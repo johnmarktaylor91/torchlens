@@ -45,14 +45,16 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from importlib.machinery import PathFinder
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-from ._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES, RunnableTorchAlias
+
+if TYPE_CHECKING:
+    from ._runnable_torch_aliases import RunnableTorchAlias
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -159,7 +161,6 @@ __all__ = [
     "TorchCapabilitySnapshot",
     "TorchCapabilityWarning",
     "saved_tensors_default_hooks_active",
-    "RunnableTorchAlias",
     "autocast_get_dtype",
     "autocast_is_enabled",
     "get_accumulate_grad_class",
@@ -306,10 +307,8 @@ def _runtime_alias_identity_holds(
     that no longer resolves, or two distinct objects, answers ``False`` and the
     recorded bound stands.
 
-    ``source_qualname`` may carry or omit its ``torch.`` prefix; the target is
-    ``target_namespace.target_qualname``. Identical paths (a spelling-drift row
-    such as ``Tensor.add`` to ``torch.Tensor.add``) are trivially one object and
-    prove nothing, so they answer ``False`` and the recorded bound stands.
+    ``source_qualname`` may omit its ``torch.`` prefix. Identical paths (a drift
+    row such as ``Tensor.add``) prove nothing and answer ``False``.
     """
 
     source_path = (
@@ -394,6 +393,7 @@ def resolve_runnable_torch_alias(
     """
 
     from ._producer_version import _torch_minor_version
+    from ._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
 
     parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:

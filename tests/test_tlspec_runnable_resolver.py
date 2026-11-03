@@ -28,8 +28,8 @@ from torchlens._runnable import (
     SparseRunDescriptor,
 )
 from torchlens._utils._producer_version import _torch_minor_version
+from torchlens._utils._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
 from torchlens._utils._torch_compat import (
-    _RUNNABLE_TORCH_ALIASES,
     resolve_runnable_torch_alias,
 )
 from torchlens.errors import ReattachError
@@ -562,21 +562,34 @@ def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
     linear_alias = next(a for a in _RUNNABLE_TORCH_ALIASES if a.source == "torch._C._nn.linear")
     assert linear_alias.recorded_max_version is not None
     beyond = f"{linear_alias.recorded_max_version[0]}.{linear_alias.recorded_max_version[1] + 1}.0"
+    inside = f"{linear_alias.recorded_max_version[0]}.{linear_alias.recorded_max_version[1]}.0"
     expected = ("torch.nn.functional", "linear", linear_alias.provenance)
-    # torch.nn.functional.linear is the torch._C._nn.linear binding on every torch measured.
-    assert torch.nn.functional.linear is torch._C._nn.linear
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == expected
-    assert resolve_runnable_torch_alias("_C._nn.linear", beyond) == expected
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.99.0") == expected
+    # torch 2.15 binds torch.nn.functional.linear straight to torch._C._nn.linear; older
+    # torches wrap it in Python. The probe reads whichever this torch does.
+    live = torch.nn.functional.linear is torch._C._nn.linear
+    beyond_expected = expected if live else None
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == beyond_expected
+    assert resolve_runnable_torch_alias("_C._nn.linear", beyond) == beyond_expected
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.99.0") == beyond_expected
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", inside) == expected
     # cross_entropy is a Python wrapper, not the cross_entropy_loss binding: no identity,
     # so beyond its bound the alias is refused while inside it still resolves.
     assert torch.nn.functional.cross_entropy is not torch._C._nn.cross_entropy_loss
     assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") is None
     assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.10.0") is not None
-    # The identity probe is the only thing extending the bound.
+    # The identity probe is the only thing extending the bound, in both directions.
     monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: False)
     assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) is None
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.13.0") == expected
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", inside) == expected
+    monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: True)
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == expected
+    assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") == (
+        "torch.nn.functional",
+        "cross_entropy",
+        next(
+            a for a in _RUNNABLE_TORCH_ALIASES if a.source == "torch._C._nn.cross_entropy_loss"
+        ).provenance,
+    )
 
 
 def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
@@ -584,8 +597,14 @@ def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
 
     from torchlens._utils._torch_compat import _runtime_alias_identity_holds
 
-    assert _runtime_alias_identity_holds("torch._C._nn.linear", "torch.nn.functional", "linear")
-    assert _runtime_alias_identity_holds("_C._nn.linear", "torch.nn.functional", "linear")
+    # torch re-exports every _VariableFunctions op as the same object on torch.*
+    assert torch.add is torch._C._VariableFunctions.add
+    assert _runtime_alias_identity_holds("torch._C._VariableFunctions.add", "torch", "add")
+    assert _runtime_alias_identity_holds("_C._VariableFunctions.add", "torch", "add")
+    # linear is bound straight to the C function on torch 2.15+, wrapped before; follow this torch.
+    assert _runtime_alias_identity_holds(
+        "torch._C._nn.linear", "torch.nn.functional", "linear"
+    ) == (torch.nn.functional.linear is torch._C._nn.linear)
     assert not _runtime_alias_identity_holds(
         "torch._C._nn.cross_entropy_loss", "torch.nn.functional", "cross_entropy"
     )

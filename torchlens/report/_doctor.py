@@ -66,6 +66,7 @@ _ENVIRONMENT_REMEDIES = {
     "mechanical belt": "Run a capture first; avoid pre-wrap references to failed belt probes.",
     "cuda": "Use CPU capture or install a CUDA-enabled PyTorch build on a compatible device.",
     "graphviz": "Install torchlens[viz] and the Graphviz system executable.",
+    "cairosvg": "Install cairosvg and the cairo system library (libcairo2 / brew install cairo) for PDF/PNG highlighters.",
     "safetensors": "Install safetensors to enable portable tensor artifacts.",
     "extras": "Reinstall TorchLens with the optional extras needed for your workflow.",
     "model fingerprint": "Check the fingerprint diagnostic and report the failing environment.",

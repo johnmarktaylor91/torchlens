@@ -18,5 +18,8 @@ def require_cairosvg() -> ModuleType:
     """
 
     if not get_cairosvg_support():
-        pytest.skip(f"cairosvg cannot rasterize here: {cairosvg_unavailable_reason()}")
+        pytest.skip(
+            f"cairosvg cannot rasterize here: {cairosvg_unavailable_reason()}",
+            allow_module_level=True,
+        )
     return pytest.importorskip("cairosvg")

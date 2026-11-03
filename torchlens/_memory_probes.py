@@ -10,8 +10,6 @@ import os
 
 import torch
 
-from ._utils import _torch_compat
-
 
 def _available_host_bytes() -> int | None:
     """Return available host RAM in bytes, or ``None`` when unmeasurable.
@@ -63,15 +61,11 @@ def _available_mps_bytes() -> int | None:
         ``None`` on a torch without the queries or when a query raises.
     """
 
-    if not _torch_compat.HAS_MPS_MEMORY_QUERY:
+    from ._utils._mps_memory import mps_headroom_bytes
+
+    headroom = mps_headroom_bytes()
+    if headroom is None:
         return None
-    try:
-        headroom = int(torch.mps.recommended_max_memory()) - int(
-            torch.mps.driver_allocated_memory()
-        )
-    except Exception:
-        return None
-    headroom = max(headroom, 0)
     host = _available_host_bytes()
     return headroom if host is None else min(headroom, host)
 
