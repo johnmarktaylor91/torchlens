@@ -1265,9 +1265,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **show_legend tri-state**
 : `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
-  then a channel-only disclosure legend), `True` (the key: one compact row per drawn mark, each
-  drawn with its real shape and fill -- input, output, trainable and frozen weights, module, and
-  buffer, true/false test, mutated parameter or intervention only when the picture has one -- plus
+  then a channel-only disclosure legend; a `module=` focused draw also gets the key and a reading
+  key), `True` (the key: one compact row per drawn mark, each drawn with its real shape and fill --
+  input, output, trainable and frozen weights, module frame, module run as one op, collapsed
+  module, hidden buffers, buffer, true/false test, mutated parameter or intervention only when the
+  picture has one -- plus
   channel rows when active), and `False` (no legend, honored even with channels active — the
   encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
   header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
@@ -3064,7 +3066,9 @@ deprecation shim owed*
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
-  an encoding channel is active, then a channel-only disclosure legend.
+  an encoding channel is active, then a channel-only disclosure legend; a
+  `module=` focused draw also shows the key and a reading key (what `@name`,
+  an op name's two counters, the shape and size line and call arguments mean).
   `True`/`False` keep their stable historical meanings.
 
 **Encoding refusal codes** — *unstable — no deprecation shim owed*
@@ -7152,7 +7156,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `show_containers=` | keyword of `Trace.draw` (keyword-only; default `False`): Container rendering: `False` (default: the plain graph), `"labels"` (the key or index on each edge into a container leaf), `"collapsed"` (`"labels"` plus the fold of an unrolled same-shape container over `container_max_inline` leaves into one dashed box) or `"nodes"` (`"collapsed"` .. |
 | `show_grad_values=` | keyword of `Trace.draw` (keyword-only; default `False`): Backward graph: opt-in rows naming the owning module of each backward node and summarizing its captured output gradient |
 | `show_input_transform_summary=` | keyword of `Trace.draw` (keyword-only; default `False`): Add the input-transform summary row |
-| `show_legend=` | keyword of `Bundle.draw` (keyword-only; default `None`); keyword of `Trace.draw` (keyword-only; default `None`): Tri-state legend visibility. `None` (default) draws a legend only when an encoding channel is active, `True` draws the full theme legend, `False` disables the legend even with channels active; constructor keyword of `tl.options.VisualizationOptions` (optional): Tri-state legend visibility (`None` = auto: legend only when an encoding channel is active); see `Trace.draw`; keyword of `tl.viz.lineplot` (keyword-only; default `True`): Whether to draw a legend when labels are supplied |
+| `show_legend=` | keyword of `Bundle.draw` (keyword-only; default `None`); keyword of `Trace.draw` (keyword-only; default `None`): Tri-state legend visibility. `None` (default) draws a legend only when an encoding channel is active, and the key with a reading key on a `module=` focused draw; `True` draws the full theme legend, `False` disables the legend even with channels active; constructor keyword of `tl.options.VisualizationOptions` (optional): Tri-state legend visibility (`None` = auto: legend only when an encoding channel is active, plus the key on a `module=` focused draw); see `Trace.draw`; keyword of `tl.viz.lineplot` (keyword-only; default `True`): Whether to draw a legend when labels are supplied |
 | `show_module_paths=` | keyword of `Trace.draw` (keyword-only; default `False`): Backward graph: opt-in rows naming the owning module of each backward node and summarizing its captured output gradient |
 | `show_orphans=` | keyword of `Trace.draw` (keyword-only; default `False`): Render orphan (island) ops, captured but unreachable from inputs and outputs, as a dashed greyed cluster (capture with `keep_orphans=True`) |
 | `show_progress=` | keyword of `tl.validation.validate_batch_of_models_and_inputs` (default `True`) |

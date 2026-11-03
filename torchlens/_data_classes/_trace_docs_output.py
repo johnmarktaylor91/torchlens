@@ -251,7 +251,8 @@ DOCS: dict[str, str] = {
             Buffer visibility: ``"never"``, ``"meaningful"`` or ``"always"``.
         show_legend:
             Tri-state legend visibility. ``None`` (default) draws a legend only
-            when an encoding channel is active, ``True`` draws the full theme
+            when an encoding channel is active, and the key with a reading key
+            on a ``module=`` focused draw; ``True`` draws the full theme
             legend, ``False`` disables the legend even with channels active.
         color_by:
             Fill encoding channel (keyword-only; unstable). A Layer/Op field
