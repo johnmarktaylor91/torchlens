@@ -400,9 +400,12 @@ class ValueEncoder:
             if isinstance(value, defaultdict):
                 factory = value.default_factory
                 fields["subtype"] = "collections.defaultdict"
+                factory_name = next(
+                    (cls.__name__ for cls in _DEFAULT_FACTORIES if factory is cls), None
+                )
                 fields["default_factory"] = (
-                    factory.__name__
-                    if any(factory is cls for cls in _DEFAULT_FACTORIES)
+                    factory_name
+                    if factory_name is not None
                     else self.unencodable(factory, f"{at}.default_factory")
                 )
             return tagged("dict", **fields)
