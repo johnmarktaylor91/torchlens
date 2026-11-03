@@ -472,7 +472,7 @@ Output:
 `tl.debug.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
-seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
+seed=0, on_failure="return", input_specs=None)` probes a module and
 returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python

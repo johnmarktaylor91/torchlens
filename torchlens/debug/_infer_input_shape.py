@@ -67,7 +67,7 @@ class GuessInputShapeReport(FoundReport):
     attempts:
         Probe diary as ``(shape, outcome)`` tuples.
     trace:
-        Final verification trace when ``return_trace=True``.
+        Final verification trace when the internal caller asked for one; `None` otherwise.
     message:
         Actionable human-readable summary.
     """
@@ -2069,7 +2069,7 @@ def _infer_input_shape_impl(
     max_probes: int = 64,
     device: torch.device | str | None = None,
     seed: int = 0,
-    return_trace: bool = False,
+    _return_trace: bool = False,
     on_failure: Literal["return", "raise"] = "return",
     input_specs: Any = None,
 ) -> GuessInputShapeReport:
@@ -2104,8 +2104,9 @@ def _infer_input_shape_impl(
         Optional device override; defaults to the model's first parameter or buffer device.
     seed:
         RNG seed used for deterministic probes.
-    return_trace:
-        Whether to include the final verification ``Trace``.
+    _return_trace:
+        Internal: whether to include the final verification ``Trace`` (the
+        zero-argument capture door reuses it).
     on_failure:
         ``"return"`` for notebook-friendly diagnostics or ``"raise"`` for
         ``ShapeInferenceError``. With ``"return"``, inference failures of any kind
@@ -2201,7 +2202,7 @@ def _infer_input_shape_impl(
             max_probes=max_probes,
             device=device,
             seed=seed,
-            return_trace=return_trace,
+            return_trace=_return_trace,
         )
     except Exception as exc:  # noqa: BLE001 - the on_failure contract admits no raw escape.
         message = f"Shape inference aborted on an unexpected internal error: {exc!r}"

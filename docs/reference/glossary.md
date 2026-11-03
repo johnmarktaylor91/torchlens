@@ -6470,7 +6470,6 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `retained_lazy_ops=` | field of `MemoryFacts` |
 | `retained_present_ops=` | field of `MemoryFacts` |
 | `return_layers=` | keyword of `tl.compat.from_ilg` (default `None`): Optional torchvision `return_layers` mapping |
-| `return_trace=` | keyword of `tl.debug.guess_input_shape` (keyword-only; default `False`): Whether to include the final verification `Trace` |
 | `revision=` | keyword of `tl.bridge.huggingface_hub.from_hub` (keyword-only; default `None`): Optional branch, tag or commit to download from; keyword of `tl.bridge.pyreft.read` (keyword-only; default `None`): Optional names of where the directory came from (a Hub repo id and commit); recorded in `provenance` and the subspace `origin` |
 | `ridge_alphas=` | keyword of `tl.neuro.compare` (keyword-only; default `...`): Penalty grid (absolute, on centred features) |
 | `ridge_intensity=` | keyword of `tl.report.roofline` (keyword-only; default `None`): Machine balance point in FLOPs/byte (from `machine_balance`); without it no bound hypotheses render |
