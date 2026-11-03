@@ -285,8 +285,11 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  `Op.gpu_kernels` / `AtenOp.gpu_kernels` are declared on their classes and reach
-  `torchlens._kernel_telemetry` by module name only when read; the views sit over
+  `AtenOp.gpu_kernels` is the GPU kernel launches one ATen call made, matched to it by
+  the profiler's correlation id; `Op.gpu_kernels` is the deduplicated union of those
+  across the op's ATen calls. With telemetry off each returns one row with
+  `attribution_status="unavailable"`, never an empty tuple. Both are declared on their
+  classes and reach `torchlens._kernel_telemetry` by module name only when read; the views sit over
   the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
   keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
