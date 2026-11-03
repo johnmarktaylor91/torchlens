@@ -14,7 +14,7 @@ from torchlens.errors import FacadeTeachingError
 from torchlens.options import CaptureOptions, merge_capture_options
 
 
-@pytest.mark.parametrize("removed", ["layers_to_save", "save_preview"])
+@pytest.mark.parametrize("removed", ["layers_to_save", "save_preview", "module_filter"])
 def test_removed_capture_fields_reject_constructor_keywords(removed: str) -> None:
     assert removed not in inspect.signature(CaptureOptions).parameters
     assert removed not in CaptureOptions().as_dict()
@@ -22,6 +22,15 @@ def test_removed_capture_fields_reject_constructor_keywords(removed: str) -> Non
         CaptureOptions(**{removed: False})
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert "save=" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("removed", ["raise_on_nan", "track_nonfinite"])
+def test_removed_nonfinite_fields_name_on_nonfinite(removed: str) -> None:
+    assert removed not in inspect.signature(CaptureOptions).parameters
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        CaptureOptions(**{removed: True})
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "on_nonfinite=" in str(excinfo.value)
 
 
 def test_private_selection_survives_option_merges() -> None:
