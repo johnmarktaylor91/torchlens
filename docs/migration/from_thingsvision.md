@@ -150,8 +150,8 @@ random projection, the speed trick DeepJuice uses for brain benchmarking (worked
   not by a fixed model list.
 - Structured site listing (`torchlens.inventory.list_sites`) with shapes and pass indices.
 - Disk artifacts with resume, a manifest that fixes row order, and `tl.load` to read them back.
-- Per-site adapters in `torchlens.bridge` (for example `torchlens.bridge.rsatoolbox.dataset`, a
-  destination for representational analysis; TorchLens makes no RSA parity claim).
+- Per-site adapters in `torchlens.bridge` (for example `torchlens.bridge.rsatoolbox.dataset`, which
+  hands activations to rsatoolbox for representational analysis).
 
 ## What thingsvision does that TorchLens does not
 
