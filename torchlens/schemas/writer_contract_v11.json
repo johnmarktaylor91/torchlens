@@ -747,8 +747,8 @@
     "_args": "blob_recursive",
     "_kwargs": "blob_recursive",
     "incomplete_reasons": "keep",
+    "input_structure": "keep",
     "is_capture_complete": "keep",
-    "structure": "keep",
     "summary": "keep",
     "tensor_observations": "keep"
    },

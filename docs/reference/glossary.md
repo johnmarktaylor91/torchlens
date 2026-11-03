@@ -5175,7 +5175,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `ModuleInputSnapshot.incomplete_reasons` | Tuple of stable reason strings explaining why the evidence is incomplete |
-| `ModuleInputSnapshot.structure` | Compact immutable description of the input container topology |
+| `ModuleInputSnapshot.input_structure` | Compact immutable description of the input container topology |
 | `ModuleInputSnapshot.tensor_observations` | Ordered `TensorInputObservation`s of the input tensors, keyed by typed input path |
 
 #### `tl.types.TensorInputObservation`
@@ -6117,6 +6117,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `input_signature=` | constructor keyword of `tl.neuro.ExtractionPlan` (required) |
 | `input_spec=` | keyword of `TransformPipeline.plan` (required): Description of the tensor entering the chain; keyword of `TransformSpec.plan` (required): Description of the incoming batch tensor; keyword of `tl.transforms.srp_realized_facts`, `tl.transforms.srp_verify_matrix` (required): Concrete input description (or a tensor to describe) |
 | `input_specs=` | keyword of `tl.debug.guess_input_shape` (keyword-only; default `None`): Reserved for explicit multi-input specs. Coupled multi-input inference is currently unsupported unless the caller supplies a ready-made tensor/container in future work |
+| `input_structure=` | constructor keyword of `tl.types.ModuleInputSnapshot` (required): Immutable compact description of the input container topology |
 | `input_tensor_facts=` | constructor keyword of `tl.types.AtenOp` (keyword-only; default `()`) |
 | `input_token_ids=` | constructor keyword of `tl.attribution.AttributionGraph` (required) |
 | `input_transform=` | keyword of `Layer.do` (required): Transform or hook to apply to this layer's output; keyword of `Op.do` (required); keyword of `Trace.run` (keyword-only; optional): Stored-transform sentinel, `False` to bypass, or explicit input transform callable for this run; constructor keyword of `tl.Trace` (default `None`); keyword of `tl.extract_dataset` (keyword-only; default `None`): The unambiguous INPUT-preprocessing path (tvscope B5, DOCUMENTED-UNSTABLE spelling), distinct from `output_transform=` which transforms OUTPUTS before storage. Pass a `Resolution` (the golden path: the authority's own callable and its provenance travel together, the ..; constructor keyword of `tl.options.CaptureOptions` (optional); constructor keyword of `tl.preprocessing.Resolution` (required): The authority's own transform callable when it ships one (torchvision preset, timm transform, HF processor); `None` for declaration-only authorities (explicit dicts) and unknown resolutions |
@@ -7118,7 +7119,6 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `strides=` | keyword of `tl.attribution.occlusion_map` (keyword-only; default `None`): Strides over the same axes; defaults to the window (non-overlapping) |
 | `strings=` | keyword of `tl.viz.nodes.text_table` (required): Text items to render |
 | `structural_site_key=` | constructor keyword of `tl.types.Site` (default `None`) |
-| `structure=` | constructor keyword of `tl.types.ModuleInputSnapshot` (required): Immutable compact description of the input container topology |
 | `structure_only=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
 | `structure_only_capture=` | constructor keyword of `tl.backends.BackendCapabilities` (default `False`): Whether structure-only capture (`structure_only=True`) is supported. DOCUMENTED-UNSTABLE surface pending naming-session/ ratification |
 | `style=` | keyword of `SummaryReport.print` (default `'auto'`); keyword of `SummaryReport.render` (default `'ascii'`); keyword of `Trace.decode_output` (keyword-only; default `None`): Decode style: `"classification"`, `"imagenet"`, `"imagenet1k"`, `"hf_text"` or a registered custom style. `None` lets the registered detectors pick one; keyword of `Trace.output_table` (keyword-only; default `None`): Optional decode style for a decode on demand (see `decode_output`); keyword of `Trace.summary` (keyword-only; default `None`): `"auto"` \| `"ascii"` \| `"unicode"` for display helpers; `str(result)` is ALWAYS the canonical ASCII payload; constructor keyword of `tl.stats.NarrationObserver` (default `'ascii'`); keyword of `tl.stats.glance` (keyword-only; default `'ascii'`): `"ascii"` (canonical) or `"unicode"` -- the two byte-checked renderings of identical content (`ascii == degrade(unicode)`); keyword of `tl.stats.narrate` (keyword-only; default `'ascii'`): Rendering style for the echoed cores; constructor keyword of `tl.viz.NodeSpec` (default `'filled,rounded'`): Graphviz node style |
