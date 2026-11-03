@@ -51,6 +51,11 @@ log = tl.trace(model)                                # inferred shape + random v
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
 
+**Using an AI coding agent?** Run `python -m torchlens guide` (or `tl.agent.guide()`) and put the
+text in the agent's instructions file (`AGENTS.md`, `CLAUDE.md`). It says when TorchLens is shorter than
+plain PyTorch hooks (first NaN or Inf, functional ops such as `F.softmax`, many-site edits, model comparison)
+and gives recipes for module outputs, NaN origins, edits, activation patching and gradients that run as written.
+
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/swin_v2_b_demo.jpg" width="70%" height="70%">
 
 **Quick Links**

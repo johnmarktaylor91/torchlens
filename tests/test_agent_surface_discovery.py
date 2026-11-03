@@ -90,7 +90,7 @@ def test_hf_entry_recovery_is_typed_and_teaching() -> None:
 
 
 def test_option_field_keyword_names_its_options_class() -> None:
-    """tl.trace(model, x, save_grads=True) names CaptureOptions, not input_kwargs."""
+    """A flat capture-option keyword on tl.trace names CaptureOptions, not input_kwargs."""
 
     import torch
     from torch import nn

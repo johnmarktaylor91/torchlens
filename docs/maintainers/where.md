@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1403 modules, 630282 lines, 0 modules without a docstring.
+83 packages, 1403 modules, 630469 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -17,14 +17,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1520 |
-| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4604 |
+| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4627 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 87 | 37553 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 54 | 35757 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11480 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11483 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 21 | 7936 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
@@ -47,7 +47,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
-| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4982 |
+| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 5020 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14632 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 72 | 34892 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 72 | 34896 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
@@ -270,7 +270,7 @@ FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue
 
 ### `torchlens._capture.prepare`
 
-PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modules, 4604 lines)
+PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modules, 4627 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -281,7 +281,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 | `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1122 |
 | `recursive_options` | The grouped ''CaptureOptions'' each per-chunk recursive capture receives (PREPARE stage). | 112 |
 | `request` | The torch door's request half: its arguments, resolution state and the packed request. | 345 |
-| `resolve` | Intervention spec, hook-plan normalization and selector checks for the PREPARE stage. | 733 |
+| `resolve` | Intervention spec, hook-plan normalization and selector checks for the PREPARE stage. | 756 |
 
 ### `torchlens._data_classes`
 
@@ -498,7 +498,7 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (5 m
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (23 modules, 11480 lines)
+Internal backend-neutral IR for TorchLens capture unification. (23 modules, 11483 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -508,7 +508,7 @@ Internal backend-neutral IR for TorchLens capture unification. (23 modules, 1148
 | `_output_occurrences` | Output-path occurrences of captured tensors, built at capture and read at output-op build. | 110 |
 | `_output_path_assign` | Assign a value at a nested output path, rebuilding immutable containers on the way. | 125 |
 | `_selector_nodes` | Leaf plan nodes for the compiled selector evaluator. | 460 |
-| `_selector_universe` | Per-lifecycle subject universes for the selector interpreter. | 526 |
+| `_selector_universe` | Per-lifecycle subject universes for the selector interpreter. | 529 |
 | `capture_events` | Mutable capture event accumulator for one forward pass. | 1226 |
 | `container` | Leaf dataclasses for TorchLens output container structure. | 1359 |
 | `container_registry` | Portable container registry records for capture-time boundary containers. | 944 |
@@ -992,7 +992,7 @@ Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 
 
 ### `torchlens.agent`
 
-torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules, 4982 lines)
+torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules, 5020 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1003,7 +1003,7 @@ torchlens.agent -- the read-only agent inspection surface (agent ). (14 modules,
 | `_compare` | compare: two-artifact structural + value diff with coverage honesty. | 252 |
 | `_envelope` | Canonical serializer and the one agent-surface envelope (agent ). | 188 |
 | `_fold` | The recurrence fold: the agent surface's default structural view. | 341 |
-| `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 210 |
+| `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 248 |
 | `_overview` | Structured overview records and dump views (agent -3.4). | 366 |
 | `_query` | query_sites: structured site discovery over persisted facts. | 539 |
 | `_registry` | The ONE tool registry: names, schemas, budgets, handlers, transports. | 1022 |
@@ -1592,7 +1592,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (72 modules, 34892 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (72 modules, 34896 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1663,7 +1663,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `save` | Persistence for TorchLens intervention specifications. | 1056 |
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `sites` | Structured intervention site collections for sweeps. | 200 |
-| `spec` | The ONE immutable public intervention spec ( substrate). | 794 |
+| `spec` | The ONE immutable public intervention spec ( substrate). | 798 |
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 302 |
 | `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1379 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 554 |

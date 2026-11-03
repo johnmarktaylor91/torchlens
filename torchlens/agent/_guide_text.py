@@ -24,10 +24,13 @@ modules that return one tensor (a HuggingFace decoder layer, an MLP, a
 Linear) costs about one plain forward pass; other requests and tl.trace
 record every op and add about 1-3 s on a small model.
 
-Where it saves the most code compared with hooks: ops that have no module
-of their own (an inline softmax, matmul or residual add), the first op that
-produced NaN or Inf, editing what goes into a module (one attention head),
-edits at several sites in one pass, and comparing two models op by op.
+A plain forward hook is fine for ONE module output you already know by
+name. TorchLens saves the most code compared with hooks for ops that have
+no module of their own (an inline softmax, matmul or residual add), the
+first op that produced NaN or Inf, editing what goes into a module (one
+attention head), edits at several sites in one pass, and comparing two
+models op by op. Capture once and read many things from the trace rather
+than tracing in a loop.
 
 Every snippet below runs as written once `model` (any nn.Module) and `x`
 (its input) exist. Module names are the ones model.named_modules() prints,
@@ -201,6 +204,14 @@ edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
   the live model with tl.when(site, edit).bind(model); no tracing cost. A
   bound model does not pass call inputs, so input_route="in" splices raise
   there; run those through tl.trace(model, x, intervene=...).
+- Capture options (save_grads, replayable, on_nonfinite, ...) are not flat
+  tl.trace keywords: pass capture=tl.options.CaptureOptions(...). Model
+  forward keywords go in input_kwargs={...}.
+- A hook written as `lambda t: ...` is refused: edits take (t, *, ctx).
+- tl.in_module(name) as an edit site is EVERY op inside the module;
+  tl.module(name) is the module's output, one site.
+- A warning that a rule "fired at zero sites" means the selector matched no
+  op: check the name against tr.modules or model.named_modules().
 - Do not trace torch.compile or TorchScript artifacts; trace the eager model.
 
 ## Saved artifacts and the read-only tools

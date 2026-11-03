@@ -150,7 +150,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
   with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
-  (or `default_grad` on `tl.record`, `replayable` on `tl.trace`) asks for a backward, and
+  (or `default_grad` on `tl.record`, `replayable` in `capture=tl.options.CaptureOptions(...)` on `tl.trace`) asks for a backward, and
   an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
@@ -526,7 +526,7 @@ also a selection (`__selection__`): an EDGE selection of the pre-norm input edge
 edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupted_graph` is the
 corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
 clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
-is one call; the trace needs `replayable=True`.
+is one call; the trace needs `capture=tl.options.CaptureOptions(replayable=True)`.
 
 `edge_scores(model, inputs, *, corrupted_input, metric, method="eap_ig", steps=None,
 example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
@@ -1029,7 +1029,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `replayable=True`; this flag supplies replay templates even when no intervention
+  must use `capture=tl.options.CaptureOptions(replayable=True)`; this flag supplies replay templates even when no intervention
   is planned.
 
 **Readiness**
@@ -4390,7 +4390,7 @@ The sections above describe each surface in depth.
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
 | `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
-| `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
+| `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `CaptureOptions(replayable=True)`) |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
