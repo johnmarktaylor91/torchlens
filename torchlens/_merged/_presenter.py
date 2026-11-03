@@ -182,7 +182,20 @@ class CollectiveJoin:
 
 @dataclass(frozen=True)
 class MergeReport:
-    """Graph-free diagnostic summary of a merge derivation (3.2)."""
+    """Graph-free diagnostic summary of a merge derivation (3.2).
+
+    Examples
+    --------
+    >>> aligned = tl.types.MergeAlignment.ALIGNED
+    >>> report = MergeReport(
+    ...     ranks=(0, 1), expected_ranks=None, stored_alignment=aligned, alignment=aligned,
+    ...     value_status=tl.types.MergeValueStatus.UNWITNESSED, num_joins=2, findings=(),
+    ... )
+    >>> report.to_markdown().splitlines()[:2]
+    ['# Cross-rank merge report', '- ranks: [0, 1]']
+    >>> len(report.gaps), len(report.conflicts)
+    (0, 0)
+    """
 
     ranks: tuple[int, ...]
     expected_ranks: tuple[int, ...] | None
@@ -288,6 +301,17 @@ class MergedTrace:
     both rank traces (and their retained activations) until the presenter is
     dropped or :meth:`release` is called. Call :meth:`release` when finished
     with a presenter built over live traces you do not otherwise retain.
+
+    Examples
+    --------
+    >>> hasattr(MergedTrace, "release")
+    True
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_ranks([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["remedy"])
+    capture each rank under torchlens.distributed.arm() and merge those
     """
 
     def __init__(
@@ -850,6 +874,15 @@ def merge_ranks(
         (pre-join lineage-audit conflicts, relation violations, order
         contradictions, correlation cross-check disagreements). The
         graph-free diagnostic escape hatch is :func:`merge_report`.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_ranks([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["reason"])
+    not_a_rank_capture
     """
 
     resolved = resolve_rank_inputs(inputs)
@@ -886,6 +919,15 @@ def merge_report(
     it is the escape hatch for diagnosing exactly those. Input validation
     (unloadable path, malformed core, out-of-scope boundary) still refuses
     typed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_report([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["code"], error.fields["reason"])
+    merge_input_invalid not_a_rank_capture
     """
 
     resolved = resolve_rank_inputs(inputs)
