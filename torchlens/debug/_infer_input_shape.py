@@ -16,6 +16,8 @@ from torchlens._errors import ShapeInferenceError
 from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 
 from .._debug_report import FoundReport
+from .._user_public_impls import trace
+from ..options import CaptureOptions
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -1221,10 +1223,6 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
     Trace
         Completed TorchLens trace.
     """
-
-    from torchlens.options import CaptureOptions
-
-    from .._user_public_impls import trace
 
     states = _training_states(model)
     try:

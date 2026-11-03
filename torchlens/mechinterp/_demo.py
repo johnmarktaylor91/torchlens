@@ -13,6 +13,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .._user_public_impls import trace as _capture_trace
+from ..options import CaptureOptions
+
 
 def tlens_agreement_demo() -> dict[str, Any]:
     """Decomposition + DLA agreeing with TransformerLens on real gpt2."""
@@ -23,9 +26,6 @@ def tlens_agreement_demo() -> dict[str, Any]:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     import torchlens.mechinterp as mi
-
-    from .._user_public_impls import trace as _capture_trace
-    from ..options import CaptureOptions
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")

@@ -18,6 +18,8 @@ import torch
 
 from torchlens.errors import TorchLensError, TorchLensWarning
 
+from .._user_public_impls import summary, trace
+
 
 def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
@@ -303,8 +305,6 @@ class _LayerProfilerCallbackMixin:
 
         from torchlens.options import CaptureOptions
 
-        from .._user_public_impls import trace
-
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
         training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
@@ -473,8 +473,6 @@ class _SummaryCallbackMixin:
         source:
             Which sample was used, named in the printed header.
         """
-
-        from .._user_public_impls import summary
 
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):

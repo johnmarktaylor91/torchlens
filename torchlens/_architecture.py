@@ -128,6 +128,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_training_validation": "L3",
     # The body of the public verbs (FACADE by role; the module declares it).
     "_user_public_impls": "FACADE",
+    "_user_public_graph_impls": "FACADE",
     # -- L4 ALGEBRA -----------------------------------------------------------
     "intervention": "L4",
     "bundle": "L4",

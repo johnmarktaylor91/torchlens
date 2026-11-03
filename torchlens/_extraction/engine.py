@@ -40,12 +40,15 @@ from .._data_substrate import (
 )
 from .._errors import InvalidArgumentError
 from .._extraction_provenance import apply_input_transform
+from .._user_public_impls import trace as _capture_trace
 from ..errors._base import TorchLensWarning
+from ..options import CaptureOptions
 from ..transforms import (
     TransformContext,
     TransformPipeline,
 )
 from ._engine_batching import _iter_item_batches, _move_envelope_to_device
+from ._front_door import _extract_layers_with_trace, _matching_saved_layer_labels
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
 from .dtype_policy import cast_for_store
 from .envelope import (
@@ -692,10 +695,6 @@ def _capture_outputs(
         the selector path, whose plan entries carry site identity).
     """
 
-    from .._user_public_impls import trace as _capture_trace
-    from ..options import CaptureOptions
-    from ._front_door import _extract_layers_with_trace
-
     if plan.layers_kind == "selector":
         frozen: SelectorPlan | None = run_state.get("selector_plan")
         if frozen is None:
@@ -764,8 +763,6 @@ def _resolve_trace_outputs(
     ValueError
         If a sequence lookup resolves to no saved layer.
     """
-
-    from ._front_door import _matching_saved_layer_labels
 
     outputs: dict[str, torch.Tensor] = {}
     views: dict[str, Any] = {}

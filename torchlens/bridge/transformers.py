@@ -21,6 +21,8 @@ from torchlens.bridge.hf_attention import (
     register_attention,
 )
 
+from ..options import merge_capture_options
+
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
 
 
@@ -284,8 +286,6 @@ def trace_text(
         TorchLens trace with ``input`` set to the original text.
     """
 
-    from ..options import merge_capture_options
-
     tokenizer_was_explicit = tokenizer is not None
     tok = tokenizer or _resolve_tokenizer(model)
     structure_only = bool(getattr(kwargs.get("capture"), "structure_only", False))
@@ -336,8 +336,7 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
         TorchLens trace with ``input_preprocessor`` populated.
     """
 
-    from .._user_public_impls import trace as _capture_trace
-    from ..options import merge_capture_options
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     transform, record = _resolve_image_preprocessing(model)
     capture = merge_capture_options(
@@ -369,8 +368,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
 
     from transformers import AutoProcessor
 
-    from .._user_public_impls import trace as _capture_trace
-    from ..options import merge_capture_options
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
@@ -420,7 +418,7 @@ def _trace_text_capture(
     and code plus the one-line remedy (never an automatic backend switch).
     """
 
-    from .._user_public_impls import trace as _capture_trace
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     if not structure_only:
         return _capture_trace(model, cast(Any, text), capture=capture, **kwargs)

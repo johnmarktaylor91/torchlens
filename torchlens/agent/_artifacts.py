@@ -13,7 +13,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._io.bundle import load
 
 #: Manifest-declared payload bytes above which loads go LAZY (blobs on disk).
 EAGER_LOAD_MAX_BYTES = 256 * 1024 * 1024
@@ -461,8 +463,6 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
             ),
             declared_payload_count=plan["declared_payload_count"],
         )
-    from .._data_classes.trace import Trace
-    from .._io.bundle import load
 
     loaded = load(str(path), lazy=plan["mode"] == "lazy")
     if not isinstance(loaded, Trace):
