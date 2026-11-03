@@ -4108,7 +4108,7 @@ The sections above describe each surface in depth.
 | `BisectPrecisionReport.message` | Human-readable summary |
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
-| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
+| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"`. `fn(member)`; the member name is passed only where `fn` takes it: positionally to a required second parameter or `*args` (`lambda log, name: ...`), by keyword to a parameter called `name`; a defaulted second parameter (`lambda log, k=3: ...`) keeps its default |
 | `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `BundleComparisonError.severity` | The error's severity class |
