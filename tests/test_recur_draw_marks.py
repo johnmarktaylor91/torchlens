@@ -162,3 +162,13 @@ def test_pass_token_is_empty_on_single_pass_nodes(linear_trace: tl.Trace) -> Non
     assert any(">3<" in line for line in rows.splitlines() if "linear_1_1" in line)
     for pass_number in (1, 2, 3):
         assert f">{pass_number}<" in unrolled
+
+
+def test_rolled_argument_and_pass_range_share_one_midpoint(loop_if_trace: tl.Trace) -> None:
+    dot = _dot(loop_if_trace, rolled=True)
+    input_edges = [line for line in _edge_lines(dot) if line.strip().startswith("input_")]
+    assert len(input_edges) == 2
+    for line in input_edges:
+        assert "headlabel" not in line and "xlabel" not in line
+        label = line.split("[label=", 1)[1]
+        assert ">arg " in label and ">In " in label

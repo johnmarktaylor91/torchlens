@@ -9,6 +9,7 @@ from typing import Any
 
 import graphviz
 
+from ._pass_marks import stack_labels
 from ._render_utils import html_escape
 from ._typography import edge_annotation_pt
 
@@ -208,9 +209,10 @@ def _set_argument_edge_label(
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.
 
-    A head slot already taken (a rolled ``In 2-3`` pass range) sends the label
-    to a free midpoint before the ``xlabel`` fallback: Graphviz reserves layout
-    space for the midpoint, while an xlabel is painted over whatever sits there.
+    A head slot already taken (a rolled ``In 2-3`` pass range) moves both labels,
+    stacked, to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
+    layout space for the midpoint, while head labels and xlabels are painted over
+    whatever sits there, and one stack keeps the edge's argument and passes together.
 
     Returns:
         The channel the label landed on: ``"label"``, ``"headlabel"``,
@@ -224,7 +226,7 @@ def _set_argument_edge_label(
         edge_dict["headlabel"] = arg_label
         return "headlabel"
     if "label" not in edge_dict:
-        edge_dict["label"] = arg_label
+        edge_dict["label"] = stack_labels(arg_label, str(edge_dict.pop("headlabel")))
         return "midpoint"
     if "xlabel" not in edge_dict:
         edge_dict["xlabel"] = arg_label

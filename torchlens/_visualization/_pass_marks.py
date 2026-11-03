@@ -5,8 +5,8 @@ The default node title carries them (``linear_1_1:2`` on an unrolled pass,
 ``"label"`` and ``"pass"`` tokens of ``node_label_fields``, so a picker that drops
 the wide parameter row keeps the loop marks. Rolled edges carry ``In``/``Out``
 pass ranges; on a conditional edge they share the branch label's midpoint slot,
-which Graphviz reserves layout space for, instead of floating at the endpoint
-over arrows and other labels.
+and beside an argument label they share its midpoint slot, which Graphviz reserves
+layout space for, instead of floating at the endpoint over arrows and other labels.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ __all__ = (
     "pass_label_fits",
     "pass_mark_suffix",
     "pass_rows",
+    "stack_labels",
     "with_branch",
 )
 
@@ -104,7 +105,17 @@ def with_branch(edge_dict: Mapping[str, Any], pass_label: str) -> str:
     branch = edge_dict.get("label")
     if branch is None or not _BRANCH_LABEL.fullmatch(str(branch)):
         return pass_label
+    return stack_labels(str(branch), pass_label)
+
+
+def stack_labels(top: str, bottom: str) -> str:
+    """Return two Graphviz HTML labels as one borderless two-row label.
+
+    Each argument is an HTML label (``<...>`` wrapped once more in ``<>``); the
+    result keeps one HTML root, so it is a valid single ``label``.
+    """
+
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f"<TR><TD>{str(branch)[1:-1]}</TD></TR><TR><TD>{pass_label[1:-1]}</TD></TR></TABLE>>"
+        f"<TR><TD>{top[1:-1]}</TD></TR><TR><TD>{bottom[1:-1]}</TD></TR></TABLE>>"
     )
