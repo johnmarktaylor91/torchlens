@@ -3506,9 +3506,12 @@ describe each surface in depth.
 | `tl.experiment.sweep_grid` | Sweep the product of named axes (sites, at most one axis of edits); one member per cell, baseline first |
 | `tl.facets.FacetFunction` | Registered facet recipe metadata |
 | `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
+| `tl.facets.child_output_spec` | Recipe helper: a child module's output as a `FacetSpec` (`module, child_name, recipe_id`), or an absence reason |
+| `tl.facets.config_value` | Recipe helper: the first available attribute of a `Module` record, checking record attributes and the `custom_attributes` snapshot, or an absence reason |
 | `tl.facets.describe` | List registered facet function names and declared facets for a class name |
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered recipes, optionally filtered by scope and class-name glob |
+| `tl.facets.parameter_spec` | Recipe helper: a module parameter as a `FacetSpec` (`module, name, recipe_id`), or an absence reason |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
 | `tl.mechinterp.LogitLensPredictions` | Result of a streaming :func:`logit_lens_predictions` sweep |
@@ -3770,6 +3773,7 @@ describe each surface in depth.
 | `can_intervene=` | keyword of `BackendCapabilities` |
 | `candidate_num_components=` | keyword of `tl.transforms.srp_fidelity_probe`: the candidate numbers of output components (projection widths k) to probe, one report row each |
 | `comet_experiment=` | keyword of `tl.trackers.CometSink`: the Comet experiment to log to |
+| `d_head=` | keyword of `FacetSpec.heads`: head dimension; the default `None` infers it from the last axis when the facet is read |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
 | `edit=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `edit_name=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |

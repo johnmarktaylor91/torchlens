@@ -216,6 +216,42 @@ _CAPABILITY_FLAGS_BY_CLASS: dict[CapabilityClass, FacetCapabilityFlags] = {
 }
 
 
+def _heads_geometry(value: Any, n_heads: Any, d_head: Any) -> tuple[int, int]:
+    """Resolve the ``(n_heads, d_head)`` pair of a heads primitive against ``value``.
+
+    Parameters
+    ----------
+    value:
+        Tensor-like value about to be reshaped.
+    n_heads:
+        Declared head count.
+    d_head:
+        Declared head dimension, or ``None`` to infer it from the last axis.
+
+    Returns
+    -------
+    tuple[int, int]
+        Head count and head dimension.
+
+    Raises
+    ------
+    ValueError
+        When the head count is missing or does not divide the last axis.
+    """
+
+    if not isinstance(n_heads, int) or isinstance(n_heads, bool) or n_heads <= 0:
+        raise ValueError(f"heads() needs a positive integer head count, got {n_heads!r}.")
+    last_dim = int(value.shape[-1])
+    if d_head is None:
+        if last_dim % n_heads:
+            raise ValueError(
+                f"Cannot split the last axis of shape {tuple(value.shape)} into "
+                f"{n_heads} heads: {last_dim} is not divisible by {n_heads}."
+            )
+        return n_heads, last_dim // n_heads
+    return n_heads, int(d_head)
+
+
 @dataclass(frozen=True)
 class TransformPrimitive:
     """One structural transform in a ``FacetSpec`` chain.
@@ -267,7 +303,7 @@ class TransformPrimitive:
         if self.kind == "getitem":
             result = value[self.args[0]]
         elif self.kind == "heads":
-            n_heads, d_head = self.args
+            n_heads, d_head = _heads_geometry(value, *self.args)
             result = value.reshape(*value.shape[:-1], n_heads, d_head)
         elif self.kind == "split":
             sections, dim, index = self.args
@@ -480,8 +516,13 @@ class FacetSpec(_SelectionOperand):
 
         return self._append(TransformPrimitive("getitem", (key,), capability_class="selection"))
 
-    def heads(self, num_heads: int, d_head: int) -> FacetSpec:
-        """Append a projection-to-heads reshape primitive."""
+    def heads(self, num_heads: int, d_head: int | None = None) -> FacetSpec:
+        """Append a projection-to-heads reshape primitive.
+
+        ``d_head=None`` infers the head dimension from the value's last axis
+        when the spec is read (``last_dim // num_heads``); a last axis that
+        ``num_heads`` does not divide refuses at read time.
+        """
 
         return self._append(
             TransformPrimitive("heads", (num_heads, d_head), capability_class="bijective_view")
@@ -1538,8 +1579,13 @@ def describe(class_name: str) -> dict[str, builtins.list[str]]:
     return {"functions": functions, "facets": facets}
 
 
+#: Recipe-authoring helpers served lazily as ``tl.facets.<name>`` (their module
+#: imports this one, so they cannot be imported at module top).
+_RECIPE_HELPER_NAMES = frozenset({"child_output_spec", "config_value", "parameter_spec"})
+
+
 def __getattr__(name: str) -> Any:
-    """Lazily expose facet submodules.
+    """Lazily expose facet submodules and recipe-authoring helpers.
 
     Parameters
     ----------
@@ -1556,6 +1602,11 @@ def __getattr__(name: str) -> Any:
         module = importlib.import_module("torchlens._semantic.patching")
         globals()[name] = module
         return module
+    if name in _RECIPE_HELPER_NAMES:
+        helpers = importlib.import_module("torchlens._semantic.recipes._helpers")
+        value = getattr(helpers, name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module 'torchlens._semantic.facets' has no attribute {name!r}")
 
 
@@ -1995,4 +2046,7 @@ __all__ = [
     "snapshot",
     "transformer_lens_aliases_enabled",
     "adding",
+    "child_output_spec",  # noqa: F822 -- resolved by __getattr__
+    "config_value",  # noqa: F822 -- resolved by __getattr__
+    "parameter_spec",  # noqa: F822 -- resolved by __getattr__
 ]
