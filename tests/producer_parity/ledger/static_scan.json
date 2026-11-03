@@ -7032,6 +7032,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/bridge/_hf_refusals.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/bridge/_sae_latents.py",
@@ -7452,16 +7460,8 @@
   "field": "modules",
   "file": "torchlens/experimental/dagua/_bridge.py",
   "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -7477,6 +7477,22 @@
   "file": "torchlens/experimental/dagua/_bridge.py",
   "has_default": true,
   "sites": 3,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/experimental/dagua/_clusters.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/experimental/dagua/_clusters.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {
