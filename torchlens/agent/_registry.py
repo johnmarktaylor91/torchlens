@@ -16,8 +16,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
-from ..report import doctor
-from ..report._explain import explain
 from . import _budgets
 from ._envelope import build_envelope, build_error_envelope, canonical_dumps, json_safe
 
@@ -242,6 +240,8 @@ def _present_row_key(data: dict[str, Any], row_key: str | tuple[str, ...] | None
 def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
     """Environment health report."""
 
+    from ..report import doctor  # deferred: startup cost
+
     report = doctor()
     data = {
         "checks": [
@@ -255,7 +255,7 @@ def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_api_map(args: dict[str, Any]) -> dict[str, Any]:
     """Public-surface index (compact rows or one per-name detail record)."""
 
-    from ._apimap import (  # deferred: cycle agent
+    from ._apimap import (
         API_MAP_SCHEMA,
         capabilities_block,
         compact_rows,
@@ -276,14 +276,14 @@ def _handle_api_map(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_overview(args: dict[str, Any]) -> dict[str, Any]:
     """Manifest-mode (torch-free) or folded-mode structural overview."""
 
-    from ._artifacts import (  # deferred: cycle agent
+    from ._artifacts import (
         artifact_block,
         load_trace,
         read_manifest,
         resolve_artifact_path,
         resolve_digest,
     )
-    from ._overview import (  # deferred: cycle agent
+    from ._overview import (
         OVERVIEW_FOLDED_SCHEMA,
         OVERVIEW_MANIFEST_SCHEMA,
         folded_overview,
@@ -310,8 +310,8 @@ def _handle_overview(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_dump(args: dict[str, Any]) -> dict[str, Any]:
     """Paged dump views over one loaded trace."""
 
-    from ._artifacts import load_trace  # deferred: cycle agent
-    from ._overview import DUMP_SCHEMA, dump_view  # deferred: cycle agent
+    from ._artifacts import load_trace  # deferred: startup cost
+    from ._overview import DUMP_SCHEMA, dump_view
 
     view = args.get("view", "overview")
     max_rows = _budgets.resolve_limit(
@@ -333,7 +333,7 @@ def _handle_dump(args: dict[str, Any]) -> dict[str, Any]:
     if view != "overview":
         # Every gateable record carries the honesty blocks (AUD-CODE 3.11a):
         # the full view's own capture block is the same source, so setdefault.
-        from ._overview import honesty_blocks  # deferred: cycle agent
+        from ._overview import honesty_blocks  # deferred: startup cost
 
         blocks = honesty_blocks(log)
         data.setdefault("capture", blocks["capture"])
@@ -377,8 +377,9 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
     instead of being dead gates (AUD-CODE 3.11a).
     """
 
-    from ._artifacts import load_trace  # deferred: cycle agent
-    from ._overview import honesty_blocks  # deferred: cycle agent
+    from ..report._explain import explain  # deferred: startup cost
+    from ._artifacts import load_trace
+    from ._overview import honesty_blocks  # deferred: startup cost
 
     log, plan, block = load_trace(args["path"])
     # The one agent tool whose max_tokens is not a ceiling: explain budgets its own
@@ -403,8 +404,8 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_query_sites(args: dict[str, Any]) -> dict[str, Any]:
     """Structured site discovery over the full persisted population."""
 
-    from ._artifacts import load_trace  # deferred: cycle agent
-    from ._query import QUERY_SITES_SCHEMA, query_sites  # deferred: cycle agent
+    from ._artifacts import load_trace  # deferred: startup cost
+    from ._query import QUERY_SITES_SCHEMA, query_sites
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
@@ -455,8 +456,8 @@ def _handle_query_sites(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_payload_stats(args: dict[str, Any]) -> dict[str, Any]:
     """Bounded per-site statistics over saved payloads."""
 
-    from ._artifacts import load_trace  # deferred: cycle agent
-    from ._stats import PAYLOAD_STATS_SCHEMA, payload_stats_rows  # deferred: cycle agent
+    from ._artifacts import load_trace  # deferred: startup cost
+    from ._stats import PAYLOAD_STATS_SCHEMA, payload_stats_rows
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
@@ -521,8 +522,8 @@ def _handle_payload_stats(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
     """Two-artifact structural + value comparison."""
 
-    from ._artifacts import load_trace  # deferred: cycle agent
-    from ._compare import COMPARE_SCHEMA, compare_traces  # deferred: cycle agent
+    from ._artifacts import load_trace  # deferred: startup cost
+    from ._compare import COMPARE_SCHEMA, compare_traces
 
     max_rows = _budgets.resolve_limit(
         args.get("max_rows"), _budgets.DEFAULT_MAX_ROWS, name="max_rows"
@@ -556,7 +557,7 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
     # Per-side honesty blocks so the CLI's --fail-on gates READ this record
     # (AUD-CODE 3.11a): a diff over an unverified or NaN-poisoned side must
     # be gateable without a second tool call.
-    from ._overview import honesty_blocks  # deferred: cycle agent
+    from ._overview import honesty_blocks  # deferred: startup cost
 
     reference_blocks = honesty_blocks(reference)
     subject_blocks = honesty_blocks(subject)
@@ -585,7 +586,7 @@ def _handle_compare(args: dict[str, Any]) -> dict[str, Any]:
 def _handle_schema(args: dict[str, Any]) -> dict[str, Any]:
     """The machine-readable schema index, or one shipped document."""
 
-    from ._schemas import SCHEMA_TOOL_SCHEMA, load_schema, schema_index  # deferred: cycle agent
+    from ._schemas import SCHEMA_TOOL_SCHEMA, load_schema, schema_index  # deferred: startup cost
 
     name = args.get("name")
     data = {

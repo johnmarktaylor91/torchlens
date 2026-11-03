@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .._utils.json_safe import json_safe
+from .._json_safe import json_safe
 
 #: Envelope stability disclosure carried on every payload.
 SCHEMA_STABILITY = "documented-unstable"

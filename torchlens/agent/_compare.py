@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._io.payload_reader import read_op_payload
-
 #: Result schema id.
 COMPARE_SCHEMA = "torchlens.agent.compare.v1"
 
@@ -80,6 +78,8 @@ def _value_tier(ref_op: Any, sub_op: Any, rtol: float, atol: float) -> dict[str,
     dict[str, Any]
         Value metrics, or a ``payload_unavailable`` state row.
     """
+
+    from .._io.payload_reader import read_op_payload  # deferred: startup cost
 
     try:
         reference = read_op_payload(ref_op)

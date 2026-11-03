@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import Any
 
 from .._errors import InvalidArgumentError
-from ..report._agent_json import _op_entry
 
 #: Versioned query-AST identifier.
 QUERY_AST_VERSION = "torchlens.agent_query.v1"
@@ -442,6 +441,8 @@ def _python_handoff(node: dict[str, Any]) -> str:
 
 def op_row(op: Any, is_input: bool, is_output: bool) -> dict[str, Any]:
     """Project one op record into the query row shape (persisted facts)."""
+
+    from ..report._agent_json import _op_entry  # deferred: startup cost
 
     entry = _op_entry(op)
     entry["is_input"] = is_input

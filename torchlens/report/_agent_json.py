@@ -25,7 +25,7 @@ from .._capture_honesty import (
     refuse_presenter_subject,
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
-from .._utils.json_safe import json_safe
+from .._json_safe import json_safe
 from ._explain import _safe_len
 from ._factcore import _memory
 from ._health import health_facts
