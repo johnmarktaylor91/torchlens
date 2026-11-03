@@ -195,9 +195,13 @@ depyf = ["depyf~=0.18"]
 compat-shims = ["torchextractor>=0.3,<2", "sentence-transformers>=2.5,<5"]
 vision-shims = ["torchvision>=0.18,<1"]
 # `all` aliases `all-stretch` so the two never drift, and BOTH resolve:
-# FIX-BY-EXCLUSION: `all` means "everything that
-# installs together", and every excluded member is NAMED here rather than
-# silently dropped.
+# FIX-BY-EXCLUSION: `all` is a rollup of extras that install together with
+# each other, NOT everything that installs together, and every excluded
+# member is NAMED here rather than silently dropped. Not every extra left out
+# can be added on top: `torchlens[all,sae]` and `torchlens[all,tlens-oracle]`
+# do not resolve, because inseq (rolled up) conflicts with sae-lens and with
+# transformer-lens 3.8.0 (uv pip compile, Linux x86_64, Python 3.10 and 3.11,
+# 2026-10-31; the packaging install matrix records both as incompatible sets).
 #   * lit-nlp (the [lit] extra) is EXCLUDED: lit-nlp 1.3 requires numpy<2,
 #     which would pin every [all] install to numpy 1.x (the shap extra
 #     admits 0.45.1, so `torchlens[lit,shap]` resolves). Install

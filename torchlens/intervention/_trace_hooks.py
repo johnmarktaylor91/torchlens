@@ -18,6 +18,7 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_edits import (
     ensure_intervention_spec,
     target_spec_from_site,
@@ -127,7 +128,11 @@ def clear_hooks(trace: Trace, *, confirm_mutation: bool = False) -> Trace:
     """Clear all sticky hooks from the current intervention spec. (the ``Trace.clear_hooks`` body)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-    ensure_intervention_spec(trace).clear()
+    spec = ensure_intervention_spec(trace)
+    handles_before = sticky_handle_ids(spec)
+    spec.clear()
     mark_intervention_spec_mutated(trace)
+    # Removal takes effect at once, in a rerun or backward pass in progress.
+    retire_live_hook_handles(handles_before)
     record_operation(trace, "clear_hooks")
     return trace

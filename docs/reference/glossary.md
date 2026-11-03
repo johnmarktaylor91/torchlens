@@ -651,7 +651,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   bound executor that applies a spec to live calls. A synchronous generator or iterator returned
   by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
   settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`.
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`. A
+  module-boundary rule (`tl.module(address)`) edits the tensor leaves of a module output that
+  is a tensor or a supported container (tuple, list, dict, namedtuple, dataclass, HF model
+  output); an output of another type (a distribution object) holds no addressable tensor
+  site, so the rule records zero fire there at both doors, bound executor and capture.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
 : One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
@@ -704,6 +708,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
   sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+  Removal (also through the handle's `remove()`) takes effect at once, like a torch hook handle: a
+  rerun or backward pass in progress skips the removed hooks from the next hook site it reaches,
+  while the site firing at that moment finishes its queued hooks; afterwards the recipe and the
+  handle are the same as after a removal between runs.
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
@@ -1604,6 +1612,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
   promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
   RNG state.
+  Under `scope="backward"`, when torch reports a backward through a graph an earlier backward
+  freed and a module attribute holds a tensor with autograd history, the model is refused with
+  `ValidationError` code `backward_validation_carried_graph`, naming those attributes; without
+  that evidence torch's own error propagates unchanged.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
@@ -2177,6 +2189,14 @@ shims, by declared contract. Each carries the same tag at its definition.
   `higher`, the site each metric scores higher (`None` for a tie or a
   missing score). `table()` gives the plain-text report and
   `to_dict()` the data form.
+
+**neuro dependency conflict (refusal code `neuro_dependency_conflict`)** — *unstable — no deprecation shim owed*
+: When rsatoolbox is installed but cannot import because another installed package
+  pins scikit-learn below what it needs (the `torchlens[neuro,brainscore]` install),
+  `tl.neuro` leaves `rdms` and `datasets` out of `__all__` and `dir()`, and touching
+  them raises `MissingDependencyError` with this code. The diagnosis reads package
+  metadata only. `exc.fields` carries `dependency_version`, `conflicting`,
+  `conflicting_version` and `pinned_by` (`None` when no pinning package is found).
 
 **neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
 : One call that scores every site of one extraction against one target with
