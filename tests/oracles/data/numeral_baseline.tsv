@@ -6278,6 +6278,7 @@ package-docstrings	torchlens/intervention/_directions.py	64
 package-docstrings	torchlens/intervention/_edit_guards.py	34
 package-docstrings	torchlens/intervention/_edit_repr.py	1.0
 package-docstrings	torchlens/intervention/_gradient_contract.py	2.0
+package-docstrings	torchlens/intervention/_helper_internals.py	10
 package-docstrings	torchlens/intervention/_metrics.py	1.0
 package-docstrings	torchlens/intervention/_metrics.py	32
 package-docstrings	torchlens/intervention/_module_boundary.py	98
@@ -6320,7 +6321,6 @@ package-docstrings	torchlens/intervention/edge_semantics.py	13
 package-docstrings	torchlens/intervention/edge_semantics.py	28
 package-docstrings	torchlens/intervention/errors.py	3.4
 package-docstrings	torchlens/intervention/errors.py	65
-package-docstrings	torchlens/intervention/helpers.py	10
 package-docstrings	torchlens/intervention/hooks.py	1.4
 package-docstrings	torchlens/intervention/hooks.py	1.5,
 package-docstrings	torchlens/intervention/hooks.py	1.6

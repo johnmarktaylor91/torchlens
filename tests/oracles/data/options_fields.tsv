@@ -53,14 +53,13 @@ CaptureOptions.verbose
 InterventionOptions._specified_fields
 InterventionOptions.allow_changed_params
 InterventionOptions.confirm_mutation
+InterventionOptions.differentiable
 InterventionOptions.engine
 InterventionOptions.strict
 ReplayOptions._specified_fields
 ReplayOptions.allow_changed_params
 ReplayOptions.append
 ReplayOptions.chunk_size
-ReplayOptions.differentiable
-ReplayOptions.hooks
 ReplayOptions.strict
 SaveOptions._specified_fields
 SaveOptions.activation_transform
