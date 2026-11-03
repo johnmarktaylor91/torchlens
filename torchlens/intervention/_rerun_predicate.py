@@ -317,21 +317,27 @@ def _lower_final_label_target(trace: Any, target: Any) -> Any:
         A new target when any leaf was lowered, else ``target`` itself.
     """
 
-    kind = getattr(target, "selector_kind", None)
-    value = getattr(target, "selector_value", None)
-    if (
-        isinstance(target, TargetSpec)
-        and kind in ("and", "or")
-        and isinstance(value, (tuple, list))
-    ):
-        children = tuple(_lower_final_label_target(trace, child) for child in value)
-        if all(new is old for new, old in zip(children, value, strict=True)):
-            return target
-        return replace(target, selector_value=children)
-    if isinstance(target, TargetSpec) and kind == "not" and value is not None:
-        child = _lower_final_label_target(trace, value)
-        return target if child is value else replace(target, selector_value=child)
-    return _lower_final_label_leaf(trace, target)
+    operands = _stored_operands(target)
+    if operands is None:
+        return _lower_final_label_leaf(trace, target)
+    lowered = tuple(_lower_final_label_target(trace, child) for child in operands)
+    if all(new is old for new, old in zip(lowered, operands, strict=True)):
+        return target
+    is_not = target.selector_kind == "not"
+    return replace(target, selector_value=lowered[0] if is_not else lowered)
+
+
+def _stored_operands(target: Any) -> tuple[Any, ...] | None:
+    """Return the operands of a stored ``and``/``or``/``not`` target, else ``None``."""
+
+    if not isinstance(target, TargetSpec):
+        return None
+    value = target.selector_value
+    if target.selector_kind == "not" and value is not None:
+        return (value,)
+    if target.selector_kind in ("and", "or") and isinstance(value, (tuple, list)):
+        return tuple(value)
+    return None
 
 
 def _lower_final_label_leaf(trace: Any, target: Any) -> Any:
