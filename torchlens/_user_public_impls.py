@@ -1,4 +1,10 @@
-"""Private implementations for public user-facing utility commands."""
+"""Private implementations for public user-facing utility commands.
+
+Modules below the public facade that need a public verb (``trace``,
+``release_model``, ``summary``, the ``validate_*`` family) import it from
+here, never from ``torchlens`` or ``torchlens._user_funcs``: this module is
+the body of those verbs, so it is the one settle-layer door to them.
+"""
 
 from __future__ import annotations
 
@@ -68,10 +74,38 @@ from .options import (
     visualization_to_render_kwargs,
 )
 
+# FACADE by role: this module IS the body of the public ``torchlens.*`` verbs,
+# so its upward calls into the renderers and reports are the facade's own
+# (Rule F), and its eager import of the public entry module is the facade
+# binding, not a layer inversion.
+__tl_layer__ = "FACADE"
+
 if TYPE_CHECKING:
     import pandas as pd
 
     from ._data_classes.module import Module
+
+
+def trace(*args: Any, **kwargs: Any) -> Trace:
+    """Capture through the public ``trace`` entry, for modules below the facade.
+
+    The call binds late through ``torchlens._user_funcs`` (nothing is copied
+    here), so a patch of ``torchlens._user_funcs.trace`` is seen while it is
+    in place and gone once it is undone, exactly as for the other verbs in
+    this module.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Forwarded unchanged to :func:`torchlens.trace`.
+
+    Returns
+    -------
+    Trace
+        The captured trace.
+    """
+
+    return _user_funcs.trace(*args, **kwargs)
 
 
 def release_model(model: nn.Module) -> None:
@@ -220,7 +254,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     _validate_summary_modes(execution_mode, grad_mode)
     _validate_summary_grammar(summary_kwargs)
     if isinstance(model, str):
-        from .report._summary_hub import build_hub_meta_model
+        from .report._summary_hub import build_hub_meta_model  # deferred: startup cost
 
         model = build_hub_meta_model(model)
     _reject_opaque_wrappers(model)
@@ -380,7 +414,7 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
     ``Trace.summary``, so ``preset=None`` refuses here too.
     """
 
-    from .report._summary_config import GRAMMAR_OPTIONS, resolve_config
+    from .report._summary_config import GRAMMAR_OPTIONS, resolve_config  # deferred: startup cost
 
     resolve_config(
         **{
@@ -885,8 +919,11 @@ def show_bundle_graph(
     if signal not in {"forward", "backward", "both", "overlay"}:
         raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
-    from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-    from ._visualization._render_utils import direction_to_rankdir
+    from ._visualization._bundle_graph import (  # deferred: startup cost
+        BundlePictureOptions,
+        render_bundle_graph,
+    )
+    from ._visualization._render_utils import direction_to_rankdir  # deferred: startup cost
 
     options = BundlePictureOptions(
         outpath=path,
