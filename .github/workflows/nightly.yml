@@ -833,7 +833,10 @@ jobs:
           # per-change pr.yml backend-protocol legs test the pin;
           # tests/test_backend_framework_pins.py holds both to the shells.
           - backend: tf
+            # The conformance-tf extra (keras-hub) feeds the ecosystem roster's
+            # text-model rows; nightly only, never the base install.
             install: '"tensorflow-cpu>=2.16"'
+            conformance_extra: conformance-tf
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
@@ -863,7 +866,10 @@ jobs:
             # MLX ships manylinux CPU wheels, so its suite runs on Linux CI;
             # pinned to 0.26.3 because the 0.26.5 manylinux wheel is missing
             # libmlx.so. Metal-path coverage still needs Apple silicon.
+            # The conformance-mlx extra (mlx-lm) feeds the ecosystem roster's
+            # Llama-class and Qwen-class rows; nightly only, never the base install.
             install: '"mlx==0.26.3"'
+            conformance_extra: conformance-mlx
             marker: backend_mlx
             import_check: "import mlx.core, mlx.nn"
             executed_floor: 40
@@ -894,6 +900,15 @@ jobs:
         run: |
           uv pip install --system -e ".[dev,test,tabular]"
           uv pip install --system ${{ matrix.install }}
+
+      - name: Install the ${{ matrix.backend }} conformance extra
+        # Nightly-only extras (pyproject conformance-*): the libraries the
+        # ecosystem roster rows load their pretrained checkpoints through.
+        # Resolved together with the framework install line so the framework
+        # pin holds (mlx-lm alone would pull the newest mlx over the 0.26.3 pin).
+        if: ${{ matrix.conformance_extra }}
+        run: |
+          uv pip install --system ${{ matrix.install }} -e ".[${{ matrix.conformance_extra }}]"
 
       - name: Verify the ${{ matrix.backend }} runtime imports
         # A missing or import-broken framework must fail the leg here, not
@@ -2162,6 +2177,57 @@ jobs:
         run: |
           pip-audit \
             --ignore-vuln PYSEC-2026-3624
+
+
+  learn-notebooks:
+    # The README points new users at notebooks/learn (eleven notebooks). This
+    # leg executes every one of them with nbclient (scripts/run_notebooks.py:
+    # one kernel per notebook, a per-cell and a whole-notebook timeout) on a
+    # fresh install of exactly what notebooks/learn/README.md tells a learner
+    # to install, and fails on any cell error. It checks that the notebooks
+    # run; it does not diff their stored outputs. Nightly only; it runs no
+    # pytest, so it declares no executed-test floor.
+    name: Learn notebooks (nbclient)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | dot -Tsvg > /dev/null
+
+      - name: Install TorchLens as the learn README says, plus the notebook kernel
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # The [test] extra carries nbclient and ipykernel; requirements-learn.txt is the learner's list.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[viz,test]" \
+            -r notebooks/learn/requirements-learn.txt \
+            "torch==2.13.0+cpu"
+          uv pip check
+          python -c "import nbclient, ipykernel, torch, transformers; print('nbclient', nbclient.__version__, 'torch', torch.__version__)"
+
+      - name: Execute the learn notebooks
+        env:
+          MPLBACKEND: Agg
+          OMP_NUM_THREADS: "2"
+        run: python scripts/run_notebooks.py -j 2 notebooks/learn/*.ipynb
 
 
   attest:
