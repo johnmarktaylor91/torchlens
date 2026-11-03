@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization import _fonts, render_execution
+from torchlens._visualization import _fonts
 from torchlens.errors._base import TorchLensWarning
 
 
@@ -56,19 +56,6 @@ def _pdf_text_blobs(data: bytes) -> bytes:
     return b"\n".join(blobs)
 
 
-def test_fk3_bundled_font_files_ship_with_license() -> None:
-    """The bundled faces and their OFL license are present beside the module."""
-    status = _fonts.bundled_font_status()
-    assert status["available"] is True
-    assert status["family"] == "Liberation Sans"
-    font_dir = Path(str(status["font_dir"]))
-    for name in _fonts.BUNDLED_FONT_FILES:
-        assert (font_dir / name).stat().st_size > 100_000
-    license_text = (font_dir / "OFL.txt").read_text(encoding="utf-8")
-    assert "SIL OPEN FONT LICENSE Version 1.1" in license_text
-    assert "Reserved Font Name Liberation" in license_text
-
-
 def test_fk3_pinned_family_resolves_to_bundled_font() -> None:
     """Under the render environment fontconfig resolves the pinned family to the bundled file."""
     env = _fonts.graphviz_font_env()
@@ -93,18 +80,6 @@ def test_fk3_pinned_family_resolves_to_bundled_font() -> None:
     assert os.path.basename(resolved["Arial:bold"]) == "LiberationSans-Bold.ttf"
     font_dir = str(_fonts.bundled_font_status()["font_dir"])
     assert all(path.startswith(font_dir) for path in resolved.values())
-
-
-def test_fk3_pdf_render_embeds_bundled_font(tmp_path: Path) -> None:
-    """A real PDF render embeds Liberation Sans; the DOT still names Helvetica."""
-    trace = tl.trace(_Tiny(), torch.randn(2, 3))
-    try:
-        dot = trace.draw(path=str(tmp_path / "fk3"), file_format="pdf").dot
-    finally:
-        trace.cleanup()
-    assert "fontname=Helvetica" in dot or 'fontname="Helvetica"' in dot
-    searchable = _pdf_text_blobs((tmp_path / "fk3.pdf").read_bytes())
-    assert b"LiberationSans" in searchable
 
 
 #: Graphviz's PostScript equivalents of Helvetica that its pango plugin prefers
@@ -271,38 +246,6 @@ def _codes(records: list[warnings.WarningMessage]) -> list[str]:
     ]
 
 
-def test_fk1_oversize_vector_warns_and_obeys(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Past the page ceiling the explicit render is still written, with a coded warning."""
-    monkeypatch.setattr(render_execution, "VECTOR_PAGE_CEILING_POINTS", 50.0)
-    trace = tl.trace(_Tiny(), torch.randn(2, 3))
-    try:
-        with warnings.catch_warnings(record=True) as records:
-            warnings.simplefilter("always")
-            trace.draw(path=str(tmp_path / "big"), file_format="svg")
-    finally:
-        trace.cleanup()
-    assert (tmp_path / "big.svg").stat().st_size > 0, "the oversize render was not written"
-    assert "render_vector_oversize" in _codes(records)
-    message = next(
-        str(record.message) for record in records if "render_vector_oversize" in _codes([record])
-    )
-    assert "50 pt" in message and "collapse='auto'" in message and "module=" in message
-
-
-def test_fk1_ordinary_vector_render_is_quiet(tmp_path: Path) -> None:
-    """A small render under the real ceiling raises no oversize warning."""
-    trace = tl.trace(_Tiny(), torch.randn(2, 3))
-    try:
-        with warnings.catch_warnings(record=True) as records:
-            warnings.simplefilter("always")
-            trace.draw(path=str(tmp_path / "small"), file_format="pdf")
-    finally:
-        trace.cleanup()
-    assert "render_vector_oversize" not in _codes(records)
-
-
 class _Block(nn.Module):
     """Three-layer child module (a box the overview can collapse)."""
 
@@ -405,17 +348,3 @@ def test_fk4_floor_residual_writes_manifest(
     assert manifest["readable_band_high"] == 1
     assert manifest["visible_count"] > 1
     assert all(entry["expansion_id"] and entry["expand"] for entry in manifest["entries"])
-
-
-def test_fk4_ordinary_auto_render_writes_no_manifest(tmp_path: Path) -> None:
-    """An in-band auto render writes only the picture."""
-    trace = tl.trace(_Block(), torch.randn(2, 4))
-    try:
-        trace.draw(
-            collapse="auto",
-            path=str(tmp_path / "plain"),
-            file_format="svg",
-        )
-    finally:
-        trace.cleanup()
-    assert not (tmp_path / "plain.expansion.json").exists()

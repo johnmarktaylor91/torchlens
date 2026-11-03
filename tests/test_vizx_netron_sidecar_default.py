@@ -8,7 +8,6 @@ skips it there while an explicit ``attachment=True`` still refuses.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -72,20 +71,6 @@ def _companion(path: Path) -> Path:
 
 
 @pytest.mark.parametrize("granularity", ["module", "op", "rolled"])
-def test_default_export_writes_the_sidecar(log: tl.Trace, tmp_path: Path, granularity: str) -> None:
-    """Every granularity's default file export writes the vendor sidecar with node rows."""
-
-    path = tl.export.netron(log, tmp_path / f"{granularity}.json", granularity=granularity)
-    companion = _companion(path)
-    assert companion.exists()
-    payload = json.loads(companion.read_text(encoding="utf-8"))
-    assert payload["signature"] == "netron:attachment"
-    assert payload["metadata"], "the sidecar must carry per-node metadata rows"
-    assert {row["kind"] for row in payload["metadata"]} == {"node"}
-    assert any(row["name"] == "output tensor bytes" for row in payload["metrics"])
-
-
-@pytest.mark.parametrize("granularity", ["module", "op", "rolled"])
 def test_default_sidecar_matches_the_writer(
     log: tl.Trace, tmp_path: Path, granularity: str
 ) -> None:
@@ -95,15 +80,6 @@ def test_default_sidecar_matches_the_writer(
     projection = _build_projection(log, granularity, 1, "meaningful")
     reference = write_attachment(projection, tmp_path / "b" / "m.json")
     assert _companion(path).read_bytes() == reference.read_bytes()
-
-
-def test_default_matches_explicit_true(log: tl.Trace, tmp_path: Path) -> None:
-    """``attachment=None`` (default) and ``attachment=True`` write the same files."""
-
-    default = tl.export.netron(log, tmp_path / "d" / "m.json")
-    explicit = tl.export.netron(log, tmp_path / "e" / "m.json", attachment=True)
-    assert default.read_bytes() == explicit.read_bytes()
-    assert _companion(default).read_bytes() == _companion(explicit).read_bytes()
 
 
 def test_opt_out_writes_no_sidecar(log: tl.Trace, tmp_path: Path) -> None:

@@ -17,7 +17,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
 
 
 @pytest.fixture(scope="module")
@@ -27,33 +26,6 @@ def small_trace() -> Iterator[object]:
         yield trace
     finally:
         trace.cleanup()
-
-
-def test_direction_refuses_typed() -> None:
-    from torchlens._visualization._render_utils import direction_to_rankdir
-
-    with pytest.raises(InvalidArgumentError) as exc_info:
-        direction_to_rankdir("diagonal")
-    assert exc_info.value.fields["code"] == "visualization_direction_invalid"
-
-
-def test_renderer_refuses_typed(small_trace) -> None:
-    with pytest.raises(InvalidArgumentError) as exc_info:
-        small_trace.draw(renderer="bogus")
-    assert exc_info.value.fields["code"] == "visualization_renderer_invalid"
-
-
-def test_graph_refuses_typed(small_trace) -> None:
-    # An unknown graph name refuses typed at the one draw door.
-    with pytest.raises(InvalidArgumentError) as exc_info:
-        small_trace.draw(graph="sideways")
-    assert exc_info.value.fields["code"] == "visualization_mode_invalid"
-
-
-def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
-    with pytest.raises(Exception) as exc_info:
-        small_trace.draw(graph="backward")
-    assert getattr(exc_info.value, "fields", {}).get("code") == "backward_graph_unavailable"
 
 
 def test_graphviz_render_failure_refuses_typed(

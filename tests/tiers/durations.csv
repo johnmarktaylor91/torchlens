@@ -1513,13 +1513,11 @@ tests/test_vizmech_typography.py,7,0.25,0.14,unmarked
 tests/test_vizr2_boundary_bundle.py,8,11.25,3.56,unmarked
 tests/test_vizr2_rank_segments.py,8,6.47,1.27,unmarked
 tests/test_vizr_backward_rows.py,3,2.45,1.02,unmarked
-tests/test_vizr_collapse_ratified.py,1,1.25,1.25,unmarked
 tests/test_vizr_layout_and_outpath.py,6,2.80,0.81,unmarked
 tests/test_vizr_render_counters.py,4,3.56,1.33,unmarked
 tests/test_vizr_render_leans.py,14,8.04,2.22,unmarked
 tests/test_vizx_export_honesty_parity.py,9,3.55,0.95,unmarked
 tests/test_vizx_model_explorer_episode_remedy.py,2,0.33,0.21,unmarked
-tests/test_vizx_model_explorer_extra.py,1,0.03,0.03,unmarked
 tests/test_vizx_netron_baseline_diff.py,10,1.39,0.35,unmarked
 tests/test_vizx_netron_sidecar_default.py,11,0.48,0.18,unmarked
 tests/test_w051_agent_budgets.py,5,8.53,7.42,heavy
