@@ -1530,7 +1530,6 @@ tests/test_w051_capt2_relation_grades.py,9,1.44,1.32,missing
 tests/test_w051_capt2_replay_record_sites.py,6,0.64,0.46,smoke
 tests/test_w051_capt2_validate_forward_invariant.py,3,3.76,1.53,unmarked
 tests/test_w051_capt3_merged_ledger_shape.py,34,0.53,0.02,smoke
-tests/test_w051_capt3_paper_era_redirects.py,3,0.05,0.02,unmarked
 tests/test_w051_episode_binding.py,12,15.63,2.25,unmarked
 tests/test_w051_episode_chain_positions.py,15,5.05,2.17,smoke
 tests/test_w051_episode_entry_basis.py,5,1.07,0.66,smoke

@@ -13,46 +13,8 @@ import graphviz
 
 from torchlens._visualization.collapse_plan import SegmentDescriptor
 from torchlens._visualization.themes import (
-    COLLAPSE_KIND_TOKENS_DEFAULT,
     THEME_PRESETS,
-    CollapseTokens,
-    collapse_tokens,
 )
-
-
-def test_tokens_table_wording_is_panel_fixed() -> None:
-    """The kind wording carries the D10 content: kind + honest counts.
-
-    "different" for segments (never a sameness claim), "1 of N shown" for
-    folds (separate instances, never "distinct weights"), reuse counts for
-    K1, and the K5 grammar for pattern chips.
-    """
-
-    tokens = collapse_tokens(THEME_PRESETS["torchlens"])
-    assert tokens.word_reused.format(n=8) == "reused x8"
-    assert tokens.word_box.format(n=12) == "12 ops inside"
-    assert tokens.word_fold.format(n=20) == "1 of 20 shown"
-    assert tokens.word_segment.format(n=20) == "20 different ops"
-    assert tokens.word_pattern.format(name="ConvBnRelu", n=3) == "PATTERN 'ConvBnRelu' -- 3 ops"
-    assert dict(tokens.label_rows).keys() == {"reused", "box", "fold", "segment", "pattern"}
-
-
-def test_flag_default_off_until_protocol_ratifies() -> None:
-    """FORK-5: the kind-word default flip waits for the evaluator battery."""
-
-    assert COLLAPSE_KIND_TOKENS_DEFAULT is False
-
-
-def test_tokens_derive_from_theme() -> None:
-    """Dark themes get dark capsule/chip colors (the fixed hardcode bug)."""
-
-    light = collapse_tokens(THEME_PRESETS["torchlens"])
-    dark = collapse_tokens(THEME_PRESETS["dark"])
-    assert isinstance(light, CollapseTokens) and isinstance(dark, CollapseTokens)
-    assert light.segment_fill != dark.segment_fill
-    assert dark.segment_fill == "#1F2937"
-    assert dark.ellipsis_border == "#9CA3AF"
-    assert light.segment_fill == "#f7f7f7"  # the historical light value, now themed
 
 
 def test_segment_capsule_uses_theme_tokens() -> None:

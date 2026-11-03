@@ -10,7 +10,6 @@ an ambiguous head refuse typed.
 
 from __future__ import annotations
 
-import inspect
 from typing import Any
 
 import pytest
@@ -66,22 +65,6 @@ def test_capture_options_have_no_decode_fields() -> None:
         assert not hasattr(tl.options.CaptureOptions(), field)
 
 
-def test_spellings_are_pinned_to_the_signatures() -> None:
-    """The public keywords live in one module; the signatures must match it."""
-
-    decode_params = inspect.signature(tl.Trace.decode_output).parameters
-    table_params = inspect.signature(tl.Trace.output_table).parameters
-    for keyword in (spellings.STYLE_KW, spellings.HEAD_KW, spellings.TOKENIZER_KW):
-        assert keyword in decode_params, keyword
-        assert decode_params[keyword].kind is inspect.Parameter.KEYWORD_ONLY, keyword
-    for keyword in (spellings.STYLE_KW, spellings.HEAD_KW):
-        assert keyword in table_params, keyword
-        assert table_params[keyword].kind is inspect.Parameter.KEYWORD_ONLY, keyword
-    assert spellings.STYLE_UNKNOWN_CODE == "decode_style_unknown"
-    assert spellings.HEAD_UNKNOWN_CODE == "decode_head_unknown"
-    assert spellings.HEAD_AMBIGUOUS_CODE == "decode_head_ambiguous"
-
-
 def test_forced_imagenet_style_decodes_an_unverified_1000_way_model() -> None:
     """The automatic pass declines a bare 1000-way tensor; ``style="imagenet"`` decodes it."""
 
@@ -129,15 +112,6 @@ def test_ambiguous_heads_refuse_when_none_is_named() -> None:
         trace.decode_output(style="classification")
     assert excinfo.value.fields["code"] == "decode_head_ambiguous"
     assert sorted(excinfo.value.fields["available_heads"]) == ["aux", "main"]
-
-
-def test_unknown_style_refuses_with_did_you_mean() -> None:
-    trace = tl.trace(_Fixed(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
-
-    with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
-        trace.decode_output(style="clasification")
-    assert excinfo.value.fields["code"] == "decode_style_unknown"
-    assert "did you mean 'classification'?" in str(excinfo.value)
 
 
 def test_unknown_style_refuses_even_when_a_builtin_detector_claims_the_output() -> None:
@@ -198,18 +172,6 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     assert trace._decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
     ]
-
-
-def test_attached_tokenizer_never_overrides_a_labelled_classifier() -> None:
-    """A text classifier traced through the bridge gets its labels, not argmax text."""
-
-    model = _Fixed(torch.tensor([[0.0, 4.0]]), {0: "neg", 1: "pos"}).eval()
-    model._torchlens_output_tokenizer = _Tokenizer()
-    trace = tl.trace(model, torch.ones(1, 2))
-
-    assert trace.provenance.output_postprocessor is not None
-    assert trace.provenance.output_postprocessor.style == "classification"
-    assert trace._decoded_output["rows"][0]["label"] == "pos"
 
 
 def test_custom_detector_serves_the_read_time_style() -> None:

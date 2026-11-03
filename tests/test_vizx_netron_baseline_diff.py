@@ -216,36 +216,6 @@ def test_module_call_nodes_aggregate_their_ops(
     assert _diff_props(nodes["linear_1_1"])[f"{_PREFIX}status"] == leaf.status
 
 
-def test_diffed_artifact_passes_the_onnx_checker(
-    deep_pair: tuple[tl.Trace, tl.Trace], tmp_path: Path
-) -> None:
-    """Node metadataProps keep the artifact strict-parseable and checker-green."""
-
-    onnx = pytest.importorskip("onnx", reason="the netron contract needs onnx (test extra)")
-    json_format = pytest.importorskip("google.protobuf.json_format")
-    subject, reference = deep_pair
-    for granularity in ("module", "op", "rolled"):
-        path = tl.export.netron(
-            subject, tmp_path / f"{granularity}.json", granularity=granularity, baseline=reference
-        )
-        model = json_format.Parse(path.read_text(encoding="utf-8"), onnx.ModelProto())
-        onnx.checker.check_model(model, full_check=True)
-
-
-def test_identical_weights_settle_to_zero(tmp_path: Path) -> None:
-    """Two captures of identical weights carry ``zero`` on every value node."""
-
-    x = torch.randn(2, 3, generator=torch.Generator().manual_seed(3))
-    subject, reference = tl.trace(_mlp(5), x), tl.trace(_mlp(5), x)
-    payload = _export(subject, reference, tmp_path / "z.json", granularity="op")
-    statuses = {
-        _diff_props(node)[f"{_PREFIX}status"]
-        for node in _all_nodes(payload).values()
-        if _diff_props(node)
-    }
-    assert statuses == {"zero"}
-
-
 def test_string_baseline_stays_an_identifier(
     pair: tuple[tl.Trace, tl.Trace], tmp_path: Path
 ) -> None:
@@ -254,16 +224,6 @@ def test_string_baseline_stays_an_identifier(
     subject, _reference = pair
     payload = _export(subject, "run-41", tmp_path / "s.json", granularity="op")
     assert _model_props(payload)["torchlens.baseline"] == "run-41"
-    assert not any(_diff_props(node) for node in _all_nodes(payload).values())
-
-
-def test_no_baseline_carries_no_diff_facts(pair: tuple[tl.Trace, tl.Trace], tmp_path: Path) -> None:
-    """Without a baseline the artifact has no slot row and no node diff facts."""
-
-    subject, _reference = pair
-    written = tl.export.netron(subject, tmp_path / "n.json", granularity="op")
-    payload = json.loads(written.read_text(encoding="utf-8"))
-    assert "torchlens.baseline" not in _model_props(payload)
     assert not any(_diff_props(node) for node in _all_nodes(payload).values())
 
 

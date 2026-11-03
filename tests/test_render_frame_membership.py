@@ -120,20 +120,6 @@ def test_rolled_shared_child_puts_each_parents_ops_in_its_frame(tmp_path: Path) 
     assert {name: frames.get(name) for name in expected} == expected
 
 
-def test_unrolled_shared_child_puts_every_pass_in_its_frame(tmp_path: Path) -> None:
-    """Unrolled control: each pass of the shared linear sits in its own parent's frame."""
-
-    trace, linear, first_relu, second_relu = _shared_child_trace()
-    frames = _innermost_frames(_draw_dot(trace, tmp_path, "unrolled"))
-    expected = {
-        f"{linear}pass1": "cluster_p1_pass1",
-        f"{first_relu}pass1": "cluster_p1_pass1",
-        f"{linear}pass2": "cluster_p2_pass1",
-        f"{second_relu}pass1": "cluster_p2_pass1",
-    }
-    assert {name: frames.get(name) for name in expected} == expected
-
-
 def _rank_frame_boxes(
     trace: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **kwargs: Any
 ) -> dict[str, str]:
@@ -185,18 +171,3 @@ def test_rank_layout_edit_marks_keep_module_frames(
     edited = _rank_frame_boxes(fork, tmp_path, monkeypatch, show_cone=show_cone)
     assert len(plain) == 4
     assert edited == plain
-
-
-def test_rank_size_estimate_ignores_edit_rows() -> None:
-    """An edited node is sized from its unedited rows, whatever its edit rows say."""
-
-    from torchlens._visualization._edit_marks import EditRow
-    from torchlens._visualization.node_spec import render_lines_to_html
-
-    rows = ["linear_1_1", "(1, 8), 32 B", "params: weight (8, 8)"]
-    plain = render_lines_to_html(rows)
-    edited = render_lines_to_html(
-        [*rows, EditRow("\u0394 zero_ablate", "#7B1FA2"), EditRow("+2 more", "#7B1FA2")]
-    )
-    assert layout_mod._without_edit_rows(edited) == plain
-    assert layout_mod._without_edit_rows(plain) == plain

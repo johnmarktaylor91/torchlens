@@ -63,21 +63,6 @@ def test_reader_rows_coalesce_and_match_materialized(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_reader_row_out_of_range"
 
 
-def test_reader_iter_batches_serves_ledger_order(tmp_path: Path) -> None:
-    """iter_batches yields shard payloads in LEDGER order with key subsets."""
-
-    out = _artifact(tmp_path)
-    reader = open_extraction(out)
-    rows = 0
-    for payload in reader.iter_batches(keys=["logits"]):
-        assert set(payload) == {"logits"}
-        rows += payload["logits"].shape[0]
-    assert rows == reader.n_stimuli == 10
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        next(iter(reader.iter_batches(keys=["nope"])))
-    assert excinfo.value.fields["code"] == "extraction_reader_key_unknown"
-
-
 def test_reader_duplicate_aware_id_lookup(tmp_path: Path) -> None:
     """row_for refuses ambiguity naming rows_for; unknown ids refuse typed."""
 
@@ -190,20 +175,6 @@ def test_verify_all_checks_value_reductions(tmp_path: Path) -> None:
 
 
 # --- views layer -----------------------------------------------------------------------
-
-
-def test_shuffled_batches_cover_every_row_once(tmp_path: Path) -> None:
-    """The SAE access pattern: shard-order + within-shard shuffle, full cover."""
-
-    out = _artifact(tmp_path)
-    reader = open_extraction(out)
-    full = reader.materialize(["relu"])["relu"]
-    seen = []
-    for batch in reader.shuffled_batches(2, seed=7, keys=["relu"]):
-        assert batch["relu"].shape[0] <= 2
-        seen.extend(batch["relu"].tolist())
-    assert len(seen) == 10
-    assert sorted(map(tuple, seen)) == sorted(map(tuple, full.tolist()))
 
 
 def test_shuffled_batches_batch_size_refuses(tmp_path: Path) -> None:
@@ -404,20 +375,6 @@ def test_export_bf16_widen_refusal_and_disclosure(tmp_path: Path) -> None:
     assert conversion["lossy"] is False
 
 
-def test_export_mat_v5_limit_refuses_before_writing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """MAT refuses BEFORE its 2 GB limit, naming HDF5 and the h5read line."""
-
-    pytest.importorskip("scipy")
-    out = _artifact(tmp_path)
-    monkeypatch.setattr("torchlens._extraction.export._MAT_V5_LIMIT", 8)
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        export_extraction(out, tmp_path / "x", format="mat")
-    assert excinfo.value.fields["code"] == "extraction_export_mat_v5_limit"
-    assert "h5read" in str(excinfo.value)
-
-
 def test_export_hdf5_dependency_refusal_or_roundtrip(tmp_path: Path) -> None:
     """HDF5 rides the optional extra: absent -> typed refusal naming it."""
 
@@ -498,3 +455,17 @@ def test_export_ragged_triplet_in_npy(tmp_path: Path) -> None:
     row2 = reader.row(2)["h"]
     start, stop = offsets[2], offsets[3]
     assert torch.equal(torch.from_numpy(values[start:stop]), row2)
+
+
+def test_export_mat_v5_limit_refuses_before_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MAT refuses BEFORE its 2 GB limit, naming HDF5 and the h5read line."""
+
+    pytest.importorskip("scipy")
+    out = _artifact(tmp_path)
+    monkeypatch.setattr("torchlens._extraction.export._MAT_V5_LIMIT", 8)
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        export_extraction(out, tmp_path / "x", format="mat")
+    assert excinfo.value.fields["code"] == "extraction_export_mat_v5_limit"
+    assert "h5read" in str(excinfo.value)

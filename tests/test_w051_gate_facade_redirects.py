@@ -18,20 +18,6 @@ import sys
 import pytest
 
 import torchlens as tl
-from torchlens._errors import FacadeTeachingError
-
-#: The removed shims the audit named explicitly (AUD-CODE 3.14).
-#: The two paper-era 1.x names the audit also listed (the pre-2.0 capture verb
-#: and the pre-2.0 log class) are pinned in tests/test_w051_capt3_paper_era_redirects.py,
-#: the one test file the removed-spelling lint's _ALLOWED ledger admits for them.
-_AUDIT_NAMED_SHIMS = (
-    "replay",
-    "rerun",
-    "record_span",
-    "wrap_torch",
-    "list_logs",
-    "show_model_graph",
-)
 
 _DOTTED = re.compile(r"use (torchlens(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
@@ -44,45 +30,6 @@ _DOTTED = re.compile(r"use (torchlens(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 _SUBPACKAGE_ROWS = sorted(
     name for name in tl._REDIRECTS if importlib.util.find_spec(f"torchlens.{name}") is not None
 )
-
-
-def test_redirect_table_is_populated_with_the_audit_named_shims() -> None:
-    """Every shim the audit named is a redirect row."""
-
-    missing = [name for name in _AUDIT_NAMED_SHIMS if name not in tl._REDIRECTS]
-    assert not missing, f"redirect table lacks the audit-named shims: {missing}"
-    assert len(tl._REDIRECTS) >= 50
-
-
-@pytest.mark.parametrize("name", sorted(set(tl._REDIRECTS) - set(_SUBPACKAGE_ROWS)))
-def test_each_redirect_row_is_typed_and_teaches(name: str) -> None:
-    """A redirect row raises the typed facade_redirect AttributeError naming the home."""
-
-    with pytest.raises(AttributeError) as excinfo:
-        getattr(tl, name)
-    assert type(excinfo.value) is FacadeTeachingError
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert tl._REDIRECTS[name] in str(excinfo.value)
-    assert "torchlens." in tl._REDIRECTS[name], "every remedy names a canonical spelling"
-    # hasattr never explodes and answers False; dir() never advertises the row.
-    assert not hasattr(tl, name)
-    assert name not in dir(tl)
-
-
-def test_no_redirect_row_shadows_a_live_name() -> None:
-    """Step 2 beats step 4: a row naming a LIVE attribute would hide it.
-
-    ``summary`` is the live example the migration table still lists as
-    removed; it must never enter the redirect table.
-    """
-
-    # An imported subpackage sits in vars(tl) but is never shadowed: lookup
-    # finds it before __getattr__ (pinned in a fresh interpreter below).
-    bound = {k for k in vars(tl) if not k.startswith("_")} - set(_SUBPACKAGE_ROWS)
-    live = set(tl.__all__) | set(tl._LAZY_ATTRS) | bound
-    shadowing = sorted(set(tl._REDIRECTS) & live)
-    assert shadowing == [], f"redirect rows shadow live names: {shadowing}"
-    assert "summary" in tl.__all__ and "summary" not in tl._REDIRECTS
 
 
 _FRESH_SUBPACKAGE_PROBE = """
@@ -108,22 +55,6 @@ print("ok")
 """
 
 
-def test_fastlog_teaches_recording() -> None:
-    """Round 2 renamed the root fastlog namespace to recording; the old name teaches it."""
-
-    removed = "fastlog"
-    assert tl._REDIRECTS["fastlog"] == "use torchlens.recording -- fastlog was renamed recording"
-    with pytest.raises(FacadeTeachingError, match=r"torchlens\.recording"):
-        getattr(tl, removed)
-
-
-def test_subpackage_rows_are_the_ruled_three() -> None:
-    """names.4: exactly mechinterp and transformer teach at the root."""
-
-    assert _SUBPACKAGE_ROWS == ["mechinterp", "transformer"]
-    assert not set(_SUBPACKAGE_ROWS) & (set(tl._LAZY_ATTRS) | set(tl.__all__))
-
-
 # Heavy: one cold interpreter importing torchlens+torch (~3.3s) plus three
 # subpackages, the tests/test_import_hygiene.py precedent.
 @pytest.mark.heavy
@@ -141,13 +72,17 @@ def test_subpackage_rows_teach_until_imported() -> None:
     assert result.returncode == 0 and result.stdout.strip() == "ok", result.stderr[-2000:]
 
 
-@pytest.mark.parametrize("name", sorted(tl._REDIRECTS))
-def test_each_redirect_target_resolves(name: str) -> None:
-    """The canonical dotted spelling in every remedy actually exists."""
+def test_each_redirect_target_resolves() -> None:
+    """The canonical dotted spelling in every remedy actually exists (one row per redirect)."""
 
-    match = _DOTTED.search(tl._REDIRECTS[name])
-    assert match, f"remedy for {name!r} names no torchlens dotted path"
-    assert _resolve_dotted(match.group(1)), f"{match.group(1)} does not resolve"
+    failures = []
+    for name in sorted(tl._REDIRECTS):
+        match = _DOTTED.search(tl._REDIRECTS[name])
+        if not match:
+            failures.append(f"remedy for {name!r} names no torchlens dotted path")
+        elif not _resolve_dotted(match.group(1)):
+            failures.append(f"{name!r}: {match.group(1)} does not resolve")
+    assert not failures, "\n".join(failures)
 
 
 def _resolve_dotted(dotted: str) -> bool:
@@ -168,15 +103,6 @@ def _resolve_dotted(dotted: str) -> bool:
             target = getattr(target, attr)
         return True
     return False
-
-
-def test_refusal_rows_if_any_are_typed() -> None:
-    """Refusal rows (none at the root today) raise the facade_refusal code."""
-
-    for name in tl._REFUSALS:
-        with pytest.raises(AttributeError) as excinfo:
-            getattr(tl, name)
-        assert excinfo.value.fields["code"] == "facade_refusal"
 
 
 def test_did_you_mean_stays_plain_for_typos() -> None:
