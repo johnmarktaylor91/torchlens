@@ -24,6 +24,7 @@ from torchlens._io.format_errors import ArtifactError
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PAGE = REPO_ROOT / "docs" / "maintainers" / "persisted_fields.md"
 REFUSAL_DOC = REPO_ROOT / "docs" / "reference" / "error_refusal_contract.md"
+CONTRACT_PAGE = REPO_ROOT / "docs" / "maintainers" / "saved_format_3.md"
 
 _RECORD_ROW = re.compile(r"^\| `([a-z_]+)` \| `([A-Za-z0-9_.]+)` \| (\d+) \| (\d+) \|$", re.M)
 _KEY_ROW = re.compile(r"^\| `([A-Za-z0-9_]+)` \| ", re.M)
@@ -107,6 +108,21 @@ def test_every_refusal_code_is_a_documented_row() -> None:
     )
 
 
+def test_ruled_spellings_are_on_the_contract_page() -> None:
+    """Every ruled name the contract module carries is spelled on the public contract page."""
+
+    text = CONTRACT_PAGE.read_text(encoding="utf-8")
+    ruled = (
+        contract.UNENCODABLE_VALUE_TYPE,
+        contract.UNENCODABLE_LOAD_ADVISORY,
+        *(f'"{label}"' for label in contract.FORMAT_DETECTION_LABELS),
+        *contract.PROVISIONAL_REFUSALS,
+        "intervention_spec_not_portable",
+    )
+    missing = [name for name in ruled if name not in text]
+    assert not missing, missing
+
+
 def test_envelope_constants_match_the_writer_contract() -> None:
     """Identity fields, codecs and save levels are the writer contract's own."""
 
@@ -128,25 +144,41 @@ def test_phase_timing_keys_are_the_pipeline_step_names() -> None:
     assert all(re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in names)
 
 
-@pytest.mark.parametrize(
-    ("door", "code"),
-    [
-        (lambda: writer.write_trace(None, "x"), "bundle_save_failed"),
-        (lambda: writer.write_bundle(None, "x"), "bundle_save_failed"),
-        (lambda: writer.write_intervention_recipe(None, "x"), "bundle_save_failed"),
-        (lambda: reader.read_manifest("x"), "bundle_load_failed"),
-        (lambda: reader.validate_artifact("x"), "bundle_load_failed"),
-        (lambda: reader.load_trace("x"), "bundle_load_failed"),
-        (lambda: reader.load_bundle("x"), "bundle_load_failed"),
-        (lambda: reader.load_intervention_recipe("x"), "bundle_load_failed"),
-    ],
-    ids=lambda value: value if isinstance(value, str) else "door",
-)
-def test_stub_doors_refuse_typed_naming_their_module(door, code) -> None:  # type: ignore[no-untyped-def]
-    """Every unbuilt door refuses with its code, a remedy and the module that fills it."""
+def test_recipe_door_refuses_a_non_spec_typed() -> None:
+    """The built recipe door refuses anything that is not a staged spec, typed."""
 
     with pytest.raises(ArtifactError) as info:
-        door()
-    assert info.value.fields["code"] == code
+        writer.write_intervention_recipe(None, "x")
+    assert info.value.fields["code"] == "bundle_save_failed"
     assert info.value.fields["remedy"]
-    assert "torchlens/_io/format3/" in str(info.value)
+
+
+@pytest.mark.parametrize("door", [writer.write_trace, writer.write_bundle])
+def test_built_save_doors_refuse_a_non_saveable_typed(door) -> None:  # type: ignore[no-untyped-def]
+    """The built trace and bundle doors refuse a value with no save door, typed."""
+
+    with pytest.raises(ArtifactError) as info:
+        door(None, "x")
+    assert info.value.fields["code"] == "bundle_save_failed"
+    assert info.value.fields["remedy"]
+    assert "NoneType" in str(info.value)
+
+
+@pytest.mark.parametrize(
+    "door",
+    [
+        reader.read_manifest,
+        reader.validate_artifact,
+        reader.load_trace,
+        reader.load_bundle,
+        reader.load_intervention_recipe,
+    ],
+    ids=lambda door: door.__name__,
+)
+def test_reader_doors_refuse_a_missing_artifact_typed(door, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Every reader door refuses a path that is not an artifact with ``manifest_missing``."""
+
+    with pytest.raises(ArtifactError) as info:
+        door(tmp_path / "absent")
+    assert info.value.fields["code"] == contract.REFUSAL_CODES["manifest_missing"]
+    assert info.value.fields["remedy"]

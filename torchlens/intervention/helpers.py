@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._io.format3.contract import HELPER_REGISTRY_VERSION
 from ._helper_internals import (
     _align_direction,
     _enqueue_nondeterminism_note,
@@ -38,8 +39,6 @@ from .stochastic import (
     _resolve_over_axes,
 )
 from .types import Edit
-
-HELPER_REGISTRY_VERSION = "1"
 
 
 def zero_ablate(*, allow_shape_change: bool = False) -> Edit:

@@ -31,10 +31,10 @@ from torchlens._io import (
     ArtifactTooOldError,
     read_tlspec_version,
 )
-from torchlens._io._pre3_module_paths import modellog_216_error
 from torchlens._io.format_contract import (
     RESERVED_STEP_SCORE_CREDIT,
     RESERVED_STEP_SCORE_NAMES,
+    modellog_216_error,
 )
 from torchlens._io.writer_contract import writer_contract
 
@@ -168,12 +168,12 @@ def test_v10_admissions_match_the_v10_contract() -> None:
 def test_v10_contract_floor_text_and_version() -> None:
     contract = _load(V10_CONTRACT)["contract"]
     assert contract["tlspec_version"] == 10, "v10 stays frozen"
-    assert TLSPEC_VERSION == 11
+    assert TLSPEC_VERSION == 12
     assert contract["min_torchlens_version"] == "2.31.0", "v10 stays frozen"
     v11 = _load(V11_CONTRACT)["contract"]
     assert v11["min_torchlens_version"] == MIN_TORCHLENS_VERSION_TEXT
     assert contract["min_tlspec_version"] == 6, "v10 stays frozen"
-    assert MIN_TLSPEC_VERSION == 11
+    assert MIN_TLSPEC_VERSION == 12
 
 
 def test_below_floor_state_refuses_as_2x() -> None:
@@ -182,7 +182,7 @@ def test_below_floor_state_refuses_as_2x() -> None:
         read_tlspec_version(state, cls_name="Trace")
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
-    assert fields["floor_tlspec_version"] == 11
+    assert fields["floor_tlspec_version"] == 12
     assert "saved by torchlens 2.x" in str(excinfo.value)
     assert "2.33" not in str(excinfo.value)
 
@@ -197,4 +197,4 @@ def test_modellog_216_refusal_names_the_one_release_that_reads_it() -> None:
 def test_future_version_refuses_on_state_window() -> None:
     with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": TLSPEC_VERSION + 1}, cls_name="Trace")
-    assert excinfo.value.fields["ceiling_tlspec_version"] == TLSPEC_VERSION == 11
+    assert excinfo.value.fields["ceiling_tlspec_version"] == TLSPEC_VERSION == 12

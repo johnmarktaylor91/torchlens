@@ -961,22 +961,22 @@ def test_real_v7_artifact_refuses_as_2x() -> None:
 
 
 def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
+    """A fresh save stamps tlspec_version 12; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 11
+    assert state["tlspec_version"] == TLSPEC_VERSION == 12
     path = tmp_path / "fresh_v11.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 11
+    assert loaded.tlspec_version == 12
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=12 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=13 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(ArtifactError, match="only supports up to 11"):
-        read_tlspec_version({"tlspec_version": 12}, cls_name="Trace")
+    with pytest.raises(ArtifactError, match="only supports up to 12"):
+        read_tlspec_version({"tlspec_version": 13}, cls_name="Trace")

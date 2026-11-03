@@ -349,7 +349,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     )
     path = tmp_path / "intervention.tlspec"
     trace.save_intervention(path, level="audit")
-    original_spec = (path / "spec.json").read_bytes()
+    original_spec = (path / "intervention.json").read_bytes()
     original_rename = os.rename
 
     def fail_replacement(source: str | Path, target: str | Path) -> None:
@@ -363,7 +363,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     with pytest.raises(OSError, match="swap refusal"):
         trace.save_intervention(path, level="audit", overwrite=True)
 
-    assert (path / "spec.json").read_bytes() == original_spec
+    assert (path / "intervention.json").read_bytes() == original_spec
 
 
 @pytest.mark.smoke

@@ -24,7 +24,7 @@ from safetensors.torch import load_file
 from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
 from .._data_classes._state_adapter import state_items
-from .._data_classes.trace import Trace
+from .._data_classes.trace import ConditionalAccessor, Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
@@ -71,6 +71,7 @@ def rehydrate_trace(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
     resolved_blobs_dir: Path | None = None,
+    trace: Any = None,  # the 3.0 reader's record object to restore into
 ) -> Trace:
     """Restore a scrubbed portable ``Trace`` state.
 
@@ -87,13 +88,11 @@ def rehydrate_trace(
     map_location:
         Target device passed through to ``safetensors`` materialization.
     materialize_nested:
-        Whether nested blob refs inside containers should be materialized when
-        ``lazy=True``.
+        Whether nested blob refs inside containers materialize under ``lazy=True``.
     payload_hints:
         Optional backend payload hints used during materialization.
     resolved_blobs_dir:
-        Canonical blob containment root already resolved for this load
-        operation. When omitted, it is resolved once here.
+        Canonical blob containment root for this load; resolved once here when omitted.
 
     Returns
     -------
@@ -108,7 +107,7 @@ def rehydrate_trace(
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
     portable_key_order = tuple(state_for_load)
 
-    trace = Trace.__new__(Trace)
+    trace = Trace.__new__(Trace) if trace is None else trace
     # The root Trace state is governed artifact bytes: arm the unknown-field
     # partition (state contract, MEMO 3.3) around its ``__setstate__`` exactly
     # like the metadata unpickler arms it for nested records.
@@ -237,8 +236,6 @@ def _bind_conditional_arms(trace: Trace) -> None:
     trace:
         Rehydrated trace whose runtime-only conditional bindings should be restored.
     """
-
-    from .._data_classes.trace import ConditionalAccessor
 
     accessor = trace._graph_conditionals
     if not isinstance(accessor, ConditionalAccessor):
@@ -966,6 +963,7 @@ def _build_lazy_tensor_ref(
         logical_device=entry.logical_device,
         codec_metadata=entry.codec_metadata,
         payload_hints=payload_hints,
+        key=entry.key,
     )
 
 

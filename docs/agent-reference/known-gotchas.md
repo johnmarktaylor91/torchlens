@@ -181,9 +181,11 @@
   not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;
   reruns re-arm the retained predicate (`_predicate_save_options.intervene`) through the capture
   door and refuse `rerun_predicate_restage_mismatch` if it re-stages a different op set. The spec is
-  `FieldPolicy.DROP` (the recipe travels through `save_intervention`), so every legacy rerun door
-  of a loaded intervened trace refuses `run_intervention_spec_not_persisted`, including after a
-  new edit is staged on it. The rerun divergence hash folds value-only edit nodes
+  saved as the typed recipe `intervention.json` (`torchlens/_io/format3/recipe.py`), with each
+  custom callable replaced by a callable placeholder; every legacy rerun door of a loaded
+  intervened trace refuses `run_intervention_spec_not_persisted` only when its recipe holds a
+  placeholder (or the artifact carries no recipe), including after a new edit is staged on it
+  (`intervention/_intervened_rerun_guard.py` keys on `metadata["recipe_placeholders"]`). The rerun divergence hash folds value-only edit nodes
   (`interventionreplacement` with unchanged shape and dtype) into their parent, so a correct
   staged rerun is silent; never filter `ControlFlowDivergenceWarning` in a test of a correct graph.
   Tensor-carrying helpers alias the caller's tensor; staged entries (`HookSpec.metadata`

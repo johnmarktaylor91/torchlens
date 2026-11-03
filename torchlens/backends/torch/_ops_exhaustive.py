@@ -85,7 +85,7 @@ def _emit_exhaustive_operation_events(
         is_bottom_level_func: True if this function was not called by another
             decorated function (i.e., it's a leaf in the decoration nesting).
     """
-    with _timed_phase(self, "ctx_build:shared_fields"):
+    with _timed_phase(self, "ctx_build_shared_fields"):
         (
             fields_dict,
             parent_layer_entries,

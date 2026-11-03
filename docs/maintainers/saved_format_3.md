@@ -11,7 +11,7 @@ page `saved_format_3_design.md`: `contract.py`, `schema.py`, `values.py`, `paylo
 are schema nodes, cross-record validators live in `validate.py`. Until the three doors land, the functions in
 `torchlens/_io/format3/` refuse typed and name the module that fills each.
 
-What the format replaces: the `metadata.pkl` of the tlspec 11 writer (a restricted-unpickler
+What the format replaces: the `metadata.pkl` of the pickle writer (a restricted-unpickler
 payload) and its inline-tensor pickle reduction. What it keeps: the record contracts and keys of
 `persisted_fields.md`, the save levels and payload flags of `torchlens/_io/save_policy.py`, the
 safetensors payload codecs, the writer identity stamp and the writer contract digest.
@@ -55,7 +55,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `files` | object | every file in the directory except `manifest.json`, by relative path: `{"sha256": hex, "bytes": N}` |
 | `model_signature`, `model_fingerprint` | string | as the tlspec 11 manifest stamps them |
 | `runnable`, `intervention` | object | present with the component; component schema versions and file paths |
-| `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; the loader attaches an advisory when present |
+| `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
 
 ### Version floor and refusals
 
@@ -69,6 +69,10 @@ contract written in this format, so the 3.0 reader reads nothing older than itse
 - `format_version` above 3, or `tlspec_version` above the runtime's, refuses
   `artifact_version_above_runtime`.
 - `tlspec_version` below the floor refuses `artifact_version_below_floor`.
+
+`tl.io.detect_tlspec_format(path)` returns `"v3"` for a directory with a 3.0 manifest, `"pre_3"`
+for a 2.x save (a `metadata.pkl` or a manifest without `format`), and `"unknown"` for a directory
+that is not a TorchLens save at all.
 
 ### Digest relation
 
@@ -126,13 +130,13 @@ validates the JSON value against it; `Any` admits any value the value rules prod
 
 A key the field page marks `required` is a column of every artifact. A key marked `optional`
 with a payload flag is a column exactly when that flag is on in `payload_policy`; otherwise the
-column is absent, never null-filled. A column the level forbids refuses `manifest_schema_invalid`
-(the record-level spelling is provisional, see section 6). A structure-only capture keeps every
+column is absent, never null-filled. A column the level forbids refuses `record_schema_invalid`
+(section 6). A structure-only capture keeps every
 payload column but its tensor references carry no blob (section 3).
 
 ### Keys and values the format adds
 
-The tlspec bump that ships with the format adds, so that a loaded trace equals the live one:
+The tlspec 12 bump that ships with the format adds, so that a loaded trace equals the live one:
 
 - `op.is_constant` (boolean, required at every level, fact): set by the shared constants rule for
   closure constants and literal producers, following `is_buffer`; the Paddle and tinygrad
@@ -151,9 +155,10 @@ The tlspec bump that ships with the format adds, so that a loaded trace equals t
   bucket outside the pipeline keeps its stage name as a snake_case key; the writer contract pins
   the full key set.
 
-Until that bump lands, `contract.PLANNED_KEYS` names the added keys and the pin test asserts
-they are absent from the page; the writer lane adds the bindings, regenerates the page, bumps
-`contract.RECORD_CONTRACT_VERSION` and empties `PLANNED_KEYS` in one change.
+Both op keys are in the tlspec 12 bindings and on the page (the op record has 176 keys), so
+`contract.PLANNED_KEYS` is empty. A key a later contract plans goes there first; the pin test
+asserts it is absent from the page until the change that adds its binding, regenerates the page
+and bumps `contract.RECORD_CONTRACT_VERSION` also removes it from the plan.
 
 ## 3. Tensor references
 
@@ -205,7 +210,8 @@ is one of `contract.TYPED_VALUE_TAGS`:
 | `dtype`, `device` | `{"$tl": "dtype", "name": "float32"}` | the torch object |
 | `type` | `{"$tl": "type", "name": "torch.nn.modules.conv.Conv2d"}` | the dotted name as a string; the reader imports nothing |
 | `enum` | `{"$tl": "enum", "type": "...", "name": "..."}` | a TorchLens-owned enum member; a user enum becomes `unencodable` |
-| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows) whose type is in the writer contract's component spec tables; any other type refuses |
+| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows, unit quantities such as `Bytes`) whose type is on the record-type allowlist: the writer contract's component classes plus the value classes listed beside the codec in `format3/values.py`; any other type refuses |
+| `ref` | `{"$tl": "ref", "record": "op", "row": 17}` | row 17 of `records/op.json`: written where a live field holds a record object (an op list, an accessor, a call-location list) rather than its label |
 | `tensor` | section 3 | the tensor |
 | `unencodable` | below | a disclosure |
 | `callable_placeholder` | section 5 | an audit-only edit |
@@ -218,8 +224,10 @@ A user object no rule covers is stringified with a disclosure, never pickled:
 ```
 
 `repr` keeps at most 256 characters (`contract.UNENCODABLE_REPR_LIMIT`), `repr_length` is the
-full length and `at` is the field path. The reader materializes it as a private frozen record
-with those four fields whose `repr` is the saved text; it carries no public name.
+full length and `at` is the field path. The reader materializes it as an `UnencodableValue`, a
+public frozen record with those four fields whose `repr` is the saved text, so a user can test for
+it with `isinstance`. A loaded artifact whose manifest carries `disclosures` gets the load
+advisory `unencodable_values_stringified`, in the same list as the capture advisories.
 
 ## 5. The intervention recipe
 
@@ -254,6 +262,9 @@ writes the same file in its own directory: one grammar, two homes.
   `kwargs` is replaced in place by the same object with `position` set to
   `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
   `intervention.executable` is false and the rule loads as an audit-only edit.
+- Such a recipe is written only at the audit level: `save_intervention(level="portable")` on a
+  recipe holding a user callable, or a value the format cannot carry, refuses at save time with
+  `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
@@ -279,15 +290,21 @@ One table for the writer and the reader. Codes are rows of
 | unknown save level | `artifact_save_level_invalid` | writer, reader |
 | file digest or length mismatch, truncated record file | `bundle_metadata_integrity_refused` | reader |
 | key not in the record contract, or a `runtime` kind key | `unknown_persisted_field` | reader |
-| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `manifest_schema_invalid` (provisional spelling `record_schema_invalid`) | reader |
+| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `record_schema_invalid` | reader |
 | blob file or entry named by a reference is missing | `bundle_load_failed` | reader |
 | blob in a structure-only artifact, or a structure-only marker over retained payloads | `artifact_structure_only_incoherent` | writer, reader |
 | load path is a symlink | `load_path_symlink_rejected` | reader |
 | payload tensor the codec cannot hold | `metadata_value_unportable` | writer |
 | explicit payload flag contradicts the level | `save_payload_level_conflict` | writer |
 | target exists without `overwrite` | `bundle_save_failed` | writer |
+| portable save of a recipe holding a user callable or a value the format cannot carry | `intervention_spec_not_portable` | writer |
 | rerun of a loaded trace whose recipe holds a callable placeholder | `run_intervention_spec_not_persisted` | rerun doors |
 | a door called before its lane filled it | `bundle_save_failed`, `bundle_load_failed` | the stubs |
+
+`record_schema_invalid` and `intervention_spec_not_portable` (ruled 2 Nov 2026) join the error
+contract table in the change that adds their raise sites, the reader and the writer respectively.
+Until the reader lands, `contract.PROVISIONAL_REFUSALS` maps the record-level code to
+`manifest_schema_invalid`, the code a builder raises meanwhile.
 
 Two behaviours stay as they are today and apply to the JSON reader: the save preflight reloads
 every save once through the reader before publishing it, and the checked load validates every
@@ -353,7 +370,7 @@ A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
              "op": {"path": "records/op.json", "rows": 3, "sha256": "...", "bytes": 19042}, "...": {}},
  "files": {"records/op.json": {"sha256": "...", "bytes": 19042},
            "blobs/out-0001.safetensors": {"sha256": "...", "bytes": 102592}, "...": {}}}
-// records/op.json (three columns of 174)
+// records/op.json (three columns of 176)
 {"record": "op", "tlspec_version": 12, "rows": 3,
  "columns": {"label": ["conv2d_1_1", "relu_1_2", "linear_1_3"],
              "is_constant": [false, false, false],
@@ -386,7 +403,8 @@ rule 0 is the `scale` edit of section 5 and rule 1 is
 with `"executable": false` at the top of the file and in the manifest's `intervention` object.
 `records/op.json` carries `is_edited` true and the `edits` fire records for both ops; loading
 succeeds, and `run(model, x)` refuses `run_intervention_spec_not_persisted` naming rule 1 and
-`experiments.hooks.clamp_top`.
+`experiments.hooks.clamp_top`. This recipe is the audit-level form: the same intervention saved
+with `save_intervention(level="portable")` refuses `intervention_spec_not_portable` at save time.
 
 ## 9. Loaded equals live
 

@@ -15,7 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactError
-from torchlens._io.tlspec import _TlSpecWriter
+from torchlens._io._tlspec_identity import _backend_runtime
 from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
@@ -448,7 +448,7 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     """A checked-in v2.16 model-log fixture refuses at the tlspec-6 floor.
 
     Both validation and loading refuse the same real pre-floor artifact with
-    the typed floor error; legacy 2.16 intervention specs remain accepted.
+    the typed floor error, as do legacy 2.16 intervention specs.
     """
 
     from torchlens.errors import ArtifactTooOldError
@@ -549,6 +549,7 @@ def test_fresh_unified_save_reports_current_version(
     log.save(path)
     manifest = _read_manifest(path)
     assert manifest["tlspec_version"] == TLSPEC_VERSION
+    assert tl.io.detect_tlspec_format(path) == "v3"
 
     loaded = tl.load(path)
     assert isinstance(loaded, tl.Trace)
@@ -924,38 +925,6 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
-@pytest.mark.smoke
-def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path) -> None:
-    """Old MLX audit-only schema-v2 bundles should still load metadata-only."""
-
-    path = tmp_path / "mlx_old_audit_only.tlspec"
-    _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["unsupported_tensors"].append(
-        {
-            "label": "relu_1_2_raw:1",
-            "kind": "out",
-            "reason": "mlx_array_audit_null",
-        }
-    )
-    _write_manifest(path, manifest)
-
-    validate_tlspec(path)
-    loaded = tl.load(path)
-    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
-
-    assert isinstance(loaded, tl.Trace)
-    assert loaded.provenance.backend == "mlx"
-    assert getattr(loaded, "payload_load_status") == "audit_only"
-    assert saved_ops
-    assert all(op.out is None and op.out_ref is None for op in saved_ops)
-    assert all(op.shape is not None and op.dtype_ref is not None for op in saved_ops)
-    assert any(
-        record["reason"] == "mlx_array_audit_null"
-        for record in _read_manifest(path)["unsupported_tensors"]
-    )
-
-
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""
@@ -1158,7 +1127,7 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
         backend_runtime_device_summary={},
     )
 
-    runtime = _TlSpecWriter._backend_runtime(source, backend_name="mlx")
+    runtime = _backend_runtime(source, backend_name="mlx")
 
     assert runtime["version"] is None
     assert '"version": null' in json.dumps(runtime)

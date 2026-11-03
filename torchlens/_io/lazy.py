@@ -3,12 +3,14 @@
 This module defines the lightweight references attached to lazy-loaded
 outs and grads. Each ref stores the bundle path, tensor metadata,
 and expected checksum so materialization can open a blob file on demand,
-verify integrity, return a tensor, and close the file immediately.
+verify integrity, return a tensor, and close the file immediately. A ref with
+a ``key`` names one tensor inside a 3.0 payload chunk
+(``blobs/<codec>-<nnnn>.safetensors``): the chunk digest is verified once per
+file version and the key is read by offset with ``safetensors.safe_open``.
 """
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
@@ -16,42 +18,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 import torch
-from safetensors import SafetensorError
+from safetensors import SafetensorError, safe_open
 from safetensors.torch import load, load_file
 
 from .._utils.hashing import sha256_file
 from . import ArtifactError, PayloadLoadHints
+from ._chunk_digest import _chunk_digest, _file_identity
 from .paths import resolve_bundle_blob_path
 from .payload_codec import materialize_transport_tensor
 
 _INLINE_LOAD_MAX_BYTES = 500 * 1024 * 1024
 _TORCH_BACKEND_NAME = "torch"
-
-
-def _file_identity(stat_result: os.stat_result) -> tuple[int, int, int, int]:
-    """Return the ``(st_dev, st_ino, st_size, st_mtime_ns)`` identity of a file.
-
-    Two stat results with the same tuple describe the same file content at the
-    same version: an atomic rename-replace changes ``st_ino`` and an in-place
-    rewrite changes ``st_size``/``st_mtime_ns``.
-
-    Parameters
-    ----------
-    stat_result:
-        Stat result to summarize.
-
-    Returns
-    -------
-    tuple[int, int, int, int]
-        Device, inode, size, and nanosecond mtime identity.
-    """
-
-    return (
-        stat_result.st_dev,
-        stat_result.st_ino,
-        stat_result.st_size,
-        stat_result.st_mtime_ns,
-    )
 
 
 @dataclass(frozen=True)
@@ -90,6 +67,9 @@ class LazyActivationRef:
         Optional JSON-ready codec metadata.
     payload_hints:
         Optional backend payload hints captured from lazy load.
+    key:
+        Tensor key inside a multi-tensor payload chunk, or ``None`` when the
+        blob file holds exactly one tensor.
     """
 
     blob_id: str
@@ -107,6 +87,7 @@ class LazyActivationRef:
     logical_device: str | None = None
     codec_metadata: dict[str, Any] | None = None
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None
+    key: str | None = None
 
     def blob_path(self, *, resolved_blobs_dir: Path | None = None) -> Path:
         """Return the absolute path to the referenced blob file.
@@ -161,6 +142,11 @@ class LazyActivationRef:
         """
 
         blob_path = self.blob_path(resolved_blobs_dir=resolved_blobs_dir)
+        if self.key is not None:
+            tensor = self._read_chunk_key(blob_path, self.key, map_location)
+            if self.dtype.is_complex and not tensor.is_complex():
+                tensor = torch.view_as_complex(tensor)  # chunks store complex as its real view
+            return self._to_payload(tensor, map_location, payload_hints)
 
         try:
             blob_size = blob_path.stat().st_size
@@ -243,7 +229,16 @@ class LazyActivationRef:
 
         if len(tensor_map) != 1:
             raise ArtifactError(f"Expected a single tensor in blob file {blob_path}.")
-        tensor = next(iter(tensor_map.values()))
+        return self._to_payload(next(iter(tensor_map.values())), map_location, payload_hints)
+
+    def _to_payload(
+        self,
+        tensor: torch.Tensor,
+        map_location: Any,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None,
+    ) -> Any:
+        """Convert a stored transport tensor into the logical payload of this ref."""
+
         effective_hints = self.payload_hints if payload_hints is None else payload_hints
         payload = materialize_transport_tensor(
             tensor,
@@ -254,3 +249,50 @@ class LazyActivationRef:
         if self.requires_grad and isinstance(payload, torch.Tensor):
             payload.requires_grad_(True)
         return payload
+
+    def _read_chunk_key(self, blob_path: Path, key: str, map_location: Any) -> torch.Tensor:
+        """Read one key of a payload chunk after verifying the chunk digest.
+
+        Parameters
+        ----------
+        blob_path:
+            Absolute chunk path.
+        key:
+            Tensor key inside the chunk.
+        map_location:
+            Requested device (torch payloads only; backend payloads read on CPU).
+
+        Returns
+        -------
+        torch.Tensor
+            The stored transport tensor.
+
+        Raises
+        ------
+        ArtifactError
+            If the chunk is missing or unreadable, the key is absent, the digest
+            differs from the manifest, or the file changed while it was read.
+        """
+
+        device = str(map_location) if self.logical_backend == _TORCH_BACKEND_NAME else "cpu"
+        tensor: torch.Tensor | None = None
+        try:
+            identity = _file_identity(blob_path.stat())
+            observed_sha256 = _chunk_digest(str(blob_path), identity)
+            if observed_sha256 == self.expected_sha256:
+                with safe_open(str(blob_path), framework="pt", device=device) as handle:
+                    tensor = handle.get_tensor(key)
+                if _file_identity(blob_path.stat()) != identity:
+                    observed_sha256 = "a file that changed while it was read"
+        except (OSError, SafetensorError, ValueError) as exc:
+            raise ArtifactError(
+                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}",
+                code="bundle_load_failed",
+            ) from exc
+        if tensor is None or observed_sha256 != self.expected_sha256:
+            raise ArtifactError(
+                f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
+                f"got {observed_sha256}",
+                code="bundle_load_failed",
+            )
+        return tensor

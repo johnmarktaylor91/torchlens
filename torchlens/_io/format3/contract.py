@@ -24,10 +24,10 @@ FORMAT_MAJOR: Final = 3
 #: The record contract (tlspec) version the constants below are pinned to.
 #: The writer lane bumps it together with the added keys and the generated
 #: field page; the pin test compares it with the page header.
-RECORD_CONTRACT_VERSION: Final = 11
+RECORD_CONTRACT_VERSION: Final = 12
 #: Lowest record contract version the 3.0 reader accepts. Nothing older than
 #: the format itself is readable; a 2.x artifact refuses at the manifest.
-RECORD_CONTRACT_FLOOR: Final = 11
+RECORD_CONTRACT_FLOOR: Final = 12
 
 #: Manifest file name at the artifact root; everything else is indexed from it.
 MANIFEST_FILE: Final = "manifest.json"
@@ -75,10 +75,10 @@ SAVE_LEVELS: Final[tuple[str, ...]] = (
 )
 
 #: The twelve record kinds in page order: (record, class path, persisted keys).
-#: The key counts are the tlspec 11 numbers of the generated field page.
+#: The key counts are the tlspec 12 numbers of the generated field page.
 RECORD_INDEX: Final[tuple[tuple[str, str, int], ...]] = (
     ("trace", "torchlens._data_classes.trace.Trace", 183),
-    ("op", "torchlens._data_classes.op.Op", 174),
+    ("op", "torchlens._data_classes.op.Op", 176),
     ("layer", "torchlens._data_classes.layer.Layer", 92),
     ("aten_op", "torchlens._data_classes.aten_op.AtenOp", 32),
     ("backward_pass", "torchlens._data_classes.backward_pass.BackwardPass", 20),
@@ -93,13 +93,10 @@ RECORD_INDEX: Final[tuple[tuple[str, str, int], ...]] = (
 #: Persisted keys across the twelve records at ``RECORD_CONTRACT_VERSION``.
 PERSISTED_KEY_COUNT: Final = sum(count for _, _, count in RECORD_INDEX)
 
-#: Keys the writer lane adds with the format, per record, so loaded equals
-#: live and constants carry their own flag. They are absent from the tlspec 11
-#: page; the writer lane adds them to the bindings and regenerates the page,
-#: and the pin test then expects ``PERSISTED_KEY_COUNT`` to include them.
-PLANNED_KEYS: Final[dict[str, tuple[str, ...]]] = {
-    "op": ("arg_expressions", "is_constant"),
-}
+#: Keys a later contract adds, per record, before they reach the bindings and
+#: the generated page; a key leaves the plan in the change that persists it.
+#: Empty at tlspec 12: ``op.arg_expressions`` and ``op.is_constant`` landed.
+PLANNED_KEYS: Final[dict[str, tuple[str, ...]]] = {}
 #: Persisted keys whose VALUE the writer settles on the live side so a loaded
 #: trace equals the live one: today the portable scrub drops these values and
 #: the loader settles the grouping policy after the fact.
@@ -124,6 +121,9 @@ JSON_TYPE_BY_STORAGE_KIND: Final[dict[StorageKind, str]] = {
     StorageKind.RUNTIME: "never",
 }
 
+#: Version of the built-in edit registry a recipe records (``helpers[].version``).
+HELPER_REGISTRY_VERSION: Final = "1"
+
 #: The key that marks a typed JSON object; its value is one of the tags below.
 TYPED_VALUE_KEY: Final = "$tl"
 #: Typed-value tags. Every Python value JSON cannot carry directly is one of
@@ -144,12 +144,16 @@ TYPED_VALUE_TAGS: Final[tuple[str, ...]] = (
     "type",
     "enum",
     "record",
+    "ref",
     "unencodable",
     "callable_placeholder",
 )
 #: Where the ``record`` tag's type allowlist comes from: the writer contract's
-#: component spec tables (value objects such as ``OpRef``, ``FireRecord`` and
-#: ``Edit``); a ``record`` object of any other type refuses.
+#: ``component_specs`` classes (``field_registry.component_spec_tables``) plus
+#: the value classes listed beside the codec in ``format3/values.py``
+#: (quantities, dtype and device refs, ...); a ``record`` object of any other
+#: type refuses. ``ref`` cells point at a row of another record table
+#: (``{"record": kind, "row": index}``) where a live field holds a record object.
 RECORD_TYPE_ALLOWLIST_SOURCE: Final = "torchlens._io.field_registry.component_spec_tables"
 #: Fields of a tensor reference object (tag ``tensor``). ``blob`` and ``key``
 #: are absent in a structure-only artifact; ``complex`` marks a tensor stored
@@ -170,6 +174,13 @@ UNENCODABLE_FIELDS: Final[tuple[str, ...]] = ("type", "repr", "repr_length", "at
 UNENCODABLE_REPR_LIMIT: Final = 256
 #: Fields of a ``callable_placeholder`` in a saved intervention recipe.
 CALLABLE_PLACEHOLDER_FIELDS: Final[tuple[str, ...]] = ("position", "qualname", "repr_length")
+#: Public type an ``unencodable`` disclosure loads as (ruled 2 Nov 2026).
+UNENCODABLE_VALUE_TYPE: Final = "UnencodableValue"
+#: Load advisory attached when the manifest carries ``disclosures`` (ruled 2 Nov 2026).
+UNENCODABLE_LOAD_ADVISORY: Final = "unencodable_values_stringified"
+#: Labels ``tl.io.detect_tlspec_format`` returns: a 3.0 save, a 2.x save, not a
+#: TorchLens save (ruled 2 Nov 2026).
+FORMAT_DETECTION_LABELS: Final[tuple[str, ...]] = ("v3", "pre_3", "unknown")
 
 #: Refusal codes the writer and reader raise, by situation. Every value is a
 #: row of ``docs/reference/error_refusal_contract.md``; situations whose row
@@ -185,6 +196,7 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "save_level_unknown": "artifact_save_level_invalid",
     "record_file_corrupt": "bundle_metadata_integrity_refused",
     "record_key_unknown": "unknown_persisted_field",
+    "record_schema_invalid": "record_schema_invalid",
     "blob_missing": "bundle_load_failed",
     "structure_only_incoherent": "artifact_structure_only_incoherent",
     "symlink_path": "load_path_symlink_rejected",
@@ -196,11 +208,9 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "reader_not_built": "bundle_load_failed",
 }
 #: Situations whose code is provisional: a private spelling builders can use
-#: until the public code is ruled. Each is also a row of ``REFUSAL_CODES``
-#: above with the existing code the reader raises meanwhile.
-PROVISIONAL_REFUSALS: Final[dict[str, str]] = {
-    "record_schema_invalid": "manifest_schema_invalid",
-}
+#: until the public code is ruled, each mapped to the existing code raised
+#: meanwhile. Empty: every spelling the format needed has been ruled.
+PROVISIONAL_REFUSALS: Final[dict[str, str]] = {}
 
 #: Where the per-step timing keys come from: ``_phase_timings`` is keyed by the
 #: ``name`` of each step of this tuple, nothing else.

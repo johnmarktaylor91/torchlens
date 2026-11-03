@@ -179,6 +179,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_pending_grad_blob_id": None,
     "_pending_transformed_grad_blob_id": None,
     "annotations": {},
+    "is_constant": False,
     "autograd_memory": None,
     "num_autograd_tensors": None,
     "bytes_delta_at_call": None,
@@ -1356,6 +1357,7 @@ class Op(_SelectionOperand):
         min_distance_to_output: Any
         max_distance_to_output: Any
         is_buffer: Any
+        is_constant: bool
         address: Any
         buffer_pass: Any
         buffer_source: Any
@@ -1478,7 +1480,7 @@ class Op(_SelectionOperand):
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "var_names": FieldPolicy.KEEP,
-        ARG_EXPRESSIONS_FIELD: FieldPolicy.DROP,
+        ARG_EXPRESSIONS_FIELD: FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -1563,6 +1565,7 @@ class Op(_SelectionOperand):
         "max_distance_to_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
+        "is_constant": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,
@@ -2787,10 +2790,7 @@ class Op(_SelectionOperand):
         _ensure_detached_store(self)
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
-        default_fill_state(
-            state,
-            defaults=self._DEFAULT_FILL_STATE,
-        )
+        default_fill_state(state, defaults=self._DEFAULT_FILL_STATE)
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes
@@ -3014,10 +3014,7 @@ class Op(_SelectionOperand):
         if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
-            self._internal_set(
-                "saved_kwargs",
-                {k: copy_arg_tree(v) for k, v in t_kwargs.items()},
-            )
+            self._internal_set("saved_kwargs", {k: copy_arg_tree(v) for k, v in t_kwargs.items()})
         else:
             self._internal_set("saved_args", None)
             self._internal_set("saved_kwargs", None)

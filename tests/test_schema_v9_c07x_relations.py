@@ -13,7 +13,7 @@ window (TLSPEC_VERSION stays 9):
 - three-leg preserve-and-disclose loading: (a) unknown NAMESPACED relation
   kinds load opaque/disclosed (bare unknown refuses; ``tl.load(
   unknown_relations="refuse")`` restores strictness), (b) unknown evidence
-  schema ids load opaque, (c) unknown namespaced bundle.json sections
+  schema ids load opaque, (c) unknown namespaced relations.json sections
   preserve through the Bundle carriage while bare-unknown sections refuse —
   with byte-preserving re-save in every leg;
 - reserved evidence schema-id strings and reserved TorchLens sidecar family
@@ -368,7 +368,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
         {"kind": "successor_of", "from": "ckpt_200", "to": "ckpt_100", "params": {}}
     )
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"].append(_foreign_kind_payload())
     metadata_path.write_text(json.dumps(metadata))
@@ -387,7 +387,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
 
     resaved = tmp_path / "resaved.tlspec"
     loaded.save(resaved)
-    resaved_metadata = json.loads((resaved / "bundle.json").read_text())
+    resaved_metadata = json.loads((resaved / "relations.json").read_text())
     assert _foreign_kind_payload() in resaved_metadata["member_relations"]
 
     with pytest.raises(BundleRelationError) as excinfo:
@@ -397,7 +397,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
 
 def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: Bundle) -> None:
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["someorg.experiment_index"] = {"runs": [1, 2, 3]}
     metadata_path.write_text(json.dumps(metadata))
@@ -415,7 +415,7 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 
     resaved = tmp_path / "resaved.tlspec"
     loaded.save(resaved)
-    resaved_metadata = json.loads((resaved / "bundle.json").read_text())
+    resaved_metadata = json.loads((resaved / "relations.json").read_text())
     assert resaved_metadata["someorg.experiment_index"] == {"runs": [1, 2, 3]}
 
 
@@ -426,7 +426,7 @@ def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: 
     from torchlens._io.format_errors import ArtifactError
 
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["experiment_index"] = {"runs": [1]}
     metadata_path.write_text(json.dumps(metadata))
