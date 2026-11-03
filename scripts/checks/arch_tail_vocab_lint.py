@@ -262,7 +262,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
     "_vocab.node_spec": 0,
     "_io.format_errors": 1,  # errors._base (L0 error vocabulary)
     "_output_slot": 2,  # _errors and errors._base (L0 error vocabulary)
-    "recording.types": 22,  # the declared residue; splits burn this down
+    "recording.types": 25,  # the declared residue; splits burn this down
 }
 
 
