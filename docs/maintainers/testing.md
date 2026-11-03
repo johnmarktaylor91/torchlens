@@ -48,7 +48,7 @@ coordinating host.
 | --- | --- | --- | --- |
 | `inner` | the files mapped to the changed path, or one named test | your worktree | 300 s, one CPU |
 | `worker_lane` | one targeted file with `-x` | a worker | 300 s, one CPU |
-| smoke (commit gate) | `-m smoke`, about 1,470 coverage-chosen tests under the `SMOKE_TIER_SIZE_CEILING` of 1,477 | `python scripts/smoke_ci_parity.py -n 4`, in CI's pinned environment | about 3 minutes serial |
+| smoke (commit gate) | `-m smoke`, 384 coverage-chosen tests under the `SMOKE_TIER_SIZE_CEILING` of 400 | `python scripts/smoke_ci_parity.py -n 4`, in CI's pinned environment | about 2 minutes at `-n 4` |
 | mid backstop | `-m "not rare and not slow and not heavy"` | a worker | minutes |
 | `pre_merge` (phase boundary) | `-m "not rare and not slow"`, 8 shards by least duration, one seed | a worker, 8 shards | 12,000 s |
 | full | `pytest tests/` (`rare` stays excluded by `addopts`) | nightly and weekly CI | per workflow budget |
