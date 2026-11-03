@@ -17,7 +17,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from name_lockstep import glossary_backfill, glossary_params  # noqa: E402
+from name_lockstep import glossary_backfill, glossary_params, records  # noqa: E402
 
 GLOSSARY = REPO_ROOT / "docs" / "reference" / "glossary.md"
 
@@ -32,6 +32,16 @@ TABLE = """\
 | `k=` | keyword of `Bundle.rank_changes`, `tl.top_changed`: rows to return |
 | `metric=` | the pairwise metric; see `Bundle.rank_changes` |
 | `seed=` | constructor keyword of `tl.errors.Base` and the classes that inherit it |
+"""
+
+RECORDS = """\
+### Records built by TorchLens
+| Record | Meaning |
+| --- | --- |
+| `tl.errors.*` | every exception and warning |
+| `tl.debug.ScanRow` | one row of a scan |
+| `tl.intervention.FireRecord` | one hook firing |
+
 """
 
 
@@ -149,6 +159,75 @@ def test_every_public_parameter_has_a_glossary_row() -> None:
     )
 
 
+def test_records_section_lists_paths_and_families() -> None:
+    """A record is a listed path, a dotted tail of one, or a member of a listed family."""
+
+    listed = records.record_classes(RECORDS + TABLE)
+    assert listed == {"tl.errors.*", "tl.debug.ScanRow", "tl.intervention.FireRecord"}
+    assert records.is_record("tl.debug.ScanRow", listed)
+    assert records.is_record("ScanRow", listed)
+    assert records.is_record("tl.errors.ReadError", listed)
+    assert not records.is_record("tl.stats.ScanRow", listed)
+    assert not records.is_record("Bundle.rank_changes", listed)
+    assert records.record_classes(TABLE) == frozenset()
+
+
+def test_record_constructor_keywords_need_no_row_and_may_not_have_one() -> None:
+    """A record's constructor keyword is skipped by ``missing`` and flagged by ``stale``."""
+
+    rows = [
+        _row("tl.debug.ScanRow", "abs_max", constructor=True),
+        _row("tl.errors.Base", "seed", constructor=True),
+        _row("tl.stats.Summary", "abs_max", constructor=True),
+        _row(
+            "tl.stats.Leaf",
+            "abs_max",
+            constructor=True,
+            aliases=["tl.stats.Leaf", "tl.debug.ScanRow"],
+            defined_by="tl.debug.ScanRow",
+        ),
+    ]
+    text = RECORDS + TABLE + "| `abs_max=` | constructor keyword of `tl.debug.ScanRow` |\n"
+    gaps = {(g["callable"], g["param"]) for g in glossary_params.missing(rows, text)}
+    assert gaps == {("tl.stats.Summary", "abs_max")}  # Leaf inherits the named constructor
+    pruned = glossary_backfill.prune_records(text)[0]
+    gaps = {(g["callable"], g["param"]) for g in glossary_params.missing(rows, pruned)}
+    assert gaps == {("tl.stats.Summary", "abs_max"), ("tl.stats.Leaf", "abs_max")}
+    assert glossary_params.stale(rows, text) == [
+        ("tl.debug.ScanRow", "abs_max"),
+        ("tl.errors.Base", "seed"),
+    ]
+
+
+def test_prune_records_drops_record_owners_and_keeps_fields() -> None:
+    """Pruning removes record owners from every clause and whole rows that named only them."""
+
+    text = (
+        RECORDS
+        + TABLE
+        + (
+            "| `abs_max=` | constructor keyword of `tl.debug.ScanRow` (required) |\n"
+            "| `edit=` | field and constructor keyword of `FireRecord`; keyword of "
+            "`build_fire_record`; keyword of `tl.audit` (default `'zero'`): a; b |\n"
+            "| `num_nan=` | keyword of `ScanRow`, `tl.stats.Stats`; constructor keyword of "
+            "`tl.debug.ScanRow`, `tl.stats.Result` (required) |\n"
+        )
+    )
+    pruned, edited, removed = glossary_backfill.prune_records(text)
+    assert (edited, removed) == (2, 2)
+    lines = pruned.splitlines()
+    assert "| `abs_max=` |" not in pruned and "| `seed=` |" not in pruned
+    assert lines[-2] == (
+        "| `edit=` | field of `FireRecord`; keyword of `build_fire_record`; keyword of "
+        "`tl.audit` (default `'zero'`): a; b |"
+    )
+    assert lines[-1] == (
+        "| `num_nan=` | keyword of `tl.stats.Stats`; constructor keyword of `tl.stats.Result` "
+        "(required) |"
+    )
+    assert glossary_backfill.prune_records(pruned)[0] == pruned
+
+
 def test_a_row_naming_a_keyword_the_callable_lacks_is_stale() -> None:
     """``k=`` on ``Bundle.rank_changes`` is stale once the code takes ``top_k=`` instead."""
 
@@ -158,7 +237,10 @@ def test_a_row_naming_a_keyword_the_callable_lacks_is_stale() -> None:
 
 @pytest.mark.heavy
 def test_no_glossary_keyword_row_names_a_parameter_the_code_lacks() -> None:
-    """A keyword row never says a public callable takes a keyword it does not take."""
+    """A keyword row never says a public callable takes a keyword it does not take.
+
+    That includes any keyword of a record class: records are built by TorchLens.
+    """
 
     rows = glossary_params.public_parameters(meanings=False)
     wrong = glossary_params.stale(rows, GLOSSARY.read_text(encoding="utf-8"))

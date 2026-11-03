@@ -10,6 +10,10 @@ gets a new row in the last ``### Keywords`` table, which stays sorted by spellin
 describe the code as it is (kind, default and the docstring's meaning); they rename nothing.
 
 Usage: ``PYTHONPATH=tools python -m name_lockstep.glossary_backfill DUMP.json [--glossary P]``.
+
+``--prune-records`` (no dump needed) drops every record class (``records.py``) from the owner
+runs of the keyword rows: records are built by TorchLens, so no keyword row names their
+constructors; a ``field and constructor keyword of`` clause keeps its owners as ``field of``.
 """
 
 from __future__ import annotations
@@ -24,7 +28,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from name_lockstep.glossary_params import _KEYWORD_ROW, missing
+from name_lockstep.glossary_params import _KEYWORD_ROW, _OWNER_RUN, _SPAN, missing
+from name_lockstep.records import is_record, record_classes
 
 _RST_LITERAL = re.compile(r"``([^`]+)``")
 _SPHINX_ROLE = re.compile(
@@ -33,6 +38,9 @@ _SPHINX_ROLE = re.compile(
 _INHERITED = " and the classes that inherit that constructor"
 _PARENTHETICAL = re.compile(r"\s*\(([^()]*)\)")
 _ID_LINT = Path(__file__).resolve().parents[2] / "scripts" / "checks" / "id_lint.py"
+#: A clause boundary inside a keyword row's meaning cell.
+_CLAUSE_SPLIT = re.compile(r";\s+(?=(?:field and )?(?:constructor )?keyword of `)")
+_CLAUSE_HEAD = re.compile(r"^(field and )?(constructor )?keyword of ")
 
 
 @functools.cache
@@ -203,6 +211,61 @@ def backfill(glossary: str, rows: list[dict[str, Any]]) -> tuple[str, int, int]:
     return "\n".join(lines) + "\n", extended, len(added)
 
 
+def _prune_clause(clause: str, records: frozenset[str]) -> list[str]:
+    """Return the clauses that replace one clause once record owners leave its run."""
+
+    head = _CLAUSE_HEAD.match(clause)
+    run = _OWNER_RUN.match(clause[head.end() - len("keyword of ") :]) if head else None
+    if head is None or run is None:
+        return [clause]
+    owners = [span.strip() for span in _SPAN.findall(run.group(1))]
+    kept = [o for o in owners if not is_record(o.removesuffix("()"), records)]
+    if len(kept) == len(owners):
+        return [clause]
+    tail = clause[head.end() - len("keyword of ") + run.end() :].strip()
+    out: list[str] = []
+    if head.group(1):
+        gone = [o for o in owners if o not in kept]
+        out.append("field of " + ", ".join(f"`{o}`" for o in gone))
+    if kept:
+        out.append(f"{head.group(0)}{', '.join(f'`{o}`' for o in kept)} {tail}".rstrip())
+    return out
+
+
+def prune_records(glossary: str) -> tuple[str, int, int]:
+    """Return the glossary with no keyword row naming a record class, plus edit counts.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text; its records section says which classes are records.
+
+    Returns
+    -------
+    tuple[str, int, int]
+        New text, rows edited, rows removed (every clause named only records).
+    """
+
+    records = record_classes(glossary)
+    lines: list[str] = []
+    edited = removed = 0
+    for line in glossary.splitlines():
+        match = _KEYWORD_ROW.match(line.strip())
+        if not match:
+            lines.append(line)
+            continue
+        clauses = _CLAUSE_SPLIT.split(match.group(2).strip())
+        kept = [c for clause in clauses for c in _prune_clause(clause, records)]
+        if kept == clauses:
+            lines.append(line)
+        elif kept:
+            lines.append(f"| `{match.group(1)}=` | {'; '.join(kept)} |")
+            edited += 1
+        else:
+            removed += 1
+    return "\n".join(lines) + "\n", edited, removed
+
+
 def _name(line: str) -> str:
     """Return the keyword a keyword row spells."""
 
@@ -234,13 +297,23 @@ def main(argv: list[str] | None = None) -> int:
     """Backfill the glossary in place from a dump; print what changed."""
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("dump", type=Path)
+    parser.add_argument("dump", type=Path, nargs="?")
     parser.add_argument("--glossary", type=Path, default=Path("docs/reference/glossary.md"))
+    parser.add_argument(
+        "--prune-records", action="store_true", help="drop record classes from keyword rows"
+    )
     args = parser.parse_args(argv)
-    rows = json.loads(args.dump.read_text(encoding="utf-8"))
-    text, extended, added = backfill(args.glossary.read_text(encoding="utf-8"), rows)
+    if args.dump is None and not args.prune_records:
+        parser.error("a dump or --prune-records is needed")
+    text = args.glossary.read_text(encoding="utf-8")
+    if args.prune_records:
+        text, edited, removed = prune_records(text)
+        print(f"pruned record owners from {edited} keyword rows; removed {removed} rows")
+    if args.dump is not None:
+        rows = json.loads(args.dump.read_text(encoding="utf-8"))
+        text, extended, added = backfill(text, rows)
+        print(f"extended {extended} keyword rows; added {added} keyword rows")
     args.glossary.write_text(text, encoding="utf-8")
-    print(f"extended {extended} keyword rows; added {added} keyword rows")
     return 0
 
 
