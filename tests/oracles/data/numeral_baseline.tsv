@@ -5800,7 +5800,6 @@ package-docstrings	torchlens/backends/torch/_tl.py	85
 package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	2.7
 package-docstrings	torchlens/backends/torch/_trace_backward.py	21
 package-docstrings	torchlens/backends/torch/_transform_wrappers.py	39
-package-docstrings	torchlens/backends/torch/_user_grad_fn.py	31
 package-docstrings	torchlens/backends/torch/_view_writeback.py	31
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	1.4
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	11
@@ -5873,8 +5872,6 @@ package-docstrings	torchlens/backends/torch/model_prep.py	2026
 package-docstrings	torchlens/backends/torch/model_prep.py	79
 package-docstrings	torchlens/backends/torch/model_prep.py	81
 package-docstrings	torchlens/backends/torch/offload_hooks.py	37,
-package-docstrings	torchlens/backends/torch/param_mutation.py	31
-package-docstrings	torchlens/backends/torch/param_mutation.py	65
 package-docstrings	torchlens/backends/torch/rescue.py	12
 package-docstrings	torchlens/backends/torch/rescue.py	16
 package-docstrings	torchlens/backends/torch/rescue.py	2026
