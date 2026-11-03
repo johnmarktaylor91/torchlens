@@ -228,12 +228,19 @@ def example_of(obj: Any) -> list[doctest.Example]:
     return doctest.DocTestParser().get_examples(doc)
 
 
-def _required_module(examples: list[doctest.Example]) -> str | None:
-    """Return the optional module the first example line declares, if any."""
+def _required_module(doc: str) -> str | None:
+    """Return the optional module the first ``>>>`` line of ``doc`` declares, if any.
 
-    first = examples[0].source.strip()
+    The marker is read from the docstring text: doctest drops a comment-only example, so
+    ``>>> # requires: X`` never appears among the parsed examples.
+    """
+
+    prompts = [
+        line.strip()[3:].strip() for line in doc.splitlines() if line.strip().startswith(">>>")
+    ]
+    first = prompts[0] if prompts else ""
     if first.startswith(REQUIRES_PREFIX):
-        return first[len(REQUIRES_PREFIX) :].strip()
+        return first[len(REQUIRES_PREFIX) :].strip() or None
     return None
 
 
@@ -292,7 +299,7 @@ def run_example(symbol: PublicSymbol, namespace: dict[str, Any] | None = None) -
     examples = example_of(symbol.obj)
     if not examples:
         return ExampleResult(symbol.path, "missing", "")
-    required = _required_module(examples)
+    required = _required_module(inspect.getdoc(symbol.obj) or "")
     if required is not None:
         try:
             importlib.import_module(required)
