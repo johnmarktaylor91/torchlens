@@ -6,7 +6,7 @@ import builtins
 import re as _re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, ClassVar, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
 from .errors import SelectorCompositionError
@@ -16,7 +16,6 @@ from .selector_base import (
     BaseSelector,
     CompositeSelector as CompositeSelector,
     NotSelector,
-    SelectorUniverse,
     classify_selector_universe as classify_selector_universe,
 )
 from .target import FrozenTargetSpec, TargetSpec
@@ -990,6 +989,8 @@ class GradSelector(BaseSelector):
         activation-universe selector.
     """
 
+    _wrapped_operand_attr: ClassVar[str | None] = "inner"
+
     def __init__(self, inner: str | BaseSelector) -> None:
         """Create a gradient address over one forward site."""
 
@@ -1609,54 +1610,6 @@ def in_module(address: str) -> InModuleSelector:
     """
 
     return InModuleSelector(str(address))
-
-
-def _and_universe(
-    left: SelectorUniverse | None,
-    right: SelectorUniverse | None,
-    left_sel: Any,
-    right_sel: Any,
-) -> SelectorUniverse | None:
-    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
-
-    if left is None or right is None:
-        other = right if left is None else left
-        if other in (None, "activation"):
-            return other
-        left = left or "activation"
-        right = right or "activation"
-    if left == right and left != "mixed":
-        return left
-    pair = {left, right}
-    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
-        return "gradient" if "gradient" in pair else "node"
-    if pair == {"activation", "qualifier"}:
-        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
-        raise SelectorCompositionError(
-            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
-            "activation address; activations have no backward pass.",
-            code="selector_signal_mismatch",
-            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
-        )
-    if "mixed" in pair:
-        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
-    elif pair == {"activation", "gradient"}:
-        remedy = "a gradient and an activation address never share a site; use | for both"
-    elif "activation" in pair:
-        remedy = (
-            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
-        )
-    else:
-        remedy = (
-            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
-            "payload; use one of them"
-        )
-    raise SelectorCompositionError(
-        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
-        f"{left} address and a {right} address, which never share a site.",
-        code="selector_cross_universe_and",
-        remedy=remedy,
-    )
 
 
 __all__ = [
