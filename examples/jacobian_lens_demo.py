@@ -10,6 +10,11 @@ reads the fitted lens out beside the plain logit lens. ``--check`` compares the
 fit against ``torch.func.jacrev`` of the whole model with the block output
 replaced, which never touches TorchLens.
 
+The eight-sentence corpus (about 120 source positions) is a demonstration fit:
+the late blocks read out sensibly, the early blocks' top tokens are noise. The
+reference method averages over thousands of positions; pass more text to
+``CORPUS`` for a usable lens.
+
 Run (downloads the checkpoint on first use)::
 
     python examples/jacobian_lens_demo.py --check
@@ -153,8 +158,10 @@ def main() -> int:
 
     started = time.perf_counter()
     lenses = fit_jacobian_lens(model, blocks, prompts, skip_first=args.skip_first, chunk=args.chunk)
+    positions = sum(max(ids.shape[1] - 1 - args.skip_first, 0) for ids in prompts)
     print(
-        f"fit {len(lenses)} lenses from {len(prompts)} prompts in {time.perf_counter() - started:.1f}s"
+        f"fit {len(lenses)} lenses from {len(prompts)} prompts ({positions} source positions) "
+        f"in {time.perf_counter() - started:.1f}s; a demonstration fit, not a usable lens"
     )
     probe = tokenizer(PROBE, return_tensors="pt").input_ids
     readout(model, tokenizer, blocks, lenses, probe, top=args.top)
