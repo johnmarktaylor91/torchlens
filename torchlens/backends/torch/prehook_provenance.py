@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import weakref
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -99,9 +100,15 @@ class _InstanceAttributeReplacement:
 
 @dataclass
 class PreHookProvenanceLedger:
-    """Strong session-only ledger for all reversible interposition."""
+    """Strong session-only ledger for all reversible interposition.
 
-    trace: Trace
+    The ledger holds its capture trace WEAKLY: the trace owns the ledger for
+    the session, and the wrappers the ledger installs close over the ledger,
+    so a strong back-reference made every dead Trace wait for the cyclic
+    collector.
+    """
+
+    trace_ref: weakref.ReferenceType[Trace]
     model: nn.Module
     modules: tuple[nn.Module, ...]
     prepared_ids: frozenset[int]
@@ -116,6 +123,22 @@ class PreHookProvenanceLedger:
     bypassed_modules: set[int] = field(default_factory=set)
     global_bypass_seen: bool = False
     active: bool = True
+
+    @property
+    def trace(self) -> Trace:
+        """Return the capture trace this ledger serves.
+
+        Raises
+        ------
+        RuntimeError
+            When the trace is already dead: the ledger is session-only and
+            every wrapper checks ``active`` before reaching the trace.
+        """
+
+        trace = self.trace_ref()
+        if trace is None:
+            raise RuntimeError("pre-hook provenance ledger outlived its capture trace")
+        return trace
 
     def current_token(self, module: nn.Module) -> _InvocationToken | None:
         """Return the active LIFO token for ``module`` when present."""
@@ -156,7 +179,7 @@ def install_prehook_provenance(
 
     modules = tuple(model.modules())
     ledger = PreHookProvenanceLedger(
-        trace=trace,
+        trace_ref=weakref.ref(trace),
         model=model,
         modules=modules,
         prepared_ids=frozenset(id(module) for module in modules),
@@ -222,6 +245,12 @@ def rollback_prehook_provenance(trace: Trace) -> None:
             registry_replacement.registry[registry_replacement.hook_id] = (
                 registry_replacement.original
             )
+    # The wrappers close over the ledger and the ledger lists the wrappers:
+    # release those cycles here so the restored session dies by refcount.
+    ledger.attribute_replacements.clear()
+    ledger.registry_replacements.clear()
+    ledger.invocation_stacks.clear()
+    ledger.known_wrappers.clear()
     trace.__dict__.pop("_prehook_provenance_ledger", None)
 
 
@@ -526,7 +555,8 @@ def _ensure_root_forward_binder(ledger: PreHookProvenanceLedger) -> None:
     def root_forward(*args: Any, **kwargs: Any) -> Any:
         """Bind the current root token before the real forward body starts."""
 
-        bind_invocation(ledger.trace, model, "self", 1, (args, kwargs))
+        if ledger.active:
+            bind_invocation(ledger.trace, model, "self", 1, (args, kwargs))
         return prior_forward(*args, **kwargs)
 
     model.forward = root_forward
@@ -911,6 +941,26 @@ def _fingerprint(observation: _StateObservation) -> tuple[Any, ...]:
     return observation.structure, tensor_bits, observation.leaves
 
 
+def _clone_tree(value: Any, clone_tensor: Callable[[Any], Any]) -> Any:
+    """Copy ``value`` through ``clone_tensor``, preserving tuple, list and dict nesting.
+
+    A module-level walker rather than a self-recursive closure: a closure that
+    calls itself holds a cell pointing back at the function, a reference cycle
+    that kept every captured name (the trace among them) alive until the cyclic
+    collector ran.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return clone_tensor(value)
+    if isinstance(value, tuple):
+        return tuple(_clone_tree(item, clone_tensor) for item in value)
+    if isinstance(value, list):
+        return [_clone_tree(item, clone_tensor) for item in value]
+    if isinstance(value, dict):
+        return {key: _clone_tree(item, clone_tensor) for key, item in value.items()}
+    return value
+
+
 def _snapshot_state(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
@@ -926,39 +976,31 @@ def _snapshot_state(
     copy_failures: set[int] = set()
     states_by_id = {state.object_id: state for state in observation.tensors}
 
-    def clone(value: Any) -> Any:
-        """Clone tensors and recursively preserve supported input containers."""
+    def clone_tensor(value: Any) -> Any:
+        """Clone one tensor, reusing an alias copy or the producer's snapshot."""
 
-        if isinstance(value, torch.Tensor):
-            tensor_id = id(value)
-            if tensor_id in tensor_copies:
-                return tensor_copies[tensor_id]
-            state = states_by_id[tensor_id]
-            if reuse_source_payload and trace is not None and state.source_op is not None:
-                event = trace.capture_events.op_event_by_label_raw.get(state.source_op)
-                payload = event.output.tensor.payload if event is not None else None
-                if isinstance(payload, torch.Tensor) and payload is not value:
-                    tensor_copies[tensor_id] = payload
-                    payload_origins[tensor_id] = "immutable_producer_snapshot"
-                    return payload
-            try:
-                copied = value.detach().clone()  # detach-ok: provenance snapshot copy
-            except Exception:
-                copied = None
-                copy_failures.add(tensor_id)
-            tensor_copies[tensor_id] = copied
-            payload_origins[tensor_id] = "dedicated_pre_hook_snapshot"
-            return copied
-        if isinstance(value, tuple):
-            return tuple(clone(item) for item in value)
-        if isinstance(value, list):
-            return [clone(item) for item in value]
-        if isinstance(value, dict):
-            return {key: clone(item) for key, item in value.items()}
-        return value
+        tensor_id = id(value)
+        if tensor_id in tensor_copies:
+            return tensor_copies[tensor_id]
+        state = states_by_id[tensor_id]
+        if reuse_source_payload and trace is not None and state.source_op is not None:
+            event = trace.capture_events.op_event_by_label_raw.get(state.source_op)
+            payload = event.output.tensor.payload if event is not None else None
+            if isinstance(payload, torch.Tensor) and payload is not value:
+                tensor_copies[tensor_id] = payload
+                payload_origins[tensor_id] = "immutable_producer_snapshot"
+                return payload
+        try:
+            copied = value.detach().clone()  # detach-ok: provenance snapshot copy
+        except Exception:
+            copied = None
+            copy_failures.add(tensor_id)
+        tensor_copies[tensor_id] = copied
+        payload_origins[tensor_id] = "dedicated_pre_hook_snapshot"
+        return copied
 
-    cloned_args = clone(args)
-    cloned_kwargs = clone(kwargs)
+    cloned_args = _clone_tree(args, clone_tensor)
+    cloned_kwargs = _clone_tree(kwargs, clone_tensor)
     alias_groups: dict[int, int] = {}
     tensor_observations: list[TensorInputObservation] = []
     reasons = set(observation.incomplete_reasons)
