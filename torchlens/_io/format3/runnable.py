@@ -241,14 +241,21 @@ def _stamped_descriptor(
     return descriptor, buffer_specs, weight_specs, activation_specs
 
 
+@dataclass(frozen=True)
+class _WriteContext:
+    """Prepared runnable data and the shared tensor-key counter of one artifact."""
+
+    counter: list[int]
+    prepared: tuple[Any, list[Any], list[Any], list[Any]] | None = None
+
+
 def write_runnable(
     trace: Any,
     path: str | Path,
     *,
     include_weights: bool = True,
     include_activations: bool = False,
-    counter: list[int] | None = None,
-    prepared: tuple[Any, list[Any], list[Any], list[Any]] | None = None,
+    context: _WriteContext | None = None,
 ) -> RunnableWrite:
     """Write the runnable component of a trace into an artifact directory.
 
@@ -265,11 +272,9 @@ def write_runnable(
         Write the capture-time state dict family.
     include_activations:
         Write the capture-selected activation family.
-    counter:
-        Shared artifact tensor-key counter, or a fresh counter when omitted.
-    prepared:
-        Already stamped descriptor and buffer, weight and activation specifications;
-        omit to prepare them from the live trace.
+    context:
+        Shared artifact counter and optionally the already stamped descriptor and
+        family specifications. Omit to prepare a standalone component.
 
     Returns
     -------
@@ -291,6 +296,8 @@ def write_runnable(
             f"The runnable component directory {component_dir} already exists.",
             "write the runnable component once, into a fresh artifact directory",
         )
+    context = context if context is not None else _WriteContext([0])
+    prepared = context.prepared
     descriptor, buffer_specs, weight_specs, activation_specs = (
         prepared
         if prepared is not None
@@ -298,7 +305,7 @@ def write_runnable(
             trace, include_weights=include_weights, include_activations=include_activations
         )
     )
-    sink = _create_component(root, descriptor, counter=counter)
+    sink = _create_component(root, descriptor, counter=context.counter)
     manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
     layers = descriptor.payload_layers
     _write_families(

@@ -634,7 +634,9 @@ def test_runnable_and_record_payloads_share_one_tensor_key_counter(tmp_path: Pat
     store.close()
     trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
     try:
-        written = runnable3.write_runnable(trace, tmp_path, counter=counter)
+        written = runnable3.write_runnable(
+            trace, tmp_path, context=runnable3._WriteContext(counter)
+        )
         assert written.manifest["descriptor"] == "runnable/descriptor.json"
         all_keys = []
         for path in sorted(tmp_path.rglob("*.safetensors")):

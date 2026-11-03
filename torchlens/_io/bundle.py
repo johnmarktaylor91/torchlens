@@ -759,12 +759,14 @@ def save(
                 tmp_path,
                 include_weights=include_weights,
                 include_activations=include_activations,
-                counter=payload_counter,
-                prepared=(
-                    sparse_run_descriptor,
-                    nonpersistent_buffer_blob_specs,
-                    weight_blob_specs,
-                    activation_blob_specs,
+                context=format3_runnable._WriteContext(
+                    counter=payload_counter,
+                    prepared=(
+                        sparse_run_descriptor,
+                        nonpersistent_buffer_blob_specs,
+                        weight_blob_specs,
+                        activation_blob_specs,
+                    ),
                 ),
             )
             payload_store.writer(TORCH_CODEC)
