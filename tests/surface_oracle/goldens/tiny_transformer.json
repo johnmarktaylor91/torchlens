@@ -10357,7 +10357,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -10513,7 +10513,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -10669,7 +10669,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -10825,7 +10825,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -10981,7 +10981,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -11133,7 +11133,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -11285,7 +11285,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -11443,11 +11443,11 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
     "grad": null,
@@ -11635,7 +11635,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -12015,7 +12015,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -12360,7 +12360,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -12535,7 +12535,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -12710,7 +12710,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -12887,7 +12887,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -13064,7 +13064,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -13244,7 +13244,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -13424,7 +13424,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -13611,13 +13611,13 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hooks": [],
     "forward_signature": null,
     "forward_source_file": null,
@@ -14245,7 +14245,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -14345,7 +14345,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -14635,7 +14635,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -14735,7 +14735,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -15026,7 +15026,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -15142,7 +15142,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -15420,7 +15420,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -15537,7 +15537,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -15824,7 +15824,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -15939,7 +15939,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -16234,7 +16234,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -16351,7 +16351,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -16631,7 +16631,7 @@
      "key"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -16745,7 +16745,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -17021,7 +17021,7 @@
      "key"
     ],
     "args_summary": "1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -17135,7 +17135,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -17411,7 +17411,7 @@
      "key"
     ],
     "args_summary": "2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -17525,7 +17525,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -18148,7 +18148,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -18265,7 +18265,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -18598,7 +18598,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -18712,7 +18712,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -19036,7 +19036,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.0384615384615385",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -19153,7 +19153,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -19456,7 +19456,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.7941176470588235",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -19569,7 +19569,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -19869,7 +19869,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9642857142857143",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -19981,7 +19981,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -20292,7 +20292,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9444444444444444",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -20404,7 +20404,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -20699,7 +20699,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -20780,7 +20780,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -21064,7 +21064,7 @@
      "dims"
     ],
     "args_summary": "2, 0, 1, 3",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -21176,7 +21176,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -21460,7 +21460,7 @@
      "inplace"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -21566,7 +21566,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -21844,7 +21844,7 @@
      "shape"
     ],
     "args_summary": "6, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -21954,7 +21954,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -22243,7 +22243,7 @@
      "enable_gqa"
     ],
     "args_summary": "None, 0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.3125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -22355,7 +22355,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -22670,7 +22670,7 @@
      "List[int]]]"
     ],
     "args_summary": "-2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -22784,7 +22784,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -23065,7 +23065,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -23174,7 +23174,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -23455,7 +23455,7 @@
      "dim1"
     ],
     "args_summary": "0, -2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -23572,7 +23572,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -23857,7 +23857,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -23972,7 +23972,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -24251,7 +24251,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -24366,7 +24366,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -24645,7 +24645,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -24760,7 +24760,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -25039,7 +25039,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -25148,7 +25148,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -25441,7 +25441,7 @@
      "sizes"
     ],
     "args_summary": "-1, (3, 4)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -25555,7 +25555,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -25840,7 +25840,7 @@
      "dim"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -25954,7 +25954,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -26235,7 +26235,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -26347,7 +26347,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -26627,7 +26627,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -26739,7 +26739,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -27019,7 +27019,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -27131,7 +27131,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -27412,7 +27412,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -27527,7 +27527,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -27812,7 +27812,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -27927,7 +27927,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -28212,7 +28212,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -28327,7 +28327,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -28611,7 +28611,7 @@
      "shape"
     ],
     "args_summary": "3, 2, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -28721,7 +28721,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -32910,7 +32910,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -44337,7 +44337,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -44493,7 +44493,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -44649,7 +44649,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -44805,7 +44805,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -44961,7 +44961,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -45113,7 +45113,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -45265,7 +45265,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -45423,11 +45423,11 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
     "grad": null,
@@ -45615,7 +45615,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -45995,7 +45995,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -46340,7 +46340,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -46515,7 +46515,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -46690,7 +46690,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -46867,7 +46867,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -47044,7 +47044,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -47224,7 +47224,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -47404,7 +47404,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -47591,13 +47591,13 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hooks": [],
     "forward_signature": null,
     "forward_source_file": null,
@@ -48225,7 +48225,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -48325,7 +48325,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -48615,7 +48615,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -48715,7 +48715,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -49006,7 +49006,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -49122,7 +49122,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -49400,7 +49400,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -49517,7 +49517,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -49804,7 +49804,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -49919,7 +49919,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -50214,7 +50214,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -50331,7 +50331,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -50611,7 +50611,7 @@
      "key"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -50725,7 +50725,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -51001,7 +51001,7 @@
      "key"
     ],
     "args_summary": "1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -51115,7 +51115,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -51391,7 +51391,7 @@
      "key"
     ],
     "args_summary": "2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -51505,7 +51505,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -52128,7 +52128,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -52245,7 +52245,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -52578,7 +52578,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -52692,7 +52692,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -53016,7 +53016,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.0384615384615385",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -53133,7 +53133,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -53436,7 +53436,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.7941176470588235",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -53549,7 +53549,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -53849,7 +53849,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9642857142857143",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -53961,7 +53961,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -54272,7 +54272,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9444444444444444",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -54384,7 +54384,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -54679,7 +54679,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -54760,7 +54760,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -55044,7 +55044,7 @@
      "dims"
     ],
     "args_summary": "2, 0, 1, 3",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -55156,7 +55156,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -55440,7 +55440,7 @@
      "inplace"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -55546,7 +55546,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -55824,7 +55824,7 @@
      "shape"
     ],
     "args_summary": "6, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -55934,7 +55934,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -56223,7 +56223,7 @@
      "enable_gqa"
     ],
     "args_summary": "None, 0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.3125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -56335,7 +56335,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -56650,7 +56650,7 @@
      "List[int]]]"
     ],
     "args_summary": "-2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -56764,7 +56764,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -57045,7 +57045,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -57154,7 +57154,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -57435,7 +57435,7 @@
      "dim1"
     ],
     "args_summary": "0, -2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -57552,7 +57552,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -57837,7 +57837,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -57952,7 +57952,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -58231,7 +58231,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -58346,7 +58346,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -58625,7 +58625,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -58740,7 +58740,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -59019,7 +59019,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -59128,7 +59128,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -59421,7 +59421,7 @@
      "sizes"
     ],
     "args_summary": "-1, (3, 4)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -59535,7 +59535,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -59820,7 +59820,7 @@
      "dim"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -59934,7 +59934,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -60215,7 +60215,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -60327,7 +60327,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -60607,7 +60607,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -60719,7 +60719,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -60999,7 +60999,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -61111,7 +61111,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -61392,7 +61392,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -61507,7 +61507,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -61792,7 +61792,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -61907,7 +61907,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -62192,7 +62192,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -62307,7 +62307,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -62591,7 +62591,7 @@
      "shape"
     ],
     "args_summary": "3, 2, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -62701,7 +62701,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -66890,7 +66890,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -78370,7 +78370,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -78526,7 +78526,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -78682,7 +78682,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -78838,7 +78838,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -78994,7 +78994,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -79146,7 +79146,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -79298,7 +79298,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -79456,11 +79456,11 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
     "grad": null,
@@ -79648,7 +79648,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -80028,7 +80028,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -80373,7 +80373,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -80548,7 +80548,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -80723,7 +80723,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -80900,7 +80900,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -81077,7 +81077,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -81257,7 +81257,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -81437,7 +81437,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -81624,13 +81624,13 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hooks": [],
     "forward_signature": null,
     "forward_source_file": null,
@@ -82258,7 +82258,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -82358,7 +82358,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -82648,7 +82648,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.08333333333333333",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -82748,7 +82748,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -83039,7 +83039,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -83155,7 +83155,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -83433,7 +83433,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -83550,7 +83550,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -83837,7 +83837,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -83952,7 +83952,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -84247,7 +84247,7 @@
      "inplace"
     ],
     "args_summary": "0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.25",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -84364,7 +84364,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -84644,7 +84644,7 @@
      "key"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -84758,7 +84758,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -85034,7 +85034,7 @@
      "key"
     ],
     "args_summary": "1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -85148,7 +85148,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -85424,7 +85424,7 @@
      "key"
     ],
     "args_summary": "2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -85538,7 +85538,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -86161,7 +86161,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -86278,7 +86278,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -86611,7 +86611,7 @@
      "eps"
     ],
     "args_summary": "(4,), 1e-05, True",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.5357142857142857",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -86725,7 +86725,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -87049,7 +87049,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.0384615384615385",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -87166,7 +87166,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -87469,7 +87469,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.7941176470588235",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -87582,7 +87582,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -87882,7 +87882,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9642857142857143",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -87994,7 +87994,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -88305,7 +88305,7 @@
      "bias"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.9444444444444444",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -88417,7 +88417,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -88712,7 +88712,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -88793,7 +88793,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -89077,7 +89077,7 @@
      "dims"
     ],
     "args_summary": "2, 0, 1, 3",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -89189,7 +89189,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -89473,7 +89473,7 @@
      "inplace"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -89579,7 +89579,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -89857,7 +89857,7 @@
      "shape"
     ],
     "args_summary": "6, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -89967,7 +89967,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -90256,7 +90256,7 @@
      "enable_gqa"
     ],
     "args_summary": "None, 0.0, False",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "1.3125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -90368,7 +90368,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -90683,7 +90683,7 @@
      "List[int]]]"
     ],
     "args_summary": "-2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -90797,7 +90797,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -91078,7 +91078,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -91187,7 +91187,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -91468,7 +91468,7 @@
      "dim1"
     ],
     "args_summary": "0, -2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -91585,7 +91585,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -91870,7 +91870,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -91985,7 +91985,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -92264,7 +92264,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -92379,7 +92379,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -92658,7 +92658,7 @@
      "dim1"
     ],
     "args_summary": "0, 1",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -92773,7 +92773,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -93052,7 +93052,7 @@
      "dim1"
     ],
     "args_summary": "1, 0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -93161,7 +93161,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -93454,7 +93454,7 @@
      "sizes"
     ],
     "args_summary": "-1, (3, 4)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -93568,7 +93568,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -93853,7 +93853,7 @@
      "dim"
     ],
     "args_summary": "0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -93967,7 +93967,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -94248,7 +94248,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -94360,7 +94360,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -94640,7 +94640,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -94752,7 +94752,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -95032,7 +95032,7 @@
      "shape"
     ],
     "args_summary": "3, 4, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -95144,7 +95144,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -95425,7 +95425,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -95540,7 +95540,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -95825,7 +95825,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -95940,7 +95940,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -96225,7 +96225,7 @@
      "shape"
     ],
     "args_summary": "2, 2, 3, 2",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -96340,7 +96340,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -96624,7 +96624,7 @@
      "shape"
     ],
     "args_summary": "3, 2, 4",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -96734,7 +96734,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -100923,7 +100923,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -116334,7 +116334,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -116692,7 +116692,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -117067,7 +117067,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -117438,7 +117438,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -117817,7 +117817,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -118206,7 +118206,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -118581,7 +118581,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -118951,7 +118951,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -119321,7 +119321,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -120031,7 +120031,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -120452,7 +120452,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -120870,7 +120870,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -121263,7 +121263,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -121653,7 +121653,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -122053,7 +122053,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -122410,7 +122410,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -122770,7 +122770,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -123138,7 +123138,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -123504,7 +123504,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -123878,7 +123878,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -124257,7 +124257,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -124623,7 +124623,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -124999,7 +124999,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -125375,7 +125375,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -125747,7 +125747,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -126119,7 +126119,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -126485,7 +126485,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -126870,7 +126870,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -127248,7 +127248,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -127617,7 +127617,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -127986,7 +127986,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -128355,7 +128355,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -128727,7 +128727,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129103,7 +129103,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129479,7 +129479,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129850,7 +129850,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": null,
+    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -133705,7 +133705,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
