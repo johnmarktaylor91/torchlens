@@ -331,6 +331,10 @@ def _removed_map(record: str) -> dict[str, str]:
     return {old: _remedy(record, old, group, leaf) for old, group, leaf in _active_rows(record)}
 
 
+#: Op concern-group view class by group name, filled as each group module loads; a
+#: capture-time ``LiveOpView`` serves the same groups (``view.call.call_id``).
+OP_GROUP_VIEWS: dict[str, type] = {}
+
 #: Former Op member name -> attribute that now holds it.
 OP_STORAGE_ATTRS: Mapping[str, str] = _storage_map("Op")
 #: Former Layer member name -> attribute that now holds it.

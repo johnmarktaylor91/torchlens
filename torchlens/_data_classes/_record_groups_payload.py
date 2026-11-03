@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import ArtifactError
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._record_group_base import _LayerGroup, _RecordGroup
 
 if TYPE_CHECKING:
@@ -198,5 +199,7 @@ class LayerPayload(_LayerGroup):
 
         return self._record._payload_transformed_out_shape
 
+
+OP_GROUP_VIEWS["payload"] = OpPayload
 
 __all__ = ["LayerPayload", "OpPayload"]

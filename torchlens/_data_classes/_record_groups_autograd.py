@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._record_group_base import _LayerGroup, _RecordGroup
 
 if TYPE_CHECKING:
@@ -136,5 +137,7 @@ class LayerAutograd(_LayerGroup):
 
         return self._record._autograd_num_autograd_tensors
 
+
+OP_GROUP_VIEWS["autograd"] = OpAutograd
 
 __all__ = ["LayerAutograd", "OpAutograd"]

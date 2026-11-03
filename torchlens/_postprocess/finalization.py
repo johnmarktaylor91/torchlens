@@ -1298,12 +1298,11 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.autograd.num_autograd_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log._cost_autograd_memory = Bytes(
-                sum(int(value) for value in pass_autograd_bytes)
-            )
-            layer_log._cost_total_autograd_memory = layer_log.cost.autograd_memory
+            layer_autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
+            layer_log._cost_autograd_memory = layer_autograd_memory
+            layer_log._cost_total_autograd_memory = layer_autograd_memory
             layer_log._autograd_num_autograd_tensors = sum(pass_autograd_tensor_counts)
-            autograd_memory += layer_log.cost.autograd_memory
+            autograd_memory += layer_autograd_memory
             has_autograd_saved_value = True
         else:
             layer_log._cost_autograd_memory = None

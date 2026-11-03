@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._record_group_base import _LayerGroup, _RecordGroup
 
 if TYPE_CHECKING:
@@ -102,5 +103,7 @@ class LayerSource(_LayerGroup):
 
         return self._record._single_pass_or_error("fx_qualpath")
 
+
+OP_GROUP_VIEWS["source"] = OpSource
 
 __all__ = ["LayerSource", "OpSource"]

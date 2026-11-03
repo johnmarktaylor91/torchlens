@@ -1845,7 +1845,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = INPUT_COLOR
     elif node.is_output:
         bg_color = OUTPUT_COLOR
-    elif node.control_flow.is_terminal_bool:
+    elif record_member(node, "is_terminal_bool", False):
         bg_color = BOOL_NODE_COLOR
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR

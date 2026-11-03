@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._record_group_base import _LayerGroup, _RecordGroup
 
 if TYPE_CHECKING:
@@ -171,5 +172,7 @@ class LayerModuleContext(_LayerGroup):
 
         return self._record._module_context_output_of_modules
 
+
+OP_GROUP_VIEWS["module_context"] = OpModuleContext
 
 __all__ = ["LayerModuleContext", "OpModuleContext"]

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._layer_views import layer_parent_arg_positions
 from ._record_group_base import _LayerGroup, _RecordGroup
 
@@ -294,5 +295,7 @@ class LayerCall(_LayerGroup):
 
         return self._record._single_pass_or_error("saved_kwargs")
 
+
+OP_GROUP_VIEWS["call"] = OpCall
 
 __all__ = ["LayerCall", "OpCall"]

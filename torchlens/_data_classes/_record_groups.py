@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._utils._record_group_table import OP_GROUP_VIEWS
 from .._utils.facade import refuse_removed_member
 from . import _doors, _op_cost
 from ._layer_views import layer_total_macs_forward
@@ -553,6 +554,9 @@ LAYER_GROUP_CLASSES: dict[str, type[_RecordGroup]] = {
     "control_flow": LayerControlFlow,
 }
 
+
+OP_GROUP_VIEWS["cost"] = OpCost
+OP_GROUP_VIEWS["control_flow"] = OpControlFlow
 
 __all__ = [
     "LAYER_GROUP_CLASSES",

@@ -26,7 +26,7 @@ from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import OP_GROUP_VIEWS, OP_STORAGE_ATTRS, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.tensor_utils import get_memory_amount_from_metadata
@@ -1284,6 +1284,10 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
     }
 
 
+#: Group storage attribute (``_call_call_id``) -> the live event field it reads.
+_LIVE_FIELD_BY_STORAGE: dict[str, str] = {attr: old for old, attr in OP_STORAGE_ATTRS.items()}
+
+
 class LiveOpView:
     """Read-only Op-shaped adapter over a capture-time operation event."""
 
@@ -1334,8 +1338,11 @@ class LiveOpView:
             Current live field value.
         """
 
+        group = OP_GROUP_VIEWS.get(name)
+        if group is not None:
+            return group(self)
         record = object.__getattribute__(self, "_record")
-        return _event_live_field(self._trace, record, name)
+        return _event_live_field(self._trace, record, _LIVE_FIELD_BY_STORAGE.get(name, name))
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Reject direct mutation of live views.
