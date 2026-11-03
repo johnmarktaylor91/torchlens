@@ -2726,6 +2726,22 @@ deprecation shim owed*
   conservative area-only mapping + typed refusal on rolled varying sources).
   See the "size_by" and "scale (size channel)" entries above for semantics.
 
+**highlight (draw kwarg)** — *keyword-only*
+: `Trace.draw(highlight=...)` draws a named highlight over the graph; `None` (the
+  default) draws the plain graph. The one value today is `"interventions"`: the surgery
+  lens marks every recorded intervention on its node (solid border = recorded fact, dashed
+  = heuristic attribution), the caption carries the per-lane census, and a written figure
+  gets the full census text beside it as `<path>.census.txt` (beside the collision-safe
+  file a bare draw chose). A trace with no recorded intervention refuses
+  `surgery_evidence_missing`; any other value refuses `draw_highlight_invalid`, naming the
+  allowed values.
+
+**ContactSheet (contact-sheet page)** — *documented-unstable*
+: What `tl.viz.contact_sheet(view, page=...)` returns: the page's SVG text (a `str`, so
+  every string use keeps working) carrying `page` (zero-based index) and `page_count`
+  (pages in the full sheet at this `tiles_per_page`, at least 1; the "N of M" footer
+  prints the same number).
+
 **stack_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
 : The wave-1 rank encoding channel on `Trace.draw` (stacking split (a):
   explicit + licensed auto on plain traces). The `True`/`"auto"` request form
