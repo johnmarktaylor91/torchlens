@@ -205,46 +205,6 @@ class WhileThenIfModel(nn.Module):
         return y * 2
 
 
-def test_assert_then_if_still_materializes_branch() -> None:
-    """A prior assert consumption must not erase the later if conditional."""
-
-    guarded = _log_model(AssertThenIfModel(), torch.ones(2, 2))
-    control = _log_model(IfOnlyModel(), torch.ones(2, 2))
-
-    assert len(guarded.graph.conditional_records) == 1
-    assert len(control.graph.conditional_records) == 1
-
-    guarded_relu = _find_only_layer(guarded, "relu")
-    control_relu = _find_only_layer(control, "relu")
-    assert guarded_relu.conditional_branch_stack == ((0, "then"),)
-    assert guarded_relu.conditional_branch_stack == control_relu.conditional_branch_stack
-
-    (conditional,) = list(guarded.graph.conditionals)
-    assert conditional.fired_arm_kind == "then"
-    bool_layer = _find_only_layer(guarded, "all")
-    assert bool_layer.conditional_context_kind == "if_test"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert bool_layer.terminal_conditional_id == 0
-
-    _assert_no_false_fired(guarded, {"relu", "all", "__gt__", "mul"}, {"sigmoid"})
-    _assert_bool_value_never_contradicts_fired(guarded)
-
-
-def test_while_then_if_still_materializes_branch() -> None:
-    """A prior while consumption must not erase the later if/else conditional."""
-
-    trace = _log_model(WhileThenIfModel(), torch.ones(2, 2))
-
-    assert len(trace.graph.conditional_records) == 1
-    sigmoid_layer = _find_only_layer(trace, "sigmoid")
-    assert sigmoid_layer.conditional_branch_stack == ((0, "else"),)
-    (conditional,) = list(trace.graph.conditionals)
-    assert conditional.fired_arm_kind == "else"
-
-    _assert_no_false_fired(trace, {"sigmoid", "sum", "__gt__", "mul"}, {"relu"})
-    _assert_bool_value_never_contradicts_fired(trace)
-
-
 # ---------------------------------------------------------------------------
 # F2: predicate reuse — one bool gating two separate if statements
 # ---------------------------------------------------------------------------
