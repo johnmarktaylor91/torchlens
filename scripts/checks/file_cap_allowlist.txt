@@ -1183,7 +1183,7 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	153
-torchlens/intervention/rerun.py	1664
+torchlens/intervention/rerun.py	1640
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78
