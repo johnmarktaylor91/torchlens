@@ -7706,6 +7706,7 @@ test-docstrings	tests/test_episode_truth_travel_policy.py	11
 test-docstrings	tests/test_episode_truth_travel_policy.py	12
 test-docstrings	tests/test_error_code_coverage.py	25
 test-docstrings	tests/test_error_code_coverage.py	900
+test-docstrings	tests/test_escape_disclosure_persistence.py	16
 test-docstrings	tests/test_exception_taxonomy.py	26.3
 test-docstrings	tests/test_exception_taxonomy.py	64
 test-docstrings	tests/test_explorer_watch_gates.py	11

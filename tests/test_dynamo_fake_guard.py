@@ -290,3 +290,21 @@ def test_compiled_submodule_is_still_unwrapped_not_merely_skipped() -> None:
     assert any("relu" in label for label in labels), (
         "a compiled child nn.Module is unwrapped to eager, so its interior must be logged"
     )
+
+
+# Kept: regression test for a fixed bug; the shrink-r4 regression class needs a planted fault to delete it.
+def test_fake_tensor_input_refuses_with_a_typed_explanatory_error() -> None:
+    """A FakeTensor input must be refused up front, not crash mid-forward."""
+
+    fake_mode = _fake_mode()
+    with fake_mode():
+        fake_x = torch.randn(2, 4)
+
+    with pytest.raises(UnsupportedTensorVariantError) as excinfo:
+        tl.trace(nn.Linear(4, 4), fake_x)
+    message = str(excinfo.value)
+    assert "FakeTensor in input" in message
+    assert "no data" in message
+    # The docs pointer must cite a location that actually exists (B8-30: the
+    # old pointer named a phantom README/LIMITATIONS.md section).
+    assert "docs/reference/limitations.md" in message

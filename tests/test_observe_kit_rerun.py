@@ -13,6 +13,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.debug import (
+    bisect_precision,
     first_divergence,
 )
 
@@ -111,3 +112,22 @@ def test_clone_input_tree_copies_tensors_and_containers() -> None:
     cloned["a"].append("extra")
     assert torch.equal(tree["a"][0], torch.ones(2))
     assert len(tree["a"]) == 2
+
+
+# Kept: regression test for a fixed bug; the shrink-r4 regression class needs a planted fault to delete it.
+def test_bisect_precision_works_after_prior_trace() -> None:
+    """The double-run harness survives an already-traced source model.
+
+    ``copy.deepcopy`` of a traced model used to carry stale instance-level
+    forward wrappers into the copies and the next capture died with a bare
+    ``KeyError``; the shared harness releases each copy first.
+    """
+
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    x = torch.randn(2, 4)
+    prior = tl.trace(model, x)
+    try:
+        result = bisect_precision(model, x)
+        assert result.rows, "expected compared rows from an already-traced model"
+    finally:
+        _cleanup(prior)

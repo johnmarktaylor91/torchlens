@@ -10,7 +10,9 @@ a positive one still never does (tamper must not forge ``True``).
 from __future__ import annotations
 
 import copy
+import warnings
 
+import pytest
 import torch
 from torch import nn
 
@@ -67,3 +69,22 @@ def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     clone = copy.deepcopy(trace)
     assert clone.provenance.verified is False
     assert clone.provenance.verification_reason == "mode_rescue_rerun"
+
+
+# Kept: regression test for a fixed bug; the shrink-r4 regression class needs a planted fault to delete it.
+def test_deferred_storage_key_never_touches_fake_tensor_storage() -> None:
+    """grind-r5 b6 R16 (sol): the deferred-alias key helper must classify a
+    FakeTensor ineligible WITHOUT reading its data pointer (torch emits an
+    'almost definitely a bug' warning on that read, ahead of the typed
+    refusal the entry guard owns)."""
+
+    fake_tensor_mode = pytest.importorskip("torch._subclasses.fake_tensor").FakeTensorMode
+
+    from torchlens._utils.tensor_utils import _deferred_storage_key
+
+    with fake_tensor_mode() as mode:
+        fake = mode.from_tensor(torch.randn(2, 2))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert _deferred_storage_key(fake) is None
