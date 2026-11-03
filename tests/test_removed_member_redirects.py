@@ -2,7 +2,8 @@
 
 The 2026-10-01 shim removal deleted the alias members outright (remove-and-
 rename, no alias), lane F12 deleted ``VisualizationTheme.legend_items``, and the
-1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names.
+1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names,
+and the ``do`` fold deleted ``attach_hooks`` from ``Trace``, ``Layer`` and ``Op``.
 A lookup of any of them must raise ``FacadeTeachingError`` (code
 ``facade_redirect``, ``AttributeError`` lineage) whose message names the
 replacement, never a bare ``AttributeError``. Every other missing name keeps
@@ -45,6 +46,8 @@ def owners():
         yield {
             "Trace": first,
             "Bundle": tl.Bundle({"a": first, "b": second}),
+            "Layer": first["relu_1_2"],
+            "Op": first["relu_1_2"].ops[0],
             "VisualizationOptions": VisualizationOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
         }
@@ -66,6 +69,8 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_elif_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_else_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Layer", "attach_hooks", "do"),
+    ("Op", "attach_hooks", "do"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "view"),
@@ -131,7 +136,9 @@ def test_removed_module_name_raises_typed_redirect(
         target = getattr(target, part)
 
 
-@pytest.mark.parametrize("owner", ["Trace", "Bundle", "VisualizationOptions", "VisualizationTheme"])
+@pytest.mark.parametrize(
+    "owner", ["Trace", "Bundle", "Layer", "Op", "VisualizationOptions", "VisualizationTheme"]
+)
 def test_unknown_member_still_fails_plain(owners: dict[str, Any], owner: str) -> None:
     """Only removed public names redirect; any other miss stays a plain AttributeError."""
 
