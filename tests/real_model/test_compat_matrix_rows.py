@@ -20,6 +20,7 @@ measured on.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +150,9 @@ def _tp_rank(rank: int, world_size: int, init_file: str, out_dir: str, hf_dir: s
     from torch.distributed.device_mesh import init_device_mesh
     from torch.distributed.tensor import parallel
 
+    # transformers reads the rank layout from the environment when it applies a tp_plan; without
+    # these it loads the checkpoint unsharded. The spawned child owns its environment.
+    os.environ.update(RANK=str(rank), WORLD_SIZE=str(world_size), LOCAL_RANK=str(rank))
     store = dist.FileStore(init_file, world_size)
     dist.init_process_group("gloo", store=store, rank=rank, world_size=world_size)
     result: dict[str, Any] = {"rank": rank}
