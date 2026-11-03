@@ -52,7 +52,6 @@ from ._foreign_data import (
     known_foreign_kernel_exits,
     note_plain_export,
 )
-from ._ops_emission import log_function_output_tensors
 from .escape_detection import ExpectedOriginalToken
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
@@ -536,6 +535,8 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
 
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the call's one boundary op."""
+
+    from ._ops_emission import log_function_output_tensors  # deferred: cycle _aten_capture
 
     def emit() -> None:
         """Record the boundary op through the ordinary output logger."""
