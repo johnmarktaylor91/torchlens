@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, TextIO, cast
 
 from .._errors import RecordBindingError
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -101,7 +102,7 @@ def _sum_call_ops_field(trace: "Trace | None", calls: "Iterable[ModuleCall]", fi
     for call in calls:
         for label in call.ops:
             for op in _resolve_call_ops(trace, label):
-                value = getattr(op, field, None)
+                value = record_member(op, field, None)
                 if op.label not in seen and value is not None:
                     total += value
                 seen.add(op.label)

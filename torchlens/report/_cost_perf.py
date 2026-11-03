@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._constants import OP_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from ..errors import TorchLensWarning
 from ._cost_tiers import COST_REPORT_TIERS, COST_REPORT_UNSHIPPED_TIERS, _validate_cost_tiers
 
@@ -518,7 +519,7 @@ def roofline(
                 )
             )
             continue
-        flops = int(getattr(op, "flops_forward", 0) or 0)
+        flops = int(record_member(op, "flops_forward", 0) or 0)
         traffic = _op_ideal_traffic(op, trace)
         if traffic is None:
             coverage["missing_shape_dtype"] += 1
@@ -708,8 +709,8 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
         if classify_row(op) not in ("known", "zero_by_rule"):
             continue
         label = str(getattr(op, "layer_label", "?"))
-        flops = getattr(op, "flops_forward", None)
-        seconds = getattr(op, "func_duration", None)
+        flops = record_member(op, "flops_forward", None)
+        seconds = record_member(op, "func_duration", None)
         device = getattr(op, "device_ref", None)
         device_name = str(device) if device is not None else None
         on_cuda = device_name is not None and device_name.startswith("cuda")

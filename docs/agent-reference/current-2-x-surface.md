@@ -1706,7 +1706,11 @@
   group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceSettings`,
   `tl.types.TraceCost`, `tl.types.TraceSource`, `tl.types.TraceHealth`, `tl.types.TraceGraph` and
   `tl.types.TraceAutograd` (`trace.provenance`, `trace.options`, `trace.cost`, `trace.source`,
-  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. The backend registry
+  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. Op and
+  Layer group their fields by concern the same way: `op.cost` (`tl.types.OpCost`) and `layer.cost`
+  (`tl.types.LayerCost`) hold compute, memory and timing facts (`op.cost.flops_forward`,
+  `op.cost.duration`, `layer.cost.total_flops_forward`); a former flat spelling such as
+  `op.cost.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`

@@ -47,7 +47,7 @@ def test_linear_with_an_input_weight_and_keyword_bias_is_counted() -> None:
     trace = tl.trace(_Call(lambda x, w, b: F.linear(x, w, bias=b)), [x, w, b])
     try:
         (op,) = _ops(trace, "linear")
-        assert op.flops_forward == 2 * 3 * 5 * 7 + 3 * 7
+        assert op.cost.flops_forward == 2 * 3 * 5 * 7 + 3 * 7
         assert _macs(trace, "linear") == 3 * 5 * 7
     finally:
         trace.cleanup()
@@ -84,7 +84,7 @@ def test_fused_recurrent_kernels_count_every_layer_and_direction(
         name = {1: "rnn_tanh", 3: "gru", 4: "lstm"}[gates]
         expected = t * b * 2 * gates * h * ((i + h) + (2 * h + h))
         assert _macs(trace, name) == expected
-        assert sorted(op.flops_forward for op in _ops(trace, name))[0] == 0  # a final state
+        assert sorted(op.cost.flops_forward for op in _ops(trace, name))[0] == 0  # a final state
     finally:
         trace.cleanup()
 
@@ -96,7 +96,7 @@ def test_lstm_cell_splits_its_call_over_its_two_outputs() -> None:
     trace = tl.trace(cell, torch.randn(3, 8))
     try:
         ops = _ops(trace, "lstm_cell")
-        assert len(ops) == 2 and ops[0].flops_forward == ops[1].flops_forward
+        assert len(ops) == 2 and ops[0].cost.flops_forward == ops[1].cost.flops_forward
         assert _macs(trace, "lstm_cell") == 3 * 4 * 16 * (8 + 16)
     finally:
         trace.cleanup()

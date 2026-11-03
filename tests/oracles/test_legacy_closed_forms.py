@@ -400,7 +400,7 @@ def test_activation_parameter_and_input_bytes(two_linear_trace, graph_trace, out
         "input_1:1": 0,  # no parents
     }
     for label, nbytes in expected_input.items():
-        assert int(ops[label].input_memory) == nbytes, label
+        assert int(ops[label].cost.input_memory) == nbytes, label
 
 
 def _param_grad_bytes(model: nn.Module) -> dict[str, int]:
@@ -564,7 +564,7 @@ def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> N
         expected = {"linear_1_1:1": 0, "relu_1_2:1": 0}
         expected["linear_2_3:1"] = 204
         for label, flops in expected.items():
-            assert int(ops[label].flops_backward) == flops, label
+            assert int(ops[label].cost.flops_backward) == flops, label
         assert int(trace.cost.total_flops_backward) == sum(expected.values())
     finally:
         trace.cleanup()
@@ -580,10 +580,10 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     ops, layers, modules, _ = _by_label(trace)
     for label, (forward, backward) in GRAD_FLOPS.items():
         for record in (ops[f"{label}:1"], layers[label]):
-            assert int(record.flops_backward) == backward, label
-            assert int(record.flops_total) == forward + backward, label
-        assert int(layers[label].total_flops_backward) == backward
-        assert int(layers[label].total_flops_total) == forward + backward
+            assert int(record.cost.flops_backward) == backward, label
+            assert int(record.cost.flops_total) == forward + backward, label
+        assert int(layers[label].cost.total_flops_backward) == backward
+        assert int(layers[label].cost.total_flops) == forward + backward
     backward_sum = sum(backward for _, backward in GRAD_FLOPS.values())  # 660
     forward_sum = sum(forward for forward, _ in GRAD_FLOPS.values())  # 342
     for scope in (trace.cost, modules["self"]):
@@ -595,7 +595,7 @@ def test_backward_and_total_flops(grad_once, outer_case) -> None:
     # The block runs twice, so its totals double; fc's Layer has two passes.
     _, trace, _, _ = outer_case
     _, layers, modules, _ = _by_label(trace)
-    assert int(layers["linear_1_1"].total_flops_backward) == 2 * 216
+    assert int(layers["linear_1_1"].cost.total_flops_backward) == 2 * 216
     assert (
         int(modules["block.fc"].total_flops_backward),
         int(modules["block.fc"].total_flops),
@@ -626,7 +626,7 @@ def test_arithmetic_intensity_by_the_read_once_write_once_model(two_linear_trace
         "linear_2_3:1": 102 / (96 + 72 + 24),
     }
     for label, value in expected.items():
-        assert ops[label].arithmetic_intensity == value, label
+        assert ops[label].cost.arithmetic_intensity == value, label
 
 
 def test_summary_counts_unknown_flop_ops() -> None:

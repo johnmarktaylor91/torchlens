@@ -76,7 +76,7 @@ def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
     log = tl.trace(model, torch.randn(1, 4))
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = None
+            layer_pass._cost_duration = None
 
     dot = _render_dot(log, tmp_path, node_style="profiling")
 
@@ -177,7 +177,7 @@ def _set_op_durations(log: tl.Trace, seconds: float) -> None:
 
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = seconds
+            layer_pass._cost_duration = seconds
 
 
 def test_profiling_collapsed_module_does_not_crash(tmp_path: Path) -> None:
@@ -254,7 +254,7 @@ def test_profiling_multipass_unrolled_nodes_keep_per_pass_rows(tmp_path: Path) -
     durations = {1: 0.001, 2: 0.002, 3: 0.004}
     for layer_label in ("linear_1_1", "relu_1_2"):
         for pass_index, layer_pass in log.layers[layer_label].ops.items():
-            layer_pass.func_duration = durations[pass_index]
+            layer_pass._cost_duration = durations[pass_index]
 
     dot = _render_dot(log, tmp_path, node_style="profiling")
 
@@ -319,7 +319,7 @@ def test_profiling_multipass_rows_omitted_when_untimed(tmp_path: Path) -> None:
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = None
+            layer_pass._cost_duration = None
 
     rolled = _render_dot(log, tmp_path / "rolled", node_style="profiling", rolled=True)
     unrolled = _render_dot(log, tmp_path / "unrolled", node_style="profiling")

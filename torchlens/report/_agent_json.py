@@ -26,6 +26,7 @@ from .._capture_honesty import (
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes._value_repr import _payload_state as _payload_state
+from .._utils._record_group_table import record_member
 from ..agent._envelope import json_safe
 from ._explain import _safe_len
 from ._factcore import _memory, factcore
@@ -350,7 +351,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "saved": bool(getattr(op, "has_saved_activation", False)),
         "site_key": _site_key_or_none(op),
         "num_params": int(getattr(op, "num_params", 0) or 0),
-        "flops_forward": _quantity_int(getattr(op, "flops_forward", None)),
+        "flops_forward": _quantity_int(record_member(op, "flops_forward", None)),
     }
 
 

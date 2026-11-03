@@ -10,6 +10,7 @@ import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes
+from .._utils._record_group_table import layer_attr, op_attr
 from .._utils.fail_open import fail_open
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
@@ -266,7 +267,7 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
                     copied_value,
                     preserved_user_annotations,
                 )
-            setattr(layer_log, field_name, copied_value)
+            setattr(layer_log, layer_attr(field_name), copied_value)
         layer_log.source_trace = trace
 
 
@@ -518,9 +519,10 @@ def copy_append_last_chunk_fields(trace: Trace, layer: Any, new_layer: Any) -> N
         "edits",
         "annotations",
     ):
-        if hasattr(new_layer, field_name):
+        attr = op_attr(field_name)
+        if hasattr(new_layer, attr):
             layer._internal_set(
-                field_name, copy_append_metadata_value(trace, getattr(new_layer, field_name))
+                field_name, copy_append_metadata_value(trace, getattr(new_layer, attr))
             )
 
 

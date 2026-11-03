@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._quantities import Macs
+from .._utils._record_group_table import read_layer_field
 from ._layer_mirror import _layer_mirror_read, _layer_rep_op
 from ._layer_spec import _LAYER_MIRROR_SPEC
 
@@ -87,14 +88,14 @@ def _layer_log_to_row(layer_log: Layer) -> dict[str, Any]:
         if multi_pass and field_name in _MULTI_PASS_PER_CALL_LAYER_FIELDS:
             row[field_name] = None
             continue
-        row[field_name] = getattr(layer_log, field_name)
+        row[field_name] = read_layer_field(layer_log, field_name)
     return row
 
 
 def layer_total_macs_forward(layer: Layer) -> Macs | None:
     """Sum TRUE forward MACs across all Ops in the layer (``None`` on any unknown split)."""
 
-    per_op = [op.macs_forward for op in layer.ops.values()]
+    per_op = [op.cost.macs_forward for op in layer.ops.values()]
     if any(value is None for value in per_op):
         return None
     return Macs(sum(int(value) for value in per_op if value is not None))

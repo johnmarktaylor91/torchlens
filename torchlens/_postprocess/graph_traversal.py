@@ -305,7 +305,7 @@ def _add_output_layers(
         # claim the view's shape for the full base tensor.
         new_output_node.shape = tuple(output_tensor.shape)
         new_output_node.dtype = output_tensor.dtype
-        new_output_node.activation_memory = Bytes(
+        new_output_node._cost_activation_memory = Bytes(
             get_memory_amount_from_metadata(
                 output_tensor, new_output_node.shape, new_output_node.dtype
             )
@@ -322,15 +322,15 @@ def _add_output_layers(
         # the duplicated row is the tied vocabulary projection). The producing
         # op owns the output tensor and its compute; the alias row displays
         # shape only and carries not-applicable (None) compute.
-        new_output_node.flops_forward = None
-        new_output_node.flops_backward = None
+        new_output_node._cost_flops_forward = None
+        new_output_node._cost_flops_backward = None
         new_output_node.code_context = _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
         )
         new_output_node.var_names = []
-        new_output_node.func_duration = Duration(0)
+        new_output_node._cost_duration = Duration(0)
         new_output_node.func_rng_states = (
             log_current_rng_states(torch_only=True) if self._options_save_rng else {}
         )
@@ -342,12 +342,12 @@ def _add_output_layers(
         new_output_node.non_tensor_kwargs = {}
         new_output_node.func_non_tensor_args = []
         new_output_node.grad_fn_class_name = None
-        new_output_node.autograd_memory = None
+        new_output_node._cost_autograd_memory = None
         new_output_node.num_autograd_tensors = None
         # An output pseudo-node runs no kernel: "not measured" is None, never
         # a fabricated 0 B (observe item 15 zero-site sweep).
-        new_output_node.bytes_delta_at_call = None
-        new_output_node.bytes_peak_at_call = None
+        new_output_node._cost_bytes_delta_at_call = None
+        new_output_node._cost_bytes_peak_at_call = None
         new_output_node._internal_set("saved_args", [output_tensor])
         new_output_node._internal_set("saved_kwargs", {})
 
@@ -361,7 +361,7 @@ def _add_output_layers(
         new_output_node.num_params = 0
         new_output_node.num_params_trainable = 0
         new_output_node.num_params_frozen = 0
-        new_output_node.param_memory = Bytes(0)
+        new_output_node._cost_param_memory = Bytes(0)
 
         # Strip module info:
 
@@ -490,7 +490,7 @@ def _add_output_layers(
             new_output_node._internal_set("transformed_out", actual_output_transformed)
             new_output_node.transformed_out_shape = _shape_or_none(actual_output_transformed)
             new_output_node.transformed_out_dtype = _dtype_or_none(actual_output_transformed)
-            new_output_node.transformed_activation_memory = _memory_or_none(
+            new_output_node._cost_transformed_activation_memory = _memory_or_none(
                 actual_output_transformed
             )
 

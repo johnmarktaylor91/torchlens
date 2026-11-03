@@ -28,6 +28,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
 from .._utils._cuda_probe import _is_cuda_available
+from .._utils._record_group_table import op_attr
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
@@ -220,7 +221,7 @@ def _clear_entry_attributes(log_entry: Op) -> None:
     if row_store is not None:
         mark_op_row_released(row_store, row)
     for attr, _ in list(state_items(log_entry)):
-        delattr(log_entry, attr)
+        delattr(log_entry, op_attr(attr))
     # Rebind the emptied facade to a detached row so a user-held husk cannot
     # pin the trace's shared columnar store (slot-era husks pinned nothing).
     _detach_op_husk(log_entry)

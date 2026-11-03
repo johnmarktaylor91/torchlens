@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._capture.flops import DISPATCH_COUNTING_CONVENTION
+from .._utils._record_group_table import record_member
 from ._backward_attribution import node_resolver_missing, pass_failed
 
 if TYPE_CHECKING:
@@ -501,8 +502,8 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
     for op in trace._layer_list or ():
         if classify_row(op) != "known":
             continue
-        record = getattr(op, "compute_record", None)
-        flops = getattr(op, "flops_forward", None)
+        record = record_member(op, "compute_record", None)
+        flops = record_member(op, "flops_forward", None)
         if flops is None or int(flops) == 0:
             continue
         if record is not None and getattr(record, "mac_applicability", None) == "mac":

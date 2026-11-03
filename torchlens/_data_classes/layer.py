@@ -52,10 +52,16 @@ from .._io import (
 )
 from .._io.state_keys import refuse_callable_shadowing_state_keys
 from .._ir.refs import DtypeRef
-from .._quantities import Bytes, Duration, Flops, Macs
+from .._quantities import Bytes, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
+from .._utils._record_group_table import (
+    LAYER_MOVED_MEMBERS,
+    LAYER_STORAGE_ATTRS,
+    op_attr,
+    op_spelling,
+)
 from .._utils.facade import refuse_removed_member
 from . import _doors
 
@@ -82,6 +88,7 @@ from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-expo
     layer_total_macs_forward,
     materialize_layer_mirrors,
 )
+from ._record_groups import LayerCost, MovedMemberField
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
@@ -570,14 +577,10 @@ class Layer(_SelectionOperand):
         self.call_labels: list[str] = []
 
     @property
-    def macs_forward(self) -> Macs | None:
-        """TRUE forward MAC count of the representative pass, never flops//2.
+    def cost(self) -> LayerCost:
+        """Compute, memory and timing facts of this Layer (``layer.cost.total_flops``)."""
 
-        ``None`` when the exact split is unknown for the representative op.
-        """
-
-        first_op = next(iter(self.ops.values()), None)
-        return None if first_op is None else first_op.macs_forward
+        return LayerCost(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -586,40 +589,10 @@ class Layer(_SelectionOperand):
         return None
 
     @property
-    def total_activation_memory(self) -> Bytes:
-        """Sum activation memory across all Ops in this Layer."""
-
-        return Bytes(sum(int(op.activation_memory or 0) for op in self.ops.values()))
-
-    @property
     def total_gradient_memory(self) -> Bytes:
         """Sum gradient memory across all Ops in this Layer."""
 
         return Bytes(sum(int(op.gradient_memory or 0) for op in self.ops.values()))
-
-    @property
-    def flops_total(self) -> Flops:
-        """Representative total FLOPs for this Layer."""
-
-        return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
-
-    @property
-    def total_flops_forward(self) -> Flops:
-        """Sum forward FLOPs across all Ops in this Layer."""
-
-        return Flops(sum((op.flops_forward or 0) for op in self.ops.values()))
-
-    @property
-    def total_flops_backward(self) -> Flops:
-        """Sum backward FLOPs across all Ops in this Layer."""
-
-        return Flops(sum((op.flops_backward or 0) for op in self.ops.values()))
-
-    @property
-    def total_flops_total(self) -> Flops:
-        """Sum total FLOPs across all Ops in this Layer."""
-
-        return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
     def macs_total(self) -> Macs | None:
@@ -628,24 +601,8 @@ class Layer(_SelectionOperand):
         return None
 
     @property
-    def total_macs_forward(self) -> Macs | None:
-        """Sum TRUE forward MACs across all Ops in this Layer.
-
-        ``None`` when any pass's exact MAC split is unknown -- a partial sum
-        under a total's name would silently under-claim.
-        """
-
-        return layer_total_macs_forward(self)
-
-    @property
     def total_macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None`` (estimates only)."""
-
-        return None
-
-    @property
-    def total_macs_total(self) -> Macs | None:
-        """Total MACs are not derivable and always ``None`` (see Op.macs_total)."""
 
         return None
 
@@ -1018,13 +975,13 @@ class Layer(_SelectionOperand):
             raise InvalidArgumentError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].ops[0].{field_name}",
+                f"log['{self.layer_label}'].ops[0].{op_spelling(field_name)}",
                 code="layer_pass_ambiguous",
-                remedy=f"access {field_name!r} on one pass via .ops[k]",
+                remedy=f"access {op_spelling(field_name)!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
                 field_name=field_name,
             )
-        return getattr(self.ops[0], field_name)
+        return getattr(self.ops[0], op_attr(field_name))
 
     def __selection__(self) -> object:
         """Lift this layer's whole output as an ACT selection term (ALL passes)."""
@@ -1186,23 +1143,6 @@ class Layer(_SelectionOperand):
             Function call stack from the only pass.
         """
         return self._single_pass_or_error("code_context")
-
-    @property
-    def func_duration(self) -> Duration:
-        """Return function execution time for a single-pass layer.
-
-        Returns
-        -------
-        Duration
-            Function timing value from the only pass.
-        """
-        return cast(Duration, self._single_pass_or_error("func_duration"))
-
-    @property
-    def total_func_duration(self) -> Duration:
-        """Sum of function-call duration across all Ops in this Layer."""
-
-        return Duration(sum(float(op.func_duration or 0) for op in self.ops.values()))
 
     @property
     def func_rng_states(self) -> Any:
@@ -1465,6 +1405,7 @@ class Layer(_SelectionOperand):
         """
         if name.startswith("_"):
             raise AttributeError(name)
+        refuse_removed_member(type(self).__name__, name, LAYER_MOVED_MEMBERS)
         if name in {
             "param_memory",
         }:
@@ -1698,7 +1639,7 @@ class Layer(_SelectionOperand):
             # One pass/op vocabulary (A10): an aggregate multi-pass layer is
             # "xN passes", never "N ops".
             s += f" (x{self.num_passes} passes)"
-        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
+        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.cost.activation_memory}"
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
             if self.func_config:
@@ -1710,7 +1651,7 @@ class Layer(_SelectionOperand):
             params_shapes_str = format_shape_list(self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params} total ({self.total_param_memory})"
+                f"{self.num_params} total ({self.cost.total_param_memory})"
             )
         s += "\n\tRelated Layers:"
         s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
@@ -1779,11 +1720,12 @@ def _install_layer_mirror_descriptors() -> None:
     """
 
     for name, (source, normalize) in _LAYER_MIRROR_SPEC.items():
-        if name in vars(Layer):
+        attr = LAYER_STORAGE_ATTRS.get(name, name)
+        if attr in vars(Layer):
             raise RuntimeError(
-                f"Layer mirror field {name!r} collides with an existing class attribute"
+                f"Layer mirror field {attr!r} collides with an existing class attribute"
             )
-        setattr(Layer, name, _LayerMirrorField(name, source, normalize))
+        setattr(Layer, attr, _LayerMirrorField(name, source, normalize))
 
 
 class _LayerViewField:
@@ -1845,5 +1787,19 @@ def _install_layer_view_descriptors() -> None:
         setattr(Layer, name, _LayerViewField(name))
 
 
+def _install_layer_moved_member_refusals() -> None:
+    """Refuse every former flat Layer spelling typed, over any ``__dict__`` shadow.
+
+    A restored or materialized shadow keeps its persisted key in
+    ``__dict__``; the data descriptor wins over it, so the former spelling
+    still names its replacement instead of reading the shadow.
+    """
+
+    for name, remedy in LAYER_MOVED_MEMBERS.items():
+        if name not in vars(Layer):
+            setattr(Layer, name, MovedMemberField("Layer", name, remedy))
+
+
 _install_layer_mirror_descriptors()
 _install_layer_view_descriptors()
+_install_layer_moved_member_refusals()

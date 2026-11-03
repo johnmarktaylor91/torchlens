@@ -74,7 +74,7 @@ def test_op_input_side_properties() -> None:
     assert op.num_inputs == len(op.parents)
     assert op.input_shapes[0] == parent.shape
     assert op.input_dtypes[0] == parent.dtype
-    assert op.input_memory >= parent.activation_memory
+    assert op.cost.input_memory >= parent.cost.activation_memory
     assert op.input_activations[0] is not None
 
 

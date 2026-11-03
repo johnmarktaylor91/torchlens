@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from ._netron_records import NetronAttr
 
@@ -105,7 +107,7 @@ def build_leaf_attrs(
     if dtype is not None:
         attrs.append(NetronAttr("dtype", "s", dtype_string(dtype)))
     members = rolled_members or [entry]
-    flops = [q for m in members if (q := _quantity(getattr(m, "flops_forward", None)))]
+    flops = [q for m in members if (q := _quantity(record_member(m, "flops_forward", None)))]
     if flops:
         attrs.append(NetronAttr("flops_estimated", "i", int(sum(flops))))
     if intervened:
@@ -113,10 +115,10 @@ def build_leaf_attrs(
     module_path = module_path_of(entry)
     if module_path:
         attrs.append(NetronAttr("module_path", "s", module_path))
-    durations = [q for m in members if (q := _quantity(getattr(m, "func_duration", None)))]
+    durations = [q for m in members if (q := _quantity(record_member(m, "func_duration", None)))]
     if durations:
         attrs.append(NetronAttr("observed_duration_us", "i", int(round(sum(durations) * 1e6))))
-    memory = _quantity(getattr(entry, "activation_memory", None))
+    memory = _quantity(record_member(entry, "activation_memory", None))
     if memory:
         attrs.append(NetronAttr("output_tensor_bytes", "i", int(memory)))
     params = getattr(entry, "num_params", None)

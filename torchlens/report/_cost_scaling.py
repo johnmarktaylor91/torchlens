@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -67,7 +68,7 @@ def position_scaling_class(op: Any, padded_length: int) -> str:
     degrades to ``unknown``, never a confident wrong class.
     """
 
-    flops = getattr(op, "flops_forward", None)
+    flops = record_member(op, "flops_forward", None)
     if flops is None or int(flops) == 0:
         return "invariant"
     func_name = str(getattr(op, "func_name", "") or "")
@@ -206,7 +207,7 @@ def padding_waste(
     for op in trace._layer_list or ():
         if classify_row(op) != "known":
             continue
-        flops = int(getattr(op, "flops_forward", 0) or 0)
+        flops = int(record_member(op, "flops_forward", 0) or 0)
         if flops == 0:
             continue
         forward += flops

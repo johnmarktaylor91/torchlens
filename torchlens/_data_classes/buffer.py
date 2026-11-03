@@ -258,7 +258,7 @@ class Buffer:
     def activation_memory(self) -> Any:
         """Return final observed buffer activation memory."""
 
-        return None if not self.versions else self.versions[-1].activation_memory
+        return None if not self.versions else self.versions[-1].cost.activation_memory
 
     @property
     def has_saved_activation(self) -> bool:

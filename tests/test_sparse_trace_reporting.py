@@ -260,7 +260,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     output_rows = [
         layer for layer in full._layer_list if layer.type == "output" and layer.has_saved_activation
     ]
-    assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)
+    assert output_rows and all(int(layer.cost.activation_memory) > 0 for layer in output_rows)
     for layer in output_rows:
         parent = full[layer.parents[0]]
         assert layer.out.untyped_storage().data_ptr() == parent.out.untyped_storage().data_ptr()

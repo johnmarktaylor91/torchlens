@@ -396,11 +396,11 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
     assert not torch.equal(refreshed_relu_site.out, original_out)
     assert refreshed_relu_site.shape == (1, 3)
     assert refreshed_relu_site.dtype == torch.float32
-    assert int(refreshed_relu_site.activation_memory) == 12
+    assert int(refreshed_relu_site.cost.activation_memory) == 12
     assert torch.equal(refreshed_relu_site.transformed_out, refreshed_relu_site.out * 2)
     assert refreshed_relu_site.transformed_out_shape == (1, 3)
     assert refreshed_relu_site.transformed_out_dtype == torch.float32
-    assert int(refreshed_relu_site.transformed_activation_memory) == 12
+    assert int(refreshed_relu_site.cost.transformed_activation_memory) == 12
     assert torch.equal(log[log.output_layers[0]].out, torch.tensor([[5.0, 6.0, 1.0]]))
 
 

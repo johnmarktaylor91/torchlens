@@ -69,7 +69,7 @@ def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
         checks=audit.Stage0Checks(
             # Cardinality = the DISTINCT values the channel can express here
             # (timings may tie run-to-run on a tiny toy).
-            cardinality=len({float(op.func_duration) for op in log.ops}),
+            cardinality=len({float(op.cost.duration) for op in log.ops}),
             baseline_headlabels=headlabel_baseline,
             baseline_xlabels=xlabel_baseline,
         ),

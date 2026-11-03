@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._label_format import format_memory
 from ._render_utils import html_escape
 
@@ -127,7 +128,7 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
             node = trace.ops[module_call.output_ops[-1]]
         except (KeyError, IndexError, AttributeError, TypeError):
             pass
-    value = getattr(node, "activation_memory", None)
+    value = record_member(node, "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)

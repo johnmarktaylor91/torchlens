@@ -10,6 +10,7 @@ from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError
+from .._utils._record_group_table import record_member
 
 __tl_layer__ = "L7"
 
@@ -162,7 +163,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
                 "label": str(getattr(entry, "layer_label", node_id)),
                 "type": _node_type(entry),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "activation_memory", "")),
+                "memory": str(record_member(entry, "activation_memory", "")),
                 "x": 80 + (index % 8) * 180,
                 "y": 80 + (index // 8) * 110,
             }

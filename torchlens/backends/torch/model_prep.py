@@ -35,6 +35,7 @@ from ..._ir.op_record import (
     amend_raw_hook_intervention,
 )
 from ..._quantities import Bytes
+from ..._utils._record_group_table import op_attr
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
     _get_code_context,
@@ -1455,7 +1456,9 @@ def _ensure_module_output_tensor_logged(
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
     fields_dict = {
         field_name: _copy_field_value_for_replacement(
-            getattr(template_entry, field_name, None) if template_entry is not None else None
+            getattr(template_entry, op_attr(field_name), None)
+            if template_entry is not None
+            else None
         )
         for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }

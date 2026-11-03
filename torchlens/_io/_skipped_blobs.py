@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._data_classes._state_adapter import state_items
+from .._utils._record_group_table import record_member
 from .format_contract import BlobRef
 
 
@@ -38,7 +39,7 @@ def _apply_skipped_blobs_to_scrubbed_state(
             1 for layer in layer_list if bool(getattr(layer, "has_saved_activation", False))
         )
         scrubbed_state["_cost_saved_activation_memory"] = sum(
-            int(getattr(layer, "activation_memory", 0) or 0)
+            int(record_member(layer, "activation_memory", 0) or 0)
             for layer in layer_list
             if bool(getattr(layer, "has_saved_activation", False))
         )

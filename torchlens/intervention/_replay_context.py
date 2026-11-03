@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._replay_values import tensor_content_digest
 
 if TYPE_CHECKING:
@@ -221,7 +222,7 @@ def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]]
     """
 
     ops = [
-        (op, {name: _journal_copy(getattr(op, name, None)) for name in _JOURNAL_OP_FIELDS})
+        (op, {name: _journal_copy(record_member(op, name, None)) for name in _JOURNAL_OP_FIELDS})
         for op in trace._layer_list
     ]
     fields = {
@@ -240,7 +241,7 @@ def restore_replay_state(
     ops, fields = journal
     for op, values in ops:
         for name, value in values.items():
-            if not _journal_same(getattr(op, name, None), value):
+            if not _journal_same(record_member(op, name, None), value):
                 op._internal_set(name, _journal_copy(value))
     for name, value in fields.items():
         current = getattr(trace, name)

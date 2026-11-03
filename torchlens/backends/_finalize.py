@@ -158,8 +158,8 @@ def finalize_single_pass_trace(
             enrich_op(op_log)
         if attach_op_params is not None:
             attach_op_params(op_log, trace, seen_param_barcodes)
-            if not isinstance(op_log.param_memory, Bytes):
-                op_log.param_memory = Bytes(int(op_log.param_memory))
+            if not isinstance(op_log.cost.param_memory, Bytes):
+                op_log._cost_param_memory = Bytes(int(op_log.cost.param_memory))
         if op_log._param_logs:
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
@@ -1137,7 +1137,7 @@ def attach_module_owned_op_params(
     op_log.num_params = sum(param.num_params for param in params)
     op_log.num_params_trainable = sum(param.num_params for param in params if param.is_trainable)
     op_log.num_params_frozen = sum(param.num_params for param in params if not param.is_trainable)
-    op_log.param_memory = sum(int(param.param_memory) for param in params)
+    op_log._cost_param_memory = sum(int(param.param_memory) for param in params)
     seen_param_barcodes.update(param.barcode for param in params)
 
 

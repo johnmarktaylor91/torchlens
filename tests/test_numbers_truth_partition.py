@@ -89,14 +89,14 @@ def test_compute_partition_totals_are_owned_exactly_once() -> None:
         try:
             real_ops = [op for op in log._layer_list if not (op.is_input or op.is_output)]
             partition_sum = sum(
-                int(op.flops_forward) for op in real_ops if op.flops_forward is not None
+                int(op.cost.flops_forward) for op in real_ops if op.cost.flops_forward is not None
             )
             assert int(log.cost.total_flops_forward) == partition_sum, name
             for op in log._layer_list:
                 if op.is_output:
-                    assert op.flops_forward is None, (name, op.label)
+                    assert op.cost.flops_forward is None, (name, op.label)
                 if op.is_input:
-                    assert int(op.flops_forward or 0) == 0, (name, op.label)
+                    assert int(op.cost.flops_forward or 0) == 0, (name, op.label)
         finally:
             log.cleanup()
 
@@ -107,7 +107,7 @@ def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
     for name, log in _fixture_traces():
         try:
             owned = sum(
-                int(op.activation_memory or 0) for op in log._layer_list if not op.is_output
+                int(op.cost.activation_memory or 0) for op in log._layer_list if not op.is_output
             )
             assert int(log.cost.total_activation_memory) == owned, name
         finally:
@@ -154,9 +154,9 @@ def test_multipass_layer_owns_all_its_pass_events() -> None:
     )
     try:
         layer = log["linear_1_2"]  # the reused mix layer (3 passes)
-        per_pass = [int(op.flops_forward or 0) for op in layer.ops.values()]
+        per_pass = [int(op.cost.flops_forward or 0) for op in layer.ops.values()]
         assert len(per_pass) == 3
-        assert int(layer.total_flops_forward) == sum(per_pass)
+        assert int(layer.cost.total_flops_forward) == sum(per_pass)
     finally:
         log.cleanup()
 

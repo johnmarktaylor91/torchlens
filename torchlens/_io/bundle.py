@@ -39,6 +39,7 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member, record_storage_attr
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
@@ -3024,7 +3025,7 @@ def _maybe_make_fast_copy_spec(
         otherwise ``None``.
     """
 
-    if not bool(getattr(live_layer, has_field, False)):
+    if not bool(record_member(live_layer, has_field, False)):
         return None
     scrubbed_state = dict(state_items(scrubbed_layer))
     if scrubbed_state.get(tensor_field) is not None:
@@ -3033,12 +3034,13 @@ def _maybe_make_fast_copy_spec(
     if live_field_value is not None:
         return None
 
-    source_ref = getattr(live_layer, ref_field, None)
+    source_ref = record_member(live_layer, ref_field, None)
     if not isinstance(source_ref, LazyActivationRef):
         return None
 
     blob_id = _next_bundle_blob_id(used_blob_ids)
-    setattr(scrubbed_layer, tensor_field, BlobRef(blob_id=blob_id, kind=kind))
+    blob_ref = BlobRef(blob_id=blob_id, kind=kind)
+    setattr(scrubbed_layer, record_storage_attr(scrubbed_layer, tensor_field), blob_ref)
     return _FastCopySpec(
         blob_id=blob_id,
         kind=kind,

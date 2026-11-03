@@ -38,6 +38,7 @@ from ._errors import TorchLensWarning
 from ._runnable import RunnableErrorCode, transaction as _transaction
 from ._runnable.input_sites import _INPUT_CHECK_UNAVAILABLE
 from ._runnable.verification import _contract_check
+from ._utils._record_group_table import record_member
 from .errors import RunCapabilityUnavailableError
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a
@@ -593,8 +594,8 @@ def clear_unrefreshed_shape_metadata(trace: Any, refreshed_labels: frozenset[str
         if op.label in refreshed_labels:
             continue
         for field_name in _UNREFRESHED_SHAPE_FIELDS:
-            if getattr(op, field_name, None) is not None:
-                setattr(op, field_name, None)
+            if record_member(op, field_name, None) is not None:
+                op._internal_set(field_name, None)
         cleared += 1
     return cleared
 

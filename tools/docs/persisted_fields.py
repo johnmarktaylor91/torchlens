@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import json
 import re
 import sys
@@ -31,6 +32,8 @@ PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v10.json"
 DATA_CLASSES = REPO / "torchlens" / "_data_classes"
 BINDINGS = DATA_CLASSES / "_schema_bindings.py"
 GROUPS_MODULE = DATA_CLASSES / "_trace_groups.py"
+#: Op and Layer member moves (former flat name -> concern group, rename or removal).
+RECORD_GROUP_TABLE = REPO / "torchlens" / "_utils" / "_record_group_table.py"
 #: Record-rebuild body modules outside ``_data_classes`` (reached through ``_doors``):
 #: their ``f(trace, ...)`` functions hold the reads the thin record methods forward to.
 BODY_MODULES = [
@@ -47,6 +50,17 @@ LEAD_RECORDS = ("trace", "op", "layer")
 BINDING_KEY_ALIASES = {"aten_op": "primitive_op"}
 #: Trace concern groups: a stored key ``_<group>_<leaf>`` reads as ``Trace.<group>.<leaf>``.
 TRACE_GROUPS = ("autograd", "cost", "graph", "health", "options", "provenance", "source")
+#: Op and Layer concern groups: ``Op<Group>.member`` reads as ``Op.<group>.member``.
+RECORD_GROUPS = (
+    "autograd",
+    "call",
+    "control_flow",
+    "cost",
+    "graph",
+    "module_context",
+    "payload",
+    "source",
+)
 #: Hops through private members a public getter is followed when it reaches a store.
 ACCESSOR_DEPTH = 3
 #: Accessors shown per key before the count of the rest.
@@ -318,7 +332,10 @@ def _accessor(
     """Render the public accessor column for one stored key."""
 
     if not key.startswith("_"):
-        return f"`{owner}.{key}` (field)"
+        spelling = member_spellings().get(owner, {}).get(key, key)
+        if spelling is None:
+            return f"none (`{owner}.{key}` removed)"
+        return f"`{owner}.{spelling}` (field)"
     parts = _group_leaf(key) if owner == "Trace" else None
     if parts is not None:
         group, leaf = parts
@@ -348,7 +365,37 @@ def _public_spelling(accessor: str) -> str:
     for group in TRACE_GROUPS:
         if class_name == f"Trace{group.capitalize()}":
             return f"Trace.{group}.{member}"
+    for record in ("Op", "Layer"):
+        for group in RECORD_GROUPS:
+            if class_name == record + _camel(group):
+                return f"{record}.{group}.{member}"
     return accessor
+
+
+def _camel(group: str) -> str:
+    """Spell a concern group as its class-name suffix (``control_flow`` -> ``ControlFlow``)."""
+
+    return "".join(part.capitalize() for part in group.split("_"))
+
+
+@functools.cache
+def member_spellings(path: Path = RECORD_GROUP_TABLE) -> dict[str, dict[str, str | None]]:
+    """Return ``record -> former name -> public spelling`` for the applied member moves.
+
+    The table module is plain data, executed without importing the package. A
+    removed member maps to ``None``.
+    """
+
+    namespace: dict[str, Any] = {"__name__": "_record_group_table"}
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
+    spellings: dict[str, dict[str, str | None]] = {}
+    for record in ("Op", "Layer"):
+        paths = namespace["_spelling_paths"](record)
+        spellings[record] = {
+            old: None if parts[0].startswith("_") else ".".join(parts)
+            for old, parts in paths.items()
+        }
+    return spellings
 
 
 def _written(key: str) -> str:

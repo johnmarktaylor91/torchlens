@@ -1733,9 +1733,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   spelling refuses typed naming it.
 
 **Autograd-saved bytes**
-: `Op.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
+: `Op.cost.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
-  and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
+  and `Layer.cost.total_autograd_memory`, `ModuleCall.autograd_memory`,
   `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
   tensor two ops save counts twice. Capture never changes a Parameter's `requires_grad`, so on
   frozen Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
@@ -4629,7 +4629,6 @@ alphabetical order.
 | `Op.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
 | `Op.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
-| `Op.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
 | `Op.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
 | `Op.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
 | `Op.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
@@ -4644,14 +4643,9 @@ alphabetical order.
 | `Op.buffer_source_ops` | Accessor over the buffer-source Ops that feed this Op |
 | `Op.buffer_value_changed` | Whether this buffer write changed the buffer's value |
 | `Op.buffer_write_kind` | Kind of write that produced this buffer version, or `None` for a static buffer |
-| `Op.bytes_delta_at_call` | Change in allocated bytes at the time of this Op's function call |
-| `Op.bytes_peak_at_call` | Peak allocated bytes at the time of this Op's function call |
-| `Op.bytes_read` | Theoretical ideal read-once memory traffic for this operation, in bytes |
-| `Op.bytes_written` | Theoretical ideal write-once memory traffic for this operation, in bytes |
 | `Op.children` | Labels of the Ops that directly consume this Op's output |
 | `Op.co_parents` | Labels of other Ops that share at least one child with this Op |
 | `Op.code_context` | Call-stack frames showing where this Op ran |
-| `Op.compute_record` | Two-term compute record (`fma_macs` and `other_flops`), derived on read |
 | `Op.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm |
 | `Op.conditional_branch_depth` | Number of conditional branches this Op is nested inside; 0 when it is not in a conditional body |
 | `Op.conditional_context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
@@ -4663,17 +4657,30 @@ alphabetical order.
 | `Op.container` | Runtime container view for this Op, when available |
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
+| `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
+| `Op.cost.activation_memory` | Bytes of this Op's output activation |
+| `Op.cost.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
+| `Op.cost.autograd_memory` | Bytes of the tensors autograd saved for backward at this Op |
+| `Op.cost.bytes_delta_at_call` | Change in allocated bytes at the time of this Op's function call |
+| `Op.cost.bytes_peak_at_call` | Peak allocated bytes at the time of this Op's function call |
+| `Op.cost.bytes_read` | Theoretical ideal read-once memory traffic for this operation, in bytes |
+| `Op.cost.bytes_written` | Theoretical ideal write-once memory traffic for this operation, in bytes |
+| `Op.cost.compute_record` | Two-term compute record (`fma_macs` and `other_flops`), derived on read |
+| `Op.cost.duration` | Time spent in this Op's function call, as a `Duration` |
+| `Op.cost.flops_backward` | Approximate backward FLOPs for this Op |
+| `Op.cost.flops_forward` | Approximate forward FLOPs for this Op |
+| `Op.cost.flops_total` | Approximate total FLOPs for this Op |
+| `Op.cost.input_memory` | Sum of saved activation bytes across this Op's parent Ops |
+| `Op.cost.macs_forward` | True forward multiply-accumulate count for this Op, or `None` |
+| `Op.cost.param_memory` | Bytes used by the parameters consumed by this Op |
+| `Op.cost.transformed_activation_memory` | Bytes of this Op's transformed output activation, if one was kept |
 | `Op.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
 | `Op.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
 | `Op.edge_uses` | Tuple of `EdgeUseRecord` entries, one per parent edge use captured for this Op |
 | `Op.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
 | `Op.equivalent_ops` | Labels of other Ops in the same equivalence class (same function and arguments) |
-| `Op.flops_backward` | Approximate backward FLOPs for this Op |
-| `Op.flops_forward` | Approximate forward FLOPs for this Op |
-| `Op.flops_total` | Approximate total FLOPs for this Op |
 | `Op.func_autocast_state` | Autocast state in effect when this Op's function was called |
 | `Op.func_config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
-| `Op.func_duration` | Time spent in this Op's function call, as a `Duration` |
 | `Op.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
 | `Op.func_non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
 | `Op.func_qualname` | Qualified name of the function this Op called |
@@ -4713,7 +4720,6 @@ alphabetical order.
 | `Op.input_activations` | Saved parent activations consumed by this Op, in `parents` order |
 | `Op.input_ancestors` | Labels of the model inputs that are ancestors of this Op |
 | `Op.input_containers` | Input container views consumed by this Op |
-| `Op.input_memory` | Sum of saved activation bytes across this Op's parent Ops |
 | `Op.input_to_module_calls` | Labels of the `ModuleCall` records whose input this Op's output fed |
 | `Op.input_to_modules` | Module addresses, without the pass suffix, whose input this Op's output fed |
 | `Op.input_was_parameter` | Whether this Op is an input boundary whose value was a model parameter |
@@ -4747,7 +4753,6 @@ alphabetical order.
 | `Op.short_layer_label` | Short layer label without the pass suffix or step index, such as `conv2d_1` |
 | `Op.lookup_keys` | Alternate keys that resolve to this Op in lookups |
 | `Op.macs_backward` | Backward MACs for this Op; not derivable, so always `None` |
-| `Op.macs_forward` | True forward multiply-accumulate count for this Op, or `None` |
 | `Op.macs_total` | Total MACs for this Op; not derivable, so always `None` |
 | `Op.materialize_grad` | Materialize this Op's saved gradient from a lazy bundle reference |
 | `Op.materialize_out` | Materialize this Op's saved output from a lazy bundle reference |
@@ -4777,7 +4782,6 @@ alphabetical order.
 | `Op.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
 | `Op.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
 | `Op.param_dtypes` | Dtypes of the parameters consumed by this Op |
-| `Op.param_memory` | Bytes used by the parameters consumed by this Op |
 | `Op.param_shapes` | Shapes of the parameters consumed by this Op |
 | `Op.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
 | `Op.parent_param_ops` | Mapping from each consumed parameter's identifying barcode to its pass number |
@@ -4834,14 +4838,28 @@ alphabetical order.
 | `Layer.conditional_entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
 | `Layer.conditional_role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
 | `Layer.conditional_then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
+| `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
+| `Layer.cost.autograd_memory` | Bytes autograd saved for backward at the representative pass |
+| `Layer.cost.duration` | Execution time of this layer's function call, for single-pass layers |
+| `Layer.cost.flops_backward` | Backward FLOPs of this layer's representative (first) pass |
+| `Layer.cost.flops_forward` | Forward FLOPs of this layer's representative (first) pass |
+| `Layer.cost.flops_total` | Representative total FLOPs for this layer |
+| `Layer.cost.macs_forward` | True forward multiply-accumulate count of the representative pass, or `None` when unknown |
+| `Layer.cost.total_activation_memory` | Sum of activation memory in bytes across all ops of this layer |
+| `Layer.cost.total_autograd_memory` | Bytes autograd saved for backward, as carried by this layer |
+| `Layer.cost.total_flops` | Sum of forward and backward FLOPs across all ops of this layer |
+| `Layer.cost.total_flops_backward` | Sum of backward FLOPs across all ops of this layer |
+| `Layer.cost.total_flops_forward` | Sum of forward FLOPs across all ops of this layer |
+| `Layer.cost.total_func_duration` | Sum of function-call durations across all ops of this layer |
+| `Layer.cost.total_macs` | Always `None`, because total MACs are not derivable |
+| `Layer.cost.total_macs_forward` | Sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown |
+| `Layer.cost.total_param_memory` | Bytes used by this layer's parameters |
+| `Layer.cost.transformed_activation_memory` | Bytes of the representative pass's transformed output activation |
 | `Layer.edges_vary_across_ops` | Whether the graph edges of this layer differ between its passes |
 | `Layer.equivalence_class` | Fingerprint string that groups ops repeating the same operation, used for loop detection |
 | `Layer.equivalent_ops` | Labels of the ops that share this layer's equivalence class |
-| `Layer.flops_backward` | Backward FLOPs of this layer's representative (first) pass |
-| `Layer.flops_forward` | Forward FLOPs of this layer's representative (first) pass |
-| `Layer.flops_total` | Representative total FLOPs for this layer |
 | `Layer.func_config` | Non-tensor configuration of the function call, stored as a dict |
-| `Layer.func_duration` | Execution time of this layer's function call, for single-pass layers |
 | `Layer.func_qualname` | Qualified name of the function this layer calls |
 | `Layer.func_rng_states` | RNG states captured for this layer's function call, for single-pass layers |
 | `Layer.fx_call_index` | The FX-style call index of a single-op layer |
@@ -4890,7 +4908,6 @@ alphabetical order.
 | `Layer.leaf_module_ops` | Set of atomic module calls whose single op belongs to this layer |
 | `Layer.lookup_keys` | Keys that look up this layer in the trace, for single-pass layers |
 | `Layer.macs_backward` | Always `None`, because backward MACs are not derivable |
-| `Layer.macs_forward` | True forward multiply-accumulate count of the representative pass, or `None` when unknown |
 | `Layer.macs_total` | Always `None`, because total MACs are not derivable |
 | `Layer.module_call_depth` | Depth of module nesting around this layer |
 | `Layer.multi_output_index` | Position of this layer among the outputs of a multi-output function, or `None` |
@@ -4919,16 +4936,8 @@ alphabetical order.
 | `Layer.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
 | `Layer.siblings` | Union across ops of the sibling layer labels, without pass suffixes |
 | `Layer.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
-| `Layer.total_activation_memory` | Sum of activation memory in bytes across all ops of this layer |
-| `Layer.total_flops_backward` | Sum of backward FLOPs across all ops of this layer |
-| `Layer.total_flops_forward` | Sum of forward FLOPs across all ops of this layer |
-| `Layer.total_flops_total` | Sum of forward and backward FLOPs across all ops of this layer |
-| `Layer.total_func_duration` | Sum of function-call durations across all ops of this layer |
 | `Layer.total_gradient_memory` | Sum of gradient memory in bytes across all ops of this layer |
 | `Layer.total_macs_backward` | Always `None`, because backward MACs are not derivable |
-| `Layer.total_macs_forward` | Sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown |
-| `Layer.total_macs_total` | Always `None`, because total MACs are not derivable |
-| `Layer.total_param_memory` | Bytes used by this layer's parameters |
 | `Layer.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
 | `Layer.transformed_grad_shape` | Shape of the saved transformed gradient, or `None` |
 | `Layer.transformed_gradient_memory` | Bytes used by the saved transformed gradient, or `None` |
@@ -5339,6 +5348,14 @@ alphabetical order.
 : Honesty diagnostics of the capture: witness and escape-detector facts; `trace.health` is the instance a Trace serves. `TraceHealth.completeness_callback_ns`: time spent in the completeness-witness callback, in nanoseconds; `TraceHealth.completeness_decompositions`: completeness-witness decompositions of the captured op stream; `TraceHealth.completeness_mode`: mode the completeness witness ran in; `TraceHealth.completeness_verified`: whether the completeness witness verified the capture; `TraceHealth.escape_detector_callback_ns`: time spent in the escape-detector callback, in nanoseconds; `TraceHealth.escape_detector_mode`: mode the escape detector ran in; `TraceHealth.escape_detector_verified`: whether the escape detector verified the capture; `TraceHealth.num_accounted_witness_events`: number of witness events accounted for by captured ops; `TraceHealth.num_escape_detector_events`: number of escape-detector events observed; `TraceHealth.num_expected_opaque_witness_events`: number of witness events expected to be opaque; `TraceHealth.num_unaccounted_witness_events`: number of witness events no captured op accounts for; `TraceHealth.num_witness_events`: number of completeness-witness events observed.
 
 <!-- end trace group views -->
+
+<!-- record group views: Op and Layer concern groups -->
+**`tl.types.OpCost`**
+: Compute, memory and timing facts of one Op; `op.cost` is the instance an Op serves. `OpCost.activation_memory`: bytes of this Op's output activation; `OpCost.arithmetic_intensity`: theoretical forward FLOPs per byte of ideal memory traffic, or `None`; `OpCost.autograd_memory`: bytes of the tensors autograd saved for backward at this Op; `OpCost.bytes_delta_at_call`: change in allocated bytes at the time of this Op's function call; `OpCost.bytes_peak_at_call`: peak allocated bytes at the time of this Op's function call; `OpCost.bytes_read`: theoretical ideal read-once memory traffic for this operation, in bytes; `OpCost.bytes_written`: theoretical ideal write-once memory traffic for this operation, in bytes; `OpCost.compute_record`: two-term compute record (`fma_macs` and `other_flops`), derived on read; `OpCost.duration`: time spent in this Op's function call, as a `Duration`; `OpCost.flops_backward`: approximate backward FLOPs for this Op; `OpCost.flops_forward`: approximate forward FLOPs for this Op; `OpCost.flops_total`: approximate total FLOPs for this Op; `OpCost.input_memory`: sum of saved activation bytes across this Op's parent Ops; `OpCost.macs_forward`: true forward multiply-accumulate count for this Op, or `None`; `OpCost.param_memory`: bytes used by the parameters consumed by this Op; `OpCost.transformed_activation_memory`: bytes of this Op's transformed output activation, if one was kept.
+
+**`tl.types.LayerCost`**
+: Compute, memory and timing facts of one Layer; single-value members describe the representative (first) pass and `total_*` members sum over every pass; `layer.cost` is the instance a Layer serves. `LayerCost.activation_memory`: bytes of the representative pass's output activation; `LayerCost.autograd_memory`: bytes autograd saved for backward at the representative pass; `LayerCost.duration`: execution time of this layer's function call, for single-pass layers; `LayerCost.flops_backward`: backward FLOPs of this layer's representative (first) pass; `LayerCost.flops_forward`: forward FLOPs of this layer's representative (first) pass; `LayerCost.flops_total`: representative total FLOPs for this layer; `LayerCost.macs_forward`: true forward multiply-accumulate count of the representative pass, or `None` when unknown; `LayerCost.total_activation_memory`: sum of activation memory in bytes across all ops of this layer; `LayerCost.total_autograd_memory`: bytes autograd saved for backward, as carried by this layer; `LayerCost.total_flops`: sum of forward and backward FLOPs across all ops of this layer; `LayerCost.total_flops_backward`: sum of backward FLOPs across all ops of this layer; `LayerCost.total_flops_forward`: sum of forward FLOPs across all ops of this layer; `LayerCost.total_func_duration`: sum of function-call durations across all ops of this layer; `LayerCost.total_macs`: always `None`, because total MACs are not derivable; `LayerCost.total_macs_forward`: sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown; `LayerCost.total_param_memory`: bytes used by this layer's parameters; `LayerCost.transformed_activation_memory`: bytes of the representative pass's transformed output activation.
+<!-- end record group views -->
 
 ### Keywords
 | Spelling | Meaning |

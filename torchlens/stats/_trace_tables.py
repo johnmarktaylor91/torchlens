@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils._record_group_table import record_member
 from .._utils.collections import _path_component_key
 
 
@@ -460,7 +461,7 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
                     else None
                 )
             else:
-                layer_dict[field_name] = getattr(layer_entry, field_name)
+                layer_dict[field_name] = record_member(layer_entry, field_name)
         model_df_dictlist.append(layer_dict)
     model_df = pd.DataFrame(model_df_dictlist)
 

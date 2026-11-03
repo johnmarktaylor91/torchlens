@@ -154,7 +154,7 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     assert len(trace.saved_ops) == len(saved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(
-        int(op.activation_memory or 0) for op in saved_ops
+        int(op.cost.activation_memory or 0) for op in saved_ops
     )
 
 

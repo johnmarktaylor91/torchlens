@@ -6014,7 +6014,7 @@ def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> Non
         victim = next(layer for layer in log._layer_list if layer.has_saved_activation)
         assert victim.out is not None
 
-        victim.activation_memory = 999
+        victim._cost_activation_memory = 999
 
         with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
             check_metadata_invariants(log)

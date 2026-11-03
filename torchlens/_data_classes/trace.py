@@ -2171,9 +2171,9 @@ class Trace(TraceOutputMixin, TraceLike):
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
-                entry.flops_backward
+                entry.cost.flops_backward
                 for entry in self._layer_list
-                if entry.flops_backward is not None
+                if entry.cost.flops_backward is not None
             )
         )
 

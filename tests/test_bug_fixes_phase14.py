@@ -368,7 +368,7 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
 
     assert output_op.shape == (6, 3)
     assert output_op.dtype == expected_raw.dtype
-    assert output_op.activation_memory == expected_raw.nelement() * expected_raw.element_size()
+    assert output_op.cost.activation_memory == expected_raw.nelement() * expected_raw.element_size()
     if save_raw_activations:
         assert torch.equal(output_op.out, expected_raw)
     else:
@@ -376,7 +376,7 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
     assert torch.equal(output_op.transformed_out, expected_transformed)
     assert output_op.transformed_out_shape == (6, 3)
     assert output_op.transformed_out_dtype == expected_transformed.dtype
-    assert output_op.transformed_activation_memory == (
+    assert output_op.cost.transformed_activation_memory == (
         expected_transformed.nelement() * expected_transformed.element_size()
     )
     assert check_metadata_invariants(trace) is True

@@ -6,6 +6,7 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
 from ._render_common import *
 from ._render_edges import *
@@ -1362,7 +1363,7 @@ def _build_collapsed_module_node(
     if module_output_shape is None:
         module_output_shape = getattr(module_output_layer, "out_shape", None)
     module_output_shape = module_output_shape or ()
-    module_output_fsize = getattr(module_output_layer, "activation_memory", None)
+    module_output_fsize = record_member(module_output_layer, "activation_memory", None)
     if module_output_fsize is None:
         module_output_fsize = "0 B"
     address, call_index = module_tuple
@@ -2034,7 +2035,9 @@ def compute_default_node_lines(
     shape_summary = getattr(layer_log, "shape_summary", None)
     if isinstance(shape_summary, str) and shape_summary:
         lines.append(shape_summary)
-    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.activation_memory)}")
+    lines.append(
+        f"{format_shape(layer_log.shape)}, {format_memory(layer_log.cost.activation_memory)}"
+    )
 
     if show_saved_for_backward and (saved := saved_for_backward_line(layer_log, vis_mode)):
         lines.append(saved)

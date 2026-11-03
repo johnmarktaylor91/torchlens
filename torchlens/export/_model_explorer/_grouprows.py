@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ..._utils.display import human_readable_size
 from ...errors._base import TorchLensError
 from ._namespace import NamespaceLevel
@@ -44,7 +45,7 @@ def accumulate_namespace_stats(
 
     stats: dict[str, _NamespaceStats] = {}
     for entry, namespace, levels in zip(entries, namespaces, levels_per_entry, strict=True):
-        activation_memory = getattr(entry, "activation_memory", None)
+        activation_memory = record_member(entry, "activation_memory", None)
         for level in levels:
             row = stats.setdefault(level.namespace, _NamespaceStats(address=level.address))
             row.descendant_ops += 1

@@ -87,8 +87,8 @@ def cost_flops_by_op_type(trace: Trace) -> _CallableDict:
         row = rows_by_label.get(str(entry.layer_label))
         if row is not None and row.flops_fma2 is not None:
             result[lt]["forward"] += Flops(row.flops_fma2)
-        if entry.flops_backward is not None:
-            result[lt]["backward"] += entry.flops_backward
+        if entry.cost.flops_backward is not None:
+            result[lt]["backward"] += entry.cost.flops_backward
     return _CallableDict(result)
 
 

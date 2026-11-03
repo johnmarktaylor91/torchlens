@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._utils._multipass_access import is_multipass_layer
+from .._utils._record_group_table import record_member
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
@@ -401,7 +402,7 @@ def _sum_optional(ops: list[Any], field: str) -> int | float | None:
         Sum when at least one value is available, otherwise ``None``.
     """
 
-    values = [getattr(op, field, None) for op in ops]
+    values = [record_member(op, field, None) for op in ops]
     if field == "func_duration":
         available = [float(value) for value in values if value is not None]
     else:
@@ -448,7 +449,9 @@ def _values(ops: list[Any], field: str) -> str | None:
         One value or a comma-separated stable set, if available.
     """
 
-    values = sorted({str(value) for op in ops if (value := getattr(op, field, None)) is not None})
+    values = sorted(
+        {str(value) for op in ops if (value := record_member(op, field, None)) is not None}
+    )
     return ", ".join(values) if values else None
 
 

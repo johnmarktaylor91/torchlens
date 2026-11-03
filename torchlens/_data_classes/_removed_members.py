@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .._utils._record_group_table import OP_MOVED_MEMBERS
 from .._utils.facade import refuse_removed_member
 
 _GPU_KERNELS_REMEDY = (
@@ -21,7 +22,7 @@ _GPU_KERNELS_REMEDY = (
 
 #: Removed public member spellings per record class name -> remedy text.
 REMOVED_MEMBERS: Mapping[str, Mapping[str, str]] = {
-    "Op": {"gpu_kernels": _GPU_KERNELS_REMEDY},
+    "Op": {"gpu_kernels": _GPU_KERNELS_REMEDY, **OP_MOVED_MEMBERS},
     "AtenOp": {"gpu_kernels": _GPU_KERNELS_REMEDY},
 }
 

@@ -90,6 +90,7 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
+from .._utils._record_group_table import OP_STORAGE_ATTRS, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
@@ -125,6 +126,7 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
+from ._record_groups import OpCost
 from ._state_adapter import state_items, state_restore
 from .container import (
     container_from_op,
@@ -327,6 +329,9 @@ _OP_SLOT_NAMES = tuple(
 # ``state_restore``) already speaks the descriptor protocol, so behavior is
 # unchanged while the physical cells live in per-trace columns.
 _OP_STORE_LAYOUT = OpStoreLayout(_OP_SLOT_NAMES)
+#: ``(persisted field name, attribute that holds it)`` in declared order; a
+#: concern-group member keeps its persisted name under a private attribute.
+_OP_STATE_ATTRS = tuple((name, OP_STORAGE_ATTRS.get(name, name)) for name in _OP_SLOT_NAMES)
 # Bulk-ingress seed constants: the converted-at-construction fields and the
 # layout ids of the cells `__init__` overrides after the one-pass dict seed.
 _INIT_BYTES_FIELDS = (
@@ -438,7 +443,10 @@ _UNPOOLED_SLOTS = frozenset(
         "recurrent_ops",
     }
 )
-_POOLED_SLOTS = tuple(name for name in _OP_SLOT_NAMES if name not in _UNPOOLED_SLOTS)
+# Attribute names (a concern-group member reads under its private storage name).
+_POOLED_SLOTS = tuple(
+    OP_STORAGE_ATTRS.get(name, name) for name in _OP_SLOT_NAMES if name not in _UNPOOLED_SLOTS
+)
 # Depth of container nesting the pass descends into.  Every field that carries
 # real repetition (ancestor sets, label lists, config dicts) is at depth 0-1.
 _POOL_MAX_DEPTH = 2
@@ -1210,24 +1218,24 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         device_ref: DeviceRef | None
         backend_address: str | None
         resolver_status: str
-        activation_memory: Bytes | None
-        transformed_activation_memory: Bytes | None
+        _cost_activation_memory: Bytes | None
+        _cost_transformed_activation_memory: Bytes | None
         visualizer_path: str | None
-        autograd_memory: Bytes | None
+        _cost_autograd_memory: Bytes | None
         num_autograd_tensors: int | None
-        bytes_delta_at_call: Bytes | None
-        bytes_peak_at_call: Bytes | None
+        _cost_bytes_delta_at_call: Bytes | None
+        _cost_bytes_peak_at_call: Bytes | None
         gradient_memory: Bytes | None
         transformed_gradient_memory: Bytes | None
         func_id: FunctionRegistryKey | None
         code_context: list["FuncCallLocation"]
         var_names: list[str]
-        func_duration: Duration | None
-        flops_forward: Flops | None
-        flops_backward: Flops | None
+        _cost_duration: Duration | None
+        _cost_flops_forward: Flops | None
+        _cost_flops_backward: Flops | None
         _param_barcodes: list[Any]
         _param_logs: list["Param"]
-        param_memory: Bytes
+        _cost_param_memory: Bytes
         is_orphan: bool
         fx_qualpath: str | None
         fx_call_index: int
@@ -1632,7 +1640,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Return one physical slot value, or ``default`` when it is unset."""
 
         try:
-            return _object_getattribute(self, name)
+            return _object_getattribute(self, OP_STORAGE_ATTRS.get(name, name))
         except AttributeError:
             return default
 
@@ -1783,7 +1791,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Value to assign.
         """
 
-        _object_setattr(self, attr, value)
+        _object_setattr(self, OP_STORAGE_ATTRS.get(attr, attr), value)
 
     def _compact_metadata(self, pool: dict[Any, Any]) -> None:
         """Replace repeated immutable metadata with pooled shared instances.
@@ -1943,16 +1951,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         set_(self, "_row", row)
 
     @property
-    def compute_record(self) -> Any | None:
-        """Two-term compute record (fma_macs / other_flops), derived on read."""
+    def cost(self) -> OpCost:
+        """Compute, memory and timing facts of this Op (``op.cost.flops_forward``)."""
 
-        return _op_cost.compute_record(self)
-
-    @property
-    def macs_forward(self) -> Macs | None:
-        """TRUE forward multiply-accumulate count, never ``flops // 2``."""
-
-        return _op_cost.macs_forward(self)
+        return OpCost(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -1961,34 +1963,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return _op_cost.macs_backward(self)
 
     @property
-    def flops_total(self) -> Flops:
-        """Approximate total FLOPs for this Op."""
-
-        return _op_cost.flops_total(self)
-
-    @property
     def macs_total(self) -> Macs | None:
         """Total MACs are not derivable and always ``None``."""
 
         return _op_cost.macs_total(self)
-
-    @property
-    def bytes_read(self) -> Bytes | None:
-        """Theoretical ideal read-once traffic for this operation."""
-
-        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
-
-    @property
-    def bytes_written(self) -> Bytes | None:
-        """Theoretical ideal write-once traffic for this operation."""
-
-        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
-
-    @property
-    def arithmetic_intensity(self) -> float | None:
-        """Return theoretical forward FLOPs per ideal traffic byte."""
-
-        return _op_cost.arithmetic_intensity(self)
 
     @property
     def param_names(self) -> list[str]:
@@ -2430,7 +2408,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
 
         return Bytes(
             sum(
-                int(getattr(parent, "activation_memory", 0) or 0)
+                int(record_member(parent, "activation_memory", 0) or 0)
                 for parent in self.input_ops.values()
                 if parent.has_saved_activation
             )
@@ -2725,9 +2703,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         getattribute = _object_getattribute
-        for name in _OP_SLOT_NAMES:
+        for name, attr in _OP_STATE_ATTRS:
             try:
-                yield name, getattribute(self, name)
+                yield name, getattribute(self, attr)
             except AttributeError:
                 continue
 
@@ -2742,8 +2720,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         _ensure_detached_store(self)
+        storage_attrs = OP_STORAGE_ATTRS
         for field_name, field_value in mapping.items():
-            _object_setattr(self, field_name, field_value)
+            _object_setattr(self, storage_attrs.get(field_name, field_name), field_value)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
@@ -3175,7 +3154,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        row = {field_name: getattr(self, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER}
+        row = {
+            field_name: getattr(self, OP_STORAGE_ATTRS.get(field_name, field_name))
+            for field_name in LAYER_PASS_LOG_FIELD_ORDER
+        }
         row["is_internally_initialized"] = bool(row["is_internally_initialized"])
         for field_name in (
             "min_distance_from_input",
@@ -3554,8 +3536,9 @@ def _install_op_field_descriptors() -> None:
     dataflow_names = frozenset(OP_DATAFLOW_FIELDS)
     existing = vars(Op)
     for fid, name in enumerate(_OP_SLOT_NAMES):
-        if name in existing:
-            raise RuntimeError(f"Op facade collision: {name!r} is already defined on Op")
+        attr = OP_STORAGE_ATTRS.get(name, name)
+        if attr in existing:
+            raise RuntimeError(f"Op facade collision: {attr!r} is already defined on Op")
         if name in dataflow_names:
             descriptor: _OpField = _DataflowField(name, fid, tuple)
         elif name in OP_GROUP_VIEW_FIELDS:
@@ -3568,7 +3551,7 @@ def _install_op_field_descriptors() -> None:
             descriptor = _FactField(name, fid)
         else:
             descriptor = _OpField(name, fid)
-        setattr(Op, name, descriptor)
+        setattr(Op, attr, descriptor)
 
 
 _install_op_field_descriptors()

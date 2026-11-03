@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from ._encoding_request import EncodingChannelRequest
 
 if TYPE_CHECKING:
@@ -991,13 +992,13 @@ def _rolled_reconciled(state: EncodingState, node: Any, field_name: str) -> floa
     if field_name in _varying_marker(node):
         state.note(NOTE_VARIES)
         return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_summed(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Summed family: exact aggregate, mandatory aggregation legend line."""
 
-    value = _coerce_scalar(state, node, getattr(node, field_name, None))
+    value = _coerce_scalar(state, node, record_member(node, field_name, None))
     if value is not None:
         wording = _AGGREGATE_LEGEND_WORDING.get(field_name, "total across passes")
         line = f"{field_name}: {wording} on rolled nodes"
@@ -1025,7 +1026,7 @@ def _rolled_derived(state: EncodingState, node: Any, field_name: str) -> float |
         if input_name in marker:
             state.note(NOTE_VARIES)
             return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1038,11 +1039,11 @@ def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> floa
 
     op_field = _mirror_backed_op_field(field_name)
     if op_field is not None:
-        per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
+        per_pass = [record_member(op, op_field, None) for op in node.ops.values()]
         if len({repr(value) for value in per_pass}) > 1:
             state.note(NOTE_VARIES)
             return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1296,9 +1297,9 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
             raise _size_rolled_refusal(
                 node, field_name, "the stored aggregate is a per-pass maximum (upper bound)"
             )
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_SUMMED:
-        value = coerce(node, getattr(node, field_name, None))
+        value = coerce(node, record_member(node, field_name, None))
         if value is not None:
             wording = _AGGREGATE_LEGEND_WORDING.get(field_name, "total across passes")
             line = f"{field_name}: {wording} on rolled nodes"
@@ -1311,10 +1312,10 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
         )
     if row == ROW_DERIVED:
         _validate_derived_size_inputs(node, field_name, marker)
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_STRUCTURAL:
         _validate_structural_size_value(node, field_name)
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_PER_PASS:
         raise _size_rolled_refusal(
             node, field_name, "the field is per-pass with no aggregate meaning"
@@ -1346,7 +1347,7 @@ def _validate_structural_size_value(node: Any, field_name: str) -> None:
     op_field = _mirror_backed_op_field(field_name)
     if op_field is None:
         return
-    per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
+    per_pass = [record_member(op, op_field, None) for op in node.ops.values()]
     if len({repr(value) for value in per_pass}) > 1:
         raise _size_rolled_refusal(node, field_name, "per-pass values disagree (defensive check)")
 

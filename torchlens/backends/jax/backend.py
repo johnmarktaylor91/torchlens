@@ -2333,7 +2333,7 @@ class JAXBackend:
                         param.num_params for param in consumed_params if param.is_trainable
                     )
                     op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-                    op_log.param_memory = Bytes(
+                    op_log._cost_param_memory = Bytes(
                         sum(int(param.param_memory) for param in consumed_params)
                     )
                     # Set-memoized usage cross-links (the bare list scans were
@@ -2473,7 +2473,7 @@ class JAXBackend:
                 param.num_params for param in params if param.is_trainable
             )
             op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-            op_log.param_memory = sum(int(param.param_memory) for param in params)
+            op_log._cost_param_memory = sum(int(param.param_memory) for param in params)
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)

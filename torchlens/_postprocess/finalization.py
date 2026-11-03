@@ -45,6 +45,7 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
+from .._utils._record_group_table import layer_attr, record_member
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
@@ -1164,22 +1165,22 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         return False
 
     for field_name in _MULTIPASS_SHAPE_FIELDS:
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [record_member(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
-            setattr(layer_log, field_name, _honest_multipass_shape(values))
+            setattr(layer_log, layer_attr(field_name), _honest_multipass_shape(values))
 
     for field_name, quantity_type in (
         *((name, Bytes) for name in _MULTIPASS_BYTES_FIELDS),
         *((name, Flops) for name in _MULTIPASS_FLOPS_FIELDS),
     ):
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [record_member(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             numeric = [value for value in values if isinstance(value, (int, float))]
             if numeric and len(numeric) == len(values):
-                setattr(layer_log, field_name, quantity_type(int(max(numeric))))
+                setattr(layer_log, layer_attr(field_name), quantity_type(int(max(numeric))))
 
     for field_name in _MULTIPASS_MARKER_ONLY_FIELDS:
-        record_if_varying(field_name, [getattr(op, field_name, None) for op in pass_ops])
+        record_if_varying(field_name, [record_member(op, field_name, None) for op in pass_ops])
 
     module_stacks = [
         [module_pass[0] for module_pass in (getattr(op, "modules", None) or ())] for op in pass_ops
@@ -1281,9 +1282,9 @@ def _build_layer_logs(self: "Trace") -> None:
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
-            pass_log.autograd_memory
+            pass_log.cost.autograd_memory
             for pass_log in layer_log.ops.values()
-            if pass_log.autograd_memory is not None
+            if pass_log.cost.autograd_memory is not None
         ]
         pass_autograd_tensor_counts = [
             pass_log.num_autograd_tensors
@@ -1291,14 +1292,16 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.num_autograd_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log.total_autograd_memory = layer_log.autograd_memory
+            layer_log._cost_autograd_memory = Bytes(
+                sum(int(value) for value in pass_autograd_bytes)
+            )
+            layer_log._cost_total_autograd_memory = layer_log.cost.autograd_memory
             layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
-            autograd_memory += layer_log.autograd_memory
+            autograd_memory += layer_log.cost.autograd_memory
             has_autograd_saved_value = True
         else:
-            layer_log.autograd_memory = None
-            layer_log.total_autograd_memory = None
+            layer_log._cost_autograd_memory = None
+            layer_log._cost_total_autograd_memory = None
             layer_log.num_autograd_tensors = None
         _reconcile_multipass_layer_fields(layer_log)
         _rebuild_layer_log_conditional_views(layer_log)

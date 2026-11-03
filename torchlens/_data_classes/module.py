@@ -47,6 +47,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._call_tree import (
     _edge_counts_for_scope,
@@ -647,7 +648,7 @@ class ModuleCall:
             return Duration(0)
         return Duration(
             sum(
-                getattr(op, "func_duration", 0.0) or 0.0
+                record_member(op, "func_duration", 0.0) or 0.0
                 for label in self.ops
                 for op in _resolve_call_ops(trace, label)
             )
@@ -702,7 +703,7 @@ class ModuleCall:
 
         return Bytes(
             sum(
-                int(getattr(op, field_name, 0) or 0)
+                int(record_member(op, field_name, 0) or 0)
                 for op in self._ops_by_output_role(output=output)
             )
         )
@@ -740,7 +741,7 @@ class ModuleCall:
             return Bytes(0)
         return Bytes(
             sum(
-                int(getattr(op, "autograd_memory", 0) or 0)
+                int(record_member(op, "autograd_memory", 0) or 0)
                 for label in self.ops
                 for op in _resolve_call_ops(trace, label)
             )

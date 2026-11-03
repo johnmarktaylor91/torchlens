@@ -509,7 +509,7 @@ def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_p
     single_pass = [
         layer.layer_label
         for layer in varying_log._layer_logs.values()
-        if len(layer.ops) == 1 and layer.activation_memory
+        if len(layer.ops) == 1 and layer.cost.activation_memory
     ]
     assert any(label in state.colors for label in single_pass)
 
@@ -521,7 +521,7 @@ def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_
     dot = _draw(
         varying_log,
         tmp_path,
-        color_by=lambda node: float(node.total_flops_forward or 0),
+        color_by=lambda node: float(node.cost.total_flops_forward or 0),
         rolled=True,
     )
     state = _state(varying_log)
@@ -538,7 +538,7 @@ def test_callable_per_pass_read_on_rolled_chains_tripwire(
         _draw(
             varying_log,
             tmp_path,
-            color_by=lambda node: float(node.func_duration),
+            color_by=lambda node: float(node.cost.duration),
             rolled=True,
         )
     assert excinfo.value.fields["code"] == "encoding_callable_error"

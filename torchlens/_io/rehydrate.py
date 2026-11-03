@@ -26,6 +26,7 @@ from torchlens.backends.registry import BackendRuntimeCompatibilityError
 from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
+from .._utils._record_group_table import record_storage_attr
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
@@ -731,7 +732,7 @@ def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> N
     elif dataclasses.is_dataclass(value) and getattr(type(value), "__dataclass_params__").frozen:
         object.__setattr__(value, field_name, field_value)
     else:
-        setattr(value, field_name, field_value)
+        setattr(value, record_storage_attr(value, field_name), field_value)
 
 
 def _materialize_recursive_blob_refs(

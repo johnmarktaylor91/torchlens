@@ -183,7 +183,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         # the alias row contributes nothing to the tracked total. Input rows
         # own exactly the external inputs' bytes and stay counted.
         if record_type(layer_entry) != "output":
-            self._cost_total_activation_memory += layer_entry.activation_memory
+            self._cost_total_activation_memory += layer_entry.cost.activation_memory
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
         if layer_entry.layer_label not in unique_layers_seen and layer_entry.has_params:
@@ -193,7 +193,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Tally elapsed time:
 
-        self._cost_func_calls_duration += layer_entry.func_duration
+        self._cost_func_calls_duration += layer_entry.cost.duration
 
     _tally_params_by_identity(self, mbd)
     _compute_fx_qualpaths(self)

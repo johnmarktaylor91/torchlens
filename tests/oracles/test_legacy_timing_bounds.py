@@ -106,15 +106,15 @@ def test_op_and_layer_func_durations_are_bounded(timed_trace) -> None:
     budget = float(trace.cost.forward_duration) - SLEEP  # ops run outside the sleep
     total = 0.0
     for op in trace.ops:
-        duration = float(op.func_duration)
+        duration = float(op.cost.duration)
         if op.is_input or op.is_output:
             assert duration == 0.0, op.label  # boundary nodes run no function
             continue
         assert 0 < duration <= budget, op.label
         total += duration
         layer = trace.layers[op.layer_label]
-        assert 0 < float(layer.func_duration) <= budget
-        assert 0 < float(layer.total_func_duration) <= budget
+        assert 0 < float(layer.cost.duration) <= budget
+        assert 0 < float(layer.cost.total_func_duration) <= budget
     assert total <= budget <= wall
 
 

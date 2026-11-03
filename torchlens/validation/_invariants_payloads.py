@@ -6,6 +6,8 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -472,7 +474,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             payload=_live_payload_value(op, "out"),
             shape=getattr(op, "shape", None),
             dtype=getattr(op, "dtype", None),
-            memory=getattr(op, "activation_memory", None),
+            memory=record_member(op, "activation_memory", None),
             presence_flag=getattr(op, "has_saved_activation", False),
             presence_flag_name="has_saved_activation",
             payload_name="out",
@@ -483,7 +485,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             payload=_live_payload_value(op, "transformed_out"),
             shape=getattr(op, "transformed_out_shape", None),
             dtype=getattr(op, "transformed_out_dtype", None),
-            memory=getattr(op, "transformed_activation_memory", None),
+            memory=record_member(op, "transformed_activation_memory", None),
             presence_flag=getattr(op, "has_saved_activation", False),
             presence_flag_name="has_saved_activation",
             payload_name="transformed_out",

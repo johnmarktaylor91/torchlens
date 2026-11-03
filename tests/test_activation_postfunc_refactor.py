@@ -58,7 +58,7 @@ def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> Non
     assert layer.shape != layer.transformed_out_shape
     assert layer.dtype == layer.out.dtype
     assert layer.transformed_out_dtype == layer.transformed_out.dtype
-    assert layer.transformed_activation_memory == layer.transformed_out.nelement() * (
+    assert layer.cost.transformed_activation_memory == layer.transformed_out.nelement() * (
         layer.transformed_out.element_size()
     )
 
@@ -87,7 +87,7 @@ def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
     assert layer.out is None
     assert layer.shape is not None
     assert layer.dtype is not None
-    assert layer.activation_memory > 0
+    assert layer.cost.activation_memory > 0
     assert layer.transformed_out is not None
 
 
@@ -212,7 +212,10 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     assert torch.equal(restored_layer.transformed_out, layer.transformed_out)
     assert restored_layer.transformed_out_shape == layer.transformed_out_shape
     assert restored_layer.transformed_out_dtype == layer.transformed_out_dtype
-    assert restored_layer.transformed_activation_memory == layer.transformed_activation_memory
+    assert (
+        restored_layer.cost.transformed_activation_memory
+        == layer.cost.transformed_activation_memory
+    )
 
 
 def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:

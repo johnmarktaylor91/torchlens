@@ -67,7 +67,7 @@ def test_classes_sum_to_gross_band_per_op_and_total() -> None:
         per_op_gross = {}
         for op in captured:
             raw = getattr(op, "raw_label", None)
-            gross = getattr(op, "autograd_memory", None)
+            gross = op.cost.autograd_memory
             if gross:
                 per_op_gross[str(raw)] = int(gross)
         total_gross = sum(per_op_gross.values())

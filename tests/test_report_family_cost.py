@@ -420,7 +420,7 @@ def test_position_scaling_closed_forms() -> None:
         quadratic_live = sum(r * r for r in real) / (len(real) * padded**2)
         expected = 0
         for op in trace._layer_list:
-            flops = int(getattr(op, "flops_forward", 0) or 0)
+            flops = int(op.cost.flops_forward or 0)
             if flops == 0:
                 continue
             scaling = position_scaling_class(op, padded)

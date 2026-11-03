@@ -162,6 +162,39 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | --- | --- | --- |
 | `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 | `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+| `Op.cost.activation_memory` | `Op.cost.activation_memory` | removed |
+| `Op.cost.arithmetic_intensity` | `Op.cost.arithmetic_intensity` | removed |
+| `Op.cost.autograd_memory` | `Op.cost.autograd_memory` | removed |
+| `Op.cost.bytes_delta_at_call` | `Op.cost.bytes_delta_at_call` | removed |
+| `Op.cost.bytes_peak_at_call` | `Op.cost.bytes_peak_at_call` | removed |
+| `Op.cost.bytes_read` | `Op.cost.bytes_read` | removed |
+| `Op.cost.bytes_written` | `Op.cost.bytes_written` | removed |
+| `Op.cost.compute_record` | `Op.cost.compute_record` | removed |
+| `Op.cost.flops_backward` | `Op.cost.flops_backward` | removed |
+| `Op.cost.flops_forward` | `Op.cost.flops_forward` | removed |
+| `Op.cost.flops_total` | `Op.cost.flops_total` | removed |
+| `Op.cost.duration` | `Op.cost.duration` | removed |
+| `Op.cost.input_memory` | `Op.cost.input_memory` | removed |
+| `Op.cost.macs_forward` | `Op.cost.macs_forward` | removed |
+| `Op.cost.param_memory` | `Op.cost.param_memory` | removed |
+| `Op.cost.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
+| `Layer.cost.activation_memory` | `Layer.cost.activation_memory` | removed |
+| `Layer.cost.autograd_memory` | `Layer.cost.autograd_memory` | removed |
+| `Layer.cost.flops_backward` | `Layer.cost.flops_backward` | removed |
+| `Layer.cost.flops_forward` | `Layer.cost.flops_forward` | removed |
+| `Layer.cost.flops_total` | `Layer.cost.flops_total` | removed |
+| `Layer.cost.duration` | `Layer.cost.duration` | removed |
+| `Layer.cost.macs_forward` | `Layer.cost.macs_forward` | removed |
+| `Layer.cost.total_activation_memory` | `Layer.cost.total_activation_memory` | removed |
+| `Layer.cost.total_autograd_memory` | `Layer.cost.total_autograd_memory` | removed |
+| `Layer.cost.total_flops_backward` | `Layer.cost.total_flops_backward` | removed |
+| `Layer.cost.total_flops_forward` | `Layer.cost.total_flops_forward` | removed |
+| `Layer.cost.total_flops` | `Layer.cost.total_flops` | removed |
+| `Layer.cost.total_func_duration` | `Layer.cost.total_func_duration` | removed |
+| `Layer.cost.total_macs_forward` | `Layer.cost.total_macs_forward` | removed |
+| `Layer.cost.total_macs` | `Layer.cost.total_macs` | removed |
+| `Layer.cost.total_param_memory` | `Layer.cost.total_param_memory` | removed |
+| `Layer.cost.transformed_activation_memory` | `Layer.cost.transformed_activation_memory` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 

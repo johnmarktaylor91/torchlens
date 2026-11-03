@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from .._debug_report import Report, table_report, trace_subject
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 from ._common import _ordered_ops, _require_pandas, _source_line
 
 CostMetric = Literal["flops", "memory", "duration", "device_time"]
@@ -276,7 +277,7 @@ def hot_path_rows(
         if device_times is not None:
             value = device_times.get(str(getattr(op, "label", "")), None)
         else:
-            value = getattr(op, field_name, None)
+            value = record_member(op, field_name, None)
         if value is None:
             excluded += 1
             continue

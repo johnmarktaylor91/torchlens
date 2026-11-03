@@ -838,7 +838,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         # Normalize the captured measurement before any timing-aware node mode or
         # overlay can format it, while retaining deterministic render behavior.
         for layer in trace._layer_list:
-            layer.func_duration = 0.0
+            layer._cost_duration = 0.0
         kwargs = dict(case.draw_kwargs)
         kwargs.update(
             {

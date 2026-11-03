@@ -35,6 +35,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils._record_group_table import record_member
 
 __tl_layer__ = "L2"
 
@@ -233,8 +234,8 @@ def retained_activation_bytes(trace_like: Any, op_like: Any) -> int:
         trace_like._options_save_raw_activations if is_live_trace(trace_like) else True
     )
     if store_raw:
-        return int(getattr(op_like, "activation_memory", 0) or 0)
-    return int(getattr(op_like, "transformed_activation_memory", 0) or 0)
+        return int(record_member(op_like, "activation_memory", 0) or 0)
+    return int(record_member(op_like, "transformed_activation_memory", 0) or 0)
 
 
 __all__ = [

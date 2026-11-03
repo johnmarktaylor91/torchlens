@@ -13,6 +13,7 @@ from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from .._utils.display import human_readable_size
 
 PARAM_SEPARATOR: Final[str] = " · "
@@ -249,7 +250,7 @@ def saved_for_backward_line(layer_log: Any, vis_mode: str) -> str | None:
     if vis_mode == "rolled" and getattr(layer_log, "num_passes", 1) > 1:
         suffix = " (total across passes)"
     noun = "tensor" if count == 1 else "tensors"
-    memory = getattr(layer_log, "autograd_memory", None)
+    memory = record_member(layer_log, "autograd_memory", None)
     if memory is not None:
         return f"saved for backward: {count} {noun}, {format_memory(memory)}{suffix}"
     return f"saved for backward: {count} {noun}{suffix}"
@@ -477,7 +478,7 @@ def compute_selected_node_lines(
             if dtype_text is not None:
                 rows.append(dtype_text)
         elif field_name in {"memory", "bytes"}:
-            rows.append(str(getattr(layer_log, "activation_memory", "")))
+            rows.append(str(record_member(layer_log, "activation_memory", "")))
         elif field_name == "module":
             rows.append(format_module_path(node_address) or "@root")
         elif field_name == "params":
@@ -494,7 +495,7 @@ def compute_selected_node_lines(
             else:
                 rows.append(str(get_multipass_attr(layer_log, "num_passes", 1)))
         elif field_name == "flops":
-            rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
+            rows.append(str(record_member(layer_log, "flops_forward", 0) or 0))
             append_attention_note(rows, layer_log)
         elif field_name == "time":
             if is_multipass_layer(layer_log):
@@ -502,7 +503,7 @@ def compute_selected_node_lines(
                 # leak the multi-pass ValueError tripwire. Report the aggregate
                 # total across passes (same choice as the rolled summary builder's
                 # ``total_func_duration``), an honest total rather than a crash.
-                duration = float(getattr(layer_log, "total_func_duration", 0.0) or 0.0)
+                duration = float(record_member(layer_log, "total_func_duration", 0.0) or 0.0)
             else:
                 duration = float(get_multipass_attr(layer_log, "func_duration", 0.0) or 0.0)
             rows.append(str(Duration(duration)))

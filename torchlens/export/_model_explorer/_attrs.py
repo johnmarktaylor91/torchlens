@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..._record_type import record_type
+from ..._utils._record_group_table import record_member
 from ..._utils.display import format_flops, human_readable_size
 
 __tl_layer__ = "L8"
@@ -90,10 +91,10 @@ def curated_attrs(entry: Any, context: AttrContext) -> list[dict[str, str]]:
         ("device", _device_string(entry)),
         ("module", _module_call_string(entry)),
         ("pass", _pass_string(entry)),
-        ("act_bytes", _bytes_string(getattr(entry, "activation_memory", None))),
+        ("act_bytes", _bytes_string(record_member(entry, "activation_memory", None))),
         ("params", _params_string(entry)),
-        ("flops", _flops_string(getattr(entry, "flops_forward", None))),
-        ("time", _duration_string(getattr(entry, "func_duration", None))),
+        ("flops", _flops_string(record_member(entry, "flops_forward", None))),
+        ("time", _duration_string(record_member(entry, "func_duration", None))),
         ("saved", _saved_string(entry)),
         ("nonfinite", _nonfinite_string(entry, context)),
         ("torchlens_label", str(getattr(entry, "label", "") or "") or None),
@@ -214,7 +215,7 @@ def _params_string(entry: Any) -> str | None:
     num_params = int(getattr(entry, "num_params", 0) or 0)
     if num_params <= 0:
         return None
-    param_memory = getattr(entry, "param_memory", None)
+    param_memory = record_member(entry, "param_memory", None)
     if param_memory is None:
         return str(num_params)
     return f"{num_params} ({human_readable_size(int(param_memory))})"
@@ -306,7 +307,7 @@ def _sum_quantity(ops: list[Any], field_name: str) -> float | None:
     total = 0.0
     any_recorded = False
     for op in ops:
-        value = getattr(op, field_name, None)
+        value = record_member(op, field_name, None)
         if value is not None:
             total += float(value)
             any_recorded = True

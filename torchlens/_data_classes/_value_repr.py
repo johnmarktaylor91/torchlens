@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._repr import format_shape_list
 
@@ -249,7 +250,7 @@ def _params_line(op: Any) -> str | None:
         return None
     return (
         f"params {format_shape_list(shapes)} = "
-        f"{getattr(op, 'num_params', '?')} ({getattr(op, 'param_memory', '?')})"
+        f"{getattr(op, 'num_params', '?')} ({record_member(op, 'param_memory', '?')})"
     )
 
 
@@ -258,7 +259,7 @@ def _cost_line(op: Any) -> str | None:
 
     if getattr(op, "is_input", False):
         return None
-    duration = getattr(op, "func_duration", None)
+    duration = record_member(op, "func_duration", None)
     if duration is None:
         return None
     return f"cost   {duration}"

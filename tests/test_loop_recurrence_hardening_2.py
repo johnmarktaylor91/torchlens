@@ -357,8 +357,8 @@ def test_variable_length_recurrence_not_projected_from_pass_1() -> None:
 
     # Honest aggregate memory/FLOPs: the per-pass maximum, with the explicit
     # machine-readable per-pass marker.
-    op_memory = [int(op.activation_memory) for op in layer.ops.values()]
-    assert int(layer.activation_memory) == max(op_memory)
+    op_memory = [int(op.cost.activation_memory) for op in layer.ops.values()]
+    assert int(layer.cost.activation_memory) == max(op_memory)
     varying = layer.annotations["varying_across_passes"]
     assert varying["shape"] == [(4, 4), (3, 4), (2, 4)]
     assert [int(value) for value in varying["activation_memory"]] == op_memory
@@ -375,8 +375,8 @@ def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     # OpAccessor get/[] are 0-based positional (C02 basis fix, lovely bug 27).
     first_pass = layer.ops.get(0)
     last_pass = layer.ops.get(layer.num_passes - 1)
-    assert int(first_pass.activation_memory) < int(last_pass.activation_memory)
-    assert int(layer.activation_memory) == int(last_pass.activation_memory)
+    assert int(first_pass.cost.activation_memory) < int(last_pass.cost.activation_memory)
+    assert int(layer.cost.activation_memory) == int(last_pass.cost.activation_memory)
     assert tuple(layer.shape) != tuple(first_pass.shape)
     assert check_metadata_invariants(traced)
 

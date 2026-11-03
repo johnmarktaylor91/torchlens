@@ -33,6 +33,7 @@ from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import first_op
+from ..._utils._record_group_table import record_member
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
@@ -263,7 +264,7 @@ def _context_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
         ("func_duration", "time"),
         ("activation_memory", "memory"),
     ):
-        value = getattr(op, attribute, None)
+        value = record_member(op, attribute, None)
         if value is not None:
             costs.append(f"{prefix}: {value}")
     if costs:
@@ -382,7 +383,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         ),
         CardText(
             f"params: {getattr(trace, 'num_params', '?')} | "
-            f"flops fwd: {getattr(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
+            f"flops fwd: {record_member(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
         ),
         CardText(f"saved: {saved if saved is not None else '?'}/{total or '?'} op records"),
     ]

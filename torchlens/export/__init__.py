@@ -26,6 +26,7 @@ from .._capture.structure_only import (
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._io._json import loads_bounded
+from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
@@ -502,7 +503,7 @@ def memory_timeline(trace: Any, path: str | Path) -> Path:
     live_bytes = 0
     events: list[dict[str, Any]] = []
     for layer in _iter_layers(trace):
-        bytes_value = int(getattr(layer, "activation_memory", 0) or 0)
+        bytes_value = int(record_member(layer, "activation_memory", 0) or 0)
         live_bytes += bytes_value
         events.append(
             {
@@ -890,7 +891,7 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
                 "args": {
                     "layer_label": getattr(layer, "layer_label", None),
                     "op_type": getattr(layer, "func_name", None),
-                    "memory": getattr(layer, "activation_memory", None),
+                    "memory": record_member(layer, "activation_memory", None),
                     "module_path": getattr(layer, "module", None),
                 },
             }
@@ -972,7 +973,7 @@ def _chrome_trace_diff_events(
                         "module_path": getattr(node, "module_path", None),
                         "module_type": getattr(node, "module_type", None),
                         "delta": deltas.get(graph_node_label, {}).get(member_name),
-                        "memory": getattr(layer, "activation_memory", None),
+                        "memory": record_member(layer, "activation_memory", None),
                     },
                 }
             )

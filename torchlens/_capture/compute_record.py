@@ -8,6 +8,7 @@ naming-session ratification; the C02 FactCore substrate consumes this.
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from ._flops_shape_rules import (
     _RNN_CELL_FUNCS,
     _RNN_SEQUENCE_FUNCS,
@@ -463,7 +464,7 @@ def derive_compute_record_for_op(op: Any) -> ComputeRecord | None:
 
     if getattr(op, "is_input", False) or getattr(op, "is_output", False):
         return None
-    stored = getattr(op, "flops_forward", None)
+    stored = record_member(op, "flops_forward", None)
     if stored is not None and int(stored) == 0:
         # Zero recorded compute is an exact zero split for ANY op (synthesized
         # source rows included): 2*0 + 0 == 0.

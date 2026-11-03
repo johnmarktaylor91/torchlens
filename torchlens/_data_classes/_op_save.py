@@ -18,6 +18,7 @@ from .._errors import InvalidArgumentError, UserTransformError
 from .._io.format_errors import ArtifactError
 from .._quantities import Bytes, Duration, Flops, as_bytes
 from .._trace_core.op_store import row_clone_scope
+from .._utils._record_group_table import op_attr
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.tensor_utils import (
     SaveMode,
@@ -317,9 +318,9 @@ def _copy_with_shallow_fields(
     with row_clone_scope(object.__getattribute__(op, "_core")):
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
-                fields_dict[field] = _copy_op_field_value(getattr(op, field, None))
+                fields_dict[field] = _copy_op_field_value(getattr(op, op_attr(field), None))
             else:
-                fields_dict[field] = getattr(op, field, None)
+                fields_dict[field] = getattr(op, op_attr(field), None)
     copied_entry = type(op)(fields_dict, _store=_store)
     return copied_entry
 
@@ -412,7 +413,9 @@ def save_activation(
 
         op.shape = tuple(raw_out.shape)
         op.dtype = raw_out.dtype
-        op.activation_memory = Bytes(get_memory_amount_from_metadata(raw_out, op.shape, op.dtype))
+        op._cost_activation_memory = Bytes(
+            get_memory_amount_from_metadata(raw_out, op.shape, op.dtype)
+        )
 
         if store_raw:
             if dedup_cached_out is None:
@@ -431,7 +434,7 @@ def save_activation(
         op._internal_set("transformed_out", None)
         op.transformed_out_shape = None
         op.transformed_out_dtype = None
-        op.transformed_activation_memory = None
+        op._cost_transformed_activation_memory = None
         if activation_transform is not None:
             transformed_out = op._apply_transform(
                 raw_out,
@@ -457,7 +460,7 @@ def save_activation(
             )
             op.transformed_out_shape = _shape_or_none(op.transformed_out)
             op.transformed_out_dtype = _dtype_or_none(op.transformed_out)
-            op.transformed_activation_memory = _memory_or_none(op.transformed_out)
+            op._cost_transformed_activation_memory = _memory_or_none(op.transformed_out)
         if budget is not None:
             if reduce_only:
                 # No source-sized admission happened (no clone allocated);

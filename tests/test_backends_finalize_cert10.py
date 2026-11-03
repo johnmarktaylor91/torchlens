@@ -109,7 +109,7 @@ def test_mlx_finalize_flips_per_op_tracing_finished_and_types_param_memory() -> 
     param_ops = [log[label] for label in log.op_labels if log[label].num_params > 0]
     assert param_ops, "expected at least one op with attached params"
     for op in param_ops:
-        assert type(op.param_memory) is Bytes, (op.label, type(op.param_memory))
+        assert type(op.cost.param_memory) is Bytes, (op.label, type(op.cost.param_memory))
 
 
 @pytest.mark.optional
@@ -129,7 +129,7 @@ def test_mlx_finalize_bytes_typed_with_saved_activation() -> None:
     assert param_ops
     for op in param_ops:
         assert op._tracing_finished is True
-        assert type(op.param_memory) is Bytes, (op.label, type(op.param_memory))
+        assert type(op.cost.param_memory) is Bytes, (op.label, type(op.cost.param_memory))
 
 
 @pytest.mark.optional
@@ -148,7 +148,7 @@ def test_tinygrad_finalize_flips_per_op_tracing_finished() -> None:
     for op_label in log.op_labels:
         op = log[op_label]
         assert op._tracing_finished is True, op_label
-        assert type(op.param_memory) is Bytes, (op_label, type(op.param_memory))
+        assert type(op.cost.param_memory) is Bytes, (op_label, type(op.cost.param_memory))
         str(op)
         repr(op)
 
@@ -178,7 +178,7 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
         op_log = seed_trace._layer_dict_main_keys[label]
         op_log._tracing_finished = False
         # Simulate the pre-fix backend hook state: a plain int, not Bytes.
-        op_log.param_memory = int(op_log.param_memory)
+        op_log._cost_param_memory = int(op_log.cost.param_memory)
         raw_ops[label] = op_log
     trace._raw_graph_ws.raw_layer_dict = raw_ops
 
@@ -198,4 +198,4 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
     assert len(trace._layer_dict_main_keys) == len(raw_ops)
     for label, op_log in trace._layer_dict_main_keys.items():
         assert op_log._tracing_finished is True, label
-        assert type(op_log.param_memory) is Bytes, (label, type(op_log.param_memory))
+        assert type(op_log.cost.param_memory) is Bytes, (label, type(op_log.cost.param_memory))

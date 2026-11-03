@@ -18,7 +18,7 @@ spelling on the left, the TorchLens spelling on the right.
 values, no timing, no verification, and every render says so in its legend. When you
 want the values torchviz's `show_saved` prints, capture the forward with `tl.trace`:
 every op keeps its saved output (`trace[label].out`) and its size in bytes
-(`trace[label].activation_memory`). To draw the backward graph of a captured run, with
+(`trace[label].cost.activation_memory`). To draw the backward graph of a captured run, with
 the module that owns each node and a gradient summary on each node, use
 `trace.draw(graph="backward", show_module_paths=True, show_grad_values=True)` after a backward
 pass the trace recorded (see `docs/backward.md`).

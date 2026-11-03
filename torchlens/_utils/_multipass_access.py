@@ -34,6 +34,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._record_group_table import record_member
+
 __all__ = [
     "MISSING",
     "RAISE",
@@ -121,7 +123,7 @@ def get_multipass_attr(
     """
 
     try:
-        return getattr(obj, attr)
+        return record_member(obj, attr)
     except AttributeError:
         if default is MISSING:
             raise

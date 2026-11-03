@@ -201,7 +201,7 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
 
     rows = []
     for op in _compute_ops(trace):
-        memory, flops = op.activation_memory, op.flops_forward
+        memory, flops = op.cost.activation_memory, op.cost.flops_forward
         if memory is None or flops is None or float(flops) <= 0:
             continue
         rows.append(

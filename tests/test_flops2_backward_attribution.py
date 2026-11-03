@@ -227,12 +227,12 @@ def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> No
             (row,) = [r for a in status.flops_attributions for r in a.rows if r.recompute_flops]
             assert row.op_label is None and row.recompute_flops == SEGMENT_FORWARD
         forward = {
-            str(op.layer_label): op.flops_forward
+            str(op.layer_label): op.cost.flops_forward
             for op in trace._layer_list
             if op.func_name == "linear"
         }
         twin_forward = {
-            str(op.layer_label): op.flops_forward
+            str(op.layer_label): op.cost.flops_forward
             for op in twin._layer_list
             if op.func_name == "linear"
         }

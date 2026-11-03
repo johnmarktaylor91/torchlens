@@ -1409,7 +1409,7 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(
-        int(op.activation_memory or 0) for op in saved_ops
+        int(op.cost.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([]) is True
 

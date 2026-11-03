@@ -15,6 +15,7 @@ import torch
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import record_type
 from ..._utils._multipass_access import get_multipass_attr
+from ..._utils._record_group_table import record_member
 from ..._utils.display import human_readable_size
 from ..._visualization.node_spec import (
     INTERVENTION_CONE_COLOR,
@@ -351,7 +352,7 @@ def _shape_memory_line(entry: Any) -> str | None:
     if not shape:
         return None
     shape_str = "x".join(str(v) for v in shape)
-    memory = getattr(entry, "activation_memory", None)
+    memory = record_member(entry, "activation_memory", None)
     if memory:
         return f"{shape_str}  {human_readable_size(memory)}"
     return shape_str

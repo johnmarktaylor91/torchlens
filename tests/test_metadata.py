@@ -317,7 +317,7 @@ def test_entry_tensor_info_fields(small_input):
     entry = mh[0]
     assert isinstance(entry.shape, (tuple, torch.Size))
     assert isinstance(entry.dtype, torch.dtype)
-    assert isinstance(entry.activation_memory, (int, float))
+    assert isinstance(entry.cost.activation_memory, (int, float))
     assert entry.out is not None
 
 
@@ -333,7 +333,7 @@ def test_function_call_fields(small_input):
     assert non_input is not None
     assert isinstance(non_input.func_name, str)
     assert len(non_input.func_name) > 0
-    assert isinstance(non_input.func_duration, float)
+    assert isinstance(non_input.cost.duration, float)
 
 
 def test_graph_relationships(small_input):
@@ -921,7 +921,7 @@ def test_flops_simple_linear_model():
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 5))
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    flops_values = [entry.flops_forward for entry in mh._layer_list]
+    flops_values = [entry.cost.flops_forward for entry in mh._layer_list]
     non_none = [f for f in flops_values if f is not None]
     assert len(non_none) > 0, "No layers have FLOPs computed"
 
@@ -979,7 +979,7 @@ def test_flops_conv_transpose_uses_input_work_basis() -> None:
     operation = next(entry for entry in trace._layer_list if entry.func_name == "conv_transpose2d")
 
     assert operation.shape == (1, 4, 15, 15)
-    assert operation.flops_forward == 2 * 6 * 8 * 8 * (4 // 2) * 3 * 3
+    assert operation.cost.flops_forward == 2 * 6 * 8 * 8 * (4 // 2) * 3 * 3
 
 
 def test_flops_coverage_on_model():
@@ -993,7 +993,7 @@ def test_flops_coverage_on_model():
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
     total = len(mh._layer_list)
-    with_flops = sum(1 for e in mh._layer_list if e.flops_forward is not None)
+    with_flops = sum(1 for e in mh._layer_list if e.cost.flops_forward is not None)
     coverage = with_flops / total if total > 0 else 0
     assert coverage >= 0.5, f"FLOPs coverage too low: {coverage:.1%}"
 
@@ -1095,7 +1095,7 @@ def test_flops_einsum_attention_contraction() -> None:
     assert nested == 2 * 2 * 5 * 7 * 4
     trace = trace_fn(_AttentionEinsum(), (q, k))
     operation = next(entry for entry in trace._layer_list if entry.func_name == "einsum")
-    assert operation.flops_forward == 2 * 2 * 5 * 7 * 4
+    assert operation.cost.flops_forward == 2 * 2 * 5 * 7 * 4
 
 
 def test_unknown_flops_survive_trace_materialization() -> None:
@@ -1112,8 +1112,8 @@ def test_unknown_flops_survive_trace_materialization() -> None:
     trace = trace_fn(_PadModel(), torch.randn(2, 3))
     operation = next(entry for entry in trace._layer_list if entry.func_name == "pad")
 
-    assert operation.flops_forward is None
-    assert operation.flops_backward is None
+    assert operation.cost.flops_forward is None
+    assert operation.cost.flops_backward is None
     assert trace.cost.total_flops_forward == 0
 
 
@@ -1137,17 +1137,19 @@ def test_rerun_refreshes_shape_derived_flops_everywhere() -> None:
     model = _LinearModel()
     trace = trace_fn(model, torch.randn(2, 4))
     captured = next(entry for entry in trace._layer_list if entry.func_name == "linear")
-    assert captured.flops_forward == 144
+    assert captured.cost.flops_forward == 144
 
     with pytest.warns(UserWarning, match="Tensor shape changed"):
         result = trace.run(inputs=torch.randn(8, 4))
     refreshed = next(entry for entry in result.trace._layer_list if entry.func_name == "linear")
 
     assert refreshed.shape == (8, 8)
-    assert refreshed.flops_forward == 576
-    assert result.trace[refreshed.layer_label].flops_forward == 576
+    assert refreshed.cost.flops_forward == 576
+    assert result.trace[refreshed.layer_label].cost.flops_forward == 576
     assert result.trace.cost.total_flops_forward == sum(
-        entry.flops_forward for entry in result.trace._layer_list if entry.flops_forward is not None
+        entry.cost.flops_forward
+        for entry in result.trace._layer_list
+        if entry.cost.flops_forward is not None
     )
 
 
