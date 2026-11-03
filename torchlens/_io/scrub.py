@@ -238,7 +238,7 @@ def scrub_for_save(
     if not isinstance(scrubbed_model, Trace):
         raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 
-    scrubbed_state = dict(state_items(scrubbed_model))
+    scrubbed_state = {k: v for k, v in state_items(scrubbed_model) if k != "_layer_accessor_cache"}
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)

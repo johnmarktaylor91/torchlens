@@ -294,7 +294,6 @@ PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
         "_health_num_expected_opaque_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_health_num_unaccounted_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_health_num_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
-        "_module_filter": "v11-privatised module filter callable/spec; opaque, session-only",
         "_options_activation_transform": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_options_backward_ready": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_options_grad_transform": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",

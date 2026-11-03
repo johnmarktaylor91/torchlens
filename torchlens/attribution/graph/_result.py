@@ -79,7 +79,7 @@ class AttributionGraph:
         ``(n_nodes, n_nodes)`` tensor, rows are targets and columns sources.
     node_values
         Each node's value: a feature's pre-activation, a logit's value
-        (demeaned when ``demeaned_logits``), NaN for error and token nodes.
+        (demeaned when ``has_demeaned_logits``), NaN for error and token nodes.
     constants
         Name to ``(n_nodes,)`` tensor of the non-node terms, NaN where a node
         has no incoming edges.
@@ -97,17 +97,18 @@ class AttributionGraph:
     error_vectors
         ``(n_error_sites, positions, width)``: each MLP output minus what the
         transcoders reconstruct there, the vector an error node writes.
-    input_tokens
-        Input token ids, one per position.
-    logit_tokens
+    input_token_ids
+        Input token ids, one per position (``None`` when the embedding input is
+        not integer token ids; the disclosure says so).
+    logit_token_ids
         Target vocabulary ids, one per logit node.
     logit_probabilities
         Softmax probability of each target at the last position.
-    demeaned_logits
+    has_demeaned_logits
         Whether a logit node's value is its logit minus the mean logit.
-    frozen
+    frozen_sites
         Labels of the sites held at their captured values.
-    capture_outcome
+    capture_status
         The capture's completeness verdict, as the trace reports it.
     disclosures
         Plain-language notes about what the graph does not cover.

@@ -14,3 +14,8 @@ tests/agent_surface_goldens/query_sites.golden.json:generic-api-key:1
 60d3732f8e9b5d9e0024ea60fcd6e72d078585d8:tests/agent_surface_goldens/query_sites.golden.json:generic-api-key:1
 60d3732f8e9b5d9e0024ea60fcd6e72d078585d8:torchlens/agent/_apimap.py:generic-api-key:192
 60d3732f8e9b5d9e0024ea60fcd6e72d078585d8:torchlens/agent/_budgets.py:generic-api-key:49
+
+# The same estimator name when an integration snapshot carries this tree under merged/.
+merged/tests/agent_surface_goldens/overview_folded.golden.json:generic-api-key:1
+merged/tests/agent_surface_goldens/payload_stats.golden.json:generic-api-key:1
+merged/tests/agent_surface_goldens/query_sites.golden.json:generic-api-key:1

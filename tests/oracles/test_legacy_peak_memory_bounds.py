@@ -6,6 +6,10 @@ page, and frees it before returning: a private anonymous 64 MiB mapping
 whatever earlier tests in the process left in the heap. The test samples the
 process's resident set itself (``/proc/self/statm``, ``/proc/self/status``), independent of TorchLens.
 A peak must include that buffer even though it is gone when the bracket ends.
+The plant's release folds the releasing CPU's share of the kernel's per-CPU RSS
+counter before and after the unmap (``_fresh_plant.FreshPlant.close``), so the
+kernel's mark is set on a total whose missing shares TorchLens can still read;
+without it the mark read short by a varying part of one counter batch.
 
 The margin, registered before these tests first ran, is 1 MiB on every CPU
 bound: it covers resident-set movement between TorchLens's bracket baseline and

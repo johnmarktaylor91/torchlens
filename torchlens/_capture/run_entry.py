@@ -184,7 +184,6 @@ def _run_model_and_save_specified_outs(
     inference_only: bool = False,
     inference_only_implied: bool = False,
     name: str | None = None,
-    module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     measure_python_peak_memory: bool = False,
     distributed_witness: str = "none",
@@ -493,7 +492,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
         # DAG -- coherent only beside the bound_method entry-point fact
         # (fail-closed load validation in _io/_forgery_identity_facts.py).
         for output_label in trace.output_layers:
-            for output_op in trace[output_label].ops:
+            for output_op in trace.ops.resolve_all(output_label):
                 output_op.tl_authored_root = True
     from .._snoop._entry import finish_echo
 
