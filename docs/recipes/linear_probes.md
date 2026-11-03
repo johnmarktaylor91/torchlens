@@ -155,9 +155,9 @@ RESULT = (leaky > 0.75, honest < 0.6, abs(real_leaky - real_honest) < 0.05)
 
 ## 4. The few-positive case
 
-A concept with few positives, here "the token is one of two ids" (about 6
+A concept with few positives, here "the token is one of two ids" (about 5
 percent of tokens), breaks accuracy as a metric: a probe that never fires is
-right about 94 percent of the time. Weight the classes with
+right about 95 percent of the time. Weight the classes with
 `class_weight="balanced"`, stratify the folds so every fold holds positives
 (`StratifiedGroupKFold` keeps the prompt grouping), and report precision, recall
 and average precision, whose chance level is the positive rate, not one half.
@@ -167,7 +167,7 @@ and average precision, whose chance level is the positive rate, not one half.
 from sklearn.metrics import precision_score, recall_score
 from sklearn.model_selection import StratifiedGroupKFold, cross_val_predict
 
-y_rare = np.isin(tokens, (103, 117)).astype(int)
+y_rare = np.isin(tokens, (105, 112)).astype(int)
 rare_split = StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=0)
 weighted = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=0)
 rare_score = cross_val_predict(
@@ -256,7 +256,7 @@ print(f"evaded {evaded.float().mean().item():.2f}, KL {kl:.2e}, relative norm {r
 RESULT = (bool(evaded.all()), kl < 1e-2, relative_norm < 0.5)
 ```
 
-Read the relative norm as the cost of evasion. A probe that a perturbation small
+Read the relative norm (about 0.3 here) as the cost of evasion. A probe that a perturbation small
 next to the input flips while the output barely moves is fragile as a monitor:
 an adversary, or ordinary optimisation pressure against the probe, can hide the
 concept from it. On a random network the KL bound is easy to meet, because the
