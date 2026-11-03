@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import json
 import resource
-import sys
 import time
 import tracemalloc
 from pathlib import Path
@@ -48,11 +47,18 @@ def _load(model_id: str) -> tuple[torch.nn.Module, torch.Tensor, tuple[str, ...]
     """Return the model, a prompt and the MLP-plus-final-norm sites."""
 
     if model_id == "config":
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-        from tests.real_model.r0.families import build_distilgpt2
+        from transformers import GPT2Config, GPT2LMHeadModel
 
-        model = build_distilgpt2("eager")
-        model.config.n_positions = 4096
+        torch.manual_seed(0)
+        config = GPT2Config(
+            n_layer=2,
+            n_head=2,
+            n_embd=64,
+            vocab_size=512,
+            n_positions=4096,
+            attn_implementation="eager",
+        )
+        model = GPT2LMHeadModel(config).eval()
         ids = torch.tensor([[454, 137, 139, 386]])
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer
