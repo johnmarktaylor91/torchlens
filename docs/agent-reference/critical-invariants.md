@@ -218,3 +218,8 @@
     intervals (storage-pointer equality never decides); the recorded default device enters as a
     scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
     with a no-allocation readiness capability gate.
+- ATen recording is opt-in and never silent: with `CaptureOptions(aten_ops=False)` (the default)
+  no dispatch mode is installed and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
+  and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
+  filled with synthetic rows.

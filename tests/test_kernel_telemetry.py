@@ -56,6 +56,17 @@ class _CudaTelemetryModel(nn.Module):
         return torch.relu(value @ value)
 
 
+def test_factory_that_recorded_no_aten_rows_refuses_typed() -> None:
+    """The seam refuses typed when its factory captured without ``aten_ops``."""
+
+    with pytest.raises(tl.errors.AtenOpsUnavailableError) as excinfo:
+        telemetry._profile_trace_with_cuda_kernels(
+            lambda: tl.trace(_CudaTelemetryModel(), torch.ones(2, 2))
+        )
+    assert excinfo.value.fields["code"] == "aten_ops_unavailable"
+    assert "CaptureOptions(aten_ops=True)" in str(excinfo.value)
+
+
 def test_documented_unstable_kernel_surface_matches_glossary_index() -> None:
     """Every telemetry spelling has the exact no-shim unstable marker."""
 
@@ -242,7 +253,11 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
         pytest.skip("CPU-only NOT-RUN disclosure row applies only without CUDA")
 
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel(), torch.ones(2, 2))
+        lambda: tl.trace(
+            _CudaTelemetryModel(),
+            torch.ones(2, 2),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     primitive_rows = trace._primitive_op_profile.primitive_ops
     assert primitive_rows
@@ -338,7 +353,11 @@ def test_real_cuda_cupti_correlation_matrix() -> None:
 
     device = torch.device("cuda")
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel().to(device), torch.ones(32, 32, device=device))
+        lambda: tl.trace(
+            _CudaTelemetryModel().to(device),
+            torch.ones(32, 32, device=device),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     launches = [
         launch

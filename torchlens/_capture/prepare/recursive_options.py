@@ -81,5 +81,6 @@ def _recursive_capture_options(state: _DoorState) -> CaptureOptions:
         log_injections=opts.log_injections,
         carry_state=opts.carry_state,
         measure_host_peak_memory=opts.measure_host_peak_memory,
+        aten_ops=opts.aten_ops,
     )
     return recursive_capture_options

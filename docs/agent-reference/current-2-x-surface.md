@@ -92,7 +92,8 @@
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
-  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE; the per-op rows behind
+  `Trace.aten_ops` / `Op.aten_ops` need `CaptureOptions(aten_ops=True)`), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
@@ -550,6 +551,16 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
+  installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
+  and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
+  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
+  op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
+  observe (empty when complete). With the switch off nothing is installed and every accessor
+  except `has_aten_ops` raises `tl.errors.AtenOpsUnavailableError` (`aten_ops_unavailable`),
+  naming the switch; `run()` refreshes inherit the knob, `run(fast=True)` results and non-torch
+  backends record nothing. GPU kernel recording is out of scope.
   `CaptureOptions(measure_python_peak_memory=True)` additionally folds in a `tracemalloc`
   Python-allocation peak, which stays positive for tiny models. It is OFF by default because
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a

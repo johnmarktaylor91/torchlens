@@ -3,8 +3,7 @@
 Regenerate with ``python tools/generate_record_schema.py``; a CI test
 (`tests/test_record_schema_bindings.py`) diffs this file against a fresh
 generation, so hand edits cannot survive. The declared axes live in
-``field_policy.StorageBinding``; classification policy lives in the
-generator.
+``field_policy.StorageBinding``; classification policy lives in the generator.
 """
 
 from __future__ import annotations
@@ -270,6 +269,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "track_nonfinite": StorageBinding(StorageKind.RUNTIME),
         "track_device_memory": StorageBinding(StorageKind.RUNTIME),
         "measure_host_peak_memory": StorageBinding(StorageKind.RUNTIME),
+        "_options_aten_ops": StorageBinding(StorageKind.RUNTIME),
         "_device_memory_samples": StorageBinding(StorageKind.RUNTIME),
         "grad_fn_timing_provenance": StorageBinding(StorageKind.SCALAR),
         "checkpoint_invocation_witness": StorageBinding(StorageKind.SCALAR),

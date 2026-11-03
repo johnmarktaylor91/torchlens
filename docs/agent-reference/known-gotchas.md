@@ -25,6 +25,11 @@
   because the allocator hook costs 1.7x-2.5x total capture time. Never assert `forward_peak_memory
   > 0` (or not None) on the default path; a test that needs a CPU number opts in.
   `backward_peak_memory` is the largest pass peak on CPU, not a sum.
+- ATen rows are opt-in: a default capture installs no dispatch mode, `trace.has_aten_ops` is
+  `False`, and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError` (`aten_ops_unavailable`) rather than returning an empty tuple. Pass
+  `capture=tl.options.CaptureOptions(aten_ops=True)`; the switch is a session knob (not persisted,
+  inherited by `run()` refreshes, fast or not) while the recorded rows persist.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
