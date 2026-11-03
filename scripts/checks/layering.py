@@ -7,6 +7,10 @@ size of the largest strongly connected component and the number of
 in-function internal import statements. Either rising above its baseline
 fails.
 
+``deferred_reason_report`` adds one report-only line: how many deferred
+imports carry no ``# deferred: <reason>`` comment. It never affects the
+status or the exit code and has no baseline.
+
 ``check_contracts`` runs import-linter over ``.importlinter`` when it is
 installed and reports a skip when it is not.
 """
@@ -57,6 +61,20 @@ def check(repo: Path) -> Outcome:
     return ratchet("layering", measure(repo), load_baselines(repo)["layering"])
 
 
+def deferred_reason_report(repo: Path) -> str:
+    """Return the report-only line counting deferred imports without a reason comment."""
+
+    graph = _load_graph_module()
+    try:
+        total = graph.deferred_reasons(repo / PACKAGE)["total"]
+    except (OSError, SyntaxError, KeyError) as error:
+        return f"       deferred imports without a reason comment: unavailable ({error!r})"
+    return (
+        f"       deferred imports without a reason comment: {total[graph.NO_REASON]} "
+        f"of {sum(total.values())} (report only)"
+    )
+
+
 def check_contracts(repo: Path) -> Outcome:
     """Run ``lint-imports`` over ``.importlinter``; skip when it is not installed."""
 
@@ -87,6 +105,7 @@ def main() -> int:
         print(f"[{outcome.status.upper():4}] {outcome.message}")
         for line in outcome.details:
             print(f"       {line}")
+    print(deferred_reason_report(repo))
     return 1 if any(o.failed for o in outcomes) else 0
 
 

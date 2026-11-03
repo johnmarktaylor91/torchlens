@@ -50,11 +50,34 @@ _ID_COUNTS = {
 }
 
 
-def _fixture(tmp_path: Path, layering_baseline: dict[str, int], id_total: int) -> Path:
-    for rel, text in _FILES.items():
-        path = tmp_path / rel
+_REASON_FILES = {
+    "torchlens/__init__.py": "",
+    "torchlens/top.py": ("def f():\n    # deferred: cycle\n\n    from torchlens.sub import m\n"),
+    "torchlens/sub/__init__.py": "",
+    "torchlens/sub/m.py": (
+        "def g():\n"
+        "    # deferred: optional dependency\n"
+        "    from torchlens import top\n"
+        "def h():\n"
+        "    import torchlens.top  # deferred: startup cost\n"
+        "def k():\n"
+        "    # The two modules import each other.\n"
+        "    # deferred: cycle\n"
+        "    from torchlens import sub\n"
+    ),
+}
+
+
+def _write_tree(root: Path, files: dict[str, str]) -> Path:
+    for rel, text in files.items():
+        path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+    return root
+
+
+def _fixture(tmp_path: Path, layering_baseline: dict[str, int], id_total: int) -> Path:
+    _write_tree(tmp_path, _FILES)
     baselines = {
         "layering": layering_baseline,
         "id_lint": {"total": id_total, **_ID_COUNTS},
@@ -71,6 +94,24 @@ def test_layering_counts_deferred_imports_and_skips_typing(tmp_path: Path) -> No
     tight = _fixture(tmp_path / "t", {"largest_scc": 1, "in_function_internal_imports": 3}, 7)
     outcome = layering.check(tight)
     assert outcome.failed and "largest_scc=2 > baseline 1" in outcome.message
+
+
+def test_deferred_reasons_counts_markers_per_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    package = _write_tree(tmp_path, _REASON_FILES) / "torchlens"
+    graph = layering._load_graph_module()
+    zero = dict.fromkeys(("optional dependency", "startup cost", "cycle", "no reason"), 0)
+    assert graph.deferred_reasons(package) == {
+        "torchlens": {**zero, "no reason": 1},
+        "torchlens.sub": {**zero, "optional dependency": 1, "startup cost": 1, "cycle": 1},
+        "total": {"optional dependency": 1, "startup cost": 1, "cycle": 1, "no reason": 1},
+    }
+    assert graph.main([str(package), "--deferred-reasons"]) == 0
+    rows = [line.split() for line in capsys.readouterr().out.splitlines()]
+    assert rows[0][-5:] == ["cycle", "no", "reason", "deferred", "total"]
+    assert rows[1] == ["torchlens", "0", "0", "0", "1", "1"]
+    assert rows[-1] == ["total", "1", "1", "1", "1", "4"]
 
 
 def test_import_contracts_skip_without_config(tmp_path: Path) -> None:
