@@ -8592,6 +8592,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/receptive_field/_influence.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/receptive_field/_op_fields.py",
@@ -8670,6 +8678,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/receptive_field/_set_query.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

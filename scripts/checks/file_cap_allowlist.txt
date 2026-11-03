@@ -460,7 +460,7 @@ torchlens/_selection/compare.py::_resolve_pass_term	64
 torchlens/_selection/compare.py::_resolve_top_changed	67
 torchlens/_selection/do_plan.py::_build_selection_do_plan	91
 torchlens/_selection/resolver.py	1033
-torchlens/_selection/selection.py	1731
+torchlens/_selection/selection.py	1671
 torchlens/_selection/selection.py::_resolve_facet_term	64
 torchlens/_selection/selectors.py	1713
 torchlens/_selection/selectors.py::SiteSelector.__init__	77
