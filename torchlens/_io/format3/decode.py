@@ -26,6 +26,7 @@ import torch
 
 from ..._data_classes._state_adapter import state_new, state_restore
 from ..field_registry import component_spec_tables
+from ._carriers import CallablePlaceholder, UnencodableValue
 from ._families import (
     CELL_CODE,
     PendingRecord,
@@ -108,28 +109,6 @@ _OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {
 _DEFAULTDICT_SUBTYPE: Final = "collections.defaultdict"
 #: Builtin factories a defaultdict cell may name; the artifact string only selects here.
 _FACTORY_TABLE: Final[dict[str, type]] = {cls.__name__: cls for cls in _DEFAULT_FACTORIES}
-
-
-@dataclasses.dataclass(frozen=True)
-class UnencodableValue:
-    """A value the writer could not encode: its type name, repr text and where it was.
-
-    ``_repr_length`` (the unbounded repr's length) is carried for round trips, not public.
-    """
-
-    type_name: str
-    repr_text: str
-    at: str
-    _repr_length: int = dataclasses.field(default=0, repr=False, compare=False)
-
-
-@dataclasses.dataclass(frozen=True)
-class CallablePlaceholder:
-    """A callable the recipe could not persist: rule position and qualname (section 8)."""
-
-    position: int | str
-    qualname: str
-    repr_length: int
 
 
 def _is_int(value: Any) -> bool:

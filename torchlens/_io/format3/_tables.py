@@ -257,3 +257,42 @@ def refuse_cell_types(kind: str, rows: Sequence[Mapping[str, Any]]) -> None:
                 row=index,
                 remedy="re-save the trace; a record cell edited by hand is refused",
             )
+
+
+_ROOT_MODULE_ADDRESSES: Final = frozenset({"", "self"})
+
+
+def refuse_param_identity(rows: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse a param row whose address does not derive from its module address and name.
+
+    A param's address is ``<module address>.<name>`` (``<name>`` under the root module) and
+    appears in its ``all_addresses`` list; the writer orders and relabels params by that
+    address, so a forged address would resave as a different artifact. Refuses
+    ``record_schema_invalid`` before any record object is built.
+    """
+
+    for index, row in enumerate(rows):
+        name, module = row.get("name"), row.get("module_address")
+        if not isinstance(name, str) or not isinstance(module, str):
+            continue
+        address = row.get("address")
+        expected = name if module in _ROOT_MODULE_ADDRESSES else f"{module}.{name}"
+        aliases = row.get("all_addresses")
+        if address != expected or (isinstance(aliases, list) and address not in aliases):
+            raise ArtifactError(
+                f"Param record table cell param[{index}].address {address!r} does not derive "
+                f"from its module address and name ({expected!r}).",
+                code=_CODES["record_schema_invalid"],
+                record_type="Param",
+                column="address",
+                row=index,
+                remedy="re-save the trace; a record cell edited by hand is refused",
+            )
+
+
+def refuse_cells(kind: str, rows: Sequence[Mapping[str, Any]]) -> None:
+    """Run every per-table cell refusal: the typed cells, then the param identity."""
+
+    refuse_cell_types(kind, rows)
+    if kind == "param":
+        refuse_param_identity(rows)

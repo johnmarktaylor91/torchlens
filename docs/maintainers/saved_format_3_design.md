@@ -52,6 +52,7 @@ the current components; `__init__` provides their thin package entry.
 | `_families.py` | the generic applier of the family grammar nodes in `schema.FAMILIES` (section 9): node shapes, closed vocabularies and within-cell constraints checked on each decoded cell before record construction; split from `decode.py` for its budget | 400 | reader |
 | `_family_nodes.py` | the family grammar nodes themselves (section 9): the core, collective and intervention-audit declaration blocks that `schema.FAMILIES` joins; data only, split from `schema.py` for its budget | 560 | reader |
 | `_tables.py` | the record tables (section 3): record file reading with the digest and shape checks, the column contract (a column the bindings do not persist, the save level's exact column set) and the typed scalar cells checked against their declared annotations; split from `validate.py` and `reader.py` for their budgets | 260 | reader |
+| `_carriers.py` | the opaque carrier values (sections 5 and 8): `UnencodableValue` and `CallablePlaceholder`, shared by both halves of the codec so a decoded carrier re-encodes exactly; below `decode.py` and `values.py` | 46 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
@@ -567,6 +568,8 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | no `manifest.json` | `manifest_missing` | reader, before any other file |
 | manifest not UTF-8 JSON / not an object / fails the manifest schema | `manifest_unreadable` / `manifest_not_json_object` / `manifest_schema_invalid` | reader |
 | `manifest.json` without `format`, or a `metadata.pkl` or `bundle.json` at the root, or `tlspec_version` below 11 | `artifact_version_below_floor` (`ArtifactTooOldError`), one error, remedy: re-save with TorchLens 2.36.x | reader (replaces `_pre3_module_paths`) |
+| a `torchlens_version` older than the first TorchLens that writes format 3 (an impossible pairing) | `artifact_version_below_floor`, before the runtime identity advisories | reader |
+| `torchlens_version` not parseable under PEP 440 | `bundle_producer_unverifiable` | reader |
 | `format_version` above 3 or `tlspec_version` above the runtime's | `artifact_version_above_runtime` | reader |
 | `kind` not the kind the door expects | `artifact_kind_mismatch` | reader |
 | `save_level` unknown | `artifact_save_level_invalid` | reader |

@@ -606,11 +606,12 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "does not read files saved by torchlens 0.x",
         ),
         (
-            # The 3.0 reader refuses artifacts saved by every 2.x writer.
+            # A format 3 manifest stamped by a writer older than the first TorchLens that
+            # writes format 3 is an impossible pairing: below the floor, before identity.
             "torchlens_2x_writer",
             lambda manifest: manifest.__setitem__("torchlens_version", "2.36.1"),
             "raise",
-            "saved by torchlens 2.x",
+            "first TorchLens that writes saved format 3",
         ),
         (
             "python_major_mismatch",

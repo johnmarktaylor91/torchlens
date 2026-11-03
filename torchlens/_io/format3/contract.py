@@ -231,6 +231,7 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "manifest_invalid": "manifest_schema_invalid",
     "format_older_than_floor": "artifact_version_below_floor",
     "format_newer_than_runtime": "artifact_version_above_runtime",
+    "producer_unverifiable": "bundle_producer_unverifiable",
     "kind_mismatch": "artifact_kind_mismatch",
     "save_level_unknown": "artifact_save_level_invalid",
     "record_file_corrupt": "bundle_metadata_integrity_refused",
