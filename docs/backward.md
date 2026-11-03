@@ -282,7 +282,7 @@ trace deletion, preventing id reuse from corrupting registry lookups. This can g
 large or higher-order graphs; PyTorch also warns about reference cycles with `create_graph=True`.
 
 Live traces register their known autograd roots so wrapped engine calls can find owning traces.
-If you keep a trace only for analysis while continuing training, call `trace.disarm_triggers()` to
+If you keep a trace only for analysis while continuing training, call `trace.autograd.disarm()` to
 detach it from engine interception and tensor-hook emission.
 
 MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only

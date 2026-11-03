@@ -510,17 +510,6 @@ class TraceValidationMixin(_TraceMixinBase):
         """
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
-    def disarm_triggers(self: "Trace") -> None:
-        """Detach this Trace from global autograd backward interception.
-
-        Returns
-        -------
-        None
-            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
-            not record into this Trace.
-        """
-        _doors.intervention()._trace_run.disarm_triggers(self)
-
     def _remove_log_entry(
         self: "Trace",
         log_entry: Op,

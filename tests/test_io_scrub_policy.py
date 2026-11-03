@@ -350,7 +350,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
-    "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
     "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",

@@ -142,13 +142,13 @@ def test_plain_tensor_backward_triggers_capture() -> None:
     trace.cleanup()
 
 
-def test_disarm_triggers_suppresses_plain_backward_capture() -> None:
-    """``Trace.disarm_triggers`` removes registry entries and disables hooks."""
+def test_autograd_disarm_suppresses_plain_backward_capture() -> None:
+    """``trace.autograd.disarm`` removes registry entries and disables hooks."""
 
     trace = _trace_for_plain_backward()
     loss = trace[trace.output_layers[0]].out.sum()
 
-    trace.disarm_triggers()
+    trace.autograd.disarm()
     loss.backward()
 
     assert len(trace.autograd.backward_passes) == 0

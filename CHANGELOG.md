@@ -5,6 +5,9 @@
 
 ### Behavior changes
 
+- **backward**: `Trace.disarm_triggers()` is now `trace.autograd.disarm()` (round-2 walk names.4):
+  detaching a Trace from global autograd interception belongs with the other autograd members. The
+  old spelling refuses with the typed `facade_redirect` error naming `trace.autograd.disarm()`.
 - **draw**: `Trace.animate_ops(site)` is now `Trace.animate(site)` (velocity walk names.1: the
   animation is its own method and `VisualizationOptions.animate` is gone). The old spelling
   refuses with the typed `facade_redirect` error naming `trace.animate(site)`.
