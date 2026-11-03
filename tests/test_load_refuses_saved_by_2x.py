@@ -132,7 +132,8 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     error = assert_refuses_as_2x(_INTERVENTION_V2_16)
     assert error.fields["observed"] == "intervention format_version=1"
     assert error.fields["path"] == str(_INTERVENTION_V2_16)
-    assert "saved again with torchlens 2.36.x is written as format_version 2" in str(error)
+    assert "does not read files saved by torchlens 2.x" in str(error)
+    assert "load it with torchlens 2.36.x" in error.fields["remedy"]
 
     with pytest.raises(ArtifactTooOldError) as excinfo:
         validate_tlspec(_INTERVENTION_V2_16)

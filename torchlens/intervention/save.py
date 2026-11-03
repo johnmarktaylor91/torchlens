@@ -350,9 +350,7 @@ def _load_trace_recipe_spec(path: str | Path) -> InterventionSpec:
         ``metadata["executable"]`` set.
     """
 
-    root = Path(path)
-    _reject_symlink_path(root / INTERVENTION_FILE, context="intervention.json")
-    return _spec_with_recipe_metadata(read_recipe(root), root)
+    return load_intervention_spec(path)
 
 
 def _spec_with_recipe_metadata(recipe: Mapping[str, Any], root: Path) -> InterventionSpec:
