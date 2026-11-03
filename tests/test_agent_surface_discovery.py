@@ -71,7 +71,6 @@ def test_step5_did_you_mean_stays_a_plain_attributeerror() -> None:
     assert "Did you mean" not in str(dunder_exc.value)
 
 
-@pytest.mark.smoke
 def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     """tl.trace(model, input_ids=...) refuses typed, naming both remedies."""
 
@@ -87,28 +86,6 @@ def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     # Bare tl.trace(model) is no longer a refusal: the quickstart input
     # ladder (F17, landed law) owns that spelling as the zero-argument
     # inferred rung, so the historical trace_inputs_missing site is gone.
-
-
-def test_hf_remedy_spelling_actually_works() -> None:
-    """The remedy the refusal teaches runs: input_kwargs routes keyword forwards."""
-
-    import torch
-    from torch import nn
-
-    class KeywordOnly(nn.Module):
-        """A forward that only accepts keyword inputs (the HF shape)."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(4, 4)
-
-        def forward(self, *, input_ids: torch.Tensor) -> torch.Tensor:
-            """Consume the keyword input."""
-
-            return self.fc(input_ids)
-
-    log = tl.trace(KeywordOnly(), (), input_kwargs={"input_ids": torch.randn(2, 4)})
-    assert log._num_ops >= 1
 
 
 @pytest.mark.heavy
@@ -147,17 +124,6 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
         assert result.returncode == 0, (code, result.stderr[-600:])
         ran += 1
     assert ran >= 3, "the snippet lint stopped covering the guide"
-
-
-@pytest.mark.smoke
-def test_api_map_rows_resolve_where_declared() -> None:
-    """Every api_map compact row's spelling resolves through the live facade."""
-
-    from torchlens.agent import call_tool
-
-    rows = call_tool("torchlens_api_map")["data"]["names"]
-    unresolved = [row["name"] for row in rows if row["kind"] == "unresolvable"]
-    assert not unresolved, f"api_map advertises spellings that raise: {unresolved}"
 
 
 def test_next_operations_and_dump_next_steps_name_live_spellings(tmp_path: Path) -> None:

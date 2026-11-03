@@ -26,6 +26,45 @@ so it finishes in seconds on CPU. The full walk is the same loop over
 `reversed(list(graph.receivers.values()))`; on GPT-2 small that is 32,491
 edge tests, each a multi-receiver patch: run it as a background job.
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). ACDC's unit step is
+one ablation and the change it makes to the logits; here it is on one MLP of the running
+decoder. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=transformers expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+site = tl.module("transformer.h.1.mlp")
+ablated = trace.fork().do(site, tl.zero_ablate(), model=model, inputs=x)
+clean_logits = trace["lm_head"].out[0, -1]
+ablated_logits = ablated["lm_head"].out[0, -1]
+RESULT = not torch.equal(clean_logits, ablated_logits)
+```
+
 ## Setup: the stand-in, the two inputs and the metric
 
 The metric is ACDC's default: the KL divergence from the full model's

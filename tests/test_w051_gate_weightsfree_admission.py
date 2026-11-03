@@ -49,6 +49,7 @@ class _IntrospectingAutocastModel(nn.Module):
         return _decorated(y)
 
 
+@pytest.mark.smoke
 def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
     with torch.device("meta"):
         model = _IntrospectingAutocastModel()
@@ -70,7 +71,6 @@ def test_autocast_stays_a_class_inside_the_admitted_forward() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_shim_class_delegates_non_null_calls_to_the_shipped_class() -> None:
     from torchlens._capture._weightsfree_admission import _null_on_meta_autocast_class
 

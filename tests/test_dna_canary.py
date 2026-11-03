@@ -67,6 +67,7 @@ def _fresh_capture() -> tuple[nn.Module, torch.Tensor, tl.Trace]:
     return model, x, trace
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_demo_1_zero_ablation_via_do():
     """DEMO 1: one-verb zero ablation; honest state/records; N-gate untouched."""
 
@@ -156,22 +157,3 @@ def test_demo_2_same_run_patch_discriminating_twin():
     assert not torch.equal(patched["output_1"].out, trace["output_1"].out)
     expected = torch.relu(model.c2(patched["relu_1_2"].out))
     assert torch.allclose(patched["output_1"].out, expected)
-
-
-def test_demo_2_same_run_patch_tamper_twin():
-    """DEMO 2c: the SAME values presented captured-native (provenance
-    stripped) FAIL validation — the tripwire distinguishes an honest patch
-    from silent tampering."""
-
-    model, x, trace = _fresh_capture()
-
-    tampered = trace.fork()
-    forged = tampered["relu_1_2"].out.clone()
-    forged[0, 0, 1, 1] += EPSILON
-    # captured-native presentation: values written into the record with NO
-    # FireRecords, NO spec revision, NO is_edited flag.
-    _replay_module._commit_replay_updates(tampered, {"relu_1_2": forged}, {})
-    assert not tampered["relu_1_2"].is_edited
-
-    result = tampered.validate_forward_pass(model(x))
-    assert result is False

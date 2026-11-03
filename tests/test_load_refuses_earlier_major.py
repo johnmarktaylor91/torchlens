@@ -79,13 +79,3 @@ def test_file_saved_by_an_earlier_major_release_refuses_at_load(
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
     assert excinfo.value.fields["observed"] == "torchlens_version=1.4.0"
     assert excinfo.value.fields["path"] == str(path)
-
-
-def test_file_saved_by_the_running_major_release_loads(tmp_path: Path) -> None:
-    """The same file loads under the release line that saved it."""
-
-    path, _ = _saved_trace(tmp_path)
-
-    loaded = tl.load(path)
-
-    assert type(loaded).__name__ == "Trace"

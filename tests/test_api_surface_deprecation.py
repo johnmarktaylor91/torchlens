@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import importlib
 
-import pytest
-
 import torchlens
 from torchlens._errors import FacadeTeachingError
 
@@ -60,11 +58,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("save_intervention", "torchlens.io", "save_intervention"),
     ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
     ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
-    (
-        "validate_batch_of_models_and_inputs",
-        "torchlens.validation",
-        "validate_batch_of_models_and_inputs",
-    ),
     ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
 ]
@@ -93,6 +86,7 @@ REMOVED_WRAPPER_NAMES = [
     "draw_backward",
     "draw_combined",
     "load_intervention_spec",
+    "validate_batch_of_models_and_inputs",
 ]
 
 #: Removed paper-era shim names.
@@ -109,44 +103,40 @@ REMOVED_PAPER_ERA_NAMES = [
 ]
 
 
-@pytest.mark.smoke_cells(
-    "test_moved_name_is_gone_and_canonical_resolves[NodeSpec-torchlens.experimental.dagua-NodeSpec]",
-)
-@pytest.mark.parametrize(("old_name", "module_name", "new_name"), REMOVED_TOP_LEVEL_CASES)
-def test_moved_name_is_gone_and_canonical_resolves(
-    old_name: str, module_name: str, new_name: str
-) -> None:
-    """The old top-level spelling refuses typed naming its home; the canonical resolves."""
+def test_removed_top_level_names_redirect_and_stay_hidden() -> None:
+    """Every removed top-level spelling refuses typed and ``dir(torchlens)`` advertises none.
 
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(torchlens, old_name)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert module_name in str(excinfo.value)
-    module = importlib.import_module(module_name)
-    assert getattr(module, new_name) is not None
+    One test over the four name tables (the per-name parametrization folded: its arcs are all
+    covered by kept tests, but these tables are the data pin the migration guide cites per name).
+    A moved name's redirect names its canonical module and the canonical spelling resolves.
+    """
 
-
-@pytest.mark.smoke_cells("test_removed_top_level_wrapper_is_gone[preview_fastlog]")
-@pytest.mark.parametrize(
-    "name", REMOVED_SURFACE_NAMES + REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES
-)
-def test_removed_top_level_wrapper_is_gone(name: str) -> None:
-    """Removed wrapper and paper-era spellings raise the typed redirect error."""
-
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(torchlens, name)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-
-
-def test_dir_lists_no_removed_names() -> None:
-    """``dir(torchlens)`` no longer advertises any removed spelling."""
-
-    visible = set(dir(torchlens))
+    failures: list[str] = []
+    for old_name, module_name, new_name in REMOVED_TOP_LEVEL_CASES:
+        try:
+            getattr(torchlens, old_name)
+        except FacadeTeachingError as error:
+            if error.fields["code"] != "facade_redirect" or module_name not in str(error):
+                failures.append(f"{old_name}: redirect does not name {module_name}: {error}")
+        else:
+            failures.append(f"{old_name}: still resolves at the top level")
+        if getattr(importlib.import_module(module_name), new_name, None) is None:
+            failures.append(f"{old_name}: canonical {module_name}.{new_name} does not resolve")
+    for name in REMOVED_SURFACE_NAMES + REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES:
+        try:
+            getattr(torchlens, name)
+        except FacadeTeachingError as error:
+            if error.fields["code"] != "facade_redirect":
+                failures.append(f"{name}: wrong code {error.fields['code']!r}")
+        else:
+            failures.append(f"{name}: still resolves at the top level")
     removed = (
         {case[0] for case in REMOVED_TOP_LEVEL_CASES}
         | set(REMOVED_SURFACE_NAMES)
         | set(REMOVED_WRAPPER_NAMES)
         | set(REMOVED_PAPER_ERA_NAMES)
     )
-    still_visible = sorted(visible & removed)
-    assert not still_visible, still_visible
+    failures.extend(
+        f"{name}: listed by dir(torchlens)" for name in sorted(set(dir(torchlens)) & removed)
+    )
+    assert not failures, "\n".join(failures)

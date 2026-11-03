@@ -19,7 +19,15 @@ __tl_vocabulary__ = True
 
 
 class ArtifactError(CompatibilityError, RuntimeError):
-    """Raised when TorchLens portable bundle state is invalid or unsupported."""
+    """Raised when TorchLens portable bundle state is invalid or unsupported.
+
+    Examples
+    --------
+    >>> issubclass(ArtifactError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(ArtifactError, RuntimeError)
+    True
+    """
 
 
 class ArtifactTooOldError(ArtifactError):
@@ -28,6 +36,13 @@ class ArtifactTooOldError(ArtifactError):
     Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
     2.16 ModelLog format refuse with this error rather than being partially reconstructed;
     the remedy is to load the file with torchlens 2.36.x or capture the model again.
+
+    Examples
+    --------
+    >>> issubclass(ArtifactTooOldError, tl.errors.ArtifactError)
+    True
+    >>> issubclass(ArtifactTooOldError, RuntimeError)
+    True
     """
 
 
@@ -42,6 +57,13 @@ class ArtifactTooNewError(ArtifactError):
     refusal carries the same stable ``fields["code"]`` everywhere (G3
     consolidation; the bare ``ValueError`` at the validation entry used to
     defeat the load path's typed-refusal pass-through).
+
+    Examples
+    --------
+    >>> issubclass(ArtifactTooNewError, tl.errors.ArtifactError)
+    True
+    >>> issubclass(ArtifactTooNewError, RuntimeError)
+    True
     """
 
 
@@ -52,6 +74,13 @@ class ArtifactRuntimeIncompatibleError(ArtifactError):
     version), never a schema-calendar one: the artifact stays valid and loads
     under a runtime with the recorded major version. Distinct class so
     callers can tell runtime policy apart from the version window.
+
+    Examples
+    --------
+    >>> issubclass(ArtifactRuntimeIncompatibleError, tl.errors.ArtifactError)
+    True
+    >>> issubclass(ArtifactRuntimeIncompatibleError, RuntimeError)
+    True
     """
 
 
@@ -67,6 +96,13 @@ class UnknownPersistedFieldError(ArtifactError):
     alias is a reader regression. ``fields`` carries ``code``
     (``unknown_persisted_field``), ``record_type``, ``unknown_fields``,
     ``declared_tlspec_version``, ``runtime_tlspec_version``, and ``remedy``.
+
+    Examples
+    --------
+    >>> issubclass(UnknownPersistedFieldError, tl.errors.ArtifactError)
+    True
+    >>> issubclass(UnknownPersistedFieldError, RuntimeError)
+    True
     """
 
 

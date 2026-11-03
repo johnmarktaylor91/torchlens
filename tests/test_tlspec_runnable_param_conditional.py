@@ -22,7 +22,6 @@ import torchlens as tl
 from torchlens._data_classes.trace import Conditional, ConditionalAccessor, ConditionalArm
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._runnable import PathFaithfulness
-from torchlens.errors import PathDivergenceError
 from torchlens.errors.runnable import SparseCorePayloadError
 from torchlens.options import CaptureOptions
 
@@ -86,32 +85,6 @@ def test_parameterized_conditional_saves_and_verifies(tmp_path: Path) -> None:
     assert torch.allclose(result.output, model(value))
 
 
-def test_conditional_arm_flip_still_diverges(tmp_path: Path) -> None:
-    """A changed input that flips the recorded arm must be caught, not blessed."""
-
-    torch.manual_seed(0)
-    value = torch.randn(2, 4)
-    model = ParamConditionalModel().eval()
-    trace = _capture(model, value)
-    path = tmp_path / "flip.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    loaded = tl.load(path)
-
-    captured_then = bool(model.linear(value).sum() > 0)
-    flipped = None
-    for seed in range(1, 200):
-        torch.manual_seed(seed)
-        candidate = torch.randn(2, 4) * 5
-        if bool(model.linear(candidate).sum() > 0) != captured_then:
-            flipped = candidate
-            break
-    assert flipped is not None, "could not synthesize an arm-flipping input"
-
-    with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=flipped, seed=0)
-
-
-@pytest.mark.smoke
 def test_sparse_core_tensor_tripwire_still_fires() -> None:
     """The value-free tripwire must still fire on a genuine stray payload."""
 

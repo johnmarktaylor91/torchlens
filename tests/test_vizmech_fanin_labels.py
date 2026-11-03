@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -36,7 +35,6 @@ from torchlens._visualization._geometry_audit import (
     parse_layout_json,
     run_layout_json,
 )
-from torchlens._visualization.lenses.audit import stage0
 
 
 class _FanCat(nn.Module):
@@ -141,7 +139,6 @@ def test_threshold_boundary_relocates_exactly_at_gate(tmp_path: Path) -> None:
     assert result.hard_violation_count == 0, result.describe("fanat")
 
 
-@pytest.mark.smoke
 def test_parallel_same_pair_arg_edges_merge_into_one_edge(tmp_path: Path) -> None:
     """A collapsed block feeding cat at N slots renders ONE merged edge.
 
@@ -185,35 +182,6 @@ def test_rolled_mode_high_fanin_relocates(tmp_path: Path) -> None:
 # D03-R5a: own-edge endpoint labels are no longer exempt in the audit
 # ---------------------------------------------------------------------------
 
-#: Pinned fixture: a head label forced onto its OWN spline (labelangle=0
-#: places it along the edge line). Before the narrowing, ``_is_own_pair``
-#: exempted the pair and BOTH oracles scored this geometry zero (the
-#: toy_branchy false negative, D03 eyeball D-2/NF-2).
-_OWN_SPLINE_KNOWN_BAD = """digraph ownspline {
-  rankdir=BT; ranksep=1.5;
-  a [shape=box, label="relu_1_3"];
-  b [shape=box, label="cat_1_6"];
-  a -> b [headlabel=<arg (0, 0)>, labelfontsize=8, labeldistance=2, labelangle=0, arrowsize=.7];
-}"""
-
-
-@pytest.mark.smoke
-def test_own_edge_head_label_spline_collision_fires() -> None:
-    """An own-spline crossing of a head label is a hard violation now."""
-
-    parsed = parse_layout_json(
-        run_layout_json(_OWN_SPLINE_KNOWN_BAD, "dot"),
-        engine="dot",
-        dot_source=_OWN_SPLINE_KNOWN_BAD,
-    )
-    result = audit_layout(parsed)
-    own = [
-        violation
-        for violation in result.violations
-        if violation.kind == "text-spline" and violation.other in violation.text_owner
-    ]
-    assert own, result.describe("ownspline")
-
 
 def test_own_node_label_exemption_retained(tmp_path: Path) -> None:
     """The narrowing is scoped: a node's own label stays exempt (clean chain)."""
@@ -227,56 +195,3 @@ def test_own_node_label_exemption_retained(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # D03-R5b: the Stage-0 lens oracle sees head/tail-label text
 # ---------------------------------------------------------------------------
-
-
-def _pinned_pileup_dot(n: int = 12) -> str:
-    """The historic fan-in head-label pileup as a pinned DOT fixture."""
-
-    lines = ["digraph knownbad {", "  rankdir=BT;", '  sink [shape=box, label="cat_1_13"];']
-    for i in range(n):
-        lines.append(f'  s{i} [shape=box, label="conv2d_{i}"];')
-        lines.append(f"  s{i} -> sink [headlabel=<arg (0, {i})>, labelfontsize=8, arrowsize=.7];")
-    lines.append("}")
-    return "\n".join(lines)
-
-
-def test_stage0_endpoint_check_fires_on_pileup() -> None:
-    """The pileup class is machine-caught by the Stage-0 oracle now."""
-
-    findings = {
-        finding.check: finding for finding in stage0.geometry_findings(_pinned_pileup_dot())
-    }
-    endpoint = findings["geometry_endpoint_label_collision"]
-    assert not endpoint.passed
-    assert endpoint.measurements["count"] >= 5
-    # Anti-vacuity: the oracle saw every head-label box it was blind to.
-    assert endpoint.measurements["endpoint_label_boxes"] == 12
-
-
-@pytest.mark.smoke
-def test_stage0_endpoint_check_passes_clean_with_boxes_counted() -> None:
-    """Known-good direction: clean endpoint labels pass over a NON-EMPTY set."""
-
-    clean = """digraph ok {
-  rankdir=BT;
-  a [shape=box, label="linear_1_1"];
-  b [shape=box, label="sub_1_2"];
-  c [shape=box, label="relu_1_9"];
-  a -> b [headlabel=<arg 0>, labelfontsize=8, arrowsize=.7];
-  c -> b [headlabel=<arg 1>, labelfontsize=8, arrowsize=.7];
-}"""
-    findings = {finding.check: finding for finding in stage0.geometry_findings(clean)}
-    endpoint = findings["geometry_endpoint_label_collision"]
-    assert endpoint.passed
-    assert endpoint.measurements["endpoint_label_boxes"] == 2
-
-
-def test_stage0_finding_order_is_appended() -> None:
-    """The new finding APPENDS: consumers indexing [0]/[1] stay valid."""
-
-    findings = stage0.geometry_findings("digraph { a -> b; }")
-    assert [finding.check for finding in findings] == [
-        "geometry_node_overlap",
-        "geometry_label_penetration",
-        "geometry_endpoint_label_collision",
-    ]

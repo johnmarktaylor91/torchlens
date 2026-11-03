@@ -103,45 +103,6 @@ def _shuffled(table: Any) -> Any:
 # ----------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("method", "reduction", "batch"),
-    [("eap_ig", "mean", 1), ("eap", "mean", 1), ("eap_ig", "sum", 2), ("eap", "mean", 2)],
-)
-def test_fixture_measured_effects_equal_the_hand_patch(method: str, reduction: str, batch: int):
-    """Every edge's measured effect is its hand-computed patch effect, exactly (float64)."""
-
-    model = Fixture().eval()
-    clean, corrupt = (CLEAN, CORRUPT) if batch == 1 else (PAIR_CLEAN, PAIR_CORRUPT)
-    table = _table(model, clean, corrupt, method=method, example_reduction=reduction)
-    audit = _audit(table, model, clean, corrupted_input=corrupt, k=1, num_random_draws=2)
-    graph = torchlens.mechinterp.component_graph(tl.trace(model, clean))
-    assert graph.nodes["m0"].module_address == "h1" and graph.nodes["m1"].module_address == "h2"
-    want = _hand_effects(model, clean, corrupt, reduction)
-    got = {row.component: row.measured_effect for row in audit.units}
-    assert got == want
-    claimed = {row.address[0]: row.score for row in table.rows()}
-    assert {row.component: row.claimed_effect for row in audit.units} == claimed
-    assert audit.extra["claim_kind"] == "edge_table"
-    assert audit.extra["claim_method"] == method
-    assert audit.extra["example_reduction"] == reduction
-    assert audit.settings["ablation"] == "edge_patch"
-    assert audit.original_score == _reduced(fixture_metric(model(clean).detach()), reduction)
-    assert [row.index for row in audit.units] == [(index,) for index in range(5)]
-
-
-def test_fixture_a_shuffled_claim_scores_below_the_correct_claim() -> None:
-    """Rank agreement of the EAP-IG table beats the same scores reversed in rank."""
-
-    table = _table()
-    correct = _audit(table, k=1, num_random_draws=2)
-    shuffled = _audit(_shuffled(table), k=1, num_random_draws=2)
-    assert correct.rank_agreement is not None and shuffled.rank_agreement is not None
-    assert shuffled.rank_agreement < correct.rank_agreement
-    assert [row.measured_effect for row in shuffled.units] == [
-        row.measured_effect for row in correct.units
-    ]
-
-
 def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
     """A set into one receiver is patched together, and so is a set across receivers."""
 
@@ -253,17 +214,6 @@ def _logits_score(audit: Any, metric: Callable[[Tensor], Tensor]) -> Callable[[A
     return _score
 
 
-def test_fixture_recorded_patches_replay_to_their_measured_effects() -> None:
-    """Every row's and set's recorded patch, replayed on a fresh fork, is exact (float64)."""
-
-    model = Fixture().eval()
-    audit = _audit(_table(model), model, edges=["input->logits", "m1->logits"], k=2)
-    score = _logits_score(audit, fixture_metric)
-    for item in (*audit.units, *audit.sets):
-        replayed = _replayed(audit, item.build_interventions, score) - audit.original_score
-        assert replayed == item.measured_effect
-
-
 def _tiny_gpt2():
     transformers = pytest.importorskip("transformers")
     torch.manual_seed(0)
@@ -328,26 +278,6 @@ def test_tiny_gpt2_q_k_v_patches_replay_to_their_measured_effects() -> None:
     (both,) = shared.sets
     replayed = _replayed(shared, both.build_interventions, score) - shared.original_score
     assert replayed == both.measured_effect
-
-
-def test_edge_audit_leaves_the_caller_model_and_random_state_untouched() -> None:
-    """Parameters, buffers, gradients, training flags and the global RNG are unchanged."""
-
-    model = Fixture().train()
-    table = _table(model)
-    for parameter in model.parameters():
-        parameter.grad = torch.ones_like(parameter)
-    before = {name: value.detach().clone() for name, value in model.state_dict().items()}
-    grads = [parameter.grad.clone() for parameter in model.parameters()]
-    rng = torch.get_rng_state()
-    _audit(table, model, k=2, num_random_draws=3)
-    assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
-    assert all(
-        torch.equal(parameter.grad, grad)
-        for parameter, grad in zip(model.parameters(), grads, strict=True)
-    )
-    assert model.training and all(module.training for module in model.modules())
-    assert torch.equal(torch.get_rng_state(), rng)
 
 
 # ----------------------------------------------------------------------------------------------

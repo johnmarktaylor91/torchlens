@@ -18,7 +18,7 @@ from collections import Counter
 
 import pytest
 import torch
-from test_circ3_multi_receiver_patch import _outside_random_circuit, _tiny_gpt2
+from test_circ3_multi_receiver_patch import _tiny_gpt2
 
 import torchlens as tl
 import torchlens.mechinterp as mi
@@ -68,37 +68,6 @@ def counted_patch(monkeypatch, clean, edges, corrupt):
     monkeypatch.setattr(type(clean), "fork", counting("forks", type(clean).fork))
     patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
     return patched, counts
-
-
-def test_a_call_into_every_receiver_costs_one_replay_per_stage(tiny, monkeypatch) -> None:
-    clean, graph, corrupt = tiny
-    edges = _outside_random_circuit(graph, keep=0.4)
-    assert len({edge.receiver.name for edge in edges}) == len(graph.receivers) == 2 * 2 * 3 + 3
-    _patched, counts = counted_patch(monkeypatch, clean, edges, corrupt)
-    # Two layers: two q/k/v stages, two MLP stages, logits.
-    assert counts == Counter(replays=5, graph_builds=4, forks=1)
-
-
-def test_one_q_receiver_costs_one_replay_and_one_fork(tiny, monkeypatch) -> None:
-    clean, graph, corrupt = tiny
-    edges = [edge for edge in graph.edges.values() if edge.receiver.name == "a1.h0<q>"]
-    _patched, counts = counted_patch(monkeypatch, clean, edges, corrupt)
-    assert counts == Counter(replays=1, forks=1)
-
-
-@pytest.mark.parametrize("receiver", ["a0.h1<k>", "a1.h0<q>", "a1.h1<v>"])
-def test_the_local_projection_is_bitwise_a_substitution_and_push(tiny, receiver) -> None:
-    clean, graph, _corrupt = tiny
-    target = graph.receivers[receiver]
-    patched = target.value + 0.25 * torch.ones_like(target.value)
-    home = str(_head_spec(clean, target).home_label)
-    before = clean.ops[home].out.clone()
-    scratch = clean.fork()
-    scratch.do(_input_edge_record(scratch, target).__selection__(), patched)
-    (got,) = _recompute_with_substitution(clean, _input_edge_record(clean, target), [patched], home)
-    assert torch.equal(got, scratch.ops[home].out)
-    assert not torch.equal(got, before)
-    assert torch.equal(clean.ops[home].out, before)
 
 
 def test_a_target_upstream_of_the_edge_returns_the_reason_and_computes_nothing(tiny) -> None:

@@ -23,7 +23,6 @@ from ..._data_classes._preprocessing_provenance import stamp_user_transform_prov
 from ..._data_classes.trace import (
     Trace,
 )
-from ..._errors import InvalidArgumentError
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
 from ...errors import TorchLensWarning
 from .._episode_ledger import (
@@ -35,6 +34,7 @@ from .._episode_ledger import (
     _fidelity_basis,
     write_episode_ledger,
 )
+from .._stop_after_policy import settle_unfired_stop_after
 
 if TYPE_CHECKING:
     from .._episode_ledger import ResolvedEpisode
@@ -209,47 +209,13 @@ def _settle_epilogue_tail(trace: Trace, request: CaptureRequest) -> None:
 
 
 def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
-    """Refuse or warn when ``stop_after`` never fired, by the site's provenance.
-
-    Never-fired policy split by provenance: a selector-shaped site that never
-    fired is a typo-shaped wrong result (the full forward ran; the caller asked
-    for a frontier) and refuses typed; an exploratory callable or ambient
-    context-manager site legitimately may never fire and warns with a durable
-    ledger entry.
-    """
-    # brainpipe D-16.
-    stop_after_site = facts.get("stop_after_site")
-    if stop_after_site is None or bool(getattr(trace, "is_stopped", False)):
-        return
-    site_repr = repr(stop_after_site)
-    if facts.get("stop_after_selector_shaped") and not facts.get("stop_after_ambient"):
-        raise InvalidArgumentError(
-            f"stop_after={site_repr} never fired: the capture ran the full "
-            "forward and completed without halting, so the result is not the "
-            "requested frontier",
-            code="stop_after_never_fired",
-            remedy=(
-                "check the site against the model's module addresses "
-                "(model.named_modules()) or use tl.func(...)/tl.module(...); "
-                "an exploratory predicate that may legitimately never fire "
-                "belongs in a callable"
-            ),
-            argument="stop_after",
-        )
-    stop_annotations = getattr(trace, "annotations", None)
-    if isinstance(stop_annotations, dict):
-        stop_annotations.setdefault("unmatched_capture_selectors", []).append(
-            {"slot": "stop_after", "selector": site_repr}
-        )
-    warnings.warn(
-        TorchLensWarning(
-            f"stop_after={site_repr} never fired; the capture ran the full "
-            "forward and the outputs are the model's real outputs, not a "
-            "frontier. Remedy: check the stop_after site against the executed "
-            "model, or drop stop_after",
-            code="stop_after_never_fired_callable",
-        ),
-        stacklevel=4,
+    """Run the shared never-fired ``stop_after`` policy with the door's facts."""
+    settle_unfired_stop_after(
+        trace,
+        facts.get("stop_after_site"),
+        selector_shaped=bool(facts.get("stop_after_selector_shaped")),
+        ambient=bool(facts.get("stop_after_ambient")),
+        stacklevel=5,
     )
 
 

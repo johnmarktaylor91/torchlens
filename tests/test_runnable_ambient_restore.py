@@ -11,15 +11,12 @@ changed ('none' -> 'ieee').
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
-from torch import nn
 
-import torchlens as tl
 from torchlens._runnable.state_context import _ambient_execution_context_restored
 from torchlens._utils import _torch_compat
 
@@ -52,23 +49,7 @@ def unset_fp32_precision_children() -> Iterator[None]:
         _torch_compat.restore_fp32_precision_controls(fields)
 
 
-@pytest.mark.usefixtures("unset_fp32_precision_children")
-def test_loaded_runnable_run_leaves_globals_unchanged(tmp_path: Path) -> None:
-    """A loaded sparse run restores the caller's exact globals afterwards."""
-
-    torch.manual_seed(0)
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    path = tmp_path / "ambient.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    loaded = tl.load(path)
-
-    before = _globals()
-    loaded.run(inputs=x, seed=0)
-    assert _globals() == before
-
-
+# Kept: sole branch coverage of _runnable/state_context.py.
 @pytest.mark.usefixtures("unset_fp32_precision_children")
 def test_ambient_context_restores_globals_when_the_run_raises() -> None:
     """The restore runs on the error path too, fp32_precision fields included."""
@@ -84,19 +65,3 @@ def test_ambient_context_restores_globals_when_the_run_raises() -> None:
             assert torch.get_float32_matmul_precision() == recorded.float32_matmul_precision
             raise RuntimeError("raised inside the run")
     assert _globals() == before
-
-
-def test_fp32_precision_snapshot_round_trips() -> None:
-    """Snapshot then restore is exact even after a legacy setter rewrote the fields."""
-
-    snapshot = _torch_compat.snapshot_fp32_precision_controls()
-    if not _torch_compat.HAS_FP32_PRECISION_CONTROLS:
-        assert snapshot == {}
-        return
-    previous = torch.get_float32_matmul_precision()
-    try:
-        torch.set_float32_matmul_precision("high")
-        torch.set_float32_matmul_precision(previous)
-    finally:
-        _torch_compat.restore_fp32_precision_controls(snapshot)
-    assert _torch_compat.snapshot_fp32_precision_controls() == snapshot

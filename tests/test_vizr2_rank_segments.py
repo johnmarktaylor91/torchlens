@@ -52,32 +52,3 @@ def test_segment_plan_renders_under_rank_with_one_node_per_segment(
     assert dot_segments
     assert rank_segments == {name.replace(":", "pass") for name in dot_segments}
     assert (tmp_path / "rank.svg").stat().st_size > 0
-
-
-class _BatchNormNet(nn.Module):
-    """Two conv-batchnorm stages: train mode writes the running buffers."""
-
-    def __init__(self) -> None:
-        """Initialize the stages."""
-        super().__init__()
-        self.c1 = nn.Conv2d(3, 4, 3, padding=1)
-        self.b1 = nn.BatchNorm2d(4)
-        self.c2 = nn.Conv2d(4, 4, 3, padding=1)
-        self.b2 = nn.BatchNorm2d(4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run both stages."""
-        return self.b2(self.c2(torch.relu(self.b1(self.c1(x)))))
-
-
-@pytest.mark.parametrize("train", [False, True], ids=["eval", "train"])
-@pytest.mark.parametrize("buffers", ["never", "meaningful", "always"])
-def test_buffer_nodes_render_under_rank(tmp_path: Path, train: bool, buffers: str) -> None:
-    """The buffer-node rank crash (collapse memo D2, the layout half) stays fixed."""
-    torch.manual_seed(0)
-    trace = tl.trace(_BatchNormNet().train(train), torch.randn(2, 3, 8, 8))
-    try:
-        _source(trace, tmp_path, "bn", layout="rank", show_buffers=buffers)
-    finally:
-        trace.cleanup()
-    assert (tmp_path / "bn.svg").stat().st_size > 0

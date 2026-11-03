@@ -92,7 +92,7 @@ def _resolve_input_leaf_by_role(
     """Return the leaf of ``x`` recorded at input address ``io_role``, plus all leaves.
 
     Mirrors capture-time input flattening exactly (see
-    ``TorchBackend.fetch_label_move_input_tensors``): positional args are
+    ``TorchBackend._fetch_label_move_input_tensors``): positional args are
     normalized against the model's forward signature, each arg's tensors are
     discovered with the same bounded traversal, addresses are
     ``input.<argname>[.<path>]``, and a repeated tensor object keeps only its

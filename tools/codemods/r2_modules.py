@@ -257,7 +257,7 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
             "# After\nfrom torchlens.visualization import show_model_graph\n\n"
             "show_model_graph(\n    model,\n    x,\n"
             '    visualization=tl.options.VisualizationOptions(container_path="graph", save_only=True),\n)\n',
-            '# After\ntrace = tl.trace(model, x)\ntrace.draw(path="graph", vis_save_only=True)\n',
+            '# After\ntrace = tl.trace(model, x)\ntrace.draw("graph")\n',
         ),
         (
             "# After\nfrom torchlens.visualization import draw_backward\n\n"

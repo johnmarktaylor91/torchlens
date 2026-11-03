@@ -10,9 +10,11 @@ a pooled statistic (D32).
 
 Layering: this module is L1 (data_classes); every stats import is
 deferred to call time (the spine layer lint forbids eager upward
-imports). Renderers never materialize lazy payloads, never read disk,
-never mutate, and never raise (voice rule 10) -- a failure degrades to
-the record's legacy placeholder form.
+imports). Renderers never materialize lazy payloads, never mutate, and
+never raise (voice rule 10) -- a failure degrades to the record's legacy
+placeholder form. The one disk read is an op's line of source code, which
+an unsnapshotted capture reads from its file (through ``linecache``) only
+while the file is unchanged since capture.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -24,6 +26,7 @@ from typing import Any
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils.fail_open import fail_open
 from ._repr import format_shape_list
+from .func_call_location import display_frame, short_source_path
 
 #: Sentinel for a payload read that raised (distinct from a freed ``None``).
 _READ_FAILED = object()
@@ -136,7 +139,7 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
     from ..stats._stats_render import render_core_line
     from ..stats._tensor_stats import tensor_stats
 
-    return render_core_line(tensor_stats(payload, identity=identity), max_width=max_width)
+    return render_core_line(tensor_stats(payload, _identity=identity), max_width=max_width)
 
 
 def _edited_token(op: Any) -> str | None:
@@ -199,13 +202,36 @@ def op_repr_line(op: Any) -> str:
     )
 
 
-def _where_line(op: Any) -> str | None:
-    """The card's module-location line, when the op sits in a module."""
+def _source_location(op: Any) -> tuple[str | None, str | None]:
+    """Where the op's line is and what it says: ``(location, code line)``.
+
+    Names the innermost frame outside torch's own code (``display_frame``) as
+    ``file:line in function``; the code line is that line's source text, read
+    lazily from the file when the capture kept no snapshot, or the reason it
+    cannot be shown (the file changed since capture, or is gone).
+    """
+
+    frame = display_frame(getattr(op, "code_context", None))
+    if frame is None:
+        return None, None
+    location = (
+        f"{short_source_path(str(frame.file))}:{frame.line_number}"
+        f" in {frame.func_qualname or frame.func_name}"
+    )
+    view, status = frame._source_text_state()
+    text = view[3] if view is not None else ""
+    return location, f"code   {text or f'({status})'}"
+
+
+def _where_and_code_lines(op: Any) -> tuple[str | None, str | None]:
+    """The card's ``where`` line (module and source line) and ``code`` line."""
 
     module = getattr(op, "module", None)
-    if not module:
-        return None
-    return f"where  module {module}"
+    location, code = _source_location(op)
+    parts = [f"module {module}"] if module else []
+    if location:
+        parts.append(location)
+    return ("where  " + ", ".join(parts) if parts else None), code
 
 
 def _graph_line(op: Any) -> str | None:
@@ -272,7 +298,7 @@ def op_card(op: Any) -> str:
     body = [
         line
         for line in (
-            _where_line(op),
+            *_where_and_code_lines(op),
             _graph_line(op),
             _func_line(op),
             _params_line(op),
@@ -337,7 +363,7 @@ def layer_card(layer: Any) -> str:
         body.extend(
             line
             for line in (
-                _where_line(first),
+                *_where_and_code_lines(first),
                 _graph_line(first),
                 _func_line(first),
                 _params_line(first),
@@ -363,7 +389,7 @@ def param_repr_line(param: Any) -> str:
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     if isinstance(live, torch.Tensor):
-        stats = tensor_stats(live, identity=getattr(param, "address", None))
+        stats = tensor_stats(live, _identity=getattr(param, "address", None))
         version = stats.tensor_version
         core = render_core_line(stats)
         if version is not None:
@@ -422,7 +448,7 @@ def buffer_repr_line(buffer: Any) -> str:
         from ..stats._stats_render import render_core_line
         from ..stats._tensor_stats import tensor_stats
 
-        core = render_core_line(tensor_stats(initial, identity=getattr(buffer, "address", None)))
+        core = render_core_line(tensor_stats(initial, _identity=getattr(buffer, "address", None)))
         basis = "snapshot at capture"
     else:
         core = _metadata_core(buffer)

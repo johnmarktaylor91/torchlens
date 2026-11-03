@@ -18,7 +18,7 @@ jnp = pytest.importorskip("jax.numpy")
 eqx = pytest.importorskip("equinox")
 nnx = pytest.importorskip("flax.nnx")
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 class SimpleEquinoxMlp(eqx.Module):

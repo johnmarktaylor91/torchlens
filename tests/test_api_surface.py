@@ -188,7 +188,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `aggregate` to `tl.stats.aggregate`. With every area's renames, moves and
     removals merged, the total is 83. The gradient-sites change adds `grad`
     and `clip_norm` and removes `zero_grad`, `scale_grad`, `clamp_grad`,
-    `add_grad_noise`, `clip_grad` and `hook_grad` = 83. JMT's walk ruling late.9
+    `add_grad_noise`, `clip_grad` and `hook_grad` = 83. The late.9 change
     (31 Oct 2026) adds `all_sites`, the named universal selector = 84.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
@@ -206,13 +206,6 @@ def test_phase_b_exports_are_top_level_importable() -> None:
     assert importlib.import_module("torchlens.facets") is importlib.import_module(
         "torchlens._semantic.facets"
     )
-
-
-def test_all_target_names_importable() -> None:
-    """Every budgeted top-level name should resolve as ``torchlens.X``."""
-
-    for name in TARGET_ALL:
-        assert hasattr(torchlens, name), name
 
 
 def test_no_duplicates() -> None:

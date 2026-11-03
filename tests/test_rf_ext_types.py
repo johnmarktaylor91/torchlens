@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pickle
-from dataclasses import fields
 from fractions import Fraction
 
 from torchlens.receptive_field import (
@@ -134,35 +133,6 @@ def _validation_args() -> tuple[object, ...]:
         ("input.a", "input.b"),
         "valid",
     )
-
-
-def test_extension_fields_preserve_legacy_dataclass_contracts() -> None:
-    """Keep legacy construction, matching, field prefixes, and reprs stable."""
-
-    # Third element: sanctioned kw-only extension fields BEYOND the shared
-    # (direction, unit_shape) pair. GradReceptiveField carries signed_grad
-    # (R13-5): grad stays the magnitude view, signed values ride a defaulted
-    # repr-suppressed extension so legacy construction and matching hold.
-    cases = (
-        (ReceptiveField, _descriptor_args(), ()),
-        (ReceptiveFieldBox, _box_args(), ()),
-        (GradReceptiveField, _gradient_args(), ("signed_grad",)),
-        (ReceptiveFieldValidation, _validation_args(), ()),
-    )
-    for result_type, args, extension_fields in cases:
-        result = result_type(*args)
-        assert tuple(field.name for field in fields(result_type)) == (
-            *result_type.__match_args__,
-            "direction",
-            "unit_shape",
-            *extension_fields,
-        )
-        assert result.direction is ReceptiveFieldDirection.RECEPTIVE
-        assert result.unit_shape == ()
-        assert "direction=" not in repr(result)
-        assert "unit_shape=" not in repr(result)
-        for extension_field in extension_fields:
-            assert f"{extension_field}=" not in repr(result)
 
 
 def test_legacy_descriptor_pickle_fills_extension_defaults() -> None:

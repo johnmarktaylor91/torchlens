@@ -64,7 +64,14 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class DryRun:
-    """Predicate dry-run trace without retained tensor payloads."""
+    """Predicate dry-run trace without retained tensor payloads.
+
+    Examples
+    --------
+    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
+    >>> type(plan).__name__, len(plan.contexts) > 0
+    ('DryRun', True)
+    """
 
     contexts: tuple[RecordContext, ...]
     decisions: tuple[bool, ...] = ()
@@ -189,8 +196,8 @@ _RAW_METADATA_FIELDS = (
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their
-#: ``CaptureOptions`` names, the recorder knobs their flat ``tl.record``
-#: keyword names, and the three door-carried slots their door keywords.
+#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
+#: field names, and the three door-carried slots their door keywords.
 _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("keep_op", "keep_op"),
     ("default_op", "default_op"),
@@ -229,9 +236,8 @@ class RecordingSettings:
     recording made?" across every door that configured it: the capture knobs
     (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
     ``grad_transform``, ``lookback``, ...), the recorder knobs
-    (the flat ``tl.record`` keywords: ``keep_op``, ``default_op``,
-    ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
-    and ``narrate=``. Values are the live objects the recorder used (the
+    (``recording=RecordingOptions(...)``: ``default_op``, ``history_size``, ...) and
+    the door keywords ``save=``, ``intervene=``, ``stop_after=``, ``storage=``, ``narrate=``. Values are the live objects the recorder used (the
     predicate or transform callable itself, the ``CaptureSpec``), never repr
     strings. Built by the recorder; there is no public constructor.
 
@@ -290,6 +296,13 @@ class RecordingSettings:
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> settings = recording.options
+    >>> type(settings).__name__, settings.history_size
+    ('RecordingSettings', 8)
     """
 
     keep_op: PredicateFn | None
@@ -359,6 +372,13 @@ class Recording(TraceLike):
     recorders, ``n_ops_completed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> type(recording).__name__, recording.status, len(recording.records)
+    ('Recording', 'complete', 1)
+
     """
 
     # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this slots-backed product's
@@ -1255,7 +1275,7 @@ class Recording(TraceLike):
             code="recording_halt_frontier_missing",
             remedy=(
                 "re-run record(...) with a save= predicate that captures at least the halt "
-                "frontier layer, or use tl.trace(model, x, halt=...) for the exhaustive "
+                "frontier layer, or use tl.trace(model, x, stop_after=...) for the exhaustive "
                 "halted-capture path"
             ),
         )

@@ -18,7 +18,7 @@ import dis
 import sys
 import weakref
 from collections.abc import Callable
-from types import CodeType
+from types import CodeType, FrameType
 from typing import Any
 
 #: The one place the module-call choice lives (decided True, 2026-10-29: calling
@@ -205,3 +205,30 @@ def canonical_chain(raw: tuple[tuple[Any, int], ...]) -> tuple[tuple[Any, Any], 
         for code, lasti in reversed(raw)
     ]
     return collapse_recursion(tokens)
+
+
+_Survivor = tuple[FrameType, CodeType, int, int]
+
+
+def select_context_frames(
+    survivors: list[_Survivor], last_forward_pos: int, anchor_frame: FrameType | None
+) -> tuple[list[_Survivor], _Survivor | None]:
+    """Select an op's context frames from the capture walk's survivors, plus its call site.
+
+    ``survivors`` are the user frames ``introspection._get_code_context``
+    kept, innermost first. The context is outermost first, like a traceback:
+    the call site (the first survivor above the outermost ``forward`` frame,
+    or the verified anchor frame), then the outermost ``forward`` frame down
+    to the innermost frame, which ran the op and is always LAST. With no
+    ``forward`` frame the context is empty and there is no call site.
+    """
+
+    if last_forward_pos < 0:
+        return [], None
+    call_site: _Survivor | None = None
+    if last_forward_pos + 1 < len(survivors):
+        call_site = survivors[last_forward_pos + 1]
+    elif anchor_frame is not None:
+        call_site = (anchor_frame, anchor_frame.f_code, anchor_frame.f_lineno, anchor_frame.f_lasti)
+    inner = survivors[last_forward_pos::-1]
+    return ([call_site, *inner] if call_site is not None else inner), call_site

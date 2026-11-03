@@ -88,7 +88,9 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
             model, example, capture=tl.options.CaptureOptions(structure_only=True)
         ),
         "trace_halted": tl.trace(model, example, stop_after=tl.func("relu")),
-        "trace_not_intervention_ready": tl.trace(model, example),
+        # Every tl.trace capture records replay templates, so the not-ready
+        # product is a predicate recording promoted to a Trace (it keeps none).
+        "trace_not_intervention_ready": tl.record(model, example, save=tl.func("relu")).to_trace(),
     }
     try:
         yield products

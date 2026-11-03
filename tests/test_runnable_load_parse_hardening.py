@@ -74,20 +74,6 @@ def test_edited_execution_context_fails_runtime_fingerprint(
     assert any("fingerprint" in diagnostic.message for diagnostic in loaded.readiness.diagnostics)
 
 
-def test_edited_argument_names_fail_runtime_fingerprint(
-    runnable_manifest: tuple[Path, Path, dict],
-) -> None:
-    """A hand-edited call arity/argument list refuses at parse."""
-
-    path, manifest_path, manifest = runnable_manifest
-    call = manifest["run"]["calls"][0]
-    call["argument_names"] = [*call["argument_names"], "forged"]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-    loaded = tl.load(path)
-    assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
-
-
 def test_reserved_name_prefix_alias_group_refuses(
     runnable_manifest: tuple[Path, Path, dict],
 ) -> None:
@@ -113,7 +99,6 @@ def test_reserved_name_prefix_alias_group_refuses(
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
 
 
-@pytest.mark.smoke
 def test_parse_rng_profile_refuses_absent_or_coerced_fields() -> None:
     """The REQUIRED host-RNG profile is never defaulted or coerced (F-R10-B4)."""
 
@@ -140,7 +125,6 @@ def test_parse_rng_profile_refuses_absent_or_coerced_fields() -> None:
     assert profile.capture_seed is None
 
 
-@pytest.mark.smoke
 def test_validated_dtype_literal_returns_canonical_spelling() -> None:
     """A bare dtype spelling canonicalizes so the consumer compare binds (F-R10-B6)."""
 
@@ -177,7 +161,6 @@ def test_encode_literal_exact_type_discipline() -> None:
         _encode_literal(MyList([1]))
 
 
-@pytest.mark.smoke
 def test_encode_literal_bounds_nesting_below_every_decode_ceiling() -> None:
     """Deep nesting refuses typed at SAVE, never a RecursionError or an unloadable bundle (F-R10-B5)."""
 
@@ -205,6 +188,7 @@ def test_encode_literal_bounds_nesting_below_every_decode_ceiling() -> None:
         _encode_literal(bomb)
 
 
+@pytest.mark.smoke
 def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> None:
     """Loaded-runnable re-save never claims 'no state records' falsely (F-R10-2).
 

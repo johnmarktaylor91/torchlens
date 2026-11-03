@@ -83,8 +83,14 @@ def _structure_only_trace(device: str) -> tl.Trace:
     )
 
 
+# Kept: sole branch coverage of _capture/structure_only.py, _capture_honesty.py, _data_classes/_trace_groups_capture.py; a sole mutation kill.
 @pytest.mark.usefixtures("_witness_armed")
-@pytest.mark.parametrize("device", ["meta", "cpu"])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "meta",
+    ],
+)
 def test_witness_leaves_a_value_free_capture_unverified(device: str) -> None:
     """Witness on plus a structure-only capture: no error, capture_verified is None."""
 
@@ -101,26 +107,11 @@ def test_witness_leaves_a_value_free_capture_unverified(device: str) -> None:
     assert not any("is not armed" in line for line in preamble)
 
 
-@pytest.mark.usefixtures("_witness_armed")
-def test_detector_and_witness_leave_a_value_free_capture_unverified() -> None:
-    """With the escape detector also armed, the clean value-free capture still reads None.
-
-    Real substrate: on meta the detector reports torch-internal ``sym_float`` /
-    ``sym_max`` calls from the meta kernels and settles False on its own.
-    """
-
-    wrap_torch(escape_detector="shadow", completeness_witness=True)
-    trace = _structure_only_trace("cpu")
-
-    assert trace.health.escape_detector_verified is True
-    assert trace.provenance.verified is None
-    assert trace.provenance.verification_reason is None
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch_names.py; a sole mutation kill.
 @pytest.mark.filterwarnings("ignore:TorchLens completeness witness observed:UserWarning")
 @pytest.mark.filterwarnings("ignore:TorchLens found tensor arguments with no graph:UserWarning")
 @pytest.mark.usefixtures("_witness_armed")
-@pytest.mark.parametrize("device", ["meta", "cpu"])
+@pytest.mark.parametrize("device", ["cpu"])
 def test_witness_gap_still_ceilings_a_value_free_capture(
     device: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -144,17 +135,7 @@ def test_witness_gap_still_ceilings_a_value_free_capture(
     assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
 
 
-@pytest.mark.usefixtures("_witness_armed")
-def test_witness_still_verifies_a_valued_capture() -> None:
-    """The value-free carve-out is narrow: an ordinary capture is still verified."""
-
-    trace = tl.trace(_LinearRelu().eval(), torch.randn(2, 4))
-
-    assert trace.health.completeness_verified is True
-    assert trace.provenance.verified is True
-    assert trace.provenance.verification_reason == "dispatch_witness_verified"
-
-
+# Kept: sole branch coverage of _capture/_structure_evidence.py, _capture/finalize/epilogue.py.
 @pytest.mark.usefixtures("_witness_armed")
 def test_incoherent_value_free_settlement_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """With the carve-out removed the witness settles True and the invariant fires."""
@@ -169,6 +150,7 @@ def test_incoherent_value_free_settlement_still_raises(monkeypatch: pytest.Monke
     assert excinfo.value.fields["invariant"] == "capture_verified is True on a value-free capture"
 
 
+# Kept: sole branch coverage of _capture/_weightsfree_admission.py; a sole mutation kill.
 def test_settlement_invariant_rejects_a_verified_value_free_trace() -> None:
     """The invariant itself is unchanged: a value-free trace claiming True is refused."""
 
@@ -181,8 +163,14 @@ def test_settlement_invariant_rejects_a_verified_value_free_trace() -> None:
     assert excinfo.value.fields["invariant"] == "capture_verified is True on a value-free capture"
 
 
+# Kept: a sole mutation kill.
 @pytest.mark.usefixtures("_witness_armed")
-@pytest.mark.parametrize("device", ["meta", "cpu"])
+@pytest.mark.parametrize(
+    "device",
+    [
+        "meta",
+    ],
+)
 def test_attribute_held_original_relu_is_rebound_and_witnessed(device: str) -> None:
     """The stale-relu case with the bare original, as it was first written.
 

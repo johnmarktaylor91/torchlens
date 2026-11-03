@@ -11,27 +11,75 @@ if TYPE_CHECKING:
 
 
 class RecordingConfigError(ConfigurationError, ValueError):
-    """Raised when fastlog options are internally inconsistent."""
+    """Raised when fastlog options are internally inconsistent.
+
+    Examples
+    --------
+    >>> issubclass(RecordingConfigError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(RecordingConfigError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class InvalidStorageError(RecordingConfigError):
-    """Raised when a selected fastlog payload cannot use the configured storage."""
+    """Raised when a selected fastlog payload cannot use the configured storage.
+
+    Examples
+    --------
+    >>> issubclass(InvalidStorageError, tl.errors.RecordingConfigError)
+    True
+    >>> issubclass(InvalidStorageError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class RecorderStateError(CaptureError, RuntimeError):
-    """Raised when a recorder is used outside its valid lifecycle."""
+    """Raised when a recorder is used outside its valid lifecycle.
+
+    Examples
+    --------
+    >>> issubclass(RecorderStateError, tl.errors.CaptureError)
+    True
+    >>> issubclass(RecorderStateError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class RecoveryError(CaptureError, RuntimeError):
-    """Raised when a partial fastlog bundle cannot be recovered."""
+    """Raised when a partial fastlog bundle cannot be recovered.
+
+    Examples
+    --------
+    >>> issubclass(RecoveryError, tl.errors.CaptureError)
+    True
+    >>> issubclass(RecoveryError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class BundleNotFinalizedError(CaptureError, RuntimeError):
-    """Raised when loading a bundle that was not finalized cleanly."""
+    """Raised when loading a bundle that was not finalized cleanly.
+
+    Examples
+    --------
+    >>> issubclass(BundleNotFinalizedError, tl.errors.CaptureError)
+    True
+    >>> issubclass(BundleNotFinalizedError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class RecordContextFieldError(ConfigurationError, AttributeError):
-    """Raised when a predicate asks for a field outside the RecordContext schema."""
+    """Raised when a predicate asks for a field outside the RecordContext schema.
+
+    Examples
+    --------
+    >>> issubclass(RecordContextFieldError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(RecordContextFieldError, tl.errors.TorchLensError)
+    True
+    """
 
     def __init__(self, field: str) -> None:
         """Initialize a missing RecordContext field error.
@@ -52,7 +100,15 @@ class RecordContextFieldError(ConfigurationError, AttributeError):
 
 
 class PredicateError(CaptureError, RuntimeError):
-    """Raised when a predicate returns an invalid value or fails during evaluation."""
+    """Raised when a predicate returns an invalid value or fails during evaluation.
+
+    Examples
+    --------
+    >>> issubclass(PredicateError, tl.errors.CaptureError)
+    True
+    >>> issubclass(PredicateError, tl.errors.TorchLensError)
+    True
+    """
 
     def __init__(
         self,

@@ -61,6 +61,7 @@ from .._finalize import (
 from .._options import (
     PADDLE_EXTRA_KWARG_POLICY,
     PADDLE_PREVIEW_TRACE_OPTION_POLICY,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
@@ -323,7 +324,7 @@ class PaddleBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
@@ -352,7 +353,7 @@ class PaddleBackend:
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
         )
         layers_to_save = capture_options._layers_to_save
@@ -368,7 +369,7 @@ class PaddleBackend:
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
@@ -386,7 +387,7 @@ class PaddleBackend:
         # keep_orphans/output_device/detach_saved_activations/save_arg_values/
         # save_code_context/save_rng_states/recurrence_detection/verbose/
         # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
-        # save_raw_output/save_visualizations are CaptureOptions-native fields: the
+        # save_transformed_output/save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
@@ -409,15 +410,14 @@ class PaddleBackend:
         grad_options = _default_if_missing(grad_options, None)
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
-        halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
+        halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
         if grad_options is not None and (intervene is not None or halt is not None):
             raise BackendUnsupportedError(
-                "paddle backend preview cannot combine grad_options with "
-                "trace(intervene=...) or trace(halt=...): derived-gradient "
-                "replay re-executes the forward without interventions, so the "
-                "matched intermediates would misrepresent the intervened "
-                "capture. Capture derived gradients in a separate plain trace.",
+                "paddle backend preview cannot combine grad_options with trace(intervene=...) "
+                "or trace(stop_after=...): derived-gradient replay re-executes the forward "
+                "without interventions, so the matched intermediates would misrepresent the "
+                "intervened capture. Capture derived gradients in a separate plain trace.",
                 code=PADDLE_REFUSAL_OPTION,
                 option="grad_options",
             )
@@ -479,7 +479,7 @@ class PaddleBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -558,7 +558,7 @@ class PaddleBackend:
                 trace.stop_reason = trace._graph_stop_frontier = halt_signal.reason
                 trace.transformed_output = None
             elif intervention_runtime is not None:
-                intervention_runtime.warn_if_zero_matches()
+                intervention_runtime.settle_unfired(trace)
             if halt_signal is None:
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None
@@ -1442,14 +1442,6 @@ class PaddleBackend:
 
         del session, policy
         return value
-
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy Paddle side-table labels between replacement tensors."""
-
-        del session
-        label = self.tensor_store.get_label(src)
-        if label is not None:
-            self.tensor_store.set_label(dst, label)
 
     def _normalize_input_args(self, input_args: object) -> list[Any]:
         """Normalize user Paddle input arguments to a positional list."""

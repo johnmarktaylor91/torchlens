@@ -50,7 +50,6 @@ def test_why_exact_on_event_lineage_fork_chain() -> None:
     assert "'child' = 'base' + [" in text
 
 
-@pytest.mark.smoke
 def test_why_diverged_refuses_additive_wording() -> None:
     base = _ready().fork()
     base.do(tl.when(tl.func("relu"), tl.scale(0.5)))
@@ -67,7 +66,6 @@ def test_why_diverged_refuses_additive_wording() -> None:
     assert "= 'base' +" not in text
 
 
-@pytest.mark.smoke
 def test_why_ordered_multiplicity_stays_distinct() -> None:
     base = _ready().fork()
     base.do(tl.when(tl.func("relu"), tl.scale(0.5)))
@@ -84,7 +82,6 @@ def test_why_ordered_multiplicity_stays_distinct() -> None:
     assert len(report_twice.member_suffix) == 1  # A-then-A != A
 
 
-@pytest.mark.smoke
 def test_why_container_basis_on_sweep_bundle() -> None:
     torch.manual_seed(0)
     model = _Tiny()

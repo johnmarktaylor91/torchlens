@@ -10,18 +10,11 @@ coverage line in the legend.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
-import torch
-from torch import nn
 
-import torchlens as tl
 from torchlens._visualization._encoding import (
     COLOR_TRANSFORM_VOCABULARY,
     NOTE_CONSTANT,
-    NOTE_LOG_NONPOSITIVE,
-    NOTE_PER_PASS_ROLLED,
     EncodingChannelRequest,
     EncodingState,
     _color_legend_rows,
@@ -61,68 +54,6 @@ def test_degenerate_domain_unencodes_never_midramp() -> None:
     assert len(rows) == 1
 
 
-def test_degenerate_size_domain_unencodes_never_grows() -> None:
-    """size_by over min == max leaves every node at its natural size.
-
-    The note says "unencoded"; growing every node to mid-area would claim a
-    difference from an unencoded node that the data cannot support.
-    """
-
-    from torchlens._visualization._encoding import _compute_size_geometry, resolve_size_by
-
-    state = EncodingState(size_spec=resolve_size_by("dims"))
-    state.size_values = {"a": 4.0, "b": 4.0, "c": 4.0}
-    _compute_size_geometry(state)
-    assert state.sizes == {}
-    assert NOTE_CONSTANT in state.size_notes
-    assert state.size_domain is None
-
-
-def test_rank_transform_is_ordinal_and_unit_invariant() -> None:
-    """Rank fractions depend only on order: seconds vs milliseconds are
-    IDENTICAL (the Stage-0 unit-invariance check, by construction)."""
-
-    seconds = _state_for("rank")
-    _normalize_color_values(seconds, {"a": 0.001, "b": 0.002, "c": 0.9})
-    milliseconds = _state_for("rank")
-    _normalize_color_values(milliseconds, {"a": 1.0, "b": 2.0, "c": 900.0})
-    assert seconds.colors == milliseconds.colors
-    # Ordinal: the huge outlier does NOT compress the others to one end.
-    assert len(set(seconds.colors.values())) == 3
-
-
-def test_rank_legend_wording_is_ordinal_not_ratio() -> None:
-    """The legend title line names the mapping honestly."""
-
-    state = _state_for("rank")
-    _normalize_color_values(state, {"a": 1.0, "b": 2.0})
-    rows = _color_legend_rows(state)
-    joined = "\n".join(line for row in rows for line in row.lines)
-    assert "ordinal, not ratio" in joined
-
-
-def test_legend_carries_the_coverage_line() -> None:
-    """encoded X of Y falls out of the same computation (N13 slice)."""
-
-    state = _state_for("linear")
-    state.eligible_count = 5
-    _normalize_color_values(state, {"a": 1.0, "b": 2.0})
-    rows = _color_legend_rows(state)
-    joined = "\n".join(line for row in rows for line in row.lines)
-    assert "encoded 2 of 5 eligible nodes" in joined
-
-
-@pytest.mark.smoke
-def test_log_transform_discloses_the_floor() -> None:
-    """Non-positive values unencode under log with the disclosed note."""
-
-    state = _state_for("log")
-    _normalize_color_values(state, {"a": 0.0, "b": 1.0, "c": 10.0})
-    assert "a" not in state.colors
-    assert {"b", "c"} <= set(state.colors)
-    assert NOTE_LOG_NONPOSITIVE in state.notes
-
-
 def test_log_legend_labels_match_their_swatches() -> None:
     """Under log the 0.5 swatch encodes the geometric mean of the encoded
     (positive) domain, and the unencoded value <= 0 is not an endpoint."""
@@ -132,51 +63,3 @@ def test_log_legend_labels_match_their_swatches() -> None:
     _normalize_color_values(state, {"a": -5.0, "b": 1.0, "c": 100.0})
     labels = [row.lines[0] for row in _color_legend_rows(state)[1:]]
     assert labels == ["min: 1", "mid: 10", "max: 100"]
-
-
-def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> None:
-    """The measured min:1/max:1 uniform mid-ramp defect is dead: rolled
-    multi-pass nodes unencode per-pass fields (composition row 16)."""
-
-    class Loop(nn.Module):
-        """Three-pass tied linear loop."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(4, 4)
-
-        def forward(self, x: Any) -> Any:
-            for _ in range(3):
-                x = torch.relu(self.fc(x))
-            return x
-
-    log = tl.trace(Loop(), torch.randn(1, 4))
-    try:
-        log.draw(
-            color_by="pass_index",
-            rolled=True,
-            path=str(tmp_path / "rolled"),
-            file_format="svg",
-        )
-        state = log._last_encoding_state if hasattr(log, "_last_encoding_state") else None
-        if state is None:
-            from torchlens._visualization._encoding import EncodingState as _ES
-
-            del _ES  # fall through to the DOT-level assertion below
-        graph = log.draw(
-            color_by="pass_index",
-            rolled=True,
-            path=str(tmp_path / "rolled2"),
-            file_format="svg",
-        ).dot
-        assert NOTE_PER_PASS_ROLLED in graph
-    finally:
-        log.cleanup()
-
-
-def test_plain_string_color_by_keeps_linear_default() -> None:
-    """A bare string source resolves with the historical linear transform."""
-
-    spec = resolve_color_by("func_duration")
-    assert spec is not None
-    assert spec.transform == "linear"

@@ -27,7 +27,6 @@ def _close_figures():
     plt.close("all")
 
 
-@pytest.mark.smoke
 def test_heatmap_visualizer_renders_supported_shapes_and_rejects_others() -> None:
     """heatmap() renders 2-d/3-d/4-d tensors within max_size and skips 1-d."""
 
@@ -45,7 +44,6 @@ def test_heatmap_visualizer_renders_supported_shapes_and_rejects_others() -> Non
     assert visualizer(torch.randn(5)) is None
 
 
-@pytest.mark.smoke
 def test_heatmap_constant_tensor_renders_flat_image() -> None:
     """A zero-range tensor normalizes to a flat single-color heatmap."""
 
@@ -57,7 +55,6 @@ def test_heatmap_constant_tensor_renders_flat_image() -> None:
     assert len(colors) == 1
 
 
-@pytest.mark.smoke
 def test_channel_grid_renders_first_batch_element_and_validates_n() -> None:
     """channel_grid() tiles channels, uses tensor[0] for batches, refuses n<1."""
 
@@ -76,7 +73,6 @@ def test_channel_grid_renders_first_batch_element_and_validates_n() -> None:
     assert visualizer(torch.randn(5, 5)) is None
 
 
-@pytest.mark.smoke
 def test_histogram_visualizer_draws_bars_and_skips_empty_input() -> None:
     """histogram() renders finite values and returns None with nothing to draw."""
 
@@ -94,7 +90,6 @@ def test_histogram_visualizer_draws_bars_and_skips_empty_input() -> None:
     assert visualizer(all_nan) is None
 
 
-@pytest.mark.smoke
 def test_montage_tiles_images_and_validates_inputs() -> None:
     """montage() centers thumbnails on a square grid and refuses bad inputs."""
 
@@ -110,7 +105,6 @@ def test_montage_tiles_images_and_validates_inputs() -> None:
     assert grid.size == (20, 10)
 
 
-@pytest.mark.smoke
 def test_text_table_escapes_truncates_and_counts_overflow() -> None:
     """text_table() escapes markup, truncates long items, and adds a +N row."""
 
@@ -125,7 +119,6 @@ def test_text_table_escapes_truncates_and_counts_overflow() -> None:
     assert "more" not in exact
 
 
-@pytest.mark.smoke
 def test_causal_trace_heatmap_renders_2d_scores_and_rejects_1d() -> None:
     """causal_trace_heatmap() plots clipped 2-d scores on matplotlib axes."""
 
@@ -159,7 +152,6 @@ class _ConvModel(nn.Module):
         return torch.relu(self.conv(x))
 
 
-@pytest.mark.smoke
 def test_layer_show_auto_routes_by_dimensionality() -> None:
     """Layer.show() picks hist/heatmap/channels/rgb from the payload shape."""
 
@@ -184,7 +176,6 @@ def test_layer_show_auto_routes_by_dimensionality() -> None:
         conv_layer.show(kind="sideways")
 
 
-@pytest.mark.smoke
 def test_show_tensor_handles_raw_tensors_int_dtypes_and_missing_payloads() -> None:
     """show_tensor accepts raw tensors, integer dtypes, and reports no-payload."""
 
@@ -200,6 +191,7 @@ def test_show_tensor_handles_raw_tensors_int_dtypes_and_missing_payloads() -> No
     assert message == "No saved tensor out is available to display."
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
     """A multi-pass Layer refuses show() with pass-selection guidance."""
 
@@ -224,24 +216,6 @@ def test_show_on_recurrent_aggregate_layer_requires_pass_selection() -> None:
     assert fig.axes[0].images
 
 
-def test_channel_grid_discloses_hidden_channels() -> None:
-    """A capped grid is visibly marked; it never renders as the full set."""
-
-    from PIL import ImageChops
-
-    base = torch.arange(2 * 3 * 3, dtype=torch.float32).reshape(2, 3, 3)
-    capped_source = torch.cat([base, base + 1.0, base + 2.0], dim=0)  # 6 channels
-    visualizer = tl.viz.nodes.channel_grid(n=2, max_size=64)
-
-    capped = visualizer(capped_source)
-    complete = visualizer(base)
-
-    assert capped is not None and complete is not None
-    # Same two tiles, but the capped render must disclose the 4 hidden channels.
-    assert ImageChops.difference(capped, complete).getbbox() is not None
-
-
-@pytest.mark.smoke
 def test_normalize_image_tensor_is_nonfinite_robust() -> None:
     """One bad pixel or a constant image never blacks out the whole tile."""
 

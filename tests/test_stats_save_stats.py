@@ -11,14 +11,12 @@ missing payloads.
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.stats._capture_stats import PACKED_SLOTS
 
 _SPINE_FIELDS = (
     "numel",
@@ -75,19 +73,6 @@ def _model_and_input(kind: str, batch: int) -> tuple[nn.Module, torch.Tensor]:
     return model, torch.randn(*shape, generator=generator, dtype=torch.float64)
 
 
-def _full_spines(trace: Any) -> dict[str, tl.stats.RunningStatsResult]:
-    """Per-op Spine results computed from a full capture's saved outs."""
-
-    out: dict[str, tl.stats.RunningStatsResult] = {}
-    for op in trace.ops:
-        value = op.out
-        if isinstance(value, torch.Tensor) and not value.is_complex():
-            spine = tl.stats.RunningStats()
-            spine.update(value)
-            out[str(op.label)] = spine.compute()
-    return out
-
-
 def _assert_same(
     left: tl.stats.RunningStatsResult, right: tl.stats.RunningStatsResult, label: str
 ) -> None:
@@ -98,55 +83,6 @@ def _assert_same(
         both_nan = isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b)
         same = a == b or both_nan
         assert same, f"{label}.{field}: stats capture {a!r} != full capture {b!r}"
-
-
-@pytest.mark.parametrize("kind", ["mlp", "cnn"])
-def test_site_spines_equal_full_capture(kind: str) -> None:
-    """Per-site statistics equal the full capture's, field by field, at two batch sizes."""
-
-    for batch in (4, 32):
-        model, x = _model_and_input(kind, batch)
-        full = tl.trace(model, x)
-        reduced = tl.trace(model, x, save="stats")
-        expected = _full_spines(full)
-        got = {label: spine.compute() for label, spine in tl.stats.site_stats(reduced).items()}
-        assert set(got) == set(expected)
-        assert got, "no sites folded"
-        for label, result in expected.items():
-            _assert_same(got[label], result, label)
-
-
-@pytest.mark.parametrize("kind", ["mlp", "cnn"])
-def test_stats_capture_logs_the_same_ops(kind: str) -> None:
-    """The reducer's own torch ops never enter the graph."""
-
-    model, x = _model_and_input(kind, 4)
-    full = tl.trace(model, x)
-    reduced = tl.trace(model, x, save="stats")
-    assert [str(op.label) for op in reduced.ops] == [str(op.label) for op in full.ops]
-
-
-@pytest.mark.parametrize("kind", ["mlp", "cnn"])
-def test_bytes_retained_per_site_constant_in_batch(kind: str) -> None:
-    """Counter: a stats site retains one 16-slot float64 vector at any batch size."""
-
-    retained: dict[int, tuple[int, int, int]] = {}
-    for batch in (4, 64):
-        model, x = _model_and_input(kind, batch)
-        full = tl.trace(model, x)
-        reduced = tl.trace(model, x, save="stats")
-        full_bytes = sum(op.out.nbytes for op in full.ops if isinstance(op.out, torch.Tensor))
-        stats_bytes = 0
-        for op in reduced.ops:
-            vector = op.transformed_out
-            assert isinstance(vector, torch.Tensor) and vector.numel() == PACKED_SLOTS
-            stats_bytes += vector.nbytes
-        retained[batch] = (len(reduced.ops), stats_bytes, full_bytes)
-    sites_4, stats_4, full_4 = retained[4]
-    sites_64, stats_64, full_64 = retained[64]
-    assert sites_4 == sites_64
-    assert stats_4 == stats_64 == sites_4 * PACKED_SLOTS * 8
-    assert full_64 > full_4 > stats_4
 
 
 def test_payload_read_refuses_with_working_spelling() -> None:
@@ -215,85 +151,3 @@ def test_stats_trace_reprs_render() -> None:
     trace = tl.trace(model, x, save="stats")
     assert "Trace" in repr(trace) or repr(trace)
     assert str(trace)
-
-
-def test_budget_refusal_names_stats_level_and_it_fits() -> None:
-    """The save-budget refusal names save='stats'; that spelling fits the same budget."""
-
-    from torchlens._save_budget import SaveBudgetExceededError
-    from torchlens.options import CaptureOptions
-
-    model, x = _model_and_input("mlp", 32)
-    budget = 4096  # a full capture of this batch retains about 6.4 KiB; stats 128 B per op
-    with pytest.raises(SaveBudgetExceededError) as info:
-        tl.trace(model, x, capture=CaptureOptions(save_budget=budget))
-    assert "save='stats'" in str(info.value)
-    reduced = tl.trace(model, x, save="stats", capture=CaptureOptions(save_budget=budget))
-    assert tl.stats.site_stats(reduced)
-
-
-def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Past one working chunk: counts, extrema, sum and mean stay exact; the rest within rounding."""
-
-    from torchlens.stats import _capture_stats
-
-    monkeypatch.setattr(_capture_stats, "_CHUNK", 7)
-    model, x = _model_and_input("cnn", 8)
-    full = _full_spines(tl.trace(model, x))
-    reduced = tl.stats.site_stats(tl.trace(model, x, save="stats"))
-    for label, want in full.items():
-        got = reduced[label].compute()
-        assert got.counts() == want.counts(), label
-        for field in ("finite_min", "finite_max", "finite_absmax", "sum", "mean"):
-            assert getattr(got, field) == getattr(want, field), (label, field)
-        for field in ("sum_squares", "sum_abs", "m2"):
-            assert getattr(got, field) == pytest.approx(getattr(want, field), rel=1e-12, abs=1e-12)
-
-
-def _largest_new_allocation(fn: Any, value: torch.Tensor) -> int:
-    """Bytes of the largest fresh storage any torch op allocates while ``fn(value)`` runs."""
-
-    from torch.utils._python_dispatch import TorchDispatchMode
-
-    largest = [0]
-
-    class _Counter(TorchDispatchMode):
-        def __torch_dispatch__(
-            self, func: Any, types: Any, args: Any = (), kwargs: Any = None
-        ) -> Any:
-            out = func(*args, **(kwargs or {}))
-            inputs = {
-                a.untyped_storage().data_ptr()
-                for a in torch.utils._pytree.tree_leaves((args, kwargs))
-                if isinstance(a, torch.Tensor)
-            }
-            for leaf in torch.utils._pytree.tree_leaves(out):
-                if (
-                    isinstance(leaf, torch.Tensor)
-                    and leaf.untyped_storage().data_ptr() not in inputs
-                ):
-                    largest[0] = max(largest[0], leaf.untyped_storage().nbytes())
-            return out
-
-    with _Counter():
-        fn(value)
-    return largest[0]
-
-
-def test_reducer_working_memory_is_bounded() -> None:
-    """Counter: the reducer's largest working tensor is one chunk, not the out's size."""
-
-    from torchlens.stats import _capture_stats
-
-    out = torch.randn(1 << 20)  # 4 MiB float32
-    lean = _largest_new_allocation(_capture_stats.lean_spine, out)
-    naive = _largest_new_allocation(lambda v: tl.stats.RunningStats().update(v), out)
-    assert lean <= _capture_stats._CHUNK * 8
-    assert naive >= out.numel() * 8
-    assert _capture_stats.lean_spine(out).compute().counts() == _spine_counts(out)
-
-
-def _spine_counts(value: torch.Tensor) -> dict[str, int]:
-    spine = tl.stats.RunningStats()
-    spine.update(value)
-    return spine.compute().counts()

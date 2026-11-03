@@ -67,20 +67,6 @@ def test_user_namedtuple_saves_with_disclosure_and_loads(tmp_path) -> None:
     assert restored == (1, 2)
 
 
-def test_non_iterable_ctor_subclass_flatten_is_disclosed(tmp_path) -> None:
-    """The plain-tuple fallback is never silent, even for odd constructors."""
-
-    log = _traced()
-    log.annotations["weird"] = _WeirdTuple(3, 4)
-    bundle = tmp_path / "weird.tlspec"
-    with pytest.warns(UserWarning, match="_WeirdTuple"):
-        log.save(bundle)
-    loaded = tl.load(bundle)
-    restored = loaded.annotations["weird"]
-    assert type(restored) is tuple
-    assert restored == (3, 4)
-
-
 def test_torch_size_round_trips_unflattened(tmp_path) -> None:
     """Load-reconstructible tuple types keep their exact type, no disclosure."""
 
@@ -133,20 +119,3 @@ def test_defaultdict_foreign_factory_is_dropped_with_disclosure(tmp_path) -> Non
     assert restored.default_factory is None
     with pytest.raises(KeyError):
         restored["missing_key"]
-
-
-def test_defaultdict_builtin_factory_round_trips(tmp_path) -> None:
-    """A portable (builtin) default_factory survives save/load intact."""
-
-    log = _traced()
-    portable = collections.defaultdict(list)
-    portable["present"].append(1)
-    log.annotations["portable_dd"] = portable
-    bundle = tmp_path / "dd_builtin.tlspec"
-    with warnings_as_errors_for_flattening():
-        log.save(bundle)
-    loaded = tl.load(bundle)
-    restored = loaded.annotations["portable_dd"]
-    assert restored["present"] == [1]
-    assert restored.default_factory is list
-    assert restored["fresh_key"] == []

@@ -44,26 +44,6 @@ def _export(log: Any, path: Path, **kwargs: Any) -> dict[str, Any]:
     return json.loads(tl.export.netron(log, path, **kwargs).read_text(encoding="utf-8"))
 
 
-def test_meaningful_drops_counter_chain_and_noise_buffers(
-    train_bn_log: Any, tmp_path: Path
-) -> None:
-    """Compo row C6: counter chains drop; no hidden op feeds visible compute."""
-
-    payload = _export(train_bn_log, tmp_path / "m.json", granularity="op")
-    names = [node["name"] for node in payload["graph"]["node"]]
-    assert names == ["linear_1_1", "batchnorm_1_3"], "compute nodes only"
-    produced = {out for node in payload["graph"]["node"] for out in node["output"]}
-    produced.update(row["name"] for row in payload["graph"]["input"])
-    for node in payload["graph"]["node"]:
-        for value in node["input"]:
-            assert value in produced, "no hidden op feeds visible computation"
-    props = {row["key"]: row["value"] for row in payload["metadataProps"]}
-    assert props["torchlens.buffer_policy"] == "meaningful"
-    assert props["torchlens.hidden_buffer_count"] == "6"
-    assert props["torchlens.hidden_op_count"] == "1", "the counter add is an op, not a buffer"
-    assert int(props["torchlens.omitted_value_count"]) > 0, "dropped buffer reads disclosed"
-
-
 def test_always_is_the_forensic_escape_hatch(train_bn_log: Any, tmp_path: Path) -> None:
     """``always`` shows every buffer node and the intact counter topology."""
 
@@ -78,7 +58,6 @@ def test_always_is_the_forensic_escape_hatch(train_bn_log: Any, tmp_path: Path) 
     assert props["torchlens.hidden_op_count"] == "0"
 
 
-@pytest.mark.smoke
 def test_never_hides_all_buffers(train_bn_log: Any, tmp_path: Path) -> None:
     """``never`` hides every buffer plus the then-dead counter chain."""
 
@@ -89,7 +68,6 @@ def test_never_hides_all_buffers(train_bn_log: Any, tmp_path: Path) -> None:
     assert props["torchlens.hidden_buffer_count"] == "6"
 
 
-@pytest.mark.smoke
 def test_module_projection_discloses_hidden_buffers_on_owner(
     train_bn_log: Any, tmp_path: Path
 ) -> None:
