@@ -38,6 +38,7 @@ PAGES: dict[str, str] = {
     "docs/recipes/generation_step_attribution.md": "transformers",
     "docs/recipes/trainable_backbone.md": "torchvision",
     "docs/recipes/tuned_lens.md": "tuned_lens",
+    "docs/recipes/jacobian_lens.md": "transformers",
     "docs/recipes/conditional_steering.md": "transformers",
     "docs/recipes/weightwatcher.md": "weightwatcher",
     "docs/recipes/quantus.md": "quantus",
@@ -102,8 +103,12 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: The probe-by-layer notebook measured 4.2 and 4.5 s run alone on one thread
 #: (at the boundary, and past the unmarked family's aggregate budget); the
 #: two-model CKA/RSA notebook measured 12.5 and 16.9 s.
+#: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
+#: batched autograd plus a jacrev check) and is listed to keep the unmarked
+#: family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
+        "docs/recipes/jacobian_lens.md",
         "docs/recipes/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
         "docs/recipes/tcav.md",
