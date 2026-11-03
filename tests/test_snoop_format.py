@@ -51,7 +51,7 @@ def _run_transcript(seed: int) -> str:
     torch.manual_seed(seed)
     x = torch.randn(2, 4)
     sink = io.StringIO()
-    tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, stats="sampled"))
+    tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, value_stats="sampled"))
     return sink.getvalue()
 
 

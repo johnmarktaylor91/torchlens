@@ -55,7 +55,7 @@ def test_echo_unknown_stats_rung_refuses() -> None:
     """The four measured cost classes are a closed vocabulary."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
-        normalize_echo(NarrationOptions(sites=True, stats="approximate"))
+        normalize_echo(NarrationOptions(sites=True, value_stats="approximate"))
     assert _code(excinfo) == "echo_argument_invalid"
 
 
@@ -128,7 +128,7 @@ def test_structure_only_with_stats_rung_refuses() -> None:
         tl.trace(
             OneOp(),
             torch.randn(2, 4),
-            narrate=NarrationOptions(sites=True, stats="sampled"),
+            narrate=NarrationOptions(sites=True, value_stats="sampled"),
             capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert _code(excinfo) == "echo_stats_requires_values"

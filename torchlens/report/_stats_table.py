@@ -71,7 +71,7 @@ _SORTABLE_FIELDS: dict[str, str | None] = {
 class StatsTableRow:
     """One per-op observation row.
 
-    ``stats`` is the frozen TensorStats record on ``state == 'ok'`` rows and
+    ``value_stats`` is the frozen TensorStats record on ``state == 'ok'`` rows and
     ``None`` otherwise; ``state`` names WHY numbers are absent.
     ``parent_mark`` carries the D28 ``= parent`` disclosure (the parent
     label) with its proof provenance in ``relation_basis`` -- populated
@@ -82,7 +82,7 @@ class StatsTableRow:
     label: str
     site_key: str | None
     state: str
-    stats: TensorStats | None
+    value_stats: TensorStats | None
     reason: str | None
     parent_mark: str | None = None
     relation_basis: str | None = None
@@ -142,13 +142,13 @@ class StatsTable:
         def value_of(row: StatsTableRow) -> float | None:
             """Extract the sort value from one row, or None."""
 
-            if row.stats is None:
+            if row.value_stats is None:
                 return None
             if by == "min":
-                return row.stats.finite_min
+                return row.value_stats.finite_min
             if by == "max":
-                return row.stats.finite_max
-            value = getattr(row.stats, by, None)
+                return row.value_stats.finite_max
+            value = getattr(row.value_stats, by, None)
             return None if value is None else float(value)
 
         valued = [(value_of(row), index, row) for index, row in enumerate(self.rows)]
@@ -160,7 +160,7 @@ class StatsTable:
         sampled = False
         if evidence_field is not None:
             sampled = any(
-                row.stats is not None and getattr(row.stats, evidence_field).is_sampled
+                row.value_stats is not None and getattr(row.value_stats, evidence_field).is_sampled
                 for row in ordered
             )
         disclosure = f"sorted by {by} ({'descending' if descending else 'ascending'})"
@@ -193,7 +193,7 @@ class StatsTable:
 
         records = []
         for row in self.rows:
-            stats = row.stats
+            stats = row.value_stats
             records.append(
                 {
                     "row_id": row.row_id,
@@ -345,7 +345,7 @@ def build_stats_table(
                 label=label,
                 site_key=getattr(op, "site_key", None),
                 state=state,
-                stats=stats,
+                value_stats=stats,
                 reason=reason,
                 parent_mark=parent_mark,
                 relation_basis=relation_basis,

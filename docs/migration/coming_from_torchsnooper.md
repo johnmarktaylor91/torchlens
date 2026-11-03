@@ -108,7 +108,7 @@ RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startsw
   `tl.debug.compare(trace_a, trace_b)` is the aligned, value-level upgrade of
   text-diffing two logs.
 
-## Cost ladder (stats=)
+## Cost ladder (value_stats=)
 
 Echo rides the record substrate or the trace substrate; metadata echo adds
 formatting and I/O only -- zero payload reads, zero device syncs by
@@ -121,7 +121,7 @@ construction (CI-enforced). Value stats are opt-in per rung:
 | `sampled` | `~`-marked moments from a bounded seeded budget with `sampled=k/N` evidence | roughly flat per line across tensor sizes | **no finiteness claim, ever** (a planted NaN in 12.6M elements is invisible to an 8k subsample) |
 | `exact` | full exact stats + exact nonfinite census | scales with bytes | typed refusal above the documented numel budget; the remedy names `sampled` |
 
-`track_nonfinite=True, narrate=..., stats="reuse"` is the recommended recipe for
+`track_nonfinite=True, narrate=..., value_stats="reuse"` is the recommended recipe for
 a numerically suspicious run. At full volume the terminal itself can dominate:
 prefer `sink="file.log"` and the opt-in bounds (`max_lines`) on big models.
 Substrate multipliers and per-line costs are measured by
