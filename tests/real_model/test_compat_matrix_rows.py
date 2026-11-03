@@ -15,8 +15,11 @@ measured on.
   ``parallelize_module``; transformers' ``tp_plan="auto"`` loading is not yet verified here.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
   package supports; skipped elsewhere with the reason. Each FlashAttention 4 call is one
-  ``autogradfunction`` boundary op (exit ``flash_attn.cute``) that validates through replay;
-  a companion test pins that the armed completeness witness sees no gap.
+  ``autogradfunction`` boundary call (exit ``flash_attn.cute``) that validates through replay
+  under ``torch.no_grad()``; a companion test pins that the armed completeness witness sees no
+  gap. With autograd enabled the kernel also returns its log-sum-exp, a second output of the
+  same call that does not depend on v, and forward validation reports that edge as
+  insensitive (strict xfail until the per-output rule is decided).
 """
 
 from __future__ import annotations
@@ -249,7 +252,7 @@ def _fa4_llama() -> tuple[torch.nn.Module, torch.Tensor]:
 
 
 def _fa4_boundary_ops(trace: tl.Trace) -> list[Any]:
-    """Return the FlashAttention 4 boundary ops of a trace (one per attention layer)."""
+    """Return the FlashAttention 4 boundary ops of a trace (one per returned tensor)."""
 
     return [
         op
@@ -259,48 +262,109 @@ def _fa4_boundary_ops(trace: tl.Trace) -> list[Any]:
     ]
 
 
+def _assert_fa4_boundary_shape(trace: tl.Trace, direct: torch.Tensor, num_layers: int) -> list[Any]:
+    """Assert the boundary ops of a ``flash_attention_4`` trace and return them.
+
+    Every boundary op has q, k and v (arg positions 0 to 2) as parents, belongs to a
+    ``self_attn`` call and replays through the Function's ``apply``; the output tensors
+    are exact and the kernel wrapper's allocation and detaches are not in the graph.
+    """
+
+    from torchlens.backends.torch._function_boundary import is_foreign_function_recorder
+
+    assert trace.outcome.status.name == "COMPLETE"
+    assert torch.equal(trace.output.logits, direct)
+    boundaries = _fa4_boundary_ops(trace)
+    calls = {op.func_call_id for op in boundaries}
+    assert len(calls) == num_layers, calls
+    for op in boundaries:
+        assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+        assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+        assert is_foreign_function_recorder(op.func)
+        assert "self_attn" in str(op.module_call_stack), op.module_call_stack
+        assert sorted(op.parent_arg_positions["args"]) == [0, 1, 2], op.parent_arg_positions
+        assert len(op.parents) == 3, op.parents
+    attention_interiors = [
+        op.label
+        for op in trace._layer_list
+        if op.type in {"empty", "detach"} and "self_attn" in str(op.module_call_stack)
+    ]
+    assert attention_interiors == []
+    return boundaries
+
+
 @pytest.mark.cuda
 @pytest.mark.heavy
 def test_flash_attention_4_capture_and_validate() -> None:
     """A Llama on ``attn_implementation="flash_attention_4"`` traces exactly and replays.
 
-    Each attention call is one ``autogradfunction`` boundary op whose parents are the
-    projected q, k and v and whose callable is the FlashAttention 4 Function's ``apply``;
-    the allocation and detaches inside the kernel wrapper are not in the graph, and forward
+    Under ``torch.no_grad()`` the kernel returns the attention output alone, so each
+    attention call is one ``autogradfunction`` boundary op whose parents are the projected
+    q, k and v and whose callable is the FlashAttention 4 Function's ``apply``; the
+    allocation and detaches inside the kernel wrapper are not in the graph, and forward
     validation (replay plus the dispatch census) passes with nothing exempted.
     """
 
     from torchlens._utils._torch_compat import HAS_FLASH_ATTENTION_4_INTERFACE
-    from torchlens.backends.torch._function_boundary import is_foreign_function_recorder
     from torchlens.validation import last_validation_failure
 
     assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     model, input_ids = _fa4_llama()
     with torch.no_grad():
         direct = model(input_ids=input_ids).logits
+        with pytest.warns(tl.errors.TorchLensWarning, match="foreign-kernel boundary op"):
+            trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    try:
+        boundaries = _assert_fa4_boundary_shape(trace, direct, model.config.num_hidden_layers)
+        assert len(boundaries) == model.config.num_hidden_layers, [op.label for op in boundaries]
+        assert all(op.children for op in boundaries), [op.label for op in boundaries]
+    finally:
+        trace.cleanup()
+    with torch.no_grad():
+        assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
+    assert last_validation_failure() is None
+
+
+_FA4_LSE_EDGE = (
+    "with autograd enabled FlashAttention 4 returns (out, lse); lse is a second output of the "
+    "same boundary call that depends on q and k only, and the perturbation check reports its "
+    "v edge (arg 2) as insensitive. A per-output or per-call rule for multi-output boundary "
+    "calls is a validation-integrity decision; until it is made this pins the failure."
+)
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA4_LSE_EDGE)
+def test_flash_attention_4_grad_enabled_validates() -> None:
+    """With autograd on, each call is two sibling ops (out, lse) and validation fails on lse.
+
+    The capture itself is right: both siblings share one call with q, k and v at arg
+    positions 0 to 2, the attention output (index 0, bfloat16) feeds the next op and the
+    log-sum-exp (index 1, float32) feeds nothing. Forward validation fails only on the lse
+    sibling's v edge; when a rule for that edge lands this xfail must be dropped.
+    """
+
+    model, input_ids = _fa4_llama()
+    with torch.no_grad():
+        direct = model(input_ids=input_ids).logits
     with pytest.warns(tl.errors.TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
     try:
-        assert trace.outcome.status.name == "COMPLETE"
-        assert torch.equal(trace.output.logits, direct)
-        boundaries = _fa4_boundary_ops(trace)
-        assert len(boundaries) == model.config.num_hidden_layers, [op.label for op in boundaries]
-        for op in boundaries:
-            assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
-            assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
-            assert is_foreign_function_recorder(op.func)
-            assert "self_attn" in str(op.module_call_stack), op.module_call_stack
-            assert len(op.parents) >= 3, op.parents
-        attention_interiors = [
-            op.label
-            for op in trace._layer_list
-            if op.type in {"empty", "detach"} and "self_attn" in str(op.module_call_stack)
+        boundaries = _assert_fa4_boundary_shape(trace, direct, model.config.num_hidden_layers)
+        assert len(boundaries) == 2 * model.config.num_hidden_layers, [
+            op.label for op in boundaries
         ]
-        assert attention_interiors == []
+        by_index = {op.multi_output_index for op in boundaries}
+        assert by_index == {0, 1}, by_index
+        for op in boundaries:
+            if op.multi_output_index == 0:
+                assert op.dtype == torch.bfloat16 and op.children, op.label
+            else:
+                assert op.dtype == torch.float32 and not op.children, op.label
     finally:
         trace.cleanup()
     assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
-    assert last_validation_failure() is None
 
 
 @pytest.mark.cuda
@@ -309,9 +373,10 @@ def test_flash_attention_4_boundary_owns_every_dispatch() -> None:
     """With the completeness witness armed, a ``flash_attention_4`` trace is verified.
 
     The boundary op owns every aten dispatch inside the FlashAttention 4 call (the detaches
-    and the output allocation), so the witness accounts for the whole forward: no
-    ``CaptureGapWarning``, ``verified`` is True and the diagnostics are empty. Companion of
-    the test above; together they pin that the former capture gap is closed, not hidden.
+    and the output allocations, autograd enabled), so the witness accounts for the whole
+    forward: no ``CaptureGapWarning``, ``verified`` is True and the diagnostics are empty.
+    Companion of the tests above; together they pin that the former capture gap is closed,
+    not hidden.
     """
 
     from torchlens import _state

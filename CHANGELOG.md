@@ -178,9 +178,12 @@
 - **capture**: FlashAttention 4 calls (`attn_implementation="flash_attention_4"`, the
   `flash_attn.cute` package) are captured as one `autogradfunction` boundary op per attention
   call (`transform_kind="autograd.Function"`, exit `flash_attn.cute`) whose parents are q, k
-  and v and which replays through the Function's `apply`, so `tl.validate(scope="forward")`
-  passes and the armed completeness witness verifies the trace; before, the trace recorded the
-  output allocation in place of the attention and validation failed on `bfs_completeness`.
+  and v and which replays through the Function's `apply`, so the armed completeness witness
+  verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
+  before, the trace recorded the output allocation in place of the attention and validation
+  failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
+  as a second output of the same call, which depends on q and k only, and forward validation
+  still reports that output's v edge as insensitive (a pinned, strict expected failure).
   `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
 - **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
   `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
