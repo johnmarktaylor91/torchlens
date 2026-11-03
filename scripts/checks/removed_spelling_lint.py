@@ -258,10 +258,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"ALL"}),
         "release history; records the old spellings as history by design",
     ),
-    "RESULTS.md": (
-        frozenset({"ALL"}),
-        "self-declared HISTORICAL SNAPSHOT benchmark record",
-    ),
     "benchmarks/perf_results_2026-05-14.md": (
         frozenset({"ALL"}),
         "dated benchmark results record (history exemption, S02-fix C3b)",
@@ -337,22 +333,22 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     # AGENTS.md and torchlens/AGENTS.md no longer carry this prose directly (2026-10-01
     # docs move: "docs: move agent reference material out of startup instructions" /
     # "docs: reserve nested instruction budget for module rules") -- it lives in the
-    # docs/agent-reference/ pages below, each row keeping the SAME allowed group(s).
-    "docs/agent-reference/package/public-surface.md": (
+    # docs/internal/agent-reference/ pages below, each row keeping the SAME allowed group(s).
+    "docs/internal/agent-reference/package/public-surface.md": (
         frozenset({"keep_op"}),
         "removal-record prose: keep_op/keep_module raise TypeError "
         "(moved from torchlens/AGENTS.md)",
     ),
-    "docs/agent-reference/critical-invariants.md": (
+    "docs/internal/agent-reference/critical-invariants.md": (
         frozenset({"keep_op"}),
         "removal-record prose: keep_op/keep_module raise TypeError (moved from AGENTS.md)",
     ),
-    "docs/agent-reference/current-2-x-surface.md": (
+    "docs/internal/agent-reference/current-2-x-surface.md": (
         frozenset({"patch"}),
         "removal-record prose: wrap_torch(patch_policy=, patch_modules=) are deprecated "
         "no-ops (moved from AGENTS.md)",
     ),
-    "docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md": (
+    "docs/internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md": (
         frozenset({"paper_era"}),
         "docs-lockstep incident's historical reference (moved from AGENTS.md)",
     ),

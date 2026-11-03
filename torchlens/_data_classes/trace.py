@@ -841,7 +841,6 @@ class Trace(TraceOutputMixin, TraceLike):
         backward_ready: bool = False,
         inference_only: bool = False,
         chunked_forward: bool = False,
-        module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
         measure_python_peak_memory: bool = False,
         distributed_witness: str = "none",
@@ -1019,7 +1018,6 @@ class Trace(TraceOutputMixin, TraceLike):
         self._options_backward_ready = backward_ready
         self._options_inference_only = inference_only
         self._options_chunk_size = chunked_forward
-        self._module_filter = module_filter
         self._options_emit_nvtx = emit_nvtx
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
@@ -3036,10 +3034,10 @@ class Trace(TraceOutputMixin, TraceLike):
     def save_new_outs(
         self,
         model: torch.nn.Module,
-        input_args: torch.Tensor | list[Any],
+        inputs: torch.Tensor | list[Any],
         input_kwargs: dict[Any, Any] | None = None,
-        layers_to_save: str | list[str] = "all",
-        grad_layers_to_save: str | list[str] | None = "all",
+        save: str | list[str] = "all",
+        save_grads: str | list[str] | None = "all",
         seed: int | None = None,
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
@@ -3049,10 +3047,10 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            grad_layers_to_save=grad_layers_to_save,
+            save=save,
+            save_grads=save_grads,
             seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,

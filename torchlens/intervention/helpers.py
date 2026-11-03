@@ -13,22 +13,24 @@ from .._errors import InvalidArgumentError
 from ._helper_internals import (
     _align_direction,
     _dim_outside_mean_vocabulary,
+    _donor_facet_slice,
     _enqueue_nondeterminism_note,
     _first_non_executable_arg,
     _helper_spec,
-    _live_capture_donor,
     _make_generator,
     _mean_ablate_axes,
     _members_dim_without_population,
     _non_executable_builtin_placeholder,
     _patch_source_identity,
     _population_mean_spec,
+    _resolve_patch_donor_site,
     _resolve_swap_value,
     _source_mean_spec,
     _source_tensor_or_out,
     _splice_module_spec,
     _swap_with_spec,
 )
+from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
 from .errors import (
     HookValueError,
     SpliceModuleDeviceError,
@@ -1145,61 +1147,23 @@ __all__ = [
 ]
 
 
-def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
-    """Resolve one PASS-QUALIFIED donor op on the patch source trace.
+def _patch_donor_value(source: Any, source_site: Any, fire_op: Any) -> tuple[Any, torch.Tensor]:
+    """Return ``(site_label, donor value)`` for one firing of a ``patch_from`` hook.
 
-    Prefers the fire context's pass-qualified ``label`` spelling, then
-    derives ``layer_label:pass_index``; a bare label reaching a multi-pass
-    donor site refuses typed (never guess a pass -- the historical bare
-    lookup silently returned the LAST pass). Returns ``(site_label, op)``.
+    The donor op is ``source_site`` on ``source`` when given, else the
+    pass-qualified op matching the firing site. A facet target (``tl.head`` /
+    ``tl.facet``) edits one slice of the home op, so the donor value is the SAME
+    facet view of the source value, never the whole home output.
     """
 
-    from .errors import HookValueError
-
-    context = layer_log if layer_log else {}
-    qualified = context.get("label")
-    bare = context.get("layer_label")
-    pass_index = context.get("pass_number")
-
-    site_label: Any = None
-    if isinstance(qualified, str) and ":" in qualified:
-        site_label = qualified
-    elif isinstance(bare, str) and isinstance(pass_index, int) and pass_index >= 1:
-        site_label = f"{bare}:{pass_index}"
-    elif bare is not None:
-        site_label = bare
-
-    source_site = None
-    if site_label is not None:
-        source_site = source._layer_dict_all_keys.get(site_label)
     if source_site is None:
-        live_label, source_site = _live_capture_donor(source, context)
-        if source_site is not None:
-            site_label = live_label
-    if source_site is None:
-        raise HookValueError(
-            f"patch_from source trace has no site {site_label!r}; patch "
-            "selections must resolve on sites the source captured "
-            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
-            "rerun or bound firing resolves to the source op captured at the "
-            "same position, only when that op has the same type and shape)."
-        )
-    if isinstance(site_label, str) and ":" not in site_label:
-        num_passes = int(getattr(source_site, "num_passes", 1) or 1)
-        if num_passes > 1:
-            layer_label = getattr(source_site, "layer_label", site_label)
-            spellings = ", ".join(f"'{layer_label}:{index}'" for index in range(1, num_passes + 1))
-            raise HookValueError(
-                f"patch_from donor site {site_label!r} is multi-pass "
-                f"({num_passes} passes) and the fire context carries no pass: "
-                "a donor pass is never guessed (the bare lookup historically "
-                "returned the LAST pass silently). Remedy: address one donor "
-                f"pass explicitly: {spellings}.",
-                code="patch_donor_pass_ambiguous",
-                site=site_label,
-                num_passes=num_passes,
-            )
-    return site_label, source_site
+        site_label, donor_op = _resolve_patch_donor_site(source, fire_op)
+    else:
+        site_label, donor_op = resolve_source_site(source, source_site)
+    value = donor_op.out
+    if not isinstance(value, torch.Tensor):
+        raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+    return site_label, _donor_facet_slice(source, donor_op, value)
 
 
 def patch_from(
@@ -1215,7 +1179,10 @@ def patch_from(
     recorded post-capture value at that same site (same-trace alignment is
     exact by construction: same index spaces). Combined with a Selection
     target, only the selected elements are patched (the engine's
-    edit-then-scatter contract).
+    edit-then-scatter contract). With a facet or head target
+    (``tl.head(h, "v")``, ``tl.facet(name)``) the donor is the same facet
+    view of the source's home-op value, so only that slice is copied;
+    ``positions=`` then indexes the facet slice's axes.
 
     PORTABILITY: ``opaque_audit`` (the shipped rule) — the spec's persisted
     args carry the source-trace IDENTITY (label + class + a stable id), never
@@ -1260,7 +1227,6 @@ def patch_from(
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
     """
 
-    from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
     if isinstance(source, SamplingPlan):
@@ -1292,15 +1258,7 @@ def patch_from(
             recurrent/weight-reused models.
             """
 
-            from .errors import HookValueError
-
-            if source_site is None:
-                site_label, donor_op = _resolve_patch_donor_site(source, ctx.op)
-            else:
-                site_label, donor_op = resolve_source_site(source, source_site)
-            value = donor_op.out
-            if not isinstance(value, torch.Tensor):
-                raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+            site_label, value = _patch_donor_value(source, source_site, ctx.op)
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
             if pairs is None:

@@ -15,7 +15,7 @@ DOCS: dict[str, str] = {
         
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, backward_ready:
+        model, input_args, input_kwargs, save, save_grads, seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
@@ -100,7 +100,7 @@ DOCS: dict[str, str] = {
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.
             A tuple or list spreads as positional arguments, as ``tl.trace``
-            binds ``input_args``, on every provider and with ``fast=True``
+            binds ``inputs``, on every provider and with ``fast=True``
             (on a live trace a one-parameter forward takes a multi-element
             sequence whole); any other value is the single argument, and
             ``{"args": [...], "kwargs": {...}}`` binds both.

@@ -32,6 +32,7 @@ _PUBLIC_SPINE_OPTION_VALUES: dict[str, Any] = {
     "inference_only": True,
     "chunk_size": 2,
     "chunk_paths": [("args", 0)],
+    "facets": (lambda record: {},),
 }
 
 _PREVIEW_POLICIES: tuple[PreviewTraceOptionPolicy, ...] = (
@@ -52,7 +53,6 @@ _PREVIEW_DEFAULT_OPTIONS: dict[str, Any] = {
     "save_source_context": False,
     "save_rng": False,
     "backward_ready": False,
-    "module_filter": None,
     "transform": None,
     "output_device": "same",
     "layer_visualizers": None,
@@ -72,7 +72,6 @@ _PREVIEW_UNSUPPORTED_VALUES: tuple[tuple[str, Any], ...] = (
     ("save_source_context", True),
     ("save_rng", True),
     ("backward_ready", True),
-    ("module_filter", lambda module: True),
     ("transform", lambda value: value),
     ("output_device", "cpu"),
     ("layer_visualizers", {"relu": object()}),

@@ -28,6 +28,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from ._capture_door import _capture_without_seed, _unfold_capture_options
 from ._recorder import Recorder
 from .types import ActivationRecord, Recording
 
@@ -64,7 +65,7 @@ NOT_RECORDED: tuple[str, ...] = (
 #: Recorder options that cannot hold across a generation, with the reason for each.
 _UNSUPPORTED_RECORD_OPTIONS: tuple[tuple[str, str], ...] = (
     ("intervene", "interventions inside a recorded generation are not built"),
-    ("halt", "a halted forward returns no output for generate() to continue from"),
+    ("stop_after", "a stopped forward returns no output for generate() to continue from"),
 )
 
 _ASSISTED_KEYS: tuple[str, ...] = ("assistant_model", "prompt_lookup_num_tokens")
@@ -496,11 +497,13 @@ def record_generation(
     settings = preflight_generation(
         model, input_args, prompt_kwargs, generate_kwargs, recorder_kwargs
     )
-    random_seed = recorder_kwargs.pop("seed", None)
+    capture = recorder_kwargs.get("capture")
+    random_seed = _unfold_capture_options(capture)["seed"]
     if random_seed is not None:
         # Seed once for the whole generation; a per-forward reseed would change
         # which tokens a sampled generation produces.
         torch.manual_seed(random_seed)
+        recorder_kwargs = {**recorder_kwargs, "capture": _capture_without_seed(capture)}
     settings = {
         **settings,
         "random_seed": random_seed,

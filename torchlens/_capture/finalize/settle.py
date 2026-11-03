@@ -39,8 +39,8 @@ class _RefreshRequest(NamedTuple):
     model: object
     input_args: Any | list[Any]
     input_kwargs: dict[Any, Any] | None
-    layers_to_save: str | list[Any]
-    grad_layers_to_save: str | list[Any] | None
+    save: str | list[Any]
+    save_grads: str | list[Any] | None
     seed: int | None
     run_until_plan: Any | None
     staged_plan: Any | None = None
@@ -49,10 +49,10 @@ class _RefreshRequest(NamedTuple):
 def save_new_outs(
     self: "Trace",
     model: object,
-    input_args: Any | list[Any],
+    inputs: Any | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
-    layers_to_save: str | list[Any] = "all",
-    grad_layers_to_save: str | list[Any] | None = "all",
+    save: str | list[Any] = "all",
+    save_grads: str | list[Any] | None = "all",
     seed: int | None = None,
     backward_ready: bool | None = None,
     _run_until_plan: Any | None = None,
@@ -73,10 +73,10 @@ def save_new_outs(
 
     ----------
         model: Model for which to save outs.
-        input_args: Either a single tensor input to the model, or list of input arguments.
+        inputs: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
-        layers_to_save: List of layers to save, using any valid lookup keys.
-        grad_layers_to_save: List of layers whose grads should be saved.
+        save: List of layers to save, using any valid lookup keys.
+        save_grads: List of layers whose grads should be saved.
         seed: Which random seed to use for deterministic reproduction.
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
@@ -92,10 +92,10 @@ def save_new_outs(
     """
     request = _RefreshRequest(
         model,
-        input_args,
+        inputs,
         input_kwargs,
-        layers_to_save,
-        grad_layers_to_save,
+        save,
+        save_grads,
         seed,
         _run_until_plan,
         _staged_plan,
@@ -127,10 +127,10 @@ def _refresh_under_backward_ready(
         save_new_outs(
             self,
             model=request.model,
-            input_args=request.input_args,
+            inputs=request.input_args,
             input_kwargs=request.input_kwargs,
-            layers_to_save=request.layers_to_save,
-            grad_layers_to_save=request.grad_layers_to_save,
+            save=request.save,
+            save_grads=request.save_grads,
             seed=request.seed,
             backward_ready=None,
             _run_until_plan=request.run_until_plan,
@@ -146,12 +146,12 @@ def _refresh_under_backward_ready(
 def _refresh_and_project(self: "Trace", request: _RefreshRequest) -> None:
     """Resolve the layer selections, run the refresh forward, then project it."""
 
-    layers_to_save = request.layers_to_save
-    grad_layers_to_save = request.grad_layers_to_save
+    save = request.save
+    save_grads = request.save_grads
     seed = request.seed
     _run_until_plan = request.run_until_plan
-    layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
-    grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
+    layer_nums_to_save = _get_op_nums_from_user_labels(self, save)
+    grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, save_grads)
     refresh_seed = self._options_seed if seed is None else seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
@@ -215,7 +215,7 @@ def _run_refresh_forward(
             layers_to_save="all" if resolved_layer_nums is None else "none",
             **_refresh_replay_config(self),
             save_grads=save_grads_policy not in (None, False),
-            grads_to_save=request.grad_layers_to_save,
+            grads_to_save=request.save_grads,
             seed=refresh_seed,
             num_context_lines=getattr(self, "num_context_lines", 7),
             optimizer=getattr(self, "_optimizer", None),

@@ -1,8 +1,11 @@
-# Migrating from Pyvene
+# Coming from pyvene
 
-Pyvene and its companion library pyreft are idle upstream. If you are starting new intervention
-work, or moving pyvene code to a maintained stack, this page maps each pyvene construct to its
-TorchLens spelling. [`pyvene.md`](pyvene.md) is the one-table summary.
+This page is for people who run interventions through pyvene's `IntervenableModel`, or who train
+them with pyreft, and want the TorchLens spelling of each construct. Pyvene's last release is
+v0.1.8 (2025-05-26) and the pyvene and pyreft repositories were last pushed in March 2026 (see
+[landscape.md](landscape.md)); the examples were written against the TorchLens version on this
+branch, and the pyvene fence needs a version-specific configured model, so it is collected and
+skipped by default. Checked 2026-11-03.
 
 The model shape is the same in both libraries: a site in the model, an intervention applied
 there, and a run. Pyvene configures sites as `(layer, component)` pairs on a wrapped model;
@@ -11,25 +14,14 @@ TorchLens names sites with selectors on the unwrapped model (`tl.module("transfo
 engine to run the edit with is on the [intervention explainers](../intervention_explainers.md#which-engine-when)
 page.
 
-| Pyvene construct | TorchLens spelling |
-| --- | --- |
-| `IntervenableConfig(representations=[{"layer": L, "component": C}])` | a selector: `tl.module(...)`, `tl.func(...)`, or a facet such as `tl.head(i, "q")` for one head's query |
-| `ZeroIntervention` | `tl.zero_ablate()` |
-| `VanillaIntervention` (interchange from a source run) | `tl.patch_from(source_trace, source_site=..., positions=...)` |
-| `AdditionIntervention`, steering vectors | `tl.steer(direction, strength=..., dim=...)` |
-| Generation under an intervention | `spec.bind(model).generate(ids, ...)` |
-| Fixed-direction subspace edits | `tl.project_out(direction, ...)`, `tl.project_onto(direction, ...)` |
-| `CollectIntervention` | a `save=` selector on `tl.trace` or `tl.record` |
-| SAE features as the intervention basis | `torchlens.bridge.sae.splice(..., latents_edit=...)` |
-| Trainable interventions (`RotatedSpaceIntervention`, DAS, pyreft) | your own training loop over a bound spec; TorchLens ships no trainer |
-| A trained pyreft `LoreftIntervention` (`ReftModel.save` directory) | `tl.bridge.pyreft.read(directory)`, then `fork.do(artifact.subspace(site, positions=mask), artifact.edit)` |
-| `unit_locations` | `positions=` on `tl.patch_from`, or `tl.units(label, indices)` |
-| Saving the configuration | `trace.save_intervention(path, level=...)` writes a `.tlspec/` recipe |
+## The same task in both
 
-## Zero-ablate a site
+The task: zero-ablate one site and read the counterfactual output.
 
-Pyvene side, for comparison only. Pyvene is not a TorchLens test dependency, so this fence is
-collected but never run; check the arguments against the pyvene version you have:
+### In pyvene
+
+Pyvene is not a TorchLens test dependency, so this fence is collected but never run; check the
+arguments against the pyvene version you have.
 
 ```python
 # migration-test: tool=pyvene expected=[[0.0, 0.0]]
@@ -58,7 +50,7 @@ _, counterfactual = intervenable(base=torch.tensor([[2.0, 3.0]]))
 RESULT = counterfactual.detach().tolist()
 ```
 
-The TorchLens side:
+### In TorchLens
 
 ```python
 # migration-test: tool=torchlens expected=[[0.0, 0.0]]
@@ -90,7 +82,32 @@ trace = tl.trace(
 RESULT = trace["linear_1_1"].out.detach().tolist()
 ```
 
-## Interchange from a source run
+## Translation table
+
+| Pyvene construct | TorchLens spelling |
+| --- | --- |
+| `IntervenableConfig(representations=[{"layer": L, "component": C}])` | a selector: `tl.module(...)`, `tl.func(...)`, or a facet such as `tl.head(i, "q")` for one head's query |
+| `ZeroIntervention` | `tl.zero_ablate()` |
+| `VanillaIntervention` (interchange from a source run) | `tl.patch_from(source_trace, source_site=..., positions=...)` |
+| `AdditionIntervention`, steering vectors | `tl.steer(direction, strength=..., dim=...)` |
+| Generation under an intervention | `spec.bind(model).generate(ids, ...)` |
+| Fixed-direction subspace edits | `tl.project_out(direction, ...)`, `tl.project_onto(direction, ...)` |
+| `CollectIntervention` | a `save=` selector on `tl.trace` or `tl.record` |
+| SAE features as the intervention basis | `torchlens.bridge.sae.splice(..., latents_edit=...)` |
+| Trainable interventions (`RotatedSpaceIntervention`, DAS, pyreft) | your own training loop over a bound spec; TorchLens ships no trainer |
+| A trained pyreft `LoreftIntervention` (`ReftModel.save` directory) | `tl.bridge.pyreft.read(directory)`, then `fork.do(artifact.subspace(site, positions=mask), artifact.edit)` |
+| `unit_locations` | `positions=` on `tl.patch_from`, or `tl.units(label, indices)` |
+| Saving the configuration | `trace.save_intervention(path, level=...)` writes a `.tlspec/` recipe |
+| Run a configured intervention | `tl.trace(model, x, intervene=tl.when(site, action))`, `trace.fork().do(site, action)`, or `tl.when(site, action).bind(model)` |
+| Zero and mean ablations | `tl.zero_ablate()`, `tl.mean_ablate(dim=...)`, `tl.mean_ablate(population, dim=None)` |
+| Resampling ablation | `torchlens.intervention.resample_rows_from(population, seed=..., axis=...)` |
+| Multi-source causal mediation templates | Several traces in a `Bundle`, with explicit metrics |
+| Dataset-level batched evaluation | Call the bound spec per batch, or `trace.run(model, batch, replay=tl.options.ReplayOptions(append=True))` when the graph is the same |
+| Model-family-specific abstractions | No exact equivalent |
+
+Worked TorchLens recipes for the rows above (each fence is executed):
+
+### Interchange from a source run
 
 Pyvene's interchange intervention writes a source run's representation into the base run.
 `tl.patch_from` does the same; `positions=` maps source positions to target positions, so the two
@@ -153,7 +170,7 @@ handle.remove()
 RESULT = torch.allclose(logits, reference, atol=1e-6)
 ```
 
-## Steering during generation
+### Steering during generation
 
 ```python
 # migration-test: tool=torchlens expected=True
@@ -186,7 +203,7 @@ A bound `generate` holds the edit across every decoding step, KV cache included;
 [KV-cache recipe](../guides/kv_cache.md) covers what that costs and how it differs from editing
 the cache itself.
 
-## Fixed-direction subspace edits
+### Fixed-direction subspace edits
 
 Pyvene's subspace interventions act on a learned or given basis. For a fixed direction,
 `tl.project_out` removes the component along it and `tl.project_onto` keeps only that component.
@@ -212,7 +229,7 @@ edited = tl.trace(
 RESULT = bool((edited.find_sites(site).first().out[:, 1] == 0).all())
 ```
 
-## SAE features as the intervention basis
+### SAE features as the intervention basis
 
 `torchlens.bridge.sae.splice` swaps a site's activation for an SAE's reconstruction and pushes the
 change downstream; `latents_edit=` edits the encoded features first. Any object with `encode` and
@@ -254,7 +271,7 @@ RESULT = [
 ]
 ```
 
-## Trainable interventions
+### Trainable interventions
 
 Pyvene and pyreft train intervention parameters (rotations, low-rank adapters) inside their own
 trainer. TorchLens does not ship a trainer: the training loop is yours. A bound spec runs the
@@ -301,7 +318,46 @@ RESULT = [
 The same hook trains inside `tl.trace(..., intervene=...)` when you also want the graph of one
 step, but a trace per step costs far more than the bound call.
 
-## Reading a pyreft LoReFT artifact
+### Batched evaluation over a dataset
+
+Pyvene evaluates interventions batch by batch inside its own loop. In TorchLens, either call the
+bound spec on each batch (no trace), or trace the first batch with the intervention and append
+further batches with `trace.run(model, batch, replay=tl.options.ReplayOptions(append=True))` when
+the graph is the same for every batch. The append constraints are on the
+[intervention explainers](../intervention_explainers.md#append-constraints) page.
+
+## What TorchLens adds
+
+- Edits on the unwrapped model: no `IntervenableModel` wrapper, and a selector names the site
+  (`tl.module`, `tl.func`, `tl.head(i, "q")`).
+- Several engines for one edit (`tl.trace(..., intervene=...)`, `trace.fork().do(...)`,
+  `spec.bind(model)`), compared on the
+  [intervention explainers](../intervention_explainers.md#which-engine-when) page.
+- Interventions recorded with the trace: `trace.save_intervention(path, level=...)` writes a
+  `.tlspec/` recipe. TorchLens persists recipes, not full experiment notebooks.
+- Seeded, recorded resampling and population ablations
+  (`torchlens.intervention.resample_rows_from`, `tl.mean_ablate`; see
+  [stochastic and population edits](../stochastic_edits.md)).
+- Replay verification of the recorded graph (`tl.validate`).
+
+## What pyvene does that TorchLens does not
+
+- Trained interventions: rotated-space interventions (DAS) and pyreft adapters train inside
+  pyvene's and pyreft's own trainers. TorchLens ships no trainer; the training loop is yours (see
+  Trainable interventions above).
+- Multi-source causal-mediation templates: TorchLens has no packaged template; use several traces
+  in a `Bundle` with explicit metrics.
+- Model-family-specific abstractions: no exact equivalent; TorchLens stays PyTorch-op first.
+- Pyvene and pyreft are idle upstream. If you are moving pyvene code to a maintained stack, this
+  page maps each construct; for other destinations see [landscape.md](landscape.md).
+
+## Using both
+
+### pyvene feeds TorchLens
+
+For pyvene itself there is no bridge: a pyvene intervention object is not read back, so rewrite it
+with the table above. For a trained pyreft LoReFT intervention there is a reader,
+`tl.bridge.pyreft.read`:
 
 TorchLens does not train a LoReFT intervention, but it reads one pyreft trained and applies it.
 `tl.bridge.pyreft.read(directory)` takes the directory `ReftModel.save` wrote (`config.json` plus
@@ -377,10 +433,30 @@ RESULT = [
 ]
 ```
 
-## Batched evaluation over a dataset
+### TorchLens feeds pyvene
 
-Pyvene evaluates interventions batch by batch inside its own loop. In TorchLens, either call the
-bound spec on each batch (no trace), or trace the first batch with the intervention and append
-further batches with `trace.run(model, batch, replay=tl.options.ReplayOptions(append=True))` when
-the graph is the same for every batch. The append constraints are on the
-[intervention explainers](../intervention_explainers.md#append-constraints) page.
+There is no bridge. Tensors from `trace[label].out` are plain `torch.Tensor` objects and can be
+passed to pyvene as source representations by hand.
+
+## Semantic differences
+
+- Pyvene's interchange intervention writes a source run's representation into the base run;
+  `tl.patch_from` takes `positions=` to map source positions to target positions, so the two
+  prompts may differ in length (checked against plain forward hooks in the recipe above).
+- A bound `generate` holds the edit across every decoding step, KV cache included; the
+  [KV-cache recipe](../guides/kv_cache.md) covers what that costs.
+- A capture-time `intervene=` and a bound spec give the same output for a graph-stable edit:
+
+```python
+# migration-test: tool=torchlens expected=True
+import torch
+from torch import nn
+import torchlens as tl
+
+torch.manual_seed(0)
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+x = torch.randn(2, 4)
+spec = tl.when(tl.module("1"), tl.zero_ablate())
+trace = tl.trace(model, x, save=tl.module("2"), intervene=spec)
+RESULT = torch.equal(trace.find_sites(tl.module("2")).first().out, spec.bind(model)(x))
+```

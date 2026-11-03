@@ -50,7 +50,7 @@ _LATENTS_WARN_BYTES = 256 * 1024**2
 #: Warning codes already emitted this session (each code fires once).
 _WARNED_CODES: set[str] = set()
 
-_DOCS = "docs/recipes/pretrained_saes.md"
+_DOCS = "docs/field-guide/pretrained_saes.md"
 
 
 def _keep_leading_positions(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -292,3 +293,115 @@ def test_bundle_diff_svg_accessibility_escapes_quotes(tmp_path: Path) -> None:
     svg_text = svg_path.read_text(encoding="utf-8")
     assert 'aria-label="left &quot;quoted&quot; versus right"' in svg_text
     ElementTree.fromstring(svg_text)
+
+
+def _diff_bundle_with_marked_column() -> tl.Bundle:
+    """A clean/patched bundle whose patched column carries non-zero deltas."""
+
+    torch.manual_seed(0)
+    model = torch.nn.Sequential(
+        torch.nn.Linear(4, 6), torch.nn.ReLU(), torch.nn.Linear(6, 6), torch.nn.Tanh()
+    ).eval()
+    clean = tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
+    patched = clean.fork("patched").do(
+        tl.module("1"),
+        tl.scale(0.5),
+        intervention=tl.options.InterventionOptions(engine="replay", confirm_mutation=True),
+    )
+    return tl.Bundle({"clean": clean, "patched": patched}, baseline="clean")
+
+
+def test_bundle_diff_dot_keeps_each_side_in_its_own_column_cluster() -> None:
+    """DOT source: one global ranking, so pair rank constraints never empty the side clusters.
+
+    Runs without Graphviz. The pair alignment emits ``rank=same`` subgraphs at
+    the root; without ``newrank=true`` dot deletes every paired node from its
+    side cluster and drops both clusters, which drew the white baseline column
+    as an unlabeled duplicate beside the marked one.
+    """
+
+    left_layers = [
+        SimpleNamespace(layer_label=f"op_{i}", func_name="op", parents=[f"op_{i - 1}"], shape=None)
+        for i in range(3)
+    ]
+    right_layers = [
+        SimpleNamespace(layer_label=f"op_{i}", func_name="op", parents=[f"op_{i - 1}"], shape=None)
+        for i in range(3)
+    ]
+    bundle = {
+        "clean": SimpleNamespace(_layer_list=left_layers),
+        "patched": SimpleNamespace(_layer_list=right_layers),
+    }
+    dot = _build_dot(
+        pairs=list(zip(left_layers, right_layers, strict=True)),
+        bundle=bundle,
+        left_name="clean",
+        right_name="patched",
+        metric_name="relative_l2",
+        tensor_field="out",
+        delta_map={f"op_{i}": {"clean": 0.0, "patched": float(i + 1)} for i in range(3)},
+        layer_to_node={f"op_{i}": f"op_{i}" for i in range(3)},
+        theme_name="paper",
+        include_unmatched=False,
+    )
+    source = dot.source
+    assert re.search(r"graph \[[^\]]*\bnewrank=true\b", source)
+    assert source.count("subgraph cluster_clean {") == 1
+    assert source.count("subgraph cluster_intervention {") == 1
+    # Each side's nodes are declared exactly once, inside that side's cluster.
+    for side in ("clean", "intervention"):
+        body = source.split(f"subgraph cluster_{side} {{", 1)[1].split("\n\t}", 1)[0]
+        for i in range(3):
+            assert f"\t{side}_op_{i} [label=" in body
+            assert source.count(f"\t{side}_op_{i} [label=") == 1
+
+
+def test_bundle_diff_render_draws_two_titled_columns(tmp_path: Path) -> None:
+    """Rendered SVG: each member is one framed, titled column holding only its own nodes."""
+
+    import shutil
+
+    if shutil.which("dot") is None:
+        pytest.skip("Graphviz dot is not installed; the DOT-source test covers the layout fix")
+    bundle = _diff_bundle_with_marked_column()
+    outpath = tmp_path / "diff_columns"
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        bundle.draw(graph="diff", path=str(outpath))
+    messages = " ".join(str(item.message) for item in recorded)
+    assert "deleted from cluster" not in messages
+    assert "removing empty cluster" not in messages
+
+    root = ElementTree.fromstring(outpath.with_suffix(".svg").read_text(encoding="utf-8"))
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    clusters: dict[str, tuple[float, float]] = {}
+    nodes: dict[str, float] = {}
+    for group in root.iter("{http://www.w3.org/2000/svg}g"):
+        title = group.find("svg:title", ns)
+        if title is None or title.text is None:
+            continue
+        xs = [
+            float(point.split(",")[0])
+            for shape in [
+                *group.iter(f"{{{ns['svg']}}}polygon"),
+                *group.iter(f"{{{ns['svg']}}}path"),
+            ]
+            for point in re.findall(
+                r"-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?", shape.get("points") or shape.get("d") or ""
+            )
+        ]
+        if group.get("class") == "cluster" and xs:
+            clusters[title.text] = (min(xs), max(xs))
+            texts = [text.text for text in group.findall("svg:text", ns)]
+            assert any(texts), title.text
+        elif group.get("class") == "node" and xs:
+            nodes[title.text] = (min(xs) + max(xs)) / 2
+    assert {"cluster_clean", "cluster_intervention"} <= set(clusters)
+    clean_lo, clean_hi = clusters["cluster_clean"]
+    patched_lo, patched_hi = clusters["cluster_intervention"]
+    assert clean_hi <= patched_lo or patched_hi <= clean_lo  # two disjoint columns
+    clean_nodes = {name: x for name, x in nodes.items() if name.startswith("clean_")}
+    patched_nodes = {name: x for name, x in nodes.items() if name.startswith("intervention_")}
+    assert clean_nodes and len(clean_nodes) == len(patched_nodes)
+    assert all(clean_lo <= x <= clean_hi for x in clean_nodes.values())
+    assert all(patched_lo <= x <= patched_hi for x in patched_nodes.values())

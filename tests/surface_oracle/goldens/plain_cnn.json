@@ -3786,7 +3786,6 @@
     "2": 3,
     "3": 4
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 2,
@@ -7953,7 +7952,6 @@
     "2": 3,
     "3": 4
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 2,
@@ -12062,7 +12060,6 @@
     "2": 3,
     "3": 4
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 2,
@@ -16223,7 +16220,6 @@
     "2": 3,
     "3": 4
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 2,
@@ -20250,7 +20246,6 @@
     "2": 3,
     "3": 4
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 1,
    "_num_ops": 2,

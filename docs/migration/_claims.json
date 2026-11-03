@@ -1354,6 +1354,172 @@
       },
       "last_verified": "2026-10-14",
       "owner": "maintainers"
+    },
+    {
+      "id": "artifact-compatibility-window",
+      "competitor": "none (self-claim; the public artifact-compatibility window)",
+      "neutral_fact": "The ruled window is five years for artifacts written by TorchLens 3.x, promised only when three prerequisites are green: typed refusal of unknown fields in both directions (in place: torchlens/_io/state_contract.py, tests/test_tlspec_unified.py), a state-capable migration protocol that upgrades older artifacts (not built: no migration tool in the tree, MIGRATIONS.md refuses 2.x files), and a release gate in which an already-published reader loads artifacts written by the current tree (not run: .github/workflows install no older torchlens release; the goldens prove only the current reader on older artifacts). Checked 2026-11-03 against the integration train. Files written by torchlens 2.x are outside the window.",
+      "allowed_public_wording": "'The intended compatibility window for artifacts written by TorchLens 3.x is five years; it becomes a promise when its prerequisites are green' (MIGRATIONS.md, Compatibility window), with the three prerequisites and their status in the same section.",
+      "narrowed_scope_wording": "'Within 3.x a newer reader loads older 3.x artifacts; anything it cannot read refuses with a typed error.'",
+      "limitation_wording": "No compatibility-window number.",
+      "required_credit": null,
+      "evidence_refs": [
+        "MIGRATIONS.md (Compatibility window)",
+        "torchlens/_io/state_contract.py",
+        "tests/test_tlspec_unified.py::test_unified_manifest_forward_compat_hard_fail_for_newer_bundle",
+        "tests/test_load_refuses_saved_by_2x.py",
+        "https://openxla.org/stablehlo/compatibility (the five-year precedent; checked 2026-08-26)",
+        "maintainer review record (private)"
+      ],
+      "tl_side_gates": [
+        "a state-capable artifact migration protocol (blocks the unconditional five-year promise)",
+        "an older-reader forward-load release gate (blocks the unconditional five-year promise)"
+      ],
+      "lint": "FAIL an unconditional five-year (or any other number of years) loadability promise for artifacts unless the same paragraph names the prerequisites; FAIL the 24-month fallback wording, which was not chosen.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "MIGRATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\b(five|5|ten|10|three|3)[- ]years?\\b[^.]{0,120}\\b(artifacts?|\\.tlspec|load(?:able|s|ed)?)\\b|\\b(artifacts?|\\.tlspec)\\b[^.]{0,120}\\b(five|5|ten|10|three|3)[- ]years?\\b",
+            "require": [
+              "prerequisite"
+            ]
+          },
+          {
+            "forbid": "\\b(24|twenty-four)[- ]months?\\b[^.]{0,80}\\b(artifacts?|\\.tlspec|compatib\\w+|load\\w*)\\b|\\b(artifacts?|\\.tlspec|compatib\\w+|load\\w*)\\b[^.]{0,80}\\b(24|twenty-four)[- ]months?\\b"
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
+    },
+    {
+      "id": "comparison-landscape-currency",
+      "competitor": "TransformerLens; nnsight; interp-engine; vllm-lens; EasySteer; VLM-Lens; pyvene; pyreft; penzai; treescope; SAELens",
+      "neutral_fact": "Status checked 2026-11-03 (GitHub repository and release metadata, plus the pages named): TransformerLens v4.0.0 2026-09-21 and v4.3.0 2026-10-23, TransformerBridge the main model class from 4.0; nnsight 0.8 announced 2026-09-09, v0.8.2 2026-11-02; Neuronpedia interp-engine announced 2026-08-31, independent review 2026-09-02 found a raw-versus-normed MLP wrong-tensor bug; vllm-lens (UKGovernmentBEIS) pushed 2026-10-13; EasySteer v0.29.0 2026-09-10; VLM-Lens EMNLP 2025 system demonstration, last push 2026-04-25; pyvene last push 2026-03-06 (last release v0.1.8 2025-05-26), pyreft last push 2026-03-05 (idle); penzai archived, last push 2025-06-22; treescope last release v0.1.10 2025-08-08, last push 2026-06-18 (idle); SAELens v6.54.14 2026-11-02. Production monitors use trained probes, SAEs are a discovery instrument (Goodfire probe monitors, 2026-09-09; arXiv:2610.12445, 2026-10-08).",
+      "allowed_public_wording": "The rows of docs/migration/landscape.md, each with its checked date and source; 'idle' means no public push in the eight months before the check, 'archived' is the repository's own flag.",
+      "narrowed_scope_wording": "Name the tool and link its migration page without a status word.",
+      "limitation_wording": "No status claim about another tool.",
+      "required_credit": "nnsight's vLLM, tensor-parallel, quantization and .source support; TransformerLens's TransformerBridge; Neuronpedia's interp-engine; UK AISI's vllm-lens; EasySteer; VLM-Lens (EMNLP 2025).",
+      "evidence_refs": [
+        "https://github.com/TransformerLensOrg/TransformerLens/releases/tag/v4.0.0 (2026-09-21; checked 2026-11-03)",
+        "https://nnsight.net/blog/2026/09/09/nnsight-08/ (2026-09-09; v0.8.2 release 2026-11-02; checked 2026-11-03)",
+        "https://www.neuronpedia.org/blog/interp-engine (2026-08-31; checked 2026-11-03)",
+        "https://gkoreli.com/oss-radar-06-interp-engine (2026-09-02; checked 2026-11-03)",
+        "https://github.com/UKGovernmentBEIS/vllm-lens (pushed 2026-10-13; checked 2026-11-03)",
+        "https://github.com/ZJU-REAL/EasySteer (v0.29.0 2026-09-10; checked 2026-11-03)",
+        "https://aclanthology.org/2025.emnlp-demos.68/ (VLM-Lens; checked 2026-11-03)",
+        "https://github.com/compling-wat/vlm-lens (pushed 2026-04-25; checked 2026-11-03)",
+        "https://github.com/stanfordnlp/pyvene (pushed 2026-03-06; checked 2026-11-03)",
+        "https://github.com/stanfordnlp/pyreft (pushed 2026-03-05; checked 2026-11-03)",
+        "https://github.com/google-deepmind/penzai (archived; last push 2025-06-22; checked 2026-11-03)",
+        "https://github.com/google-deepmind/treescope (v0.1.10 2025-08-08; pushed 2026-06-18; checked 2026-11-03)",
+        "https://github.com/jbloomAus/SAELens (v6.54.14 2026-11-02; checked 2026-11-03)",
+        "https://www.goodfire.com/blog/probe-monitors-101 (2026-09-09)",
+        "https://arxiv.org/abs/2610.12445 (2026-10-08)",
+        "docs/migration/landscape.md"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL describing TransformerLens 2.x or 3.x, or nnsight 0.7, as the current release; FAIL calling penzai active or treescope, pyvene or pyreft actively developed; FAIL 'SAEs for monitoring' as the recommended production instrument.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "MIGRATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\b(transformerlens|tlens)\\s+[23]\\.\\d*x?\\b[^.]{0,40}\\b(is|remains|as)\\s+(the\\s+)?(current|latest|newest)\\b"
+          },
+          {
+            "forbid": "\\bnnsight\\s+0\\.7(\\.\\d+)?\\b[^.]{0,40}\\b(is|remains)\\s+(the\\s+)?(current|latest|newest|stable)\\b"
+          },
+          {
+            "forbid": "\\b(penzai|treescope|pyvene|pyreft)\\b[^.]{0,40}\\b(is|are|remains?)\\s+(actively\\s+(developed|maintained)|under\\s+active\\s+development)\\b"
+          },
+          {
+            "forbid": "\\b(sparse autoencoders?|saes?)\\b[^.]{0,60}\\b(the|a)\\s+(production|recommended)\\s+(monitor\\w*|instrument\\s+for\\s+monitoring)\\b"
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
+    },
+    {
+      "id": "attribution-destinations",
+      "competitor": "Captum; inseq",
+      "neutral_fact": "Captum is where TCAV, influence functions and adversarial attacks live; Captum and inseq provide DeepLift and LIME for text. TorchLens ships a gradient and perturbation attribution set in tl.attribution and a TCAV docs recipe with a causal check, and no influence functions, attacks or text DeepLift and LIME (rulings U20.8 and U22.5, 2026-10-11).",
+      "allowed_public_wording": "'For influence functions and adversarial attacks, use Captum; for DeepLift and LIME on text, use Captum or inseq.'",
+      "narrowed_scope_wording": "Name Captum (and inseq for text) as the destination without describing TorchLens's attribution set.",
+      "limitation_wording": "No attribution-breadth claims.",
+      "required_credit": "Captum (TCAV, influence functions, attacks, DeepLift, LIME); inseq (text attribution).",
+      "evidence_refs": [
+        "docs/migration/where_to_go_instead.md",
+        "docs/field-guide/tcav.md"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL a sentence saying TorchLens ships, provides or implements influence functions, adversarial attacks, or DeepLift or LIME for text.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\btorchlens\\b[^.]{0,60}\\b(ships|provides|implements|includes|offers|supports|computes)\\b[^.]{0,60}\\b(influence\\s+functions?|adversarial\\s+attacks?)\\b",
+            "require": [
+              "\\b(no|not|never|without)\\b[^.]{0,40}\\b(influence|attacks?)\\b|\\buse\\s+captum\\b"
+            ]
+          },
+          {
+            "forbid": "\\btorchlens\\b[^.]{0,60}\\b(ships|provides|implements|includes|offers|supports|computes)\\b[^.]{0,60}\\b(deep\\s?lift|lime)\\b[^.]{0,40}\\btext\\b",
+            "require": [
+              "\\b(no|not|never|without)\\b[^.]{0,40}\\b(deep\\s?lift|lime)\\b|\\bcaptum\\s+(or|and)\\s+inseq\\b"
+            ]
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
+    },
+    {
+      "id": "transformers-5-supported-version",
+      "competitor": "none (self-claim about Hugging Face transformers 5 support)",
+      "neutral_fact": "transformers 5.x is called supported only with the tested version named; until the 5.x leg is green and the BERT and DistilBERT collapse goldens are re-recorded it is a candidate (ruling forks.4, 2026-10-12).",
+      "allowed_public_wording": "'Tested with transformers 5.N' (the version the green leg ran), or 'transformers 5 is a candidate'.",
+      "narrowed_scope_wording": "'transformers 5 is a candidate; the tested band is 4.x.'",
+      "limitation_wording": "No transformers 5 claim.",
+      "required_credit": null,
+      "evidence_refs": [
+        "pyproject.toml (hf extra band)"
+      ],
+      "tl_side_gates": [],
+      "lint": "FAIL 'transformers 5' or 'transformers 5.x' called supported without a named 5.N version.",
+      "check": {
+        "scope": [
+          "README.md",
+          "LIMITATIONS.md",
+          "docs/**/*.md",
+          "CHANGELOG.md#unreleased"
+        ],
+        "rules": [
+          {
+            "forbid": "\\btransformers\\s+(v)?5(\\.x)?\\b(?!\\.\\d)[^.]{0,40}\\bsupport(ed|s)?\\b|\\bsupport\\w*\\s+(for\\s+)?transformers\\s+(v)?5(\\.x)?\\b(?!\\.\\d)"
+          }
+        ]
+      },
+      "last_verified": "2026-11-03",
+      "owner": "maintainers"
     }
   ],
   "check_block_line": "Every check pass over dossiers/boundary copy emits exactly one line: 'CLAIM-LINT: <n_run> run / <n_fail> fail [ids: ...]' (N5).",
