@@ -28,9 +28,8 @@ if TYPE_CHECKING:
 from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
-from .._selection._site_refusals import multipass_bare_label_message
 from .._selection.errors import AmbiguousSiteError
-from .._selection.selectors import BaseSelector, LabelSelector
+from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -212,10 +211,8 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
-        if (tokened := _resolve_pass_token(self, ix)) is not None:
-            return tokened
-        if ix in self._layer_logs:
-            return _layer_label_op(self, ix)
+        if (record := _layer_label_lookup(self, ix)) is not None:
+            return record
 
         ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
         if ix in ambiguous_lookup_keys:
@@ -293,47 +290,27 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     raise KeyError(ix)
 
 
-def _resolve_pass_token(self: "Trace", ix: str) -> Any:
-    """Resolve ``label:last`` / ``label:all`` through the label selector, else ``None``.
+def _layer_label_lookup(self: "Trace", ix: str) -> Any:
+    """Resolve a layer label, bare or pass-tokened, to its record; ``None`` when ``ix`` names no layer.
 
-    ``label:last`` names the final pass of a layer and returns that Op;
-    ``label:all`` names every pass and returns the Selection. A spelling whose
-    base is no layer of this trace returns ``None`` so the ordinary cascade
-    answers (and refuses) as it would for any unknown key.
+    A bare label of a single-pass layer returns that Op. ``label:last`` returns
+    the final pass and ``label:all`` the Selection of every pass. A bare label of
+    a multi-pass layer goes through the label selector, whose refusal
+    (``multipass_bare_label_ambiguous`` on ``AmbiguousSiteError``, the same one
+    ``tl.label`` raises) teaches ``label:N``, ``label:last``, ``label:all`` and
+    ``trace.layers[label]``; ``trace[...]`` never returns a Layer.
     """
+
+    from .._selection.selectors import LabelSelector
 
     token = split_pass_token(ix)
-    if token is None or not self.ops.resolve_all(token[0]):
+    base = ix if token is None else token[0]
+    ops = self.ops.resolve_all(base)
+    if not ops:
         return None
-    return _getitem_selector(self, LabelSelector(ix))
-
-
-def _layer_label_op(self: "Trace", layer_label: str) -> Any:
-    """Return the Op a layer label names, or refuse a bare multi-pass label.
-
-    Raises
-    ------
-    AmbiguousSiteError
-        ``multipass_bare_label_ambiguous`` (the same refusal as ``tl.label``):
-        the layer ran several passes, so the bare label names none of them;
-        the message teaches ``label:N``, ``label:last``, ``label:all`` and
-        ``trace.layers[label]``.
-    """
-
-    ops = self.ops.resolve_all(layer_label)
-    if len(ops) == 1:
+    if token is None and len(ops) == 1:
         return ops[0]
-    pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in ops)
-    raise AmbiguousSiteError(
-        multipass_bare_label_message(layer_label, pass_indices),
-        code="multipass_bare_label_ambiguous",
-        remedy=(
-            f"address one pass ('{layer_label}:N' or '{layer_label}:last'), every pass "
-            f"('{layer_label}:all'), or the Layer (trace.layers[{layer_label!r}])"
-        ),
-        layer_label=layer_label,
-        pass_indices=tuple(pass_indices),
-    )
+    return _getitem_selector(self, LabelSelector(ix))
 
 
 #: Elision rungs for the bounded execution log (F10; lovely matrix row):

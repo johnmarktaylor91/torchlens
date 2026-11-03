@@ -407,7 +407,7 @@ def _first_input_shape(layer_log: Op | Layer) -> tuple[int, ...] | None:
     parents = _get_optional_attr(layer_log, "parents")
     if trace is not None and isinstance(parents, (list, tuple)):
         for parent_label in parents:
-            parent = trace[parent_label]
+            parent = trace.layers[parent_label]
             shape = _get_optional_attr(parent, "shape")
             if isinstance(shape, tuple):
                 return shape

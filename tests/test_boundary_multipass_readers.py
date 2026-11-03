@@ -91,7 +91,7 @@ def test_inputs_of_different_shape_or_dtype_never_share_a_layer(kind: str) -> No
 
     trace, _ = _trace(kind)
     assert trace.input_layers == ["input_1", "input_2"]
-    assert [len(trace[label].ops) for label in trace.input_layers] == [1, 1]
+    assert [len(trace.layers[label].ops) for label in trace.input_layers] == [1, 1]
 
 
 def test_identical_inputs_fold_and_every_pass_matches_its_input() -> None:

@@ -146,7 +146,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     x = torch.randn(6, 4)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     layer = next(lab for lab in log.layer_labels if lab.startswith("linear"))
-    assert log[layer].num_passes == 2, "the fixture must be a real two-pass layer"
+    assert log.layers[layer].num_passes == 2, "the fixture must be a real two-pass layer"
 
     donors = population(torch.randn(8, *log[f"{layer}:1"].out.shape), origin="donor stack")
     per_firing = sample_from(donors, seed=13, share_draw="per_firing")

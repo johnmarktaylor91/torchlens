@@ -400,7 +400,7 @@ def input_ops(trace: Trace) -> Accessor[Op]:
     """Body of ``Trace.input_ops``; the record keeps the thin spelling and docstring."""
 
     return TraceOpAccessor(
-        boundary_label_ops(trace.input_layers, trace.__getitem__), trace._layer_num_calls
+        boundary_label_ops(trace.input_layers, trace.layers.__getitem__), trace._layer_num_calls
     )
 
 
@@ -408,7 +408,7 @@ def output_ops(trace: Trace) -> Accessor[Op]:
     """Body of ``Trace.output_ops``; the record keeps the thin spelling and docstring."""
 
     return TraceOpAccessor(
-        boundary_label_ops(trace.output_layers, trace.__getitem__), trace._layer_num_calls
+        boundary_label_ops(trace.output_layers, trace.layers.__getitem__), trace._layer_num_calls
     )
 
 

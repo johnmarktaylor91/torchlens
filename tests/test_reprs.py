@@ -111,7 +111,7 @@ def test_layer_repr_after_trace_collection_degrades_not_raises() -> None:
 
     import gc
 
-    layer = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"]
+    layer = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"]
     gc.collect()
 
     text = repr(layer)
@@ -142,7 +142,7 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    restored = pickle.loads(pickle.dumps(trace["relu_1_2"]))
+    restored = pickle.loads(pickle.dumps(trace.layers["relu_1_2"]))
 
     text = repr(restored)
     assert "relu_1_2" in text
@@ -211,7 +211,7 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
     unsaved_text = f"{unsaved}"
     assert "not saved" in unsaved_text
-    saved = trace["relu_1_2"]
+    saved = trace.layers["relu_1_2"]
     assert "not saved" not in f"{saved.ops[0]}"
 
 
@@ -223,7 +223,7 @@ def test_layer_repr_on_live_trace_unchanged() -> None:
     """
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    layer = trace["relu_1_2"]
+    layer = trace.layers["relu_1_2"]
     text = repr(layer)
     assert "relu_1_2" in text
     assert "\n" not in text
@@ -247,7 +247,7 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
 
     from torchlens._errors import RecordBindingError
 
-    op = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"].ops[0]
+    op = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"].ops[0]
     gc.collect()
 
     text = repr(op)

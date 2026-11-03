@@ -226,7 +226,7 @@ def test_episode_x_save_predicate_retaining_source_is_orthogonal(
     assert trace.annotations["episode"] is not None
     tanh_labels = [label for label in trace.layer_labels if "tanh" in label]
     assert tanh_labels, "no tanh layer captured"
-    first_pass = trace[tanh_labels[0]].ops[0]
+    first_pass = trace.layers[tanh_labels[0]].ops[0]
     assert first_pass.out is not None, "the save predicate retained nothing"
 
 

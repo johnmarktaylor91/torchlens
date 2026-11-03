@@ -12,7 +12,7 @@ def _input_geometry(trace: Any) -> tuple[tuple[tuple[int, ...] | None, str], ...
 
     facts: list[tuple[tuple[int, ...] | None, str]] = []
     for label in getattr(trace, "input_layers", ()) or ():
-        layer = trace[label]
+        layer = trace.layers[label]
         shape = getattr(layer, "shape", None)
         facts.append((tuple(shape) if shape else None, str(getattr(layer, "dtype", None))))
     return tuple(facts)

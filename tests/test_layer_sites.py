@@ -103,7 +103,7 @@ class _Grow(nn.Module):
 
 def test_site_key_single_on_uniform_layer() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert layer_site_key(log["linear_1_1"]) == "s1|lin|linear||1"
+    assert layer_site_key(log.layers["linear_1_1"]) == "s1|lin|linear||1"
     assert layer_site_key(log["relu_1_2"]) == "s1|act|relu||1"
 
 
@@ -111,7 +111,7 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     # I-S3': a silent single-key read on a site-spanning layer is the
     # failure this tripwire exists to catch.
     log = tl.trace(_ResModel(), torch.randn(2, 8))
-    layer = log["tanh_1_1"]
+    layer = log.layers["tanh_1_1"]
     member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
     assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -124,7 +124,7 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
     # Legacy-artifact shape: no op carries a key -> typed refusal, never a
     # None read (consumer-matrix row).
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    layer = log["linear_1_1"]
+    layer = log.layers["linear_1_1"]
     for _, op in layer.ops.items():
         op.site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -141,24 +141,24 @@ def test_site_peers_finds_reused_site_cohort() -> None:
     log = tl.trace(_Shrink(), torch.randn(2, 16))
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     assert len(relu_labels) == 3
-    first = log[relu_labels[0]]
+    first = log.layers[relu_labels[0]]
     assert [peer.layer_label for peer in first.site_peers] == relu_labels[1:]
     # Symmetric membership: every cohort member sees the other two.
     for label in relu_labels:
-        peer_labels = {peer.layer_label for peer in log[label].site_peers}
+        peer_labels = {peer.layer_label for peer in log.layers[label].site_peers}
         assert peer_labels == set(relu_labels) - {label}
 
 
 def test_site_peers_empty_when_site_unshared() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].site_peers == ()
+    assert log.layers["linear_1_1"].site_peers == ()
 
 
 def test_site_peers_refuses_typed_without_keys() -> None:
     # Never a None-key peer-of-everything collapse.
     log = tl.trace(_Shrink(), torch.randn(2, 16))
     relu_labels = [label for label in log.layer_labels if "relu" in label]
-    layer = log[relu_labels[0]]
+    layer = log.layers[relu_labels[0]]
     for _, op in layer.ops.items():
         op.site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -195,13 +195,13 @@ class _StubLayer:
 
 def test_shape_summary_none_for_single_pass_and_uniform() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].shape_summary is None  # uniform multi-pass
+    assert log.layers["linear_1_1"].shape_summary is None  # uniform multi-pass
     assert log["input_1"].shape_summary is None  # single-pass
 
 
 def test_shape_summary_single_axis_monotone_on_real_capture() -> None:
     log = tl.trace(_Grow(), torch.randn(2, 4, 8))
-    multi_pass = [log[label] for label in log.layer_labels if log[label].num_passes > 1]
+    multi_pass = [log.layers[label] for label in log.layer_labels if log[label].num_passes > 1]
     linear = next(layer for layer in multi_pass if "linear" in layer.layer_label)
     assert linear.shape_summary == "2->4"
     assert set(linear.shape_summary) <= SHAPE_SUMMARY_CHARACTER_CLASS

@@ -91,7 +91,7 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
     known: set[str] = set()
     for label in trace.layer_labels:
         known.add(label)
-        known.update(trace[label].output_of_modules)
+        known.update(trace.layers[label].output_of_modules)
     by_site = _graph_site_values(graph, graph_value)
     unknown = sorted(site for site in by_site if site not in known)
     if unknown:
@@ -215,7 +215,7 @@ def _classify_entries(
     known_labels: set[str] = set()
     for label in trace.layer_labels:
         known_labels.add(label)
-        known_modules.update(trace[label].output_of_modules)
+        known_modules.update(trace.layers[label].output_of_modules)
 
     module_values: dict[str, float] = {}
     label_values: dict[str, float] = {}

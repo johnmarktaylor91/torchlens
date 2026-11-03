@@ -320,7 +320,7 @@ def test_loop_detection_groups_recurrent_ops_with_parameter_input() -> None:
 
     trace = tl.trace(_LoopStimulusModel(), _parameter_stimulus())
 
-    add_layer = trace["add_1_1"]
+    add_layer = trace.layers["add_1_1"]
     relu_layer = trace["relu_1_2"]
     assert add_layer.num_passes == 3
     assert relu_layer.num_passes == 3

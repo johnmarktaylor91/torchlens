@@ -148,7 +148,7 @@ def test_boundary_label_ops_expands_an_under_listed_layer() -> None:
 
 def test_agent_json_and_overview_succeed_on_a_two_pass_input(tmp_path: Path) -> None:
     trace, _ = _loop_trace()
-    expected = [f"{trace['input_1'].layer_label}:{index}" for index in (1, 2)]
+    expected = [f"{trace.layers['input_1'].layer_label}:{index}" for index in (1, 2)]
 
     assert build_agent_json(trace)["inputs"] == expected
     assert trace.to_agent_json()["inputs"] == expected
@@ -181,7 +181,7 @@ def test_classics_multipass_input_entries_build_agent_json(entry: Any) -> None:
         trace = tl.trace(model, inputs)
     tensors = [value for value in inputs if isinstance(value, torch.Tensor)]
 
-    assert any(trace[label].num_passes > 1 for label in trace.input_layers)
+    assert any(trace.layers[label].num_passes > 1 for label in trace.input_layers)
     dumped = build_agent_json(trace)["inputs"]
     assert len(dumped) == len(tensors) == len(trace.input_ops)
     for label, value in zip(dumped, tensors, strict=True):

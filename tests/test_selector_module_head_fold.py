@@ -9,6 +9,7 @@ multi-call tests, called once here so module scoping is unambiguous.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import pytest
@@ -17,8 +18,9 @@ from torch import nn
 
 import torchlens as tl
 from tests.test_sae4_multi_call_modules import MultiHeadSelfAttention, _head_trace, _output
-from torchlens._selection.errors import SelectorCompositionError
+from torchlens._selection.errors import SelectorCapabilityError, SelectorCompositionError
 from torchlens._selection.selectors import FacetSelector
+from torchlens.intervention.errors import BindingRuntimeError
 from torchlens.options import InterventionOptions
 
 
@@ -77,37 +79,70 @@ def test_folded_selector_resolves_like_the_explicit_spelling_at_the_trace_door()
     )
 
 
+def _fanout_codes(action: Any) -> list[str]:
+    """Run ``action`` and return the facet fan-out disclosure codes it emitted."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        action()
+    return [
+        code
+        for w in caught
+        if (code := getattr(w.message, "fields", {}).get("code")) == "facet_selector_fanout"
+    ]
+
+
 def test_folded_selector_writes_at_attach_hooks_and_do() -> None:
     model, x, clean = _case()
     clean_out = _output(clean).clone()
 
     hooked = clean.fork("hooked")
-    hooked.attach_hooks(tl.module("attn") & tl.head(1), tl.zero_ablate())
+    folded_codes = _fanout_codes(
+        lambda: hooked.attach_hooks(tl.module("attn") & tl.head(1), tl.zero_ablate())
+    )
     hooked.run(model, x)
     assert torch.count_nonzero(hooked.modules["attn"].facets.head(1).q) == 0
     assert not torch.allclose(_output(hooked), clean_out)
 
     explicit = clean.fork("explicit")
-    explicit.attach_hooks(tl.head(1).in_module("attn"), tl.zero_ablate())
+    explicit_codes = _fanout_codes(
+        lambda: explicit.attach_hooks(tl.head(1).in_module("attn"), tl.zero_ablate())
+    )
     explicit.run(model, x)
     assert torch.equal(_output(hooked), _output(explicit))
+    # The fold discloses its fan-out exactly as the explicit spelling does.
+    assert folded_codes == explicit_codes == ["facet_selector_fanout"]
 
-    done = clean.fork("do").do(
-        tl.head(1) & tl.module("attn"),
-        tl.zero_ablate(),
-        model=model,
-        inputs=x,
-        intervention=InterventionOptions(engine="rerun"),
+    done: list[Any] = []
+    _fanout_codes(
+        lambda: done.append(
+            clean.fork("do").do(
+                tl.head(1) & tl.module("attn"),
+                tl.zero_ablate(),
+                model=model,
+                inputs=x,
+                intervention=InterventionOptions(engine="rerun"),
+            )
+        )
     )
-    assert torch.equal(_output(done), _output(explicit))
+    assert torch.equal(_output(done[0]), _output(explicit))
 
 
 def test_folded_selector_binds_through_when() -> None:
+    """``tl.when`` treats the fold exactly as the explicit facet spelling.
+
+    Facet selectors resolve through the intervention mutators, not through
+    capture-time predicate evaluation, so both spellings refuse with the same
+    typed binding error carrying the same capability cause.
+    """
+
     model, x, _trace = _case()
 
-    with torch.no_grad():
-        folded = tl.when(tl.module("attn") & tl.head(1), tl.zero_ablate()).bind(model)(x)
-        explicit = tl.when(tl.head(1).in_module("attn"), tl.zero_ablate()).bind(model)(x)
-        plain = model(x)
-    assert torch.equal(folded, explicit)
-    assert not torch.equal(folded, plain)
+    def _refusal(selector: Any) -> tuple[str, type[BaseException]]:
+        with torch.no_grad(), pytest.raises(BindingRuntimeError) as caught:
+            tl.when(selector, tl.zero_ablate()).bind(model)(x)
+        return caught.value.fields["code"], type(caught.value.__cause__)
+
+    folded = _refusal(tl.module("attn") & tl.head(1))
+    explicit = _refusal(tl.head(1).in_module("attn"))
+    assert folded == explicit == ("bind_rule_runtime_error", SelectorCapabilityError)

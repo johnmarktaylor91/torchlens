@@ -4032,6 +4032,7 @@ package-docstrings	torchlens/_data_classes/_layer_sites.py	4.3
 package-docstrings	torchlens/_data_classes/_layer_sites.py	512
 package-docstrings	torchlens/_data_classes/_layer_sites.py	64
 package-docstrings	torchlens/_data_classes/_layer_spec.py	43
+package-docstrings	torchlens/_data_classes/_module_accessor_filters.py	10
 package-docstrings	torchlens/_data_classes/_nonfinite.py	11
 package-docstrings	torchlens/_data_classes/_nonfinite.py	151
 package-docstrings	torchlens/_data_classes/_nonfinite.py	17
@@ -8892,6 +8893,7 @@ test-docstrings	tests/test_selection_completeness_examples.py	300
 test-docstrings	tests/test_selection_completeness_examples.py	64
 test-docstrings	tests/test_selection_do.py	17
 test-docstrings	tests/test_selection_do.py	2026
+test-docstrings	tests/test_selection_door.py	45
 test-docstrings	tests/test_selection_gallery.py	12
 test-docstrings	tests/test_selection_gallery.py	12.
 test-docstrings	tests/test_selection_gallery.py	4.6
@@ -8962,6 +8964,7 @@ test-docstrings	tests/test_streaming_stats.py	19
 test-docstrings	tests/test_streaming_stats.py	29
 test-docstrings	tests/test_streaming_stats.py	64
 test-docstrings	tests/test_strict_accessors.py	2.33
+test-docstrings	tests/test_strict_accessors.py	260
 test-docstrings	tests/test_structure_only_discharge.py	10
 test-docstrings	tests/test_structure_only_entry.py	4.2
 test-docstrings	tests/test_structure_only_teaching.py	2.5

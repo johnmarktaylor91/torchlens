@@ -114,7 +114,7 @@ def test_selector_notimplemented_branch_rows(log):
 
     selector = tl.func("relu")
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     assert isinstance(selector | box, Selector)
     assert isinstance(selector & box, Selector)
     assert isinstance(selector - box, Selector)
@@ -158,7 +158,7 @@ def test_selector_subtraction_non_selector_operand_refuses_typed():
 def test_op_and_layer_lift(log):
     """Op lifts one pass; Layer lifts ALL passes (whole-output producers)."""
 
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     op = layer.ops[0]
     resolved_layer = log[layer.__selection__()]
     resolved_op = log[op.__selection__()]

@@ -570,7 +570,7 @@ def test_rolled_draw_with_annotations_survives_multipass_layers(tmp_path: Path) 
         _scree_eigenvalues_for_node,
     )
 
-    multipass_layer = trace["conv2d_2_2"]
+    multipass_layer = trace.layers["conv2d_2_2"]
     trace._annotation_blobs = trace._annotation_blobs or {}
     # Each repgeom lookup shares the same candidate-building block; a
     # multi-pass node must skip the ambiguous op label, not raise.

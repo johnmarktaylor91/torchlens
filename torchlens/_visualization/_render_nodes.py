@@ -1388,8 +1388,8 @@ def _build_collapsed_module_node(
         # this ONE call for an unrolled per-call box.
         scope_op_labels = tuple(module_call.ops)
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self[layer].is_buffer for layer in module_call.ops)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
+        module_num_buffers = sum(self.layers[o].is_buffer for o in module_call.ops)
+        module_has_input_ancestor = any(self.layers[o].has_input_ancestor for o in module_call.ops)
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1425,8 +1425,8 @@ def _build_collapsed_module_node(
         # presets aggregate per-pass op records across all calls.
         scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
+        module_num_buffers = sum(layer.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit

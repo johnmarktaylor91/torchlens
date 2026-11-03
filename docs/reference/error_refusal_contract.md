@@ -450,7 +450,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `collapse_plan_unavailable` | Collapse optimizer declined the render context | Use a supported render context and mode |
 | `collapse_plan_cohorts_changed` | A persisted collapse plan was reapplied (strict, the default) on a capture whose structural cohorts changed — the guarded join refused or one-sided them, and reapplying anyway would silently fold different structure (leverage B13; spelling DOCUMENTED-UNSTABLE) | Re-export the plan on the new capture, or pass `strict=False` for the changed-set report |
 | `collapse_plan_payload_invalid` | A `tl_collapse_plan_v1` payload is malformed or foreign; torn plans never half-apply (leverage B13; spelling DOCUMENTED-UNSTABLE) | Re-export with `export_collapse_plan(trace)` |
-| `cone_origin_invalid` | `cone_of_effect` received a string (or other non-op) origin: iterating a string walks its characters and would silently return an empty cone (leverage B3; spelling DOCUMENTED-UNSTABLE) | Resolve labels first — `trace[label].ops` or `trace.find_sites(label)` |
+| `cone_origin_invalid` | `cone_of_effect` received a string (or other non-op) origin: iterating a string walks its characters and would silently return an empty cone (leverage B3; spelling DOCUMENTED-UNSTABLE) | Resolve labels first — `trace.layers[label].ops` or `trace.find_sites(label)` |
 | `container_leaf_not_saved` | Container leaf value was not retained | Re-run with `save=` covering the leaves |
 | `container_not_reconstructable` | Container spec or backend support is absent | Capture with `capture_container_structure=True` |
 | `container_selector_requires_registry` | Snapshot selector on a non-registry view | Call `reconstruct()` without site/role |

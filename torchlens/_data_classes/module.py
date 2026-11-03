@@ -2389,13 +2389,13 @@ class Module:
                     address=self.address,
                 )
             raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
-        return self._source_trace[self.layer_labels[ix]]
+        return self._source_trace.layers[self.layer_labels[ix]]
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate over Op entries for all layers in this module."""
         if self._source_trace is None:
             return iter(self.layer_labels)
-        return iter(self._source_trace[label] for label in self.layer_labels)
+        return iter(self._source_trace.layers[label] for label in self.layer_labels)
 
     def draw(self, **kwargs: Any) -> str:
         """Render this module's focused graph.
@@ -2461,7 +2461,7 @@ class Module:
             return pd.DataFrame(columns=columns)
         rows = []
         for label in self.layer_labels:
-            entry = self._source_trace[label]
+            entry = self._source_trace.layers[label]
             row = _layer_log_to_row(entry)
             row["num_ops"] = len(entry.ops) if hasattr(entry, "ops") else 1
             rows.append(row)

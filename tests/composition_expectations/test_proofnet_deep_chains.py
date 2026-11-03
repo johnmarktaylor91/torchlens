@@ -133,7 +133,7 @@ def test_chain_multipass_pass_qualified_edit_is_exact() -> None:
     trace = tl.trace(model, example, capture=tl.options.CaptureOptions(replayable=True))
     try:
         tanh_layer = [label for label in trace.layer_labels if "tanh" in label][0]
-        assert len(trace[tanh_layer].ops) == 3, "recurrence grouping lost the 3 passes"
+        assert len(trace.layers[tanh_layer].ops) == 3, "recurrence grouping lost the 3 passes"
         with pytest.raises(Exception) as bare_exc:
             trace.fork().do(tanh_layer, tl.zero_ablate())
         assert "pass" in str(bare_exc.value).lower(), (

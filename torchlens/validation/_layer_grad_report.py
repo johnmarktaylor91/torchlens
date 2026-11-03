@@ -195,7 +195,7 @@ def _compare_module_output_grads(
         for output_index, output_label in enumerate(output_ops):
             coverage_label = f"{call_label}[{output_index}]" if multi_output else call_label
             try:
-                cand_layer = trace[output_label]
+                cand_layer = trace.layers[output_label]
             except (KeyError, IndexError):
                 # Fail-closed gap: a module call naming an output layer the
                 # trace cannot resolve is an internal inconsistency, never a

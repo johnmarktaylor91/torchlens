@@ -48,7 +48,6 @@ from .._constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
-    MutatedReferenceError,
     PayloadUnavailableError,
     RecordBindingError,
 )
@@ -90,7 +89,6 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
@@ -111,6 +109,11 @@ from ._op_aten import OpAtenMixin
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
+)
+from ._op_out_read import (
+    _out_read_state,
+    _synthesized_out_read_due,
+    _validate_reference_out_not_mutated,
 )
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
@@ -154,6 +157,8 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
 # -> builtins hit -> type attribute resolution) was itself measurable. Bind the
 # unbound slot accessors once at import.
 _object_getattribute = object.__getattribute__
+
+
 _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
@@ -1142,26 +1147,6 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
-def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
-    """Raise if a reference-mode saved output has changed since capture."""
-
-    annotations = state.get("annotations") or {}
-    if annotations.get("save_mode") != "reference":
-        return
-    out = state.get("out")
-    if not isinstance(out, torch.Tensor):
-        return
-    saved_version = annotations.get("saved_out_version")
-    current_version = tensor_version_or_none(out)
-    if saved_version is not None and current_version != saved_version:
-        label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
-        raise MutatedReferenceError(
-            f"saved reference out for op {label!r} was mutated after capture "
-            f"(saved _version={saved_version}, current _version={current_version}). "
-            "Use save_mode='copy' for isolated saved tensors."
-        )
-
-
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -1172,6 +1157,13 @@ if TYPE_CHECKING:
     from .module import Module
     from .param import Param
     from .trace import Trace
+
+
+def _warn_synthesized_out_read(source_trace: Any) -> None:
+    if _synthesized_out_read_due(source_trace):
+        from .._quickstart._gate import warn_on_raw_read
+
+        warn_on_raw_read(source_trace, site="Op.out")
 
 
 class Op(OpAtenMixin, _SelectionOperand):
@@ -1720,17 +1712,9 @@ class Op(OpAtenMixin, _SelectionOperand):
                 from ..stats._capture_stats import refuse_reduced_payload_read
 
                 refuse_reduced_payload_read(slot, source_trace)
+            _warn_synthesized_out_read(source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
-                state = {
-                    "out": out,
-                    "annotations": slot("annotations"),
-                    "has_saved_activation": slot("has_saved_activation", False),
-                    "detach_saved_activations": slot("detach_saved_activations"),
-                    "label": slot("label"),
-                    "layer_label": slot("layer_label"),
-                    "_label_raw": slot("_label_raw"),
-                }
-                _validate_reference_out_not_mutated(state)
+                _validate_reference_out_not_mutated(_out_read_state(slot, out))
         return _getattribute(self, name)
 
     def __setattr__(

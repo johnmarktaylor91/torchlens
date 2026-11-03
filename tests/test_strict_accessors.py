@@ -12,7 +12,7 @@ from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.module import Module
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
-from torchlens._errors import AmbiguousOpLookupError
+from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
 from torchlens._selection.errors import AmbiguousSiteError
 
 
@@ -130,12 +130,14 @@ def test_last_pass_token_names_the_final_pass() -> None:
     assert trace.layers["linear_1_1:last"] is trace.layers["linear_1_1"]
     assert "linear_1_1:last" in trace.ops
     assert trace[tl.label("linear_1_1:last")].pass_number == 2
-    with pytest.raises(KeyError):
+    with pytest.raises(InvalidArgumentError) as negative:
         trace["linear_1_1:-1"]
+    assert negative.value.fields["code"] == "op_lookup_pass_out_of_range"
     with pytest.raises(KeyError):
         trace.layers["linear_1_1:0"]
-    with pytest.raises(KeyError):
+    with pytest.raises(InvalidArgumentError) as beyond:
         trace["linear_1_1:3"]
+    assert beyond.value.fields["code"] == "op_lookup_pass_out_of_range"
 
 
 def test_all_pass_token_selects_every_pass() -> None:
@@ -147,7 +149,7 @@ def test_all_pass_token_selects_every_pass() -> None:
     assert isinstance(every, tl.Selection)
     assert every.labels == ("linear_1_1:1", "linear_1_1:2")
     assert trace[tl.label("linear_1_1:all")].labels == every.labels
-    assert every.labels == trace.layers["linear_1_1"].__selection__().labels
+    assert every.labels == trace[trace.layers["linear_1_1"].__selection__()].labels
     single = trace["mul_1_2:all"]
     assert isinstance(single, tl.Selection)
     assert single.labels == ("mul_1_2",)
@@ -343,7 +345,10 @@ def test_ops_nonfinite_and_modules_uncalled_filters() -> None:
     assert len(nonfinite) >= 1
     assert all(isinstance(op, Op) for op in nonfinite)
     assert all(not torch.isfinite(op.out).all() for op in nonfinite)
-    assert trace.ops.compute.nonfinite.labels == nonfinite.labels
+    compute_labels = set(trace.ops.compute.labels)
+    assert trace.ops.compute.nonfinite.labels == tuple(
+        label for label in nonfinite.labels if label in compute_labels
+    )
 
     assert list(trace.modules.uncalled) == list(trace.uncalled_modules)
     assert "idle" in trace.modules.uncalled

@@ -59,7 +59,7 @@ def test_trace_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
 def test_layer_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     """Layer str renders aggregate multiplicity as "(x3 passes)", never "(3 ops)"."""
 
-    layer = three_pass_log["linear_1_1"]
+    layer = three_pass_log.layers["linear_1_1"]
     text = str(layer)
     assert "(x3 passes)" in text
     assert "(3 ops)" not in text

@@ -514,7 +514,7 @@ class GradFn:
         trace = self.trace
         if trace is None:
             return None
-        return trace[self.op_label]
+        return trace.layers[self.op_label]
 
     @property
     def handle(self) -> Any | None:

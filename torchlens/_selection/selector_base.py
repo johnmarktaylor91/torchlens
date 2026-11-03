@@ -63,7 +63,7 @@ class BaseSelector:
             return NotImplemented
         return _compose("and", self, other)
 
-    def __rand__(self, other: str) -> CompositeSelector:
+    def __rand__(self, other: str) -> BaseSelector:
         """Return ``other & self`` for a bare label string on the left.
 
         Parameters
@@ -82,7 +82,7 @@ class BaseSelector:
             return NotImplemented
         return _compose("and", other, self)
 
-    def __or__(self, other: SelectorLike) -> CompositeSelector:
+    def __or__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the union of two selectors.
 
         Parameters
@@ -106,7 +106,7 @@ class BaseSelector:
             )
         return _compose("or", self, other)
 
-    def __ror__(self, other: str) -> CompositeSelector:
+    def __ror__(self, other: str) -> BaseSelector:
         """Return ``other | self`` for a bare label string on the left.
 
         Parameters
@@ -154,7 +154,7 @@ class BaseSelector:
             )
         return NotSelector(self)
 
-    def __sub__(self, other: SelectorLike) -> CompositeSelector:
+    def __sub__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector matching this selector minus ``other`` (DESUGAR).
 
         ``a - b`` desugars to ``CompositeSelector("and", (a, NotSelector(b)))``

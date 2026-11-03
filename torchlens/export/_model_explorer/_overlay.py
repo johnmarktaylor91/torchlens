@@ -244,7 +244,7 @@ def _join_record(log: Any, node: dict[str, Any]) -> Any | None:
     if not label:
         return None
     try:
-        return log[label]
+        return log.layers[label]
     except (LookupError, TorchLensError):
         return None
 

@@ -301,7 +301,7 @@ def _check_conditional_bool_event_backrefs(
             try:
                 bool_layer = ml.ops[bool_label]
             except (KeyError, ValueError, TypeError):
-                bool_layer = ml[bool_label]
+                bool_layer = ml.layers[bool_label]
             bool_layer_ops = getattr(bool_layer, "ops", None)
             bool_layer_values = getattr(bool_layer_ops, "values", None)
             if isinstance(bool_layer_ops, Mapping):
