@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, TypeGuard
 
 from .._io.format3.recipe import (
     PLACEHOLDER_PORTABILITY,
@@ -360,7 +360,7 @@ def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any]
 _SELECTOR_KEYS = frozenset({"selector_kind", "selector_value", "strict", "slice_spec", "metadata"})
 
 
-def _is_selector_object(value: Any) -> bool:
+def _is_selector_object(value: Any) -> TypeGuard[Mapping[str, Any]]:
     """Return whether a decoded value is a nested selector object."""
 
     return isinstance(value, Mapping) and set(value) == _SELECTOR_KEYS

@@ -24,7 +24,7 @@ import json
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, NamedTuple
+from typing import Any, Final, NamedTuple, TypeGuard
 
 import torch
 
@@ -128,7 +128,7 @@ def _is_target(value: Any) -> bool:
     return hasattr(value, "selector_kind") and hasattr(value, "selector_value")
 
 
-def _is_target_sequence(value: Any) -> bool:
+def _is_target_sequence(value: Any) -> TypeGuard[Sequence[Any]]:
     """Return whether a value is the member tuple of an ``and`` / ``or`` target spec."""
 
     return isinstance(value, (tuple, list)) and bool(value) and all(map(_is_target, value))
