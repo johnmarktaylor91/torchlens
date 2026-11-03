@@ -1612,11 +1612,11 @@ def test_corrupt_saved_args(valid_mh_and_ground_truth):
         if entry.call.saved_args and any(
             isinstance(a, torch.Tensor) for a in entry.call.saved_args
         ):
-            for i, arg in enumerate(entry.saved_args):
+            for i, arg in enumerate(entry.call.saved_args):
                 if isinstance(arg, torch.Tensor):
-                    corrupted_args = list(entry.saved_args)
+                    corrupted_args = list(entry.call.saved_args)
                     corrupted_args[i] = torch.randn_like(arg)
-                    entry.saved_args = tuple(corrupted_args)
+                    entry._call_saved_args = tuple(corrupted_args)
                     assert mh.validate_forward_pass(ground_truth) is False
                     return
     pytest.fail(

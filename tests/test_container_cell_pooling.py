@@ -141,7 +141,7 @@ def test_pickle_round_trip_never_leaks_encoding(stack_trace: tl.Trace) -> None:
         assert value.__class__ is not PooledCell, name
     restored = pickle.loads(pickle.dumps(stack_trace["linear_2_3"]))
     assert restored.annotations == {}
-    assert restored.func_autocast_state == op.call.autocast_state
+    assert restored.call.autocast_state == op.call.autocast_state
 
     module_restored = pickle.loads(pickle.dumps(stack_trace.modules["layers.2"]))
     assert module_restored.forward_hooks == []

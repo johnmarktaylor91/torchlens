@@ -467,7 +467,7 @@ def test_runnable_preflight_recurses_nested_mixed_mapping_tensor_container() -> 
     assert isinstance(parents, tuple)
     object.__setattr__(
         target,
-        "args_template",
+        "_call_args_template",
         CapturedArgTemplate(
             args=({"nested": [parents[0], LiteralValue(3), (parents[1],)]},),
             kwargs=original.kwargs,
@@ -498,7 +498,7 @@ def test_runnable_preflight_keeps_typed_rejection_for_opaque_tensor_container_me
     assert isinstance(parents, tuple)
     object.__setattr__(
         target,
-        "args_template",
+        "_call_args_template",
         CapturedArgTemplate(
             args=((parents[0], _OpaqueContainerMember()),),
             kwargs=original.kwargs,

@@ -220,7 +220,7 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     first, second = split_ops[0], split_ops[1]
     assert first is not second
     assert first.call.call_id == second.call.call_id
-    assert first.args_template == second.args_template
+    assert first.call.args_template == second.call.args_template
     assert first.multi_output_index != second.multi_output_index
     assert first.layer_label != second.layer_label
 
@@ -267,7 +267,7 @@ def test_op_copy_selective_depth() -> None:
     assert clone.func is op.func
     assert clone.out is op.out
     if op.call.saved_args is not None:
-        assert clone.saved_args is op.call.saved_args
+        assert clone.call.saved_args is op.call.saved_args
     if op.container_spec is not None:
         assert clone.container_spec is op.container_spec
     if op.graph.parent_params:

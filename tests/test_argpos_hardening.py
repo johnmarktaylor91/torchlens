@@ -270,13 +270,13 @@ def test_mod_tensor_rhs_parent_is_trace_order_independent() -> None:
     tensor_mod = mods[1]
     assert len(tensor_mod.parents) == 2
     assert set(tensor_mod.call.parent_arg_positions["args"]) == {0, 1}
-    assert tensor_mod.unattributed_tensor_args == ()
+    assert tensor_mod.call.unattributed_tensor_args == ()
 
     fresh = tl.trace(_ModTensorOnly().eval(), x)
     fresh_mod = next(op for op in fresh.ops if op.type == "mod")
     assert len(fresh_mod.parents) == 2
-    assert set(fresh_mod.parent_arg_positions["args"]) == {0, 1}
-    assert fresh_mod.unattributed_tensor_args == ()
+    assert set(fresh_mod.call.parent_arg_positions["args"]) == {0, 1}
+    assert fresh_mod.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------

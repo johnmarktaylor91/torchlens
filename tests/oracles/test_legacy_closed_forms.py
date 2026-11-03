@@ -309,9 +309,9 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
         records = [layers[label]] + [op for op in ops.values() if op.layer_label == label]
         for record in records:
             assert (
-                int(record.num_pos_args),
-                int(record.num_kwargs),
-                int(record.num_args_total),
+                int(record.call.num_pos_args),
+                int(record.call.num_kwargs),
+                int(record.call.num_args_total),
             ) == (positional, keyword, positional + keyword), label
     _, trace, _, _ = outer_case
     ops, layers, _, _ = _by_label(trace)
@@ -319,7 +319,11 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
     # rule rows 26-27 and section 1 (argument values are never evidence): both
     # block calls' ``* scale`` muls are one Layer, so the sum is the 5th Layer.
     for record in (layers["sum_1_5"], ops["sum_1_5:1"]):
-        assert (int(record.num_pos_args), int(record.num_kwargs), int(record.num_args_total)) == (
+        assert (
+            int(record.call.num_pos_args),
+            int(record.call.num_kwargs),
+            int(record.call.num_args_total),
+        ) == (
             1,
             2,
             3,

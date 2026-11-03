@@ -242,7 +242,7 @@ def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
     trace.save(path)
 
     loaded = tl.load(path)
-    frozen = loaded.output_ops[0].func_config["frozen"]
+    frozen = loaded.output_ops[0].call.config["frozen"]
     assert isinstance(frozen, frozenset)
     assert len(frozen) == 1
     assert torch.equal(next(iter(frozen)), torch.tensor(3))
@@ -259,7 +259,7 @@ def test_tuple_subclasses_preserve_type_across_bundle_round_trip(tmp_path: Path)
     trace.save(path)
 
     loaded = tl.load(path)
-    config = loaded.output_ops[0].func_config
+    config = loaded.output_ops[0].call.config
     assert isinstance(config["size"], torch.Size)
     assert type(config["maximum"]) is type(maximum)
     assert torch.equal(config["maximum"].values, maximum.values)

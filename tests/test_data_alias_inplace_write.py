@@ -65,4 +65,4 @@ def test_data_alias_marker_stays_without_base_propagation() -> None:
             capture=tl.options.CaptureOptions(save_grads=True),
         )
     fill = next(op for op in trace.ops if op.func_name == "masked_fill_")
-    assert fill.unattributed_tensor_args == ("arg0",)
+    assert fill.call.unattributed_tensor_args == ("arg0",)

@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import op_attr, record_member
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation._invariants_entry import check_metadata_invariants
 from torchlens.validation._invariants_equivalence import _check_graph_ordering
@@ -150,7 +151,7 @@ def test_planted_ancestry_corruption_is_named(target: str, field: str, value: An
 
     trace = _fresh_two_io()
     check_metadata_invariants(trace)  # baseline is clean
-    setattr(_entry(trace, target), field, value)
+    setattr(_entry(trace, target), op_attr(field), value)
     with pytest.raises(MetadataInvariantError) as excinfo:
         check_metadata_invariants(trace)
     assert excinfo.value.check_name == "ancestry_closure"
@@ -338,7 +339,7 @@ def test_seeded_generative_ancestry_corruptions_are_caught() -> None:
         kind = rng.choice(["add", "remove", "clear", "bool", "dist"])
         if kind in ("add", "remove", "clear"):
             field = rng.choice(_ANCESTRY_SET_FIELDS)
-            old = set(getattr(record, field))
+            old = set(record_member(record, field))
             if kind == "add":
                 new = old | {"phantom_9_9"}
             elif kind == "remove" and old:
@@ -348,7 +349,7 @@ def test_seeded_generative_ancestry_corruptions_are_caught() -> None:
                 new = set()
             if new == old:
                 continue
-            setattr(record, field, new)
+            setattr(record, op_attr(field), new)
             description = f"{record.layer_label}.{field}:{kind}"
         elif kind == "bool":
             record._graph_has_internal_source_ancestor = (

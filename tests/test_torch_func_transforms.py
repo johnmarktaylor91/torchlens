@@ -543,10 +543,10 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert vmap_ops[0].parents == ("input_1",)
     assert vmap_ops[0].call.is_func_transform is True
     assert vmap_ops[0].call.func_transform_kind == "vmap"
-    assert vmap_ops[0].transform_chain == ("vmap",)
-    assert vmap_ops[0].transform_config["in_dims"] == 0
-    assert vmap_ops[0].transform_fn_name == "<lambda>"
-    assert vmap_ops[0].transform_fn_source is not None
+    assert vmap_ops[0].call.func_transform_chain == ("vmap",)
+    assert vmap_ops[0].call.func_transform_config["in_dims"] == 0
+    assert vmap_ops[0].call.func_transform_fn_name == "<lambda>"
+    assert vmap_ops[0].call.func_transform_fn_source is not None
     assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
@@ -585,9 +585,9 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
     assert len(grad_ops) == 1
     assert grad_ops[0].parents == ("input_1",)
     assert grad_ops[0].call.is_func_transform is True
-    assert grad_ops[0].transform_kind == "grad"
-    assert grad_ops[0].transform_chain == ("grad",)
-    assert grad_ops[0].transform_config["argnums"] == 0
+    assert grad_ops[0].call.func_transform_kind == "grad"
+    assert grad_ops[0].call.func_transform_chain == ("grad",)
+    assert grad_ops[0].call.func_transform_config["argnums"] == 0
     assert any(op.type == "add" and "grad_1_1" in op.parents for op in log.ops)
 
 
@@ -665,7 +665,7 @@ def test_autograd_functional_direct_call_boundary(
     assert len(transform_ops) == 1
     assert transform_ops[0].parents == ("input_1",)
     assert transform_ops[0].call.is_func_transform is True
-    assert transform_ops[0].transform_kind == kind
+    assert transform_ops[0].call.func_transform_kind == kind
 
 
 def test_functional_call_substituted_params_are_tensor_parents() -> None:
@@ -710,8 +710,8 @@ def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None
 
     assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
     assert dataframe.loc[dataframe["type"] == "vmap", "transform_kind"].iloc[0] == "vmap"
-    assert loaded.transforms[0].transform_kind == "vmap"
-    assert loaded.transforms[0].transform_config["in_dims"] == 0
+    assert loaded.transforms[0].call.func_transform_kind == "vmap"
+    assert loaded.transforms[0].call.func_transform_config["in_dims"] == 0
 
 
 def test_transform_selector_intervention_no_crash() -> None:
@@ -790,7 +790,7 @@ def test_provenance_warning_foreign_tensor_contract() -> None:
     ]
     assert provenance_warnings == []
     module_add = next(op for op in module_log.ops if op.type == "add")
-    assert module_add.unattributed_tensor_args == ()
+    assert module_add.call.unattributed_tensor_args == ()
 
 
 def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
@@ -1008,7 +1008,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     path = tmp_path / "matrix-vmap.tlspec"
     predicate_log.save(path)
     loaded = cast(Trace, tl.load(path))
-    assert loaded.transforms[0].transform_kind == "vmap"
+    assert loaded.transforms[0].call.func_transform_kind == "vmap"
 
     intervened = tl.trace(
         VmapMaskModel().eval(),

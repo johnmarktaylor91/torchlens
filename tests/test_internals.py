@@ -701,7 +701,7 @@ class TestNestedTupleArgs:
             "expected to find the torch.stack layer with a nested-list saved_args[0]"
         )
 
-        saved_list = stack_entry.saved_args[0]
+        saved_list = stack_entry.call.saved_args[0]
         assert isinstance(saved_list, list)
         assert len(saved_list) == 2
         live_pair = stashed(log, "_last_pair")

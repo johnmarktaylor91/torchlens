@@ -295,8 +295,8 @@ class Buffer:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):
-            if version.buffer_source is not None:
-                return cast(str, version.buffer_source)
+            if version.graph.buffer_source is not None:
+                return cast(str, version.graph.buffer_source)
         return None
 
     @property

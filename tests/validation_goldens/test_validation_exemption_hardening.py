@@ -1333,7 +1333,7 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     check_metadata_invariants(trace)
 
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
-    object.__setattr__(relu_op, "func_call_id", None)
+    object.__setattr__(relu_op, "_call_call_id", None)
     object.__setattr__(relu_op, "func_name", "none")
     assert callable(relu_op.func)
     assert not relu_op.graph.is_internal_source

@@ -639,10 +639,10 @@ def _tamper_recorded_training_literal(log, sink, value):
     """Flip the recorded literal mode argument on one sink's producing op."""
 
     source = log._layer_dict_all_keys[sink.graph.buffer_source]
-    args = list(source.non_tensor_pos_args)
+    args = list(source.call.non_tensor_pos_args)
     index = next(i for i, arg in enumerate(args) if isinstance(arg, bool))
     args[index] = value
-    source.non_tensor_pos_args = args
+    source._call_non_tensor_pos_args = args
 
 
 def test_eval_mode_batchnorm_refresh_allowed_default_path():

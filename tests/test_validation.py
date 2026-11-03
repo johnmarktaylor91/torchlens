@@ -5802,10 +5802,10 @@ def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
         assert write_version.graph.buffer_source is not None
-        assert write_version.saved_args
+        assert write_version.call.saved_args
 
         write_version.buffer_replay_validated = True
-        write_version.saved_args = []
+        write_version._call_saved_args = []
 
         with pytest.raises(MetadataInvariantError, match="saved source argument"):
             check_metadata_invariants(log)
@@ -6094,7 +6094,7 @@ def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
         )
         assert victim.call.call_id is not None
 
-        victim.func_call_id = None
+        victim._call_call_id = None
 
         with pytest.raises(MetadataInvariantError, match="has no func_call_id"):
             check_metadata_invariants(log)
@@ -6308,7 +6308,7 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
             log.backward(log.output_ops[0].out.sum())
             dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
             assert dead.grad_fn_object_id is not None
-            assert dead.grad_fn is None
+            assert dead.autograd.grad_fn is None
             assert check_metadata_invariants(log) is True
         finally:
             log.cleanup()
@@ -6342,8 +6342,8 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     try:
         log.backward(log.output_ops[0].out.sum())
         victim = next(layer for layer in log._layer_list if layer.label.startswith("linear"))
-        assert victim.grad_fn is not None
-        victim.grad_fn = None
+        assert victim.autograd.grad_fn is not None
+        victim._autograd_grad_fn = None
 
         with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
             check_metadata_invariants(log)

@@ -1713,7 +1713,7 @@ def _reuse_streamed_blob_ids(
             skipped_blob_ids.add(tensor_blob.blob_id)
             setattr(
                 scrubbed_layer,
-                tensor_field,
+                op_attr(tensor_field),
                 BlobRef(blob_id=pending_blob_id, kind=tensor_blob.kind),
             )
             writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
