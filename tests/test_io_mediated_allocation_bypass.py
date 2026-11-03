@@ -322,7 +322,7 @@ def test_reconstruct_gadget_refused_end_to_end_through_tl_load(
     _forbid_unpicklers(monkeypatch)
     with pytest.raises(ArtifactError) as caught:
         tl.load(path)
-    assert caught.value.code == "bundle_metadata_integrity_refused"
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 # --------------------------------------------------------------------------- #
@@ -561,7 +561,7 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(
     _forbid_unpicklers(monkeypatch)
     with pytest.raises(ArtifactError) as caught:
         tl.load(path)
-    assert caught.value.code == "bundle_metadata_integrity_refused"
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 @pytest.mark.smoke
