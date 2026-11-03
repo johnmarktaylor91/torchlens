@@ -75,6 +75,26 @@ _SHALLOW_REPLACED = frozenset(
         "input_shapes",
         "input_dtypes",
         "input_memory",
+        # Tensor-bearing or object-valued fields: the replacement resets or
+        # shares them, and a deep copy of a non-leaf tensor raises.
+        "grad",
+        "grad_fn",
+        "module",
+        "atomic_module_call",
+        "input_activations",
+        "unattributed_tensor_args",
+        "dropped_edge_tensor_args",
+        "func_non_tensor_args",
+        "_grad_records",
+        "_param_logs",
+        "_param_barcodes",
+        "recurrent_ops",
+        "edge_substitutions",
+        "edge_replacement_stamps",
+        "activation_transform",
+        "transform_config",
+        "func_config",
+        "annotations",
     }
 )
 
@@ -254,6 +274,9 @@ def _identity_fields(trace: Trace, site: Op, before: dict[str, Any]) -> dict[str
         "io_role": None,
         "grad": None,
         "has_grad": False,
+        "_grad_records": [],
+        "_param_logs": [],
+        "_param_barcodes": [],
     }
 
 
@@ -285,6 +308,14 @@ def _callable_free_fields(site: Op) -> dict[str, Any]:
         "grad_fn_class_qualname": None,
         "grad_fn_object_id": None,
         "grad_fn_handle": getattr(site.out, "grad_fn", None),
+        "grad_fn": None,
+        "func_non_tensor_args": None,
+        "unattributed_tensor_args": (),
+        "dropped_edge_tensor_args": (),
+        "atomic_module_call": None,
+        "edge_substitutions": {},
+        "edge_replacement_stamps": {},
+        "annotations": dict(site.annotations or {}),
         "in_multi_output": False,
         "multi_output_index": None,
         "multi_output_name": None,

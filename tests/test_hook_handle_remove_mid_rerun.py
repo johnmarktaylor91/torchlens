@@ -14,12 +14,15 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
+
+pytestmark = pytest.mark.filterwarnings("ignore::torchlens._selection.errors.MultiMatchWarning")
 
 
 def _model() -> nn.Sequential:

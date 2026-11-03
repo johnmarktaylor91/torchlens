@@ -185,6 +185,16 @@ op's `.out`, and it is what `tl.module("block")` reads as the module's output.
 Every later op is renumbered (a label's last number is its position), so compare
 traces through `Bundle` site reads, which pair ops by structure, not by label.
 
+A post-capture module edit (`fork.do(tl.module("block"), edit)`) is recorded in the
+same shape: after the push the edited value sits in a new `interventionreplacement_*`
+op spliced after the module's last op, the last op keeps the value it computed, the
+edited module and the calls enclosing it report the replacement as their output, and a
+submodule whose output is that same last op keeps reporting the pre-edit value, as a
+plain forward hook on the outer module would leave it. Nothing is renumbered after
+capture: the replacement takes the next unused position number and every other op keeps
+its label. A later push upstream passes the parent's new value through the replacement
+and fires the module's hooks there again.
+
 ## Capture-Time Recording
 
 `tl.record(..., save=...)` is the sparse capture sibling of `tl.trace(..., save=...)`.
