@@ -16,6 +16,7 @@ render pass.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -180,11 +181,14 @@ def test_non_string_non_callable_refuses() -> None:
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
-def test_scalar_builtins_are_not_size_sources() -> None:
-    """Memo 2.2: only color_by accepts the node_overlay scalar builtins."""
+def test_size_by_shares_color_by_builtin_tokens() -> None:
+    """size_by accepts the scalar builtins color_by does, with the same meaning."""
 
+    for token in ("time", "bytes", "flops", "magnitude"):
+        spec = resolve_size_by(token)
+        assert spec is not None and spec.source_kind == "builtin"
     with pytest.raises(Exception) as excinfo:
-        resolve_size_by("magnitude")
+        resolve_size_by("memory")
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
@@ -361,6 +365,68 @@ def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 # C2(b) writer discipline: width/height/fixedsize node-arg emission sites
 # ---------------------------------------------------------------------------
+
+
+# Kept: slice 4 removed this test; the train's size_by encoding work (bc6b4799a, via slice 5's
+# train merge) added two writer sites to its expected allowlist after slice 4 measured it.
+def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
+    """No TorchLens-internal call site may emit width/height/fixedsize into
+    node args on an encodable node (memo C2(b)).
+
+    Grep scope: dict-literal keys and subscript assignments in the graphviz
+    node-arg surfaces (visualization/, viz/, repgeom/). The allowlisted
+    writers are the record-derived image/montage/helper/container sites (all
+    on non-encodable node classes), the four PUBLIC node_spec_fn factories
+    (user-slot callbacks, governed by the funnel image-drop rule), and the
+    ONE sanctioned NodeSpec funnel. A new writer fails here until it is
+    consciously allowlisted.
+    """
+
+    package_root = Path(tl.__file__).parent
+    scopes = ["_visualization", "viz", "repgeom"]
+    key_pattern = re.compile(r"[\"'](width|height|fixedsize)[\"']\s*:")
+    subscript_pattern = re.compile(r"\[[\"'](width|height|fixedsize)[\"']\]\s*=")
+    found: dict[str, int] = {}
+    for scope in scopes:
+        for path in sorted((package_root / scope).rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            count = len(key_pattern.findall(text)) + len(subscript_pattern.findall(text))
+            if count:
+                found[str(path.relative_to(package_root))] = count
+    expected = {
+        # Record-derived image branches (2x fixedsize) + input-batch montage
+        # (fixedsize/width/height) — non-encodable node classes.
+        "_visualization/_render_nodes.py": 5,
+        # Intervention-hook diamond helper (width/height in extra_attrs).
+        "_visualization/_render_edges.py": 2,
+        # Collapsed container-record node (fixedsize).
+        "_visualization/_render_flow.py": 1,
+        # THE NodeSpec funnel (fixedsize key + width/height emissions).
+        "_visualization/_render_leaf.py": 3,
+        # Encoding channel on segment capsules (fill + width/height/fixedsize
+        # from the draw's size state; no state, no attrs).
+        "_visualization/_encoding_aggregate.py": 3,
+        # Label-aware size pass: rewrites only the channel's own provisional
+        # width/height (user overrides differ and are kept).
+        "_visualization/_encoding_size_layout.py": 2,
+        # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
+        "viz/feature_maps.py": 1,
+        # C01 architecture move: the three node-visual writer sites left
+        # __init__.py for the dedicated submodule; same sites, same count.
+        "repgeom/_node_visuals.py": 3,
+        # Stage-0 lens audit reads graphviz plain-output geometry back into a
+        # measurement record ("width"/"height" keys) -- a READER of the
+        # rendered layout, never a node-arg writer; no node class involved.
+        "_visualization/lenses/audit/stage0.py": 2,
+        # ScoreInterval.to_dict's "width" key is a bootstrap interval's
+        # high - low (a statistic in a plain data dict), never a graphviz
+        # node arg; the module renders nothing and touches no node class.
+        "repgeom/_uncertainty.py": 1,
+    }
+    assert found == expected, (
+        "width/height/fixedsize node-arg writer sites changed; a new internal "
+        f"writer on an encodable node class is forbidden (C2(b)). Found: {found}"
+    )
 
 
 def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:

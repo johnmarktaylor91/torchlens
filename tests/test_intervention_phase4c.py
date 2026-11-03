@@ -9,7 +9,6 @@ import torch
 
 import torchlens as tl
 from torchlens._selection.selectors import output_at
-from torchlens._trace_state import TraceState
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
 from torchlens.options import CaptureOptions
@@ -66,33 +65,6 @@ class _LinearModel(torch.nn.Module):
         """
 
         return self.linear(x)
-
-
-class _TwoModuleModel(torch.nn.Module):
-    """Model with two module boundaries for selector specificity tests."""
-
-    def __init__(self) -> None:
-        """Initialize submodules."""
-
-        super().__init__()
-        self.a = torch.nn.ReLU()
-        self.b = torch.nn.Sigmoid()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run two modules in sequence.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Sigmoid of the relu output.
-        """
-
-        return self.b(self.a(x))
 
 
 class _ChunkModel(torch.nn.Module):
@@ -291,39 +263,6 @@ def test_module_selector_matches_capture_time_module_context() -> None:
     assert torch.count_nonzero(hooked_layers[0].out) == 0
 
 
-def test_module_selector_does_not_overmatch_other_live_modules() -> None:
-    """Live module selectors only match the requested module boundary."""
-
-    log = tl.trace(
-        _TwoModuleModel(),
-        torch.tensor([-1.0, 2.0]),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.module("b"): _zero_hook},
-        ),
-    )
-
-    hooked_labels = {layer.layer_label for layer in log._layer_list if layer.edits}
-
-    assert hooked_labels == {"interventionreplacement_1_3"}
-
-
-def test_module_selector_matches_exact_multi_op_boundary() -> None:
-    """A module selector intervenes only on a multi-op module's output boundary."""
-
-    log = tl.trace(
-        _MultiOpModuleModel(),
-        torch.randn(2, 3),
-        intervene=tl.when(tl.module("block"), tl.zero_ablate()),
-    )
-
-    intervened = {op.layer_label for op in log.ops if op.edits}
-    resolved_boundary = {log[label].layer_label for label in log[tl.module("block")].labels}
-
-    assert len(intervened) == 1
-    assert intervened == resolved_boundary
-
-
 def test_module_selector_namedtuple_output_rebuilds_without_crashing() -> None:
     """Module-boundary hooks rebuild namedtuple outputs after tensor replacement."""
 
@@ -463,77 +402,3 @@ def test_input_at_live_hook_target_rejects_with_honest_error() -> None:
                 hooks={tl.model_input(0): _zero_hook},
             ),
         )
-
-
-def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
-    """Raw labels, predicates, and module containment selectors resolve live."""
-
-    raw_log = tl.trace(
-        _ReluReturnModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(replayable=True),
-    )
-    raw_label = next(
-        layer._layer_label_raw for layer in raw_log._layer_list if layer.func_name == "relu"
-    )
-
-    label_log = tl.trace(
-        _ReluReturnModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.label(raw_label): _zero_hook},
-        ),
-    )
-    where_log = tl.trace(
-        _ReluReturnModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.where(lambda p: p.func_name == "relu"): _zero_hook},
-        ),
-    )
-    in_module_log = tl.trace(
-        _LinearModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.in_module("linear"): _zero_hook},
-        ),
-    )
-
-    assert any(layer.edits for layer in label_log._layer_list)
-    assert any(layer.edits for layer in where_log._layer_list)
-    assert any(layer.edits for layer in in_module_log._layer_list)
-
-
-def test_no_hooks_preserves_pristine_run_state() -> None:
-    """Intervention-ready capture without hooks stays pristine."""
-
-    log = tl.trace(
-        _ReluReturnModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(replayable=True),
-    )
-
-    assert log.state is TraceState.PRISTINE
-
-
-def test_live_replacement_metadata_matches_saved_out() -> None:
-    """Hook replacement refreshes tensor metadata and saved-out flags."""
-
-    log = tl.trace(
-        _ReluReturnModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.func("relu"): _zero_hook},
-        ),
-    )
-    relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
-
-    assert relu_layer.out is not None
-    assert relu_layer.has_saved_activation is True
-    assert relu_layer.shape == tuple(relu_layer.out.shape)
-    assert relu_layer.dtype == relu_layer.out.dtype
-    assert relu_layer.activation_memory == relu_layer.out.nelement() * relu_layer.out.element_size()

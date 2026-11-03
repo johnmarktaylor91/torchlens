@@ -492,10 +492,14 @@
 - `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
-  record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
+  record field, the `color_by` builtin tokens (same meaning and units; field-backed ones take
+  the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  encoded area clamped to `SIZE_BY_MAX_AREA_MULT` (4.0) x the default node area; strictly
+  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: base box =
+  per-dimension max(median label box, own label box), area grows linearly to
+  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value); collapsed
+  boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified
   single-valued (marker-varying reconciled fields, mirrored/per-pass projections, varying

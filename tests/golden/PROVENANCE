@@ -186,3 +186,12 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1173a2ed1 (merge preview of the gradient-site packets)
 recorded: 2026-11-01T02:35:31.052658+00:00
+---
+generator: hand edit (key removal only; no kept value changed)
+flag: none
+reason: test-suite shrink round 4 removed selector_semantics_matrix.json rows whose
+  cells hold no library branch arc that the kept tests miss (per-cell coverage);
+  197 keys dropped with their case-table rows, 99 kept keys byte-identical
+env: py3.10-torch2.13.0
+torch: 2.13.0
+recorded: 2026-11-03

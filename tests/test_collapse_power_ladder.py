@@ -68,6 +68,28 @@ def stack_trace():  # noqa: ANN201 - generator fixture
         trace.cleanup()
 
 
+def test_auto_is_first_in_band_ladder_point(stack_trace) -> None:
+    """The unfrozen auto contract: first step meeting the readable band, evened.
+
+    Evening only condenses (it boxes stray small modules and folds runs of
+    identical sibling boxes), so auto keeps every box of its ladder point
+    and never shows more nodes than it.
+    """
+
+    from torchlens._visualization.auto_collapse import _readable_band_high
+    from torchlens._visualization.collapse_ladder import _ladder_state_through
+
+    context = RenderContext()
+    schedule = collapse_schedule(stack_trace, context)
+    band_high = _readable_band_high(stack_trace)
+    expected = next(step for step in schedule.steps if step.visible_count <= band_high)
+    auto = collapse_optimizer.select_collapse_plan(stack_trace, context, mode="auto")
+    assert auto.visible_count <= expected.visible_count
+    ladder_selected, _ = _ladder_state_through(schedule.steps, expected)
+    assert ladder_selected <= auto.selected
+    assert not auto.band_missed
+
+
 def test_band_miss_serves_disclosed_strongest_point() -> None:
     """No in-band step: the strongest point is served with the disclosure."""
 

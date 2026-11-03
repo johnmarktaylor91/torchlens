@@ -41,6 +41,7 @@ from torch import nn
 
 from . import _state
 from ._call_fingerprint import install_module_token_hooks, module_fingerprint_address
+from ._fast_live_events import _output_tensor_leaves
 from ._fast_live_hooks import _remove_fast_live_hooks, install_collection_hooks
 from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode, RunProvider
@@ -485,16 +486,6 @@ def _live_modules_by_address(model: nn.Module) -> dict[str, nn.Module]:
         for address in addresses:
             modules.setdefault(address, module)
     return modules
-
-
-def _output_tensor_leaves(output: Any) -> tuple[Any, ...]:
-    """Return the tensor leaves of one live call output (one container level)."""
-
-    if isinstance(output, torch.Tensor):
-        return (output,)
-    if isinstance(output, (tuple, list)):
-        return tuple(item for item in output if isinstance(item, torch.Tensor))
-    return ()
 
 
 def repeats_last_function_output(

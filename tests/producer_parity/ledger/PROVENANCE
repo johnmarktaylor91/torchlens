@@ -4011,3 +4011,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a73071024dc9ea610051d008015afcb19a162d4f (dirty)
 recorded: 2026-11-03T12:09:03.770189+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: viz-encoding fixq4 on 69c64c8bd9517cabbb24e339f48b867d365d1ed4: lane modules _encoding_aggregate and _encoding_size_layout
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69c64c8bd9517cabbb24e339f48b867d365d1ed4 (clean)
+recorded: 2026-11-03T11:09:53.182320+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: viz-encoding fixq4 on 69c64c8bd9517cabbb24e339f48b867d365d1ed4: lane modules _encoding_aggregate and _encoding_size_layout
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69c64c8bd9517cabbb24e339f48b867d365d1ed4 (clean)
+recorded: 2026-11-03T11:09:58.642800+00:00
