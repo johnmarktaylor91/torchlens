@@ -56,8 +56,9 @@ RECORD_TOKENS = frozenset(
 )
 #: Subscripted containers whose items are Op or Layer records.
 KEEP_FLAT = "# record-groups: keep-flat"
-#: Line marker: a site whose receiver is an Op row reading a member that moved on
-#: Layer only (``buffer_pass``, ``is_internal_sink``) keeps its flat spelling.
+#: Line marker: a site keeps its flat spelling because its receiver only looks like a
+#: record (``parent_event``, ``_op_edits``) or is an Op row reading a member that moved
+#: on Layer only (``buffer_pass``, ``is_internal_sink``).
 LINE_FLAT = "# record-groups: flat"
 RECORD_CONTAINERS = re.compile(
     r"(^|\.)(trace|log|model_log|tl_log|tlog|ops|layers|layer_list|_layer_list|ops_list)$"
@@ -365,7 +366,9 @@ def main(argv: list[str] | None = None) -> int:
             new = rewrite_text(text, moves)
         if new != text:
             pending += 1
-            if not args.check:
+            if args.check:
+                print(f"pending: {path}", file=sys.stderr)
+            else:
                 path.write_text(new)
         if args.report:
             for lineno, what in skipped:

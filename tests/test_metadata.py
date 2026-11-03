@@ -434,7 +434,7 @@ def test_sibling_spouse_fields(small_input):
     mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert isinstance(entry.siblings, list)
+        assert isinstance(entry.graph.siblings, list)
         assert isinstance(entry.co_parents, list)
 
 

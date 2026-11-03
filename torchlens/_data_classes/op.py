@@ -2032,12 +2032,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _autograd_derived_grad(self) -> Any | None:
         """Return this op's derived intermediate gradient payload, if available."""
 
-        return _doors.intervention()._op_edits.autograd.derived_grad(self)
+        return _doors.intervention()._op_edits.derived_grad(self)  # record-groups: flat
 
     def _autograd_grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass."""
 
-        return _doors.intervention()._op_edits.autograd.grad_for(self, bwd=bwd)
+        return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)  # record-groups: flat
 
     def _record_gradient(
         self,
@@ -3385,7 +3385,7 @@ _install_op_field_descriptors()
 _ROW_RELEASE_FIELD_CLASSES = frozenset(
     {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
 )
-bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
+bind_op_facade(Op, (attr for _, attr in _OP_STATE_ATTRS), _ROW_RELEASE_FIELD_CLASSES)
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:

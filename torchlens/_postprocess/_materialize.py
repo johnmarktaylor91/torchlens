@@ -764,7 +764,7 @@ def _normalize_edge_use_record(
     parent_label, arg_position, edge_use = record[:3]
     if not isinstance(parent_label, str) or not isinstance(edge_use, str):
         return None
-    parent_event = op_events_by_label.get(parent_label)
+    source_event = op_events_by_label.get(parent_label)
     # F10 (lovely item 8): the storage verdict populates from the closed
     # function-semantics table when this event carries a function name;
     # keyword edges and unknown functions stay the honest "unknown".
@@ -782,7 +782,7 @@ def _normalize_edge_use_record(
         arg_kind="keyword" if edge_use == "kwarg" else "positional",
         arg_path=cast(Any, arg_path),
         view_or_copy=cast(Any, storage_relation),
-        parent_func_call_id=None if parent_event is None else parent_event.call.call_id,
+        parent_func_call_id=None if source_event is None else source_event.func_call_id,
         child_func_call_id=event.func_call_id or 0,
         edge_use=edge_use,
     )
