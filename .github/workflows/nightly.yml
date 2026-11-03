@@ -2165,14 +2165,14 @@ jobs:
 
 
   notebooks:
-    # Walk late.18: nothing executed the user notebooks, so eight of them (the
+    # Nothing executed the user notebooks, so eight of them (the
     # README's ten-minute tutorial included) rotted unnoticed through two rename
     # rounds. This leg executes every user notebook (notebooks/*.ipynb, the
     # learning path notebooks/learn/*.ipynb and examples/**/*.ipynb; the
     # developer audit notebooks are not in the set)
     # with nbclient, one kernel per notebook, a per-cell and a whole-notebook
     # timeout, and names the notebook and cell of every failure. Nightly only:
-    # the HF model downloads and about six minutes of execution do not belong
+    # the HF model downloads and about twelve minutes of execution do not belong
     # on every push. It runs no pytest, so it declares no executed-test floor.
     name: User notebooks (nbclient)
     runs-on: ubuntu-24.04
