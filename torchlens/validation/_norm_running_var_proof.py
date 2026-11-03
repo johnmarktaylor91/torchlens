@@ -26,7 +26,7 @@ Two further preconditions make the claim hold for the values validation itself s
 * every running_var validation can substitute keeps ``running_var + eps`` positive and the
   per-channel scale finite. The perturbation of a running_var parent moves its saved minimum
   down by at most ``max(1.0, 0.1 * |min|, 0.1 * max|output|)`` (the near-constant widening in
-  ``core._perturb_layer_outs``, which also bounds its scaled expansion and the unit step of
+  ``_perturb._perturb_layer_outs``, which also bounds its scaled expansion and the unit step of
   ``core._directional_step_perturb``). Below that floor a live edge reads NaN while a dead
   one reads unchanged, so the proof refuses there; the tests replay every accepted case
   under each strategy so a wider perturbation fails a test instead of going stale.

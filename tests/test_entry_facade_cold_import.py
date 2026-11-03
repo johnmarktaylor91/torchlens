@@ -43,7 +43,7 @@ import torchlens as tl
 results["post_import_absent"] = [
     name for name in (
         "torchlens.bridge", "torchlens.callbacks", "torchlens.neuro",
-        "torchlens._notebook", "torchlens._semantic",
+        "torchlens.report._notebook", "torchlens._semantic",
         "rsatoolbox", "brainscore_core", "IPython", "jupyter_client",
         "fake_recipe_pkg",
     ) if name in sys.modules
@@ -55,7 +55,7 @@ probe_names = (
     "__wrapped__", "rdms", "datasets",
 )
 probe_failures = []
-import torchlens._notebook as notebook_facade
+import torchlens.report._notebook as notebook_facade
 for namespace_name in ("tl", "tl.neuro", "notebook_facade", "tl.bridge", "tl.callbacks"):
     namespace = eval(namespace_name)
     for name in probe_names:

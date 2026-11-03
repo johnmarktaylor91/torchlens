@@ -9,21 +9,27 @@ import threading
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, TypeAlias, cast
+from typing import Any, ClassVar, Literal, TypeAlias
 
-from .._errors import _actionable_message, _ActionableErrorMixin
 from .._io._field_policy import FieldPolicy
-from ..errors._base import TorchLensError
+from ._container_errors import ContainerReconstructionError
 from ._container_type_probes import (
     _dataclass_defines_post_init,
     _dataclass_has_foreign_init,
     _fields_are_inert_settable,
     _inert_new,
     _is_generated_namedtuple_type,
+    _is_hf_model_output_type,
+    _is_trusted_transformers_output_type,
     _metaclass_defines_foreign_call,
     _name_is_data_descriptor,
     _type_has_instance_dict,
     _type_has_safe_new,
+)
+from .distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    is_distribution_type,
+    rebuild_distribution_node,
 )
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing
@@ -132,6 +138,11 @@ class ContainerSpec:
         "lossy_reconstruction": FieldPolicy.KEEP,
     }
 
+    #: Kinds whose children are named fields (``NamedField`` or ``DataclassField``).
+    _FIELD_KINDS: ClassVar[frozenset[str]] = frozenset(
+        {"namedtuple", "dataclass", DISTRIBUTION_CONTAINER_KIND}
+    )
+
     kind: Literal[
         "tuple",
         "list",
@@ -142,6 +153,7 @@ class ContainerSpec:
         "literal",
         "opaque",
         "registered",
+        "distribution",
     ]
     length: int | None = None
     keys: tuple[Any, ...] = ()
@@ -187,7 +199,7 @@ def declared_leaf_slots(spec: ContainerSpec) -> int:
         components = [DictKey(key) for key in spec.keys]
     elif spec.kind == "hf_model_output":
         components = [HFKey(key) for key in spec.keys]
-    elif spec.kind == "namedtuple":
+    elif spec.kind in {"namedtuple", DISTRIBUTION_CONTAINER_KIND}:
         components = [NamedField(name) for name in spec.fields]
     elif spec.kind == "dataclass":
         components = [DataclassField(name) for name in spec.fields]
@@ -306,13 +318,13 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared keys."
                 )
-    elif kind in {"namedtuple", "dataclass"}:
+    elif kind in {"namedtuple", "dataclass", DISTRIBUTION_CONTAINER_KIND}:
         if length is not None and length != len(spec.fields):
             raise ContainerReconstructionError(
                 f"ContainerSpec kind {kind!r} length {length} disagrees with "
                 f"{len(spec.fields)} fields."
             )
-        field_component = NamedField if kind == "namedtuple" else DataclassField
+        field_component = DataclassField if kind == "dataclass" else NamedField
         for component in components:
             if not isinstance(component, field_component) or component._name not in spec.fields:
                 raise ContainerReconstructionError(
@@ -415,24 +427,38 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ):
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
+    if spec.kind == DISTRIBUTION_CONTAINER_KIND:
+        return rebuild_distribution_node(
+            spec,
+            lambda name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter),
+            _resolve_container_type(spec),
+        )
     if spec.kind == "registered":
-        values = [
-            _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
-            for index in range(spec.length or 0)
-        ]
-        container_type = _resolve_container_type(spec)
-        if container_type is None:
-            raise ValueError(
-                f"Registered container type {spec.type_module}.{spec.type_qualname} "
-                "could not be imported."
-            )
-        registration = get_registered_container(container_type)
-        if registration is None:
-            raise ValueError(
-                f"Container type {container_type.__qualname__!r} is not registered in this runtime."
-            )
-        return registration.unflatten(spec.aux_data, values)
+        return _rebuild_registered_node(spec, child_by_key, leaf_iter)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")
+
+
+def _rebuild_registered_node(
+    spec: ContainerSpec, child_by_key: dict[OutputPathComponent, ContainerSpec], leaf_iter: Any
+) -> Any:
+    """Rebuild a registered container through its registration's ``unflatten`` hook."""
+
+    values = [
+        _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
+        for index in range(spec.length or 0)
+    ]
+    container_type = _resolve_container_type(spec)
+    if container_type is None:
+        raise ValueError(
+            f"Registered container type {spec.type_module}.{spec.type_qualname} "
+            "could not be imported."
+        )
+    registration = get_registered_container(container_type)
+    if registration is None:
+        raise ValueError(
+            f"Container type {container_type.__qualname__!r} is not registered in this runtime."
+        )
+    return registration.unflatten(spec.aux_data, values)
 
 
 def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
@@ -583,40 +609,6 @@ def _is_trusted_structseq_type(container_type: type[Any], spec: ContainerSpec) -
 # family. A resolved ``__init__`` provided by any of these is trusted; anything else is a custom
 # constructor and is treated as a lossy black box (see ``_model_output_has_foreign_init``).
 _TRUSTED_MODEL_OUTPUT_INIT_BASES: tuple[type[Any], ...] = (object, dict, OrderedDict)
-
-
-def _is_trusted_transformers_output_type(
-    container_type: type[Any], spec: ContainerSpec | None
-) -> bool:
-    """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
-
-    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
-    resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
-    class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
-    (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine
-    package (``transformers`` or ``transformers.``-prefixed), that module is actually loaded in
-    ``sys.modules``, and static re-resolution of ``spec.type_qualname`` from it returns the
-    IDENTICAL class object. A ``None`` spec (a legacy direct call with no resolution authority)
-    is never trusted -- fail closed.
-    """
-
-    if spec is None:
-        return False
-    module = spec.type_module or ""
-    if module != "transformers" and not module.startswith("transformers."):
-        return False
-    if not spec.type_qualname:
-        return False
-    loaded = sys.modules.get(module)
-    if loaded is None:
-        return False
-    resolved: Any = loaded
-    try:
-        for attribute_name in spec.type_qualname.split("."):
-            resolved = inspect.getattr_static(resolved, attribute_name)
-    except AttributeError:
-        return False
-    return resolved is container_type
 
 
 def _model_output_has_foreign_init(
@@ -946,57 +938,6 @@ def _slot_path_text(path: tuple[OutputPathComponent, ...]) -> str:
     return "".join(parts)
 
 
-class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueError):
-    """Raised when an output-container spec names a type that is not admissible.
-
-    The output ``ContainerSpec`` is portable, attacker-influenceable data. Its
-    ``type_module`` / ``type_qualname`` name the concrete container class to rebuild.
-    This error is the default-deny tripwire: a spec that names a type outside the
-    benign container allowlist for its ``kind`` is refused BEFORE any construction,
-    mirroring the safe-unpickler's global denial. Subclasses ``ValueError`` so the
-    runnable run wrapper reports it as a typed ``RunPreconditionError`` denial.
-
-    r3 b1-opus R64-3: the class also escapes RAW from the PUBLIC documented
-    ``Op.multi_output_type`` property, so it is a user-catchable typed refusal,
-    not only an internal codec error: it resolves from ``torchlens.errors``,
-    carries ``fields["code"] == "container_spec_inadmissible"`` plus a remedy,
-    and rows in ``docs/reference/error_refusal_contract.md``.
-    """
-
-    def __init__(
-        self,
-        problem: str,
-        *,
-        code: str = "container_spec_inadmissible",
-        remedy: str = (
-            "Re-save the artifact from a trusted capture; the recorded "
-            "output-container spec is corrupt, tampered, or names an "
-            "inadmissible type."
-        ),
-        **context: object,
-    ) -> None:
-        """Initialize the typed default-deny container-spec refusal.
-
-        Parameters
-        ----------
-        problem:
-            Description of the inadmissible spec fact.
-        code:
-            Stable machine-readable refusal code.
-        remedy:
-            Concrete caller action that resolves the refusal.
-        **context:
-            Structured, non-authoritative diagnostic context.
-        """
-
-        super().__init__(
-            _actionable_message(problem, remedy),
-            code=code,
-            remedy=remedy,
-            **cast("dict[str, Any]", context),
-        )
-
-
 # ``dict``-subtype output containers are only ever recorded for the two mapping
 # classes ``torchlens.backends.torch.ops._mapping_reconstruction`` can faithfully
 # rebuild; every other mapping is recorded ``opaque`` (honest-reject at save) and so
@@ -1005,38 +946,6 @@ class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueE
 _ALLOWED_MAPPING_TYPE_REFS: frozenset[tuple[str, str]] = frozenset(
     {("collections", "OrderedDict"), ("collections", "defaultdict")}
 )
-
-
-def _is_hf_model_output_type(container_type: type[Any]) -> bool:
-    """Return whether ``container_type`` is a HuggingFace ``ModelOutput`` container class.
-
-    Mirrors the capture-side ``ir.container_registry._is_hf_model_output`` heuristic at
-    the class level. Inspects only the ALREADY-RESOLVED class (its MRO / name / mapping
-    protocol); it never imports ``transformers`` to satisfy an attacker.
-
-    Parameters
-    ----------
-    container_type:
-        Resolved class to classify.
-
-    Returns
-    -------
-    bool
-        True when the class is a real ``transformers`` ``ModelOutput`` subclass or a
-        HuggingFace-style mapping output class.
-    """
-
-    for base in getattr(container_type, "__mro__", ()):
-        if base.__module__.startswith("transformers") and base.__name__ == "ModelOutput":
-            return True
-    return (
-        (
-            container_type.__module__.startswith("transformers")
-            or container_type.__name__.endswith("ModelOutput")
-        )
-        and hasattr(container_type, "keys")
-        and hasattr(container_type, "__getitem__")
-    )
 
 
 def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec) -> bool:
@@ -1084,6 +993,8 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
         return (spec.type_module, spec.type_qualname) in _ALLOWED_MAPPING_TYPE_REFS
     if kind == "registered":
         return get_registered_container(container_type) is not None
+    if kind == DISTRIBUTION_CONTAINER_KIND:
+        return is_distribution_type(container_type) and _type_has_safe_new(container_type)
     return False
 
 
@@ -1403,6 +1314,13 @@ CONTAINER_KIND_CAPABILITIES: dict[str, dict[str, str | bool]] = {
         "literal_support": True,
         "exact_type": True,
         "instance_state_rule": "declaration_required",
+        "addressable": True,
+    },
+    DISTRIBUTION_CONTAINER_KIND: {
+        "children": "fields",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "type_recompute",
         "addressable": True,
     },
 }

@@ -81,7 +81,7 @@
   `trace_option_unsupported`, because a run would re-capture every payload into RAM while the
   bundle on disk kept the first capture. Capture again with `to_disk` to a new path, or without
   `to_disk`, and run that trace; a trace loaded from the bundle runs through its loaded providers.
-  `Trace.save` and `Bundle.save` to an existing path refuse `bundle_save_failed` (typed, no builtin
+  `Trace.save` and `Bundle.save` to an existing path refuse `bundle_path_exists` (typed, no builtin
   `FileExistsError`) unless `overwrite=True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds
   `torch.compiler.set_stance("force_eager")` scoped to the forward (entered inside

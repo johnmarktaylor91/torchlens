@@ -226,7 +226,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
 
     import dataclasses
 
-    from .selection import Selection, SelectionProvenance, _site_shape
+    from .selection import Selection, _site_shape
 
     if target is resolved._trace:
         return resolved
@@ -254,8 +254,8 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
                 source_shape=entry.shape,
                 target_shape=target_shape,
             )
-        provenance = SelectionProvenance(
-            relation=entry.provenance.relation,
+        provenance = dataclasses.replace(
+            entry.provenance,
             source=f"{entry.provenance.source} [cross-run aligned from {source_label!r}]",
         )
         target_address = (op.layer_label, getattr(op, "pass_number", 1) or 1)

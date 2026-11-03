@@ -38,8 +38,11 @@ import torch
 from torch import nn
 
 from . import _state
-from ._fast_live_steer import apply_steer_paused, session_is_active
+from ._call_fingerprint import install_module_token_hooks
+from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode
+from ._runnable.verification import _contract_check
+from ._utils.introspection import get_vars_of_type_from_obj
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -59,6 +62,7 @@ __all__ = [
     "build_module_plans",
     "collected_function_output",
     "install_collection_hooks",
+    "install_session_hooks",
     "recorded_module_call_counts",
     "repeats_last_function_output",
     "require_distinct_plan_modules",
@@ -103,7 +107,6 @@ def _pair_output_leaves(
 
     # Module import: the dotted spelling of this path matches the layer lint's
     # torch-private pattern, but the walker is TorchLens's own, not a torch private.
-    from ._utils.introspection import get_vars_of_type_from_obj
     from .backends.torch import _ops_containers
 
     native = [
@@ -418,7 +421,8 @@ def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
     Parameters
     ----------
     trace:
-        Source trace whose ops are updated in place.
+        Result trace whose ops are updated (the fast door's fork, or the
+        live trace itself on the legacy rerun door).
     supported_labels:
         Op labels the session's module and function plans collect, plus the
         model's boundary ops.
@@ -603,6 +607,31 @@ def install_collection_hooks(
         handles.append(module.register_forward_hook(hook))
 
 
+def install_session_hooks(
+    session: Any,
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+) -> weakref.finalize[Any, Any]:
+    """Install a fast live session's steer, token and collection hooks on ``model``.
+
+    Handles append to ``session.handles``. Returns the finalizer that removes
+    them; it runs when the session is collected, and at once when an install
+    raises, so a failed build leaves no hook on the user's modules.
+    """
+
+    finalizer = weakref.finalize(session, _remove_fast_live_hooks, session.handles)
+    session_ref = weakref.ref(session)
+    try:
+        session.handles.extend(install_steer_hooks(session.steer_plan, session_ref))
+        session.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
+        install_collection_hooks(session.handles, modules, plan_addresses, session_ref)
+    except BaseException:
+        finalizer()
+        raise
+    return finalizer
+
+
 @dataclass(frozen=True)
 class DirectForwardRoute:
     """The session hook work one directly called module needs on a direct call."""
@@ -662,3 +691,30 @@ def _remove_fast_live_hooks(handles: list[Any]) -> None:
     handles.clear()
     if first_error is not None:
         raise first_error
+
+
+def _lossy_output_failure(output: Any, output_labels: Sequence[str]) -> Any:
+    """Return the failed contract check for a lossy ``torch.distributions`` output.
+
+    Capture flagged the output lossy (a transform list, a parameter the container
+    contract cannot record), so the fast run refuses it as it refuses an opaque
+    root rather than accept a boundary it knows is incomplete; ``None`` otherwise.
+    """
+
+    # Module import: the dotted spelling of this path matches the layer lint's
+    # torch-private pattern, but the prover is TorchLens's own, not a torch private.
+    from .backends.torch import _ops_containers
+
+    lossy_reason = _ops_containers.lossy_distribution_output_reason(output)
+    if not lossy_reason:
+        return None
+    return _contract_check(
+        "fast_live_model_output_opaque",
+        False,
+        RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+        f"The model returns a {type(output).__qualname__} whose state capture "
+        f"cannot record losslessly ({lossy_reason}). The fast run cannot pair "
+        "a lossy output boundary; the full run records this output as the "
+        "capture did.",
+        affected_op_labels=tuple(output_labels),
+    )
