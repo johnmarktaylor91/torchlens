@@ -851,7 +851,7 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
     trace = tl.trace(DivergentReachBufferModel(), torch.randn(2, 4))
     try:
         assert list(trace.buffer_layers), "duplicate reads must merge to one buffer node"
-        merged = trace[trace.buffer_layers[0]]
+        merged = trace.layers[trace.buffer_layers[0]]
         op = next(iter(merged.ops.values()))
         # The survivor owns every pre-merge child (two dead ends + output path)...
         assert len(op.children) == 3

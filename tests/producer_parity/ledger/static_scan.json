@@ -3562,6 +3562,22 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_selection/_site_record.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_selection/_site_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_selection/align.py",
   "has_default": false,
   "sites": 3,
@@ -10012,7 +10028,7 @@
   "field": "parents",
   "file": "torchlens/validation/_invariants_topology.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {

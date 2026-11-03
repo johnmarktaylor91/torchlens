@@ -174,7 +174,7 @@ def test_changed_plain_instance_attribute_is_a_cache_miss(tmp_path) -> None:
     # grouping rule row 3: the one-op relu loop is one layer with k passes, so
     # Loop(5) differs from Loop(1) in op (pass) count, not layer count.
     assert second._num_ops > first._num_ops
-    assert second[second.layer_labels[2]].num_passes == 5
+    assert second.layers[second.layer_labels[2]].num_passes == 5
     torch.manual_seed(0)
     third = tl.trace(_AttrLoop(5), x, capture=_cache_capture(tmp_path))
     assert third.provenance.cache_hit is True, (
@@ -567,7 +567,7 @@ def test_over_ceiling_dict_tail_difference_is_a_cache_miss(tmp_path) -> None:
     shallow = _DictLoop(1)
     first = tl.trace(shallow, x, capture=_cache_capture(tmp_path))
     assert first.provenance.cache_hit is False
-    assert first["relu_1_2"].num_passes == 1
+    assert first.layers["relu_1_2"].num_passes == 1
 
     deep = _DictLoop(5)
     deep.load_state_dict(shallow.state_dict())
@@ -575,7 +575,7 @@ def test_over_ceiling_dict_tail_difference_is_a_cache_miss(tmp_path) -> None:
     assert second.provenance.cache_hit is False, (
         "a config difference past the container item ceiling must not hit the stale cached trace"
     )
-    assert second["relu_1_2"].num_passes == 5
+    assert second.layers["relu_1_2"].num_passes == 5
 
 
 def test_depth_ceiling_difference_never_keys_equal() -> None:
