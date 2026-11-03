@@ -564,8 +564,8 @@ def _operation(
         def save_once() -> None:
             path = Path(parent.name) / f"trace_{counter['i']}.tlspec"
             counter["i"] += 1
-            tl.save(trace, str(path))
-            state["serialized_file_size_bytes"] = path.stat().st_size
+            trace.save(str(path))
+            state["serialized_file_size_bytes"] = _saved_size_bytes(path)
 
         return save_once
     if operation == "aux_load":
@@ -575,8 +575,8 @@ def _operation(
         parent = tempfile.TemporaryDirectory()
         state["_tempdir"] = parent
         path = Path(parent.name) / "trace_fixture.tlspec"
-        tl.save(trace, str(path))
-        state["serialized_file_size_bytes"] = path.stat().st_size
+        trace.save(str(path))
+        state["serialized_file_size_bytes"] = _saved_size_bytes(path)
         return lambda: tl.load(str(path))
     if operation == "peer_manual_hooks":
         return lambda: run_vanilla_hooks_manual_dict(model, x)
@@ -589,6 +589,28 @@ def _operation(
     if operation == "peer_nnsight":
         return lambda: run_nnsight(model, x)
     raise ValueError(f"Unknown operation: {operation}")
+
+
+def _saved_size_bytes(path: Path) -> int:
+    """Return the byte size of a saved artifact: a file's size, or the sum of a directory's files.
+
+    A ``.tlspec`` path is a directory, whose own ``st_size`` is the directory
+    entry (4096 on ext4), not the payload; the metric is the bytes written.
+
+    Parameters
+    ----------
+    path:
+        Saved artifact path (file or directory tree).
+
+    Returns
+    -------
+    int
+        Total bytes of regular files under ``path`` (or of ``path`` itself when it is a file).
+    """
+
+    if path.is_file():
+        return path.stat().st_size
+    return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
 
 
 def _inference_forward(model: torch.nn.Module, x: Any) -> Any:
