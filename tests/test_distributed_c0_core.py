@@ -16,6 +16,10 @@ pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available(), reason="torch.distributed unavailable"
 )
 
+from torchlens._distributed import (  # noqa: E402
+    _lifecycle as lifecycle,
+    _recognizer as recognizer_mod,
+)
 from torchlens._distributed._ledger import (  # noqa: E402
     GroupLifecycleEvent,
     GroupLifecycleLedger,
@@ -23,8 +27,6 @@ from torchlens._distributed._ledger import (  # noqa: E402
 )
 from torchlens._distributed._recognizer import derive_collective_recognizer  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
-    _recognizer as recognizer_mod,
     is_vetted_build,
     verify_membership_lineages,
 )

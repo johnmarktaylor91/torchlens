@@ -22,9 +22,9 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens._distributed._lifecycle import GroupIdentity  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 

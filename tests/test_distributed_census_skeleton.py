@@ -25,8 +25,8 @@ from tests.support.census_harness import (  # noqa: E402
     run_census_criterion_1,
     run_census_criterion_2,
 )
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 

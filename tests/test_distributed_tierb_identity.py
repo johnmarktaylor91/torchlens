@@ -25,11 +25,11 @@ import torchlens as tl  # noqa: E402
 from torchlens._distributed import (  # noqa: E402
     REFUSING_KINDS,
     DistributedCaptureUnsupportedError,
+    _lifecycle as lifecycle,  # noqa: E402
     detect_distributed_state,
 )
 from torchlens._distributed._dtensor import dtensor_dual_geometry  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 

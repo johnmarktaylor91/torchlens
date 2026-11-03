@@ -19,11 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens.backends.torch.funcol import (  # noqa: E402
     FUNCOL_BOUNDARY_SCHEMA,
     active_funcol_session,
 )
-from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build  # noqa: E402
+from torchlens.distributed import is_vetted_build  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
@@ -258,7 +259,7 @@ class TestPlaneWLifetime:
     def test_unarmed_capture_is_status_quo_for_funcol(self, gloo_world, monkeypatch):
         """Arming relaxes nothing and unarmed captures stay pre-C2: no journal."""
 
-        from torchlens.distributed import _lifecycle as lifecycle_module
+        from torchlens._distributed import _lifecycle as lifecycle_module
 
         lifecycle.disarm()
         # Force the lazy auto-arm off so this capture is genuinely unarmed.
