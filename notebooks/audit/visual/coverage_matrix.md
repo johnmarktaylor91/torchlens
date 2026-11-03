@@ -173,7 +173,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 29 | D | `d6_branching_loop` | Loop with internal branching | `branching_loop` | 2 |
 | 30 | D | `d7_back_edge_midpoint` | REGRESSION: back-edge midpoint placement | `rnn_cell_loop` | 1 |
 | 32 | E | `e1_collapse_modes` | collapse: 'none' vs 'auto' vs 'max' on ResNet-18 | `resnet18` | 3 |
-| 33 | E | `e2_float_filmstrip` | Float collapse slider: t = 0.0 to 1.0 filmstrip | `resnet18` | 5 |
+| 33 | E | `e2_float_filmstrip` | Float collapse slider: level 0.0 to 1.0 filmstrip | `resnet18` | 5 |
 | 34 | E | `e3_fold_repeats` | fold_repeats: None / True / False on a repeated block stack | `block_stack` | 3 |
 | 35 | E | `e4_standalone_fold` | Standalone folding: fold_repeats=True with collapse='none' | `block_stack` | 2 |
 | 36 | E | `e5_ellipsis_grammar` | The '+N more' ellipsis, up close | `block_stack` | 1 |

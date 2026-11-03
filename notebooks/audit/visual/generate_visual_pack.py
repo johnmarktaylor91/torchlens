@@ -1420,7 +1420,7 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e2_float_filmstrip",
-                title="Float collapse slider: t = 0.0 to 1.0 filmstrip",
+                title="Float collapse slider: level 0.0 to 1.0 filmstrip",
                 caption=(
                     "collapse accepts a float t in [0, 1] selecting a deterministic MONOTONE schedule: "
                     "t=0.0 is byte-identical to 'none', t=1.0 to 'max', and increasing t never uncollapses "
