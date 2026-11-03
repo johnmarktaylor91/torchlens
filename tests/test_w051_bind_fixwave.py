@@ -22,10 +22,9 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
-from torchlens._io import ArtifactError
 from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.values import ValueEncoder
-from torchlens.intervention.errors import BindingPreflightError
+from torchlens.intervention.errors import BindingPreflightError, OpaqueCallableError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
@@ -603,6 +602,6 @@ def test_callable_injection_refuses_a_portable_save(tmp_path) -> None:
     """A callable injection can be archived, but a portable recipe requires built-in edits."""
 
     logged, _ = _logged_chain()
-    with pytest.raises(ArtifactError) as caught:
+    with pytest.raises(OpaqueCallableError) as caught:
         logged.save(tmp_path / "portable.tlspec", level="portable")
     assert caught.value.fields["code"] == "intervention_spec_not_portable"

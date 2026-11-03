@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -202,6 +203,7 @@ def test_tampered_mask_refuses_at_load_and_the_remedy_runs(tmp_path: Path) -> No
     digest = _mask_digest(_mask())
     assert digest in text
     spec_json.write_text(text.replace(digest, _mask_digest(_mask(1))), encoding="utf-8")
+    redigest(path, "intervention.json")
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     error = _coded(excinfo.value)

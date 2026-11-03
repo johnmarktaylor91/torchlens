@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import tensor_references
 from torch import nn
 
 import torchlens as tl
@@ -15,7 +16,6 @@ import torchlens._postprocess.graph_traversal as graph_traversal_module
 from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
-from torchlens._io.manifest import Manifest
 from torchlens._record_type import record_type
 from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
@@ -172,8 +172,7 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
         assert layer.out_ref.source_bundle_path == bundle_path
         assert ".tmp." not in str(layer.out_ref.source_bundle_path)
 
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    assert manifest.tensors
+    assert tensor_references(bundle_path)
 
 
 def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
