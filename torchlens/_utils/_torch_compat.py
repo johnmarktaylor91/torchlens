@@ -122,6 +122,7 @@ __all__ = [
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_FLASH_ATTENTION_4_INTERFACE",
+    "HAS_FUNCTION_APPLY_SLOT",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -839,22 +840,14 @@ def _probe_script_function_call_hook() -> bool:
 
 
 def _probe_flash_attention_4_interface() -> bool:
-    """Return whether the flash-attn-4 distribution is installed (not a torch surface).
-
-    ``flash_attn.cute.interface`` is located by the path finder and never imported
-    (``flash_attn.cute`` loads the CUTLASS DSL); FlashAttention 2 and 3 ship no ``cute``
-    package. ``backends/torch/_foreign_data.py`` records its Functions as boundary ops.
-    """
-
-    try:
+    """Return whether flash-attn-4 ships ``flash_attn.cute.interface`` (located, never imported)."""
+    find = importlib.machinery.PathFinder.find_spec
+    with contextlib.suppress(ImportError, ValueError):
         spec = importlib.util.find_spec("flash_attn")
-    except (ImportError, ValueError):
-        return False
-    for name in ("cute", "interface"):
-        if spec is None or not spec.submodule_search_locations:
-            return False
-        spec = importlib.machinery.PathFinder.find_spec(name, list(spec.submodule_search_locations))
-    return spec is not None
+        for name in ("cute", "interface"):
+            spec = find(name, list(spec.submodule_search_locations or ())) if spec else None
+        return spec is not None
+    return False
 
 
 def _probe_safe_weights_only_load() -> bool:
@@ -1697,6 +1690,10 @@ HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
 HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = _probe_script_function_call_hook()
 HAS_FLASH_ATTENTION_4_INTERFACE: bool = _probe_flash_attention_4_interface()
+# Function.apply: a Python classmethod through torch 2.13, the C classmethod descriptor from 2.14.
+HAS_FUNCTION_APPLY_SLOT: bool = isinstance(
+    torch.autograd.Function.__dict__.get("apply"), (classmethod, types.ClassMethodDescriptorType)
+)
 # ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
 # R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
 # a user-side limit TorchLens never degrades on, so doctor does not report it.
@@ -1914,6 +1911,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SCRIPT_FUNCTION_CALL_HOOK",
     "HAS_FLASH_ATTENTION_4_INTERFACE",
+    "HAS_FUNCTION_APPLY_SLOT",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",

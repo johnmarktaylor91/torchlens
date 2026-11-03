@@ -225,7 +225,9 @@
 - TorchScript and DLPack: a `torch.jit.script` function called from an eager forward runs its
   body in the TorchScript interpreter, below the Python functions TorchLens wraps, so each call
   is recorded as ONE `jitscript` boundary op (`backends/torch/_script_boundary.py`, hook on
-  `ScriptFunction.__call__`, gated by `HAS_SCRIPT_FUNCTION_CALL_HOOK`; warning
+  `ScriptFunction.__call__`, gated by `HAS_SCRIPT_FUNCTION_CALL_HOOK`; the sibling
+  `Function.apply` hook wraps both slot shapes, the Python classmethod through torch 2.13 and
+  the C descriptor from torch 2.14, gated by `HAS_FUNCTION_APPLY_SLOT`; warning
   `torchscript_boundary`): its interior ops are not in the graph, every dispatch inside it is
   owned by the audited `jit_script:boundary` token, and validation replays it by calling the
   function again (a scripted module is still refused up front). A call that writes into one of

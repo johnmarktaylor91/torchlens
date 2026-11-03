@@ -182,6 +182,13 @@
   passes and the armed completeness witness verifies the trace; before, the trace recorded the
   output allocation in place of the attention and validation failed on `bfs_completeness`.
   `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
+- **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
+  `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
+  classmethod; before, the hook silently stayed uninstalled there and a forward that left
+  torch (NumPy, DLPack, FlashAttention 4) was not collapsed into a boundary op, so the
+  completeness census reported its interior dispatches as unaccounted. The slot shape is the
+  capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
+  `TorchCapabilityWarning` instead of degrading silently.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116

@@ -172,6 +172,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_FP8_DTYPES"),
     _row("HAS_FSDP_WRAPPER"),
+    _row("HAS_FUNCTION_APPLY_SLOT"),
     _row(
         "HAS_FUNCOL_GROUP_RESOLUTION",
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1", "2.8.0", "2.9.1"),

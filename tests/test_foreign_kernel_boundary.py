@@ -33,6 +33,7 @@ from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
     FOREIGN_FUNCTION_WRAPPER_NAME,
+    apply_slot_function,
     is_foreign_function_recorder,
 )
 from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
@@ -476,3 +477,33 @@ def test_known_foreign_kernel_table_matches_the_interface_module_only() -> None:
         (FLASH_ATTENTION_4_EXIT,) if tc.HAS_FLASH_ATTENTION_4_INTERFACE else ()
     )
     assert tc._probe_flash_attention_4_interface() is tc.HAS_FLASH_ATTENTION_4_INTERFACE  # noqa: SLF001
+
+
+def test_apply_slot_shapes_both_wrap() -> None:
+    """Both shapes of ``Function.__dict__["apply"]`` yield a ``(cls, *args)`` callable."""
+
+    def plain(cls: type, value: int) -> tuple[type, int]:
+        return cls, value
+
+    assert apply_slot_function(classmethod(plain)) is plain
+    # A C classmethod descriptor (torch 2.14's slot shape) binds to the given class.
+    descriptor = dict.__dict__["fromkeys"]
+    call = apply_slot_function(descriptor)
+    assert call is not None
+    assert call(dict, "ab", 0) == {"a": 0, "b": 0}
+    assert apply_slot_function(staticmethod(plain)) is None
+    assert apply_slot_function(None) is None
+
+
+def test_apply_hook_is_installed_on_this_torch() -> None:
+    """The running torch's ``apply`` slot is wrapped, under its own name, while capture is on."""
+
+    assert tc.HAS_FUNCTION_APPLY_SLOT is True
+    wrap_torch()
+    installed = torch.autograd.Function.__dict__["apply"]
+    assert isinstance(installed, classmethod)
+    assert installed.__func__.__name__ == "apply"
+    model = _ForeignFunctionModel(_NumpyDoubleFunction)
+    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
+        trace = tl.trace(model, torch.randn(2, 4))
+    assert len(_boundary_ops(trace)) == 1
