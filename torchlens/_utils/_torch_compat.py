@@ -52,7 +52,9 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._foreign_kernel_packages import probe_flash_attention_4_interface
 from ._module_call_dispatch import probe_module_call_dispatch_frame
+from ._script_call_slot import probe_script_function_call_hook
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -120,6 +122,7 @@ __all__ = [
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SCRIPT_FUNCTION_CALL_HOOK",
+    "HAS_FLASH_ATTENTION_4_INTERFACE",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
     "HAS_DYNAMO_ORIG_CALLABLE_MARKER",
     "HAS_FSDP_WRAPPER",
@@ -826,14 +829,6 @@ def _probe_tensor_sequence_slot_fix() -> bool:
     from ._type_sequence_slot import sequence_slot_layout_problem
 
     return sequence_slot_layout_problem(torch.Tensor, b"Tensor") is None
-
-
-def _probe_script_function_call_hook() -> bool:
-    """Return whether ``ScriptFunction.__call__`` can be replaced (leaf imported at probe time)."""
-
-    from ._script_call_slot import probe_script_function_call_hook
-
-    return probe_script_function_call_hook()
 
 
 def _probe_safe_weights_only_load() -> bool:
@@ -1674,7 +1669,8 @@ HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = _probe_legacy_constructor_new_patch()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
-HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = _probe_script_function_call_hook()
+HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = probe_script_function_call_hook()
+HAS_FLASH_ATTENTION_4_INTERFACE: bool = probe_flash_attention_4_interface()
 # ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
 # R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
 # a user-side limit TorchLens never degrades on, so doctor does not report it.
@@ -1891,6 +1887,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
     "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
     "HAS_SCRIPT_FUNCTION_CALL_HOOK",
+    "HAS_FLASH_ATTENTION_4_INTERFACE",
     "HAS_SAVED_TENSORS_HOOK_INTROSPECTION",
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",

@@ -15,8 +15,9 @@ measured on.
   ``parallelize_module`` and transformers' DTensor-native ``tp_plan="auto"`` loading are
   covered.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
-  package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
-  xfail), and a companion test pins that a witnessed trace is marked unverified, not silent.
+  package supports; skipped elsewhere with the reason. Each FlashAttention 4 call is one
+  ``autogradfunction`` boundary op (exit ``flash_attn.cute``) that validates through replay;
+  a companion test pins that the armed completeness witness sees no gap.
 """
 
 from __future__ import annotations
@@ -32,6 +33,13 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._utils._foreign_kernel_packages import FLASH_ATTENTION_4_INTERFACE_MODULE
+from torchlens.backends.torch._function_boundary import (
+    FOREIGN_FUNCTION_FUNC_NAME,
+    FOREIGN_FUNCTION_TRANSFORM_KIND,
+    FOREIGN_FUNCTION_WRAPPER_NAME,
+)
+from torchlens.backends.torch._known_foreign_kernels import FLASH_ATTENTION_4_EXIT
 
 transformers = pytest.importorskip("transformers")
 
@@ -262,13 +270,6 @@ def _flash_attention_4_ready() -> str:
     return ""
 
 
-_FA4_GAP = (
-    "capture gap: FlashAttention 4 allocates its output with torch.empty and fills it from a "
-    "CuTe kernel below the torch function layer, so the trace records the allocation instead of "
-    "the attention; validation fails (the tripwire) and the trace is marked unverified"
-)
-
-
 def _fa4_llama() -> tuple[torch.nn.Module, torch.Tensor]:
     """Build a bf16 two-layer Llama on ``flash_attention_4`` on CUDA, or skip with the reason."""
 
@@ -286,33 +287,70 @@ def _fa4_llama() -> tuple[torch.nn.Module, torch.Tensor]:
     return model, input_ids.to("cuda")
 
 
+def _fa4_boundary_ops(trace: tl.Trace) -> list[Any]:
+    """Return the FlashAttention 4 boundary ops of a trace (one per attention layer)."""
+
+    return [
+        op
+        for op in trace._layer_list
+        if op.func_name == FOREIGN_FUNCTION_FUNC_NAME
+        and op.transform_config.get("exits") == [FLASH_ATTENTION_4_EXIT]
+    ]
+
+
 @pytest.mark.cuda
 @pytest.mark.heavy
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA4_GAP)
 def test_flash_attention_4_capture_and_validate() -> None:
-    """A Llama on ``attn_implementation="flash_attention_4"`` traces exactly and replays."""
+    """A Llama on ``attn_implementation="flash_attention_4"`` traces exactly and replays.
 
+    Each attention call is one ``autogradfunction`` boundary op whose parents are the
+    projected q, k and v and whose callable is the FlashAttention 4 Function's ``apply``;
+    the allocation and detaches inside the kernel wrapper are not in the graph, and forward
+    validation (replay plus the dispatch census) passes with nothing exempted.
+    """
+
+    from torchlens._utils._torch_compat import HAS_FLASH_ATTENTION_4_INTERFACE
+    from torchlens.backends.torch._function_boundary import is_foreign_function_recorder
+    from torchlens.validation import last_validation_failure
+
+    assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     model, input_ids = _fa4_llama()
     with torch.no_grad():
         direct = model(input_ids=input_ids).logits
-    trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    with pytest.warns(tl.errors.TorchLensWarning, match="foreign-kernel boundary op"):
+        trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
     try:
         assert trace.outcome.status.name == "COMPLETE"
         assert torch.equal(trace.output.logits, direct)
+        boundaries = _fa4_boundary_ops(trace)
+        assert len(boundaries) == model.config.num_hidden_layers, [op.label for op in boundaries]
+        for op in boundaries:
+            assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+            assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+            assert is_foreign_function_recorder(op.func)
+            assert "self_attn" in str(op.module_call_stack), op.module_call_stack
+            assert len(op.parents) >= 3, op.parents
+        attention_interiors = [
+            op.label
+            for op in trace._layer_list
+            if op.type in {"empty", "detach"} and "self_attn" in str(op.module_call_stack)
+        ]
+        assert attention_interiors == []
     finally:
         trace.cleanup()
     assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
+    assert last_validation_failure() is None
 
 
 @pytest.mark.cuda
 @pytest.mark.heavy
-def test_flash_attention_4_capture_gap_is_flagged_not_silent() -> None:
-    """Until the gap is closed, a witnessed ``flash_attention_4`` trace says it is unverified.
+def test_flash_attention_4_boundary_owns_every_dispatch() -> None:
+    """With the completeness witness armed, a ``flash_attention_4`` trace is verified.
 
-    The kernel's writes are invisible to capture, so the armed completeness witness must account
-    for them as unexplained dispatch events and mark the trace unverified (a plain trace leaves
-    the witness off and ``verified`` unrecorded). If this starts failing because the gap was
-    closed, drop the xfail on the test above and this test together.
+    The boundary op owns every aten dispatch inside the FlashAttention 4 call (the detaches
+    and the output allocation), so the witness accounts for the whole forward: no
+    ``CaptureGapWarning``, ``verified`` is True and the diagnostics are empty. Companion of
+    the test above; together they pin that the former capture gap is closed, not hidden.
     """
 
     from torchlens import _state
@@ -340,10 +378,18 @@ def test_flash_attention_4_capture_gap_is_flagged_not_silent() -> None:
             provenance.verification_reason,
             trace.completeness_diagnostics,
         )
-        assert provenance.verified is False, facts
-        assert provenance.verification_reason == "dispatch_witness_unaccounted_ops", facts
-        assert trace.completeness_diagnostics, facts
+        assert provenance.verified is True, facts
+        assert trace.completeness_diagnostics == [], facts
+        owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
+        assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
+        boundary_ids = {op.func_call_id for op in _fa4_boundary_ops(trace)}
+        owned = {
+            entry["owner_func_call_id"]
+            for entry in trace.health.completeness_decompositions
+            if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
+        }
+        assert owned == boundary_ids
     finally:
         trace.cleanup()
     gap_warnings = [w for w in caught if issubclass(w.category, tl.errors.CaptureGapWarning)]
-    assert gap_warnings, [str(w.message)[:200] for w in caught]
+    assert gap_warnings == [], [str(w.message)[:200] for w in gap_warnings]

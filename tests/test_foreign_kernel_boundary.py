@@ -2,13 +2,16 @@
 
 Positive: a numpy round trip and a dlpack round trip inside ``Function.forward`` are
 captured as ONE ``autogradfunction`` boundary op that validates through replay, with the
-armed completeness census clean. Control: an ordinary custom Function (interior in torch)
+armed completeness census clean; so is a known foreign kernel (the FlashAttention 4 shape:
+a ``torch.empty`` output filled below the dispatcher, matched by its interface module). Control: an ordinary custom Function (interior in torch)
 is captured exactly as before. Armed negative: a plain ``.numpy()`` round trip in a module
 forward (no Function) is never collapsed into a Function boundary.
 """
 
 from __future__ import annotations
 
+import array
+import ctypes
 import warnings
 
 import numpy as np
@@ -20,11 +23,20 @@ import torchlens as tl
 from tests import example_models
 from torchlens._errors import CaptureGapWarning
 from torchlens._record_type import record_type
+from torchlens._utils import _torch_compat as tc
+from torchlens._utils._foreign_kernel_packages import (
+    FLASH_ATTENTION_4_INTERFACE_MODULE,
+    probe_flash_attention_4_interface,
+)
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
     FOREIGN_FUNCTION_WRAPPER_NAME,
     is_foreign_function_recorder,
+)
+from torchlens.backends.torch._known_foreign_kernels import (
+    FLASH_ATTENTION_4_EXIT,
+    known_foreign_kernel_exits,
 )
 from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import wrap_torch
@@ -310,3 +322,160 @@ def test_foreign_function_with_unhashable_handle_argument() -> None:
         trace = tl.trace(model, x)
     _assert_one_boundary(trace, _HandleDoubleFunction)
     _assert_validates_clean(model, x)
+
+
+# --- Known foreign kernels: the FlashAttention 4 shape ------------------------------------
+
+
+class _StandInKernelFunction(torch.autograd.Function):
+    """FlashAttention 4 shape: a fresh ``torch.empty`` output filled below the dispatcher.
+
+    The class reports the FlashAttention 4 interface module as its ``__module__``, so the
+    known-foreign-kernel table matches it. The fill writes the bytes through the output's
+    data pointer: no torch op, no numpy or dlpack export, nothing the dynamic detector or the
+    dispatch census can see, exactly what a CuTe kernel reached through TVM FFI looks like.
+    """
+
+    __module__ = FLASH_ATTENTION_4_INTERFACE_MODULE
+
+    @staticmethod
+    def forward(ctx, q, k, v):  # type: ignore[override]
+        out = torch.empty(q.shape, dtype=torch.float32)
+        values = array.array(
+            "f",
+            [
+                a + b * c
+                for a, b, c in zip(
+                    q.detach().flatten().tolist(),
+                    k.detach().flatten().tolist(),
+                    v.detach().flatten().tolist(),
+                    strict=True,
+                )
+            ],
+        )
+        ctypes.memmove(out.data_ptr(), values.buffer_info()[0], len(values) * values.itemsize)
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        return grad_output, grad_output, grad_output
+
+
+class _StandInAttentionModel(nn.Module):
+    """Three projections feeding the stand-in kernel, then a consumer."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.q_proj = nn.Linear(4, 4)
+        self.k_proj = nn.Linear(4, 4)
+        self.v_proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = _StandInKernelFunction.apply(self.q_proj(x), self.k_proj(x), self.v_proj(x))
+        return torch.relu(y)
+
+
+def _stand_in_direct(model: _StandInAttentionModel, x: torch.Tensor) -> torch.Tensor:
+    """Return the stand-in kernel's output for ``x`` outside capture."""
+
+    return _StandInKernelFunction.apply(model.q_proj(x), model.k_proj(x), model.v_proj(x))
+
+
+def test_known_foreign_kernel_function_is_one_boundary_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A FlashAttention 4 Function is one replayable boundary op with its known exit."""
+
+    monkeypatch.setattr(tc, "HAS_FLASH_ATTENTION_4_INTERFACE", True)
+    model = _StandInAttentionModel()
+    x = torch.randn(3, 4)
+
+    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op") as record:
+        trace = tl.trace(model, x)
+    codes = [getattr(w.message, "fields", {}).get("code") for w in record]
+    assert "foreign_kernel_boundary" in codes
+    boundaries = _boundary_ops(trace)
+    assert len(boundaries) == 1
+    op = boundaries[0]
+    assert op.is_transform is True
+    assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+    assert op.transform_config["function"] == _StandInKernelFunction.__qualname__
+    assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+    assert op.transform_config["exits"] == [FLASH_ATTENTION_4_EXIT]
+    assert is_foreign_function_recorder(op.func)
+    # The allocation and the detaches inside the kernel wrapper are not in the graph.
+    assert not any(op.type in {"empty", "detach", "flatten"} for op in trace._layer_list)
+    assert sorted(record_type(trace[label]) for label in op.parents) == ["linear"] * 3
+    assert [record_type(trace[label]) for label in op.children] == ["relu"]
+    torch.testing.assert_close(op.out, _stand_in_direct(model, x))
+
+    # Forward replay and the dispatch census through the boundary validate, nothing exempted.
+    _assert_validates_clean(model, x)
+
+
+def test_known_foreign_kernel_owns_its_interior_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With the census armed, the allocation and detaches inside the call belong to the op."""
+
+    monkeypatch.setattr(tc, "HAS_FLASH_ATTENTION_4_INTERFACE", True)
+    wrap_torch(completeness_witness=True)
+    model = _StandInAttentionModel()
+    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
+        trace = tl.trace(model, torch.randn(3, 4))
+
+    assert trace.provenance.verified is True
+    assert trace.completeness_diagnostics == []
+    boundary_rows = [
+        entry
+        for entry in trace.health.completeness_decompositions
+        if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
+    ]
+    assert len(boundary_rows) == 1
+    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].func_call_id
+    assert boundary_rows[0]["capture_accounted"] is True
+    assert not any(
+        entry["owner_func_name"] in {"empty", "detach"}
+        for entry in trace.health.completeness_decompositions
+    )
+
+
+def test_known_foreign_kernel_needs_its_capability_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Control: with the flag off the same Function is ordinary, and the tripwire still fires.
+
+    Nothing is collapsed, the ``empty`` allocation stands in for the attention, and forward
+    validation fails because replay cannot reproduce a fill it never saw: the boundary closes
+    the gap, it does not hide the census.
+    """
+
+    monkeypatch.setattr(tc, "HAS_FLASH_ATTENTION_4_INTERFACE", False)
+    assert known_foreign_kernel_exits(_StandInKernelFunction) == ()
+    model = _StandInAttentionModel()
+    x = torch.randn(3, 4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x)
+    assert _boundary_ops(trace) == []
+    assert any(op.type == "empty" for op in trace._layer_list)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert validate_forward_pass(model, [x], input_kwargs={}) is False
+    assert last_validation_failure() is not None
+
+
+def test_known_foreign_kernel_table_matches_the_interface_module_only() -> None:
+    """Only Functions of the FlashAttention 4 interface module (or its submodules) match."""
+
+    class _Elsewhere(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, x):  # type: ignore[override]
+            return x
+
+    class _Submodule(torch.autograd.Function):
+        __module__ = FLASH_ATTENTION_4_INTERFACE_MODULE + ".sm90"
+
+        @staticmethod
+        def forward(ctx, x):  # type: ignore[override]
+            return x
+
+    assert known_foreign_kernel_exits(_Elsewhere) == ()
+    assert known_foreign_kernel_exits(_Submodule) == (
+        (FLASH_ATTENTION_4_EXIT,) if tc.HAS_FLASH_ATTENTION_4_INTERFACE else ()
+    )
+    assert probe_flash_attention_4_interface() is tc.HAS_FLASH_ATTENTION_4_INTERFACE

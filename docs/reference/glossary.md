@@ -1284,7 +1284,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   gradient the pass writes, parented on the roots and, when the leaf already held a grad, on
   that previous grad as its in-place receiver, so a later `param.grad` read has a producer;
   `autogradfunction`, a custom `autograd.Function`
-  whose forward left torch through a numpy or dlpack round trip, with
+  whose forward left torch through a numpy or dlpack round trip or a known foreign kernel
+  (FlashAttention 4's `flash_attn.cute` Functions, exit `flash_attn.cute`), with
   `transform_kind="autograd.Function"`, `foreigndata`, a host constructor (`from_numpy`,
   `from_dlpack`, `frombuffer`, or a tensorless `tensor` / `as_tensor` / `asarray`) that brings
   data back into torch after a plain-code `numpy` / `__array__` / `__dlpack__` / `to_dlpack` /

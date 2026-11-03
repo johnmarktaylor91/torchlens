@@ -46,6 +46,7 @@ from ._foreign_data import (
     TOLIST_EXPORT_FUNC_NAME,
     note_plain_export,
 )
+from ._known_foreign_kernels import known_foreign_kernel_exits
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -651,6 +652,10 @@ def record_function_apply(
 ) -> Any:
     """Run one ``Function.apply`` under capture, collapsing it if the forward left torch.
 
+    A forward leaves torch when the frame saw an export or host re-entry, or when the
+    Function is a known foreign kernel (``_known_foreign_kernels``: FlashAttention 4 hands its
+    tensors to a CuTe kernel through TVM FFI, which no export patch sees).
+
     Parameters
     ----------
     trace:
@@ -685,7 +690,7 @@ def record_function_apply(
         return out
     collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
     host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
-    exits = tuple(sorted(frame_exports)) + host_entry_ops
+    exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
         return out
     spec = BoundarySpec(

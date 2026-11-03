@@ -104,7 +104,11 @@
     so the dispatch census balances without any exemption. A custom
     `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
     `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
-    `as_tensor` / `asarray` op, inside its `apply`) is one
+    `as_tensor` / `asarray` op, inside its `apply`), or that is a known foreign kernel
+    (`backends/torch/_known_foreign_kernels.py`: every Function of `flash_attn.cute.interface`,
+    FlashAttention 4, hands its tensors to a CuTe kernel through TVM FFI, which no export patch
+    sees; gated by `HAS_FLASH_ATTENTION_4_INTERFACE`, a filesystem probe that never imports the
+    package), is one
     `autogradfunction` boundary op (`transform_kind="autograd.Function"`,
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and

@@ -17,7 +17,7 @@ version table, the limitations catalog) lives in
 |---|---|---|---|---|---|---|
 | Router-logit outputs (`output_router_logits=True`) | `test_router_logit_outputs_capture_exactly_and_validate[mixtral, qwen2_moe, olmoe]` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | `test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks, both sharding paths |
-| `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40 (compute capability 8.9), flash-attn-4 4.0.0b37 | capture gap, flagged: exact output, forward validation fails (strict xfail), witnessed trace marked unverified |
+| `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40 (compute capability 8.9), flash-attn-4 4.0.0b37 | pass: exact output, each attention call one `autogradfunction` boundary op (exit `flash_attn.cute`), forward validation passes, witnessed trace verified |
 | Router-logit outputs | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host (CPU tensors) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
 | Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
@@ -59,23 +59,28 @@ waits out its timeout.
 
 `attn_implementation="flash_attention_4"` needs a CUDA device that the
 FlashAttention 4 package supports (compute capability 8.0 and newer; transformers
-refuses it on CPU). On the measured GPU the model runs, and the trace returns the
-exact logits, but the attention itself is not in the graph: FlashAttention 4
-allocates its output with `torch.empty` and fills it from a CuTe kernel that runs
-below the torch function layer TorchLens wraps, so the trace records the
-allocation in place of the attention. Forward validation catches it: it arms the
-completeness witness, which reports unaccounted dispatch events and raises
-`tl.errors.CaptureGapWarning`, and replay cannot reproduce the kernel's writes,
-so `tl.validate` returns `False`. A plain `tl.trace` leaves the witness off, so
-its `trace.provenance.verified` is `None` (not recorded, never a clean bill);
-with the witness armed for every capture
-(`torchlens.backends.torch.wrappers.wrap_torch(completeness_witness=True)`) the
-trace is marked unverified (`trace.provenance.verified is False`, reason
-`dispatch_witness_unaccounted_ops`). The same model on `sdpa` or `eager` attention, same GPU and dtype
-(bfloat16), captures and validates. Until FlashAttention 4 calls are captured as
-boundary ops, trace these models with `attn_implementation="sdpa"` or
-`"eager"`. The row's test is a strict expected failure, with a companion test
-that pins the unverified marking under the armed witness.
+refuses it on CPU). FlashAttention 4 (`flash_attn.cute`) allocates its output with
+`torch.empty` and fills it from a CuTe kernel reached through TVM FFI, below the torch
+function layer TorchLens wraps and without the numpy or dlpack export the dynamic
+foreign-kernel detector sees, so a plain capture would record the allocation in place
+of the attention. TorchLens therefore records every `autograd.Function` of
+`flash_attn.cute.interface` (`FlashAttnFunc`, `FlashAttnVarlenFunc`) as one
+`autogradfunction` boundary op with `transform_kind="autograd.Function"` and
+`transform_config["exits"] == ["flash_attn.cute"]`: its parents are the projected q, k
+and v, its output the attention output, and it replays by calling the Function's
+`apply` again (the treatment numpy and dlpack round trips already get). The op is
+disclosed once per Function class per capture by the `foreign_kernel_boundary`
+warning. On the measured GPU the trace returns the exact logits, `tl.validate(...,
+scope="forward")` passes with the dispatch census balanced (nothing exempted), and
+with the completeness witness armed for every capture
+(`torchlens.backends.torch.wrappers.wrap_torch(completeness_witness=True)`) the trace
+is verified (`trace.provenance.verified is True`, no `CaptureGapWarning`). The same
+model on `sdpa` or `eager` attention, same GPU and dtype (bfloat16), captures and
+validates op by op. `torchlens.utils.doctor()` reports whether the package is
+installed as `HAS_FLASH_ATTENTION_4_INTERFACE` (read from the package's search path;
+nothing is imported). The row's test asserts the boundary ops, the exact output and
+the passing validation; a companion test pins the verified marking under the armed
+witness.
 
 ## Model Explorer with adapter 0.2.x
 
