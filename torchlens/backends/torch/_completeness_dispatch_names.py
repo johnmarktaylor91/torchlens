@@ -26,6 +26,7 @@ from .escape_detection import (
 __all__ = (
     "_resolved_dispatch_origins",
     "_record_escape_source_tensor",
+    "_tally_plain_scalar_escape",
     "_operator_name",
     "_operator_base_name",
     "_is_aten_operator",
@@ -474,6 +475,41 @@ def _first_scalar_escape_source() -> tuple[str | None, int | None]:
     return None, None
 
 
+#: Branch-test consumer kinds postprocess step 5 records as conditionals
+#: (``_postprocess.control_flow._BRANCH_CONTEXT_KINDS``; a test pins the two equal).
+_RECORDED_CONDITIONAL_TEST_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
+
+
+def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> None:
+    """Count one labelled plain-capture scalar escape unless step 5 records it.
+
+    A 0-dim ``torch.bool`` read by ``__bool__`` at an ``if`` / ``elif`` test or a
+    conditional expression is not a lost dependence: step 5 records it as a
+    ``Conditional`` (same receiver rule, ``is_scalar_bool``, and the same AST
+    lookup). Every other read counts, including ``if x.sum():`` truthiness,
+    ``while`` and ``assert`` tests, and reads the lookup cannot tie to one test.
+
+    Parameters
+    ----------
+    state:
+        Per-capture ``_PlainScalarEscapeState`` aggregate.
+    tensor:
+        Labelled receiver of the escape method.
+    name:
+        Scalar-protocol method name.
+    """
+
+    if name == "__bool__" and tensor.dtype is torch.bool and tensor.ndim == 0:
+        filename, line = _first_scalar_escape_source()
+        if filename is not None and line is not None:
+            kind = _classify_consumer_kind(filename, line)
+            if kind in _RECORDED_CONDITIONAL_TEST_KINDS:
+                return
+    state.count += 1
+    if state.first_file is None:
+        state.first_file, state.first_line = _first_scalar_escape_source()
+
+
 def _external_warning_stacklevel() -> int:
     """Return a warning stack level that resolves outside the TorchLens package.
 
@@ -550,3 +586,4 @@ from .completeness_witness import (  # noqa: E402
     _TORCHLENS_ROOT,
     _DispatchCallsite,
 )
+from .structure_only_belt import _classify_consumer_kind  # noqa: E402
