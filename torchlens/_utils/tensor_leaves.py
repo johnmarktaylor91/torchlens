@@ -12,6 +12,35 @@ from typing import Any, cast
 import torch
 
 
+def flat_byte_view(tensor: torch.Tensor) -> torch.Tensor:
+    """Return a flat ``torch.uint8`` view of a contiguous tensor's element bytes.
+
+    ``view(torch.uint8)`` needs a last-dimension stride of 1 and refuses 0-dim
+    tensors, so the tensor is flattened first. A contiguous tensor flattens to
+    stride 1 except when it holds at most one element: a size-1 dimension keeps
+    its source stride through ``contiguous()`` and ``reshape(-1)`` (the one-element
+    slice ``x[0:1, 1]`` of a 2x4 tensor has stride 4), which ``view(torch.uint8)``
+    refuses. That one element sits at the storage offset either way, so the view
+    is re-strided to 1 there, without a copy.
+
+    Parameters
+    ----------
+    tensor:
+        Contiguous strided tensor on any device (non-contiguous inputs are
+        copied by ``reshape(-1)``).
+
+    Returns
+    -------
+    torch.Tensor
+        One-dimensional ``torch.uint8`` view of the tensor's bytes.
+    """
+
+    flat = tensor.reshape(-1)
+    if flat.numel() <= 1 and flat.stride(0) != 1:
+        flat = flat.as_strided((flat.numel(),), (1,))
+    return flat.view(torch.uint8)
+
+
 def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
     """Return a tensor's raw contiguous payload bytes, for ANY dense dtype.
 
@@ -35,7 +64,7 @@ def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
     flat = tensor.detach().reshape(-1).cpu().contiguous()
     if flat.numel() == 0:
         return b""
-    return flat.view(torch.uint8).numpy().tobytes()
+    return flat_byte_view(flat).numpy().tobytes()
 
 
 def iter_tensors(

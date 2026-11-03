@@ -37,6 +37,7 @@ from ._zero_fire import (
     raise_rerun_zero_fire,
     settle_zero_fire,
 )
+from ._zero_fire_doors import rerun_zero_fire_message
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -1514,20 +1515,17 @@ def _reconcile_rerun_hook_fires(
         # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the
         # rest (default: this coded warning). Under "error" the refusal raises here, before the
         # swap, so the trace is unchanged.
-        message = (
-            "Rerun hook plan entries fired at zero sites on the new inputs: "
-            f"{unfired!r}. The rerun completed, but those interventions were "
-            "no-ops. Remedy: resolve the target sites against the rerun trace "
-            "(trace[selector]) before re-applying, or route the edit "
-            "through the push engine (fork().do(...)), which validates sites "
-            "at plan time"
+        message, reason_fields = rerun_zero_fire_message(
+            new_log, hook_plan, unfired, _hook_plan_identifier
         )
 
         def _warn() -> None:
             """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
 
             warnings.warn(
-                TorchLensWarning(message, code="rerun_zero_fire", unfired_plan_ids=list(unfired)),
+                TorchLensWarning(
+                    message, code="rerun_zero_fire", unfired_plan_ids=list(unfired), **reason_fields
+                ),
                 stacklevel=external_stacklevel(),
             )
 

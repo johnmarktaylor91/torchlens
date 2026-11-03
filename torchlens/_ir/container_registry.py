@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
@@ -13,6 +12,12 @@ from typing import Any, ClassVar
 import torch
 
 from .._io._field_policy import FieldPolicy
+from ._container_type_probes import (
+    _container_type_ref,
+    _is_hf_model_output,
+    _is_namedtuple_instance,
+    _torch_return_type_fields,
+)
 from .container import (
     ContainerSpec,
     DataclassField,
@@ -23,6 +28,7 @@ from .container import (
     TupleIndex,
     get_registered_container,
 )
+from .distribution_container import build_distribution_spec, distribution_children, is_distribution
 
 
 class Role(Enum):
@@ -718,19 +724,10 @@ def _build_container_spec_unguarded(
             child_specs=tuple(child_specs),
             aux_data=aux_data,
         )
+    if is_distribution(value):
+        return _distribution_spec(value, children, child_specs)
     if _is_hf_model_output(value):
-        keys = tuple(value.keys())
-        module, qualname = _container_type_ref(value)
-        if not _children_are_reconstructable(children, child_specs):
-            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
-        return ContainerSpec(
-            kind="hf_model_output",
-            length=len(keys),
-            keys=keys,
-            type_module=module,
-            type_qualname=qualname,
-            child_specs=tuple(child_specs),
-        )
+        return _hf_output_spec(value, children, child_specs)
     torch_fields = _torch_return_type_fields(value)
     if _is_namedtuple_instance(value) or torch_fields:
         fields = torch_fields or tuple(value._fields)
@@ -782,6 +779,40 @@ def _build_container_spec_unguarded(
     if isinstance(value, list):
         return ContainerSpec(kind="list", length=len(value), child_specs=tuple(child_specs))
     return None
+
+
+def _distribution_spec(
+    value: Any,
+    children: tuple[tuple[OutputPathComponent, Any], ...],
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]],
+) -> ContainerSpec:
+    """Build the spec for a ``torch.distributions`` value (opaque when a child is not)."""
+
+    module, qualname = _container_type_ref(value)
+    if not _children_are_reconstructable(children, child_specs):
+        return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+    return build_distribution_spec(ContainerSpec, value, module, qualname, tuple(child_specs))
+
+
+def _hf_output_spec(
+    value: Any,
+    children: tuple[tuple[OutputPathComponent, Any], ...],
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]],
+) -> ContainerSpec:
+    """Build the spec for a HuggingFace ``ModelOutput`` (opaque when a child is not)."""
+
+    keys = tuple(value.keys())
+    module, qualname = _container_type_ref(value)
+    if not _children_are_reconstructable(children, child_specs):
+        return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+    return ContainerSpec(
+        kind="hf_model_output",
+        length=len(keys),
+        keys=keys,
+        type_module=module,
+        type_qualname=qualname,
+        child_specs=tuple(child_specs),
+    )
 
 
 def _walk_tensor_occurrences(
@@ -868,6 +899,10 @@ def _iter_container_children(value: Any) -> Iterator[tuple[OutputPathComponent, 
         for index, child in enumerate(children):
             yield TupleIndex(index), child
         return
+    if is_distribution(value):
+        for name, child in distribution_children(value):
+            yield NamedField(name), child
+        return
     if _is_hf_model_output(value):
         for key in value.keys():
             yield HFKey(key), value[key]
@@ -892,14 +927,6 @@ def _iter_container_children(value: Any) -> Iterator[tuple[OutputPathComponent, 
             yield TupleIndex(index), child
 
 
-def _tensor_label(value: torch.Tensor) -> str | None:
-    """Return TorchLens tensor label metadata without importing torch backends eagerly."""
-
-    meta = getattr(value, "_tl", None)
-    label = getattr(meta, "label_raw", None)
-    return label if isinstance(label, str) else None
-
-
 def _is_literal(value: Any) -> bool:
     """Return whether ``value`` is a replay-safe literal leaf."""
 
@@ -909,48 +936,9 @@ def _is_literal(value: Any) -> bool:
     )
 
 
-def _container_type_ref(value: Any) -> tuple[str | None, str | None]:
-    """Return the importable type reference for ``value``."""
+def _tensor_label(value: torch.Tensor) -> str | None:
+    """Return TorchLens tensor label metadata without importing torch backends eagerly."""
 
-    cls = type(value)
-    return cls.__module__, cls.__qualname__
-
-
-def _is_namedtuple_instance(value: Any) -> bool:
-    """Return whether ``value`` is a namedtuple instance."""
-
-    return isinstance(value, tuple) and hasattr(value, "_fields")
-
-
-def _is_hf_model_output(value: Any) -> bool:
-    """Return whether ``value`` looks like a HuggingFace ``ModelOutput``."""
-
-    cls = type(value)
-    if any(
-        base.__module__.startswith("transformers") and base.__name__ == "ModelOutput"
-        for base in cls.__mro__
-    ):
-        return True
-    return (
-        (cls.__module__.startswith("transformers") or cls.__name__.endswith("ModelOutput"))
-        and hasattr(value, "keys")
-        and hasattr(value, "__getitem__")
-    )
-
-
-def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
-    """Best-effort field names for tuple-like torch return types."""
-
-    if not isinstance(value, tuple):
-        return ()
-    n_fields = getattr(value, "n_fields", None)
-    n_unnamed = getattr(value, "n_unnamed_fields", 0)
-    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
-        return ()
-    field_names = tuple(
-        match.group(1)
-        for match in re.finditer(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE)
-    )
-    if len(field_names) != n_fields:
-        return ()
-    return field_names
+    meta = getattr(value, "_tl", None)
+    label = getattr(meta, "label_raw", None)
+    return label if isinstance(label, str) else None

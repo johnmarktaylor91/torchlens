@@ -15,23 +15,22 @@ import torch
 
 from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
-from .._output_slot import read_output, returned as returned, stopped as stopped
-from . import _types_records
-
-ActivationRecord = _types_records.ActivationRecord
-CaptureDecision = _types_records.CaptureDecision
-CaptureSpec = _types_records.CaptureSpec
-EventKind = _types_records.EventKind
-GradRecord = _types_records.GradRecord
-GradRecordContext = _types_records.GradRecordContext
-ModuleStackFrame = _types_records.ModuleStackFrame
-PredicateDecision = _types_records.PredicateDecision
-PredicateFailure = _types_records.PredicateFailure
-RecordContext = _types_records.RecordContext
-RetroactiveCaptureDecision = _types_records.RetroactiveCaptureDecision
-SaveMode = _types_records.SaveMode
-StorageIntent = _types_records.StorageIntent
-_distinct_label_index_keys = _types_records._distinct_label_index_keys
+from .._ir.predicate import (
+    ActivationRecord as ActivationRecord,
+    CaptureDecision as CaptureDecision,
+    CaptureSpec as CaptureSpec,
+    EventKind as EventKind,
+    GradRecord as GradRecord,
+    GradRecordContext as GradRecordContext,
+    ModuleStackFrame as ModuleStackFrame,
+    PredicateDecision as PredicateDecision,
+    PredicateFailure as PredicateFailure,
+    RecordContext as RecordContext,
+    RetroactiveCaptureDecision as RetroactiveCaptureDecision,
+    StorageIntent as StorageIntent,
+    _distinct_label_index_keys as _distinct_label_index_keys,
+)
+from .._utils.tensor_utils import SaveMode as SaveMode
 
 __all__ = [
     "ActivationRecord",
@@ -362,12 +361,11 @@ class Recording(TraceLike):
     the count from the failing pass.
     """
 
-    # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this
-    # slots-backed product's validating ``outcome`` property IS the settlement
-    # truth (stamped-record re-parse + conservative derivation, never blessing
-    # COMPLETE). Without it ``outcome_for`` read the absent ``__dict__`` as
-    # UNKNOWN and every capability gate refused settled Recordings with a
-    # false hand-built-object warning (WT1 A-IV item 21, lane A08).
+    # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this slots-backed product's
+    # validating ``outcome`` property IS the settlement truth (stamped-record re-parse +
+    # conservative derivation, never blessing COMPLETE). Without it ``outcome_for`` read the absent
+    # ``__dict__`` as UNKNOWN and every capability gate refused settled Recordings with a false
+    # hand-built-object warning (WT1 A-IV item 21, lane A08).
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
 
     records: list[ActivationRecord]
@@ -476,6 +474,8 @@ class Recording(TraceLike):
             before the model returned. Never returns ``None`` for a missing
             output.
         """
+
+        from .._output_slot import read_output
 
         return read_output(self._output, owner="Recording")
 
@@ -1009,7 +1009,7 @@ class Recording(TraceLike):
             Rendered narration block (no trailing newline).
         """
 
-        from torchlens._snoop._narrate import narrate_recording
+        from torchlens.debug._snoop._narrate import narrate_recording
 
         return narrate_recording(self, last=last, select=select)
 

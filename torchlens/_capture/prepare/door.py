@@ -481,7 +481,7 @@ def _open_door_state(
     # Echo teaching refusals fire whether or not narrate= is armed: NarrationOptions
     # routed into save=/hooks= refuses with the measured receipts, and
     # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
-    from ..._snoop._entry import resolve_echo_capture_options
+    from ...debug._snoop._entry import resolve_echo_capture_options
 
     echo_options = resolve_echo_capture_options(
         args.narrate,

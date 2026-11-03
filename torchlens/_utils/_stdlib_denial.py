@@ -29,7 +29,7 @@ import sys
 # (builtin) -- is admitted here so the legitimate ``operator:neg`` custom ref survives.
 # The torch namespaces (torch / torch.Tensor / torch.nn.functional) are NOT stdlib, so
 # they are naturally allowed and need no carve-out. First-party ``torchlens.*`` (incl.
-# appliance ``torchlens.neuro`` / ``torchlens._notebook`` under explicit trust) is not
+# appliance ``torchlens.neuro`` / ``torchlens.report._notebook`` under explicit trust) is not
 # stdlib either, so it is naturally allowed. A user's ``allowed_custom_callable_modules``
 # entry that names a NON-stdlib user package still resolves; but a user CANNOT re-allow
 # a stdlib module (an allowlist entry naming e.g. ``io`` stays DENIED -- that is the

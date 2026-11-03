@@ -425,10 +425,10 @@
   reads `status.state == "passed"` on a plain torch module.
 
   Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
-  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `python -m tests.conformance.scorecard --backend <name> --check` in its CI leg);
   `tl.report.doctor()` shows it as the `backend_scorecard:<name>` row;
-  `torchlens.conformance.graduation_report(name)` returns the
-  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
+  `python -m tests.conformance.scorecard --backend <name> --graduation` prints the
+  advisory six-item graduation report. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -1312,17 +1312,11 @@
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
   switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
-  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
-  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
-  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
-  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op) and the
-  protocol roster fields `RosterModel.expected_intermediates`,
-  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
+  `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
+  preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
-  substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
+  substrate, 3-4x cheaper than settrace); `torchlens.debug._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
   `Trace.narrate` replays a finished capture as narration.
   `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
@@ -1814,9 +1808,22 @@ object's docstring):
 - `tl.debug.BackwardNanReport`: Result of `bisect_nan_backward`.
 - `tl.debug.BisectNanReport`: Result returned by `bisect_nan`.
 - `tl.debug.BisectPrecisionReport`: Result of `bisect_precision`.
+- `tl.debug.CheckFinding`: One immutable finding recorded by a training-loop check.
+- `tl.debug.CheckReport`: Deterministically finalized report of the findings a checks session collected.
+- `tl.debug.ChecksSession`: Standalone, capture-free registry of training-loop checks bound to a model and optimizer.
+- `tl.debug.ClipLedger`: Clip-saturation evidence in three tiers, never a silent guess.
+- `tl.debug.ClipLedgerSnapshot`: Frozen clip-saturation facts, tiered and honest.
 - `tl.debug.FindNanReport`: Structured first-non-finite diagnostic returned by `find_nan`.
 - `tl.debug.GuessInputShapeReport`: Result returned by `guess_input_shape`.
 - `tl.debug.LineageReport`: Result returned by `lineage`.
+- `tl.debug.LivenessProbe`: Liveness statistic recorder; never a verdict.
+- `tl.debug.OptimizerFacts`: Adapter-read facts about one optimizer.
+- `tl.debug.RangeProbe`: Opt-in live semantic range check per site.
+- `tl.debug.ScaleLedger`: The decrement-counting mixed-precision skip ledger.
+- `tl.debug.ScaleLedgerSnapshot`: Frozen skip and scale ledger facts for reports and events.
+- `tl.debug.ScanRow`: Health facts for one unique tensor in a parameter scan.
+- `tl.debug.Watchdog`: Death-spiral watchdog: warns when no step is ever accepted.
+- `tl.debug.WatchdogSnapshot`: Frozen death-spiral watchdog state.
 - `tl.differential.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.differential.diff`: Settle two captures into the guarded differential projection.
 - `tl.distributed.is_vetted_build`: Capability probe: does this torch build match a censused snapshot?

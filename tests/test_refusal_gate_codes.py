@@ -16,6 +16,13 @@ from typing import Any
 
 import pytest
 
+from tests.conformance import _refusal_cases
+from tests.conformance._refusal_cases import (
+    CAPABILITY_REQUESTS,
+    TRACE_OPTION_COMPANIONS,
+    TRACE_OPTION_PROBES,
+    CapabilityRequest,
+)
 from torchlens.backends._backend_protocol import (
     REFUSABLE_CAPABILITY_FLAGS,
     REFUSAL_CODES,
@@ -29,13 +36,6 @@ from torchlens.backends._options import (
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import BackendCapabilities, BackendUnsupportedError
-from torchlens.conformance import _refusal_cases
-from torchlens.conformance._refusal_cases import (
-    CAPABILITY_REQUESTS,
-    TRACE_OPTION_COMPANIONS,
-    TRACE_OPTION_PROBES,
-    CapabilityRequest,
-)
 
 _OPTION_CODE = "trace_option_unsupported"
 

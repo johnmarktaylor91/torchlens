@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 import torchlens.backends as tl_backends
-from torchlens.conformance._scorecard import shipped_scorecard
+from tests.conformance._scorecard import shipped_scorecard
 
 _REPO = Path(__file__).resolve().parents[1]
 _DOCS = _REPO / "docs"
@@ -254,7 +254,7 @@ def test_can_and_cannot_table_equals_the_shipped_capability_summary(backend: str
     card = shipped_scorecard(backend)
     assert card is not None, (
         f"{backend} ships no scorecard record, so its can and cannot table has no measured "
-        f"basis; write it with python -m torchlens.conformance.scorecard --backend {backend} "
+        f"basis; write it with python -m tests.conformance.scorecard --backend {backend} "
         "--write on the pinned leg"
     )
     summary = dict(card.capabilities)

@@ -59,6 +59,12 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
 - `_summary_result.py` — the rebuilt-summary assembler both entry doors share
   (`build_rebuilt_summary`), fact collection, filtering + coverage
   disclosure, and the projection implementations.
+- `_notebook/` — the Jupyter display layer: `cards.py` (`trace_repr_html`, the summary
+  card behind `Trace._repr_html_`), `cardtree.py`, `frontier.py`, `_truncation.py`
+  (treescope truncation), `_grid.py`, `_access.py`, `_axis_labels.py`, `_motifs.py`.
+  Importing it must stay inert (no torch wrapping, no IPython import); it is one of
+  the two appliance modules excluded from callable resolution, and that set must
+  match in `_utils/_callable_safety.py` and `intervention/_resolver_registry.py`.
 
 ## Gotchas
 

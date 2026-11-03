@@ -46,10 +46,17 @@ rules, not an internal refactor.
   `reconstruction_is_lossy()` gates what may round-trip.
 - `ContainerRegistry`, `walk_container()`, `ContainerRecord`/`ContainerSnapshot` record
   container occurrences by `Role`/`Phase` and site (`FuncSite`/`ModuleSite`/`ModelSite`).
+- `_container_errors.py` defines `ContainerReconstructionError` (public via `tl.errors`);
+  `container.py` re-exports it. It sits below `container.py` and `distribution_container.py`
+  so the two import it without importing each other.
 
 ## Selection and predicates
 - `predicate.py`: `RecordContext` is the predicate-visible view during capture; deferred
   values via `is_deferred_value()` / `coerce_deferred_value()`.
+  It also holds what a predicate returns and what a capture retains (`CaptureSpec`,
+  `StorageIntent`, `ActivationRecord`, `GradRecordContext`, `GradRecord`, `PredicateFailure`),
+  published from `torchlens.recording.types` (their `__module__` says so); torch types are
+  annotation-only here.
 - `selector_eval.py`: selector walking and capability gating (`walk_selector()`,
   `ensure_supported()`, `contains_followed_by()`) and the compile-once evaluator:
   `evaluate()` compiles a selector once per lane (`capture`, `site`, `live`, and
