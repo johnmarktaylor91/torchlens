@@ -332,10 +332,18 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     -------
     Callable
         ``forward(*args, **kwargs)`` running the source model through the
-        capture-free bound-intervention door (``spec.bind(model)``) with the
-        probe called on the op's tensor, returning the model's own output with
-        its autograd graph intact. The bound call refuses ``bind_zero_fire``
-        when the forward never reached the site.
+        sparse ``tl.record`` lane (the capture wrappers, nothing saved) with
+        the probe called on the ``probe.ordinal``-th op at its site key, and
+        returning the model's own output with its autograd graph intact. The
+        same lane minted the site key the probe carries, so the key resolves
+        exactly as it did in the originating trace.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``bridge_captum_site_not_reached`` (from the returned forward) when a
+        forward ran fewer ops at the site than the probe's ordinal, so the
+        probe never saw its tensor.
     """
 
     import torchlens as tl
@@ -351,15 +359,38 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
         seen["count"] += 1
         return probe(out) if seen["count"] == probe.ordinal else out
 
-    bound = tl.when(site_selector(probe.site_key), splice).bind(model)
+    spec = tl.when(site_selector(probe.site_key), splice)
 
     def forward(*args: Any, **kwargs: Any) -> Any:
-        """Run one forward with the site counter reset."""
+        """Run one forward with the site counter reset; refuse a forward that misses the site."""
 
         seen["count"] = 0
-        return bound(*args, **kwargs)
+        output, _recording = tl.record(
+            model,
+            list(args) if args else None,
+            dict(kwargs) if kwargs else None,
+            save=_save_nothing,
+            intervene=spec,
+            return_output=True,
+        )
+        if seen["count"] < probe.ordinal:
+            raise InvalidArgumentError(
+                f"Captum site probe {probe.label!r} (site_key {probe.site_key!r}, call "
+                f"{probe.ordinal}) was never reached: this forward ran the site "
+                f"{seen['count']} time(s)",
+                code="bridge_captum_site_not_reached",
+                remedy="attribute with inputs that take the same path as the trace the "
+                "site was picked from, or pick a site on the path these inputs take",
+            )
+        return output
 
     return forward
+
+
+def _save_nothing(ctx: Any) -> bool:
+    """Save predicate for the spliced forward: retain no activation."""
+
+    return False
 
 
 @contextlib.contextmanager

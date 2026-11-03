@@ -45,9 +45,10 @@ pick out in TorchLens into a layer Captum's layer methods can hook.
 - `tl.bridge.captum.attribute(log, method, target, *, inputs=None, **kwargs)`
   calls `method.attribute(...)` on the trace's first saved input tensor (or
   `inputs=`). When `method.layer` is a site probe (below), the call runs the
-  model through the capture-free bound-intervention door with the probe
+  model through the sparse `tl.record` lane (nothing saved) with the probe
   spliced at that op, so Captum's forward hook on the probe reads and replaces
-  exactly that tensor; the model itself keeps no hook afterwards.
+  exactly that tensor; the model itself keeps no hook afterwards. A forward
+  that never reaches the site refuses `bridge_captum_site_not_reached`.
 - `tl.bridge.captum.layer(log, site, *, pass_index=None)` returns the live
   `nn.Module` for a module address, a pass-qualified address, an op label, a
   selector or a layer object when a single-call module returns that tensor

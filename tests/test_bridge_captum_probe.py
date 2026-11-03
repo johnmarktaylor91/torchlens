@@ -6,8 +6,10 @@ import gc
 from types import SimpleNamespace
 
 import pytest
+import torch
 from torch import nn
 
+import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.bridge import captum
 
@@ -68,3 +70,31 @@ def test_site_ordinal_counts_earlier_ops_sharing_the_key() -> None:
     assert captum._site_ordinal(log, ops[2], key) == 2
     assert captum._site_ordinal(log, ops[3], key) == 3
     assert captum._site_ordinal(log, SimpleNamespace(raw_index=None), key) == 1
+
+
+def test_spliced_forward_calls_the_probe_once_and_refuses_a_missed_site() -> None:
+    """The spliced forward returns the plain output, calls the probe on its ordinal, and refuses a miss."""
+
+    torch.manual_seed(0)
+    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2)).eval()
+    x = torch.randn(2, 4)
+    log = tl.trace(model, x)
+    try:
+        relu_op = log.find_sites(tl.func("relu")).first()
+        probe = captum.layer(log, relu_op.layer_label)
+    finally:
+        log.cleanup()
+    assert isinstance(probe, captum._SiteProbe) and probe.ordinal == 1
+    calls: list[tuple[int, ...]] = []
+    handle = probe.register_forward_hook(lambda _m, _a, out: calls.append(tuple(out.shape)))
+    try:
+        output = captum._spliced_forward(probe)(x)
+    finally:
+        handle.remove()
+    assert calls == [(2, 3)]
+    torch.testing.assert_close(output, model(x))
+    assert output.requires_grad
+    missed = captum._SiteProbe(model, probe.site_key, probe.label, ordinal=2)
+    with pytest.raises(InvalidArgumentError) as info:
+        captum._spliced_forward(missed)(x)
+    assert info.value.fields["code"] == "bridge_captum_site_not_reached"
