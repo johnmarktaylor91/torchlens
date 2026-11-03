@@ -29,6 +29,8 @@ from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, EngineDispatchError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _VOCAB = 64
 _DIM = 16
 _N_BLOCKS = 3
@@ -666,17 +668,16 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert _max_abs_diff(first.output, _hooked(model, direction, ids)["output"]) == 0.0
 
     other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
-    trace.clear_hooks(confirm_mutation=True)
+    trace.clear_hooks()
     trace.attach_hooks(
         tl.module(_SITE),
         tl.steer(other, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
     )
     restaged = trace.run(inputs=ids, fast=True)
     assert restaged.trace.last_run["engine"] == "guarded_fast"
     assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
 
-    trace.clear_hooks(confirm_mutation=True)
+    trace.clear_hooks()
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run(inputs=ids, fast=True)
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
@@ -710,7 +711,6 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     trace.attach_hooks(
         tl.module(_SITE),
         tl.steer(direction, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
     )
     assert _SITE not in graph_fired_addresses(trace)
 

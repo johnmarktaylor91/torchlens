@@ -16,6 +16,8 @@ from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return the out unchanged.
@@ -83,7 +85,7 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
     result = log.do(
         tl.func("relu"),
         replacement,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
 
     assert result is log
@@ -121,7 +123,7 @@ def test_set_callable_tags_one_shot_metadata() -> None:
     log.do(
         tl.func("relu"),
         replacement_fn,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
 
     value_spec = log._intervention_spec.target_value_specs[-1]
@@ -159,8 +161,8 @@ def test_attach_hooks_handle_removes_only_its_own_specs() -> None:
 
     log = _capture()
 
-    first = log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    second = log.attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
+    first = log.attach_hooks(tl.func("relu"), _identity_hook)
+    second = log.attach_hooks(tl.func("__add__"), _identity_hook)
 
     assert isinstance(first, HookHandle)
     assert isinstance(second, HookHandle)
@@ -185,25 +187,25 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     log.do(
         tl.func("relu"),
         replacement,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     after_set = log.recipe
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
 
-    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    log.attach_hooks(tl.func("relu"), _identity_hook)
     after_attach = log.recipe
     assert after_attach is not after_set
     assert len(after_attach.hook_specs) == 1
 
-    log.clear_edits(tl.func("relu"), confirm_mutation=True)
+    log.clear_edits(tl.func("relu"))
     after_detach = log.recipe
     assert after_detach is not after_attach
     assert after_detach.hook_specs == ()
 
-    log.attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
+    log.attach_hooks(tl.func("relu"), _identity_hook)
     after_second_attach = log.recipe
-    log.clear_hooks(confirm_mutation=True)
+    log.clear_hooks()
     after_clear = log.recipe
     assert after_clear is not after_second_attach
     assert after_clear.hook_specs == ()
@@ -211,7 +213,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     log.do(
         tl.func("relu"),
         torch.ones(2, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     after_do = log.recipe
     assert after_do is not after_clear
@@ -226,9 +228,9 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
     log.do(
         target,
         torch.zeros_like(log[target].out),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    log.attach_hooks(tl.label(target), _identity_hook, confirm_mutation=True)
+    log.attach_hooks(tl.label(target), _identity_hook)
     log._intervention_spec.targets.append(TargetSpec("label", target))
     log._intervention_spec.records.append(
         FireRecord(target_label=target, site_label=target, call_label=log[target].label)
@@ -296,7 +298,7 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert log._out_recipe_revision == 0
 
@@ -320,7 +322,7 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
 
     result = log.do(
         {tl.func("relu"): _identity_hook},
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
     assert result is log
     assert log.state is TraceState.REPLAY_PROPAGATED

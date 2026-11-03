@@ -2521,6 +2521,7 @@ class Op(OpAtenMixin, _SelectionOperand):
     def do(
         self,
         input_transform: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -2538,7 +2539,6 @@ class Op(OpAtenMixin, _SelectionOperand):
         *extra_hooks: Any,
         strict: bool = False,
         prepend: bool = False,
-        confirm_mutation: bool = False,
     ) -> Any:
         """Attach sticky hooks to this op through the owning Trace."""
 
@@ -2548,7 +2548,6 @@ class Op(OpAtenMixin, _SelectionOperand):
             *extra_hooks,
             strict=strict,
             prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def materialize_out(

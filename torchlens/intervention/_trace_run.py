@@ -379,6 +379,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     trace: Trace,
     model: Any = None,
     x: Any = None,
+    /,
     *,
     inputs: Any | MissingType = MISSING,
     seed: int | None = None,
@@ -394,7 +395,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     on_zero_fire: str | MissingType = MISSING,
 ) -> Trace | RunResult:
     """Body of ``Trace.run``; the method carries the documented contract."""
-
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
     if seed is not None:
         # r77 nit + r79 hardening: validate ``seed`` at the run door so junk

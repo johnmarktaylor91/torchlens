@@ -88,7 +88,7 @@ def test_explicit_attach_hooks_stays_sticky_by_contract() -> None:
 
     log = _log()
     fork = log.fork()
-    handle = fork.attach_hooks(tl.func("relu"), _bad_hook, confirm_mutation=True)
+    handle = fork.attach_hooks(tl.func("relu"), _bad_hook)
     with pytest.raises(RuntimeError, match="boom"):
         fork.push()
     assert _hook_count(fork) == 1

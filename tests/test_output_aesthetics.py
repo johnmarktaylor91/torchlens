@@ -33,6 +33,8 @@ from torchlens import func, trace as trace_fn
 from torchlens._visualization import show_model_graph
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 # ---------------------------------------------------------------------------
 # Report helpers
 # ---------------------------------------------------------------------------
@@ -1661,7 +1663,7 @@ class TestVisualizationBugfixes:
         log.do(
             func("relu"),
             torch.zeros(2, 3),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
         try:
             node_mark = log.draw(

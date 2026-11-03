@@ -1173,7 +1173,7 @@ def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
         "and this site is an activation. Nothing was attached.",
         code="edit_signal_mismatch",
         remedy="re-attach the edit on the gradient address: trace.attach_hooks(tl.grad(site), edit)",
-        argument="hooks_or_site",
+        argument="site",
         site=repr(site),
     )
 

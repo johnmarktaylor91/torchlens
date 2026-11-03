@@ -24,6 +24,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._selection.subspace import _basis_digest
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _SITE = "linear_1_1"
 _D = 6
 _RANK = 4
@@ -172,7 +174,7 @@ def test_one_position_edit_saves_portable_and_reapplies_bit_identically(tmp_path
     spec = tl.io.load_intervention_spec(path)
     fresh = _ready().fork()
     for hook_spec in spec.hook_specs:
-        fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+        fresh.attach_hooks(hook_spec.site_target, hook_spec.helper)
     assert torch.equal(fresh.push()[_SITE].out, staged[_SITE].out)
 
 

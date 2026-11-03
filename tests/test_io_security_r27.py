@@ -37,6 +37,8 @@ from torchlens.intervention.save import load_intervention_spec
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _supports_symlinks(tmp_path: Path) -> bool:
     """Return whether the filesystem under ``tmp_path`` supports symlinks."""
@@ -161,7 +163,7 @@ def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path
     log.do(
         tl.func("relu"),
         tl.steer(torch.ones(2, 3)),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     spec_path = tmp_path / name
     log.save_intervention(spec_path, level="portable")

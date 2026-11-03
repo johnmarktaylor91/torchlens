@@ -120,7 +120,7 @@ def _capture(
 
 
 def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
-    """Root mutators warn once, with call-level and session-level suppression."""
+    """Root mutators warn once; a fork and the session-level context stay quiet."""
 
     log, _ = _capture()
     with pytest.warns(TraceMutationWarning):
@@ -138,13 +138,14 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
         )
     assert warnings_record == []
 
-    confirmed, _ = _capture()
+    root, _ = _capture()
+    forked = root.fork("quiet")
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        confirmed.do(
+        forked.do(
             tl.func("relu"),
             torch.zeros(2, 3),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert warnings_record == []
 
@@ -234,7 +235,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     replay_log, _ = _capture()
     replay_result = replay_log.do(
         {tl.func("relu"): _zero_hook},
-        intervention=InterventionOptions(confirm_mutation=True),
+        intervention=InterventionOptions(),
     )
     assert replay_result is replay_log
     assert replay_log.state is TraceState.REPLAY_PROPAGATED
@@ -250,7 +251,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         {tl.func("relu"): _zero_hook},
         model=ReluLinear(),
         inputs=x,
-        intervention=InterventionOptions(confirm_mutation=True),
+        intervention=InterventionOptions(),
     )
     assert rerun_result is rerun_log
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
@@ -263,7 +264,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     set_only_log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     assert set_only_log.state is TraceState.SPEC_STALE
     assert [record["op"] for record in set_only_log.state_history[-2:]] == [
@@ -281,14 +282,14 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
         log.do(
             {tl.func("relu"): _zero_hook},
             inputs=x,
-            intervention=InterventionOptions(confirm_mutation=True),
+            intervention=InterventionOptions(),
         )
 
     with pytest.raises(EngineDispatchError):
         log.do(
             {tl.func("relu"): _zero_hook},
             model=ReluLinear(),
-            intervention=InterventionOptions(confirm_mutation=True),
+            intervention=InterventionOptions(),
         )
 
     history_len = len(log.state_history)
@@ -298,7 +299,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
             {tl.func("relu"): _zero_hook},
             model=WrongModel(),
             inputs=torch.randn(2, 99),
-            intervention=InterventionOptions(confirm_mutation=True),
+            intervention=InterventionOptions(),
         )
     assert len(log.state_history) == history_len
     assert log._spec_revision == spec_revision
@@ -315,7 +316,7 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     log.do(
         tl.func("relu"),
         torch.zeros_like(relu_pass.out),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     with pytest.warns(DirectActivationWriteWarning):
         log.push()
@@ -324,7 +325,7 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     log.do(
         tl.func("relu"),
         torch.ones_like(relu_pass.out),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")

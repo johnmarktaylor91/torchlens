@@ -34,7 +34,12 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
-from ._edit_guards import select_do_engine, warn_if_root_mutation
+from ._edit_guards import (
+    detach_handles,
+    internal_mutation,
+    select_do_engine,
+    warn_if_root_mutation,
+)
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -69,7 +74,7 @@ from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_a
 
 
 def _prepare_do(
-    hooks_or_site: Any,
+    site: Any,
     value_or_hook: Any,
     intervention: InterventionOptions | None,
     loss: Any,
@@ -78,7 +83,7 @@ def _prepare_do(
 
     Parameters
     ----------
-    hooks_or_site:
+    site:
         The ``do`` input (a ``find_sites`` table is lowered to its site labels).
     value_or_hook:
         Optional hook for the ``(site, hook)`` input shape.
@@ -94,14 +99,14 @@ def _prepare_do(
         (``None`` when no site addresses the backward pass).
     """
 
-    if type(hooks_or_site).__name__ == "_SiteTable":
+    if type(site).__name__ == "_SiteTable":
         # find_sites() output is a first-class address (the zero-match refusal
         # recommends it): lower it to the exact resolved site labels.
-        hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
+        site = normalize_selector_like(site, lifecycle="live")
     intervention_options = merge_intervention_options(intervention=intervention)
-    plan = signal_plan(hooks_or_site, value_or_hook)
+    plan = signal_plan(site, value_or_hook)
     refuse_invalid_do_loss(loss, plan)
-    return hooks_or_site, intervention_options, plan
+    return site, intervention_options, plan
 
 
 def ensure_intervention_spec(trace: Trace) -> InterventionSpec:
@@ -150,11 +155,10 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     value: Any,
     *,
     strict: bool = False,
-    confirm_mutation: bool = False,
 ) -> Trace:
     """Stage a site out recipe without propagating it (the ``engine="set_only"`` body of ``Trace.do``)."""
 
-    warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    warn_if_root_mutation(trace)
     if is_facet_target(site):
 
         def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -178,12 +182,8 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
                 return cast(torch.Tensor, value(out))
             return cast(torch.Tensor, value)
 
-        trace.attach_hooks(
-            site,
-            _facet_replacement_hook,
-            strict=strict,
-            confirm_mutation=True,
-        )
+        with internal_mutation():
+            trace.attach_hooks(site, _facet_replacement_hook, strict=strict)
         record_operation(
             trace,
             "set",
@@ -218,8 +218,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
 def remove(trace: Trace) -> None:
     """Remove the most recent legacy-returned hook attachment. (the ``Trace.remove`` body)."""
 
-    for handle_id in trace._last_hook_handle_ids:
-        clear_edits(trace, handle=handle_id, confirm_mutation=True)
+    detach_handles(trace, trace._last_hook_handle_ids)
     trace._last_hook_handle_ids = ()
 
 
@@ -229,11 +228,10 @@ def clear_edits(
     handle: Any = None,
     *,
     strict: bool = False,
-    confirm_mutation: bool = False,
 ) -> Trace:
     """Detach sticky hooks by site or handle. (the ``Trace.clear_edits`` body)."""
 
-    warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    warn_if_root_mutation(trace)
     if site is None and handle is None:
         if strict:
             raise SpecMutationError("clear_edits requires a site or handle in strict mode.")
@@ -304,8 +302,9 @@ def settle_selection_do(
 
 def do(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
-    hooks_or_site: Any,
+    site: Any,
     value_or_hook: Any = None,
+    /,
     *,
     model: nn.Module | None = None,
     inputs: Any = None,
@@ -314,18 +313,18 @@ def do(  # noqa: PLR0913 - trace stands in for self on the moved method
 ) -> Trace:
     """Apply an intervention and dispatch to replay, rerun, or set-only. (the ``Trace.do`` body)."""
 
-    hooks_or_site, options, plan = _prepare_do(hooks_or_site, value_or_hook, intervention, loss)
+    site, options, plan = _prepare_do(site, value_or_hook, intervention, loss)
     with changed_param_scope(options.allow_changed_params):
         if plan is not None:
             return do_signal_plan(trace, plan, _SignalDoRequest(model, inputs, options, loss))
         return do_with_options(
-            trace, hooks_or_site, value_or_hook, model=model, x=inputs, intervention_options=options
+            trace, site, value_or_hook, model=model, x=inputs, intervention_options=options
         )
 
 
 def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
     trace: Trace,
-    hooks_or_site: Any,
+    site: Any,
     value_or_hook: Any,
     *,
     model: nn.Module | None,
@@ -341,7 +340,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     ----------
     trace:
         The trace the transaction edits.
-    hooks_or_site:
+    site:
         Mapping/list batch input or selector-like site.
     value_or_hook:
         Optional hook for the ``(site, hook)`` input shape.
@@ -358,7 +357,6 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         This model log after the selected propagation engine runs.
     """
     engine_value = intervention_options.engine
-    confirm_mutation_value = intervention_options.confirm_mutation
     strict_value = intervention_options.strict
 
     if engine_value not in {"auto", "replay", "rerun", "set_only"}:
@@ -380,7 +378,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     # never empty after an attempt. The monotonic bound scopes exactly
     # this transaction's FireRecords (the ONE builder stamps every one).
     txn = _DoTransaction(
-        hooks_or_site=hooks_or_site,
+        site=site,
         value_or_hook=value_or_hook,
         engine=selected_engine,
         transaction_start=time.monotonic(),
@@ -388,12 +386,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     )
     try:
         mutation_kind, attached_handles = apply_do_mutation(
-            trace,
-            hooks_or_site,
-            value_or_hook,
-            engine=selected_engine,
-            strict=strict_value,
-            confirm_mutation=confirm_mutation_value,
+            trace, site, value_or_hook, engine=selected_engine, strict=strict_value
         )
     except BaseException as exc:
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
@@ -424,8 +417,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     except BaseException as exc:
         # A failed do() must not leave its sticky hooks attached (the next push
         # would silently re-fire them): detach exactly this call's hooks, re-raise.
-        for handle_id in attached_handles:
-            clear_edits(trace, handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached_handles)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
         raise
     record_do_intervention_event(trace, txn, status=None)
@@ -474,15 +466,15 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
     dict
         The envelope row.
     """
-    hooks_or_site = txn.hooks_or_site
+    site = txn.site
     value_or_hook = txn.value_or_hook
     engine = txn.engine
     fires = fire_records_since(trace, txn.transaction_start) if status != "error" else []
     fired_labels = tuple(
         dict.fromkeys(record.call_label or record.target_label for record in fires)
     )
-    if isinstance(hooks_or_site, PublicInterventionSpec):
-        rules = rules_payload(hooks_or_site)
+    if isinstance(site, PublicInterventionSpec):
+        rules = rules_payload(site)
         edit_names = tuple(str(rule["action"]) for rule in rules)
         selection_repr = " | ".join(str(rule["where"]) for rule in rules)
         fired_action_reprs = {
@@ -493,10 +485,10 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
         )
     else:
         rules = ()
-        edit_names, selection_repr = do_event_edit_names(trace, hooks_or_site, value_or_hook)
+        edit_names, selection_repr = do_event_edit_names(trace, site, value_or_hook)
         zero_fire_rule_ids = ()
     resolved_status = ("fired" if fires else "no_fire") if status is None else status
-    extra = do_event_extra(trace, hooks_or_site, staged_only=staged_only, extra_fields=extra_fields)
+    extra = do_event_extra(trace, site, staged_only=staged_only, extra_fields=extra_fields)
     return record_intervention_event(
         trace,
         lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
@@ -515,14 +507,13 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
     )
 
 
-def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved method
+def apply_do_mutation(
     trace: Trace,
-    hooks_or_site: Any,
+    site: Any,
     value_or_hook: Any,
     *,
     engine: str,
     strict: bool,
-    confirm_mutation: bool,
 ) -> tuple[str, tuple[str, ...]]:
     """Apply the mutation part of ``do`` and report its kind.
 
@@ -530,7 +521,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     ----------
     trace:
         The trace being mutated.
-    hooks_or_site:
+    site:
         Mapping/list batch input or selector-like site.
     value_or_hook:
         Optional value or hook.
@@ -538,8 +529,6 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         Concrete engine selected by ``_edit_guards.select_do_engine``.
     strict:
         Whether selector checks should be strict.
-    confirm_mutation:
-        Whether root mutation warnings should be suppressed.
 
     Returns
     -------
@@ -547,7 +536,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         The mutation kind (``"set"``, ``"attach_hooks"``, or a ``"selection_*"`` kind) and the
         sticky-hook handle ids THIS call attached (for the caller's failure cleanup).
     """
-    if isinstance(hooks_or_site, PublicInterventionSpec):
+    if isinstance(site, PublicInterventionSpec):
         # C03 spec door: do(spec) applies the whole immutable spec through
         # the attach path (one preflight, all rules or none), then the
         # caller's selected engine propagates.
@@ -561,11 +550,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 "(site, edit) call shape without a spec",
                 argument="value_or_hook",
             )
-        handle = trace.attach_hooks(
-            hooks_or_site,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
-        )
+        handle = trace.attach_hooks(site, strict=strict)
         return "attach_hooks", tuple(handle.handle_ids)
 
     # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
@@ -573,11 +558,11 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     # interior. Distinct from the TraceSlice lift below, which keeps its shipped
     # member-site family semantics. sys.modules gate keeps do() free of the regions import.
     regions_module = sys.modules.get("torchlens.intervention.regions")
-    if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    if regions_module is not None and isinstance(site, regions_module.RegionTarget):
+        warn_if_root_mutation(trace)
         return (
             regions_module.apply_region_do(
-                trace, hooks_or_site, value_or_hook, engine=engine, strict=strict
+                trace, site, value_or_hook, engine=engine, strict=strict
             ),
             (),
         )
@@ -585,10 +570,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     # QUERY (re-resolved on THIS trace by site name, so a slice built on the
     # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
     slice_module = sys.modules.get("torchlens._trace_slice")
-    if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
-        hooks_or_site = hooks_or_site.__selection__()
-    if is_selection_batch(hooks_or_site):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    if slice_module is not None and isinstance(site, slice_module.TraceSlice):
+        site = site.__selection__()
+    if is_selection_batch(site):
+        warn_if_root_mutation(trace)
         if value_or_hook is not None:
             raise InvalidArgumentError(
                 "do([(selection, edit), ...], edit) conflicts: the batch "
@@ -598,31 +583,14 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 remedy="pass only the (selection, edit) pair list",
                 argument="value_or_hook",
             )
-        return apply_selection_batch_do(trace, hooks_or_site, engine=engine, strict=strict)
-    if isinstance(hooks_or_site, (Selector, Selection)):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-        return apply_selection_do(
-            trace,
-            hooks_or_site,
-            value_or_hook,
-            engine=engine,
-            strict=strict,
-        )
+        return apply_selection_batch_do(trace, site, engine=engine, strict=strict)
+    if isinstance(site, (Selector, Selection)):
+        warn_if_root_mutation(trace)
+        return apply_selection_do(trace, site, value_or_hook, engine=engine, strict=strict)
     if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
-        set_site(
-            trace,
-            hooks_or_site,
-            value_or_hook,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
-        )
+        set_site(trace, site, value_or_hook, strict=strict)
         return "set", ()
-    handle = trace.attach_hooks(
-        hooks_or_site,
-        value_or_hook,
-        strict=strict,
-        confirm_mutation=confirm_mutation,
-    )
+    handle = trace.attach_hooks(site, value_or_hook, strict=strict)
     return "attach_hooks", tuple(handle.handle_ids)
 
 

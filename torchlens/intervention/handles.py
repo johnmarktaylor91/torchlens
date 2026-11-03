@@ -16,13 +16,10 @@ class HookHandle:
         Object that owns the sticky hook specs.
     handle_ids:
         Opaque hook-spec identifiers to remove.
-    confirm_mutation:
-        Whether removal should suppress root-mutation warnings.
     """
 
     owner: Any
     handle_ids: tuple[str, ...]
-    confirm_mutation: bool = False
 
     def remove(self) -> None:
         """Remove the hook specs owned by this handle.
@@ -33,8 +30,7 @@ class HookHandle:
             Matching hook specs are detached from the owning log.
         """
 
-        for handle_id in self.handle_ids:
-            self.owner.clear_edits(handle=handle_id, confirm_mutation=self.confirm_mutation)
+        self.owner._detach_handles(self.handle_ids)
 
     def __enter__(self) -> HookHandle:
         """Enter a scoped hook attachment.

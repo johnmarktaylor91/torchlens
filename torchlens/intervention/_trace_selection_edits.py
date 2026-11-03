@@ -33,6 +33,7 @@ from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
 from . import replay as replay_module
+from ._edit_guards import detach_handles, internal_mutation
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
 from ._replay_sites import _require_hook_origins
@@ -137,7 +138,7 @@ def apply_selection_batch_do(
                 remedy="make every pair's first slot a Selection (lift "
                 "producers with .__selection__()), or use the legacy "
                 "(site, hook) list without Selections",
-                argument="hooks_or_site",
+                argument="site",
             )
         lifted = _lift(selection)
         kind = getattr(lifted, "kind", "ACT")
@@ -173,7 +174,7 @@ def batch_act_plan(
             code="selection_batch_leaf_unsupported",
             remedy="apply leaf-site edits through single-selection "
             "do() calls; batch interior sites only",
-            argument="hooks_or_site",
+            argument="site",
         )
     return resolved, plan, audit
 
@@ -210,7 +211,7 @@ def apply_cross_kind_batch_do(
             code="selection_batch_cross_kind",
             remedy="pass intervention=tl.options.InterventionOptions(engine='replay'), "
             "or apply the ACT pairs in their own do() call on this engine",
-            argument="hooks_or_site",
+            argument="site",
         )
     steps: list[tuple[str, Any]] = []
     for index, ((selection, edit), kind) in enumerate(zip(pairs, kinds, strict=True)):
@@ -235,8 +236,7 @@ def apply_cross_kind_batch_do(
             if mutation_kind == "selection_hooks":
                 push_from_handles(trace, handles, strict=strict)
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         restore_replay_state(trace, journal)
         raise
     return "selection_replayed", tuple(attached)
@@ -338,16 +338,13 @@ def attach_selection_plan_hooks(
     attached: list[str] = []
     try:
         for item in hook_items:
-            handle = trace.attach_hooks(
-                label_selector(item["op"].label),
-                item["edit"],
-                strict=strict,
-                confirm_mutation=True,
-            )
+            with internal_mutation():
+                handle = trace.attach_hooks(
+                    label_selector(item["op"].label), item["edit"], strict=strict
+                )
             attached.extend(handle.handle_ids)
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         raise
     # These sticky hooks are the do() plan's edit-then-scatter residue of an
     # edit applied NOW (the caller propagates and appends the audit record),

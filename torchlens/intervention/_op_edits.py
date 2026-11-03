@@ -78,6 +78,7 @@ def grad_for(op: Op, *, bwd: int) -> torch.Tensor:
 def do(
     op: Op,
     input_transform: Any,
+    /,
     *,
     model: Any = None,
     inputs: Any = None,
@@ -119,7 +120,6 @@ def attach_hooks(
     *extra_hooks: Any,
     strict: bool = False,
     prepend: bool = False,
-    confirm_mutation: bool = False,
 ) -> Any:
     """Attach sticky hooks to this op through the owning Trace.
 
@@ -135,8 +135,6 @@ def attach_hooks(
         Whether site resolution should reject non-portable selectors.
     prepend:
         Whether new sticky hooks should run before existing sticky hooks.
-    confirm_mutation:
-        Suppress root mutation warnings when intentionally mutating.
 
     Returns
     -------
@@ -150,5 +148,4 @@ def attach_hooks(
         *extra_hooks,
         strict=strict,
         prepend=prepend,
-        confirm_mutation=confirm_mutation,
     )

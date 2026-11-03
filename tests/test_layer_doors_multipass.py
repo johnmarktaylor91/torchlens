@@ -18,6 +18,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _SharedThenFresh(nn.Module):
     """One Linear reused for two passes, then a fresh single-pass Linear."""
@@ -100,12 +102,10 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         elif door == "set":
             layer.do(
                 torch.zeros(2, 3),
-                intervention=tl.options.InterventionOptions(
-                    engine="set_only", confirm_mutation=True
-                ),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
             )
         else:
-            layer.attach_hooks(tl.scale(2.0), confirm_mutation=True)
+            layer.attach_hooks(tl.scale(2.0))
         # The recipe doors apply on push, which re-resolves the same two sites.
         if door != "do":
             fork.push()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
@@ -16,6 +17,8 @@ from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
 )
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class _LifecycleModel(nn.Module):
@@ -118,14 +121,14 @@ def test_run_state_transitions() -> None:
 
     stale = _capture_log()
     assert stale.state is TraceState.PRISTINE
-    stale.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    stale.attach_hooks(tl.func("relu"), _zero_hook)
     assert stale.state is TraceState.SPEC_STALE
     stale.push()
     assert stale.state is TraceState.REPLAY_PROPAGATED
 
     rerun_log = _capture_log()
     assert rerun_log.state is TraceState.PRISTINE
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    rerun_log.attach_hooks(tl.func("relu"), _zero_hook)
     assert rerun_log.state is TraceState.SPEC_STALE
     rerun_log.run(_LifecycleModel(), torch.tensor([[-1.0, 2.0, 3.0]]))
     assert rerun_log.state is TraceState.RERUN_PROPAGATED

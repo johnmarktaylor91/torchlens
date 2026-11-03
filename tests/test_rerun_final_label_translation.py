@@ -20,6 +20,8 @@ from torchlens.intervention._rerun_predicate import raw_live_labels
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.options import CaptureOptions, InterventionOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _Recurrent(nn.Module):
     """Three unrolled steps; each step's output feeds the next step's add."""
@@ -80,7 +82,7 @@ def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
     trace.do(
         second,
         value,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     result = trace.run(model, x)
     assert result is trace

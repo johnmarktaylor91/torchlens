@@ -23,6 +23,8 @@ from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import AppendBatchDependenceError
 from torchlens.options import ReplayOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _TwoLinear(nn.Module):
     """Small real-module stack for append-gate pins."""
@@ -103,15 +105,13 @@ def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
     """The append gate honors the DERIVED flag in both directions."""
 
     model, x, log = _traced_model()
-    log.attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
+    log.attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None))
     log.run(model, x)
     with pytest.raises(AppendBatchDependenceError):
         log.run(model, torch.randn(2, 4), replay=ReplayOptions(append=True))
 
     model2, x2, log2 = _traced_model()
-    log2.attach_hooks(
-        tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None), confirm_mutation=True
-    )
+    log2.attach_hooks(tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None))
     log2.run(model2, x2)
     n_before = log2["relu_1_2"].out.shape[0]
     appended = log2.run(model2, torch.randn(2, 4), replay=ReplayOptions(append=True))

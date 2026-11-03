@@ -18,6 +18,8 @@ import torchlens as tl
 from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 from torchlens.errors import MultiMatchWarning
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 GOLDEN_SVG = SNAPSHOT_DIR / "bundle_diff_clean_vs_zero_relu.svg"
 #: Recorded `dot` C-binary version that emitted the committed golden SVG
@@ -61,7 +63,7 @@ def _canonical_bundle() -> tl.Bundle:
         ablated_log.do(
             tl.module("layer1.0.relu"),
             tl.zero_ablate(),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     return tl.Bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
@@ -306,7 +308,7 @@ def _diff_bundle_with_marked_column() -> tl.Bundle:
     patched = clean.fork("patched").do(
         tl.module("1"),
         tl.scale(0.5),
-        intervention=tl.options.InterventionOptions(engine="replay", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="replay"),
     )
     return tl.Bundle({"clean": clean, "patched": patched}, baseline="clean")
 

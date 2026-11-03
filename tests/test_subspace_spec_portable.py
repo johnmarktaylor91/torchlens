@@ -68,7 +68,7 @@ def _apply(spec: Any) -> Any:
 
     fork = _ready().fork()
     for hook_spec in spec.hook_specs:
-        fork.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+        fork.attach_hooks(hook_spec.site_target, hook_spec.helper)
     return fork.push()
 
 

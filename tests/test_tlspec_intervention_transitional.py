@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from example_models import TinyReluAdd as _ReluModel
 
@@ -14,6 +15,8 @@ from torchlens._io import TLSPEC_VERSION
 from torchlens.intervention.save import load_intervention_spec as legacy_load_intervention_spec
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 def _interventions() -> tl.Trace:
@@ -35,7 +38,7 @@ def _interventions() -> tl.Trace:
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     return log
 

@@ -2750,7 +2750,6 @@ class Trace(TraceOutputMixin, TraceLike):
         *extra_hooks: Any,
         strict: bool = False,
         prepend: bool = False,
-        confirm_mutation: bool = False,
     ) -> Any:
         """Attach sticky hooks to the current intervention spec."""
 
@@ -2761,7 +2760,6 @@ class Trace(TraceOutputMixin, TraceLike):
             *extra_hooks,
             strict=strict,
             prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
@@ -2790,20 +2788,15 @@ class Trace(TraceOutputMixin, TraceLike):
         handle: Any = None,
         *,
         strict: bool = False,
-        confirm_mutation: bool = False,
     ) -> "Trace":
         """Detach sticky hooks by site or handle."""
 
-        return _doors.intervention()._trace_edits.clear_edits(
-            self, site, handle, strict=strict, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_edits.clear_edits(self, site, handle, strict=strict)
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+    def clear_hooks(self) -> "Trace":
         """Clear all sticky hooks from the current intervention spec."""
 
-        return _doors.intervention()._trace_hooks.clear_hooks(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_hooks.clear_hooks(self)
 
     @property
     def _graph_edges(self) -> tuple[Any, ...]:
@@ -2822,8 +2815,9 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def do(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any = None,
+        /,
         *,
         model: nn.Module | None = None,
         inputs: Any = None,
@@ -2834,7 +2828,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             model=model,
             inputs=inputs,
@@ -2844,7 +2838,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _do_with_options(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         model: nn.Module | None,
@@ -2855,7 +2849,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do_with_options(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             model=model,
             x=x,
@@ -2905,12 +2899,15 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _trace_intervention_records.record_operation(self, op, **payload)
 
-    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+    def _detach_handles(self, handle_ids: tuple[str, ...]) -> None:
+        """Forward to ``_doors.intervention()._edit_guards.detach_handles``."""
+
+        return _doors.intervention()._edit_guards.detach_handles(self, handle_ids)
+
+    def _warn_if_root_mutation(self) -> None:
         """Forward to ``_doors.intervention()._edit_guards.warn_if_root_mutation``."""
 
-        return _doors.intervention()._edit_guards.warn_if_root_mutation(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._edit_guards.warn_if_root_mutation(self)
 
     def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
         """Forward to ``_doors.intervention()._edit_guards.select_do_engine``."""
@@ -2919,22 +2916,16 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _apply_do_mutation(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         engine: str,
         strict: bool,
-        confirm_mutation: bool,
     ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
 
         return _doors.intervention()._trace_edits.apply_do_mutation(
-            self,
-            hooks_or_site,
-            value_or_hook,
-            engine=engine,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
+            self, site, value_or_hook, engine=engine, strict=strict
         )
 
     @staticmethod
@@ -3128,6 +3119,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self,
         model: Any = None,
         x: Any = None,
+        /,
         *,
         inputs: Any | MissingType = MISSING,
         seed: int | None = None,

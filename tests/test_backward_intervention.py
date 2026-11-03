@@ -26,6 +26,8 @@ from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _EncoderModel(nn.Module):
     """Small model with module-scoped ReLU and intervening backward nodes."""
@@ -392,7 +394,6 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
@@ -438,7 +439,6 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
@@ -567,7 +567,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(tl.grad_fn(name="relu"), zero_in_place, confirm_mutation=True)
+    trace.attach_hooks(tl.grad_fn(name="relu"), zero_in_place)
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
@@ -900,7 +900,7 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
+    trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input)
     trace.backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
     pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 

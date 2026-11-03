@@ -24,6 +24,10 @@ from torchlens.backends.torch._tl import get_module_meta
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
 )
+pytestmark = [
+    pytestmark,
+    pytest.mark.usefixtures("root_edits_in_place"),
+]  # D.12: no per-call mutation keyword
 
 
 class DirectParent(nn.Module):
@@ -261,9 +265,7 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
         plain = model(x)
     direction = torch.tensor([1.0, -2.0, 0.5])
     trace = tl.trace(model, x)
-    trace.attach_hooks(
-        tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1), confirm_mutation=True
-    )
+    trace.attach_hooks(tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1))
     trace.run(model, x)
     assert trace.last_run["engine"] == "rerun"
     full = [op.out.clone() for op in trace.output_ops]

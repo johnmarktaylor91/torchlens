@@ -17,8 +17,10 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import SelectionError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CAPTURE = tl.options.CaptureOptions(replayable=True)
-_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+_CONFIRM = tl.options.InterventionOptions()
 
 
 def _batchnorm_model() -> nn.Sequential:

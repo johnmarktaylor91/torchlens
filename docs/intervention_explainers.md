@@ -253,7 +253,7 @@ tl.io.save_intervention(fork, path, level="portable")
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x, capture=options).fork()
 for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper)
 reloaded = fresh.push()
 helper = spec.hook_specs[0].helper
 
@@ -346,7 +346,7 @@ tl.io.save_intervention(fork, path, level="portable")
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens, capture=options).fork()
 for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper)
 
 RESULT = [
     torch.equal(fresh.push()[site].out, edited[site].out),  # the same edit, bit for bit

@@ -11,7 +11,6 @@ GAP-008	cache_key_coverage	CaptureOptions.save_budget	2026-08-26	A06	capture-sem
 GAP-011	cache_key_coverage	CaptureOptions.input_transform	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-012	cache_key_coverage	CaptureOptions.unwrap_when_done	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
 GAP-013	cache_key_coverage	CaptureOptions.verbose	2026-08-26	A06	capture-semantics field absent from the capture-cache key; A06 keys it or registers a witnessed dont-care (facts 5-6 class)
-GAP-014	cache_key_coverage	InterventionOptions.confirm_mutation	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-015	cache_key_coverage	InterventionOptions.engine	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-016	cache_key_coverage	InterventionOptions.strict	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-017	cache_key_coverage	ReplayOptions.append	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row

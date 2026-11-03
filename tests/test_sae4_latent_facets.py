@@ -29,6 +29,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.errors import AttributionError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 X = [[1.0, 2.0, -1.0, 3.0], [2.0, -1.0, 4.0, 0.0]]
 W_ENC = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -0.5, 1.0], [0.0, 0.0, 0.5]]
 B_ENC = [0.0, 0.0, 0.25]
@@ -147,7 +149,7 @@ def _recording_hook(seen: list[torch.Tensor]):
     return _hook
 
 
-_IN_PLACE = tl.options.InterventionOptions(confirm_mutation=True)
+_IN_PLACE = tl.options.InterventionOptions()
 
 _DOORS = {
     "attach_hooks": lambda trace, site, hook: trace.attach_hooks(site, hook) and trace.push(),

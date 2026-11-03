@@ -1569,6 +1569,7 @@ class Layer(_SelectionOperand):
     def do(
         self,
         input_transform: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1607,7 +1608,6 @@ class Layer(_SelectionOperand):
         *extra_hooks: Any,
         strict: bool = False,
         prepend: bool = False,
-        confirm_mutation: bool = False,
     ) -> Any:
         """Attach sticky hooks to this layer through the owning Trace.
 
@@ -1621,8 +1621,6 @@ class Layer(_SelectionOperand):
             Whether site resolution should reject non-portable selectors.
         prepend:
             Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
 
         Returns
         -------
@@ -1636,7 +1634,6 @@ class Layer(_SelectionOperand):
             *extra_hooks,
             strict=strict,
             prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def to_pandas(self) -> "pd.DataFrame":
