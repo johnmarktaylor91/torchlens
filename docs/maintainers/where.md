@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1407 modules, 634613 lines, 0 modules without a docstring.
+85 packages, 1407 modules, 634629 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -41,7 +41,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 37 | 15884 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 70 | 42920 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 70 | 42936 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2286 |
@@ -860,7 +860,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (70 modules, 42920 lines)
+Computational graph visualization via Graphviz. (70 modules, 42936 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -870,7 +870,7 @@ Computational graph visualization via Graphviz. (70 modules, 42920 lines)
 | `_backward_rows` | Opt-in label rows for backward nodes (''draw_backward'' keywords). | 164 |
 | `_boundary_bundle` | Boundary bundle (collapse ): one node for a flood of like model outputs. | 294 |
 | `_buffer_visibility` | Buffer-node visibility predicates shared across the render pipeline. | 81 |
-| `_bundle_graph` | The merged bundle graph behind ''Bundle.draw''. | 528 |
+| `_bundle_graph` | The merged bundle graph behind ''Bundle.draw''. | 544 |
 | `_collapse_disclosures` | Human-facing collapse disclosure warnings (collapse ). | 160 |
 | `_collapse_frontier` | Frontier records and merge algebra for the collapse optimizer. | 216 |
 | `_collapse_runs` | Run-fold legality over indexed flow adjacency, de-quadratic (B2). | 349 |
