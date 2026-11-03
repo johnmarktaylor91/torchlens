@@ -13,6 +13,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import torchlens.mechinterp as mi
+
 from .._user_public_impls import trace as _capture_trace
 from ..options import CaptureOptions
 
@@ -24,8 +26,6 @@ def tlens_agreement_demo() -> dict[str, Any]:
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    import torchlens.mechinterp as mi
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")

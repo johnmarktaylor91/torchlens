@@ -11,6 +11,9 @@ from typing import Any
 
 import torch
 
+from .._semantic._norm_reconstruction import reconstruct_norm
+from .._semantic.facets import AbsenceReason
+from .._semantic.recipes._helpers import config_value
 from ._anchors import resolve_lm_head
 from ._errors import refuse
 from ._heads import attention_head_contributions
@@ -113,9 +116,6 @@ def _norm_reconstruction_for(trace: Any, norm: str) -> Any:
 
     if norm == "final":
         return resolve_lm_head(trace).norm_reconstruction()
-    from .._semantic._norm_reconstruction import reconstruct_norm
-    from .._semantic.facets import AbsenceReason
-    from .._semantic.recipes._helpers import config_value
 
     try:
         record = trace.modules[norm]

@@ -17,6 +17,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from ..errors import InvalidArgumentError
+
 __all__ = ["FacetCoverageReport", "ModuleCoverageRow", "facet_coverage"]
 
 
@@ -159,8 +161,6 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
     FacetCoverageReport
         Structured coverage rows in trace module order.
     """
-
-    from ..errors import InvalidArgumentError
 
     rows: list[ModuleCoverageRow] = []
     for module in trace.modules:

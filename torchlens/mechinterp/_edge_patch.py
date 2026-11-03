@@ -46,6 +46,7 @@ from typing import Any
 
 import torch
 
+from ..intervention.edge_substitution import _recompute_with_substitution
 from ._errors import refuse
 
 __all__ = ["patch_edges", "receiver_selection"]
@@ -134,8 +135,6 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     that share a norm input and a projection (one layer's heads and roles)
     share one path search.
     """
-
-    from ..intervention.edge_substitution import _recompute_with_substitution
 
     groups: dict[tuple[str, str, str], list[int]] = {}
     for index, (receiver, _value) in enumerate(attention):

@@ -39,7 +39,11 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from .._data_substrate import compare_model_identity, compute_model_identity
+from .._runnable.transaction import _require_live_source_model
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensError, TorchLensWarning
+from ..errors.runnable import RunCapabilityUnavailableError
 from .facets import Facet, MissingFacet
 
 __all__ = [
@@ -1196,9 +1200,6 @@ def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, 
             "from manifest['signature']['model_identity'].",
             code="logit_lens_identity_invalid",
         )
-    from .._data_substrate import compare_model_identity, compute_model_identity
-    from .._runnable.transaction import _require_live_source_model
-    from ..errors.runnable import RunCapabilityUnavailableError
 
     try:
         model = _require_live_source_model(trace)
@@ -1252,7 +1253,6 @@ def _check_user_lens(
     disagreement = _last_layer_disagreement(trace, lens, lens_by_address, head, tolerance)
     if disagreement is None:
         return
-    from .._utils.display import user_stacklevel
 
     warnings.warn(
         TorchLensWarning(

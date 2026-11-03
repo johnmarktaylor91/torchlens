@@ -7,6 +7,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from ..._data_classes._module_role_hints import multi_output_role_from_path
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
 
@@ -214,7 +215,6 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
     paths = tuple(getattr(call, "output_paths", ()) or ())
     if not paths:
         return None
-    from ..._data_classes._module_role_hints import multi_output_role_from_path
 
     primary_role = multi_output_role_from_path(paths[0], 0)
     if primary_role is None:

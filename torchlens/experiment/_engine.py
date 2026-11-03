@@ -32,10 +32,26 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from .._selection.resolver import _resolve_sites
+from .._selection.selection import Selection, Selector
+from .._selection.selectors import FacetSelector, site as site_selector
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
 from ..errors.episode import BundleExperimentError
+from ..intervention.audit import (
+    append_event_audit_row,
+    event_audit_rows,
+    fire_records_since,
+    record_intervention_event,
+    rules_payload,
+    site_keys_for_labels,
+)
+from ..intervention.errors import SelectorCapabilityError
+from ..intervention.masked_edit import _derive_masked_edit
+from ..intervention.spec import Recipe, when
+from ..intervention.types import Edit
+from ..options import CaptureOptions
 
 if TYPE_CHECKING:
     from torch import nn
@@ -156,9 +172,6 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
-    from .._selection.selection import Selection, Selector
-    from .._selection.selectors import FacetSelector
-
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
         # the intervention mutators, never post-hoc site resolution.
@@ -210,8 +223,6 @@ def _facet_candidate(candidate_id: str, where: Any) -> _Candidate:
 def _sites_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candidate:
     """Resolve a label string or structural spelling through ``_resolve_sites``."""
 
-    from .._selection.resolver import _resolve_sites
-
     table = _resolve_sites(baseline, where, max_fanout=100_000)
     labels = tuple(str(getattr(site, "label", site)) for site in table)
     _require_resolved(candidate_id, where, labels)
@@ -239,11 +250,8 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
     fork of the same selection edit.
     """
 
-    from ..intervention.spec import Recipe, when
-
     if candidate.unit_entries is None:
         return when(candidate.execution_where, edit)
-    from ..intervention.masked_edit import _derive_masked_edit
 
     rules: list[Any] = []
     for entry in candidate.unit_entries:
@@ -279,8 +287,6 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     ``tl.site(key)`` is valid in every lane — so a label-enumerated candidate
     executes identically on live_hook and replay.
     """
-
-    from .._selection.selectors import site as site_selector
 
     keys: list[str] = []
     for label in labels:
@@ -336,8 +342,6 @@ def _run_live_candidate(
     never silent.
     """
 
-    from ..intervention.errors import SelectorCapabilityError
-
     try:
         import time as _time
 
@@ -369,13 +373,6 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     through the ONE shared writer with the fires this run minted.
     """
 
-    from ..intervention.audit import (
-        fire_records_since,
-        record_intervention_event,
-        rules_payload,
-        site_keys_for_labels,
-    )
-
     fires = fire_records_since(member, started)
     fired_labels = tuple(
         dict.fromkeys(record.call_label or record.target_label for record in fires)
@@ -398,8 +395,6 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
 
 def _capture_options_like(baseline: Trace) -> Any:
     """Capture options for a capture-door candidate (intervention-ready)."""
-
-    from ..options import CaptureOptions
 
     return CaptureOptions(replayable=True)
 
@@ -473,8 +468,6 @@ def _declared_multi_ids(pairs: list[tuple[str, Any]], multi_site: Any) -> set[st
 
 def _edit_identity(edit: Any) -> str:
     """Identity of an edit for duplicate detection (helper edits by content)."""
-
-    from ..intervention.types import Edit
 
     if isinstance(edit, Edit):
         return _digest(("edit", edit.name, repr(edit.args), repr(edit.kwargs)))
@@ -677,8 +670,6 @@ def _execute_and_measure(state: _SweepState, candidate: _Candidate, spec: Any) -
     The metric, the byte figure, and the envelope EVENT row are read while
     the member is alive (the measured engine contract).
     """
-
-    from ..intervention.audit import append_event_audit_row, event_audit_rows
 
     if state.lane == "live_hook":
         member, actual_lane = _run_live_candidate(
