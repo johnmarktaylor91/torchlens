@@ -1,4 +1,4 @@
-"""Tests for the Phase 11.0 intervention ``.tlspec`` transitional writer."""
+"""Current intervention saves load; transitional 2.x layouts refuse."""
 
 from __future__ import annotations
 
@@ -6,11 +6,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from example_models import TinyReluAdd as _ReluModel
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION
+from torchlens.errors import ArtifactTooOldError
 from torchlens.intervention.save import load_intervention_spec as legacy_load_intervention_spec
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
@@ -80,13 +82,17 @@ def _remove_unified_marker(path: Path) -> None:
 
     manifest = _read_json(path / "manifest.json")
     manifest.pop("tlspec_version", None)
+    manifest.pop("format", None)
+    recipe = _read_json(path / "intervention.json")
+    recipe["format_version"] = "2"
+    _write_json(path / "spec.json", recipe)
     _write_json(path / "manifest.json", manifest)
 
 
-def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
+def test_intervention_writer_emits_current_format(
     tmp_path: Path,
 ) -> None:
-    """The writer should emit unified fields while preserving 2.16.0 fields."""
+    """The writer emits a 3.0 manifest and recipe, with no legacy payload."""
 
     path = tmp_path / "unified.tlspec"
     _interventions().save_intervention(path, level="portable")
@@ -94,35 +100,36 @@ def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     manifest = _read_json(path / "manifest.json")
     assert manifest["tlspec_version"] == TLSPEC_VERSION
     assert manifest["kind"] == "intervention"
-    assert manifest["format_version"] == "2"
-    assert manifest["tensor_entries"] == []
+    assert manifest["format_version"] == 3
+    assert _read_json(path / "intervention.json")["format_version"] == 3
+    assert not (path / "spec.json").exists()
     assert tl.io.detect_tlspec_format(path) == "v3"
 
 
-def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None:
-    """The polymorphic loader should read transitional intervention specs."""
+def test_new_loader_refuses_transitional_intervention_spec(tmp_path: Path) -> None:
+    """The polymorphic loader refuses the 2.x transitional layout."""
 
     path = tmp_path / "transitional.tlspec"
     _interventions().save_intervention(path, level="portable")
     _remove_unified_marker(path)
 
-    loaded = tl.load(path)
+    assert tl.io.detect_tlspec_format(path) == "pre_3"
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == "intervention format_version=2"
 
-    assert isinstance(loaded, InterventionSpec)
-    assert loaded.metadata["save_level"] == "portable"
 
-
-def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) -> None:
-    """The direct 2.16.0 intervention reader should ignore ``manifest.kind``."""
+def test_direct_intervention_reader_refuses_transitional_kind(tmp_path: Path) -> None:
+    """The direct reader also refuses an intervention layout written by 2.x."""
 
     path = tmp_path / "transitional.tlspec"
     _interventions().save_intervention(path, level="executable_with_callables")
     _remove_unified_marker(path)
 
-    loaded = legacy_load_intervention_spec(path)
-
-    assert isinstance(loaded, InterventionSpec)
-    assert loaded.metadata["save_level"] == "executable_with_callables"
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        legacy_load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_new_loader_reads_intervention_with_unified_manifest_marker(tmp_path: Path) -> None:

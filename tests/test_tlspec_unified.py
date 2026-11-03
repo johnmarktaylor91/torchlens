@@ -448,7 +448,7 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     """A checked-in v2.16 model-log fixture refuses at the tlspec-6 floor.
 
     Both validation and loading refuse the same real pre-floor artifact with
-    the typed floor error; legacy 2.16 intervention specs remain accepted.
+    the typed floor error, as do legacy 2.16 intervention specs.
     """
 
     from torchlens.errors import ArtifactTooOldError
@@ -549,6 +549,7 @@ def test_fresh_unified_save_reports_current_version(
     log.save(path)
     manifest = _read_manifest(path)
     assert manifest["tlspec_version"] == TLSPEC_VERSION
+    assert tl.io.detect_tlspec_format(path) == "v3"
 
     loaded = tl.load(path)
     assert isinstance(loaded, tl.Trace)
