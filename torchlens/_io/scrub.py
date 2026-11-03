@@ -1707,6 +1707,19 @@ def _scrub_raw_value_for_save(
         return None
     if policy is not True and policy != "small":
         raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
+    if not walk.options.typed_values:
+        return (
+            _scrub_value(
+                value,
+                walk.options,
+                walk.memo,
+                walk.blob_specs,
+                walk.blob_counter,
+                stringify_unknown=True,
+            )
+            if policy is True
+            else _small_raw_value(value, field_name=field_name)
+        )
     selected = value if policy is True else _small_raw_value(value, field_name=field_name)
     raw_walk = _ScrubWalk(
         walk.options,
