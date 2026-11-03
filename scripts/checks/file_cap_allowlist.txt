@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1527
+torchlens/_capture/projections.py	1526
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	103
@@ -177,7 +177,7 @@ torchlens/_io/_portability_preflight.py::preflight_metadata_portability	64
 torchlens/_io/_safe_unpickle.py	1404
 torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4232
+torchlens/_io/bundle.py	4203
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -193,7 +193,7 @@ torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
 torchlens/_io/bundle.py::cleanup_tmp	109
 torchlens/_io/bundle.py::load	155
-torchlens/_io/bundle.py::save	618
+torchlens/_io/bundle.py::save	605
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	98
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88
@@ -1007,7 +1007,7 @@ torchlens/bridge/shap.py::explain	67
 torchlens/bridge/transformers.py	801
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	61
 torchlens/bridge/transformers.py::trace_text	66
-torchlens/bundle/__init__.py	1410
+torchlens/bundle/__init__.py	1402
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	99
 torchlens/bundle/_lineage.py::validate_member_construction	77
@@ -1312,14 +1312,14 @@ torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
-torchlens/recording/_record_one_shot.py::record	146
-torchlens/recording/_recorder.py	828
-torchlens/recording/_recorder.py::Recorder.__init__	162
+torchlens/recording/_record_one_shot.py::record	138
+torchlens/recording/_recorder.py	811
+torchlens/recording/_recorder.py::Recorder.__init__	159
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	150
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1278
+torchlens/recording/types.py	1275
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	72
 torchlens/recording/types.py::Recording.to_trace	171
