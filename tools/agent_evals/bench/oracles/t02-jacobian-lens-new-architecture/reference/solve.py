@@ -10,7 +10,8 @@ import torch
 
 
 def load(inputs):
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
     path = os.path.join(inputs, "model.py")
     spec = importlib.util.spec_from_file_location("byte_decoder", path)
     module = importlib.util.module_from_spec(spec)

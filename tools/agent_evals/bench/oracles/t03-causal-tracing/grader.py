@@ -64,8 +64,10 @@ def oracle(inputs, cache):
         return load_npz(path)
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
-    prompts = json.load(open(os.path.join(inputs, "prompts.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
+    with open(os.path.join(inputs, "prompts.json")) as fh:
+        prompts = json.load(fh)
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"], use_fast=True)
     model = AutoModelForCausalLM.from_pretrained(
         cfg["model"], torch_dtype=torch.float32, attn_implementation="eager"

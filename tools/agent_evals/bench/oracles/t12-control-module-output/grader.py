@@ -12,7 +12,8 @@ from grade_utils import Report, grader_main, load_npz, max_abs  # noqa: E402
 
 
 def oracle(inputs_dir):
-    cfg = json.load(open(os.path.join(inputs_dir, "config.json")))
+    with open(os.path.join(inputs_dir, "config.json")) as fh:
+        cfg = json.load(fh)
     spec = importlib.util.spec_from_file_location(
         "task_model_oracle", os.path.join(inputs_dir, "model.py")
     )

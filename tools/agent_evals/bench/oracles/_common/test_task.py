@@ -30,7 +30,8 @@ def main():
     p.add_argument("--skip-run", action="store_true", help="grade existing outputs only")
     a = p.parse_args()
     task = os.path.abspath(a.task_dir)
-    meta = json.load(open(os.path.join(task, "task.json")))
+    with open(os.path.join(task, "task.json")) as fh:
+        meta = json.load(fh)
     timeout = float(meta.get("timeout_s", 1800))
     work = os.path.join(task, ".work")
     cache = os.path.join(work, "oracle_cache")
@@ -120,7 +121,8 @@ def main():
             f"{'PASS' if r['passed'] else 'FAIL':6} {'yes' if r['verdict_ok'] else 'NO ':4} {bars}"
         )
     print("TASK", meta["id"], "GREEN" if ok else "RED")
-    json.dump(results, open(os.path.join(work, "results.json"), "w"), indent=1)
+    with open(os.path.join(work, "results.json"), "w") as fh:
+        json.dump(results, fh, indent=1)
     return 0 if ok else 1
 
 

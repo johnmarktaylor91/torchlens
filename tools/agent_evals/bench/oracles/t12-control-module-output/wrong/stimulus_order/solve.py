@@ -16,7 +16,8 @@ def main():
     p.add_argument("--inputs", required=True)
     p.add_argument("--outputs", required=True)
     a = p.parse_args()
-    cfg = json.load(open(os.path.join(a.inputs, "config.json")))
+    with open(os.path.join(a.inputs, "config.json")) as fh:
+        cfg = json.load(fh)
     spec = importlib.util.spec_from_file_location("task_model", os.path.join(a.inputs, "model.py"))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)

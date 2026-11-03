@@ -15,7 +15,8 @@ args = parser.parse_args()
 spec = importlib.util.spec_from_file_location("model", os.path.join(args.inputs, "model.py"))
 model_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_module)
-seed = json.load(open(os.path.join(args.inputs, "config.json")))["seed"]
+with open(os.path.join(args.inputs, "config.json")) as fh:
+    seed = json.load(fh)["seed"]
 model = model_module.build_model()
 captured = []
 model.fc2.register_forward_hook(lambda module, inputs, output: captured.append(output.detach()))

@@ -13,7 +13,8 @@ def oracle(inputs: str) -> np.ndarray:
     spec = importlib.util.spec_from_file_location("model", os.path.join(inputs, "model.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    seed = json.load(open(os.path.join(inputs, "config.json")))["seed"]
+    with open(os.path.join(inputs, "config.json")) as fh:
+        seed = json.load(fh)["seed"]
     model = module.build_model()
     with torch.no_grad():
         return model.fc2(model.act(model.fc1(module.make_inputs(seed)))).numpy()
@@ -24,7 +25,7 @@ def bar(name: str, outputs: str | None, inputs: str) -> dict:
     if not outputs or not os.path.isfile(path):
         return {"name": name, "passed": False, "value": "missing", "threshold": "exact"}
     with np.load(path) as data:
-        got = data["out"] if "out" in data else None
+        got = data.get("out")
     want = oracle(inputs)
     if got is None or got.shape != want.shape:
         return {"name": name, "passed": False, "value": "wrong shape", "threshold": "exact"}

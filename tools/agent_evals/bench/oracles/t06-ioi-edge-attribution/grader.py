@@ -119,7 +119,8 @@ def oracle(inputs, cache):
         return load_npz(path)["scores"]
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
     spec = importlib.util.spec_from_file_location(
         "oracle_prompts", os.path.join(inputs, "prompts.py")
     )

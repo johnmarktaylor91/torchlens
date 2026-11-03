@@ -128,7 +128,8 @@ def chunk_scores(model, clean, corrupt, positive, negative, signed=False):
 
 
 def run(inputs, outputs, variant=None):
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
     os.makedirs(outputs, exist_ok=True)
     if variant == "random_scores":
         scores = np.random.default_rng(cfg["random_score_seed"]).random((12, 12)).astype(np.float32)

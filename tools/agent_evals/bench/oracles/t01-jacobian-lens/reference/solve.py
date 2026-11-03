@@ -110,7 +110,8 @@ def readout(model, tok, prompts, lens, cfg, variant=None):
 
 
 def run(inputs, outputs, variant=None):
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
     tok = AutoTokenizer.from_pretrained(cfg["model"])
     model = AutoModelForCausalLM.from_pretrained(cfg["model"], torch_dtype=torch.float32).eval()
     texts = read_jsonl(os.path.join(inputs, "corpus.jsonl"))
@@ -125,7 +126,8 @@ def run(inputs, outputs, variant=None):
     os.makedirs(outputs, exist_ok=True)
     np.savez(os.path.join(outputs, "lens.npz"), **saved)
     rd = readout(model, tok, prompts, lens, cfg, variant=variant)
-    json.dump(rd, open(os.path.join(outputs, "readout.json"), "w"))
+    with open(os.path.join(outputs, "readout.json"), "w") as fh:
+        json.dump(rd, fh)
 
 
 if __name__ == "__main__":

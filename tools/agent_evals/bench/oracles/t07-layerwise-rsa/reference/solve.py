@@ -16,8 +16,10 @@ from transformers import AutoModelForImageClassification
 
 
 def load_inputs(inputs):
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
-    layers = json.load(open(os.path.join(inputs, "layers.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
+    with open(os.path.join(inputs, "layers.json")) as fh:
+        layers = json.load(fh)
     spec = importlib.util.spec_from_file_location("stimuli", os.path.join(inputs, "stimuli.py"))
     st = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(st)
@@ -194,7 +196,8 @@ def run(inputs, outputs, variant=None):
             scores[lid] = match(rdms[lid], cat)
         np.savez(os.path.join(outputs, f"rdms_{net}.npz"), **rdms)
         best[net] = max(scores, key=scores.get)
-    json.dump(best, open(os.path.join(outputs, "best_layer.json"), "w"), indent=1)
+    with open(os.path.join(outputs, "best_layer.json"), "w") as fh:
+        json.dump(best, fh, indent=1)
 
 
 if __name__ == "__main__":

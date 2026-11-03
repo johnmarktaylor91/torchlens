@@ -23,8 +23,10 @@ from grade_utils import (  # noqa: E402
 
 
 def load_inputs(inputs):
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
-    layers = json.load(open(os.path.join(inputs, "layers.json")))
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
+    with open(os.path.join(inputs, "layers.json")) as fh:
+        layers = json.load(fh)
     spec = importlib.util.spec_from_file_location(
         "stimuli_oracle", os.path.join(inputs, "stimuli.py")
     )

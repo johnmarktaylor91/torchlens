@@ -187,11 +187,15 @@ def oracle(task_dir, cache):
             )
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cfg = json.load(open(os.path.join(inputs, "config.json")))
-    assert (
-        open(os.path.join(inputs, "corpus.jsonl")).read()
-        == open(os.path.join(heldout, "corpus.jsonl")).read()
-    ), "held-out corpus must equal the visible corpus (only the readout prompts differ)"
+    with open(os.path.join(inputs, "config.json")) as fh:
+        cfg = json.load(fh)
+    with (
+        open(os.path.join(inputs, "corpus.jsonl")) as visible,
+        open(os.path.join(heldout, "corpus.jsonl")) as held,
+    ):
+        assert visible.read() == held.read(), (
+            "held-out corpus must equal the visible corpus (only the readout prompts differ)"
+        )
     tok = AutoTokenizer.from_pretrained(cfg["model"])
     model = AutoModelForCausalLM.from_pretrained(cfg["model"], torch_dtype=torch.float32).eval()
     texts = read_jsonl(os.path.join(inputs, "corpus.jsonl"))
@@ -223,7 +227,8 @@ def oracle(task_dir, cache):
 
 def grade(task_dir, outputs, heldout_outputs, cache):
     rep = Report("t01-jacobian-lens")
-    cfg = json.load(open(os.path.join(task_dir, "inputs", "config.json")))
+    with open(os.path.join(task_dir, "inputs", "config.json")) as fh:
+        cfg = json.load(fh)
     src = list(cfg["source_layers"])
     J_ref, top_v, top_h, model_v, model_h = oracle(task_dir, cache)
     names = ["shapes", "jacobian", "readout_visible", "model_top10_visible", "readout_heldout"]
