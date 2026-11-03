@@ -378,7 +378,12 @@ def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
     spec = InterventionSpec(
         metadata={
             "_capture_rules": [
-                (_target(rule["selector"]), _edit(rule["edit"]))
+                (
+                    normalize_selector_like(
+                        _target(rule["selector"]), lifecycle="live"
+                    ).to_target_spec(),
+                    _edit(rule["edit"]),
+                )
                 for rule in recipe.get("capture_rules", ())
             ]
         }

@@ -602,6 +602,8 @@ def _capture_rules_problem(rules: Any) -> str | None:
         target, edit = rule["selector"], rule["edit"]
         if not isinstance(target, dict) or set(target) != selector_keys:
             return f"capture_rules[{index}] has an invalid selector"
+        if type(target["strict"]) is not bool or not isinstance(target["metadata"], dict):
+            return f"capture_rules[{index}] has invalid selector field types"
         if not isinstance(target["selector_kind"], str) or not target["selector_kind"]:
             return f"capture_rules[{index}] has an invalid selector kind"
         if not isinstance(edit, dict) or set(edit) != edit_keys or edit["portability"] != "builtin":
