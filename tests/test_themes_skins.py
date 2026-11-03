@@ -1,11 +1,10 @@
 """F12 pins: live skin palettes (N4), ramps, the N17 neutral fill, and the
 CVD accessibility gates.
 
-Every shipped skin, the default included, renders the legacy role colours
-(JMT's 29 Oct ruling: the default look is main's released look); the
-Okabe-Ito set ships as data with its accessibility evidence attached, and
-the legacy set's deuteranopia failure is pinned here as the fork's
-evidence.
+The default ``torchlens`` skin and ``colorblind`` render the Okabe-Ito set
+(the flip was held until the collapse budget gate landed); ``paper`` and
+``high_contrast`` keep the legacy role colours, and the legacy set's
+deuteranopia failure is pinned here as the fork's evidence.
 """
 
 from __future__ import annotations
@@ -93,21 +92,23 @@ def test_neutral_fill_collides_with_no_semantic_meaning() -> None:
         assert theme.neutral_aggregate_fill.lower() not in semantic, theme.name
 
 
-def test_default_skin_palette_is_pixel_identical() -> None:
-    """The default skin translates every legacy constant to itself: no blue weights."""
+def test_default_skin_renders_the_okabe_ito_palette() -> None:
+    """The default skin translates every legacy constant to its Okabe-Ito role colour."""
 
     theme = resolve_theme("torchlens")
-    assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
-    for constant in ("#98FB98", "#ff9999", "#D9D9D9", "#B0B0B0", "#E6E6E6", "#F7D460", "#E69F00"):
+    assert theme.semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
+    for role, constant in LEGACY_SEMANTIC_PALETTE.items():
         spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=constant), theme)
-        assert spec.fillcolor == constant
+        assert spec.fillcolor == OKABE_ITO_SEMANTIC_PALETTE[role], role
+    assert resolve_theme("colorblind").semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
 
 
-def test_light_skins_keep_their_historical_palettes() -> None:
-    """The default, paper, colorblind and high_contrast skins all keep history."""
+def test_paper_and_high_contrast_keep_their_historical_palettes() -> None:
+    """The paper and high_contrast skins keep the legacy role colours."""
 
-    for name in ("torchlens", "paper", "colorblind", "high_contrast"):
+    for name in ("paper", "high_contrast"):
         theme = resolve_theme(name)
+        assert theme.semantic_palette is LEGACY_SEMANTIC_PALETTE
         spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), theme)
         assert spec.fillcolor == "#98FB98", name
 
@@ -127,12 +128,11 @@ def test_dark_skin_param_remap_is_byte_identical_to_history() -> None:
 
 
 def test_palette_wiring_is_live() -> None:
-    """A hypothetical skin palette actually changes the rendered fill: the
-    machinery is live, only the shipped palettes are identity."""
+    """Swapping a skin's palette changes the rendered fill: the machinery is live."""
 
     from dataclasses import replace
 
-    flipped = replace(resolve_theme("torchlens"), semantic_palette=OKABE_ITO_SEMANTIC_PALETTE)
+    flipped = replace(resolve_theme("paper"), semantic_palette=OKABE_ITO_SEMANTIC_PALETTE)
     spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor="#98FB98"), flipped)
     assert spec.fillcolor == "#009E73"
 
