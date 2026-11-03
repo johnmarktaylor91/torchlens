@@ -23,6 +23,16 @@ class UnencodableValue:
     """A value the writer could not encode: its type name, repr text and where it was.
 
     ``_repr_length`` (the unbounded repr's length) is carried for round trips, not public.
+
+    Attributes
+    ----------
+    type_name:
+        Dotted class path of the original value's type.
+    repr_text:
+        The original value's ``repr``, cut to the writer's length limit.
+    at:
+        Location of the value in the saved artifact: record kind, row index and
+        column name, for example ``op[3].func_args``.
     """
 
     type_name: str
