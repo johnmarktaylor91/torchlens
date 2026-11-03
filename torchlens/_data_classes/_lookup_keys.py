@@ -1,13 +1,11 @@
 """Shared lookup-key validation helpers for ``Trace`` access paths."""
 
-import random
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from .._errors import InvalidArgumentError
 from .._utils._display_errors import candidate_keys, lookup_message
 
 if TYPE_CHECKING:
-    from .module import Module
     from .trace import Trace
 
 
@@ -114,47 +112,12 @@ def _get_lookup_help_str(self: "Trace", layer_label: int | str, mode: str) -> st
     if suggestions:
         return _missing_layer_message(self, layer_label, suggestions)
 
-    if not self.op_labels:
-        sample_layer1 = "conv2d_1_1:1"
-        sample_layer2 = "conv2d_1_1"
-    else:
-        sample_layer1 = random.choice(self.op_labels)
-        sample_layer2 = random.choice(self.layer_labels)
-    module_logs = cast("list[Module]", list(self.modules))
-    module_addrs = [ml.address for ml in module_logs if ml.address != "self"]
-    if len(module_addrs) > 0:
-        sample_module1 = random.choice(module_addrs)
-        all_call_labels = [
-            pl for ml in module_logs for pl in ml.call_labels if ml.address != "self"
-        ]
-        sample_module2 = random.choice(all_call_labels) if all_call_labels else "features.4:2"
-    else:
-        sample_module1 = "features.3"
-        sample_module2 = "features.4:2"
-    module_str = f"(e.g., {sample_module1}, {sample_module2})"
-    if mode == "get_one_item":
-        msg = (
-            "e.g., 'pool' will grab the maxpool2d or avgpool2d layer, 'maxpool' will grab the "
-            "'maxpool2d' layer, etc., but there must be only one such matching layer"
-        )
-    elif mode == "query_multiple":
-        msg = (
-            "e.g., 'pool' will grab all maxpool2d or avgpool2d layers, 'maxpool' will grab all "
-            "'maxpool2d' layers, etc."
-        )
-    else:
+    if mode not in ("get_one_item", "query_multiple"):
         raise ValueError("mode must be either get_one_item or query_multiple")
-    help_str = (
-        f"Layer {layer_label} not recognized; please specify either "
-        f"\n\n\t1) an integer giving the ordinal position of the layer "
-        f"(e.g. 2 for 3rd layer, -4 for fourth-to-last), "
-        f"\n\t2) the layer label (e.g., {sample_layer1}, {sample_layer2}), "
-        f"\n\t3) the module address {module_str}"
-        f"\n\t4) A substring of any desired layer label ({msg})."
-        f"\n\n(Label meaning: conv2d_3_4:2 means the second pass of the third convolutional layer, "
-        f"and fourth layer overall in the model.)"
-    )
-    return help_str
+    remedy = "Use an integer position, a layer label, a module address, or a label substring."
+    if mode == "get_one_item":
+        remedy += " A substring must identify exactly one layer."
+    return lookup_message(f"Layer {layer_label!r} not recognized.", [], remedy)
 
 
 def _missing_layer_message(trace: "Trace", label: int | str, suggestions: list[str]) -> str:

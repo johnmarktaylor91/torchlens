@@ -152,13 +152,11 @@ def frozen_spec_card(spec: FrozenInterventionSpec) -> str:
 
 @display_guard
 def edge_repr(edge: Any) -> str:
-    """Describe one stored edge occurrence, without inventing short labels."""
+    """Describe one occurrence; raw labels stay behind the named detail exits."""
 
     path = ".".join(str(component) for component in edge.arg_path) or "?"
     relation = f", {edge.view_or_copy}" if edge.view_or_copy in ("view", "copy") else ""
-    return clipped(
-        f"EdgeUseRecord: {edge.parent_label} -> {edge.child_label}, {edge.arg_kind} {path}{relation}"
-    )
+    return clipped(f"EdgeUseRecord: {edge.arg_kind} argument {path}{relation}")
 
 
 @display_guard
@@ -168,8 +166,6 @@ def edge_card(edge: Any) -> str:
     return render_card(
         edge_repr(edge),
         [
-            ("parent", edge.parent_label),
-            ("child", edge.child_label),
             ("argument", f"{edge.arg_kind} {value_text(edge.arg_path)}"),
             ("relation", edge.view_or_copy or "not recorded"),
         ],

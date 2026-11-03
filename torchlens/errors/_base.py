@@ -63,6 +63,15 @@ def _message_from_payload(class_name: str, fields: dict[str, object]) -> str:
     return f"{class_name}: {rendered}."
 
 
+def _remedy_from_message(message: str) -> str | None:
+    """Read the authored remedy from either supported display layout."""
+
+    for marker in (_REMEDY_MARKER, "\n  remedy    "):
+        if marker in message:
+            return message.rsplit(marker, 1)[1].strip().rstrip(".") or None
+    return None
+
+
 class TorchLensError(Exception):
     """Root base class for all TorchLens errors.
 
@@ -118,13 +127,10 @@ class TorchLensError(Exception):
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)
-        # Remedy-contract alignment (R65 fixwave-6): the refusal contract
-        # promises a non-empty ``fields["remedy"]`` whose text the message
-        # ends with, but most sites author the remedy ONLY in the message.
-        # Derive the structured field from the authored "Remedy: ..." tail at
-        # this one chokepoint; an explicit ``remedy=`` kwarg always wins.
-        if message and "remedy" not in self.fields and _REMEDY_MARKER in message:
-            derived_remedy = message.rsplit(_REMEDY_MARKER, 1)[1].strip().rstrip(".")
+        # Preserve the structured remedy for both sentence and card layouts.
+        # An explicit ``remedy=`` payload always takes precedence.
+        if message and "remedy" not in self.fields:
+            derived_remedy = _remedy_from_message(message)
             if derived_remedy:
                 self.fields["remedy"] = derived_remedy
         super().__init__("" if message is None else message)

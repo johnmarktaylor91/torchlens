@@ -60,13 +60,13 @@ def _mask_volatile(text: str) -> str:
 _GOLDEN_ASCII = """\
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
----------------------------------------------------------
-conv (Conv2d)  (1, 4, 8, 8)     108   ... 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ### 92.2%      2.56K
----------------------------------------------------------
+name (type)    output        params    (%)  fwd flops
+-----------------------------------------------------
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1_3    (1, 256)           -      -          0
+fc (Linear)    (1, 5)         1.28K  92.2%      2.56K
+-----------------------------------------------------
 Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   <masked>
@@ -77,13 +77,13 @@ More:    result.details() | view='compute' for per-row MACs | docs/reference/sum
 _GOLDEN_UNICODE = """\
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
-─────────────────────────────────────────────────────────
-conv (Conv2d)  (1, 4, 8, 8)     108   ░░░ 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ███ 92.2%      2.56K
-─────────────────────────────────────────────────────────
+name (type)    output        params    (%)  fwd flops
+─────────────────────────────────────────────────────
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1_3    (1, 256)           -      -          0
+fc (Linear)    (1, 5)         1.28K  92.2%      2.56K
+─────────────────────────────────────────────────────
 Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
 Memory   <masked>

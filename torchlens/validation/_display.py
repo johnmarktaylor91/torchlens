@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._utils._display_card import render_card
+from .._utils._display_card import one_line, render_card
 from .._utils._display_constructor import clipped, display_guard
-from .._utils._display_numbers import format_count, format_exact_count
+from .._utils._display_numbers import format_count, format_exact_count, format_sig
 
 
 @display_guard
@@ -44,7 +44,25 @@ def status_card(status: Any) -> str:
 def failure_repr(failure: Any) -> str:
     """Lead with the failing check and its location, with a bounded summary."""
 
-    return clipped(f"ValidationFailure: {failure.summary()}")
+    location = (
+        f"function {failure.func_name}"
+        if failure.func_name
+        else "operation recorded"
+        if failure.op_label
+        else "location not recorded"
+    )
+    difference = (
+        f"max absolute {format_sig(failure.max_abs_diff)}"
+        if failure.max_abs_diff is not None
+        else "difference not computed"
+    )
+    return clipped(
+        one_line(
+            f"ValidationFailure {failure.check_name}",
+            [location, difference],
+            [failure.message] if failure.message else [],
+        )
+    )
 
 
 @display_guard
@@ -55,13 +73,20 @@ def failure_card(failure: Any) -> str:
         failure_repr(failure),
         [
             ("check", failure.check_name),
-            ("op", failure.op_label or "not recorded"),
+            ("location", "recorded on .op_label" if failure.op_label else "not recorded"),
             ("function", failure.func_name or "not recorded"),
             ("message", failure.message),
             (
                 "difference",
-                f"max absolute {failure.max_abs_diff}, max relative {failure.max_rel_diff}",
+                f"max absolute {_difference_text(failure.max_abs_diff)}, "
+                f"max relative {_difference_text(failure.max_rel_diff)}",
             ),
         ],
-        (".saved_shape", ".recomputed_shape", ".extra"),
+        (".op_label", ".saved_shape", ".recomputed_shape", ".extra"),
     )
+
+
+def _difference_text(value: float | None) -> str:
+    """Keep an unrecorded discrepancy distinct from a measured zero."""
+
+    return "not computed" if value is None else format_sig(value)

@@ -139,22 +139,22 @@ ASCII (the canonical `str(report)` -- what logs and CI see):
 ```
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
----------------------------------------------------------
-conv (Conv2d)  (1, 4, 8, 8)     108   ... 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ### 92.2%      2.56K
----------------------------------------------------------
+name (type)    output        params    (%)  fwd flops
+-----------------------------------------------------
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1_3    (1, 256)           -      -          0
+fc (Linear)    (1, 5)         1.28K  92.2%      2.56K
+-----------------------------------------------------
 Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
-Memory   forward peak 3.4 MB (torch) | activations at capture 3.9 KB, retained now 3.9 KB
+Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | health CHECKED-AND-CLEAN
 More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md
 ```
 
-(The Memory line is a live measurement and varies by host; every other
+(The Memory line is masked because its live measurement varies by host; every other
 byte above is pinned by the dual-charset goldens in
 `tests/test_summary_rebuild_charset.py`.)
 
@@ -164,16 +164,16 @@ bytes through a declared glyph table):
 ```
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
-─────────────────────────────────────────────────────────
-conv (Conv2d)  (1, 4, 8, 8)     108   ░░░ 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ███ 92.2%      2.56K
-─────────────────────────────────────────────────────────
+name (type)    output        params    (%)  fwd flops
+─────────────────────────────────────────────────────
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1_3    (1, 256)           -      -          0
+fc (Linear)    (1, 5)         1.28K  92.2%      2.56K
+─────────────────────────────────────────────────────
 Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
 Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
-Memory   forward peak 3.4 MB (torch) | activations at capture 3.9 KB, retained now 3.9 KB
+Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | health CHECKED-AND-CLEAN
 More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md

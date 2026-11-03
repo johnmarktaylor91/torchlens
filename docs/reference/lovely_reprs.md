@@ -97,6 +97,54 @@ as a live per-firing stream on the capture hook surface;
 summary panel and HTML cards consume, so a number can never exist only
 in HTML.
 
+## Selections, edits, options and reports
+
+Selections report sites and values separately and name the selector that
+produced them. For a five-token GPT-2 small capture:
+
+```text
+Selection ACT: 12 sites, 184k values, from tl.func('tanh')
+```
+
+`print(selection)` lists the first five sites, the number omitted, and the
+attributes for further inspection. A dense mask says `values not computed`
+rather than scanning its elements while printing.
+
+Selectors retain parentheses so their constructor spelling rebuilds the
+same boolean expression. Edits retain their public constructor spelling;
+tensor arguments use shape, dtype and device without printing elements:
+
+```text
+tl.scale(2.0)
+tl.project_out(<tensor float32 [4] on cpu>)
+tl.when(tl.func('relu'), tl.zero_ablate())
+Recipe: 2 rules
+```
+
+A recipe uses `tl.when(...)` only when that spelling rebuilds it exactly.
+Otherwise its repr reports the number of rules; `print(recipe)` lists at
+most five rules. Captured arguments and frozen intervention specs also
+show metadata and counts rather than tensor contents or callback dumps.
+
+Options show non-default fields in repr. Printing an options object lists
+all its public fields, including defaults:
+
+```text
+CaptureOptions()
+CaptureOptions(save_grads=True, aten_ops=True)
+```
+
+Doctor, health and compute report reprs show their type, scope and row or
+finding counts. Summary tables retain their headers and totals, use plain
+numeric percentages, and explain every displayed marker in one legend.
+Lookup errors keep the problem first and offer at most five display keys:
+
+```text
+Layer 'tanhh_6' not found.
+  candidates 'tanh_1', 'tanh_6', 'tanh_11', 'tanh_2', 'tanh_9'; and 5 more
+  remedy    pass an in-range integer, a layer label, or a module address
+```
+
 ## Credits
 
 The philosophy this surface mines and extends:

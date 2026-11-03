@@ -57,6 +57,6 @@ def refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:
     """
 
     rendered = f"{message} Remedy: {remedy}"
-    if "\n  candidates " in message:
+    if "\n  remedy " in message:
         rendered = _actionable_message(message, remedy)
     raise MechInterpError(rendered, code=code, remedy=remedy, **payload)

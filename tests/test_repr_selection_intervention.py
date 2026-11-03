@@ -145,3 +145,19 @@ def test_candidate_rows_use_five_stored_display_keys() -> None:
     assert str(error) == message
     assert error.fields["code"] == "example"
     assert error.fields["remedy"] == "choose a key."
+    empty = lookup_message("No matching layers.", [], "choose a key.")
+    error = tl.errors.InvalidArgumentError(empty, code="example", remedy="choose a key.")
+    assert str(error) == empty
+
+
+@pytest.mark.parametrize("candidates", [[], ["relu_1"]])
+def test_candidate_rows_preserve_the_structured_remedy(candidates: list[str]) -> None:
+    """Changing refusal layout must retain the programmatic remedy contract."""
+
+    message = lookup_message("Layer not found.", candidates, "choose a key.")
+    error = tl.errors.TorchLensError(message)
+    assert error.fields["remedy"] == "choose a key"
+    explicit = tl.errors.TorchLensError(message, remedy="use another trace")
+    assert explicit.fields["remedy"] == "use another trace"
+    legacy = tl.errors.TorchLensError("Layer not found. Remedy: choose a key.")
+    assert legacy.fields["remedy"] == error.fields["remedy"]

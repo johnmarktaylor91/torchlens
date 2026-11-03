@@ -30,7 +30,7 @@ def _actionable_message(problem: str, remedy: str) -> str:
     """
 
     problem_clause = problem.rstrip()
-    if "\n  candidates " in problem_clause:
+    if "\n  remedy " in problem_clause:
         problem_clause = problem_clause.split("\n  remedy ", 1)[0]
         return f"{problem_clause}\n  remedy    {remedy.rstrip()}"
     if not problem_clause.endswith((".", "!", "?", ":", ";")):

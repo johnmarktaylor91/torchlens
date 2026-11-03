@@ -35,7 +35,7 @@ torchlens/_capture/prepare/cache.py::_harden_capture_cache_dir	65
 torchlens/_capture/prepare/cache.py::_load_authenticated_capture_cache	75
 torchlens/_capture/prepare/cache.py::_store_authenticated_capture_cache	85
 torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
-torchlens/_capture/prepare/chunked.py::plan_chunks	76
+torchlens/_capture/prepare/chunked.py::plan_chunks	69
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
@@ -71,7 +71,6 @@ torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
 torchlens/_constants.py	1444
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	61
-torchlens/_data_classes/_lookup_keys.py::_get_lookup_help_str	63
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
 torchlens/_data_classes/_nonfinite.py	885
 torchlens/_data_classes/_op_dedup.py::_dedup_cached_identity_out	66
@@ -449,8 +448,8 @@ torchlens/_selection/compare.py::_pass_groups	64
 torchlens/_selection/compare.py::_resolve_pass_term	64
 torchlens/_selection/compare.py::_resolve_top_changed	67
 torchlens/_selection/do_plan.py::_build_selection_do_plan	91
-torchlens/_selection/resolver.py	1033
-torchlens/_selection/selection.py	1659
+torchlens/_selection/resolver.py	1030
+torchlens/_selection/selection.py	1652
 torchlens/_selection/selection.py::_resolve_facet_term	64
 torchlens/_selection/selectors.py	1644
 torchlens/_selection/selectors.py::SiteSelector.__init__	77
@@ -1131,7 +1130,7 @@ torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
 torchlens/intervention/_trace_selection_edits.py::apply_selection_do	78
 torchlens/intervention/audit.py::build_fire_record	71
 torchlens/intervention/audit.py::record_intervention_event	152
-torchlens/intervention/binding.py	1545
+torchlens/intervention/binding.py	1538
 torchlens/intervention/binding.py::_consider_op	112
 torchlens/intervention/binding.py::_make_boundary_hook	61
 torchlens/intervention/compose.py::compose	103
@@ -1204,7 +1203,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	72
 torchlens/intervention/stochastic.py::set_direction_mean	143
 torchlens/intervention/sweep.py::sweep	176
-torchlens/intervention/types.py	833
+torchlens/intervention/types.py	826
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	64
 torchlens/io/__init__.py::detect_tlspec_format	66
@@ -1364,7 +1363,7 @@ torchlens/report/_stats_table.py::build_stats_table	88
 torchlens/report/_summary_ladder.py	1293
 torchlens/report/_summary_ladder.py::_ModelIndex.__init__	64
 torchlens/report/_summary_ladder.py::_elide_once	74
-torchlens/report/_summary_render.py::render_summary_pair	70
+torchlens/report/_summary_render.py::render_summary_pair	66
 torchlens/report/_summary_result.py::collect_summary_facts	71
 torchlens/report/_trace_summary.py::summary	68
 torchlens/stats/_aggregate.py::aggregate	71
