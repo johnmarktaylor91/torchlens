@@ -149,6 +149,30 @@ def test_backward_source_fields_are_in_the_privacy_belt(include_source: bool) ->
         assert scrubbed_state["backward_docstring"] is None
 
 
+def test_module_source_paths_are_relativized_on_save(tmp_path: Path) -> None:
+    """Module source files reach the bundle as basenames, never host paths.
+
+    Fail-before: the owner dispatch matched Module records on the Trace's private
+    ``_source_class_docstring`` spelling, so a Module never entered the privacy
+    belt and a capture with ``save_source_context=True`` wrote every module's
+    absolute ``class``/``init``/``forward`` source path into ``module.json``.
+    """
+
+    from torchlens._io.format3.decode import decode_value
+
+    spec = tmp_path / "module_paths.tlspec"
+    _build_live_log().save(str(spec))
+    columns = read_record(spec, "module")["columns"]
+    checked = 0
+    for column in ("class_source_file", "init_source_file", "forward_source_file"):
+        for row, cell in enumerate(columns[column]):
+            value = decode_value(cell, at=f"module[{row}].{column}")
+            assert value is not None, f"module[{row}].{column} was not captured"
+            assert "/" not in value and "\\" not in value, f"module[{row}].{column}: {value!r}"
+            checked += 1
+    assert checked
+
+
 def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: Path) -> None:
     """B8-20: a ``functools.partial`` transform's bound arg values are not persisted.
 
