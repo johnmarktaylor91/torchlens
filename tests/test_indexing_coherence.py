@@ -12,6 +12,8 @@ Bundle doors.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 import torch
 
@@ -55,13 +57,16 @@ class DoorModel(torch.nn.Module):
 
 
 @pytest.fixture(scope="module")
-def trace() -> tl.Trace:
+def trace() -> Iterator[tl.Trace]:
     """One capture with a backward pass, shared across the doors."""
 
     torch.manual_seed(0)
     captured = tl.trace(DoorModel().eval(), torch.randn(3, 4))
     captured.backward(captured.output.sum())
-    return captured
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 @pytest.fixture(scope="module")
@@ -165,7 +170,11 @@ def test_layers_door_converts_module_keys(trace: tl.Trace) -> None:
     assert trace.layers["shared:2"] is trace.layers[SHARED]
     # Both calls of ``shared`` land in one two-pass Layer, so the address is one Layer.
     assert trace.layers["shared"] is trace.layers[SHARED]
-    assert isinstance(trace.layers["bn.running_mean"], Layer)
+    # Two buffer versions sit in two Layers, so the bare address refuses; a version is one.
+    with pytest.raises(AmbiguousOpLookupError) as info:
+        trace.layers["bn.running_mean"]
+    assert "'bn.running_mean:1'" in str(info.value)
+    assert isinstance(trace.layers["bn.running_mean:1"], Layer)
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +224,7 @@ def test_params_filtered_collection_does_not_leak(trace: tl.Trace) -> None:
     """A converted key must name a member of the filtered collection."""
 
     with pytest.raises(KeyError):
-        trace.params.frozen()["emb"]
+        trace.params.frozen["emb"]
 
 
 def test_buffers_door_converts_module_and_version_keys(trace: tl.Trace) -> None:
@@ -280,10 +289,10 @@ def test_layer_ops_door_accepts_call_labels(trace: tl.Trace) -> None:
 def test_bundle_typed_doors_convert_module_keys(bundle: tl.Bundle) -> None:
     """Bundle doors follow the member doors, ambiguity included."""
 
-    assert bundle.ops["fc1"]["first"] is bundle["first"].ops["fc1"]
-    assert bundle.ops["shared:1"]["first"].label == f"{SHARED}:1"
-    assert bundle.layers["fc1"]["first"] is bundle["first"].layers[FC1]
-    assert bundle.modules[FC1]["first"] is bundle["first"].modules["fc1"]
+    assert bundle.ops["fc1"].members["first"] is bundle["first"].ops["fc1"]
+    assert bundle.ops["shared:1"].members["first"].label == f"{SHARED}:1"
+    assert bundle.layers["fc1"].members["first"] is bundle["first"].layers[FC1]
+    assert bundle.modules[FC1].members["first"] is bundle["first"].modules["fc1"]
     with pytest.raises(AmbiguousOpLookupError):
         bundle.ops["shared"]
 

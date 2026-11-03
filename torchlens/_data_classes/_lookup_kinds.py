@@ -138,17 +138,25 @@ def _module_at(trace: Any, key: str) -> Any:
 def _output_op_candidates(trace: Any, key: str) -> tuple[list[Any], list[str]]:
     """Output ops a record key reaches, with the spellings that name each one.
 
-    A module address reaches one output op per call, a buffer address one op
-    per version; ``address:N`` and every other lookup key reach one op.
+    A module address reaches the output ops of every call (spelled by call
+    label when each call has one output), ``address:N`` the output ops of that
+    call, a buffer address one op per version. An op label is not converted:
+    the ops door answers it itself or refuses, so validation keeps its tripwire.
     """
 
     keys = trace._layer_dict_all_keys
-    if key in keys:
-        return [keys[key]], [key]
+    pass_dict = getattr(trace.modules, "_pass_dict", {})
+    call = pass_dict.get(key)
+    if call is not None:
+        labels = [label for label in (call.output_ops or []) if label in keys]
+        return [keys[label] for label in labels], labels
     module = _module_at(trace, key)
-    if module is not None and key not in getattr(trace.modules, "_pass_dict", {}):
-        spellings = [label for label in module.call_labels if label in keys]
-        return [keys[label] for label in spellings], spellings
+    if module is not None:
+        calls = [pass_dict[label] for label in module.call_labels if label in pass_dict]
+        per_call = [[label for label in (c.output_ops or []) if label in keys] for c in calls]
+        labels = [label for labels in per_call for label in labels]
+        one_each = all(len(labels) == 1 for labels in per_call)
+        return [keys[label] for label in labels], [c.label for c in calls] if one_each else labels
     buffers = trace.buffers
     if key in getattr(buffers, "_dict", {}):
         versions = list(buffers[key].versions)
@@ -238,7 +246,7 @@ def module_call_for_key(trace: Any, key: str) -> Any:
         )
     )
     if len(labels) > 1:
-        refuse_several("ModuleCall", key, [op.label for op in ops], "passes in different calls")
+        refuse_several("ModuleCall", key, labels, "calls")
     return trace.module_calls[labels[0]] if labels else None
 
 
@@ -313,14 +321,14 @@ def module_item(module: Any, key: str) -> Any:
     """
 
     trace = module._source_trace
-    if key in module.layer_labels:
+    if key in module.layer_labels or key.rsplit(":", 1)[0] in module.layer_labels:
         return trace[key]
     descendant = _module_at(trace, key)
     address = getattr(descendant, "address", None)
     if descendant is not None and (
         module.address == "self"
         or address == module.address
-        or address.startswith(module.address + ".")
+        or (isinstance(address, str) and address.startswith(module.address + "."))
     ):
         module_call = getattr(trace.modules, "_pass_dict", {}).get(key)
         return module_call if module_call is not None else descendant
