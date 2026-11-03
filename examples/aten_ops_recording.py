@@ -49,8 +49,8 @@ def main() -> None:
     valued = tl.trace(model, x, capture=CaptureOptions(aten_ops="values"))
     for op in valued.ops:
         for row in op.aten_ops:
-            shape = tuple(row.out.shape) if isinstance(row.out, torch.Tensor) else row.out
-            print(f"  {op.layer_label:<28} {row.operator}.{row.overload} -> out {shape}")
+            shapes = [tuple(t.shape) for t in torch.utils._pytree.tree_leaves(row.out)]
+            print(f"  {op.layer_label:<28} {row.operator}.{row.overload} -> out {shapes}")
     gelu_rows = [row for row in valued.aten_ops if row.operator == "gelu"]
     print("gelu value equals op output:", torch.equal(gelu_rows[-1].out, valued.ops[-1].out))
 
