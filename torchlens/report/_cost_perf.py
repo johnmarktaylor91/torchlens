@@ -410,7 +410,7 @@ class CleanStepTime:
 
 def measure_clean_step(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     warmup: int = 2,
@@ -439,7 +439,7 @@ def measure_clean_step(
             remedy="Pass warmup >= 0 and repeats >= 1.",
         )
     kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
+    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
     for _ in range(warmup):
         model(*args, **kwargs)
     samples: list[float] = []
@@ -933,7 +933,7 @@ class OverheadReport:
 
 def overhead(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     tiers: tuple[str, ...] = COST_REPORT_TIERS,
@@ -964,7 +964,7 @@ def overhead(
 
     _validate_cost_tiers(tiers)
     kwargs = input_kwargs or {}
-    args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
+    args = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
     n_forwards = 0
 
     def _measure(run: Any) -> tuple[float, float]:

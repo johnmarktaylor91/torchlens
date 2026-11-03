@@ -50,13 +50,8 @@ import torch
 
 from .. import _state
 from .._capture.outcome import stamp_forked
-from .._trace_core.op_store import (
-    _COW_ATOMIC,
-    _MISSING,
-    DetachedOpStore,
-    PooledCell,
-    cow_copy_value,
-)
+from .._trace_core._fork_copy import _COW_ATOMIC, cow_copy_value
+from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils.env_flags import closed_bool_env
 from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy

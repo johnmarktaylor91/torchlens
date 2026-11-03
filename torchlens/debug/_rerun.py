@@ -135,7 +135,7 @@ def clone_input_tree(value: Any) -> Any:
 
 def isolated_capture(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     seed: int,
@@ -154,7 +154,7 @@ def isolated_capture(
     ----------
     model:
         Source model. Never mutated; each call copies it afresh.
-    input_args:
+    inputs:
         Forward input value or positional-argument list/tuple, exactly as
         accepted by ``tl.trace``.
     input_kwargs:
@@ -206,7 +206,7 @@ def isolated_capture(
         prepared = prepare(run_model)
         if prepared is not None:
             run_model = prepared
-    cloned_args = clone_input_tree(input_args)
+    cloned_args = clone_input_tree(inputs)
     cloned_kwargs = clone_input_tree(input_kwargs) if input_kwargs is not None else None
     run_trace_kwargs = dict(trace_kwargs)
     capture_options = run_trace_kwargs.get("capture")

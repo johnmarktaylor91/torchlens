@@ -247,7 +247,7 @@ def occlusion(
             f"({len(resolved)} touched site(s), none with a selected element), so the "
             "occluded score would equal the original and report a confident zero. "
             "Remedy: select at least one element: pass the op itself (e.g. "
-            "trace[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
+            "trace.layers[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
             "with at least one in-range index.",
             code="occlusion_selection_empty",
         )

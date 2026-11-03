@@ -218,10 +218,10 @@ def _validate(entry: Any, model: Any, inputs: Any) -> dict[str, Any]:
     """Forward-replay validate one entry exactly as the corpus test does."""
 
     import torch
-    from torchlens.utils.arg_handling import normalize_input_args
 
     import torchlens as tl
     from tests.classics_corpus._loader import VALIDATION_SEED
+    from torchlens._utils.arg_handling import normalize_input_args
     from torchlens.validation import last_validation_failure
 
     with torch.no_grad():

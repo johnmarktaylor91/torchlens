@@ -82,7 +82,7 @@ def test_folded_input_premise() -> None:
     folded, _ = _traces(_LoopOverInputs, _inputs(0), _inputs(0))
     control, _ = _traces(_TwoInputs, _inputs(0), _inputs(0))
     assert folded.input_layers == ["input_1", "input_2"]
-    assert all(len(folded[label].ops) == 1 for label in folded.input_layers)
+    assert all(len(folded.layers[label].ops) == 1 for label in folded.input_layers)
     relu_layers = [layer for layer in folded._layer_logs.values() if layer.func_name == "relu"]
     assert [len(layer.ops) for layer in relu_layers] == [2]
     assert control.input_layers == ["input_1", "input_2"]

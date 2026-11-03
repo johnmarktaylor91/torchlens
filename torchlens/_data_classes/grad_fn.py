@@ -518,12 +518,11 @@ class GradFn:
             Resolved forward record, or ``None`` when no corresponding op was captured.
         """
 
-        if self.op_label is None:
-            return None
         trace = self.trace
-        if trace is None:
+        if self.op_label is None or trace is None:
             return None
-        return trace[self.op_label]
+        ops = trace.ops.resolve_all(self.op_label)
+        return ops[0] if len(ops) == 1 else (trace.layers[self.op_label] if ops else None)
 
     @property
     def handle(self) -> Any | None:

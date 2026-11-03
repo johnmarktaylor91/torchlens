@@ -130,7 +130,7 @@ class BisectPrecisionReport(FoundReport):
 
 def bisect_precision(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     reference_dtype: torch.dtype = torch.float64,
@@ -156,7 +156,7 @@ def bisect_precision(
     ----------
     model:
         Source model. It is deep-copied twice and never mutated.
-    input_args:
+    inputs:
         Forward input value or positional-argument list/tuple, exactly as
         accepted by ``tl.trace``.
     input_kwargs:
@@ -193,14 +193,14 @@ def bisect_precision(
     try:
         native_trace = isolated_capture(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             seed=seed,
             capture=capture,
         )
         reference_trace = isolated_capture(
             model,
-            _cast_tree(input_args, reference_dtype),
+            _cast_tree(inputs, reference_dtype),
             _cast_tree(input_kwargs, reference_dtype),
             seed=seed,
             prepare=lambda run_model: run_model.to(reference_dtype),

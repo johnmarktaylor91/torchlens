@@ -26,7 +26,14 @@ from ..onebackward import read, seed
 from ..onebackward._accessor import ReadEdgeIndex, read_edge_index
 from ..onebackward._read import _capture_outcome_status, _SitePayloads
 from ..onebackward._targets import resolve_site_edge
-from ._read_sites import check_upstream, facet_labels, is_module, op_read_label
+from ._read_sites import (
+    check_upstream,
+    facet_labels,
+    is_module,
+    is_pooled_logits,
+    op_read_label,
+    read_payload,
+)
 from ._result import AttributionGraph, GraphNode
 from ._transcoders import Reader, normalize_transcoders
 
@@ -125,7 +132,7 @@ def _read_labels(
 def _resolve_sites(
     trace: Any,
     readers: tuple[Reader, ...],
-    embedding: str,
+    embedding_module: str,
     logits_at: SiteTarget | None,
 ) -> _Sites:
     """Address every read, write, embedding and logit site on the capture.
@@ -144,9 +151,9 @@ def _resolve_sites(
                 writes[write] = _edge_label(index, op, "input")
     for reader in op_readers:
         check_upstream(trace, index, reader, reads[reader.site], writes)
-    embed_module = _module(trace, embedding, "embedding")
+    embed_module = _module(trace, embedding_module, "embedding")
     embed_label = _edge_label(
-        index, _one_op(embed_module, embedding, "output_ops", "embedding"), "input"
+        index, _one_op(embed_module, embedding_module, "output_ops", "embedding"), "input"
     )
     token_op = list(getattr(embed_module, "input_ops", None) or ())
     tokens = None
@@ -175,25 +182,9 @@ def _resolve_sites(
         embed_label,
         tokens,
         logits_label,
-        embedding,
+        embedding_module,
         "output" if logits_at is None else logits_at.module_address,
     )
-
-
-def _payload(sites: _Sites, label: str, role: str) -> torch.Tensor:
-    """Return a site's captured value as ``(positions, width)``."""
-
-    value = sites.payloads.payload(label)
-    if value is None or value.dim() != 3 or value.shape[0] != 1:
-        shape = None if value is None else tuple(value.shape)
-        raise _graph_refusal(
-            f"The {role} site {label!r} holds {shape}; the graph reads one prompt, "
-            "shaped (1, positions, width), with every activation saved. Remedy: "
-            "capture one sequence with the default save mode, for example "
-            "tl.trace(model, tokens[None]).",
-            code="attribution_graph_input_unsupported",
-        )
-    return value.detach()[0]
 
 
 @dataclass(frozen=True)
@@ -213,7 +204,7 @@ def _active_features(readers: tuple[Reader, ...], sites: _Sites) -> _Features:
 
     found = _Features([], [], [], [], [], [])
     for number, reader in enumerate(readers):
-        inputs = _payload(sites, sites.reads[reader.site], "MLP input")
+        inputs = read_payload(sites.payloads, sites.reads[reader.site], "MLP input")
         with torch.no_grad():
             pre = inputs @ reader.encoder.to(inputs.dtype) + reader.encoder_bias.to(inputs.dtype)
             acts = reader.transcoder.encode(inputs)
@@ -278,12 +269,12 @@ def _logit_targets(
 
 
 def _cotangent(
-    shape: tuple[int, ...], dtype: torch.dtype, position: int, vector: torch.Tensor
+    shape: tuple[int, ...], dtype: torch.dtype, position: int | None, vector: torch.Tensor
 ) -> Any:
-    """Return a ``(1, positions, width)`` cotangent nonzero at one position."""
+    """Return a cotangent nonzero at one position, or the whole row for a pooled head (None)."""
 
     cot = torch.zeros(shape, dtype=dtype)
-    cot[0, position] = vector.to(dtype)
+    cot[0 if position is None else (0, position)] = vector.to(dtype)
     return cot
 
 
@@ -293,7 +284,7 @@ class _SeedSpec:
 
     label: str
     shape: tuple[int, ...]
-    position: int
+    position: int | None
     vector: torch.Tensor
 
 
@@ -312,10 +303,11 @@ def _seed_specs(
     ):
         reader = readers[number]
         label = sites.reads[reader.site]
-        inputs = _payload(sites, label, "MLP input")
+        inputs = read_payload(sites.payloads, label, "MLP input")
         vector = reader.encoder[:, feature].to(inputs.dtype)
         specs.append(_SeedSpec(label, (1, *inputs.shape), position, vector))
-    logits = _payload(sites, sites.logits, "logits")
+    logits = read_payload(sites.payloads, sites.logits, "logits")
+    pooled = is_pooled_logits(sites.payloads.payload(sites.logits))
     last = logits.shape[0] - 1
     vocab = logits.shape[1]
     values = []
@@ -324,7 +316,8 @@ def _seed_specs(
         direction[token] = 1.0
         if demeaned_logits:
             direction = direction - 1.0 / vocab
-        specs.append(_SeedSpec(sites.logits, (1, *logits.shape), last, direction))
+        shape = tuple(logits.shape) if pooled else (1, *logits.shape)
+        specs.append(_SeedSpec(sites.logits, shape, None if pooled else last, direction))
         values.append((logits[last] * direction).sum())
     return specs, torch.stack(values) if values else torch.zeros(0, dtype=logits.dtype)
 
@@ -408,7 +401,7 @@ def _sources(sites: _Sites) -> tuple[list[str], int, int, torch.dtype]:
     sources = [*sites.writes.values(), sites.embedding]
     shapes = []
     for label in sources:
-        shapes.append(tuple(_payload(sites, label, "source").shape))
+        shapes.append(tuple(read_payload(sites.payloads, label, "source").shape))
     if len(set(shapes)) != 1:
         raise _graph_refusal(
             f"The MLP outputs and the embedding output have shapes {shapes}; the graph "
@@ -417,7 +410,7 @@ def _sources(sites: _Sites) -> tuple[list[str], int, int, torch.dtype]:
             code="attribution_graph_input_unsupported",
         )
     n_pos, width = shapes[0]
-    return sources, n_pos, width, _payload(sites, sites.embedding, "embedding").dtype
+    return sources, n_pos, width, read_payload(sites.payloads, sites.embedding, "embedding").dtype
 
 
 def _gradient_chunks(
@@ -630,7 +623,7 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
     return _build(
         trace,
         transcoders,
-        embedding=embedding_module,
+        embedding_module=embedding_module,
         target=target,
         max_n_logits=max_num_logits,
         desired_logit_prob=logit_probability_coverage,
@@ -645,7 +638,7 @@ def _build(  # noqa: PLR0913 -- build_graph's keywords plus the internal counter
     trace: Any,
     transcoders: Any,
     *,
-    embedding: str,
+    embedding_module: str,
     target: Sequence[int] | None,
     max_n_logits: int,
     desired_logit_prob: float,
@@ -657,14 +650,14 @@ def _build(  # noqa: PLR0913 -- build_graph's keywords plus the internal counter
     """Build the graph; fill ``counters`` (the body of :func:`build_graph`)."""
 
     readers = normalize_transcoders(transcoders)
-    sites = _resolve_sites(trace, readers, embedding, logits_at)
+    sites = _resolve_sites(trace, readers, embedding_module, logits_at)
     found = _active_features(readers, sites)
-    logits = _payload(sites, sites.logits, "logits")
+    logits = read_payload(sites.payloads, sites.logits, "logits")
     logit_ids, probabilities = _logit_targets(logits, target, max_n_logits, desired_logit_prob)
     specs, logit_values = _seed_specs(readers, sites, found, logit_ids, demeaned_logits)
     frozen_labels = _frozen_labels(trace, sites, frozen)
     chunks = _gradient_chunks(trace, sites, specs, frozen_labels, counters)
-    embed_out = _payload(sites, sites.embedding, "embedding")
+    embed_out = read_payload(sites.payloads, sites.embedding, "embedding")
     nodes, starts = _node_layout(sites, found, logit_ids, embed_out.shape[0])
     writes = _write_sources(readers, sites, found, embed_out.dtype)
     adjacency, dec_total = _edges(writes, found, nodes, starts, chunks, embed_out)
@@ -735,7 +728,7 @@ def _write_sources(
 
     out = []
     for write in sites.writes:
-        payload = _payload(sites, sites.writes[write], "MLP output").to(dtype)
+        payload = read_payload(sites.payloads, sites.writes[write], "MLP output").to(dtype)
         error = payload - _reconstruction(readers, found, write, payload.shape, dtype)
         pairs = _feature_vectors(readers, found, write)
         out.append(
@@ -805,7 +798,7 @@ def _pack(  # noqa: PLR0913 -- one packer for the build's computed parts
     dec_total: torch.Tensor,
     demeaned_logits: bool,
     frozen: list[str],
-    capture_outcome: str | None,
+    capture_status: str | None,
 ) -> AttributionGraph:
     """Fill the node values and constants; pack the graph."""
 
@@ -847,8 +840,8 @@ def _pack(  # noqa: PLR0913 -- one packer for the build's computed parts
         logit_probabilities=probabilities.detach(),
         has_demeaned_logits=demeaned_logits,
         frozen_sites=tuple(frozen),
-        capture_status=capture_outcome,
-        disclosures=_disclosures(capture_outcome, sites),
+        capture_status=capture_status,
+        disclosures=_disclosures(capture_status, sites),
     )
 
 
@@ -858,15 +851,20 @@ def _site_name(sites: _Sites, role: str) -> str:
     return sites.embedding_name if role == "embedding" else sites.logits_name
 
 
-def _disclosures(capture_outcome: str | None, sites: _Sites) -> tuple[str, ...]:
+def _disclosures(capture_status: str | None, sites: _Sites) -> tuple[str, ...]:
     """Return the graph's plain-language disclosures."""
 
     notes = []
-    if capture_outcome != "COMPLETE":
+    if capture_status != "COMPLETE":
         notes.append(
-            f"the capture's completeness verdict is {capture_outcome!r}, not 'COMPLETE': "
+            f"the capture's completeness verdict is {capture_status!r}, not 'COMPLETE': "
             "edges are built on what was captured and may miss what was not"
         )
     if sites.tokens is None:
         notes.append("the embedding input is not integer token ids; token nodes carry no id")
+    if is_pooled_logits(sites.payloads.payload(sites.logits)):
+        notes.append(
+            "the logits site is a pooled (1, classes) head; logit nodes carry the last "
+            "position by convention"
+        )
     return tuple(notes)

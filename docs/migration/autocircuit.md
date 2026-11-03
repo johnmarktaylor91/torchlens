@@ -52,7 +52,7 @@ RESULT = (
 | Patch edges/nodes | `.do(site, edit)` on a forked trace (replays the recorded graph from the edited value; `.do(site, edit, model=model, inputs=x)` runs the model again), or `.attach_hooks(...)` then `.run(...)` | Node patching equivalent; edges patch with `torchlens.mechinterp.patch_edges` (one or several receivers per call). |
 | Run path patching sweeps | Fork logs or loop over selectors and compute an explicit metric (or call your metric on the `tl.Bundle`) | Manual but supported. |
 | Compare clean/corrupted datasets | Capture logs and group them with `Bundle` | Equivalent container workflow. |
-| Automatic circuit discovery | Recipe: `docs/recipes/acdc_ioi.md` (ACDC as a driver loop); edge scores: `torchlens.mechinterp.edge_scores` | Recipe-level; no built-in pruning optimizer. |
+| Automatic circuit discovery | Recipe: `docs/field-guide/acdc_ioi.md` (ACDC as a driver loop); edge scores: `torchlens.mechinterp.edge_scores` | Recipe-level; no built-in pruning optimizer. |
 | Prune/score circuit components | Use explicit metrics over intervention variants | Partial; no built-in pruning optimizer. |
 | Save circuit intervention | `save_intervention(level="portable")` for supported recipes | Equivalent for recipe publication. |
 | Visualize graph with intervention marks | `log.show(..., intervention_mode="node_mark")` | Equivalent graph-level visibility. |
@@ -65,7 +65,7 @@ RESULT = (
   drawings come from the same capture (`log.find_sites(...)`, `trace.draw(...)`).
 - Edge patching with `torchlens.mechinterp.patch_edges` (one or several receivers per call),
   and edge scores with `torchlens.mechinterp.edge_scores`.
-- An ACDC recipe as a driver loop over those calls (`docs/recipes/acdc_ioi.md`).
+- An ACDC recipe as a driver loop over those calls (`docs/field-guide/acdc_ioi.md`).
 - Clean and corrupted runs grouped in a `tl.Bundle`, and recipes saved as `.tlspec/`
   directories (`save_intervention(level="portable")`).
 - Intervention marks on the graph picture: `log.show(..., intervention_mode="node_mark")`.
@@ -75,7 +75,7 @@ RESULT = (
 - AutoCircuit packages a patchable model, ablation and pruning loops over a dataset and its
   circuit scoring. TorchLens has no built-in pruning optimizer; scoring circuit components
   with explicit metrics over intervention variants is yours to write.
-- Automatic circuit discovery is a recipe, not a call: `docs/recipes/acdc_ioi.md` shows ACDC
+- Automatic circuit discovery is a recipe, not a call: `docs/field-guide/acdc_ioi.md` shows ACDC
   as a driver loop. See [where to go instead](where_to_go_instead.md).
 
 ## Using both

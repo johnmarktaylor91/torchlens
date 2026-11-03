@@ -128,7 +128,7 @@ class KernelProfileReport:
 
 def kernel_profile(
     model: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     activities: Any | None = None,
@@ -141,7 +141,7 @@ def kernel_profile(
     ----------
     model:
         The model to run (any ``tl.trace``-able callable).
-    input_args, input_kwargs:
+    inputs, input_kwargs:
         Forwarded to ``tl.trace``.
     activities:
         Optional explicit ``torch.profiler`` activity list; the default asks
@@ -180,7 +180,7 @@ def kernel_profile(
             activities.append(torch.profiler.ProfilerActivity.CUDA)
     trace_kwargs.setdefault("save", None)
     with session(mode="owned", activities=activities) as active:
-        trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
+        trace = user_funcs.trace(model, inputs, input_kwargs=input_kwargs, **trace_kwargs)
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             torch.cuda.synchronize()
     result = join_session(active, trace, native_chrome_path=native_chrome_path)

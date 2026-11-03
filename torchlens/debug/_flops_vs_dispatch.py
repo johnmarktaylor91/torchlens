@@ -131,7 +131,7 @@ def _first_tensor(value: Any) -> torch.Tensor | None:
 
 def flops_vs_dispatch(
     model: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     sdpa_backend: str | None = None,
@@ -143,7 +143,7 @@ def flops_vs_dispatch(
     ----------
     model:
         The model (any ``tl.trace``-able ``nn.Module``).
-    input_args, input_kwargs:
+    inputs, input_kwargs:
         Forwarded to both executions identically.
     sdpa_backend:
         Provenance disclosure of the SELECTED SDPA backend when the caller
@@ -185,7 +185,7 @@ def flops_vs_dispatch(
     training_flags = {name: module.training for name, module in model.named_modules()}
 
     trace_kwargs.setdefault("save", "all")
-    trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
+    trace = user_funcs.trace(model, inputs, input_kwargs=input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)
@@ -211,12 +211,12 @@ def flops_vs_dispatch(
             module.train(training_flags[name])
 
     args: tuple[Any, ...]
-    if input_args is None:
+    if inputs is None:
         args = ()
-    elif isinstance(input_args, (list, tuple)):
-        args = tuple(input_args)
+    elif isinstance(inputs, (list, tuple)):
+        args = tuple(inputs)
     else:
-        args = (input_args,)
+        args = (inputs,)
     kwargs = dict(input_kwargs or {})
     with FlopCounterMode(display=False) as counter:
         raw_output = model(*args, **kwargs)

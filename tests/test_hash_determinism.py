@@ -709,4 +709,4 @@ def test_per_call_generator_objects_do_not_split_recurrence_grouping() -> None:
         "per-call Generator objects split the recurrent randn into "
         f"separate layers: {randn_layers!r}"
     )
-    assert trace[randn_layers[0]].num_passes == 2
+    assert trace.layers[randn_layers[0]].num_passes == 2

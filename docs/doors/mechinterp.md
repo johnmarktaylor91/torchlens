@@ -15,8 +15,8 @@
 - [The mech-interp kit](../reference/mechinterp.md): residual decomposition, direct logit
   contributions, per-head results, the component edge graph, patching grids.
 - [Intervention reference](../intervention_api.md) and [the intervention explainers](../intervention_explainers.md).
-- Recipes: [ACDC on IOI](../recipes/acdc_ioi.md), [pretrained SAEs](../recipes/pretrained_saes.md),
-  [tuned lens](../recipes/tuned_lens.md), [conditional steering](../recipes/conditional_steering.md).
+- Recipes: [ACDC on IOI](../field-guide/acdc_ioi.md), [pretrained SAEs](../field-guide/pretrained_saes.md),
+  [tuned lens](../field-guide/tuned_lens.md), [conditional steering](../field-guide/conditional_steering.md).
 - [Performance: choosing a fast path](../guides/fast_paths.md).
 
 ## Coming from another tool

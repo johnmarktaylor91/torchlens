@@ -1462,7 +1462,7 @@
       "required_credit": "Captum (TCAV, influence functions, attacks, DeepLift, LIME); inseq (text attribution).",
       "evidence_refs": [
         "docs/migration/where_to_go_instead.md",
-        "docs/recipes/tcav.md"
+        "docs/field-guide/tcav.md"
       ],
       "tl_side_gates": [],
       "lint": "FAIL a sentence saying TorchLens ships, provides or implements influence functions, adversarial attacks, or DeepLift or LIME for text.",

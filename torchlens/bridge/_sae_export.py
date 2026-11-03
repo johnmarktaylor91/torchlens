@@ -48,7 +48,7 @@ _DASHBOARD_DECIMALS = 4
 #: Estimated JSON size above which ``write_sae_dashboard`` warns once per session.
 _DASHBOARD_WARN_BYTES = 256 * 1024**2
 
-_DOCS = "docs/recipes/sae_latent_export.md"
+_DOCS = "docs/field-guide/sae_latent_export.md"
 
 
 def _is_unit_topk(latents: Any) -> bool:
