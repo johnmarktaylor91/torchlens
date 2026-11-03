@@ -328,7 +328,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     assert parent_layer.control_flow.elif_children == {}
     assert parent_layer.control_flow.else_children == ()
     assert parent_layer.control_flow.arm_children == {0: {"then": ["kept_child"]}}
-    assert parent_layer.control_flow.branch_stack_ops == {((0, "then"),): [1, 2]}
+    assert parent_layer._control_flow_branch_stack_ops == {((0, "then"),): [1, 2]}
 
 
 def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
