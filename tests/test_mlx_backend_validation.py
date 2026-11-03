@@ -455,7 +455,7 @@ def test_mlx_validation_fails_saved_output_dtype_drift_with_equal_values() -> No
 
     status = MLXBackend().validate_trace(trace)
     assert status.state == "failed"
-    assert "value_mismatch" in _failed_reasons(status)
+    assert "replay_mismatch" in _failed_reasons(status)
 
 
 def test_mlx_validation_fails_when_output_ignores_its_parent() -> None:
@@ -465,7 +465,7 @@ def test_mlx_validation_fails_when_output_ignores_its_parent() -> None:
 
     status = MLXBackend().validate_trace(trace)
     assert status.state == "failed"
-    assert "perturbation_unproved" in _failed_reasons(status)
+    assert "perturbation_insensitive" in _failed_reasons(status)
 
 
 def test_mlx_validation_incoherent_parent_attribution_names_structural_reason() -> None:
@@ -478,9 +478,11 @@ def test_mlx_validation_incoherent_parent_attribution_names_structural_reason() 
     sigmoid_final = trace[sigmoid_label].layer_label
     add_op.parents = [sigmoid_final if p == relu_final else p for p in add_op.parents]
 
-    status = MLXBackend().validate_trace(trace)
+    # The backend-neutral topology invariant trips first on the one-sided
+    # rewire; skipping it exposes the replay oracle's own structural check.
+    status = MLXBackend().validate_trace(trace, validate_metadata=False)
     assert status.state == "failed"
-    assert "parents_inconsistent" in _failed_reasons(status)
+    assert "declared_parents_inconsistent" in _failed_reasons(status)
 
 
 def test_mlx_validation_fails_uninventoried_trace_op() -> None:

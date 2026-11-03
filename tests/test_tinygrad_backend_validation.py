@@ -140,7 +140,7 @@ def _failed_reasons(trace: Any) -> set[str]:
     return {
         str(record["reason"])
         for record in status.decisions
-        if record["decision"] == "failed" and record.get("reason") is not None
+        if record["verdict"] == "failed" and record.get("reason") is not None
     }
 
 
@@ -206,9 +206,9 @@ def test_tinygrad_validation_fails_when_output_ignores_its_parent() -> None:
     """An op whose output does not depend on its parent fails the perturbation check."""
 
     def vanishing(x: Any) -> Any:
-        """Return an output that is zero for every input."""
+        """Return an output that is False for every input (one parent, both positions)."""
 
-        return x * 0.0
+        return x != x
 
     trace = tl.trace(vanishing, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
 
