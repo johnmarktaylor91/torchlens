@@ -339,7 +339,7 @@ def test_ops_nonfinite_and_modules_uncalled_filters() -> None:
     trace = tl.trace(
         _IdleBranchModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
     nonfinite = trace.ops.nonfinite
