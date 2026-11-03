@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1468 modules, 656727 lines, 0 modules without a docstring.
+83 packages, 1467 modules, 656714 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32873 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32872 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1254 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10643 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 59 | 36749 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8862 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8865 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11676 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5951 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
@@ -32,7 +32,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 30 | 17252 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14923 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14908 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 20 | 10329 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7083 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
@@ -99,13 +99,13 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32873 lines)
+TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32872 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 801 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
-| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 268 |
+| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 267 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
@@ -498,7 +498,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8862 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8865 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -520,7 +520,7 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 798 |
 | `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 183 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 80 |
-| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 411 |
+| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 414 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 119 |
@@ -693,12 +693,11 @@ Private registry kernel package (architecture ; never public API). (3 modules, 5
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 14923 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14908 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1864 |
-| `_schema_versions` | Frozen wire version discriminators shared by runnable writers and readers. | 60 |
+| `__init__` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1909 |
 | `attestation` | Numeric attestation and nondeterminism checks. | 599 |
 | `call_arguments` | Sparse-call argument decoding and binding. | 630 |
 | `call_outputs` | Sparse-call output binding and mutation checks. | 700 |
