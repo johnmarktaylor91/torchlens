@@ -53,14 +53,14 @@ PAGES: dict[str, str] = {
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
-    "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
-    "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
-    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
-    "examples/recipes/clip_head_attention_recipe.ipynb": "clip",
-    "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
-    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
-    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
-    "examples/recipes/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/methods/function_vectors_recipe.ipynb": "transformers",
+    "examples/methods/clip_head_attention_recipe.ipynb": "clip",
+    "examples/methods/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
+    "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -117,11 +117,11 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/field-guide/pretrained_saes.md",
         "docs/field-guide/sae_trainers.md",
         "docs/field-guide/feature_visualisation.md",
-        "examples/recipes/train_tuned_lens_recipe.ipynb",
+        "examples/methods/train_tuned_lens_recipe.ipynb",
         "docs/field-guide/prisma_clip_sae.md",
-        "examples/recipes/das_causal_basis_recipe.ipynb",
-        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
-        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
+        "examples/methods/das_causal_basis_recipe.ipynb",
+        "examples/methods/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/methods/cka_rsa_two_models_recipe.ipynb",
     }
 )
 
@@ -141,10 +141,10 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
-        "examples/recipes/function_vectors_recipe.ipynb",
-        "examples/recipes/clip_head_attention_recipe.ipynb",
-        "examples/recipes/clip_text_decomposition_recipe.ipynb",
-        "examples/recipes/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/function_vectors_recipe.ipynb",
+        "examples/methods/clip_head_attention_recipe.ipynb",
+        "examples/methods/clip_text_decomposition_recipe.ipynb",
+        "examples/methods/attribution_graph_transcoders_recipe.ipynb",
     }
 )
 

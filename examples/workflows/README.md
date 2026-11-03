@@ -1,4 +1,4 @@
-# TorchLens 50-Minute Notebooks
+# TorchLens workflows
 
 These notebooks are longer workflow recipes for users who want the full shape of an analysis rather than a minimal snippet. They are deterministic, CPU-friendly, checked in without outputs (run them to see the results), and intended to run end-to-end with `papermill` without network access.
 

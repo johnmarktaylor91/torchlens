@@ -1,4 +1,4 @@
-# TorchLens 5-Minute Notebooks
+# TorchLens quick recipes
 
 Read these in this order if you are new to TorchLens:
 
