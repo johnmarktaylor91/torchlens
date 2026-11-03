@@ -214,7 +214,6 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
         trace.draw(
             node_spec_fn=node_spec(target),
             file_format="svg",
-            vis_save_only=True,
             path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")
@@ -248,8 +247,7 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     armed = tl.trace(
         _Small().eval(),
         torch.randn(1, 1, 12, 12, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     op = armed["relu_1_2"]
     unit = op.receptive_field.center_unit(batch_index=0)

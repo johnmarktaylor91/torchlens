@@ -1149,9 +1149,10 @@ def _guided_backprop_via_torchlens(model: nn.Module, x: torch.Tensor, target: in
     trace = tl.trace(
         model,
         x.clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads=True, save_mode="reference"
+        ),
         intervene=guided,
-        save_mode="reference",
     )
     out = trace[trace.output_layers[0]].out
     trace.backward(out[:, target].sum(), retain_graph=True)

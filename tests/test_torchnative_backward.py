@@ -28,8 +28,7 @@ def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
         log = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         loss = log.output_ops[0].out.sum()
         log.log_backward(loss, **backward_kwargs)
@@ -74,8 +73,7 @@ def test_second_pass_markers_carry_pass_index() -> None:
         log = tl.trace(
             model,
             torch.randn(2, 8, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         loss = log.output_ops[0].out.sum()
         log.log_backward(loss, retain_graph=True)
@@ -116,8 +114,7 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
         log = tl.trace(
             Model(),
             torch.randn(2, 8, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         loss = log.output_ops[0].out.sum()
         with pytest.raises(RuntimeError, match="injected backward failure"):
@@ -139,8 +136,7 @@ def test_no_marker_work_without_a_session() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 8, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     loss = log.output_ops[0].out.sum()
     log.log_backward(loss)

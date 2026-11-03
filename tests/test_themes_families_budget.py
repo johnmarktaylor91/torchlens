@@ -78,7 +78,7 @@ def test_speed_resolves_per_pass_member_on_unrolled(mlp_log: Any) -> None:
 def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     """Rolled speed binds total_func_duration WITH the aggregation line."""
 
-    resolution = lenses.resolve_lens(mlp_log, "speed", {"vis_mode": "rolled"})
+    resolution = lenses.resolve_lens(mlp_log, "speed", {"rolled": True})
     assert resolution.source is not None
     assert resolution.source.member == "total_func_duration"
     assert any("total across passes" in line for line in resolution.disclosure)
@@ -233,7 +233,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "lens_budget_above_ceiling_fallback" in codes
     assert not budget.in_band
-    assert "vis_call_depth" in budget.dial
+    assert "depth" in budget.dial
     assert any("estimate" in line for line in budget.disclosure)
 
 

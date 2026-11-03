@@ -52,7 +52,7 @@ def test_finalize_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StorageOptions(path=bundle),
+            storage=tl.options.StorageOptions(path=bundle),
         )
 
     reasons = _reason_files(tmp_path)
@@ -84,7 +84,7 @@ def test_index_append_failure_reason_is_redacted(tmp_path, monkeypatch) -> None:
             _TinyModel(),
             torch.randn(1, 4),
             save=tl.func("relu"),
-            streaming=tl.options.StorageOptions(path=bundle),
+            storage=tl.options.StorageOptions(path=bundle),
         )
 
     reasons = _reason_files(tmp_path)

@@ -25,7 +25,7 @@ from torchlens._capture.flops import (
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_biased_linear_true_macs_not_flops_over_two() -> None:
@@ -247,7 +247,7 @@ def test_bert_base_exact_mac_decomposition() -> None:
     model.eval()
     ids = torch.randint(0, 30522, (1, 12))
     with torch.no_grad():
-        log = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, ids, save=None)
     try:
         fused = [
             op

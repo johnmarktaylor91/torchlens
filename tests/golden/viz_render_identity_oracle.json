@@ -6203,12 +6203,6 @@
         },
         "tags": []
       },
-      "none_short_circuit": {
-        "callbacks": {},
-        "dot": null,
-        "structural": null,
-        "tags": []
-      },
       "orphans_visible": {
         "callbacks": {
           "collapsed_node_spec_fn": [],

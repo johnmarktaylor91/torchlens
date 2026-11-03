@@ -190,10 +190,9 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     source = render_surgery(
         fork,
-        vis_mode="unrolled",
+        rolled=False,
         path=str(tmp_path / "surgery_passes"),
         file_format="svg",
-        vis_save_only=True,
     )
     edited = _dot_node_statement(source, "linear_1_1pass1")
     cohort = _dot_node_statement(source, "linear_1_1pass2")
@@ -364,7 +363,7 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, path=outpath, file_format="svg", vis_save_only=True)
+    render_surgery(fork, path=outpath, file_format="svg")
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -466,7 +465,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     fork = subject.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
+    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg")
     figure_text = (tmp_path / "diff_fig.svg").read_text()
     assert rendered.endswith("diff_fig.svg")
     assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed

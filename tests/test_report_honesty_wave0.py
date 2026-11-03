@@ -251,7 +251,7 @@ def test_poisoned_trace_draw_caption_carries_banner() -> None:
     trace = _clean_trace()
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
-    dot_source = trace.draw(vis_save_only=True)
+    dot_source = trace.draw().dot
     assert "POISONED" in dot_source
 
 

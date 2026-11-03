@@ -114,10 +114,8 @@ def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: 
         **resolution.draw_kwargs,
         path=str(tmp_path / "filtered"),
         file_format="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
-    source = graph.source
+    ).dot
+    source = graph
     assert "style=dashed" in source
     labels = re.findall(r'label="via (\d+) hidden"', source)
     assert labels and int(labels[0]) >= 1
@@ -133,7 +131,6 @@ def test_predicate_boundary_raise_teaches(glue_log: Any, tmp_path: Any) -> None:
         glue_log.draw(
             skip_fn=lambda layer: True,
             path=str(tmp_path / "boundary"),
-            vis_save_only=True,
         )
     message = str(excinfo.value)
     assert excinfo.value.fields["code"] == "skip_fn_boundary_invalid"

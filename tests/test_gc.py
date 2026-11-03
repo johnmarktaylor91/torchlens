@@ -159,7 +159,7 @@ class TestTraceGC:
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
         # Two-pass path: exhaustive first, then fast via save_new_outs
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+        trace = tl.trace(model, x, save=None)
 
         # Warm up
         trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
@@ -312,9 +312,7 @@ class TestTraceGC:
         gc.collect()
         gc.disable()
         try:
-            trace = tl.trace(
-                model, torch.randn(1, 5), capture=tl.options.CaptureOptions(layers_to_save="all")
-            )
+            trace = tl.trace(model, torch.randn(1, 5), save="all")
             activation = trace["relu_1_2"].out
             trace_ref = weakref.ref(trace)
             activation_ref = weakref.ref(activation)
@@ -424,8 +422,7 @@ class TestTraceGC:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         armed_keys = {key for key, ref in registry.items() if ref() is trace}
         assert armed_keys, "capture registered no backward triggers to observe"
@@ -512,7 +509,7 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             _TwoLayerNet(),
             torch.randn(1, 5),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         restored = pickle.loads(pickle.dumps(trace))
         assert len(restored) > 0
@@ -529,7 +526,7 @@ class TestLifetimeCoverageGaps:
         parent = tl.trace(
             _TwoLayerNet(),
             torch.randn(1, 5),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         fork = parent.fork()
         fork_ref = weakref.ref(fork)
@@ -555,9 +552,7 @@ class TestLifetimeCoverageGaps:
         """
 
         model = _TwoLayerNet().eval()
-        source = tl.trace(
-            model, torch.randn(1, 5), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        source = tl.trace(model, torch.randn(1, 5), save="all")
         result = source.run(inputs=torch.randn(1, 5))
         fork_ref = weakref.ref(result.trace)
 
@@ -634,7 +629,8 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(replayable=True, cache=False, layers_to_save="all"),
+            capture=tl.options.CaptureOptions(replayable=True, cache=False),
+            save="all",
         )
         path = tmp_path / "gc_archived.tlspec"
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
@@ -694,7 +690,7 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
         "summary": lambda: trace.summary(),
         "iteration": lambda: list(trace),
         "getitem": lambda: trace["relu_1_2"],
-        "draw": lambda: trace.draw(vis_save_only=True),
+        "draw": lambda: trace.draw(),
         "receptive_fields": lambda: trace.receptive_fields(),
     }
     for name, reader in readers.items():

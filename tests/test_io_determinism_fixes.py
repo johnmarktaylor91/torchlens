@@ -196,8 +196,8 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     trace = tl.trace(
         _ComplexModel(),
         torch.tensor([1 + 2j], dtype=torch.complex64),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=lambda value: value.conj()),
+        capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
+        save="all",
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"

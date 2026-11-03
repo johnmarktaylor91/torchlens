@@ -281,7 +281,7 @@ def test_save_none_refuses_value_mode_episode():
             GreedyRunner(model, 2),
             _prompt(),
             episode=EpisodeOptions(stepped_module=model),
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -309,8 +309,8 @@ def test_chunked_episode_refuses():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            chunk_size=1,
             episode=EpisodeOptions(stepped_module=model),
+            capture=tl.options.CaptureOptions(chunk_size=1),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -347,7 +347,7 @@ def test_halted_episode_ledger_discloses_truncation():
     log = tl.trace(
         runner,
         _prompt(),
-        halt=halt_after_two,
+        stop_after=halt_after_two,
         episode=EpisodeOptions(stepped_module=model, num_steps=5),
     )
     assert log.outcome.status.name == "STOPPED"

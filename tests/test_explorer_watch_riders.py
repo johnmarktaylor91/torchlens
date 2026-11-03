@@ -45,7 +45,7 @@ class TestInputOpTransformCoverage:
         log = tl.trace(
             _model(),
             torch.randn(2, 8),
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
                 activation_transform=summary(lambda t: t.float().mean().unsqueeze(0))
             ),
         )
@@ -60,7 +60,7 @@ class TestMemoryTruth:
         log = tl.trace(
             _model(),
             torch.randn(32, 8),
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
                 activation_transform=summary(lambda t: t.float().sum().unsqueeze(0)),
                 save_raw_activations=False,
             ),
@@ -81,8 +81,8 @@ class TestMemoryTruth:
         log = tl.trace(
             _model(),
             torch.randn(32, 8),
-            save=tl.options.SaveOptions(
-                activation_transform=summary(lambda t: t.float().sum().unsqueeze(0)),
+            capture=tl.options.CaptureOptions(
+                activation_transform=summary(lambda t: t.float().sum().unsqueeze(0))
             ),
         )
         # Raw retained: historical raw-bytes accounting, transformed extra

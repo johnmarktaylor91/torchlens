@@ -153,7 +153,7 @@ def test_edited_node_dot(tmp_path: Path) -> None:
 
     trace = _traced()
     try:
-        dot = trace.draw(vis_save_only=True, file_format="dot", path=str(tmp_path / "toy"))
+        dot = trace.draw(file_format="dot", path=str(tmp_path / "toy")).dot
     finally:
         trace.cleanup()
     relu_line = next(line for line in dot.splitlines() if "tl_edited" in line)
@@ -171,11 +171,10 @@ def test_dark_skin_uses_its_tint(tmp_path: Path) -> None:
     trace = _traced()
     try:
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / "dark"),
             theme="dark",
-        )
+        ).dot
     finally:
         trace.cleanup()
     assert dot.count(DARK_PURPLE) >= 3
@@ -231,22 +230,20 @@ def test_highlight_svg_lays_underlays_where_f2_says() -> None:
 
 @pytest.mark.parametrize("placement", ["dot", "rank"])
 def test_highlighter_in_svg_on_both_engines(tmp_path: Path, placement: str) -> None:
-    """``vis_show_cone=True`` lays the highlighter into the SVG on dot and the rank layout."""
+    """``show_cone=True`` lays the highlighter into the SVG on dot and the rank layout."""
 
     trace = _traced()
     try:
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / f"cone_{placement}"),
-            vis_show_cone=True,
-            vis_node_placement=placement,
+            show_cone=True,
+            layout=placement,
         )
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / f"plain_{placement}"),
-            vis_node_placement=placement,
+            layout=placement,
         )
     finally:
         trace.cleanup()
@@ -264,10 +261,9 @@ def test_highlighter_dark_opacity(tmp_path: Path) -> None:
     trace = _traced()
     try:
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "dark"),
-            vis_show_cone=True,
+            show_cone=True,
             theme="dark",
         )
     finally:
@@ -284,10 +280,9 @@ def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
     try:
         for fileformat in ("pdf", "png"):
             trace.draw(
-                vis_save_only=True,
                 file_format=fileformat,
                 path=str(tmp_path / "cone"),
-                vis_show_cone=True,
+                show_cone=True,
             )
     finally:
         trace.cleanup()
@@ -310,10 +305,9 @@ def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> No
     try:
         with pytest.warns(TorchLensWarning) as record:
             trace.draw(
-                vis_save_only=True,
                 file_format="jpg",
                 path=str(tmp_path / "cone"),
-                vis_show_cone=True,
+                show_cone=True,
             )
     finally:
         trace.cleanup()
@@ -328,11 +322,10 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     trace = _traced()
     try:
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / "as_node"),
-            vis_intervention_mode="as_node",
-        )
+            intervention_mode="as_node",
+        ).dot
     finally:
         trace.cleanup()
     hook_line = next(
@@ -391,11 +384,10 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         marks = edit_marks_by_site(trace, sites)
         assert [mark.short for mark in marks[second.label]] == ["hook(named_backward)"]
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="unrolled",
+            rolled=False,
             path=str(tmp_path / "shared"),
-        )
+        ).dot
     finally:
         trace.cleanup()
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
@@ -422,18 +414,16 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
         linear, relu = layers["linear"], layers["relu"]
         fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
         dot = fork.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="unrolled",
-            vis_show_cone=True,
+            rolled=False,
+            show_cone=True,
             path=str(tmp_path / "shared_fwd"),
-        )
+        ).dot
         rolled = fork.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="rolled",
+            rolled=True,
             path=str(tmp_path / "shared_fwd_rolled"),
-        )
+        ).dot
     finally:
         trace.cleanup()
     # Rolled, the one node stands for both passes; the header keeps the pass.

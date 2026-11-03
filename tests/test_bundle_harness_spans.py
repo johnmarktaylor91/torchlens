@@ -183,8 +183,8 @@ def test_auto_spans_refuse_without_the_evidence(model: _TinyLM) -> None:
 
 
 def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=[])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=[])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
@@ -195,12 +195,14 @@ def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
 
 
 def test_auto_spans_work_with_a_selection_that_names_the_input(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=["input_1", "block"])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=["input_1", "block"])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
-    critique = tl.trace(model, torch.tensor([_CRITIQUE_IDS]), capture=options)
+    critique = tl.trace(
+        model, torch.tensor([_CRITIQUE_IDS]), capture=options, save=["input_1", "block"]
+    )
     bundle = Bundle({"draft": draft, "critique": critique})
     bundle.relate("fed_by", "critique", "draft", token_spans="auto")
     assert bundle.relations[0].params["basis"] == "matched"
@@ -456,7 +458,6 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
         bundle,
         nodes="members",
         path=str(tmp_path / "members"),
-        vis_save_only=True,
         file_format="svg",
     )
     assert source is not None

@@ -326,7 +326,7 @@ def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -
 
     model = stepped_pair["model"]
     x = stepped_pair["x"]
-    halted = tl.trace(model, x, halt=tl.func("relu"))
+    halted = tl.trace(model, x, stop_after=tl.func("relu"))
     assert halted.outcome.status.name == "STOPPED"
     bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
     with pytest.raises(ParamEvidenceMissingError) as excinfo:
@@ -339,7 +339,7 @@ def test_n_gate_precedence_unchanged_on_halted_member(
 ) -> None:
     """N4 (halted runnable save) still fires its OWN code; this lane reorders nothing."""
 
-    halted = tl.trace(stepped_pair["model"], stepped_pair["x"], halt=tl.func("relu"))
+    halted = tl.trace(stepped_pair["model"], stepped_pair["x"], stop_after=tl.func("relu"))
     with pytest.raises(Exception) as excinfo:
         halted.save(tmp_path / "halted.tlspec", level="runnable")
     fields = getattr(excinfo.value, "fields", {})

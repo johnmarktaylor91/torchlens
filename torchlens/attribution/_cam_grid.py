@@ -305,10 +305,10 @@ def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
 
     import torchlens as tl
 
-    options = tl.options.CaptureOptions(layers_to_save=None)
+    options = tl.options.CaptureOptions()
     args = inputs if inputs is not None else ()
     with _temporarily_eval(model):
-        return tl.trace(model, args, input_kwargs, capture=options)
+        return tl.trace(model, args, input_kwargs=input_kwargs, capture=options, save=None)
 
 
 def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:

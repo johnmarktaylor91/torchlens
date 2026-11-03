@@ -55,9 +55,7 @@ def _build_trace() -> tl.Trace:
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    return tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    return tl.trace(model, torch.randn(2, 4), save="all")
 
 
 def test_floor_error_is_typed_and_public() -> None:

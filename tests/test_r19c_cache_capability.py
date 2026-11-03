@@ -44,16 +44,18 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
     first = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
-        save=tl.options.SaveOptions(activation_transform=_act_transform),
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, activation_transform=_act_transform
+        ),
     )
     assert first.provenance.cache_hit is False
 
     second = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
-        save=tl.options.SaveOptions(activation_transform=_act_transform),
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, activation_transform=_act_transform
+        ),
     )
     assert second.provenance.cache_hit is True
 
@@ -67,9 +69,12 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
     first = tl.trace(
         model,
         x,
-        grad_transform=_grad_transform,
         capture=tl.options.CaptureOptions(
-            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+            cache=True,
+            cache_dir=cache_dir,
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=_grad_transform,
         ),
     )
     assert first.provenance.cache_hit is False
@@ -77,9 +82,12 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
     second = tl.trace(
         model,
         x,
-        grad_transform=_grad_transform,
         capture=tl.options.CaptureOptions(
-            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+            cache=True,
+            cache_dir=cache_dir,
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=_grad_transform,
         ),
     )
     assert second.provenance.cache_hit is True
@@ -178,9 +186,10 @@ def test_trace_docstring_has_no_self_referential_aliases():
     doc = inspect.cleandoc(tl.trace.__doc__ or "")
     signature_params = set(inspect.signature(tl.trace).parameters)
 
-    # activation_transform and recurrence_detection moved into the grouped
-    # options with the flat-kwarg removal; grad_transform stays a real param.
-    for name in ("grad_transform",):
+    # activation_transform, recurrence_detection and grad_transform moved into
+    # the grouped options with the flat-kwarg removals; stop_after stays a real
+    # param (its former spelling was halt).
+    for name in ("stop_after",):
         # No second spelling exists, so any "alias for <itself>" line is a lie.
         assert f"{name}: Alias for ``{name}``" not in doc
         assert f"{name}: Deprecated alias for ``{name}``" not in doc
@@ -189,7 +198,7 @@ def test_trace_docstring_has_no_self_referential_aliases():
         # "name:", after cleandoc normalization).
         assert name in signature_params
         assert doc.count(f"\n{name}:") == 1
-    for removed in ("activation_transform", "recurrence_detection"):
+    for removed in ("activation_transform", "recurrence_detection", "grad_transform"):
         assert removed not in signature_params
 
 

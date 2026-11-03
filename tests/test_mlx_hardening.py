@@ -241,7 +241,7 @@ def test_mlx_layers_to_save_raises_typed_error() -> None:
             TinyMLP(),
             _tiny_mlp_input(),
             backend="mlx",
-            capture=tl.options.CaptureOptions(layers_to_save=["relu_1_3_raw:1"]),
+            save=["relu_1_3_raw:1"],
         )
 
 
@@ -256,7 +256,9 @@ def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
         model,
         x,
         backend="mlx",
-        grad_options=GradOptions(params=params, loss_fn=_grad_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(params=params, loss_fn=_grad_loss, input_grad_argnums=(0,))
+        ),
     )
 
     def value_fn(test_params: dict[str, Any], test_x: mx.array) -> mx.array:
@@ -306,7 +308,9 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
         _mlx_intermediate_loss,
         x,
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
     hidden_op = next(
         op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
@@ -348,8 +352,10 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         model,
         x,
         backend="mlx",
-        grad_options=GradOptions(
-            loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+            )
         ),
     )
     by_name = {op.func_name: op for op in trace._layer_list if not op.is_input}
@@ -396,7 +402,9 @@ def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
         _mlx_intermediate_loss,
         x,
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
     hidden_op = next(
         op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
@@ -430,7 +438,9 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
         _mlx_intermediate_loss,
         mx.array([1.5, -2.0], dtype=mx.float32),
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
 
     first_multiply = next(op for op in trace._layer_list if op.func_name == "multiply")
@@ -449,8 +459,10 @@ def test_mlx_intermediate_derived_grads_do_not_pollute_module_call_counts() -> N
         model,
         x,
         backend="mlx",
-        grad_options=GradOptions(
-            loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                loss_fn=_grad_loss, input_grad_argnums=(0,), intermediate_grads=True
+            )
         ),
     )
 
@@ -468,10 +480,12 @@ def test_mlx_intermediate_derived_grads_cap_hard_fails() -> None:
             _mlx_intermediate_loss,
             mx.array([1.5, -2.0], dtype=mx.float32),
             backend="mlx",
-            grad_options=GradOptions(
-                input_grad_argnums=(0,),
-                intermediate_grads=True,
-                max_intermediate_grads=1,
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(
+                    input_grad_argnums=(0,),
+                    intermediate_grads=True,
+                    max_intermediate_grads=1,
+                )
             ),
         )
 
@@ -492,7 +506,9 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
         _mlx_intermediate_loss,
         mx.array([1.5, -2.0], dtype=mx.float32),
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
 
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
@@ -508,7 +524,9 @@ def test_mlx_intermediate_derived_grads_are_not_backward_capture() -> None:
         _mlx_intermediate_loss,
         mx.array([1.5, -2.0], dtype=mx.float32),
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
 
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
@@ -529,7 +547,7 @@ def test_mlx_derived_grads_allow_scalar_output_without_loss_fn() -> None:
         scalar_model,
         x,
         backend="mlx",
-        grad_options=GradOptions(input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(input_grad_argnums=(0,))),
     )
 
     np.testing.assert_allclose(
@@ -546,7 +564,9 @@ def test_mlx_derived_grads_reject_raw_output_divergence() -> None:
             DivergentGradLinear(),
             mx.ones((1, 3), dtype=mx.float32),
             backend="mlx",
-            grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,)),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,))
+            ),
         )
 
 
@@ -558,7 +578,9 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
         TinyGradLinear(),
         mx.ones((1, 3), dtype=mx.float32),
         backend="mlx",
-        grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,))
+        ),
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
@@ -588,8 +610,7 @@ def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
     rendered = trace.draw(
         path=str(tmp_path / "mlx_trace"),
         file_format="pdf",
-        vis_save_only=True,
-    )
+    ).dot
 
     assert rendered is not None
     assert (tmp_path / "mlx_trace.pdf").exists()

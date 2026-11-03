@@ -19,6 +19,7 @@ from torchlens._errors import InvalidArgumentError
 
 #: removed keyword spelling -> (example value, token the refusal must name)
 _REMOVED_KWARGS: dict[str, tuple[object, str]] = {
+    "filter": ("relu", "where="),
     "preset": ("overview", "view="),
     "fields": (["name"], "columns="),
     "show_ops": (True, "level='op'"),

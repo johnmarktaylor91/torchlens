@@ -200,7 +200,9 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
         executed.append("post-frontier")
         return paddle.nn.functional.linear(hidden, w2, b2)
 
-    trace = tl.trace(mlp_with_flag, _inputs(), backend="paddle", halt=tl.func("functional.relu"))
+    trace = tl.trace(
+        mlp_with_flag, _inputs(), backend="paddle", stop_after=tl.func("functional.relu")
+    )
     assert executed == []
     assert trace.is_stopped is True
     assert "relu" in str(trace.stop_reason)
@@ -217,7 +219,7 @@ def test_paddle_halt_value_dependent_predicate() -> None:
         _mlp,
         _inputs(),
         backend="paddle",
-        halt=lambda ctx: ctx.func_name == "functional.relu",
+        stop_after=lambda ctx: ctx.func_name == "functional.relu",
     )
     assert trace.is_stopped is True
 
@@ -228,7 +230,7 @@ def test_paddle_halt_non_bool_predicate_refuses_typed() -> None:
     from torchlens.recording.exceptions import PredicateError
 
     with pytest.raises(PredicateError, match="must return bool"):
-        tl.trace(_mlp, _inputs(), backend="paddle", halt=lambda ctx: 1)
+        tl.trace(_mlp, _inputs(), backend="paddle", stop_after=lambda ctx: 1)
 
 
 def test_paddle_tamper_stripped_evidence_fails_validation() -> None:
@@ -349,16 +351,16 @@ def test_paddle_grad_options_with_intervene_refuses_typed() -> None:
             _mlp,
             _inputs(),
             backend="paddle",
-            grad_options=grad_options,
             intervene=tl.when(tl.func("functional.relu"), tl.zero_ablate()),
+            capture=tl.options.CaptureOptions(grad_options=grad_options),
         )
     with pytest.raises(BackendUnsupportedError, match="grad_options"):
         tl.trace(
             _mlp,
             _inputs(),
             backend="paddle",
-            grad_options=grad_options,
-            halt=tl.func("functional.relu"),
+            stop_after=tl.func("functional.relu"),
+            capture=tl.options.CaptureOptions(grad_options=grad_options),
         )
 
 

@@ -94,7 +94,8 @@ def _traced_attention() -> tuple[nn.Module, torch.Tensor, Any]:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     return model, x, clean
 
@@ -206,7 +207,8 @@ def _saved_relu_scale_spec(tmp_path: Any, *, level: str = "executable_with_calla
     log_a = tl.trace(
         ReluModel(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     log_a.attach_hooks(tl.func("relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / f"scale_relu_{level}.tlspec"
@@ -230,7 +232,8 @@ def test_check_spec_compat_executable_hash_mismatch_returns_confirmation(tmp_pat
     log_b = tl.trace(
         SigmoidReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"
@@ -247,7 +250,8 @@ def test_check_spec_compat_executable_unresolvable_mismatch_still_raises(tmp_pat
     other = tl.trace(
         nn.Sigmoid(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     with pytest.raises(GraphShapeMismatchError):
         check_spec_compat(spec, other)
@@ -261,7 +265,8 @@ def test_check_spec_compat_same_graph_stays_exact(tmp_path: Any) -> None:
     same_log = tl.trace(
         ReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     compat = check_spec_compat(spec, same_log)
@@ -280,7 +285,8 @@ def test_check_spec_compat_nonexecutable_mismatch_still_confirmation(tmp_path: A
     log_b = tl.trace(
         SigmoidReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     compat = check_spec_compat(spec, log_b)
     assert compat.outcome == "COMPATIBLE_WITH_CONFIRMATION"

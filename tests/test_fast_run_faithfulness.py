@@ -263,7 +263,7 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
-    from torchlens._fast_live_plans import _remove_fast_live_hooks
+    from torchlens._fast_live_hooks import _remove_fast_live_hooks
 
     removed: list[int] = []
 
@@ -420,9 +420,9 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             inputs,
             capture=CaptureOptions(
                 replayable=True,
-                layers_to_save="all",
                 cache=False,
             ),
+            save="all",
         )
     captured.save(path, level="runnable", include_weights=True)
     return path

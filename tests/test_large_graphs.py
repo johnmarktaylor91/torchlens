@@ -100,7 +100,7 @@ def _draw_model(model: nn.Module, x: torch.Tensor, **kwargs: Any) -> str:
 
     trace = trace_fn(model, x)
     try:
-        return str(trace.draw(**kwargs))
+        return str(trace.draw(**kwargs).dot)
     finally:
         trace.cleanup()
 
@@ -439,8 +439,7 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="auto",
-                vis_save_only=True,
+                layout="auto",
                 file_format="svg",
                 path=str(tmp_path / "auto_dot"),
             )
@@ -473,8 +472,7 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="auto",
-                vis_save_only=True,
+                layout="auto",
                 file_format="svg",
                 path=str(tmp_path / "auto_rank"),
             )
@@ -500,8 +498,7 @@ class TestRankEngineRendering:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 trace.draw(
-                    vis_node_placement="auto",
-                    vis_save_only=True,
+                    layout="auto",
                     file_format="svg",
                     path=str(tmp_path / "rank_decision"),
                 )
@@ -532,8 +529,7 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="dot",
-                vis_save_only=True,
+                layout="dot",
                 file_format="svg",
                 path=str(tmp_path / "manual_dot"),
             )
@@ -561,8 +557,7 @@ class TestRankEngineRendering:
             source = _draw_model(
                 model,
                 torch.randn(2, 64),
-                vis_node_placement="rank",
-                vis_save_only=True,
+                layout="rank",
                 file_format="svg",
                 path=str(tmp_path / "manual_rank"),
             )
@@ -579,8 +574,7 @@ class TestRankEngineRendering:
                 _draw_model(
                     model,
                     torch.randn(2, 64),
-                    vis_node_placement=removed,
-                    vis_save_only=True,
+                    layout=removed,
                     file_format="svg",
                     path=str(tmp_path / f"removed_{removed}"),
                 )
@@ -593,8 +587,7 @@ class TestRankEngineRendering:
         source = _draw_model(
             model,
             torch.randn(2, 64),
-            vis_node_placement="rank",
-            vis_save_only=True,
+            layout="rank",
             file_format="svg",
             path=str(outpath),
         )
@@ -610,12 +603,11 @@ class TestRankEngineRendering:
         model = RandomGraphModel(target_nodes=80, seed=42)
         trace = trace_fn(model, torch.randn(2, 64))
         source = trace.draw(
-            vis_mode="unrolled",
-            vis_save_only=True,
+            rolled=False,
             file_format="svg",
             path=str(tmp_path / "placement_test"),
-            vis_node_placement="dot",
-        )
+            layout="dot",
+        ).dot
         assert "digraph" in source
         trace.cleanup()
 
@@ -723,10 +715,9 @@ class TestDotThresholdBenchmark:
             start = time.time()
             try:
                 trace.draw(
-                    vis_mode="unrolled",
-                    vis_save_only=True,
+                    rolled=False,
                     path=str(tmp_path / f"bench_{target}"),
-                    vis_node_placement="dot",
+                    layout="dot",
                 )
                 elapsed = time.time() - start
                 print(f"  {target} target ({actual_nodes} actual): {elapsed:.1f}s")

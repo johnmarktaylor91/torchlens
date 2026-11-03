@@ -170,7 +170,7 @@ def _counted_draw(
         if hasattr(module, "_collapsed_module_rolling_suffix"):
             monkeypatch.setattr(module, "_collapsed_module_rolling_suffix", counting_suffix)
 
-    trace.draw(vis_save_only=True, path=str(outpath), **draw_kwargs)
+    trace.draw(path=str(outpath), **draw_kwargs)
     return counts
 
 
@@ -196,7 +196,7 @@ def test_unrolled_collapsed_nodes_share_one_rolled_layer_sweep(
         monkeypatch,
         trace,
         tmp_path / "graph",
-        vis_mode="unrolled",
+        rolled=False,
         collapse=collapse,
     )
 
@@ -222,7 +222,7 @@ def test_rolled_view_also_shares_one_rolled_layer_sweep(
         monkeypatch,
         trace,
         tmp_path / "graph",
-        vis_mode="rolled",
+        rolled=True,
         collapse=collapse,
     )
 

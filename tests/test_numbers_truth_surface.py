@@ -33,7 +33,7 @@ def small_log() -> Generator[tl.Trace, None, None]:
     """Metadata-only capture of a tiny model."""
 
     model = nn.Sequential(nn.Linear(8, 16, bias=True), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
         yield log
     finally:
@@ -89,7 +89,7 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
     log = tl.trace(
         _CondModel(),
         torch.randn(2, 3) + 1.0,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         for text in (str(log.summary(level="op")), log.provenance._summary()):

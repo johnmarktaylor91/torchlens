@@ -215,7 +215,7 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
 
     with torch.no_grad():
         complete = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-        halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+        halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     mixed = tl.Bundle({"complete": complete, "halted": halted})
     assert mixed.outcome.status is CaptureStatus.STOPPED
 

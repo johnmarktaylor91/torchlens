@@ -233,7 +233,6 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     with pytest.warns(TorchLensWarning, match="nearly the uncollapsed graph"):
         log.draw(
             path=str(tmp_path / "fan"),
-            vis_save_only=True,
             file_format="svg",
             collapse="auto",
         )
@@ -256,10 +255,9 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     with pytest.warns(TorchLensWarning, match="floor plan"):
         source = log.draw(
             path=str(tmp_path / "cliff"),
-            vis_save_only=True,
             file_format="svg",
             collapse="auto",
-        )
+        ).dot
     # Visible notice on the render (never only a warning).
     assert "collapse fell back to the floor plan" in source
 

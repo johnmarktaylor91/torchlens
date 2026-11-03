@@ -172,7 +172,7 @@ def test_attach_partial_reraises_original_with_failed_recording() -> None:
 
 
 def test_return_partial_one_shot_returns_failed_recording() -> None:
-    """return_partial returns the failed Recording when return_output=False."""
+    """return_partial returns the failed Recording."""
 
     recording = tl.record(
         FailingAfterOps(),
@@ -187,18 +187,21 @@ def test_return_partial_one_shot_returns_failed_recording() -> None:
     assert "caveat=" in summary
 
 
-def test_return_partial_with_return_output_returns_none_output() -> None:
-    """return_partial with return_output=True returns ``(None, partial)``."""
+def test_return_partial_output_refuses_naming_the_failure() -> None:
+    """A failed partial recording has no output; ``output`` refuses, never ``None``."""
 
-    output, recording = tl.record(
+    from torchlens._errors import PayloadUnavailableError
+
+    recording = tl.record(
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops,
         on_forward_error="return_partial",
-        return_output=True,
     )
 
-    assert output is None
+    with pytest.raises(PayloadUnavailableError) as exc_info:
+        _ = recording.output
+    assert exc_info.value.fields["code"] == "output_forward_failed"
     _assert_failed_partial(recording)
 
 
@@ -343,7 +346,7 @@ def test_model_error_wins_over_module_exit_predicate_error() -> None:
         ParentWithFailingChild(),
         torch.tensor(1.0),
         save=_save_ops,
-        halt=module_exit_halt,
+        stop_after=module_exit_halt,
         on_predicate_error="fail-fast",
         on_forward_error="return_partial",
     )
@@ -368,7 +371,7 @@ def test_root_module_exit_halt_failure_deduplicates_partial_event_stream() -> No
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops_and_modules,
-        halt=halt,
+        stop_after=halt,
         on_forward_error="return_partial",
     )
 
@@ -492,7 +495,7 @@ def test_accumulated_predicate_error_suppressed_after_failed_forward() -> None:
         ParentWithFailingChild(),
         torch.tensor(1.0),
         save=_save_ops,
-        halt=module_exit_halt,
+        stop_after=module_exit_halt,
         on_predicate_error="accumulate",
         on_forward_error="return_partial",
     )
@@ -516,7 +519,7 @@ def test_accumulated_predicate_error_still_raises_without_forward_failure() -> N
             HealthyModel(),
             torch.tensor(1.0),
             save=_save_ops,
-            halt=module_exit_halt,
+            stop_after=module_exit_halt,
             on_predicate_error="accumulate",
         )
 

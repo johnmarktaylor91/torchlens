@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from torch import nn
 
     from .._data_classes.trace import Trace
+    from ..viz._drawing import Drawing
     from . import Bundle
 
 __all__ = [
@@ -160,14 +161,11 @@ def accepts_member_name(fn: Callable[..., Any]) -> bool:
     return count >= 2
 
 
-def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
+def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
     """Render each bundle member graph as a member-keyed strip."""
 
-    if kwargs.get("vis_mode") == "none":
-        return dict.fromkeys(self._members)
-
     base_outpath = kwargs.get("path")
-    results: dict[str, str | None] = {}
+    results: dict[str, Drawing | str] = {}
     for name, member in self._members.items():
         member_kwargs = dict(kwargs)
         if isinstance(base_outpath, str):

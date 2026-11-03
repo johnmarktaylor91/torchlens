@@ -24,7 +24,7 @@ ATTN_ADDRESS = "model.layers.0.self_attn"
 def llama_capture():
     spec = FAMILY_BY_NAME["llama"]
     model = spec.build("eager")
-    trace = tl.trace(model, (), spec.input_kwargs())
+    trace = tl.trace(model, (), input_kwargs=spec.input_kwargs())
     yield model, trace
     tl.release_model(model)
 

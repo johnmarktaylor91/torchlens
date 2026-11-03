@@ -148,7 +148,8 @@ def _planted_edge_drop_trace():
     log = trace_fn(
         model,
         torch.randn(2, 6),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     log._tl_test_model_keepalive = model
     outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
@@ -354,7 +355,8 @@ def _loaded_edge_drop_trace(tmp_path):
     log = trace_fn(
         _TwoStage(),
         torch.randn(2, 6),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     path = tmp_path / "edge_drop_plant.tlspec"

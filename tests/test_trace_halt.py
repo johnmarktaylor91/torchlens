@@ -43,7 +43,7 @@ def _halt_on_linear_exit(ctx: RecordContext) -> bool:
 def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
     """trace(halt=...) returns a finalized partial graph through the matching op."""
 
-    trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), halt=_halt_on_relu)
+    trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_on_relu)
 
     assert trace.is_stopped is True
     assert trace.graph.stop_frontier == trace.stop_reason
@@ -61,7 +61,7 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
     trace = tl.trace(
         _ThreeStageModel(),
         torch.ones(1, 3),
-        halt=_halt_on_linear_exit,
+        stop_after=_halt_on_linear_exit,
     )
 
     assert trace.is_stopped is True
@@ -76,8 +76,8 @@ def test_trace_halt_supports_selective_layers_to_save() -> None:
     trace = tl.trace(
         _ThreeStageModel(),
         torch.ones(1, 3),
-        halt=_halt_on_relu,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        stop_after=_halt_on_relu,
+        save=["linear"],
     )
 
     assert trace.is_stopped is True
@@ -99,7 +99,7 @@ def test_halted_trace_validation_skips_full_model_output_only() -> None:
     trace = tl.trace(
         model,
         torch.ones(1, 3),
-        halt=_halt_on_relu,
+        stop_after=_halt_on_relu,
         capture=CaptureOptions(save_args=True),
     )
 
@@ -129,7 +129,7 @@ def test_trace_halt_keeps_values_awaiting_consumers() -> None:
     model = _WeightsBeforeHaltModel()
     x = torch.ones(1, 3)
     plain = tl.trace(model, x)
-    halted = tl.trace(model, x, halt=_halt_on_relu)
+    halted = tl.trace(model, x, stop_after=_halt_on_relu)
     assert halted.is_stopped is True
     order = lambda trace: [  # noqa: E731
         op.func_name for op in sorted(trace.ops, key=lambda op: op.raw_index)
@@ -167,8 +167,14 @@ def test_halted_recording_to_trace_keeps_no_module_boundary_rows() -> None:
     torch.manual_seed(0)
     model = _NestedBeforeHaltModel().eval()
     x = torch.randn(2, 4)
-    live = tl.trace(model, x, halt=_halt_on_relu)
-    cooked = tl.record(model, x, save=tl.func("relu"), halt=_halt_on_relu, seed=3).to_trace()
+    live = tl.trace(model, x, stop_after=_halt_on_relu)
+    cooked = tl.record(
+        model,
+        x,
+        save=tl.func("relu"),
+        stop_after=_halt_on_relu,
+        capture=tl.options.CaptureOptions(seed=3),
+    ).to_trace()
     assert live.is_stopped is True and cooked.is_stopped is True
     assert [op.func_name for op in cooked.ops] == ["linear", "linear", "relu"]
     assert [op.label for op in cooked.ops] == [op.label for op in live.ops]

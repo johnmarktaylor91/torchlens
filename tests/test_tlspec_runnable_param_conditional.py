@@ -58,8 +58,8 @@ def _capture(model: nn.Module, value: torch.Tensor) -> tl.Trace:
             replayable=True,
             capture_container_structure=True,
             cache=False,
-            layers_to_save="all",
         ),
+        save="all",
     )
 
 

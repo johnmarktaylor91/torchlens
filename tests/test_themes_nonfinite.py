@@ -154,11 +154,9 @@ def test_debug_render_carries_motifs_end_to_end(nonfinite_log: Any, tmp_path: An
         **resolution.draw_kwargs,
         path=str(tmp_path / "nf"),
         file_format="svg",
-        vis_save_only=True,
-        return_graph=True,
-    )
-    assert "wedged" in graph.source
-    assert "nonfinite status" in graph.source
+    ).dot
+    assert "wedged" in graph
+    assert "nonfinite status" in graph
 
 
 def test_non_float_outputs_read_finite(nonfinite_log: Any) -> None:
@@ -212,11 +210,10 @@ def test_unrolled_passes_carry_their_own_motif(tmp_path: Any) -> None:
     assert exp_ops[0].layer_label == exp_ops[1].layer_label  # one two-pass layer
     resolution = lenses.resolve_lens(log, "debug")
     source = log.draw(
-        **{**resolution.draw_kwargs, "vis_mode": "unrolled"},
+        **{**resolution.draw_kwargs, "rolled": False},
         path=str(tmp_path / "nf_passes"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     inf_border = _MOTIFS["pos_inf"][1]
     statements = {}
     for op in exp_ops:

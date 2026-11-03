@@ -95,7 +95,7 @@ def _plain_trace(model: nn.Module, x: Any) -> Any:
 
 def _reference_trace(model: nn.Module, x: Any) -> Any:
     # reference-mode save: journal payloads are the live output tensors
-    return tl.trace(model, x, save_mode="reference")
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(save_mode="reference"))
 
 
 def _save_arg_values_trace(model: nn.Module, x: Any) -> Any:
@@ -115,8 +115,7 @@ def _lookback_trace(model: nn.Module, x: Any) -> Any:
         model,
         x,
         save=tl.func("linear") & tl.followed_by(tl.func("tanh")),
-        lookback=4,
-        lookback_payload_policy="detached_raw",
+        capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
     )
 
 
@@ -133,8 +132,7 @@ def _backward_trace(model: nn.Module, x: Any) -> Any:
     trace = tl.trace(
         model,
         x.requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     output = trace.output_ops[0].out if trace.output_ops else None
     if output is not None and output.requires_grad:

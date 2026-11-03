@@ -68,7 +68,7 @@ def test_trace_str_honesty_header_on_not_checked() -> None:
     trace = tl.trace(
         nn.Identity(),
         torch.randn(2, 2),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     text = str(trace)
     assert trace.nonfinite_verdict == "not_checked"

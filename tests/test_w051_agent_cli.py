@@ -104,7 +104,7 @@ def test_explain_and_diff_gates_are_live(clean: Path, nonfinite: Path) -> None:
 def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     """A HALTED capture is not complete: --fail-on incomplete exits 1."""
 
-    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), halt=tl.func("relu"))
+    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), stop_after=tl.func("relu"))
     assert log.outcome.status.value == "stopped"
     path = tmp_path / "halted.tlspec"
     log.save(str(path))

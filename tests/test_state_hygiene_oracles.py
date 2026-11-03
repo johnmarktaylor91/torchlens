@@ -326,7 +326,7 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
         torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
-        recorded = tl.record(model, x, default_op=True, intervene=spec).to_trace()
+        recorded = tl.record(model, x, intervene=spec, default_op=True).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
 
@@ -463,7 +463,10 @@ def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
     outs = {
         "trace": tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))),
         "record": tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), tl.scale(0.5)),
+            default_op=True,
         ).to_trace(),
         "fork_do": fork,
         "rerun": rerun,
@@ -718,7 +721,10 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         lambda: tl.trace(model, x, intervene=tl.when(tl.module("fc2"), interrupt)),
         lambda: tl.when(tl.module("fc2"), interrupt).bind(model)(x),
         lambda: tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), interrupt)
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), interrupt),
+            default_op=True,
         ),
     ):
         with pytest.raises(KeyboardInterrupt):

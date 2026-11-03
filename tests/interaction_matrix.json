@@ -2,14 +2,10 @@
  "schema": "interaction-matrix/1",
  "features": {
   "save": {
-   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions, save_mode, lookback)",
+   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions: save_mode, lookback, reconstruction_ready)",
    "trace_kwargs": [
     "save",
-    "save_mode",
-    "lookback",
-    "lookback_payload_policy",
-    "capture",
-    "reconstruction_ready"
+    "capture"
    ],
    "options": [
     "CaptureOptions"
@@ -26,31 +22,25 @@
    ]
   },
   "halt": {
-   "summary": "Stop the forward early at a site (halt=)",
+   "summary": "Stop the forward early at a site or on a predicate (stop_after=)",
    "trace_kwargs": [
-    "halt"
+    "stop_after"
    ],
    "options": []
   },
   "storage": {
-   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, streaming=, chunking)",
+   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, CaptureOptions.chunk_size, chunk_paths)",
    "trace_kwargs": [
     "storage",
-    "streaming",
-    "chunk_size",
     "chunk_paths"
    ],
    "options": [
-    "SaveOptions",
     "StorageOptions"
    ]
   },
   "backward": {
    "summary": "Gradient capture: backward_ready, save_grads, grad options, log_backward",
-   "trace_kwargs": [
-    "grad_transform",
-    "grad_options"
-   ],
+   "trace_kwargs": [],
    "options": []
   },
   "episode": {
@@ -65,17 +55,14 @@
   "backend": {
    "summary": "Non-torch backends (backend=, JAX static args)",
    "trace_kwargs": [
-    "backend",
-    "jax_static_argnums"
+    "backend"
    ],
    "options": []
   },
   "reporting": {
-   "summary": "Capture-time reporting: profile, echo, grouping",
+   "summary": "Capture-time reporting: narrate=, CaptureOptions.grouping",
    "trace_kwargs": [
-    "profile",
-    "narrate",
-    "grouping"
+    "narrate"
    ],
    "options": [
     "NarrationOptions"
@@ -180,6 +167,7 @@
  "plain_trace_kwargs": [
   "model",
   "input_args",
+  "extra_positional",
   "input_kwargs",
   "input_shape",
   "forward_kwargs"
@@ -2863,14 +2851,6 @@
    "ruling": "pending"
   },
   {
-   "id": "A34",
-   "pair": [],
-   "summary": "The same disk option is spelled storage= and streaming= on tl.trace and tl.record; both together refuse storage_argument_conflict, and a silent conflict case is ledgered (accepted then discarded).",
-   "evidence": "tests/composition_expectations/data/composition_ledger.md",
-   "recommendation": "close",
-   "ruling": "pending"
-  },
-  {
    "id": "A35",
    "pair": [],
    "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
@@ -2889,7 +2869,7 @@
   {
    "id": "A37",
    "pair": [],
-   "summary": "Which sites to keep is spelled save= on trace and record, layers on extract, and layers_to_save in CaptureOptions; using both save= and layers_to_save refuses save_selection_conflict.",
+   "summary": "Which sites to keep is spelled save= on trace and record, and layers on extract. CaptureOptions configures capture mechanics.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2900,14 +2880,6 @@
    "summary": "Predicate type errors are twin codes with different lineages: tl.trace halt_predicate_type_invalid (ArgumentTypeError, TypeError) and intervention_predicate_type_invalid, versus tl.record recording_halt_predicate_type_invalid and recording_intervention_predicate_type_invalid (InvalidArgumentError, ValueError).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "close",
-   "ruling": "pending"
-  },
-  {
-   "id": "A39",
-   "pair": [],
-   "summary": "Early stop has two spellings: halt= (a predicate) and stop_after= (a selector or site); setting both refuses stop_after_halt_conflict, and only stop_after refuses chunking with its own code.",
-   "evidence": "docs/reference/error_refusal_contract.md",
-   "recommendation": "document",
    "ruling": "pending"
   },
   {
