@@ -20,6 +20,7 @@ import torch
 
 from ..._data_classes._state_adapter import state_new
 from ..format_contract import BlobRef
+from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
 from .codec_policy import codec_backend
@@ -181,25 +182,40 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
     )
 
 
-def validate_artifact(path: str | Path) -> dict[str, Any]:
+class ValidatedManifest(dict[str, Any]):
+    """The manifest ``validate_artifact`` returns; for a ``trace`` artifact ``decoded`` carries
+    the checked tables, so the load door builds records from the one validation pass."""
+
+    decoded: DecodedArtifact | None
+
+    def __init__(self, manifest: Mapping[str, Any], *, decoded: DecodedArtifact | None) -> None:
+        super().__init__(manifest)
+        self.decoded = decoded
+
+
+def validate_artifact(path: str | Path, *, expect_kind: str | None = None) -> ValidatedManifest:
     """Validate an artifact as ``tl.load`` would, short of building its record objects.
 
     The envelope first (manifest, every listed file's bytes and SHA-256, the runnable slot
     cross-check), then the same bounded typed-record decode, reference resolution,
     cross-record invariants and manifest anchor check the load doors run, on the artifact's
-    own tables and, for a bundle, on every member's. One code path with the doors
-    (``decode_checked``): what load refuses, validation refuses, with the same code.
+    own tables and, for a bundle, on every member's. One code path with the doors: every
+    load door calls this function, so what load refuses, validation refuses, with the same
+    code. ``expect_kind`` is the door's kind: a mismatch refuses before any table is read.
     """
 
     root = Path(path)
     manifest = _validate_envelope(root)
+    if expect_kind is not None:
+        _require_kind(manifest, root, expect_kind)
+    decoded: DecodedArtifact | None = None
     if manifest["kind"] == "bundle":
         metadata = read_member_index(root, manifest)
         for _name, member_root in iter_members(root, manifest, metadata):
             decode_checked(member_root, _validate_envelope(member_root))
     elif manifest["kind"] == "trace":
-        decode_checked(root, manifest)
-    return manifest
+        decoded = decode_checked(root, manifest)
+    return ValidatedManifest(manifest, decoded=decoded)
 
 
 def _validate_envelope(path: str | Path) -> dict[str, Any]:
@@ -391,7 +407,9 @@ class DecodedArtifact:
         self.manifest = manifest
         self.version: int = manifest[TLSPEC_KEY]
         self.sink = TensorRefSink(
-            codecs=tuple(manifest["codecs"]), files=manifest["files"], backend=manifest["backend"]
+            codecs=tuple(manifest["codecs"]),
+            files=manifest["files"],
+            backend=manifest.get("backend", contract.DEFAULT_BACKEND),
         )
         self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
@@ -405,6 +423,8 @@ class DecodedArtifact:
 
         for kind in self.manifest["records"]:
             raw_rows = read_record_table(self.root, self.manifest, kind)
+            if kind == "trace" and raw_rows:
+                self._check_prerelease_marker(raw_rows[0])
             if raw_rows:
                 refuse_unknown_columns(kind, raw_rows[0], declared_version=self.version)
             self.tables[kind] = [
@@ -418,6 +438,16 @@ class DecodedArtifact:
             self.objects[kind] = [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
         self.objects["trace"] = [state_new(record_class("trace"))]
+
+    def _check_prerelease_marker(self, fields: dict[str, Any]) -> None:
+        """Pop the pre-release marker of a switch-on write; refuse typed unless the switch is on."""
+
+        if PRERELEASE_STATE_KEY not in fields:
+            return
+        marker = self.decoder.decode(
+            fields.pop(PRERELEASE_STATE_KEY), at=f"trace.{PRERELEASE_STATE_KEY}"
+        )
+        validate_prerelease_state({PRERELEASE_STATE_KEY: marker}, cls_name="Trace")
 
     def _index_identities(self, kind: str) -> None:
         """Index a decoded table's rows by their identity column."""
@@ -605,7 +635,7 @@ class DecodedArtifact:
     def manifest_for_rehydrate(self) -> dict[str, Any]:
         """The manifest as the rehydrate path reads it: the tensor index from the cells."""
 
-        manifest = {"backend": "torch", **self.manifest}
+        manifest = {"backend": contract.DEFAULT_BACKEND, **self.manifest}
         manifest["tensors"] = list(self.sink.entries.values())
         return manifest
 
@@ -695,9 +725,10 @@ def load_trace(
     under the governed load, then the installed ``trace`` step (tensors, accessors, recipe)."""
 
     root = Path(path)
-    manifest = _validate_envelope(root)
-    _require_kind(manifest, root, "trace")
-    artifact = read_tables(root, manifest)
+    manifest = validate_artifact(root, expect_kind="trace")
+    artifact = manifest.decoded
+    assert artifact is not None  # a trace manifest always decodes
+    artifact.build_records()
     return _hook("trace", root)(
         artifact,
         lazy=lazy,
@@ -735,6 +766,7 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     root = Path(path)
     manifest = _validate_envelope(root)
     _require_kind(manifest, root, "bundle")
+    # Each member goes through ``load_trace``, hence ``validate_artifact``, once.
     metadata = read_member_index(root, manifest)
     policy = options.pop("unknown_relations", "opaque")
     members = [

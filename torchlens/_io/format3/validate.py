@@ -32,6 +32,7 @@ from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
 from ..format_errors import ArtifactError, ArtifactTooOldError, UnknownPersistedFieldError
 from ..paths import reject_symlink_path
+from ..prerelease import prerelease_fields_active, registered_prerelease_fields
 from ..state_contract import _unknown_field_remedy
 from . import contract
 from .summaries import summary_schema_errors
@@ -291,9 +292,11 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
             errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
-    backend = manifest.get("backend")
+    backend = manifest.get("backend", contract.DEFAULT_BACKEND)
     if not isinstance(backend, str) or not backend:
-        errors.append("backend must be a non-empty string naming the artifact's backend")
+        errors.append(
+            "backend, when present, must be a non-empty string naming the artifact's backend"
+        )
     policy = manifest["payload_policy"]
     if not isinstance(policy, dict) or not all(
         isinstance(key, str) and isinstance(value, bool) for key, value in policy.items()
@@ -456,6 +459,11 @@ def _unknown_columns(kind: str, names: Mapping[str, Any]) -> list[str]:
 
     bindings = STORAGE_BINDINGS[_SCHEMA_KEY_BY_RECORD.get(kind, kind)]
     allowed_extra = _TRACE_TRANSPORT_COLUMNS if kind == "trace" else frozenset()
+    if prerelease_fields_active():
+        # A switch-on write persists the registered sprint-gated fields; the marker the
+        # reader already validated proves the artifact is one of ours.
+        owner = record_class(kind).__name__
+        allowed_extra = allowed_extra | frozenset(registered_prerelease_fields().get(owner, ()))
     unknown = []
     for name in names:
         if name in allowed_extra:

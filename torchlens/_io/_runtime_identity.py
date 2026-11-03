@@ -140,17 +140,13 @@ def _check_python(recorded: str, subject: str) -> None:
     runtime = parse_pep440(current, label="runtime python")
     saved = parse_pep440(recorded, label="manifest python")
     if runtime is not None and saved is not None:
-        if runtime.major != saved.major:
-            warnings.warn(
-                f"{subject} python_version={recorded} differs from runtime "
-                f"python_version={current} (major version mismatch).",
-                TorchLensWarning,
-                stacklevel=4,
-            )
-    elif recorded != current:
+        cause = "major version mismatch" if runtime.major != saved.major else None
+    else:
+        cause = "could not be parsed under PEP 440" if recorded != current else None
+    if cause is not None:
         warnings.warn(
-            f"{subject} python_version={recorded} differs from runtime python_version="
-            f"{current} and could not be parsed under PEP 440.",
+            f"{subject} python_version={recorded} differs from runtime "
+            f"python_version={current} ({cause}).",
             TorchLensWarning,
             stacklevel=4,
         )

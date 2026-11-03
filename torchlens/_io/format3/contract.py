@@ -95,6 +95,9 @@ MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
 ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention")
 #: Payload codec ids the format writes; both are safetensors files.
 PAYLOAD_CODEC_IDS: Final[tuple[str, ...]] = ("torch_safetensors_v1", "numpy_safetensors_v1")
+#: The artifact backend an envelope without a ``backend`` key means: the torch writer's.
+#: An array-backend envelope names its backend; absent means the old meaning.
+DEFAULT_BACKEND: Final[str] = "torch"
 #: Save levels, as ``torchlens._io.save_policy`` spells them.
 SAVE_LEVELS: Final[tuple[str, ...]] = (
     "portable",
