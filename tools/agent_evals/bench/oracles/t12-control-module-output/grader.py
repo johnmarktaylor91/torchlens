@@ -1,10 +1,10 @@
 """T12 grader: exact comparison with an independent computation of the module output."""
+
 import importlib.util
 import json
 import os
 import sys
 
-import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_common"))
@@ -13,7 +13,9 @@ from grade_utils import Report, grader_main, load_npz, max_abs  # noqa: E402
 
 def oracle(inputs_dir):
     cfg = json.load(open(os.path.join(inputs_dir, "config.json")))
-    spec = importlib.util.spec_from_file_location("task_model_oracle", os.path.join(inputs_dir, "model.py"))
+    spec = importlib.util.spec_from_file_location(
+        "task_model_oracle", os.path.join(inputs_dir, "model.py")
+    )
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     model = m.build_model(cfg["weight_seed"])
@@ -23,7 +25,7 @@ def oracle(inputs_dir):
     outs = []
     with torch.no_grad():
         for i in range(len(x)):
-            h = model.stem(x[i:i + 1])
+            h = model.stem(x[i : i + 1])
             h = model.block1(h)
             h = model.block2.conv(h)
             h = model.block2.bn(h)

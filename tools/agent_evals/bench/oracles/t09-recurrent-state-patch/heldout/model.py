@@ -1,4 +1,5 @@
 """Seeded two-layer recurrent language model and ordered sequence pairs."""
+
 import numpy as np
 import torch
 from torch import nn
@@ -21,8 +22,10 @@ def build_model(seed):
     model = LanguageModel()
     with torch.no_grad():
         for name, param in sorted(model.named_parameters()):
-            scale = 0.08 if 'bias' in name else 1 / np.sqrt(param.shape[-1])
-            param.copy_(torch.from_numpy((rng.standard_normal(param.shape) * scale).astype(np.float32)))
+            scale = 0.08 if "bias" in name else 1 / np.sqrt(param.shape[-1])
+            param.copy_(
+                torch.from_numpy((rng.standard_normal(param.shape) * scale).astype(np.float32))
+            )
     return model.eval()
 
 

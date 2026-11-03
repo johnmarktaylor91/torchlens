@@ -1,14 +1,11 @@
-import importlib.util
-import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_common"))
-from grade_utils import Report, grader_main, load_npz, load_json, max_abs
-
+from grade_utils import Report, grader_main, load_json, load_npz, max_abs
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -20,14 +17,17 @@ def oracle(inputs, cache_file):
     cfg = load_json(Path(inputs) / "config.json")
     prompts = load_json(Path(inputs) / "prompts.json")
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"])
-    model = AutoModelForCausalLM.from_pretrained(cfg["model"], torch_dtype=torch.float32,
-                                                attn_implementation=cfg["attention_implementation"]).eval()
+    model = AutoModelForCausalLM.from_pretrained(
+        cfg["model"], torch_dtype=torch.float32, attn_implementation=cfg["attention_implementation"]
+    ).eval()
     block = model.gpt_neox.layers[cfg["layer"]]
     vectors = []
     recorded = []
+
     def collect(mod, args, output):
         h = output[0] if isinstance(output, (tuple, list)) else output
         recorded.append(h[0, -1].clone())
+
     handle = block.register_forward_hook(collect)
     try:
         for group in ("positive", "negative"):
@@ -47,6 +47,7 @@ def oracle(inputs, cache_file):
         rows = []
         for steering in (False, True):
             observed = []
+
             def intervene(mod, args, output):
                 h = output[0] if isinstance(output, (tuple, list)) else output
                 observed.append((h[0, -1] * unit).sum().item())
@@ -56,6 +57,7 @@ def oracle(inputs, cache_file):
                 if isinstance(output, list):
                     return [changed] + output[1:]
                 return changed
+
             handle = block.register_forward_hook(intervene) if steering else None
             ids = start.clone()
             row = []
@@ -75,15 +77,30 @@ def oracle(inputs, cache_file):
                 projections.append(observed)
         native.append(rows[0])
         tokens.append(rows[1])
-    result = dict(direction=direction.numpy(), logits=np.stack(first), tokens=np.array(tokens),
-                  native=np.array(native), projections=np.array(projections, dtype=np.float32))
+    result = {
+        "direction": direction.numpy(),
+        "logits": np.stack(first),
+        "tokens": np.array(tokens),
+        "native": np.array(native),
+        "projections": np.array(projections, dtype=np.float32),
+    }
     np.savez(cache_file, **result)
     return result
 
 
 def grade_one(rep, label, inputs, outputs, cache):
-    names = [f"{label}:{name}" for name in ("shapes", "direction_cosine", "first_logits_relative_max",
-             "steered_token_agreement", "native_token_agreement", "projection_max_abs", "time_ratio")]
+    names = [
+        f"{label}:{name}"
+        for name in (
+            "shapes",
+            "direction_cosine",
+            "first_logits_relative_max",
+            "steered_token_agreement",
+            "native_token_agreement",
+            "projection_max_abs",
+            "time_ratio",
+        )
+    ]
     ref = oracle(inputs, Path(cache) / f"t05_{label}.npz")
     try:
         direction = load_npz(Path(outputs) / "direction.npz")["direction"]
@@ -93,31 +110,59 @@ def grade_one(rep, label, inputs, outputs, cache):
         tokens = np.asarray([row["steered_token_ids"] for row in items])
         native = np.asarray([row["native_token_ids"] for row in items])
         projections = np.asarray([row["projections"] for row in items], dtype=np.float64)
-        valid = (direction.shape == ref["direction"].shape and logits.shape == ref["logits"].shape
-                 and tokens.shape == ref["tokens"].shape and native.shape == ref["native"].shape
-                 and projections.shape == ref["projections"].shape and direction.dtype == np.float32
-                 and logits.dtype == np.float32 and np.issubdtype(tokens.dtype, np.integer)
-                 and np.issubdtype(native.dtype, np.integer)
-                 and all(np.isfinite(x).all() for x in (direction, logits, projections)))
-        cosine = float(direction.astype(float) @ ref["direction"].astype(float) /
-                       (np.linalg.norm(direction.astype(float)) * np.linalg.norm(ref["direction"].astype(float)))) if valid and np.linalg.norm(direction) > 0 else -1.0
-        error = max_abs(logits, ref["logits"]) / float(np.max(np.abs(ref["logits"]))) if valid else float("inf")
+        valid = (
+            direction.shape == ref["direction"].shape
+            and logits.shape == ref["logits"].shape
+            and tokens.shape == ref["tokens"].shape
+            and native.shape == ref["native"].shape
+            and projections.shape == ref["projections"].shape
+            and direction.dtype == np.float32
+            and logits.dtype == np.float32
+            and np.issubdtype(tokens.dtype, np.integer)
+            and np.issubdtype(native.dtype, np.integer)
+            and all(np.isfinite(x).all() for x in (direction, logits, projections))
+        )
+        cosine = (
+            float(
+                direction.astype(float)
+                @ ref["direction"].astype(float)
+                / (
+                    np.linalg.norm(direction.astype(float))
+                    * np.linalg.norm(ref["direction"].astype(float))
+                )
+            )
+            if valid and np.linalg.norm(direction) > 0
+            else -1.0
+        )
+        error = (
+            max_abs(logits, ref["logits"]) / float(np.max(np.abs(ref["logits"])))
+            if valid
+            else float("inf")
+        )
         agreement = float(np.mean(tokens == ref["tokens"])) if valid else 0.0
         native_agreement = float(np.mean(native == ref["native"])) if valid else 0.0
         projection_error = max_abs(projections, ref["projections"]) if valid else float("inf")
         nt, st = float(timing["native_seconds"]), float(timing["steered_seconds"])
-        ratio = st / nt if np.isfinite(nt) and np.isfinite(st) and nt > 0 and st > 0 else float("inf")
+        ratio = (
+            st / nt if np.isfinite(nt) and np.isfinite(st) and nt > 0 and st > 0 else float("inf")
+        )
     except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)
-    rep.add(names[1], cosine >= .999, cosine, .999)
-    rep.add(names[2], error <= .01, error, .01)
-    rep.add(names[3], agreement >= .9, agreement, .9)
+    rep.add(names[1], cosine >= 0.999, cosine, 0.999)
+    rep.add(names[2], error <= 0.01, error, 0.01)
+    rep.add(names[3], agreement >= 0.9, agreement, 0.9)
     rep.add(names[4], native_agreement == 1, native_agreement, 1)
     # Float32 mean reduction and scalar projection can accumulate sub-milliscale noise.
     rep.add(names[5], projection_error < 1e-3, projection_error, 1e-3)
-    rep.add(names[6], ratio <= 1.5, ratio, 1.5, note="same-process measurement; advisory across machines")
+    rep.add(
+        names[6],
+        ratio <= 1.5,
+        ratio,
+        1.5,
+        note="same-process measurement; advisory across machines",
+    )
 
 
 def grade(task_dir, outputs, heldout_outputs, cache):

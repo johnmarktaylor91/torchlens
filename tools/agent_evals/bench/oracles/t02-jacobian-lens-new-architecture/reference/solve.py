@@ -1,4 +1,5 @@
 """Exact estimator using batched cotangents summed over target positions."""
+
 import argparse
 import importlib.util
 import json
@@ -18,7 +19,9 @@ def load(inputs):
 
 
 def texts(inputs, filename):
-    return [json.loads(line)["text"] for line in open(os.path.join(inputs, filename)) if line.strip()]
+    return [
+        json.loads(line)["text"] for line in open(os.path.join(inputs, filename)) if line.strip()
+    ]
 
 
 def encode(text, limit=None):
@@ -30,8 +33,10 @@ def fit(model, corpus, cfg, variant):
     total = {layer: torch.zeros(64, 64, dtype=torch.float64) for layer in sources}
     for text in corpus:
         ids = encode(text, cfg["max_seq_len"])
-        valid = torch.arange(0 if variant == "no_position_mask" else cfg["skip_first_positions"],
-                             len(ids) if variant == "no_position_mask" else len(ids) - 1)
+        valid = torch.arange(
+            0 if variant == "no_position_mask" else cfg["skip_first_positions"],
+            len(ids) if variant == "no_position_mask" else len(ids) - 1,
+        )
         if not len(valid):
             raise ValueError("corpus text has no valid positions")
         state = model.embed(ids).detach().requires_grad_(True)
@@ -41,8 +46,12 @@ def fit(model, corpus, cfg, variant):
             states.append(state)
         target_positions = valid[-1:] if variant == "last_target_only" else valid
         targets = states[cfg["target_layer"]][target_positions].sum(dim=0)
-        derivatives = torch.autograd.grad(targets, [states[l] for l in sources],
-                                          grad_outputs=torch.eye(64), is_grads_batched=True)
+        derivatives = torch.autograd.grad(
+            targets,
+            [states[li] for li in sources],
+            grad_outputs=torch.eye(64),
+            is_grads_batched=True,
+        )
         for layer, derivative in zip(sources, derivatives):
             total[layer] += derivative[:, valid].double().sum(dim=1) / len(valid)
     return {layer: (value / len(corpus)).float() for layer, value in total.items()}
@@ -64,7 +73,7 @@ def readout(model, prompts, lenses, cfg, variant):
             row.append(model.unembed(transported).topk(cfg["readout_top_k"]).indices.tolist())
         top.append(row)
         model_top.append(model.unembed(model.final_norm(states[-1][-1])).topk(10).indices.tolist())
-    return dict(layers=cfg["source_layers"], top10=top, model_top10=model_top)
+    return {"layers": cfg["source_layers"], "top10": top, "model_top10": model_top}
 
 
 def run(inputs, outputs, variant=None):
@@ -72,9 +81,13 @@ def run(inputs, outputs, variant=None):
     matrices = fit(model, texts(inputs, "corpus.jsonl"), cfg, variant)
     results = readout(model, texts(inputs, "readout_prompts.jsonl"), matrices, cfg, variant)
     os.makedirs(outputs, exist_ok=True)
-    np.savez(os.path.join(outputs, "lens.npz"), **{
-        f"J_{layer}": (matrix.T if variant == "transpose" else matrix).numpy()
-        for layer, matrix in matrices.items()})
+    np.savez(
+        os.path.join(outputs, "lens.npz"),
+        **{
+            f"J_{layer}": (matrix.T if variant == "transpose" else matrix).numpy()
+            for layer, matrix in matrices.items()
+        },
+    )
     with open(os.path.join(outputs, "readout.json"), "w") as f:
         json.dump(results, f)
 

@@ -2,6 +2,7 @@
 
 No judge model, no randomness: every function is a plain numerical check.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,14 +40,15 @@ class Report:
             self.bars.append(Bar(n, False, None, None, note))
 
     def to_dict(self):
-        return {"task": self.task, "passed": self.passed,
-                "bars": [asdict(b) for b in self.bars]}
+        return {"task": self.task, "passed": self.passed, "bars": [asdict(b) for b in self.bars]}
 
     def emit(self):
         for b in self.bars:
             flag = "PASS" if b.passed else "FAIL"
-            print(f"  {flag} {b.name}: value={b.value} threshold={b.threshold} {b.note}",
-                  file=sys.stderr)
+            print(
+                f"  {flag} {b.name}: value={b.value} threshold={b.threshold} {b.note}",
+                file=sys.stderr,
+            )
         print(json.dumps(self.to_dict()))
 
 
@@ -103,7 +105,7 @@ def _ranks(x):
         j = i
         while j + 1 < len(x) and sx[j + 1] == sx[i]:
             j += 1
-        ranks[order[i:j + 1]] = (i + j) / 2.0 + 1.0
+        ranks[order[i : j + 1]] = (i + j) / 2.0 + 1.0
         i = j + 1
     return ranks
 
@@ -166,6 +168,7 @@ def inputs_hash(*paths):
     """Short digest of the contents of files and directories (and the grader
     itself when passed), so an oracle cache is never reused for changed inputs."""
     import hashlib
+
     h = hashlib.sha256()
     for root in paths:
         if os.path.isdir(root):
@@ -185,6 +188,7 @@ def inputs_hash(*paths):
 def grader_main(task_id, grade_fn):
     """Standard CLI for graders: grade_fn(task_dir, outputs, heldout_outputs, cache) -> Report."""
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--task-dir", required=True)
     p.add_argument("--outputs", required=True)

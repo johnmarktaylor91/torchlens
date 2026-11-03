@@ -1,4 +1,5 @@
 """A small CNN mixing module calls with tensor functions."""
+
 import numpy as np
 import torch
 from torch import nn
@@ -42,7 +43,7 @@ def build_model(seed):
             if name == "norm_weight":
                 values = 1 + 0.05 * rng.standard_normal(param.shape)
             else:
-                scale = 0.1 if 'bias' in name else 1 / np.sqrt(np.prod(param.shape[1:]))
+                scale = 0.1 if "bias" in name else 1 / np.sqrt(np.prod(param.shape[1:]))
                 values = rng.standard_normal(param.shape) * scale
             param.copy_(torch.from_numpy(values.astype(np.float32)))
     return model.eval()

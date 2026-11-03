@@ -1,4 +1,5 @@
 """Control solution: writes nothing. Every grader must fail it."""
+
 import argparse
 import os
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+
 def load(inputs):
     inputs = Path(inputs)
     cfg = json.loads((inputs / "config.json").read_text())
@@ -13,6 +14,7 @@ def load(inputs):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return cfg, module
+
 
 def run(inputs, outputs, variant=None):
     cfg, module = load(inputs)
@@ -37,6 +39,7 @@ def run(inputs, outputs, variant=None):
     outputs = Path(outputs)
     outputs.mkdir(parents=True, exist_ok=True)
     np.savez(outputs / "grad_act.npz", **result)
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

@@ -1,6 +1,7 @@
 """T7 grader. The oracle re-computes every listed layer explicitly from the
 submodules (no hooks), checks its own result against the networks' logits,
 and compares RDMs and best layers with the agent's outputs."""
+
 import importlib.util
 import json
 import os
@@ -10,17 +11,28 @@ import numpy as np
 import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_common"))
-from grade_utils import Report, grader_main, inputs_hash, load_json, load_npz, max_abs, rdm_correlation  # noqa: E402
+from grade_utils import (  # noqa: E402
+    Report,
+    grader_main,
+    inputs_hash,
+    load_json,
+    load_npz,
+    max_abs,
+    rdm_correlation,
+)
 
 
 def load_inputs(inputs):
     cfg = json.load(open(os.path.join(inputs, "config.json")))
     layers = json.load(open(os.path.join(inputs, "layers.json")))
-    spec = importlib.util.spec_from_file_location("stimuli_oracle", os.path.join(inputs, "stimuli.py"))
+    spec = importlib.util.spec_from_file_location(
+        "stimuli_oracle", os.path.join(inputs, "stimuli.py")
+    )
     st = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(st)
-    images, labels = st.make_stimuli(cfg["stimulus_seed"], cfg["n_categories"],
-                                     cfg["per_category"], cfg["image_size"])
+    images, labels = st.make_stimuli(
+        cfg["stimulus_seed"], cfg["n_categories"], cfg["per_category"], cfg["image_size"]
+    )
     mean = torch.tensor(cfg["normalize_mean"]).view(1, 3, 1, 1)
     std = torch.tensor(cfg["normalize_std"]).view(1, 3, 1, 1)
     return cfg, layers, (torch.from_numpy(images) - mean) / std, labels
@@ -36,7 +48,10 @@ def _rdm(t):
 @torch.no_grad()
 def cnn_oracle(x):
     import torchvision
-    m = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).eval()
+
+    m = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1
+    ).eval()
     out = {}
     h = m.relu(m.bn1(m.conv1(x)))
     out["stem.relu"] = _rdm(h)
@@ -69,13 +84,16 @@ def cnn_oracle(x):
     out["avgpool"] = _rdm(h)
     logits = m.fc(torch.flatten(h, 1))
     out["fc"] = _rdm(logits)
-    assert torch.allclose(logits, m(x), atol=1e-4), "oracle CNN recomputation disagrees with the model"
+    assert torch.allclose(logits, m(x), atol=1e-4), (
+        "oracle CNN recomputation disagrees with the model"
+    )
     return out
 
 
 @torch.no_grad()
 def vit_oracle(x):
     from transformers import AutoModelForImageClassification
+
     model = AutoModelForImageClassification.from_pretrained("facebook/deit-tiny-patch16-224").eval()
     vit = model.vit
     blocks = vit.layers if hasattr(vit, "layers") else vit.encoder.layer
@@ -107,16 +125,20 @@ def vit_oracle(x):
     out["final_ln"] = _rdm(h)
     logits = model.classifier(h[:, 0])
     out["classifier"] = _rdm(logits)
-    assert torch.allclose(logits, model(pixel_values=x).logits, atol=1e-4), \
+    assert torch.allclose(logits, model(pixel_values=x).logits, atol=1e-4), (
         "oracle ViT recomputation disagrees with the model"
+    )
     return out
 
 
 def oracle(inputs, cache_file):
     if os.path.isfile(cache_file):
         with np.load(cache_file, allow_pickle=True) as z:
-            return ({k: z[k] for k in z.files if not k.startswith("_")},
-                    json.loads(str(z["_best"])), json.loads(str(z["_scores"])))
+            return (
+                {k: z[k] for k in z.files if not k.startswith("_")},
+                json.loads(str(z["_best"])),
+                json.loads(str(z["_scores"])),
+            )
     cfg, layers, x, labels = load_inputs(inputs)
     cat = (labels[:, None] != labels[None, :]).astype(np.float64)
     rd = {}
@@ -130,11 +152,13 @@ def oracle(inputs, cache_file):
             sc[lid] = rdm_correlation(o[lid], cat)
         best[net] = max(sc, key=sc.get)
         scores[net] = sc
-    np.savez(cache_file, _best=np.array(json.dumps(best)), _scores=np.array(json.dumps(scores)), **rd)
+    np.savez(
+        cache_file, _best=np.array(json.dumps(best)), _scores=np.array(json.dumps(scores)), **rd
+    )
     return rd, best, scores
 
 
-BEST_TOL = 1e-3   # a layer whose category match is within this of the maximum also counts as best
+BEST_TOL = 1e-3  # a layer whose category match is within this of the maximum also counts as best
 
 
 def grade_one(rep, label, task_dir, inputs, outputs, cache):
@@ -152,17 +176,30 @@ def grade_one(rep, label, task_dir, inputs, outputs, cache):
         return
     n = next(iter(ref.values())).shape[0]
     missing = [k for k in ref if k not in agent or agent[k].shape != (n, n)]
-    rep.add(names[0], not missing, len(ref) - len(missing), len(ref),
-            note=f"missing={missing[:5]}" if missing else "")
+    rep.add(
+        names[0],
+        not missing,
+        len(ref) - len(missing),
+        len(ref),
+        note=f"missing={missing[:5]}" if missing else "",
+    )
     corrs = {k: rdm_correlation(agent[k], ref[k]) for k in ref if k not in missing}
     absd = {k: max_abs(agent[k], ref[k]) for k in ref if k not in missing}
     worst = min(corrs.values()) if corrs else float("nan")
     worst_k = min(corrs, key=corrs.get) if corrs else None
     worst_abs = max(absd.values()) if absd else float("inf")
     ok = (not missing) and worst >= 0.999 and worst_abs <= 1e-3
-    rep.add(names[1], ok, worst, 0.999,
-            note=f"worst corr layer {worst_k}; max abs diff {worst_abs:.2e} (bar 1e-3)")
-    accept = {net: [l for l, v in sc.items() if v >= max(sc.values()) - BEST_TOL] for net, sc in ref_scores.items()}
+    rep.add(
+        names[1],
+        ok,
+        worst,
+        0.999,
+        note=f"worst corr layer {worst_k}; max abs diff {worst_abs:.2e} (bar 1e-3)",
+    )
+    accept = {
+        net: [li for li, v in sc.items() if v >= max(sc.values()) - BEST_TOL]
+        for net, sc in ref_scores.items()
+    }
     best_ok = isinstance(best, dict) and all(best.get(net) in accept[net] for net in accept)
     rep.add(names[2], best_ok, note=f"agent={best} oracle={ref_best} accepted={accept}")
 
@@ -171,7 +208,9 @@ def grade(task_dir, outputs, heldout_outputs, cache):
     rep = Report("t07-layerwise-rsa")
     grade_one(rep, "visible", task_dir, os.path.join(task_dir, "inputs"), outputs, cache)
     if heldout_outputs:
-        grade_one(rep, "heldout", task_dir, os.path.join(task_dir, "heldout"), heldout_outputs, cache)
+        grade_one(
+            rep, "heldout", task_dir, os.path.join(task_dir, "heldout"), heldout_outputs, cache
+        )
     return rep
 
 

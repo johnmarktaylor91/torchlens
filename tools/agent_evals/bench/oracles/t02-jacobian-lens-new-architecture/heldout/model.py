@@ -1,4 +1,5 @@
 """Seeded byte decoder with alternating causal convolution and attention."""
+
 import numpy as np
 import torch
 from torch import nn
@@ -17,7 +18,9 @@ def parameter(rng, shape, scale):
 class RMSNorm(nn.Module):
     def __init__(self, rng, spread=0.15):
         super().__init__()
-        self.weight = nn.Parameter(torch.from_numpy(rng.lognormal(0.0, spread, WIDTH).astype(np.float32)))
+        self.weight = nn.Parameter(
+            torch.from_numpy(rng.lognormal(0.0, spread, WIDTH).astype(np.float32))
+        )
 
     def forward(self, x):
         return x * torch.rsqrt(x.square().mean(-1, keepdim=True) + 1e-5) * self.weight
@@ -27,8 +30,8 @@ class ConvBlock(nn.Module):
     def __init__(self, rng):
         super().__init__()
         self.norm = RMSNorm(rng)
-        self.depthwise = parameter(rng, (WIDTH, 1, 3), 3 ** -0.5)
-        self.projection = parameter(rng, (WIDTH, WIDTH), WIDTH ** -0.5)
+        self.depthwise = parameter(rng, (WIDTH, 1, 3), 3**-0.5)
+        self.projection = parameter(rng, (WIDTH, WIDTH), WIDTH**-0.5)
         self.gate = parameter(rng, (), 0.5)
 
     def forward(self, x):
@@ -42,8 +45,8 @@ class AttentionBlock(nn.Module):
     def __init__(self, rng):
         super().__init__()
         self.norm = RMSNorm(rng)
-        self.qkv = parameter(rng, (3 * WIDTH, WIDTH), WIDTH ** -0.5)
-        self.projection = parameter(rng, (WIDTH, WIDTH), WIDTH ** -0.5)
+        self.qkv = parameter(rng, (3 * WIDTH, WIDTH), WIDTH**-0.5)
+        self.projection = parameter(rng, (WIDTH, WIDTH), WIDTH**-0.5)
         self.gate = parameter(rng, (), 0.5)
 
     def forward(self, x):
@@ -63,15 +66,16 @@ class ByteDecoder(nn.Module):
         rng = np.random.default_rng(seed)
         self.token_embedding = parameter(rng, (VOCAB, WIDTH), 0.2)
         self.position_embedding = parameter(rng, (MAX_POSITIONS, WIDTH), 0.1)
-        self.blocks = nn.ModuleList([ConvBlock(rng) if i % 2 == 0 else AttentionBlock(rng)
-                                     for i in range(6)])
+        self.blocks = nn.ModuleList(
+            [ConvBlock(rng) if i % 2 == 0 else AttentionBlock(rng) for i in range(6)]
+        )
         self.final_norm = RMSNorm(rng, spread=0.7)
-        self.readout = parameter(rng, (VOCAB, WIDTH), WIDTH ** -0.5)
+        self.readout = parameter(rng, (VOCAB, WIDTH), WIDTH**-0.5)
 
     def embed(self, ids):
         if ids.ndim != 1 or not 0 < len(ids) <= MAX_POSITIONS:
             raise ValueError("expected a nonempty byte sequence of at most 512 positions")
-        return F.embedding(ids, self.token_embedding) + self.position_embedding[:len(ids)]
+        return F.embedding(ids, self.token_embedding) + self.position_embedding[: len(ids)]
 
     def states(self, ids):
         state, recorded = self.embed(ids), []

@@ -1,4 +1,5 @@
 """Independent oracle: explicit attention equations and residual additions."""
+
 import hashlib
 import json
 import os
@@ -16,8 +17,10 @@ def attention(block, h):
     q, k, v = block.attn.c_attn(x).chunk(3, dim=-1)
     batch, length, width = q.shape
     heads = block.attn.num_heads
+
     def split(t):
         return t.reshape(batch, length, heads, width // heads).transpose(1, 2)
+
     q, k, v = map(split, (q, k, v))
     weights = q @ k.transpose(-1, -2) / (width // heads) ** 0.5
     mask = torch.ones(length, length, dtype=torch.bool).triu(1)
@@ -60,27 +63,44 @@ def oracle(inputs, cache):
     if os.path.isfile(path):
         return load_npz(path)
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
     cfg = json.load(open(os.path.join(inputs, "config.json")))
     prompts = json.load(open(os.path.join(inputs, "prompts.json")))
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"], use_fast=True)
     model = AutoModelForCausalLM.from_pretrained(
-        cfg["model"], torch_dtype=torch.float32, attn_implementation="eager").eval()
+        cfg["model"], torch_dtype=torch.float32, attn_implementation="eager"
+    ).eval()
     model.requires_grad_(False)
     rng = np.random.default_rng(cfg["noise_seed"])
-    noise_scale = np.float32(cfg["noise_std_multiplier"] * float(model.transformer.wte.weight.std(unbiased=False)))
-    encodings = [tokenizer(p["text"], add_special_tokens=False, return_offsets_mapping=True) for p in prompts]
+    noise_scale = np.float32(
+        cfg["noise_std_multiplier"] * float(model.transformer.wte.weight.std(unbiased=False))
+    )
+    encodings = [
+        tokenizer(p["text"], add_special_tokens=False, return_offsets_mapping=True) for p in prompts
+    ]
     max_length = max(len(e["input_ids"]) for e in encodings)
-    answer = {s: np.full((len(prompts), 12, max_length), np.nan, np.float32)
-              for s in ("attn", "mlp", "resid")}
-    answer.update(clean_prob=np.empty(len(prompts), np.float32), corrupt_prob=np.empty(len(prompts), np.float32))
+    answer = {
+        s: np.full((len(prompts), 12, max_length), np.nan, np.float32)
+        for s in ("attn", "mlp", "resid")
+    }
+    answer.update(
+        clean_prob=np.empty(len(prompts), np.float32),
+        corrupt_prob=np.empty(len(prompts), np.float32),
+    )
     for row, (p, enc) in enumerate(zip(prompts, encodings)):
         ids = torch.tensor([enc["input_ids"]])
         length = ids.shape[1]
         embeddings = model.transformer.wte(ids)
         noisy = embeddings.clone()
-        indices = [i for i, (start, end) in enumerate(enc["offset_mapping"])
-                   if start < p["subject_end"] and end > p["subject_start"]]
-        noise = rng.standard_normal((len(indices), embeddings.shape[-1])).astype(np.float32) * noise_scale
+        indices = [
+            i
+            for i, (start, end) in enumerate(enc["offset_mapping"])
+            if start < p["subject_end"] and end > p["subject_start"]
+        ]
+        noise = (
+            rng.standard_normal((len(indices), embeddings.shape[-1])).astype(np.float32)
+            * noise_scale
+        )
         noisy[:, indices] += torch.from_numpy(noise)
         positions = model.transformer.wpe(torch.arange(length))[None]
         clean_logits, clean = forward(model, embeddings + positions)
@@ -99,15 +119,22 @@ def oracle(inputs, cache):
             for layer in range(12):
                 for start in range(0, length, cfg["batch_size"]):
                     pos = torch.arange(start, min(start + cfg["batch_size"], length))
-                    out, _ = forward(model, (noisy + positions).expand(len(pos), -1, -1),
-                                     (site, layer, clean[site, layer], pos))
-                    answer[site][row, layer, start:start + len(pos)] = out.softmax(-1)[:, token].numpy()
+                    out, _ = forward(
+                        model,
+                        (noisy + positions).expand(len(pos), -1, -1),
+                        (site, layer, clean[site, layer], pos),
+                    )
+                    answer[site][row, layer, start : start + len(pos)] = out.softmax(-1)[
+                        :, token
+                    ].numpy()
     np.savez(path, **answer)
     return answer
 
 
 def grade_one(rep, label, inputs, outputs, cache):
-    names = [f"{label}:{s}" for s in ("shape", "attn", "mlp", "resid", "clean_prob", "corrupt_prob")]
+    names = [
+        f"{label}:{s}" for s in ("shape", "attn", "mlp", "resid", "clean_prob", "corrupt_prob")
+    ]
     try:
         agent = load_npz(os.path.join(outputs, "heatmap.npz"))
         ref = oracle(inputs, cache)
@@ -118,7 +145,11 @@ def grade_one(rep, label, inputs, outputs, cache):
             value = agent.get(site)
             valid = np.isfinite(expected)
             ok = value is not None and value.shape == expected.shape
-            ok = ok and np.array_equal(np.isnan(value), np.isnan(expected)) and np.isfinite(value[valid]).all()
+            ok = (
+                ok
+                and np.array_equal(np.isnan(value), np.isnan(expected))
+                and np.isfinite(value[valid]).all()
+            )
             corr = pearson(value[valid], expected[valid]) if ok else float("nan")
             rep.add(f"{label}:{site}", ok and corr >= 0.99, corr, 0.99)
         for key in ("clean_prob", "corrupt_prob"):

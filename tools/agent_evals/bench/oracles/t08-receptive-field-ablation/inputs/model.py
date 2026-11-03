@@ -1,4 +1,5 @@
 """Seeded spatial network with stride, padding and dilation."""
+
 import numpy as np
 import torch
 from torch import nn
@@ -32,8 +33,10 @@ def build_model(seed):
     model = Network()
     with torch.no_grad():
         for name, param in sorted(model.named_parameters()):
-            scale = 0.1 if 'bias' in name else 1 / np.sqrt(np.prod(param.shape[1:]))
-            param.copy_(torch.from_numpy((rng.standard_normal(param.shape) * scale).astype(np.float32)))
+            scale = 0.1 if "bias" in name else 1 / np.sqrt(np.prod(param.shape[1:]))
+            param.copy_(
+                torch.from_numpy((rng.standard_normal(param.shape) * scale).astype(np.float32))
+            )
     return model.eval()
 
 

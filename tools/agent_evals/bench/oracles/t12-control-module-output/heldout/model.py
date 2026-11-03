@@ -2,6 +2,7 @@
 
 Build it with ``build_model(weight_seed)``; it is returned in eval mode.
 """
+
 import numpy as np
 import torch
 from torch import nn

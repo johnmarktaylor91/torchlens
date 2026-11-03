@@ -1,6 +1,12 @@
 """Seeded wrong solution: drop_cls (the reference with one deliberate error)."""
-import argparse, os, sys
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "reference"))
+
+import argparse
+import os
+import sys
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "reference")
+)
 import solve as ref  # noqa: E402
 
 p = argparse.ArgumentParser()

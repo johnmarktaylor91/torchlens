@@ -1,4 +1,5 @@
 """Reference: forward hook on the named module, batched, eval mode."""
+
 import argparse
 import importlib.util
 import json
@@ -24,7 +25,7 @@ def main():
     h = module.register_forward_hook(lambda mod, inp, out: chunks.append(out.detach().clone()))
     with torch.no_grad():
         for i in range(0, len(x), 16):
-            model(x[i:i + 16])
+            model(x[i : i + 16])
     h.remove()
     acts = torch.cat(chunks).numpy().astype(np.float32)
     os.makedirs(a.outputs, exist_ok=True)

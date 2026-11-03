@@ -3,6 +3,7 @@ recovered from the hooked tensors (cloned before any in-place update).
 
 ``run(inputs, outputs, variant=None)`` is reused by the seeded wrong solutions.
 """
+
 import argparse
 import importlib.util
 import json
@@ -20,8 +21,9 @@ def load_inputs(inputs):
     spec = importlib.util.spec_from_file_location("stimuli", os.path.join(inputs, "stimuli.py"))
     st = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(st)
-    images, labels = st.make_stimuli(cfg["stimulus_seed"], cfg["n_categories"],
-                                     cfg["per_category"], cfg["image_size"])
+    images, labels = st.make_stimuli(
+        cfg["stimulus_seed"], cfg["n_categories"], cfg["per_category"], cfg["image_size"]
+    )
     mean = torch.tensor(cfg["normalize_mean"]).view(1, 3, 1, 1)
     std = torch.tensor(cfg["normalize_std"]).view(1, 3, 1, 1)
     x = (torch.from_numpy(images) - mean) / std
@@ -29,13 +31,16 @@ def load_inputs(inputs):
 
 
 def cnn_features(x):
-    model = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).eval()
+    model = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1
+    ).eval()
     rec = {}
     handles = []
 
     def save(name):
         def hook(mod, inp, out):
             rec[name] = out.detach().clone()
+
         return hook
 
     def save_relu(prefix):
@@ -50,11 +55,13 @@ def cnn_features(x):
                 rec[f"{prefix}.relu1"] = out.detach().clone()
             else:
                 rec[f"{prefix}.out"] = out.detach().clone()
+
         return hook
 
     def save_block_input(prefix):
         def pre(mod, args):
             rec[f"{prefix}._in"] = args[0].detach().clone()
+
         return pre
 
     handles.append(model.relu.register_forward_hook(save("stem.relu")))
@@ -98,11 +105,13 @@ def vit_features(x):
         def hook(mod, inp, out):
             t = out if index is None else out[index]
             rec[name] = t.detach().clone()
+
         return hook
 
     def save_input(name):
         def pre(mod, args):
             rec[name] = args[0].detach().clone()
+
         return pre
 
     handles.append(vit.embeddings.register_forward_hook(save("embeddings")))
@@ -174,7 +183,9 @@ def run(inputs, outputs, variant=None):
             if variant == "inplace_alias" and lid.endswith(".bn2"):
                 t = feats[lid.replace(".bn2", ".add")].numpy()  # what an un-cloned hook would hold
             if variant == "bn1_alias" and lid.endswith(".bn1"):
-                t = feats[lid.replace(".bn1", ".relu1")].numpy()  # bn1 overwritten by the in-place ReLU
+                t = feats[
+                    lid.replace(".bn1", ".relu1")
+                ].numpy()  # bn1 overwritten by the in-place ReLU
             if variant == "drop_cls" and net == "vit" and t.ndim == 3 and t.shape[1] == 197:
                 t = t[:, 1:, :]  # patch tokens only
             if variant == "transpose":

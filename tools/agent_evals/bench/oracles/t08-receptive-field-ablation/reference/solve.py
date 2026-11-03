@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+
 def load(inputs):
     inputs = Path(inputs)
     cfg = json.loads((inputs / "config.json").read_text())
@@ -14,22 +15,34 @@ def load(inputs):
     spec.loader.exec_module(module)
     return cfg, module
 
+
 def geometry(unit, ignore_padding=False):
     from torch.nn import functional as F
+
     # Inverse connectivity via transposed convolutions with positive kernels.
-    stages = [("relu1", 64, 64, 5, 1, 2, 1), ("pool1", 64, 32, 2, 2, 0, 1),
-              ("relu2", 32, 16, 3, 2, 1, 1), ("relu3", 16, 16, 3, 1, 2, 2)]
+    stages = [
+        ("relu1", 64, 64, 5, 1, 2, 1),
+        ("pool1", 64, 32, 2, 2, 0, 1),
+        ("relu2", 32, 16, 3, 2, 1, 1),
+        ("relu3", 16, 16, 3, 1, 2, 2),
+    ]
     stop = next(i for i, stage in enumerate(stages) if stage[0] == unit["layer"])
     size = stages[stop][2]
     mask = torch.zeros(1, 1, size, size)
     mask[0, 0, unit["row"], unit["column"]] = 1
-    for _, ins, outs, kernel, stride, padding, dilation in reversed(stages[:stop + 1]):
+    for _, ins, outs, kernel, stride, padding, dilation in reversed(stages[: stop + 1]):
         extra = ins - ((outs - 1) * stride - 2 * padding + dilation * (kernel - 1) + 1)
         p = 0 if ignore_padding else padding
-        mask = F.conv_transpose2d(mask, torch.ones(1, 1, kernel, kernel), stride=stride,
-                                  padding=p, dilation=dilation, output_padding=extra)
+        mask = F.conv_transpose2d(
+            mask,
+            torch.ones(1, 1, kernel, kernel),
+            stride=stride,
+            padding=p,
+            dilation=dilation,
+            output_padding=extra,
+        )
         mask = mask[:, :, :ins, :ins]
-        mask = F.pad(mask, (0, ins-mask.shape[-1], 0, ins-mask.shape[-2]))
+        mask = F.pad(mask, (0, ins - mask.shape[-1], 0, ins - mask.shape[-2]))
         mask = (mask > 0).float()
     return mask[0, 0].numpy().astype(bool)
 
@@ -53,10 +66,12 @@ def run(inputs, outputs, variant=None):
         geometric.append(field)
         with torch.no_grad():
             if variant == "unit_ablation":
+
                 def zero_unit(mod, args, out):
                     result = out.clone()
                     result[:, unit["channel"], unit["row"], unit["column"]] = 0
                     return result
+
                 handle = getattr(m, unit["layer"]).register_forward_hook(zero_unit)
                 try:
                     changed = m(x)[:, 0]
@@ -78,6 +93,7 @@ def run(inputs, outputs, variant=None):
     np.savez(outputs / "geometric.npz", masks=geo)
     np.savez(outputs / "gradient.npz", masks=grad)
     np.savez(outputs / "ablation.npz", effects=effect)
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

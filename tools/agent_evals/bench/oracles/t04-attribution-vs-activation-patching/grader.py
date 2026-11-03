@@ -1,4 +1,5 @@
 """Independent oracle: explicit attention and one replacement per forward."""
+
 import hashlib
 import json
 import os
@@ -31,8 +32,9 @@ def evaluate(model, ids, positive, negative, replacement=None):
         heads = head_results(block, state)
         if replacement is not None and layer == replacement[0]:
             head, donor = replacement[1:]
-            heads = torch.cat((heads[:, :, :head], donor[:, :, head:head + 1],
-                               heads[:, :, head + 1:]), dim=2)
+            heads = torch.cat(
+                (heads[:, :, :head], donor[:, :, head : head + 1], heads[:, :, head + 1 :]), dim=2
+            )
         recorded.append(heads)
         state = state + block.attn.c_proj(heads.reshape(ids.shape[0], length, 768))
         normalized = block.ln_2(state)
@@ -50,16 +52,22 @@ def oracle(inputs, cache):
     if os.path.isfile(path):
         return load_npz(path)
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
     cfg = json.load(open(os.path.join(inputs, "config.json")))
     prompts = json.load(open(os.path.join(inputs, "prompts.json")))
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"])
     model = AutoModelForCausalLM.from_pretrained(
-        cfg["model"], torch_dtype=torch.float32, attn_implementation="eager").eval()
+        cfg["model"], torch_dtype=torch.float32, attn_implementation="eager"
+    ).eval()
     model.requires_grad_(False)
-    clean, corrupt = [tokenizer(x, return_tensors="pt", add_special_tokens=False).input_ids
-                      for x in (prompts["clean"], prompts["corrupt"])]
-    positive, negative = [tokenizer.encode(prompts[k], add_special_tokens=False)[0]
-                          for k in ("positive_token", "negative_token")]
+    clean, corrupt = [
+        tokenizer(x, return_tensors="pt", add_special_tokens=False).input_ids
+        for x in (prompts["clean"], prompts["corrupt"])
+    ]
+    positive, negative = [
+        tokenizer.encode(prompts[k], add_special_tokens=False)[0]
+        for k in ("positive_token", "negative_token")
+    ]
     if clean.shape != corrupt.shape:
         raise ValueError("unequal pair lengths")
     with torch.no_grad():
@@ -69,33 +77,50 @@ def oracle(inputs, cache):
             raise AssertionError("explicit attention disagrees with model baseline")
     clean_metric, heads = evaluate(model, clean, positive, negative)
     derivatives = torch.autograd.grad(clean_metric.sum(), heads)
-    attribution = torch.stack([
-        torch.einsum("bthd,bthd->h", derivative, donor - original).detach()
-        for derivative, donor, original in zip(derivatives, donors, heads)]).numpy()
+    attribution = torch.stack(
+        [
+            torch.einsum("bthd,bthd->h", derivative, donor - original).detach()
+            for derivative, donor, original in zip(derivatives, donors, heads)
+        ]
+    ).numpy()
     exact = np.empty((12, 12), np.float32)
     with torch.no_grad():
         for layer in range(12):
             for head in range(12):
-                restored, _ = evaluate(model, clean, positive, negative, (layer, head, donors[layer]))
+                restored, _ = evaluate(
+                    model, clean, positive, negative, (layer, head, donors[layer])
+                )
                 exact[layer, head] = (restored - clean_metric).item()
-    answer = dict(exact=exact, attribution=attribution,
-                  clean_metric=clean_metric.detach().numpy().reshape(()),
-                  corrupt_metric=corrupt_metric.numpy().reshape(()))
+    answer = {
+        "exact": exact,
+        "attribution": attribution,
+        "clean_metric": clean_metric.detach().numpy().reshape(()),
+        "corrupt_metric": corrupt_metric.numpy().reshape(()),
+    }
     np.savez(path, **answer)
     return answer
 
 
 def grade_one(rep, label, inputs, outputs, cache):
-    names = [f"{label}:{key}" for key in ("shape", "exact", "attribution", "clean_metric", "corrupt_metric")]
+    names = [
+        f"{label}:{key}"
+        for key in ("shape", "exact", "attribution", "clean_metric", "corrupt_metric")
+    ]
     try:
         agent = load_npz(os.path.join(outputs, "patching.npz"))
         ref = oracle(inputs, cache)
-        valid = all(key in agent and agent[key].shape == value.shape
-                    and np.isfinite(agent[key]).all() for key, value in ref.items())
+        valid = all(
+            key in agent and agent[key].shape == value.shape and np.isfinite(agent[key]).all()
+            for key, value in ref.items()
+        )
         rep.add(names[0], valid)
         for key in ("exact", "attribution"):
             arr = agent.get(key, np.array([]))
-            score = spearman(arr, ref[key]) if arr.shape == ref[key].shape and np.isfinite(arr).all() else float("nan")
+            score = (
+                spearman(arr, ref[key])
+                if arr.shape == ref[key].shape and np.isfinite(arr).all()
+                else float("nan")
+            )
             rep.add(f"{label}:{key}", score >= 0.98, score, 0.98)
         for key in ("clean_metric", "corrupt_metric"):
             err = max_abs(agent.get(key, np.array([])), ref[key])

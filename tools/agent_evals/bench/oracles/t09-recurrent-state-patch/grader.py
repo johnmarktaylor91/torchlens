@@ -1,13 +1,14 @@
 import importlib.util
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_common"))
 from grade_utils import Report, grader_main, load_npz, max_abs
+
 
 def load(inputs):
     inputs = Path(inputs)
@@ -16,6 +17,7 @@ def load(inputs):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return cfg, module
+
 
 def cell(model, tokens, state):
     x = model.embedding(tokens)
@@ -40,8 +42,10 @@ def oracle(inputs, cache_file):
         return load_npz(cache_file)
     cfg, module = load(inputs)
     model = module.build_model(cfg["weight_seed"])
-    clean, corrupt = [torch.from_numpy(x) for x in module.make_pairs(
-        cfg["stimulus_seed"], cfg["n_pairs"], cfg["length"])]
+    clean, corrupt = [
+        torch.from_numpy(x)
+        for x in module.make_pairs(cfg["stimulus_seed"], cfg["n_pairs"], cfg["length"])
+    ]
     states, native = [], []
     for sequence in (clean, corrupt):
         state = torch.zeros(2, len(clean), 48)
@@ -58,7 +62,7 @@ def oracle(inputs, cache_file):
         for time in range(k + 1, cfg["length"]):
             state = cell(model, corrupt[:, time], state)
             patched[:, j, time] = model.readout(state[-1]).numpy()
-    result = dict(logits=patched, clean_logits=native[0], corrupt_logits=native[1])
+    result = {"logits": patched, "clean_logits": native[0], "corrupt_logits": native[1]}
     np.savez(cache_file, **result)
     return result
 
@@ -68,11 +72,19 @@ def grade_one(rep, label, inputs, outputs, cache):
     ref = oracle(inputs, Path(cache) / f"t09_{label}.npz")
     try:
         got = load_npz(Path(outputs) / "patched.npz")
-        valid = all(k in got and got[k].shape == v.shape and got[k].dtype == np.float32
-                    and np.array_equal(np.isnan(got[k]), np.isnan(v))
-                    and np.isfinite(got[k][np.isfinite(v)]).all() for k, v in ref.items())
-        error = max(max_abs(got[k][np.isfinite(v)], v[np.isfinite(v)])
-                    for k, v in ref.items()) if valid else float("inf")
+        valid = all(
+            k in got
+            and got[k].shape == v.shape
+            and got[k].dtype == np.float32
+            and np.array_equal(np.isnan(got[k]), np.isnan(v))
+            and np.isfinite(got[k][np.isfinite(v)]).all()
+            for k, v in ref.items()
+        )
+        error = (
+            max(max_abs(got[k][np.isfinite(v)], v[np.isfinite(v)]) for k, v in ref.items())
+            if valid
+            else float("inf")
+        )
     except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
         return

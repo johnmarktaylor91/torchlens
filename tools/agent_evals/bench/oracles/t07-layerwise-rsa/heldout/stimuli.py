@@ -5,6 +5,7 @@
 ordered category-major (all exemplars of category 0 first), labels ``[N]``.
 Exemplars vary in position, size, rotation, brightness and background noise.
 """
+
 import numpy as np
 
 SHAPES = ("disc", "square", "bar", "ring")
@@ -18,14 +19,14 @@ def _mask(shape, size, cx, cy, r, theta):
     xr = np.cos(theta) * x + np.sin(theta) * y
     yr = -np.sin(theta) * x + np.cos(theta) * y
     if shape == "disc":
-        return (xr ** 2 + yr ** 2) <= r ** 2
+        return (xr**2 + yr**2) <= r**2
     if shape == "square":
         return (np.abs(xr) <= r) & (np.abs(yr) <= r)
     if shape == "bar":
         return (np.abs(xr) <= r) & (np.abs(yr) <= r / 3.5)
     if shape == "ring":
-        d2 = xr ** 2 + yr ** 2
-        return (d2 <= r ** 2) & (d2 >= (0.6 * r) ** 2)
+        d2 = xr**2 + yr**2
+        return (d2 <= r**2) & (d2 >= (0.6 * r) ** 2)
     raise ValueError(shape)
 
 

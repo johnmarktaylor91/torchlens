@@ -1,5 +1,10 @@
 """Seeded wrong solution: wrong_module."""
-import argparse, importlib.util, json, os
+
+import argparse
+import importlib.util
+import json
+import os
+
 import numpy as np
 import torch
 
@@ -29,7 +34,7 @@ def main():
     h = module.register_forward_hook(lambda mod, inp, out: chunks.append(out.detach().clone()))
     with torch.no_grad():
         for i in range(0, len(x), 16):
-            model(x[i:i + 16])
+            model(x[i : i + 16])
     h.remove()
     acts = torch.cat(chunks).numpy().astype(np.float32)
     if VARIANT == "transpose":

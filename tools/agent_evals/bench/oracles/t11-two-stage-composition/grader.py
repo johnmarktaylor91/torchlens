@@ -1,22 +1,23 @@
-import importlib.util
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_common"))
-from grade_utils import Report, grader_main, load_npz, load_json, max_abs
-
+from grade_utils import Report, grader_main, load_json, load_npz, max_abs
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def aligned(tokenizer, text, span):
     encoded = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
     # Independent alignment: exact positive overlap of token and character spans.
-    indices = [i for i, (start, end) in enumerate(encoded["offset_mapping"])
-               if end > start and end > span[0] and start < span[1]]
+    indices = [
+        i
+        for i, (start, end) in enumerate(encoded["offset_mapping"])
+        if end > start and end > span[0] and start < span[1]
+    ]
     if not indices or indices != list(range(indices[0], indices[-1] + 1)):
         raise ValueError("Expected a nonempty contiguous token span")
     return torch.tensor([encoded["input_ids"]]), [indices[0], indices[-1] + 1]
@@ -32,8 +33,9 @@ def oracle(inputs, cache_file):
         return load_npz(cache_file)
     cfg, items = load_json(Path(inputs) / "config.json"), load_json(Path(inputs) / "items.json")
     tokenizer = AutoTokenizer.from_pretrained(cfg["model"], use_fast=True)
-    model = AutoModelForCausalLM.from_pretrained(cfg["model"], torch_dtype=torch.float32,
-                                                attn_implementation=cfg["attention_implementation"]).eval()
+    model = AutoModelForCausalLM.from_pretrained(
+        cfg["model"], torch_dtype=torch.float32, attn_implementation=cfg["attention_implementation"]
+    ).eval()
     # The input to block 7 is exactly the residual after block 6. This avoids
     # the reference's hidden-state output extraction and block-forward replacement.
     next_block = model.transformer.h[cfg["layer"] + 1]
@@ -42,8 +44,10 @@ def oracle(inputs, cache_file):
         source, sr = aligned(tokenizer, item["source"], item["source_span"])
         target, tr = aligned(tokenizer, item["target"], item["target_span"])
         saved = []
+
         def capture(mod, args, kwargs):
-            saved.append(hidden_argument(args, kwargs)[:, sr[0]:sr[1]].clone())
+            saved.append(hidden_argument(args, kwargs)[:, sr[0] : sr[1]].clone())
+
         handle = next_block.register_forward_pre_hook(capture, with_kwargs=True)
         try:
             model(input_ids=source, use_cache=False)
@@ -53,38 +57,58 @@ def oracle(inputs, cache_file):
         source_length, target_length = sr[1] - sr[0], tr[1] - tr[0]
         indices = torch.arange(target_length).clamp(max=source_length - 1)
         donor = representation.index_select(1, indices)
-        mode = "none" if source_length == target_length else (
-            "truncate" if source_length > target_length else "repeat_last")
+        mode = (
+            "none"
+            if source_length == target_length
+            else ("truncate" if source_length > target_length else "repeat_last")
+        )
         base.append(model(input_ids=target, use_cache=False).logits[0, -1].numpy())
+
         def intervene(mod, args, kwargs):
             h = hidden_argument(args, kwargs).clone()
-            h[:, tr[0]:tr[1]] = donor
+            h[:, tr[0] : tr[1]] = donor
             if args:
                 return (h, *args[1:]), kwargs
             return args, {**kwargs, "hidden_states": h}
+
         handle = next_block.register_forward_pre_hook(intervene, with_kwargs=True)
         try:
             patched.append(model(input_ids=target, use_cache=False).logits[0, -1].numpy())
         finally:
             handle.remove()
-        alignments.append(dict(source_range=sr, target_range=tr, adaptation=mode))
-    result = dict(patched_logits=np.stack(patched), baseline_logits=np.stack(base),
-                  alignment=np.array(json.dumps(alignments)))
+        alignments.append({"source_range": sr, "target_range": tr, "adaptation": mode})
+    result = {
+        "patched_logits": np.stack(patched),
+        "baseline_logits": np.stack(base),
+        "alignment": np.array(json.dumps(alignments)),
+    }
     np.savez(cache_file, **result)
     return result
 
 
 def grade_one(rep, label, inputs, outputs, cache):
-    names = [f"{label}:{key}" for key in ("shapes", "alignment_exact", "patched_max_abs", "baseline_max_abs")]
+    names = [
+        f"{label}:{key}"
+        for key in ("shapes", "alignment_exact", "patched_max_abs", "baseline_max_abs")
+    ]
     ref = oracle(inputs, Path(cache) / f"t11_{label}.npz")
     try:
         got = load_npz(Path(outputs) / "composition.npz")
         alignment = load_json(Path(outputs) / "alignment.json")
         expected_alignment = json.loads(str(ref["alignment"]))
-        valid = all(key in got and got[key].shape == ref[key].shape and got[key].dtype == np.float32
-                    and np.isfinite(got[key]).all() for key in ("patched_logits", "baseline_logits"))
-        patched_error = max_abs(got["patched_logits"], ref["patched_logits"]) if valid else float("inf")
-        baseline_error = max_abs(got["baseline_logits"], ref["baseline_logits"]) if valid else float("inf")
+        valid = all(
+            key in got
+            and got[key].shape == ref[key].shape
+            and got[key].dtype == np.float32
+            and np.isfinite(got[key]).all()
+            for key in ("patched_logits", "baseline_logits")
+        )
+        patched_error = (
+            max_abs(got["patched_logits"], ref["patched_logits"]) if valid else float("inf")
+        )
+        baseline_error = (
+            max_abs(got["baseline_logits"], ref["baseline_logits"]) if valid else float("inf")
+        )
         align_ok = alignment == expected_alignment
     except Exception as exc:  # Malformed solution files fail at this boundary.
         rep.fail_all(names, str(exc))
