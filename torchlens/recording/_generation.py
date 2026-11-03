@@ -603,8 +603,7 @@ def _seeded_settings(
 
 def record_generation(
     model: nn.Module,
-    input_args: Any,
-    input_kwargs: Mapping[str, Any] | None,
+    prompt: tuple[Any, Mapping[str, Any] | None],
     generate_kwargs: Mapping[str, Any],
     recorder_kwargs: dict[str, Any],
     generation: GenerationOptions | None = None,
@@ -616,8 +615,8 @@ def record_generation(
     model:
         A model with a Hugging Face style ``generate`` that passes its KV cache
         to ``forward``.
-    input_args, input_kwargs:
-        Prompt arguments forwarded to ``generate``.
+    prompt:
+        ``(input_args, input_kwargs)``, the prompt arguments forwarded to ``generate``.
     generate_kwargs:
         Generation settings forwarded verbatim to ``generate``.
     recorder_kwargs:
@@ -632,6 +631,7 @@ def record_generation(
         ``generate()``'s own return value and the recording.
     """
 
+    input_args, input_kwargs = prompt
     prompt_kwargs = dict(input_kwargs or {})
     settings = preflight_generation(
         model, input_args, prompt_kwargs, generate_kwargs, recorder_kwargs

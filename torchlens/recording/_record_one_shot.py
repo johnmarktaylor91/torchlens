@@ -283,7 +283,7 @@ def record(
     }
     if generate_kwargs is not None:
         output, generated = record_generation(
-            model, inputs, input_kwargs, generate_kwargs, recorder_kwargs, generation
+            model, (inputs, input_kwargs), generate_kwargs, recorder_kwargs, generation
         )
         object.__setattr__(generated.recording, "_output", output_returned(output))
         return enrich_generation(generated, postprocess)
