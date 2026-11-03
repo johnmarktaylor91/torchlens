@@ -566,8 +566,10 @@ def settle_edited_product(trace: Any) -> None:
     """Inherited evidence no longer describes an edited product.
 
     Episode step evidence is quarantined (lane F42) and the decoded output
-    rows captured with the clean forward are recomputed from the edited
-    output, so ``decode_output`` on the fork names the fork's answer.
+    rows captured with the clean forward are dropped: ``decode_output`` then
+    re-decodes the edited output on demand, so the fork names its own answer,
+    and refuses (``decoded_output_unavailable``) when no output is retained
+    rather than answering stale.
 
     Parameters
     ----------
@@ -576,6 +578,5 @@ def settle_edited_product(trace: Any) -> None:
     """
 
     quarantine_episode_after_perturbed_replay(trace)
-    from ..stats._trace_tables import refresh_decoded_output
-
-    refresh_decoded_output(trace)
+    if getattr(trace, "_decoded_output", None) is not None:
+        trace._decoded_output = None
