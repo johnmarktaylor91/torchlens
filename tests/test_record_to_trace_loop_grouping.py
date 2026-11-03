@@ -129,3 +129,33 @@ def test_cooked_recording_resolves_parameters_without_holding_them() -> None:
     second_cook = second.to_trace()
     assert first_cook.params["cell.weight"] is not inventory["cell.weight"]
     assert first_cook.params["cell.weight"] is not second_cook.params["cell.weight"]
+
+
+def _torchvision_model(name: str) -> nn.Module:
+    torchvision = pytest.importorskip("torchvision")
+    torch.manual_seed(0)
+    return getattr(torchvision.models, name)(weights=None).eval()
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize("name", ["resnet18", "mobilenet_v3_small"])
+def test_cooked_torchvision_recording_matches_trace(name: str) -> None:
+    """A cooked recording of a torchvision classic has the exhaustive capture's layers.
+
+    Layer count, ordered layer labels, pass grouping and the multiset of module
+    addresses all agree; the builder, never the expectation, is what a mismatch
+    indicts.
+    """
+
+    x = torch.rand(1, 3, 64, 64)
+    exhaustive = tl.trace(_torchvision_model(name), x)
+    cooked = tl.record(_torchvision_model(name), x, save=lambda ctx: ctx.kind == "op").to_trace()
+
+    assert len(cooked.layers) == len(exhaustive.layers)
+    assert [layer.layer_label for layer in cooked.layers] == [
+        layer.layer_label for layer in exhaustive.layers
+    ]
+    assert _grouping(cooked) == _grouping(exhaustive)
+    assert sorted(str(op.address) for op in cooked.ops) == sorted(
+        str(op.address) for op in exhaustive.ops
+    )

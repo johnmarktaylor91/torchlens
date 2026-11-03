@@ -7,6 +7,9 @@ true. An eval-mode call reads the statistics and writes nothing, so journaling a
 write for it invents two buffer-version layers per normalization layer that the
 eager computation does not have. The decision reads the declared flag, never a
 value comparison, so a weights-free (meta) capture decides it identically.
+``native_group_norm`` is not a mutator: GroupNorm keeps no running statistics
+and the call only reads its input, weight and bias, so a registered buffer
+handed to it is never journaled as written.
 """
 
 from __future__ import annotations
@@ -24,7 +27,6 @@ _FUSED_MUTATOR_NAMES = frozenset(
         "_native_batch_norm_legit_no_training",
         "cudnn_batch_norm",
         "instance_norm",
-        "native_group_norm",
     }
 )
 

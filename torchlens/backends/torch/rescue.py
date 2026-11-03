@@ -384,13 +384,12 @@ def _buffer_write_labels(trace: Trace) -> tuple[str, ...]:
     registered buffer) still mutates twice on rescued captures -- the
     documented residual (see docs/migration/scoped_detached_patching.md).
 
-    The refusal keys on an ACTUAL write, not on journal presence: fused norm
-    mutators (``batch_norm``, ``instance_norm``, ``native_group_norm``) are
-    journaled unconditionally, so every EVAL-mode BN/IN/GN capture carries
-    ``buffer_write_kind`` records whose ``buffer_value_changed`` is ``False``
-    (bytes provably unchanged; re-running is state-neutral). Only a record
-    whose value changed -- or whose change status is unknown (fail closed) --
-    refuses the re-run.
+    The refusal keys on an ACTUAL write, not on journal presence: a fused norm
+    mutator (``batch_norm``, ``instance_norm``) whose update flag is on is
+    journaled on its declaration, so a capture may carry ``buffer_write_kind``
+    records whose ``buffer_value_changed`` is ``False`` (bytes provably
+    unchanged; re-running is state-neutral). Only a record whose value changed
+    -- or whose change status is unknown (fail closed) -- refuses the re-run.
     """
 
     labels: list[str] = []
