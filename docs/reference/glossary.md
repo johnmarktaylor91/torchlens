@@ -2240,7 +2240,9 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `trace[selector]` (the one
   resolution door) returns a `tl.Selection` — frozen, trace-bound, an ordered
-  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped; a
+  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped (a row's
+  `.record` is the `Op`, `Param` or `EdgeUseRecord` it names, read through a weak
+  link to the trace; `selection_trace_released` once the trace is gone); a
   spelling that names one thing (an exact label, a target spec, a facet
   selector) must match exactly one site and returns that record
   (`site_spelling_not_unique` otherwise). `Selection` is a container: `len`,
@@ -2494,7 +2496,8 @@ shim owed; S2-gated*
   `site_not_in_trace | value_not_saved | non_tensor_site | no_index_space |
   mask_shape_mismatch | facet_write_mask_unavailable | population_too_small |
   multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`),
-  `selection_apply_invalid` (stage 2), and `slice_save_unsupported`
+  `selection_apply_invalid` (stage 2), `selection_trace_released` (`Site.record`
+  after the trace was released), and `slice_save_unsupported`
   (`Trace.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
   is the `tl.units` face of the multi-pass bare-label ambiguity refusal: a
   bare layer label addresses only single-pass layers, and each pass of a
