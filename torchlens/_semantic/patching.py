@@ -461,7 +461,11 @@ def _baseline_traces(
     kwargs = _trace_kwargs(trace_kwargs, save_grads=save_grads)
 
     def _capture(inputs: Any) -> Callable[[], Any]:
+        """Return a zero-argument capture that traces ``model`` on ``inputs``."""
+
         def _run() -> Any:
+            """Reset the model/RNG state to the pristine snapshot and trace once."""
+
             guard.reset()
             return trace(model, inputs, **kwargs)
 
@@ -840,6 +844,8 @@ def _run_patch(
     tracked_hook = _counting_hook(hook, fire_ledger)
 
     def _capture() -> Any:
+        """Fork the corrupted trace, attach the counting hook, and rerun from the pristine state."""
+
         fire_ledger.update(fires=0, identical=0)
         log = corrupted_log.fork(name)
         log.attach_hooks(selector, tracked_hook)
@@ -904,6 +910,8 @@ def _run_input_patch(
     patched_input = _patch_input_leaf(corrupted_input, model, input_role, _tracked_input_patch)
 
     def _capture() -> Any:
+        """Fork the corrupted trace and rerun it on the patched input from the pristine state."""
+
         log = corrupted_log.fork(name)
         guard.reset()
         log.run(model, patched_input)
