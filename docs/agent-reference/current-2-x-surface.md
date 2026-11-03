@@ -573,7 +573,10 @@
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
-  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  rows; `CaptureOptions(aten_ops="values")` additionally keeps what each call returned in
+  `AtenOp.out` (a tensor, a tuple per `output_tensor_facts`, or `None`), as detached snapshots under
+  the capture's `save=` / `save_mode` / `output_device` / `save_budget` policy, persisted with
+  `Op.out`; any other spelling refuses `aten_ops_invalid`. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
   from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
   op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
   observe (empty when complete). With the switch off nothing is installed and every accessor

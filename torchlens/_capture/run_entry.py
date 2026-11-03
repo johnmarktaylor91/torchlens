@@ -10,7 +10,7 @@ import inspect
 from collections.abc import Callable, Collection
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -196,7 +196,7 @@ def _run_model_and_save_specified_outs(
     structure_only: bool = False,
     log_injections: bool = False,
     measure_host_peak_memory: bool = False,
-    aten_ops: bool = False,
+    aten_ops: bool | Literal["values"] = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -341,7 +341,8 @@ def _run_model_and_save_specified_outs(
             knob; never changes control flow).
         log_injections: Record intervention-hook torch calls as injected-op records.
         measure_host_peak_memory: Measure CPU peaks (resets the process ``VmHWM``).
-        aten_ops: Record the ATen operations each logged torch call dispatched to.
+        aten_ops: Record the ATen operations each logged torch call dispatched to
+            (``"values"`` also keeps their output tensors).
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.

@@ -308,7 +308,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 ### Documented-unstable ATen profile INDEX
 
-The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)` and
+The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)`
+(value-free rows) or `CaptureOptions(aten_ops="values")` (rows plus each call's output tensors in
+`AtenOp.out`) and
 served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`, `Trace.aten_gaps` and
 `Op.aten_ops` (entries below this index); an absent profile refuses typed with
 `AtenOpsUnavailableError` (`aten_ops_unavailable`). As of the tlspec v8 coordinated bump the
@@ -323,13 +325,13 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 | --- | --- | --- |
 | Facades, record kind, disclosure, and provenance | `AtenOp`, `OpRef`, `SuperAtenOp`, `primitive_op`, `mode_paused_interior`, `exact_via_aten`, `heuristic` | unstable -- no deprecation shim owed |
 | Field-order contract | `PRIMITIVE_OP_FIELD_ORDER` | unstable -- no deprecation shim owed |
-| Primitive fields | `label`, `sequence`, `capture_phase`, `forward_pass_index`, `backward_epoch_index`, `owner_func_call_id`, `parent_op_refs`, `parent_grad_fn_call_ref`, `owner_status`, `decomposition_slot`, `namespace`, `operator`, `overload`, `schema`, `schema_fingerprint`, `module_call_stack`, `input_tensor_facts`, `output_tensor_facts`, `mutation_kind`, `view_copy_kind`, `autocast_context`, `dispatch_key_context`, `grad_fn_ref`, `grad_fn_link_status`, `grad_fn_link_provenance`, `algorithmic_flops`, `flop_status`, `flop_formula_source`, `flop_formula_version`, `outcome`, `exception_type`, `execution_context` | unstable -- no deprecation shim owed |
+| Primitive fields | `label`, `sequence`, `capture_phase`, `forward_pass_index`, `backward_epoch_index`, `owner_func_call_id`, `parent_op_refs`, `parent_grad_fn_call_ref`, `owner_status`, `decomposition_slot`, `namespace`, `operator`, `overload`, `schema`, `schema_fingerprint`, `module_call_stack`, `input_tensor_facts`, `output_tensor_facts`, `mutation_kind`, `view_copy_kind`, `autocast_context`, `dispatch_key_context`, `grad_fn_ref`, `grad_fn_link_status`, `grad_fn_link_provenance`, `algorithmic_flops`, `flop_status`, `flop_formula_source`, `flop_formula_version`, `outcome`, `exception_type`, `execution_context`, `out` | unstable -- no deprecation shim owed |
 | Observer-gap fields | `kind`, `capture_phase`, `sequence_before`, `sequence_after`, `owner_func_call_id`, `parent_op_refs`, `reason` | unstable -- no deprecation shim owed |
 | Redundant Op-reference fields | `op_row_index`, `op_label`, `func_call_id` | unstable -- no deprecation shim owed |
 | Tensor-fact fields | `container_path`, `tensor_impl_capability`, `logical_version`, `storage_alias_group`, `shape`, `stride`, `dtype`, `device`, `layout`, `requires_grad` | unstable -- no deprecation shim owed |
 | Execution-context fields | `pytorch_version`, `backend`, `device_model`, `device_capability`, `grad_mode`, `inference_mode`, `module_training_summary`, `autocast`, `deterministic_algorithms`, `tf32_matmul_policy`, `sdpa_policy`, `compile_stance`, `owner_thread_coverage`, `completeness_witness_mode` | unstable -- no deprecation shim owed |
 | Super comparison fields | `comparison_status`, `has_observation_gap` | unstable -- no deprecation shim owed |
-| Invariant contracts | `primitive_op_invariants`, `non_torch_primitive_op_inert` | unstable -- no deprecation shim owed |
+| Invariant contracts | `primitive_op_invariants`, `non_torch_primitive_op_inert`, `aten_values_consistent` | unstable -- no deprecation shim owed |
 | Switch-active load failures | `primitive_op_schema_invalid`, `primitive_op_fk_invalid` | unstable -- no deprecation shim owed |
 | Capture phases | `forward`, `backward`, `setup` | unstable -- no deprecation shim owed |
 | Mutation classes | `none`, `in_place`, `out_variant`, `metadata_only`, `unknown` | unstable -- no deprecation shim owed |
@@ -346,12 +348,15 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 
 **aten_ops (CaptureOptions)**
 : Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
-  dispatched to, as value-free `AtenOp` rows, through a dispatch mode installed for the forward
-  and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
+  dispatched to, as `AtenOp` rows, through a dispatch mode installed for the forward and, with
+  `backward_ready=True`, for `Trace.backward()` / `log_backward()`. `True` keeps the rows
+  value-free; `"values"` additionally keeps what each call returned in `AtenOp.out`, under the
+  capture's save policy (the `save=` selection, `save_mode`, `output_device`, `save_budget`); any
+  other value refuses typed (`InvalidArgumentError`, `aten_ops_invalid`). The default installs
   no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
   `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
   loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
-  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
+  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026); `"values"` literal: aten-values lane (3 Nov 2026).
 
 **Trace.has_aten_ops**
 : `True` when the trace carries recorded ATen operations: after a capture with
@@ -377,6 +382,31 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   yields an empty tuple while the trace still `has_aten_ops`. Raises `AtenOpsUnavailableError`
   when the owning trace recorded none.
 
+**AtenOp.out** -- *unstable -- no deprecation shim owed*
+: What the ATen call returned, mirroring `Op.out`: a tensor for a single-tensor result, a tuple of
+  tensors (one per `output_tensor_facts` entry, in the same order) for a container result, `None`
+  when no value was kept. Recorded only under `CaptureOptions(aten_ops="values")`; otherwise every
+  row reads `None`. Each value is a snapshot copied below autograd at the moment the call returned:
+  it never carries a `grad_fn` (`detach_saved_activations=False` attaches `Op.out`, not these), an
+  in-place call's value is the mutated tensor as returned, a view's value is the view's content, and
+  aliasing between rows is not preserved (`view_copy_kind` and `storage_alias_group` describe it).
+  Which rows keep values follows the owning torch call: a forward row keeps its value when an `Op`
+  of its call saved its output (`has_saved_activation`), so `save=` restricts ATen values the way
+  it restricts `Op.out`; a dropped owner frees its values during the forward. Backward rows (with
+  `backward_ready=True`) and orphan rows keep values unconditionally. Values honour `save_mode`
+  (`"reference"` becomes a copy for in-place calls), `output_device` and the `save_budget` (each
+  value is admitted like an activation; the budget error names `aten:<operator>.<overload>`). Not
+  retained when activations stream to disk or an out sink is active (every row reads `None`; a
+  typed gap, see limitations). Persist and load with `Op.out` (`BLOB_RECURSIVE`;
+  `include_outs=False` drops them while the facts stay). The `aten_values_consistent` invariant
+  checks every kept value against its facts and, under `save_mode="copy"`, that some row beneath
+  each saved op equals the op's `out`.
+  A `run()` refresh re-records the profile against the new input, so values follow `Op.out`; the
+  fast tier (`run(inputs=..., fast=True)`, and the guarded fast rerun behind `run(model, x)` with
+  staged hooks) never re-records ATen values, so it refuses a values capture with
+  `run_capability_unavailable` at stage `fast_run_aten_values_unsupported` and the legacy door
+  falls back to the capture engine.
+
 **AtenOpsUnavailableError**
 : `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code
   `aten_ops_unavailable` in `exc.fields["code"]`: `Trace.aten_ops`, `Trace.aten_gaps` or
@@ -384,7 +414,8 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   artifact was saved without it, or the trace is a `run(fast=True)` result). The message names the
   remedy, `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first to avoid it.
 
-`AtenOp` is one value-free dispatcher call measured during a concrete capture. Its label is opaque,
+`AtenOp` is one dispatcher call measured during a concrete capture (value-free unless
+`aten_ops="values"` filled `out`). Its label is opaque,
 capture-local, and intentionally excluded from universal Trace string lookup. `OpRef` is a redundant
 dense foreign key whose row index, Op label, and function-call witness must all agree. A
 `mode_paused_interior` entry says only that TorchLens paused its owned dispatch observer around a

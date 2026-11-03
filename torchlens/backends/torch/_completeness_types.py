@@ -89,6 +89,14 @@ class _WitnessState:
     record_escapes: bool = False
     ledger: bool = False
     record_aten: bool = False
+    record_aten_values: bool = False
+    """``CaptureOptions(aten_ops="values")``: keep each recorded ATen call's output
+    tensor(s) on its event, under the owner Op's save rules."""
+    aten_value_cells: dict[int, list[Any]] = field(default_factory=dict)
+    """Speculatively kept value cells by owner wrapper call id, awaiting that
+    owner's ``save=`` verdict (``_aten_capture._note_aten_owner_verdict``)."""
+    aten_owner_verdicts: dict[int, str] = field(default_factory=dict)
+    """Owner wrapper call id -> ``keep`` | ``deferred`` | ``drop`` (never downgraded)."""
     plane_p: bool = False
     """Merge-ranks C2 plane-P: record EVERY dispatched op (any namespace,
     paused windows included) for armed distributed captures. Feeds the

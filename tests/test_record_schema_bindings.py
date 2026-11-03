@@ -121,7 +121,9 @@ def test_primitive_bindings_match_the_promoted_candidate_kinds() -> None:
     assert candidate["output_tensor_facts"] == "SCALAR"
     assert candidate["label"] == "INTERNED"
     assert candidate["execution_context"] == "INTERNED"
-    assert set(candidate.values()) == {"EDGE", "INTERNED", "SCALAR"}
+    # ``out`` (aten_ops="values") is the one payload cell a primitive row carries.
+    assert candidate["out"] == "PAYLOAD"
+    assert set(candidate.values()) == {"EDGE", "INTERNED", "SCALAR", "PAYLOAD"}
 
 
 @pytest.mark.heavy

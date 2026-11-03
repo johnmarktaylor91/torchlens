@@ -45,6 +45,7 @@ _DOCUMENTED_UNSTABLE_ATEN_TOKENS = {
     "has_observation_gap",
     "primitive_op_invariants",
     "non_torch_primitive_op_inert",
+    "aten_values_consistent",
     "primitive_op_schema_invalid",
     "primitive_op_fk_invalid",
     "forward",

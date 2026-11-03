@@ -51,7 +51,7 @@ torchlens/_capture/projectors.py	1018
 torchlens/_capture/projectors.py::RecordingProjector.project	87
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
 torchlens/_capture/projectors.py::RefreshProjector.project	89
-torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	240
+torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	241
 torchlens/_capture/session.py	1283
 torchlens/_capture/session.py::CaptureSession._spill_activation_escrow_to_budget	77
 torchlens/_capture/session.py::CaptureSession.resolve_deferred_retention	200
@@ -158,8 +158,8 @@ torchlens/_extraction/trace_safetensors.py::write_trace_safetensors	90
 torchlens/_extraction/views.py::shuffled_batches	64
 torchlens/_extraction_provenance.py::coerce_input_preprocessing	128
 torchlens/_fast_live_plans.py::build_function_plans	66
-torchlens/_fast_run.py	1442
-torchlens/_fast_run.py::_FastLiveSession.__init__	73
+torchlens/_fast_run.py	1467
+torchlens/_fast_run.py::_FastLiveSession.__init__	74
 torchlens/_fast_run.py::_FastLiveSession._finalize_run	61
 torchlens/_fast_run.py::_FastSparseSession.__init__	67
 torchlens/_fast_run.py::_FastSparseSession._bind_outputs	140
@@ -333,7 +333,7 @@ torchlens/_observe/_svg.py::render_timeline_svg	93
 torchlens/_observe/_timeline.py::_forward_events	71
 torchlens/_observe/_timeline.py::_persistent_events	63
 torchlens/_observe/_timeline.py::memory_timeline_v2	65
-torchlens/_options_validation.py::_validate_capture_values	79
+torchlens/_options_validation.py::_validate_capture_values	88
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
@@ -840,7 +840,7 @@ torchlens/backends/tinygrad/backend.py::_parent_perturbations_change_output	83
 torchlens/backends/tinygrad/backend.py::_walk_tinygrad_modules	78
 torchlens/backends/tinygrad/backend.py::scoped_tinygrad_module_calls	71
 torchlens/backends/tinygrad/backend.py::tinygrad_param_logs	62
-torchlens/backends/torch/_aten_capture.py::_finish_aten_call	65
+torchlens/backends/torch/_aten_capture.py::_finish_aten_call	69
 torchlens/backends/torch/_aten_capture.py::_walk_tensor_facts	75
 torchlens/backends/torch/_completeness_boundaries.py::_observe_input_metadata_read	71
 torchlens/backends/torch/_completeness_dispatch.py	801
@@ -884,7 +884,7 @@ torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
 torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
-torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	126
+torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	139
 torchlens/backends/torch/_ops_finalize.py::_raise_if_nonfinite_requested	119
 torchlens/backends/torch/_ops_interventions.py	830
 torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_legacy	114
@@ -1184,7 +1184,7 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	153
-torchlens/intervention/rerun.py	1690
+torchlens/intervention/rerun.py	1695
 torchlens/intervention/rerun.py::_append_rerun	104
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78
@@ -1260,7 +1260,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1775
+torchlens/options.py	1780
 torchlens/options.py::CaptureOptions.__init__	75
 torchlens/options.py::VisualizationOptions.__init__	130
 torchlens/options.py::_merge_grouped_options	74
