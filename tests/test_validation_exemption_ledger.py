@@ -54,8 +54,8 @@ from _source_corpus import package_files, package_source
 from torchlens.validation import _exemptions as ex
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_EXEMPTIONS_SRC = _REPO_ROOT / "torchlens" / "validation" / "exemptions.py"
-_CORE_SRC = _REPO_ROOT / "torchlens" / "validation" / "core.py"
+_EXEMPTIONS_SRC = _REPO_ROOT / "torchlens" / "validation" / "_exemptions.py"
+_CORE_SRC = _REPO_ROOT / "torchlens" / "validation" / "_core.py"
 
 
 def _exemption_emitting_sources() -> list[Path]:

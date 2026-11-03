@@ -345,7 +345,7 @@ def test_core_check_roster_refuses_enrollment_drift(tmp_path: Path) -> None:
         f"def {func}():\n    pass\n" for _, func in driver.CORE_CHECK_MUTANTS.values()
     )
     excluded = "\n".join(f"def {func}():\n    pass\n" for func in driver.CORE_CHECK_EXCLUSIONS)
-    (core_dir / "core.py").write_text(
+    (core_dir / "_core.py").write_text(
         enrolled + excluded + "\ndef _check_brand_new_thing():\n    pass\n",
         encoding="utf-8",
     )
@@ -353,11 +353,11 @@ def test_core_check_roster_refuses_enrollment_drift(tmp_path: Path) -> None:
         driver.derive_core_check_roster(tmp_path)
 
     # Without the stray def the same tree is accepted.
-    (core_dir / "core.py").write_text(enrolled + excluded, encoding="utf-8")
+    (core_dir / "_core.py").write_text(enrolled + excluded, encoding="utf-8")
     driver.derive_core_check_roster(tmp_path)
 
     # A ledger row pointing at a vanished def is refused too.
-    (core_dir / "core.py").write_text(enrolled, encoding="utf-8")
+    (core_dir / "_core.py").write_text(enrolled, encoding="utf-8")
     with pytest.raises(SystemExit, match="without a core.py def"):
         driver.derive_core_check_roster(tmp_path)
 

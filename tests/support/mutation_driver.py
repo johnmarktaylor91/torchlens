@@ -176,7 +176,7 @@ def derive_core_check_roster(sandbox: Path) -> None:
         Repo root whose ``torchlens/validation/_core.py`` is scanned.
     """
 
-    core = sandbox / "torchlens" / "validation" / "core.py"
+    core = sandbox / "torchlens" / "validation" / "_core.py"
     tree = ast.parse(core.read_text(encoding="utf-8"))
     names = {
         node.name

@@ -132,6 +132,8 @@ EXCLUDES = (
     # Pickled module paths an earlier release wrote, kept as refusal inputs.
     "tests/test_r23_type_reduce_rce.py",
     "tests/test_edit_legacy_pickle_name.py",
+    # Synthetic fixture tree whose module names are test data, not torchlens paths.
+    "tests/test_name_lockstep_codemod.py",
 )
 SUFFIXES = {
     ".py",

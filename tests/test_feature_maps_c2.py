@@ -346,7 +346,7 @@ def test_import_feature_maps_does_not_import_matplotlib() -> None:
     """Importing feature maps should not import matplotlib."""
 
     code = (
-        "import sys; import torchlens.viz.feature_maps; "
+        "import sys; import torchlens.viz._feature_maps; "
         "raise SystemExit(1 if 'matplotlib' in sys.modules else 0)"
     )
     result = subprocess.run([sys.executable, "-c", code], check=False)

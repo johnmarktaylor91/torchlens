@@ -323,7 +323,7 @@ def test_every_emitted_exemption_code_has_a_table_row() -> None:
             continue
         source = package_source(path)
         emitted |= posthoc_exempting_reasons(source)
-        if path.name != "exemptions.py":
+        if path.name != "_exemptions.py":
             emitted |= core_exempting_reasons(source)
     declared = {row.name for row in EXEMPTION_TABLE}
     assert emitted <= declared, sorted(emitted - declared)

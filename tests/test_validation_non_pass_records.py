@@ -78,7 +78,7 @@ def test_every_status_exit_of_validate_saved_outs_goes_through_the_recorder() ->
             and node.func.attr == "as_status"
         ]
         assert not builders, f"{path.name} builds a status directly at lines {builders}"
-    functions = _module_functions("core.py") | _module_functions("_saved_outs_steps.py")
+    functions = _module_functions("_core.py") | _module_functions("_saved_outs_steps.py")
     offenders = _status_exits_outside_recorder("validate_saved_outs", functions, set())
     assert not offenders, f"status exits outside the failure recorder: {offenders}"
 

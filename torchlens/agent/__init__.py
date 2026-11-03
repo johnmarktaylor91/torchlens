@@ -13,11 +13,8 @@ in ``torchlens.__all__`` (frozen root budget): reach it as ``tl.agent``.
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING, Any
-
-from torchlens._utils._private_submodules import (
-    refuse_private_submodule as _refuse_private_submodule,
-)
 
 from ._envelope import build_envelope, build_error_envelope, canonical_dumps, json_safe
 from ._guide_text import AGENT_GUIDE, guide
@@ -84,5 +81,9 @@ if not TYPE_CHECKING:
             submodule's old public spelling.
         """
 
-        _refuse_private_submodule(__name__, name)
+        # Resolved at call time: the tier-0 verbs stay torch-free, and importing
+        # torchlens._utils runs its package init, which reaches torch.
+        importlib.import_module("torchlens._utils._private_submodules").refuse_private_submodule(
+            __name__, name
+        )
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

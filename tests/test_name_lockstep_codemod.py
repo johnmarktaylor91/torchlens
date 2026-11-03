@@ -48,7 +48,7 @@ def test_relative_import_and_reexport_all_are_renamed(tmp_path: Path) -> None:
             "torchlens/errors/__init__.py": (
                 "from .episode import OldError\n\n__all__ = ['OldError']\n"
             ),
-            "torchlens/errors/_episode.py": "class OldError(Exception):\n    pass\n",
+            "torchlens/errors/episode.py": "class OldError(Exception):\n    pass\n",
             "torchlens/errors/deep/__init__.py": "from ..episode import OldError\n",
         },
     )
@@ -58,11 +58,11 @@ def test_relative_import_and_reexport_all_are_renamed(tmp_path: Path) -> None:
         "name": "OldError",
         "proposed": "NewError",
         "path": "tl.errors.OldError",
-        "module": "torchlens.errors._episode",
+        "module": "torchlens.errors.episode",
     }
     edits = codemod.plan([row], root, roots=("torchlens",))
     assert _sites(edits) == {
-        ("torchlens/errors/_episode.py", 1, 7, codemod.DEFINITE),
+        ("torchlens/errors/episode.py", 1, 7, codemod.DEFINITE),
         ("torchlens/errors/__init__.py", 1, 22, codemod.DEFINITE),
         ("torchlens/errors/__init__.py", 3, 13, codemod.DEFINITE),
         ("torchlens/errors/deep/__init__.py", 1, 23, codemod.DEFINITE),
