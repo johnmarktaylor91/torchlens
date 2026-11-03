@@ -143,11 +143,14 @@ def _aliases(tree: ast.AST) -> dict[str, str]:
                     local = item.asname or item.name.split(".")[0]
                     target = item.name if item.asname else "torchlens"
                     aliases[local] = "tl" + target[len("torchlens") :]
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            if node.module == "torchlens" or node.module.startswith("torchlens."):
-                base = "tl" + node.module[len("torchlens") :]
-                for item in node.names:
-                    aliases[item.asname or item.name] = f"{base}.{item.name}"
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and (node.module == "torchlens" or node.module.startswith("torchlens."))
+        ):
+            base = "tl" + node.module[len("torchlens") :]
+            for item in node.names:
+                aliases[item.asname or item.name] = f"{base}.{item.name}"
     return aliases
 
 

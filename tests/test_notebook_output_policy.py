@@ -13,8 +13,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -32,18 +30,19 @@ def _stored_output_notebooks() -> tuple[str, ...]:
 
 
 def _committed_notebooks() -> list[str]:
-    """Return every tracked ``.ipynb`` path, repo-relative."""
+    """Return every tracked ``.ipynb`` path, repo-relative.
 
-    try:
-        listing = subprocess.run(
-            ["git", "ls-files", "*.ipynb"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    except (OSError, subprocess.CalledProcessError):
-        pytest.skip("not a git checkout: the committed notebook set is unknown")
+    The policy reads the committed set, so it needs a git checkout; outside one
+    ``git ls-files`` fails loudly rather than skipping invisibly.
+    """
+
+    listing = subprocess.run(
+        ["git", "ls-files", "*.ipynb"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     return sorted(line for line in listing.splitlines() if line)
 
 
