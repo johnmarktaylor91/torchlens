@@ -1254,7 +1254,7 @@ class Recording(TraceLike):
             code="recording_halt_frontier_missing",
             remedy=(
                 "re-run record(...) with a save= predicate that captures at least the halt "
-                "frontier layer, or use tl.trace(model, x, halt=...) for the exhaustive "
+                "frontier layer, or use tl.trace(model, x, stop_after=...) for the exhaustive "
                 "halted-capture path"
             ),
         )

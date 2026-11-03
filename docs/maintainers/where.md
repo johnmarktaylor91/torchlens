@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1424 modules, 634561 lines, 0 modules without a docstring.
+83 packages, 1426 modules, 634700 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,8 +15,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1246 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25103 |
-| `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1493 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25182 |
+| `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 88 | 37519 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
@@ -55,10 +55,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 17 | 6559 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8669 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6856 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6348 |
-| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8471 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3937 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6858 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6363 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 8 | 4010 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54122 |
 | `torchlens.bridge` | External-tool bridge namespace. | 26 | 7917 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
@@ -208,7 +208,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25103 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (46 modules, 25182 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -232,6 +232,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_retention` | Selector classification for deferred capture retention. | 67 |
 | `_run_setup` | Request resolution and Trace setup for the RUN stage entry. | 444 |
 | `_run_state` | Per-pass bookkeeping shared by the RUN stage's skeleton and its exit arms. | 55 |
+| `_stop_after_policy` | The one never-fired ''stop_after'' policy, shared by torch and the previews. | 79 |
 | `_structure_evidence` | The structure-only evidence envelope writer (weightsfree memo sec 5). | 145 |
 | `_structure_only_bridge` | Structure-only -> runnable bridge: entry-dark L7b wave-1 machinery. | 236 |
 | `_structure_only_entry` | Structure-only Layer-0 entry contract (L7a sec 1.3/2.2). | 228 |
@@ -260,13 +261,13 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 
 ### `torchlens._capture.finalize`
 
-FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. (4 modules, 1493 lines)
+FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. (4 modules, 1459 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 1 |
 | `arms` | Exit arms of the FINALIZE stage. | 490 |
-| `epilogue` | Door epilogue of the FINALIZE stage: ''finish_trace'' and the layer visualizers. | 418 |
+| `epilogue` | Door epilogue of the FINALIZE stage: ''finish_trace'' and the layer visualizers. | 384 |
 | `settle` | Output marking and settlement helpers for the FINALIZE stage. | 584 |
 
 ### `torchlens._capture.prepare`
@@ -1157,12 +1158,12 @@ JAX backend preview exports. (10 modules, 8669 lines)
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (17 modules, 6856 lines)
+Technical-preview MLX backend for TorchLens. (17 modules, 6858 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Technical-preview MLX backend for TorchLens. | 31 |
-| `_capture_disclosures` | Capture-time honesty disclosures for the MLX preview backend. | 85 |
+| `_capture_disclosures` | Capture-time honesty disclosures for the MLX preview backend. | 87 |
 | `_capture_records` | Capture records and payload helpers for MLX replay validation. | 238 |
 | `_grad_oracle` | MLX derived-gradient oracle helpers. | 437 |
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 104 |
@@ -1181,7 +1182,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6856 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6348 lines)
+Paddle backend preview. (14 modules, 6363 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1193,21 +1194,21 @@ Paddle backend preview. (14 modules, 6348 lines)
 | `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
-| `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 427 |
+| `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 437 |
 | `model_prep` | Paddle model preparation helpers for technical-preview capture. | 365 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
-| `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 699 |
+| `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 700 |
 | `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 279 |
-| `wrappers` | Paddle function-call interception for technical-preview capture. | 770 |
+| `wrappers` | Paddle function-call interception for technical-preview capture. | 774 |
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend preview exports. (13 modules, 8471 lines)
+TensorFlow backend preview exports. (13 modules, 8475 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TensorFlow backend preview exports. | 8 |
-| `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 429 |
+| `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 457 |
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
 | `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 232 |
 | `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 164 |
@@ -1218,11 +1219,11 @@ TensorFlow backend preview exports. (13 modules, 8471 lines)
 | `interventions` | TensorFlow static-label intervention layer. | 786 |
 | `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 657 |
 | `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1097 |
-| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1101 |
+| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1077 |
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (7 modules, 3937 lines)
+tinygrad backend preview. (8 modules, 4010 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1231,7 +1232,8 @@ tinygrad backend preview. (7 modules, 3937 lines)
 | `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
 | `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 317 |
-| `backend` | UOp-snapshot tinygrad backend preview. | 3168 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 127 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3114 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`

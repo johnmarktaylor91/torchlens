@@ -332,7 +332,7 @@ perturbation oracle, and only records with `status == "exact"` reach
 These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
 
-MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
+MLX supports static-label live interventions and `stop_after=`. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(stop_after=static_selector)` finalizes an honest partial trace at
 the matched frontier (`trace.is_stopped`, `trace.stop_reason`; parameter accounting is restricted to
