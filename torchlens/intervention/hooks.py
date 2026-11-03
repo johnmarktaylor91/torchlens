@@ -846,6 +846,28 @@ def _fused_attention_write_remedy(facet_name: str, *, reconstructed: bool = True
     )
 
 
+def _facet_write_mask(selector: FacetSelector, spec: Any) -> torch.Tensor:
+    """Return a detached copy of ``spec``'s write mask.
+
+    A read-only attention facet (fused attention, or a reconstructed facet)
+    raises ``RuntimeError`` from ``write_mask``; that becomes a
+    ``SiteResolutionError`` naming the eager-attention remedy.
+    """
+
+    try:
+        return spec.write_mask().detach().clone()
+    except RuntimeError as exc:
+        if selector.name in {"pattern", "scores", "z", "result"}:
+            raise SiteResolutionError(
+                f"facet selector {selector!r} resolved only read-only "
+                "attention facets. "
+                + _fused_attention_write_remedy(
+                    selector.name, reconstructed=spec.capability_flags.reconstructed
+                )
+            ) from exc
+        raise
+
+
 def expand_facet_hook_entries(
     log: Any, entries: Sequence[NormalizedHookEntry]
 ) -> list[NormalizedHookEntry]:
@@ -885,18 +907,7 @@ def expand_facet_hook_entries(
             )
         written: list[tuple[str, str]] = []
         for facet_name, spec in specs:
-            try:
-                mask = spec.write_mask().detach().clone()
-            except RuntimeError as exc:
-                if selector.name in {"pattern", "scores", "z", "result"}:
-                    raise SiteResolutionError(
-                        f"facet selector {selector!r} resolved only read-only "
-                        "attention facets. "
-                        + _fused_attention_write_remedy(
-                            selector.name, reconstructed=spec.capability_flags.reconstructed
-                        )
-                    ) from exc
-                raise
+            mask = _facet_write_mask(selector, spec)
             home_label = _facet_home_label(spec)
             _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
             claimed.append((home_label, mask, facet_name))
