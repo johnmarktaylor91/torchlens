@@ -978,8 +978,8 @@ class VisualizationOptions:
     node_label_fields:
         Optional explicit label row fields.
     show_legend:
-        Tri-state legend visibility (``None`` = auto: legend only when an
-        encoding channel is active); see ``Trace.draw``.
+        Tri-state legend (``None`` = auto: an active encoding channel's
+        legend, and the key on a ``module=`` focus); see ``Trace.draw``.
     color_by:
         UNSTABLE encoding-channel value source; see ``Trace.draw``.
     size_by:

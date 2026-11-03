@@ -318,7 +318,7 @@ Key entry points:
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
   (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
-  the tri-state `show_legend` (`None`=AUTO channel-only legend, `True`/`False` historical; explicit
+  the tri-state `show_legend` (`None`=AUTO channel-only legend, plus the key on a `module=` focus; `True`/`False` historical; explicit
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.

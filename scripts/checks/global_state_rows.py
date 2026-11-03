@@ -1030,6 +1030,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture/_trace_capture_error.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
+        ("torchlens/_visualization/_focus_scope.py", "__all__"),
         ("torchlens/backends/_facet_recipes.py", "__all__"),
         ("torchlens/backends/_protocols/mlx_wrapped_state.py", "__all__"),
         ("torchlens/backends/mlx/external_arrays.py", "__all__"),

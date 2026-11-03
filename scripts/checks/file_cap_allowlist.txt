@@ -567,9 +567,9 @@ torchlens/_visualization/_rank_layout_internal/layout.py::_compute_topological_l
 torchlens/_visualization/_rank_layout_internal/layout.py::_run_neato_with_fallbacks	84
 torchlens/_visualization/_rank_layout_internal/layout.py::render_rank_layout	392
 torchlens/_visualization/_render_common.py	955
-torchlens/_visualization/_render_dot.py	1918
+torchlens/_visualization/_render_dot.py	1917
 torchlens/_visualization/_render_dot.py::_emit_and_finish_forward	193
-torchlens/_visualization/_render_dot.py::_finalize_forward_ir	93
+torchlens/_visualization/_render_dot.py::_finalize_forward_ir	89
 torchlens/_visualization/_render_dot.py::_populate_forward_ir	159
 torchlens/_visualization/_render_dot.py::_publish_forward_render	107
 torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
@@ -604,8 +604,8 @@ torchlens/_visualization/_render_nodes.py::_get_node_address_shape_color	66
 torchlens/_visualization/_render_nodes.py::_render_raw_input	63
 torchlens/_visualization/_render_nodes.py::_render_raw_input_image_batch	61
 torchlens/_visualization/_render_nodes.py::compute_default_node_lines	108
-torchlens/_visualization/_render_regions.py::_setup_subgraphs	81
-torchlens/_visualization/_render_regions.py::_setup_subgraphs_recurse	148
+torchlens/_visualization/_render_regions.py::_setup_subgraphs	78
+torchlens/_visualization/_render_regions.py::_setup_subgraphs_recurse	136
 torchlens/_visualization/_render_utils.py::_open_file_quietly	66
 torchlens/_visualization/_stacking.py::resolve_stack_by	84
 torchlens/_visualization/_summary_internal/_discoverability.py::format_discoverability_summary	64
