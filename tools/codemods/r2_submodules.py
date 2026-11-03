@@ -170,6 +170,8 @@ def _private(entry: str) -> str:
 PLAIN = re.compile(rf"(?<![\w.])(torchlens|tl)\.({_alt(MOVED)})(?!\w)")
 SHADOW_DEEP = re.compile(rf"(?<![\w.])(torchlens|tl)\.({_alt(SHADOWED)})(?=\.\w)")
 SHADOW_QUOTED = re.compile(rf"(?<=[\"'])(torchlens)\.({_alt(SHADOWED)})(?=[\"'])")
+# Raise-site keys (``torchlens.intervention.compose:_fn:Error::1``) name the module, never the export.
+SHADOW_SITEKEY = re.compile(rf"(?<![\w.])(torchlens)\.({_alt(SHADOWED)})(?=:\w)")
 SHADOW_IMPORT = re.compile(rf"^(\s*(?:from|import)\s+torchlens\.)({_alt(SHADOWED)})(?!\w)", re.M)
 _SLASHED = _alt(tuple(e.replace(".", "/") for e in ALL_MOVED))
 PATHED_FULL = re.compile(rf"(?<![\w.-])(torchlens/)({_SLASHED})(?=\.py\b|/)")
@@ -232,6 +234,7 @@ def rewrite_text(text: str, path: Path, repo: Path) -> str:
     text = PLAIN.sub(lambda m: f"{m.group(1)}.{_private(m.group(2))}", text)
     text = SHADOW_DEEP.sub(lambda m: f"{m.group(1)}.{_private(m.group(2))}", text)
     text = SHADOW_QUOTED.sub(lambda m: f"{m.group(1)}.{_private(m.group(2))}", text)
+    text = SHADOW_SITEKEY.sub(lambda m: f"{m.group(1)}.{_private(m.group(2))}", text)
     text = SHADOW_IMPORT.sub(lambda m: f"{m.group(1)}{_private(m.group(2))}", text)
     for pattern in (PATHED_FULL, PATHED_REL):
         text = pattern.sub(

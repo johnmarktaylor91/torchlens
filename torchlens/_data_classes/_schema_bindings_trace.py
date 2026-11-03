@@ -329,7 +329,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_tl_backward_hooked_tensor_keys": StorageBinding(StorageKind.RUNTIME),
     "_tl_grad_hook_owner_by_label": StorageBinding(StorageKind.RUNTIME),
     "_tl_rf_probe_active": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
-    "_active_backward_pass_index": StorageBinding(StorageKind.RUNTIME),
+    "_active_backward_pass_number": StorageBinding(StorageKind.RUNTIME),
     "_backward_roots_by_pass": StorageBinding(StorageKind.RUNTIME),
     "_backward_projection_event_count": StorageBinding(StorageKind.RUNTIME),
     "_backward_projection_revision": StorageBinding(StorageKind.RUNTIME),

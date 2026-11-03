@@ -1,7 +1,7 @@
 """A plain rerun translates staged final labels to the raw capture labels they name.
 
 A live forward matches selectors before postprocess labels exist. A staged edit addressed
-by a finalized exact label (``Trace.set(label, ...)``, ``do(label, ...)`` on the rerun engine)
+by a finalized exact label (``do(label, ...)`` on the set_only or the rerun engine)
 is translated before the forward to the raw labels the same ops carried at capture time, the
 translation a mixed gradient plan's activation half already used, so the edit fires on the
 rerun instead of being refused. Each pass of a multi-pass op keeps its own raw label, so a

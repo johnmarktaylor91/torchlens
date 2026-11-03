@@ -7,7 +7,7 @@ code; these tests provoke every one through its production raise site. The
 capability refusals (a selector kind a lifecycle cannot evaluate) and the
 post-capture site-resolution refusals (no match, excess fanout, a bad
 ``max_fanout``, a strict bare string, an empty site table) carry codes too, so
-``Trace.set`` and ``attach_hooks`` refuse a model-input site with one code. The
+a set_only ``do`` and ``attach_hooks`` refuse a model-input site with one code. The
 ``LiveModeLabelError`` sites are pinned in ``tests/test_stress_refusal_codes.py``.
 """
 

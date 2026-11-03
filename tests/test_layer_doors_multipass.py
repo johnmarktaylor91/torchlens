@@ -1,4 +1,4 @@
-"""``Layer.do``, ``Layer.set`` and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
+"""``Layer.do`` (both engines) and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
 
 A bare layer label addresses only a single-pass layer, so the three Layer doors
 must not forward it for a layer that ran several passes: a module reused in a

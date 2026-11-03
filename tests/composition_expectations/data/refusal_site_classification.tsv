@@ -713,27 +713,27 @@ torchlens.intervention._trace_edits:apply_do_mutation:InvalidArgumentError::2	CO
 torchlens.intervention._trace_selection_edits:apply_selection_batch_do:InvalidArgumentError::1	CONTRACTED	selection_batch_pair_invalid	F02 D33 batch door: batch mixing Selections with legacy selector sites
 torchlens.intervention._trace_selection_edits:apply_cross_kind_batch_do:InvalidArgumentError::1	CONTRACTED	selection_batch_cross_kind	F02 D33 cross-kind batch on an engine other than replay
 torchlens.intervention._trace_selection_edits:batch_act_plan:InvalidArgumentError::1	CONTRACTED	selection_batch_leaf_unsupported	F02 D33 leaf sites cannot join one hook transaction in v1
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::1	CONTRACTED	compose_empty	F02 D20 zero-leaf refusal
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::2	CONTRACTED	compose_leaf_invalid	F02 D20 non-Edit leaf
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::3	CONTRACTED	compose_leaf_invalid	F02 D20 factory-less (audit-only) leaf
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::4	CONTRACTED	compose_unseeded_stochastic	F02 D21 unseeded stochastic leaf
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::5	CONTRACTED	compose_shape_change_unsupported	F02 D21 shape-changing leaf refused in v1
-torchlens.intervention.compose:compose.factory._hook:HookValueError::1	CONTRACTED	compose_leaf_failed	F02 D20 atomic leaf failure naming compose[i]
-torchlens.intervention.compose:compose.factory._hook:HookValueError::2	CONTRACTED	compose_leaf_failed	F02 D20 non-tensor leaf return naming compose[i]
+torchlens.intervention._compose:_validate_leaves:InvalidArgumentError::1	CONTRACTED	compose_empty	F02 D20 zero-leaf refusal
+torchlens.intervention._compose:_validate_leaves:InvalidArgumentError::2	CONTRACTED	compose_leaf_invalid	F02 D20 non-Edit leaf
+torchlens.intervention._compose:_validate_leaves:InvalidArgumentError::3	CONTRACTED	compose_leaf_invalid	F02 D20 factory-less (audit-only) leaf
+torchlens.intervention._compose:_validate_leaves:InvalidArgumentError::4	CONTRACTED	compose_unseeded_stochastic	F02 D21 unseeded stochastic leaf
+torchlens.intervention._compose:_validate_leaves:InvalidArgumentError::5	CONTRACTED	compose_shape_change_unsupported	F02 D21 shape-changing leaf refused in v1
+torchlens.intervention._compose:compose.factory._hook:HookValueError::1	CONTRACTED	compose_leaf_failed	F02 D20 atomic leaf failure naming compose[i]
+torchlens.intervention._compose:compose.factory._hook:HookValueError::2	CONTRACTED	compose_leaf_failed	F02 D20 non-tensor leaf return naming compose[i]
 torchlens.intervention._masked_edit:_row_equivariance_facts:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 D23 batch axis out of range for the site mask
 torchlens.intervention._masked_edit:_row_equivariance_facts:InvalidArgumentError::2	CONTRACTED	mask_not_row_equivariant	F02 D23 draw-independent uniform-row mask law
-torchlens.intervention.population:Population.__post_init__:InvalidArgumentError::1	CONTRACTED	population_empty	F02 D2 population invariant
-torchlens.intervention.population:Population.__post_init__:InvalidArgumentError::2	CONTRACTED	population_datum_count_mismatch	F02 D2 datum/member alignment
-torchlens.intervention.population:Population.eligible_indices:InvalidArgumentError::1	CONTRACTED	population_agreement_empty	F02 D13 conditioned draw without datums
-torchlens.intervention.population:Population.eligible_indices:InvalidArgumentError::2	CONTRACTED	population_agreement_empty	F02 D13 empty agreement class (ephemeral message names keys and class sizes)
-torchlens.intervention.population:Population._tensor_members:InvalidArgumentError::1	CONTRACTED	population_reduce_unsupported	F02 D3 reducers need tensor members
-torchlens.intervention.population:Population._reduce:InvalidArgumentError::1	CONTRACTED	population_matching_invalid	F02 agreement condition is both-or-neither
-torchlens.intervention.population:Population._reduce:InvalidArgumentError::2	CONTRACTED	population_matching_invalid	F02 reducers take ONE subject datum
-torchlens.intervention.population:Population._reduce:InvalidArgumentError::3	CONTRACTED	population_reduce_underdetermined	F02 D3 too few eligible members (std needs >= 2)
-torchlens.intervention.population:population:InvalidArgumentError::1	CONTRACTED	population_origin_required	F02 D2 origin= required non-empty (subspace precedent)
-torchlens.intervention.population:population:InvalidArgumentError::2	CONTRACTED	population_empty	F02 D2 empty tensor stack
-torchlens.intervention.population:population:InvalidArgumentError::3	CONTRACTED	population_heterogeneous	F02 D2 one homogeneous member stack
-torchlens.intervention.population:population:InvalidArgumentError::4	CONTRACTED	population_source_invalid	F02 D2 unsupported source type
+torchlens.intervention._population:Population.__post_init__:InvalidArgumentError::1	CONTRACTED	population_empty	F02 D2 population invariant
+torchlens.intervention._population:Population.__post_init__:InvalidArgumentError::2	CONTRACTED	population_datum_count_mismatch	F02 D2 datum/member alignment
+torchlens.intervention._population:Population.eligible_indices:InvalidArgumentError::1	CONTRACTED	population_agreement_empty	F02 D13 conditioned draw without datums
+torchlens.intervention._population:Population.eligible_indices:InvalidArgumentError::2	CONTRACTED	population_agreement_empty	F02 D13 empty agreement class (ephemeral message names keys and class sizes)
+torchlens.intervention._population:Population._tensor_members:InvalidArgumentError::1	CONTRACTED	population_reduce_unsupported	F02 D3 reducers need tensor members
+torchlens.intervention._population:Population._reduce:InvalidArgumentError::1	CONTRACTED	population_matching_invalid	F02 agreement condition is both-or-neither
+torchlens.intervention._population:Population._reduce:InvalidArgumentError::2	CONTRACTED	population_matching_invalid	F02 reducers take ONE subject datum
+torchlens.intervention._population:Population._reduce:InvalidArgumentError::3	CONTRACTED	population_reduce_underdetermined	F02 D3 too few eligible members (std needs >= 2)
+torchlens.intervention._population:population:InvalidArgumentError::1	CONTRACTED	population_origin_required	F02 D2 origin= required non-empty (subspace precedent)
+torchlens.intervention._population:population:InvalidArgumentError::2	CONTRACTED	population_empty	F02 D2 empty tensor stack
+torchlens.intervention._population:population:InvalidArgumentError::3	CONTRACTED	population_heterogeneous	F02 D2 one homogeneous member stack
+torchlens.intervention._population:population:InvalidArgumentError::4	CONTRACTED	population_source_invalid	F02 D2 unsupported source type
 torchlens.intervention.stochastic:_require_seed:InvalidArgumentError::1	CONTRACTED	sampling_seed_required	F02 D4 seed law: int or 'auto', None never reaches a hook
 torchlens.intervention.stochastic:_base_seed:InvalidArgumentError::1	CONTRACTED	sampling_trace_seed_unavailable	F02 D5 auto seed needs trace.options.seed in run_ctx
 torchlens.intervention.stochastic:_resolve_over_axes:InvalidArgumentError::1	CONTRACTED	axis_semantics_unknown	F02 D17/D25 named token without axis-role evidence
@@ -1007,6 +1007,7 @@ torchlens.report._stats_view:_refuse_column:InvalidArgumentError::1	CONTRACTED	s
 torchlens.report._summary_config:resolve_config:InvalidArgumentError::1	CONTRACTED	summary_option_conflict	F08 level='op' x depth= contradiction; typed + contract row
 torchlens._utils._onramp:_refuse_flop_count_options:InvalidArgumentError::1	CONTRACTED	flop_count_option_invalid	flop_count option gate: the removed count_fma_as_two spelling names flop_convention, unknown names and values outside fma2/fma1 refuse before capture; typed + contract row
 torchlens._utils.facade:refuse_removed_member:FacadeTeachingError::1	CONTRACTED	facade_redirect	removed public class member (Trace.replay, Bundle.rerun, VisualizationOptions.mode, ...) names its replacement from the owning class's removed-member table; typed + contract row
+torchlens._utils._private_submodules:refuse_private_submodule:FacadeTeachingError::1	CONTRACTED	facade_redirect	old spelling of a submodule made private (tl.intervention.types) read as an attribute of its parent names the parent namespace to import from; typed + contract row
 torchlens.report._trace_summary:summary:CaptureNotActiveError::1	CONTRACTED	trace_not_finished	summary() during an active forward: the rebuilt summary has no partial form, so it refuses typed and names repr(trace) as the live view; typed + contract row
 torchlens.report._summary_report:SummaryReport._rebuilt_or_refuse:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 result API on legacy-preset reports teaches the rebuilt grammar; typed + contract row
 torchlens.report._summary_report:SummaryReport.render:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 render style closed vocabulary; typed + contract row
@@ -1246,7 +1247,7 @@ torchlens._extraction.engine:_refuse_unbindable_default_positionals:InvalidArgum
 torchlens._extraction.reader:_raise_mixed_layout:DatasetExtractionResumeError::1	CONTRACTED	extraction_manifest_invalid	W051-EXTRACT audit 1.3: ledger layout contradicting the manifest layers block refuses at open/materialize (tests/test_w051_extraction_layout.py)
 torchlens._extraction.resume:_refuse_model_structure_mismatch:DatasetExtractionResumeError::1	CONTRACTED	extraction_resume_model_identity_mismatch	W051-EXTRACT audit 2.10a: structural model record compared on resume (tests/test_w051_extraction_identity.py)
 torchlens.agent._registry:_handle_compare:InvalidArgumentError::1	CONTRACTED	agent_argument_invalid	W051-AGENT audit 4.8/2.7: typed refusal of non-finite/negative allclose tolerances at the torchlens_compare boundary (tests/test_w051_agent_cli.py)
-torchlens.intervention.population:_trace_payload_digest:InvalidArgumentError::1	CONTRACTED	population_digest_unavailable	W051-STOCH audit 2.1: trace-backed population digest requires saved payloads; teaches save= (tests/test_w051_stochastic_identity.py)
+torchlens.intervention._population:_trace_payload_digest:InvalidArgumentError::1	CONTRACTED	population_digest_unavailable	W051-STOCH audit 2.1: trace-backed population digest requires saved payloads; teaches save= (tests/test_w051_stochastic_identity.py)
 torchlens._capture._episode_derivation:_licensed_positions:EpisodeDeclarationError:_declaration_error:1	CONTRACTED	episode_declaration_invalid	W051 (audit 3.1 + FIX2): evidence alignment refuses when the source width is neither the emitted-only, the measured entry-plus-one-per-step, nor the declared-crossing chain shape; teaches the licensed widths and the crossings declaration
 torchlens._capture._episode_derivation:_evidence_positions:EpisodeDeclarationError:_declaration_error:1	CONTRACTED	episode_declaration_invalid	W051 FIX2: a persisted step_output_positions disclosure that does not address one in-range position per row on THIS product's source (re-derivation mismatch signal, never noise)
 torchlens._capture._episode_ledger:resolve_episode_declaration:EpisodeDeclarationError:_declaration_error:5	CONTRACTED	episode_declaration_invalid	W051 (audit 3.3): EpisodeOptions.step_input_from must be a positional index (int) or keyword name (non-empty str) or None; teaching refusal at declaration time
@@ -1749,7 +1750,6 @@ torchlens._runnable.execution:refuse_truncated_rerun:RunCapabilityUnavailableErr
 torchlens.backends._backend_protocol:refuse_backward_capture_unsupported:BackendUnsupportedError::1	CONTRACTED	backward_capture_unsupported	backward / capture_backward on a backend whose capability table declares backward_capture=False; the shared helper replaces two identical raise sites in TraceValidationMixin.run's siblings; code is the capability-derived refusal code (refusal_code_for_capability)
 torchlens._io.format3.contract:refuse_writer_not_built:ArtifactError::1	CONTRACTED	bundle_save_failed	3.0 saved-format write door called before its lane filled the module (contract stub; the remedy names the tlspec 11 writer and the module that fills it)
 torchlens._io.format3.contract:refuse_reader_not_built:ArtifactError::1	CONTRACTED	bundle_load_failed	3.0 saved-format read door called before its lane filled the module (contract stub; the remedy names the tlspec 11 reader and the module that fills it)
-torchlens.backends._backend_protocol:refuse_backward_capture_unsupported:BackendUnsupportedError::1	CONTRACTED	backward_capture_unsupported	backward / capture_backward on a backend whose capability table declares backward_capture=False; the shared helper replaces two identical raise sites in TraceValidationMixin.run's siblings; code is the capability-derived refusal code (refusal_code_for_capability)
 torchlens.experiment._engine:_require_resolved:BundleExperimentError::1	CONTRACTED	site_sweep_candidate_unresolved	zero-site candidate would measure the baseline under its own name (ruled 1 Nov 2026); contract row + tests/test_ledger_exp_grid.py
 torchlens.experiment._grid:SweepGrid.coords:BundleExperimentError::1	CONTRACTED	grid_cell_unknown	sweep_grid (ruled 1 Nov 2026): contract row + tests/test_ledger_exp_grid.py
 torchlens.experiment._grid:_require_full_coords:BundleExperimentError::1	CONTRACTED	grid_coords_invalid	sweep_grid (ruled 1 Nov 2026): contract row + tests/test_ledger_exp_grid.py
