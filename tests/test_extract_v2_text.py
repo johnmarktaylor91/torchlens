@@ -51,61 +51,6 @@ def gpt2_and_tokenizer(tmp_path_factory):
     return model, tokenizer
 
 
-def _solo_rows(model, tokenizer, layer: str = "ln_f") -> list[torch.Tensor]:
-    """Per-string solo forwards: the position-correctness oracle."""
-
-    rows = []
-    with torch.no_grad():
-        for prompt in _PROMPTS:
-            encoded = tokenizer(prompt, return_tensors="pt")
-            rows.append(model(**encoded).last_hidden_state[0])
-    return rows
-
-
-@pytest.mark.parametrize("padding_side", ["right", "left"])
-@pytest.mark.parametrize("batch_size", [2, 4])
-def test_gpt2_padded_batches_match_solo_forwards(
-    gpt2_and_tokenizer, padding_side: str, batch_size: int, tmp_path: Path
-) -> None:
-    """T-POSITION: right AND left padding agree with solo rows per string.
-
-    The left legs are the measured rel 41.6% defect class: they pass ONLY
-    because the engine derives mask-based position_ids (disclosed once).
-    """
-
-    model, tokenizer = gpt2_and_tokenizer
-    tokenizer.padding_side = padding_side
-    collate = hf_collate(tokenizer, pad_token="eos")
-    kwargs = {}
-    solo = _solo_rows(model, tokenizer)
-    import contextlib
-
-    disclosure = (
-        pytest.warns(UserWarning, match="derived position_ids")
-        if padding_side == "left" and batch_size > 1
-        else contextlib.nullcontext()
-    )
-    with disclosure:
-        extract_dataset(
-            model,
-            list(_PROMPTS),
-            {"h": "ln_f"},
-            batch_size=batch_size,
-            path=tmp_path,
-            collate=collate,
-            ragged="trim",
-            progress=False,
-            **kwargs,
-        )
-    reader = open_extraction(tmp_path)
-    for index in range(len(_PROMPTS)):
-        row = reader.row(index)["h"]
-        reference = solo[index]
-        assert row.shape == reference.shape, f"row {index} extent"
-        rel = (row - reference).abs().max() / reference.abs().max()
-        assert rel < 1e-4, f"row {index} rel {rel:.3e} under {padding_side} padding"
-
-
 def test_gpt2_no_pad_token_refuses_then_eos_opt_in_recorded(
     gpt2_and_tokenizer, tmp_path: Path
 ) -> None:

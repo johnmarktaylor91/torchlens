@@ -46,6 +46,15 @@ class SiteTarget:
         ``sae.encode(output)``, and ``unit`` selects among them:
         ``SiteTarget("fc1", sae=sae, unit=3442)`` attributes latent 3442.
         DOCUMENTED-UNSTABLE.
+
+    Examples
+    --------
+    >>> site = tl.attribution.SiteTarget("0", unit=(1,))
+    >>> site.module_address
+    '0'
+    >>> result = tl.attribution.saliency(model, x, target=site)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
     """
 
     module_address: str

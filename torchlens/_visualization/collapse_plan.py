@@ -481,7 +481,9 @@ class CollapsePlanReapply:
     graph_shape_match: bool
 
 
-def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
+def export_collapse_plan(
+    trace: Any, mode: Literal["auto", "max"] | float = "auto"
+) -> dict[str, Any]:
     """Export one capture's collapse plan as a JSON-safe persistable payload.
 
     The payload carries the plan's collapsed/visible addresses AND the source
@@ -492,7 +494,9 @@ def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
     JSON file the caller owns, never the tlspec.
     """
 
-    plan = trace.collapse_plan(mode=mode)
+    from ._trace_collapse import collapse_plan as _collapse_plan  # deferred: cycle _visualization
+
+    plan = _collapse_plan(trace, mode)
     profile = site_profile(trace)
     per_call = [
         {

@@ -160,6 +160,13 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
     -------
     FacetCoverageReport
         Structured coverage rows in trace module order.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = tl.facets.coverage(trace)
+    >>> len(report.rows) > 0
+    True
     """
 
     rows: list[ModuleCoverageRow] = []

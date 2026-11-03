@@ -67,6 +67,13 @@ def attach_authority(model: ModelT, authority: Any) -> ModelT:
         ``preprocessing_authority_unrecognized`` when no adapter recognizes
         the authority, ``preprocessing_attach_opaque`` when it resolves to an
         opaque callable that declares nothing.
+
+    Examples
+    --------
+    >>> card = {"mean": [0.5] * 3, "std": [0.5] * 3}
+    >>> net = tl.preprocessing.attach_authority(nn.Linear(4, 4), card)
+    >>> tl.preprocessing.resolve(model=net).status
+    'authoritative'
     """
 
     from ._authorities import _probe_torchvision_weights, resolve  # deferred: cycle preprocessing

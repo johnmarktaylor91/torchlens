@@ -36,6 +36,10 @@ from ..repgeom._annotation_gate import (
     _site_ineligibility,
     _warn_skipped_sites,
 )
+from ._conflicts import (
+    require_rsatoolbox as require_rsatoolbox,
+    rsatoolbox_version as rsatoolbox_version,
+)
 
 #: Observation-descriptor key of the ALWAYS-written original-row-index
 #: descriptor (neuro memo D10): rsatoolbox's ``calc_rdm(descriptor=...)``
@@ -60,6 +64,13 @@ class NeuroHandoffError(_ActionableErrorMixin, ConfigurationError, ValueError):
     ``neuro_site_ambiguous``, ``neuro_source_invalid``,
     ``neuro_sites_inconsistent_rows``, ``neuro_rdms_mode_conflict``,
     ``neuro_matrix_invalid``.
+
+    Examples
+    --------
+    >>> issubclass(NeuroHandoffError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NeuroHandoffError, ValueError)
+    True
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
@@ -116,52 +127,6 @@ class SiteDatasets(OrderedDict):
     """
 
     ledger: tuple[SiteOutcome, ...] = ()
-
-
-def require_rsatoolbox() -> Any:
-    """Import and return rsatoolbox, teaching the extra when absent.
-
-    Returns
-    -------
-    Any
-        The imported ``rsatoolbox`` package.
-
-    Raises
-    ------
-    ImportError
-        When rsatoolbox is not installed; the message names the exact
-        extra spelling.
-    """
-
-    try:
-        import rsatoolbox
-    except ImportError as exc:
-        raise ImportError(
-            'torchlens.neuro requires rsatoolbox: install it with `pip install "torchlens[neuro]"`.'
-        ) from exc
-    return rsatoolbox
-
-
-def rsatoolbox_version() -> str:
-    """Return the installed rsatoolbox version via package metadata.
-
-    Neither validated rsatoolbox version (0.1.5 floor, 0.3.x current)
-    exposes ``__version__`` (measured), so the recorded version comes from
-    ``importlib.metadata``.
-
-    Returns
-    -------
-    str
-        The installed distribution version, or ``"unknown"`` when metadata
-        is unavailable (e.g. a path-injected source tree).
-    """
-
-    import importlib.metadata
-
-    try:
-        return importlib.metadata.version("rsatoolbox")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown"
 
 
 def check_pool(pool: Any) -> str:

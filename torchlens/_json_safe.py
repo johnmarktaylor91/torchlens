@@ -25,6 +25,13 @@ def json_safe(value: Any) -> Any:
     -------
     Any
         Strict-JSON-serializable projection.
+
+    Examples
+    --------
+    >>> json_safe({"loss": float("nan"), "shape": (1, 3)})
+    {'loss': {'nonfinite': 'nan'}, 'shape': [1, 3]}
+    >>> json_safe([1, "a"]) == [1, "a"]
+    True
     """
 
     if isinstance(value, float):

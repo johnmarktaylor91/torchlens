@@ -48,6 +48,12 @@ def check_metadata_invariants(trace: Trace) -> bool:
     -------
     bool
         ``True`` if all invariants pass.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.validation.check_metadata_invariants(trace)
+    True
     """
     for contract in _metadata_invariant_contracts_for_trace(trace):
         contract.check(trace)

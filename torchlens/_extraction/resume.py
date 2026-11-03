@@ -71,7 +71,14 @@ _CHECKSUM_LEVELS = ("fast", "crypto", "none")
 
 
 class DatasetExtractionResumeError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
-    """Raised when a resumable extraction artifact cannot be safely continued."""
+    """Raised when a resumable extraction artifact cannot be safely continued.
+
+    Examples
+    --------
+    >>> issubclass(DatasetExtractionResumeError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(DatasetExtractionResumeError, tl.errors.TorchLensError)
+    True"""
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
         """Initialize an actionable extraction-resume refusal.

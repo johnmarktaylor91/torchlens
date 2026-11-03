@@ -53,6 +53,13 @@ def canonical_dumps(payload: Any) -> str:
     -------
     str
         Canonical JSON text.
+
+    Examples
+    --------
+    >>> canonical_dumps({"b": 1, "a": [1, 2]})
+    '{"a":[1,2],"b":1}'
+    >>> canonical_dumps({"a": 1, "b": 2}) == canonical_dumps({"b": 2, "a": 1})
+    True
     """
 
     return json.dumps(
@@ -100,6 +107,12 @@ def build_envelope(  # noqa: PLR0913 - the envelope's declared keys, keyword-onl
     -------
     dict[str, Any]
         JSON-safe envelope.
+
+    Examples
+    --------
+    >>> envelope = build_envelope(schema="torchlens.agent.demo.v1", data={"n": 1})
+    >>> envelope["status"], envelope["data"]
+    ('ok', {'n': 1})
     """
 
     return json_safe(
@@ -134,6 +147,12 @@ def build_error_envelope(exc: BaseException) -> dict[str, Any]:
     -------
     dict[str, Any]
         JSON-safe error envelope.
+
+    Examples
+    --------
+    >>> envelope = build_error_envelope(ValueError("bad input"))
+    >>> envelope["status"], envelope["error"]["class"], envelope["error"]["message"]
+    ('error', 'ValueError', 'bad input')
     """
 
     fields = dict(getattr(exc, "fields", {}) or {})

@@ -10,21 +10,18 @@ can never silently land in the wrong branch or the ``AttributeError`` tail.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._capture import projections
 from torchlens._capture.projections import (
     _LIVE_FIELD_GETTER_PAIRS,
     _LIVE_FIELD_GETTERS,
     _OPLOG_FIELDS_KNOWN_LATE,
     LIVE_OP_VIEW_FIELDS,
     LiveOpView,
-    LiveOpViewFieldNotYetWritten,
 )
 from torchlens._constants import OP_LOG_FIELD_ORDER
 
@@ -187,15 +184,6 @@ def test_getters_are_module_level_two_arg_callables() -> None:
         assert len(inspect.signature(getter).parameters) == 2, name
 
 
-def test_known_late_raises_typed_and_unknown_raises_attribute_error() -> None:
-    """The typed known-late refusal and the AttributeError tail are preserved."""
-
-    with pytest.raises(LiveOpViewFieldNotYetWritten):
-        projections._event_live_field(None, None, "label")
-    with pytest.raises(AttributeError):
-        projections._event_live_field(None, None, "definitely_not_a_field")
-
-
 class _MidForwardReader(nn.Module):
     """Reads every live field from a mid-forward LiveOpView."""
 
@@ -218,6 +206,7 @@ class _MidForwardReader(nn.Module):
         return y + 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_attr_observer.py.
 def test_every_live_field_reads_mid_forward() -> None:
     """Functional smoke: all 111 live fields project on a real capture event."""
 

@@ -571,6 +571,44 @@ def build_graph(  # noqa: PLR0913 -- the graph door: two subjects, then what, wh
         Coded ``attribution_graph_*`` refusals for an omitted ``frozen=``, an
         unknown or repeated site, an unreadable transcoder, a capture that is
         not one saved sequence, or an invalid logit target.
+
+    Examples
+    --------
+    A one-MLP toy language model with an exact transcoder stands in for a real pair.
+
+    >>> class TinyLM(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.embed = nn.Embedding(5, 4)
+    ...         self.mlp = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 4))
+    ...         self.unembed = nn.Linear(4, 5)
+    ...     def forward(self, tokens):
+    ...         x = self.embed(tokens)
+    ...         return self.unembed(x + self.mlp(x))
+    >>> class Transcoder:
+    ...     def __init__(self, up, down):
+    ...         self.W_enc = up.weight.detach().T.clone()
+    ...         self.b_enc = up.bias.detach().clone()
+    ...         self.W_dec = down.weight.detach().T.clone()
+    ...         self.b_dec = down.bias.detach().clone()
+    ...     def encode(self, x):
+    ...         return torch.relu(x @ self.W_enc + self.b_enc)
+    >>> lm = TinyLM().eval()
+    >>> _ = lm.mlp[0].bias.data.fill_(1.0)
+    >>> trace = tl.trace(lm, torch.tensor([[1, 3, 2]]))
+    >>> graph = tl.attribution.build_graph(
+    ...     trace,
+    ...     {"mlp": Transcoder(lm.mlp[0], lm.mlp[2])},
+    ...     embedding_module="embed",
+    ...     target=[0, 1],
+    ...     frozen=(),
+    ... )
+    >>> type(graph).__name__
+    'AttributionGraph'
+    >>> graph.node_counts["token"]
+    3
+    >>> graph.node_counts["logit"]
+    2
     """
 
     if isinstance(frozen, _Unset):

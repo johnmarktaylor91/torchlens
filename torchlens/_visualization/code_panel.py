@@ -11,15 +11,20 @@ import weakref
 from collections.abc import Callable
 from pathlib import PurePath
 from types import SimpleNamespace
-from typing import Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
-import graphviz
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError, RecordBindingError
 from .._source_links import file_line_text
 from . import _render_utils
 from ._render_utils import RENDER_TIMEOUT_SECONDS
+
+if TYPE_CHECKING:
+    import graphviz
+
+# graphviz loads at render time only: every capture imports this module, and a
+# capture must run without graphviz.
 
 CodePanelMode: TypeAlias = Literal["forward", "class", "init+forward"]
 CodePanelOption: TypeAlias = bool | CodePanelMode | Callable[[nn.Module], str]
@@ -342,6 +347,8 @@ def render_code_panel_svg(source_text: str) -> str:
     str
         SVG document for the code panel.
     """
+
+    import graphviz
 
     panel = graphviz.Digraph()
     # "#FFFFFF00" (alpha 0), not "transparent": dot 2.43 does not know the

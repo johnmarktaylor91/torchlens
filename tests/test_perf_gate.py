@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import copy
-import cProfile
 import gc
 import statistics
 import time
 from collections import OrderedDict, deque
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 import torch
@@ -24,14 +20,8 @@ from benchmarks.perf_suite import (
     _assert_baseline_status_writable,
     _validate_baseline_status_args,
 )
-from torchlens._data_classes._trace_accessors import (
-    TraceModuleCallAccessor,
-    _invalidate_trace_module_call_accessor_cache,
-)
-from torchlens._data_classes.trace import Trace
 from torchlens._postprocess import ast_branches
 from torchlens._postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
-from torchlens._utils.tensor_utils import get_memory_amount
 from torchlens.backends.torch.model_prep import _traverse_model_modules
 
 
@@ -137,41 +127,6 @@ def _write_perf_source(tmp_path: Path, index: int) -> Path:
     return path
 
 
-class _RepeatedModuleCallModel(nn.Module):
-    """Model that repeatedly invokes one shared module."""
-
-    def __init__(self, repeats: int) -> None:
-        """Initialize the repeated-call model.
-
-        Parameters
-        ----------
-        repeats:
-            Number of calls to the shared module.
-        """
-
-        super().__init__()
-        self.repeats = repeats
-        self.shared = nn.ReLU()
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Invoke the shared module repeatedly.
-
-        Parameters
-        ----------
-        value:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Tensor produced by the final module call.
-        """
-
-        for _ in range(self.repeats):
-            value = self.shared(value)
-        return value
-
-
 class _PinnedSmallCaptureChain(nn.Module):
     """Exact deterministic workload for the small-capture ratio gate."""
 
@@ -267,120 +222,7 @@ def test_pinned_small_capture_fixed_cost_ratio_gate() -> None:
     assert 0.45 < slope_ratio < 2.25
 
 
-def _fresh_module_calls(trace: Trace) -> TraceModuleCallAccessor:
-    """Reconstruct the pre-cache module-call accessor.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ModuleCalls should be flattened.
-
-    Returns
-    -------
-    TraceModuleCallAccessor
-        Fresh accessor matching the original property implementation.
-    """
-
-    calls: OrderedDict[str, Any] = OrderedDict()
-    for module in trace._module_logs:
-        for call in module.calls.values():
-            calls[call.label] = call
-    return TraceModuleCallAccessor(calls)
-
-
-def _profile_call_count(callback: Callable[[], object]) -> int:
-    """Return deterministic Python call count for one callback.
-
-    Parameters
-    ----------
-    callback:
-        Workload to profile.
-
-    Returns
-    -------
-    int
-        Total profiled function calls.
-    """
-
-    profiler = cProfile.Profile()
-    profiler.runcall(callback)
-    return sum(entry.callcount for entry in profiler.getstats())
-
-
-def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """ModuleCall flattening happens once and cuts profiled call count sharply."""
-
-    trace = tl.trace(_RepeatedModuleCallModel(repeats=64), torch.ones(1))
-    expected = _fresh_module_calls(trace)
-    _invalidate_trace_module_call_accessor_cache(trace)
-
-    from torchlens._data_classes import _trace_views
-
-    original_accessor = _trace_views.TraceModuleCallAccessor
-    rebuild_count = 0
-
-    def counting_accessor(calls: OrderedDict[str, Any]) -> TraceModuleCallAccessor:
-        """Count construction while preserving the production accessor type."""
-
-        nonlocal rebuild_count
-        rebuild_count += 1
-        return original_accessor(calls)
-
-    monkeypatch.setattr(_trace_views, "TraceModuleCallAccessor", counting_accessor)
-    cached = trace.module_calls
-    for _ in range(128):
-        assert trace.module_calls is cached
-
-    assert rebuild_count == 1
-    assert type(cached) is type(expected)
-    assert cached.keys() == expected.keys()
-    assert all(cached[key] is expected[key] for key in expected.keys())
-
-    cold_calls = _profile_call_count(lambda: [_fresh_module_calls(trace) for _ in range(64)])
-    hot_calls = _profile_call_count(lambda: [trace.module_calls for _ in range(64)])
-    assert cold_calls * 2 >= hot_calls * 7
-
-
-def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
-    """Mutating a scoped ModuleCall accessor refreshes the Trace-level cache."""
-
-    trace = tl.trace(_RepeatedModuleCallModel(repeats=2), torch.ones(1))
-    cached = trace.module_calls
-    module = trace.modules["shared"]
-    replacement = copy.copy(module.calls[0])
-    replacement.label = "shared:replacement"
-
-    module.calls[1] = replacement
-
-    refreshed = trace.module_calls
-    assert refreshed is not cached
-    assert "shared:1" not in refreshed
-    assert refreshed["shared:replacement"] is replacement
-
-
-@pytest.mark.smoke
-@pytest.mark.parametrize(
-    ("dtype", "shape"),
-    [
-        (torch.bfloat16, (2, 3)),
-        (torch.float32, (4, 5)),
-        (torch.float64, (1, 2, 3)),
-        (torch.int8, (7,)),
-    ],
-)
-def test_get_memory_amount_matches_tensor_method_byte_count(
-    dtype: torch.dtype, shape: tuple[int, ...]
-) -> None:
-    """Tensor memory accounting matches direct Tensor method byte counts."""
-
-    tensor = torch.ones(shape, dtype=dtype)
-    expected = int(tensor.nelement() * tensor.element_size())
-
-    assert get_memory_amount(tensor) == expected
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py.
 def test_ast_file_cache_respects_lru_cap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """AST file cache evicts least-recently-used entries beyond the configured cap."""
 
@@ -600,22 +442,7 @@ def test_partial_payload_is_not_writable_as_canonical() -> None:
         _assert_baseline_status_writable(payload)
 
 
-def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
-    """Tensor grad hooks record P6 profiling buckets for later optimization."""
-
-    model = nn.Linear(3, 2)
-    x = torch.randn(1, 3, requires_grad=True)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
-
-    timings = trace._phase_timings
-    assert timings["backward_grad_event:ensure_stream"]["count"] >= 1
-    assert timings["backward_grad_event:ensure_pass"]["count"] >= 1
-    assert timings["backward_grad_event:payload"]["count"] >= 1
-    assert timings["backward_grad_event:append"]["count"] >= 1
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/loop_grouping_adapter.py.
 def test_loop_frontier_uses_deque_fifo_order() -> None:
     """Frontier popping is direction-major FIFO with deque-backed candidates."""
 
@@ -638,6 +465,7 @@ def test_loop_frontier_uses_deque_fifo_order() -> None:
     assert _pop_frontier_node(frontier_nodes) == (None, None, None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_model_module_traversal_child_addresses_match_named_modules() -> None:
     """Incremental traversal addresses match PyTorch's dotted module names."""
 

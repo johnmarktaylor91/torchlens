@@ -5,8 +5,6 @@ from __future__ import annotations
 import inspect
 from dataclasses import fields
 
-import pytest
-
 from torchlens._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
@@ -30,7 +28,7 @@ from torchlens.errors import ReattachError, RunnableTLSPECError, StateBindingErr
 from torchlens.types import ReadinessReport, RunReport
 
 
-@pytest.mark.smoke
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_frozen_runnable_schema_values() -> None:
     """Keep the v2 schema versions and key enum values frozen."""
 
@@ -49,6 +47,7 @@ def test_frozen_runnable_schema_values() -> None:
     assert CANONICAL_INITIALIZER_BY_ROLE[StateSlotRole.WEIGHT] is InitializerPolicy.KAIMING_NORMAL
 
 
+# Kept: sole branch coverage of errors/_base.py.
 def test_runnable_errors_import_and_instantiate() -> None:
     """Ensure public runnable errors retain the shared TorchLens payload style."""
 
@@ -58,6 +57,7 @@ def test_runnable_errors_import_and_instantiate() -> None:
     assert isinstance(StateBindingError("bad state"), ValueError)
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_authoritative_descriptor_and_report_field_names() -> None:
     """Keep persisted descriptor and report shapes synchronized with the frozen document."""
 
@@ -190,6 +190,52 @@ def test_authoritative_descriptor_and_report_field_names() -> None:
     )
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_s1_extension_points_resolve_on_contract_modules() -> None:
+    """Every S1 extension point resolves on its declared contract module."""
+
+    import importlib
+
+    for module_name, names in _S1_EXTENSION_POINTS.items():
+        module = importlib.import_module(module_name)
+        for name in names:
+            assert hasattr(module, name), f"{module_name} lost S1 extension point {name}"
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_trace_run_satisfies_protocol_minimum() -> None:
+    """The concrete run door structurally satisfies the frozen protocol minimum.
+
+    ``RunnableTraceProtocol.run`` promises the stable typed minimum (``inputs``,
+    ``seed``, ``fast``, ``on_divergence``). The concrete ``Trace.run`` may add
+    keywords only as defaulted (keyword-only preferred) parameters, so every
+    existing typed consumer keeps compiling while unstable keywords incubate.
+    """
+
+    from torchlens._data_classes.trace import Trace
+
+    protocol_params = inspect.signature(RunnableTraceProtocol.run).parameters
+    concrete = inspect.signature(Trace.run)
+    for name in ("inputs", "seed", "fast", "on_divergence"):
+        assert name in concrete.parameters, f"Trace.run lost protocol parameter {name}"
+        proto_param = protocol_params[name]
+        conc_param = concrete.parameters[name]
+        if proto_param.default is not inspect.Parameter.empty:
+            assert conc_param.default == proto_param.default, (
+                f"Trace.run default for {name} drifted from the protocol minimum"
+            )
+    # Structural satisfiability: every concrete parameter beyond the protocol
+    # minimum must be optional (defaulted or VAR kinds), so a protocol-typed
+    # call never breaks.
+    for name, param in concrete.parameters.items():
+        if name in {"self", "inputs", "seed", "fast", "on_divergence"}:
+            continue
+        assert param.default is not inspect.Parameter.empty or param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ), f"Trace.run parameter {name} must carry a default (protocol satisfaction)"
+
+
 # The S1 seam contract (docs/reference/runnable_model.md "Extension points"):
 # every extension point resolves on its contract module, the protocol stays
 # the stable typed minimum the concrete door satisfies, and the run-door
@@ -245,50 +291,7 @@ RUN_DOOR_CONFLICT_CODES: frozenset[str] = frozenset(
 )
 
 
-def test_s1_extension_points_resolve_on_contract_modules() -> None:
-    """Every S1 extension point resolves on its declared contract module."""
-
-    import importlib
-
-    for module_name, names in _S1_EXTENSION_POINTS.items():
-        module = importlib.import_module(module_name)
-        for name in names:
-            assert hasattr(module, name), f"{module_name} lost S1 extension point {name}"
-
-
-def test_trace_run_satisfies_protocol_minimum() -> None:
-    """The concrete run door structurally satisfies the frozen protocol minimum.
-
-    ``RunnableTraceProtocol.run`` promises the stable typed minimum (``inputs``,
-    ``seed``, ``fast``, ``on_divergence``). The concrete ``Trace.run`` may add
-    keywords only as defaulted (keyword-only preferred) parameters, so every
-    existing typed consumer keeps compiling while unstable keywords incubate.
-    """
-
-    from torchlens._data_classes.trace import Trace
-
-    protocol_params = inspect.signature(RunnableTraceProtocol.run).parameters
-    concrete = inspect.signature(Trace.run)
-    for name in ("inputs", "seed", "fast", "on_divergence"):
-        assert name in concrete.parameters, f"Trace.run lost protocol parameter {name}"
-        proto_param = protocol_params[name]
-        conc_param = concrete.parameters[name]
-        if proto_param.default is not inspect.Parameter.empty:
-            assert conc_param.default == proto_param.default, (
-                f"Trace.run default for {name} drifted from the protocol minimum"
-            )
-    # Structural satisfiability: every concrete parameter beyond the protocol
-    # minimum must be optional (defaulted or VAR kinds), so a protocol-typed
-    # call never breaks.
-    for name, param in concrete.parameters.items():
-        if name in {"self", "inputs", "seed", "fast", "on_divergence"}:
-            continue
-        assert param.default is not inspect.Parameter.empty or param.kind in (
-            inspect.Parameter.VAR_POSITIONAL,
-            inspect.Parameter.VAR_KEYWORD,
-        ), f"Trace.run parameter {name} must carry a default (protocol satisfaction)"
-
-
+# Kept: sole provocation of an error code.
 def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
     """The conflict-matrix code list stays raised on the run-door path.
 
@@ -382,6 +385,7 @@ def _runnable_facade_imports() -> list[tuple[str, int, bool]]:
     return found
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_runnable_facade_imports_no_submodule_io_capture_or_backend() -> None:
     """``torchlens/_runnable/__init__.py`` stays a pure vocabulary module."""
 
@@ -406,6 +410,7 @@ def test_runnable_facade_imports_no_submodule_io_capture_or_backend() -> None:
     assert not offenders, f"the runnable vocabulary facade imports machinery: {offenders}"
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_runnable_facade_has_no_eager_torchlens_import() -> None:
     """The facade's TorchLens imports are deferred or typing-only, never eager."""
 

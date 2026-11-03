@@ -637,6 +637,21 @@ def read(  # noqa: PLR0913 -- the M(reads) public door: eight keyword-only spec-
     -------
     ReadTable
         Immutable carrier with per-row honesty and table provenance.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> type(table).__name__
+    'ReadTable'
+    >>> len(table) > 0
+    True
     """
 
     started = time.perf_counter()

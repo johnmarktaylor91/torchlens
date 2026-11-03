@@ -1,7 +1,7 @@
 """Typed "expected a Trace" refusals for the graph and tracker exporters.
 
-U09.2 + U10.5: ``tl.export.netron`` and ``tl.export.model_explorer`` share one
-refusal (``export_expected_trace``) at their top. U33.2: the one-shot
+``tl.export.netron`` and ``tl.export.model_explorer`` share one
+refusal (``export_expected_trace``) at their top. The one-shot
 ``tl.export.tensorboard`` exporter used to write plausible zeros for a
 non-Trace input; it now refuses with the same code. Each test also runs the
 remedy the refusal prints and checks it works.
@@ -55,7 +55,7 @@ def _assert_expected_trace_refusal(exc: ArgumentTypeError, exporter: str) -> Non
 
 
 def test_netron_refuses_a_non_trace_and_the_remedy_runs(tmp_path: Path) -> None:
-    """U09.2: a non-Trace refuses typed before any projection work."""
+    """A non-Trace refuses typed before any projection work."""
 
     destination = tmp_path / "graph.json"
     with pytest.raises(ArgumentTypeError) as info:
@@ -69,7 +69,7 @@ def test_netron_refuses_a_non_trace_and_the_remedy_runs(tmp_path: Path) -> None:
 
 
 def test_model_explorer_refuses_a_non_trace_and_the_remedy_runs(tmp_path: Path) -> None:
-    """U10.5: the Model Explorer exporter shares the netron refusal."""
+    """The Model Explorer exporter shares the netron refusal."""
 
     destination = tmp_path / "graph.json"
     with pytest.raises(ArgumentTypeError) as info:
@@ -83,7 +83,7 @@ def test_model_explorer_refuses_a_non_trace_and_the_remedy_runs(tmp_path: Path) 
 
 
 def test_tensorboard_refuses_a_non_trace_instead_of_writing_zeros() -> None:
-    """U33.2: no fabricated zero scalars reach the writer for a non-Trace."""
+    """No fabricated zero scalars reach the writer for a non-Trace."""
 
     writer = _RecordingWriter()
     with pytest.raises(ArgumentTypeError) as info:

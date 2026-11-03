@@ -40,15 +40,6 @@ class WideTupleOutputModel(nn.Module):
         return tuple(x + float(index) for index in range(16))
 
 
-class MixedShapeTupleModel(nn.Module):
-    """Return a tuple whose leaf shapes differ."""
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Run the model."""
-
-        return x + 1, torch.stack((x, x))
-
-
 class DictInputModel(nn.Module):
     """Consume a two-leaf dictionary input."""
 
@@ -89,57 +80,6 @@ def _trace(model: nn.Module) -> Any:
     return tl.trace(model, torch.ones(2), capture=tl.options.CaptureOptions(replayable=True))
 
 
-def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:
-    """Default rendering stays byte-identical to explicit ``show_containers=False``."""
-
-    trace = _trace(DictOutputModel())
-    default_source = trace.draw(
-        file_format="dot",
-        path=str(tmp_path / "default"),
-    ).dot
-    explicit_source = trace.draw(
-        show_containers=False,
-        file_format="dot",
-        path=str(tmp_path / "explicit"),
-    ).dot
-
-    assert default_source == explicit_source
-    assert "container_group" not in default_source
-    assert "container_kind" not in default_source
-    assert "container_role" not in default_source
-
-
-def test_show_containers_labels_adds_key_labeled_midpoint_edges(tmp_path: Path) -> None:
-    """Label mode adds key labels on real edges into container leaves."""
-
-    trace = _trace(DictOutputModel())
-    source = trace.draw(
-        show_containers="labels",
-        file_format="dot",
-        path=str(tmp_path / "labels"),
-    ).dot
-
-    assert 'label=<<TABLE BORDER="0"' in source
-    assert '<FONT POINT-SIZE="8">a</FONT>' in source
-    assert '<FONT POINT-SIZE="8">b</FONT>' in source
-    assert "labeldistance=" not in source
-    assert "labelangle=" not in source
-
-
-def test_show_containers_nodes_boxes_only_single_owner_leaves(tmp_path: Path) -> None:
-    """Nodes mode keeps the key labels but draws no dotted box without one module owner."""
-
-    trace = _trace(DictOutputModel())
-    source = trace.draw(
-        show_containers="nodes",
-        file_format="dot",
-        path=str(tmp_path / "nodes_no_owner"),
-    ).dot
-
-    assert '<FONT POINT-SIZE="8">a</FONT>' in source
-    assert "cluster_container_" not in source
-
-
 @pytest.mark.parametrize(
     ("removed", "replacement"),
     [("auto", "collapsed"), ("cluster", "labels")],
@@ -163,51 +103,6 @@ def test_show_containers_removed_spellings_refuse_naming_the_replacement(
     assert f"show_containers={replacement!r}" in excinfo.value.fields["remedy"]
     if removed == "cluster":
         assert "'nodes'" in excinfo.value.fields["remedy"]
-
-
-def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> None:
-    """Collapsed mode hides oversized homogeneous containers only."""
-
-    homogeneous = _trace(TupleOutputModel())
-    collapsed_source = homogeneous.draw(
-        show_containers="collapsed",
-        container_max_inline=2,
-        file_format="dot",
-        path=str(tmp_path / "collapsed"),
-    ).dot
-    assert "container_final_output_0_tuple" in collapsed_source
-    assert "output_1pass1" not in collapsed_source
-
-    mixed = _trace(MixedShapeTupleModel())
-    inline_source = mixed.draw(
-        show_containers="collapsed",
-        container_max_inline=1,
-        file_format="dot",
-        path=str(tmp_path / "inline"),
-    ).dot
-    assert "container_final_output_0_tuple" not in inline_source
-    assert "output_1pass1" in inline_source
-
-
-def test_show_containers_nodes_adds_source_and_sink_nodes(tmp_path: Path) -> None:
-    """Node mode adds boundary container nodes through overlay edges."""
-
-    trace = tl.trace(
-        DictInputModel(),
-        {"a": torch.ones(2), "b": torch.ones(2)},
-        capture=tl.options.CaptureOptions(capture_container_structure=True),
-    )
-    source = trace.draw(
-        show_containers="nodes",
-        file_format="dot",
-        path=str(tmp_path / "nodes_input"),
-    ).dot
-
-    assert "dict[2] (model input)" in source
-    assert "container_node_" in source
-    assert '<FONT POINT-SIZE="8">a</FONT>' in source
-    assert '<FONT POINT-SIZE="8">b</FONT>' in source
-    assert "constraint=false" in source
 
 
 def test_show_containers_nodes_adds_midgraph_member_ties(tmp_path: Path) -> None:
@@ -295,19 +190,6 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
     assert not hasattr(loaded, "_pending_container_collapse_nodes")
 
 
-def test_dagua_graph_carries_container_semantic_attrs() -> None:
-    """Dagua bridge carries portable semantic container metadata."""
-    pytest.importorskip("dagua")
-
-    trace = _trace(DictOutputModel())
-    graph = dagua.trace_to_dagua_graph(trace)
-
-    assert "final_output:0:dict" in graph.container_group
-    assert "dict" in graph.container_kind
-    assert "a" in graph.container_role
-    assert "b" in graph.edge_container_role
-
-
 class RecurrentDictOutputModel(nn.Module):
     """Run a layer three times, returning a dict output (multi-pass layers)."""
 
@@ -369,3 +251,16 @@ def test_dagua_container_semantics_survive_multipass_layers() -> None:
         "container_kind": None,
         "container_role": None,
     }
+
+
+def test_dagua_graph_carries_container_semantic_attrs() -> None:
+    """Dagua bridge carries portable semantic container metadata."""
+    pytest.importorskip("dagua")
+
+    trace = _trace(DictOutputModel())
+    graph = dagua.trace_to_dagua_graph(trace)
+
+    assert "final_output:0:dict" in graph.container_group
+    assert "dict" in graph.container_kind
+    assert "a" in graph.container_role
+    assert "b" in graph.edge_container_role

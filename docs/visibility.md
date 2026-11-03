@@ -51,7 +51,8 @@ Important examples:
   perspective. You can intervene on the visible SDPA call output, but not the
   internal Q/K/V scores, attention probabilities, or value aggregation steps.
 - FlashAttention kernels have the same limitation: the kernel internals are not
-  TorchLens leaf ops.
+  TorchLens leaf ops. A FlashAttention 4 call (`flash_attn.cute`) is one
+  `autogradfunction` boundary op whose output you can intervene on.
 - Multi-output fused calls, including `nn.LSTM`, expose one visible TorchLens
   op per returned tensor such as sequence output, final hidden state, and final
   cell state. The fused kernel is still opaque internally.

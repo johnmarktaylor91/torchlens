@@ -68,6 +68,20 @@ class AttentionCall:
     sdpa_checked:
         Whether this call's output was checked against
         ``torch.nn.functional.scaled_dot_product_attention``.
+
+    Examples
+    --------
+    >>> call = AttentionCall(
+    ...     module_name="layers.0.attn",
+    ...     probs=torch.full((1, 2, 3, 3), 1 / 3),
+    ...     num_key_value_heads=2,
+    ...     mask_kind="causal",
+    ...     sdpa_checked=False,
+    ... )
+    >>> call.mask_kind
+    'causal'
+    >>> tuple(call.probs.shape)
+    (1, 2, 3, 3)
     """
 
     module_name: str
@@ -85,6 +99,18 @@ class AttentionRecording(Mapping[str, torch.Tensor]):
     ``recording[name]`` serves a module called exactly once; a module called
     several times (generation steps, reused blocks) refuses typed and
     ``calls_for(name)`` returns every call in order.
+
+    Examples
+    --------
+    >>> probs = torch.full((1, 2, 3, 3), 1 / 3)
+    >>> call = tl.bridge.transformers.AttentionCall("layers.0.attn", probs, 2, "causal", False)
+    >>> recording = AttentionRecording(calls=[call])
+    >>> list(recording)
+    ['layers.0.attn']
+    >>> tuple(recording["layers.0.attn"].shape)
+    (1, 2, 3, 3)
+    >>> recording.nbytes
+    72
     """
 
     calls: list[AttentionCall] = field(default_factory=list)
@@ -420,6 +446,12 @@ def register_attention(model: Any | None = None) -> str:
         When transformers or its mask registry is unavailable.
     InvalidArgumentError
         When ``"torchlens"`` is already registered to a foreign function.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> tl.bridge.transformers.register_attention()
+    'torchlens'
     """
 
     attention_interface, mask_interface, _ = _require_registries()
@@ -471,6 +503,15 @@ def record_attention(model: Any, *, check_sdpa: bool = False) -> Iterator[Attent
     InvalidArgumentError
         When the model is not configured for the TorchLens backend (a
         recording would otherwise stay silently empty).
+
+    Examples
+    --------
+    >>> try:
+    ...     with tl.bridge.transformers.record_attention(model):
+    ...         pass
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     selected = _selected_backend(model)

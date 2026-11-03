@@ -115,6 +115,15 @@ class PreprocessingAuditError(_ActionableErrorMixin, ConfigurationError, Runtime
     disagreement (``preprocessing_audit_mismatch``) and inability to compare
     (``preprocessing_audit_unknown``). Consumers branch on
     ``exc.fields['code']``, never message text.
+
+    Examples
+    --------
+    >>> authority = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> try:
+    ...     tl.preprocessing.compare(authority, {"mean": [0.4] * 3, "std": [0.5] * 3}, strict=True)
+    ... except PreprocessingAuditError as error:
+    ...     print(type(error).__name__, error.fields["code"])
+    PreprocessingAuditError preprocessing_audit_mismatch
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
@@ -160,6 +169,14 @@ class AuditFinding:
         Evidence-class ranking token (memo D5).
     consequence:
         Family-split consequence prose with its stimulus set named.
+
+    Examples
+    --------
+    >>> authority = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> report = tl.preprocessing.compare(authority, {"mean": [0.4] * 3, "std": [0.5] * 3})
+    >>> row = next(f for f in report.findings if f.field == "mean")
+    >>> isinstance(row, AuditFinding), row.verdict
+    (True, 'mismatch')
     """
 
     field: str
@@ -206,6 +223,15 @@ class PreprocessingComparison:
         The authority's standing (``authoritative`` / ``unverified_fallback``
         / ``unknown``); a non-authoritative reference caps the verdict below
         ``verified`` (memo D9).
+
+    Examples
+    --------
+    >>> authority = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> report = tl.preprocessing.compare(authority, {"mean": [0.4] * 3, "std": [0.5] * 3})
+    >>> isinstance(report, PreprocessingComparison), report.verdict
+    (True, 'mismatch')
+    >>> list(report.mismatched_fields)
+    ['mean']
     """
 
     authority: Resolution
@@ -460,6 +486,13 @@ def compare(
     PreprocessingAuditError
         Strict mode only: on any mismatched field, or on an
         uncomparable/unauthoritative audit.
+
+    Examples
+    --------
+    >>> authority = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> report = tl.preprocessing.compare(authority, {"mean": [0.4] * 3, "std": [0.5] * 3})
+    >>> report.verdict, report.applied_source
+    ('mismatch', 'declaration')
     """
 
     from ._authorities import resolve as _resolve  # deferred: cycle preprocessing

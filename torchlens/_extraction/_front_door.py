@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any as _Any
 
 import torch
 
+from .._data_classes.trace import Trace
 from .._errors import AmbiguousOpLookupError
 from .._extract_refusals import (
     CaptureOptions,
@@ -27,9 +28,15 @@ from ..options import CaptureOptions as _LazyCaptureOptions
 if TYPE_CHECKING:
     from torch import nn
 
-    from .._data_classes.trace import Trace
-
 __tl_layer__ = "L5"
+
+
+def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
+    """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
+
+    if not isinstance(trace, Trace):
+        return []
+    return list(trace._suggest_layer_labels(str(query)))
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -83,7 +90,7 @@ def _out_from_log(trace: Trace, layer: str) -> torch.Tensor:
         # condition; a "not found" would hide it.
         raise
     except (KeyError, ValueError) as exc:
-        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
+        suggestions = _suggest_layer_labels(trace, layer)
         refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     out = getattr(layer_log, "out", None)
@@ -184,6 +191,12 @@ def pluck(
     InvalidArgumentError
         ``op_lookup_not_found`` if ``layer`` does not resolve;
         ``activation_not_saved`` if it produced no saved tensor.
+
+    Examples
+    --------
+    >>> relu_out = pluck(model, x, "relu")
+    >>> tuple(relu_out.shape)
+    (1, 4, 8, 8)
     """
 
     # an explicit site rides the door's stop_after=, where the trace
@@ -296,7 +309,7 @@ def _extract_layers_with_trace(
     for pattern in layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = trace.find_layers(pattern)
+            suggestions = _suggest_layer_labels(trace, pattern)
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
@@ -332,6 +345,12 @@ def extract(
     dict[str, torch.Tensor]
         Mapping from user labels to outs for mapping inputs, or from
         resolved layer labels to outs for list inputs.
+
+    Examples
+    --------
+    >>> outs = extract(model, x, {"stem": "0", "head": "2"})
+    >>> sorted((name, tuple(out.shape)) for name, out in outs.items())
+    [('head', (1, 2, 8, 8)), ('stem', (1, 4, 8, 8))]
     """
 
     _trace, outputs, _views = _extract_layers_with_trace(

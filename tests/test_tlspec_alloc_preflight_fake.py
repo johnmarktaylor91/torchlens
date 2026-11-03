@@ -49,20 +49,12 @@ from torchlens._runnable import (
     LiteralSequenceKind,
     LiteralTorchSymbol,
 )
-from torchlens._runnable.call_arguments import (
-    _has_numeric_literal,
-    _input_storage_ids,
-    _new_allocation_bytes,
-    _preflight_call_allocation,
-)
 from torchlens._runnable.execution import _MAX_DECODE_NESTING_DEPTH
 from torchlens._runnable.state_context import _fake_tensor_mode_class
 from torchlens._runnable.verification import _decode_literal
 from torchlens.errors import (
-    PayloadUnavailableError,
     RunCapabilityUnavailableError,
     RunnableTLSPECError,
-    RuntimeSignatureDriftError,
 )
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
@@ -193,16 +185,6 @@ _ONE_HOT_FAKE_PROJECTION_SUPPORTED = _one_hot_fake_projection_supported()
 # --------------------------------------------------------------------------- #
 
 
-def test_fake_tensor_mode_available_and_projects_without_allocation() -> None:
-    """The projection engine imports and projects a factory bomb without allocating."""
-
-    mode_cls = _fake_tensor_mode_class()
-    assert mode_cls is not None, "FakeTensorMode must be available on the supported torch range"
-    with _rlimit_cap(), mode_cls(allow_non_fake_inputs=True):
-        projected = torch.zeros(10**12)  # would be 4 TB if real -> refused by rlimit
-    assert int(projected.numel()) == 10**12  # projected, never allocated
-
-
 # --------------------------------------------------------------------------- #
 # (b) ENUMERATION-FREE end-to-end refusal sweep: a BROAD op sample, DELIBERATELY  #
 #     not the old allowlist, INCLUDING every r56-missed op. With NO allowlist, a  #
@@ -269,20 +251,13 @@ class _Repeat(nn.Module):  # already-covered materializer (control)
 
 # (model_factory, input, literal kind, sentinel value, tampered replacement)
 _REFUSAL_SWEEP = [
-    ("pad", _Pad, torch.randn(4), "int", 13, 10**12),
-    ("constant_pad_nd", _ConstantPadNd, torch.randn(4), "int", 17, 10**12),
-    ("hann_window", _HannWindow, torch.randn(4), "int", 19, 10**12),
-    ("kaiser_window", _KaiserWindow, torch.randn(4), "int", 23, 10**12),
-    ("tril_indices", _TrilIndices, torch.randn(4), "int", 29, 10**11),
-    ("triu_indices", _TriuIndices, torch.randn(4), "int", 31, 10**11),
     ("interpolate_float", _InterpolateFloat, torch.randn(1, 1, 8), "float", 3.5, 1e12),
     ("one_hot", _OneHot, torch.randn(4), "int", 37, 10**11),
-    ("zeros", _Zeros, torch.randn(4), "int", 41, 10**12),
-    ("arange", _Arange, torch.randn(4), "int", 43, 10**12),
     ("repeat", _Repeat, torch.randn(4), "int", 47, 10**11),
 ]
 
 
+# Kept: sole branch coverage of _io/runnable_load.py, _runnable/call_arguments.py, backends/torch/_completeness_escape_state.py; a sole mutation kill.
 @pytest.mark.parametrize(
     "name, factory, x, kind, sentinel, replacement",
     _REFUSAL_SWEEP,
@@ -336,117 +311,7 @@ class _Fold(nn.Module):
         return F.fold(x, output_size=(4, 4), kernel_size=(2, 2)).sum() + x.sum()
 
 
-def test_fold_literal_tamper_caught_without_allocation(tmp_path: Path) -> None:
-    """A ``fold`` output_size tamper is caught WITHOUT allocation. The projection fails
-    open (output_size/block-count inconsistency), but real ``fold`` validates the same
-    inconsistency before allocating -> typed ``RuntimeSignatureDriftError``, no bomb.
-    This is the honest fail-open residual, not an ``op_allocation_preflight`` refusal."""
-
-    x = torch.randn(1, 4, 9)
-    bundle = _build(tmp_path, "fold.tlspec", _Fold(), x)
-    mutated = _tamper_literal(bundle, "int", 4, 10**12)
-    assert mutated >= 1
-    with _rlimit_cap():
-        loaded = tl.load(str(bundle))
-        # Caught (no unbounded allocation) -- via signature drift, not a MemoryError bomb.
-        with pytest.raises(RuntimeSignatureDriftError):
-            loaded.run(inputs=x.clone())
-
-
-# --------------------------------------------------------------------------- #
-# (c) ENUMERATION-FREE mechanism pins: the projection runs for ANY callable      #
-#     regardless of its qualname/registry entry, and pure views / input-returns  #
-#     / in-place ops are excluded by STORAGE ALIASING (no view-name list).       #
-# --------------------------------------------------------------------------- #
-
-
-def test_preflight_projects_regardless_of_callable_identity() -> None:
-    """A factory bomb refuses even with ``entry=None`` and an ARBITRARY callable whose
-    qualname is nothing special -- proving no op-name/registry gate remains."""
-
-    call = _stub_call()
-    with _rlimit_cap():
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            _preflight_call_allocation(None, torch.zeros, [10**12], {}, call)
-        assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
-
-        def _arbitrary_alloc(n: int) -> torch.Tensor:
-            return torch.zeros(n)
-
-        with pytest.raises(RunCapabilityUnavailableError):
-            _preflight_call_allocation(None, _arbitrary_alloc, [10**12], {}, call)
-
-
-def test_preflight_excludes_views_and_inplace_by_storage_alias() -> None:
-    """Huge pure views / input-returning / in-place outputs alias a fake INPUT storage
-    -> zero NEW bytes -> NOT refused (structural, no view allowlist). The ``_base``-gap
-    cases (input-return, in-place) are included precisely because ``_base is None`` there."""
-
-    call = _stub_call()
-    x = torch.randn(4)
-    over_triggers = [
-        ("expand", torch.Tensor.expand, [x, 10**12, 4], {}),
-        ("broadcast_to", torch.broadcast_to, [x, (10**12, 4)], {}),
-        ("as_strided", torch.as_strided, [x, (10**6, 10**6), (0, 0)], {}),
-        ("getitem", torch.Tensor.__getitem__, [x, 0], {}),  # input-returning-ish
-        ("add_inplace", torch.Tensor.add_, [x.clone(), 1], {}),  # in-place, _base is None
-    ]
-    for _name, func, args, kwargs in over_triggers:
-        # Must NOT raise -- a view/in-place op allocates nothing.
-        _preflight_call_allocation(None, func, args, kwargs, call)
-
-
-@pytest.mark.smoke
-def test_preflight_fails_open_on_data_dependent_op() -> None:
-    """A data-dependent op with no fake impl (``nonzero``) fails open -- not refused."""
-
-    _preflight_call_allocation(None, torch.nonzero, [torch.randn(4)], {}, _stub_call())
-
-
-def test_preflight_skips_calls_without_numeric_literal() -> None:
-    """No size source AT ALL (no tensor operand AND no numeric literal, r61) -> the
-    projection is skipped; a tensor-operand-only call now projects (see the r61
-    immunizer file for the amplifier families the old has-literal-only skip gapped)."""
-
-    _preflight_call_allocation(None, torch.zeros, [], {}, _stub_call())
-
-
-def test_new_allocation_bytes_charges_only_non_aliasing_outputs() -> None:
-    """Storage-alias accounting: a projected VIEW of the input contributes 0 bytes; a
-    fresh projected tensor is charged; a mixed (view + fresh) output charges only fresh."""
-
-    mode_cls = _fake_tensor_mode_class()
-    assert mode_cls is not None
-    with mode_cls(allow_non_fake_inputs=True) as mode:
-        fake_in = mode.from_tensor(torch.randn(8))
-        input_ids = _input_storage_ids([fake_in])
-        view = fake_in.expand(10**6, 8)  # aliases input storage
-        fresh = torch.zeros(1000)  # fresh fake allocation
-        assert _new_allocation_bytes(view, input_ids) == {}  # pure view -> 0 new bytes
-        fresh_bytes = _new_allocation_bytes(fresh, input_ids)
-        assert sum(fresh_bytes.values()) == 1000 * fresh.element_size()
-        mixed_bytes = _new_allocation_bytes([view, fresh], input_ids)
-        assert sum(mixed_bytes.values()) == 1000 * fresh.element_size()
-
-
-def test_has_numeric_literal_covers_int_and_finite_float_only() -> None:
-    """``_has_numeric_literal`` fires for any non-bool int or FINITE float (closing the
-    float ``interpolate(scale_factor=...)`` gap), and excludes bool / inf / nan."""
-
-    assert _has_numeric_literal([5])
-    assert _has_numeric_literal([3.5])
-    assert _has_numeric_literal({"a": {"b": (2.0,)}})  # nested finite float
-    assert not _has_numeric_literal([True, False])  # bool excluded
-    assert not _has_numeric_literal([float("inf")])  # non-finite excluded
-    assert not _has_numeric_literal([float("nan")])
-    assert not _has_numeric_literal(["a string", None])
-
-
-# --------------------------------------------------------------------------- #
-# (d) absence pins -- the enumerated gate is GONE                                #
-# --------------------------------------------------------------------------- #
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_size_driving_allowlist_and_gate_are_deleted() -> None:
     """The projection is NOT gated by a callable qualname/tail allowlist: the r55
     enumeration symbols are absent, so no op-name list can silently re-open the class."""
@@ -457,16 +322,20 @@ def test_size_driving_allowlist_and_gate_are_deleted() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# (e) over-trigger guards -- legit ops / models must NOT be over-refused         #
+# (c) ENUMERATION-FREE mechanism pins: the projection runs for ANY callable      #
+#     regardless of its qualname/registry entry, and pure views / input-returns  #
+#     / in-place ops are excluded by STORAGE ALIASING (no view-name list).       #
 # --------------------------------------------------------------------------- #
 
 
-def test_untampered_factory_model_runs_verified(tmp_path: Path) -> None:
-    """A legitimate factory-using model runs VERIFIED (no over-trigger)."""
+# --------------------------------------------------------------------------- #
+# (d) absence pins -- the enumerated gate is GONE                                #
+# --------------------------------------------------------------------------- #
 
-    bundle = _build(tmp_path, "clean_factory.tlspec", _Factory(), torch.randn(4))
-    result = tl.load(str(bundle)).run(inputs=torch.randn(4))
-    assert result.report.path_faithfulness.value == "verified"
+
+# --------------------------------------------------------------------------- #
+# (e) over-trigger guards -- legit ops / models must NOT be over-refused         #
+# --------------------------------------------------------------------------- #
 
 
 class _HugeMaterialized(nn.Module):
@@ -560,32 +429,7 @@ def _fix_host_budget(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(module, "_allocation_budget_bytes", fixed_budget)
 
 
-def test_genuinely_huge_view_model_runs_verified(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A model whose real forward produces a HUGE view (4e8-element ``expand``) runs
-    VERIFIED under a budget far below the view's 1.6 GB logical size: the op allocates
-    nothing, the capture did not save the view so the run keeps no copy of it, and the
-    run-prep bounds charge it nothing."""
-
-    _fix_host_budget(monkeypatch)
-    x = torch.randn(1, 4)
-    # Retain only the scalar sums: the runnable save is tensor-value-free, and the default
-    # exhaustive capture would materialize a contiguous copy of the 4e8-element view
-    # (~1.6 GB), which trips the host-dependent save budget on a busy CI runner.
-    # The subject here is the RUN-time alloc preflight, not capture retention.
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
-    result = tl.load(str(bundle)).run(inputs=x.clone())
-    assert result.report.path_faithfulness.value == "verified"
-    ops = {op.label.split("_")[0]: op for op in result.trace._layer_list}
-    try:
-        expand_out = ops["expand"].out
-    except PayloadUnavailableError:
-        expand_out = None
-    assert expand_out is None  # unsaved at capture, so the run keeps no copy
-    assert isinstance(ops["sum"].out, torch.Tensor)  # saved ops keep their snapshot
-
-
+# Kept: sole branch coverage of _runnable/retention.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "factory, save",
     [
@@ -625,6 +469,7 @@ def test_huge_materialized_slot_still_refused(
     assert int(caught.value.fields["available_bytes"]) == _HUGE_VIEW_HOST_BUDGET_BYTES
 
 
+# Kept: sole branch coverage of _runnable/call_arguments.py.
 @pytest.mark.parametrize("failure", ["no_size_source", "projection_raises"])
 def test_admitted_view_unprojectable_at_run_time_fails_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
@@ -657,6 +502,7 @@ def test_admitted_view_unprojectable_at_run_time_fails_closed(
     assert any(str(label).startswith("expand") for label in labels)
 
 
+# Kept: sole branch coverage of _runnable/retention.py, _runnable/state.py.
 def test_admitted_views_share_one_logical_ceiling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -674,32 +520,6 @@ def test_admitted_views_share_one_logical_ceiling(
         loaded.run(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     assert int(caught.value.fields["logical_elements"]) == 2 * 4 * 10**7
-
-
-def test_view_proof_projection_runs_without_real_kernel_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The run-prep view proof never lets FakeTensor fall back to a real kernel on
-    zero-filled operands of recorded, not yet bounded, shapes."""
-
-    _fix_host_budget(monkeypatch)
-    real_mode_class = torchlens._runnable.state_context._count_bounded_fake_tensor_mode_class()
-    assert real_mode_class is not None
-    seen: list[Any] = []
-
-    class _Recording(real_mode_class):  # type: ignore[misc,valid-type]
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            seen.append(kwargs.get("allow_fallback_kernels", True))
-            super().__init__(*args, **kwargs)
-
-    # The home module and the module that bound the factory by import.
-    for module in (torchlens._runnable.state_context, torchlens._runnable.call_arguments):
-        monkeypatch.setattr(module, "_count_bounded_fake_tensor_mode_class", lambda: _Recording)
-    x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
-    result = tl.load(str(bundle)).run(inputs=x.clone())
-    assert result.report.path_faithfulness.value == "verified"
-    assert seen and seen[0] is False  # the first projection is the run-prep view proof
 
 
 def _calls_by_op(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -747,6 +567,7 @@ def _record_out_add_small(manifest: dict[str, Any]) -> None:
             slot["shape"] = [1, 4]
 
 
+# Kept: sole branch coverage of _runnable/retention.py; a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "factory, mutate",
     [
@@ -846,83 +667,6 @@ def _admits(
     return lookup(view)
 
 
-def test_view_admission_admits_measured_reader_forms(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A listed reader passing only measured literal forms (``sum(v, dim, keepdim=...)``,
-    ``add(v, 1.0, alpha=...)``) keeps the view admitted."""
-
-    view = _admission_slot("s:view")
-    sum_reader = _admission_call(
-        "c:read",
-        reads=("s:view",),
-        writes=("s:out",),
-        literal_paths=(("args", 1), ("kwargs", "keepdim")),
-    )
-    assert _admits(monkeypatch, view, (), sum_reader, ("torch", "sum"))
-    add_reader = _admission_call(
-        "c:read",
-        reads=("s:view",),
-        writes=("s:out",),
-        literal_paths=(("args", 1), ("kwargs", "alpha")),
-    )
-    assert _admits(monkeypatch, view, (), add_reader, ("torch", "add"))
-
-
-def test_view_admission_control_streaming_reader_admitted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The control for the routes below: a CPU view read only by ``sum`` is admitted."""
-
-    view = _admission_slot("s:view")
-    reader = _admission_call("c:read", reads=("s:view",), writes=("s:sum",))
-    assert _admits(monkeypatch, view, (), reader, ("torch", "sum"))
-
-
-@pytest.mark.parametrize(
-    "route",
-    [
-        "cuda_view",
-        "reader_through_alias",
-        "out_reader",
-        "inplace_reader",
-        "norm_reader",
-        "dtype_reader",
-        "unmeasured_reader_argument",
-    ],
-)
-def test_view_admission_refuses_hidden_copy_routes(
-    monkeypatch: pytest.MonkeyPatch, route: str
-) -> None:
-    """Each route that can hide a full-size copy of a view keeps the view charged: a view
-    off CPU (the reader lists were measured on CPU), a copying reader of a version alias,
-    a listed reader writing ``out=`` or in place, ``norm`` (an SVD for ``p="nuc"``), and a
-    listed reduction given a dtype (it casts a full-size copy first), and a listed reader
-    passing any literal argument outside the forms it was measured with."""
-
-    view = _admission_slot("s:view", device_type="cuda" if route == "cuda_view" else "cpu")
-    extra: tuple[Any, ...] = ()
-    reader_op = ("torch", "add")
-    reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",))
-    if route == "reader_through_alias":
-        extra = (_admission_slot("s:alias", alias_of="s:view"),)
-        reader = _admission_call("c:read", reads=("s:alias",), writes=("s:out",))
-        reader_op = ("torch", "median")
-    elif route == "out_reader":
-        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), out="s:buf")
-    elif route == "inplace_reader":
-        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), inplace=True)
-    elif route == "norm_reader":
-        reader_op = ("Tensor", "norm")
-    elif route == "unmeasured_reader_argument":
-        reader = _admission_call(
-            "c:read", reads=("s:view",), writes=("s:out",), literal_paths=(("kwargs", "bogus"),)
-        )
-        reader_op = ("torch", "sum")
-    elif route == "dtype_reader":
-        reader = _admission_call("c:read", reads=("s:view",), writes=("s:out",), dtype="float64")
-        reader_op = ("torch", "sum")
-    assert not _admits(monkeypatch, view, extra, reader, reader_op)
-
-
 def _alias_slot(slots: dict[str, dict[str, Any]], target_id: str, slot_id: str) -> dict[str, Any]:
     """A crafted unread version alias of ``target_id``, recorded at the target's shape."""
 
@@ -942,6 +686,7 @@ def _alias_of_alias(manifest: dict[str, Any]) -> None:
     run["tensor_slots"] += [first, _alias_slot(slots, first["slot_id"], f"{view_id}:alias2")]
 
 
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
     """Bind writes a produced value only into its direct version aliases, so a file whose
     alias names another alias is refused at load, which keeps the run's alias maps one
@@ -960,25 +705,7 @@ def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
         loaded.run(inputs=x.clone())
 
 
-def test_alias_reader_map_is_linear_in_slots() -> None:
-    """The view-admission reader map holds one entry per read and per direct alias read,
-    however long a version-alias chain the descriptor carries."""
-
-    from torchlens._runnable.retention import _readers_through_version_aliases
-
-    chain = 2000
-    slots = [_admission_slot("s:a0")] + [
-        _admission_slot(f"s:a{index}", alias_of=f"s:a{index - 1}") for index in range(1, chain)
-    ]
-    readers = {
-        "s:a0": [_admission_call("c:head", reads=("s:a0",))],
-        f"s:a{chain - 1}": [_admission_call("c:tail", reads=(f"s:a{chain - 1}",))],
-    }
-    descriptor = types.SimpleNamespace(tensor_slots=tuple(slots))
-    mapped = _readers_through_version_aliases(descriptor, readers)
-    assert sum(len(calls) for calls in mapped.values()) <= 2 * len(readers)
-
-
+# Kept: sole branch coverage of _runnable/retention.py, _runnable/state.py.
 def test_admitted_view_realized_off_cpu_refused_at_bind() -> None:
     """A view admitted past the budget as a CPU view whose realized value is on another
     device (the recorded label lied) is refused at bind, before any reader runs; an
@@ -995,46 +722,12 @@ def test_admitted_view_realized_off_cpu_refused_at_bind() -> None:
     assert caught.value.fields.get("device") == "meta"
 
 
-def test_bind_tells_the_extent_check_which_outputs_are_admitted_views(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Bind passes run-prep's admission to the extent check, so the device check above
-    applies to exactly the admitted views."""
-
-    _fix_host_budget(monkeypatch)
-    real_check = rex._check_unretained_extent
-    admitted_by_slot: dict[str, bool] = {}
-
-    def recording_check(value: torch.Tensor, **kwargs: Any) -> None:
-        admitted_by_slot[str(kwargs["slot_id"])] = bool(kwargs.get("admitted_view", False))
-        real_check(value, **kwargs)
-
-    monkeypatch.setattr(
-        torchlens._runnable.call_outputs, "_check_unretained_extent", recording_check
-    )
-    x = torch.randn(1, 4)
-    bundle = _build(tmp_path, "huge_view.tlspec", _HugeView(), x, save=tl.func("sum"))
-    result = tl.load(str(bundle)).run(inputs=x.clone())
-    assert result.report.path_faithfulness.value == "verified"
-    admitted = sorted(slot for slot, flag in admitted_by_slot.items() if flag)
-    assert admitted and all("expand" in slot for slot in admitted)
-
-
-def test_data_dependent_op_fails_open_and_runs(tmp_path: Path) -> None:
-    """A legit ``nonzero`` (fake impl raises ``DynamicOutputShapeException``) FAILS OPEN."""
-
-    x = torch.randn(8)
-    bundle = _build(tmp_path, "nonzero.tlspec", _Nonzero(), x)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
-    # fail-open: the projection raised, the run still executes and is faithful.
-    assert result.report.path_faithfulness.value == "verified"
-
-
 # --------------------------------------------------------------------------- #
 # (f) defensive run-side decode-depth guard (C4)                               #
 # --------------------------------------------------------------------------- #
 
 
+# Kept: sole branch coverage of _runnable/verification.py.
 def test_decode_literal_depth_guard_raises_not_recursionerror() -> None:
     """An over-depth nested literal raises a typed ``ValueError``, never ``RecursionError``."""
 
@@ -1043,16 +736,3 @@ def test_decode_literal_depth_guard_raises_not_recursionerror() -> None:
         node = LiteralSequence(kind=LiteralSequenceKind.TUPLE, items=(node,))
     with pytest.raises(ValueError, match="decode depth"):
         _decode_literal(node)
-
-
-def test_decode_literal_normal_nesting_ok() -> None:
-    """Ordinary shallow literal nesting decodes cleanly (guard never over-fires)."""
-
-    node: Any = LiteralSequence(
-        kind=LiteralSequenceKind.TUPLE,
-        items=(
-            LiteralAtom(kind=LiteralAtomKind.INT, value=2),
-            LiteralAtom(kind=LiteralAtomKind.INT, value=3),
-        ),
-    )
-    assert _decode_literal(node) == (2, 3)

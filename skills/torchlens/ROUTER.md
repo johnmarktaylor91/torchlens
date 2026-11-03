@@ -60,6 +60,6 @@ trace = tl.load("run.tlspec")
 | Compare model features with brain data | `result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"))` | Re-implementing RSA and ridge scoring by hand. | docs/reference/neuro.md |
 | Stream summary statistics over a dataset | `stats = tl.stats.aggregate(model, batches, metrics={"relu_1_2": tl.stats.Aggregator(tl.stats.Mean())})` | Saving all activations of every batch to average later. | docs/reference/stats.md |
 | Fail a test when the architecture changes | `tl.fingerprint.assert_unchanged(model, x, expected=None)` | Comparing str(model), which misses changes inside forward. | docs/reference/hash.md |
-| Monitor activations on a production inference server | none: not a TorchLens task | Wrapping a server's forward in a capture. | docs/non_goals.md |
+| Monitor activations on a production inference server | none: not a TorchLens task | Wrapping a server's forward in a capture. | docs/migration/cross_engine.md |
 
 Capabilities by name: docs/reference/agent_capabilities.md. Read-only tools over saved artifacts: `torchlens guide`.

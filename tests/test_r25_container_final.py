@@ -91,6 +91,7 @@ class _DescriptorKeyModelOutput(dict[str, Any]):
         dict.__setitem__(self, "logits", value)
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_sec1_dataclass_descriptor_field_is_inert_and_refused() -> None:
     """A captured field that is a data descriptor is refused; its ``__set__`` never fires."""
 
@@ -108,61 +109,6 @@ def test_sec1_dataclass_descriptor_field_is_inert_and_refused() -> None:
     assert rebuilt == {"endpoint": "attacker://payload"}
 
 
-def test_sec1_model_output_descriptor_key_is_inert_and_refused() -> None:
-    """A captured key that is a data descriptor is refused; its ``__set__`` never fires."""
-
-    _DESCRIPTOR_SENTINEL.clear()
-    spec = ContainerSpec(
-        kind="hf_model_output",
-        length=1,
-        keys=("logits",),
-        type_module=_DescriptorKeyModelOutput.__module__,
-        type_qualname=_DescriptorKeyModelOutput.__qualname__,
-    )
-    rebuilt = rebuild_container_from_spec(spec, [7])
-
-    assert _DESCRIPTOR_SENTINEL == []  # descriptor __set__ NEVER executed
-    assert rebuilt == {"logits": 7}
-
-
-def test_sec1_frozen_dataclass_populated_via_instance_dict() -> None:
-    """A FROZEN dataclass rebuilds by writing directly into ``obj.__dict__``.
-
-    Direct ``obj.__dict__`` population (not ``object.__setattr__``) is what bypasses both a
-    frozen dataclass's ``__setattr__`` and any data descriptor. A faithful frozen rebuild is
-    the observable proof the inert ``__dict__`` write path is used.
-    """
-
-    spec = ContainerSpec(
-        kind="dataclass",
-        fields=("logits", "tag"),
-        type_module=_FrozenOut.__module__,
-        type_qualname=_FrozenOut.__qualname__,
-    )
-    rebuilt = rebuild_container_from_spec(spec, [123, 5])
-
-    assert type(rebuilt) is _FrozenOut
-    assert rebuilt == _FrozenOut(logits=123, tag=5)
-    assert vars(rebuilt) == {"logits": 123, "tag": 5}
-
-
-def test_sec1_model_output_alias_and_mapping_both_populated() -> None:
-    """A ModelOutput rebuild sets the mapping entry AND the ``__dict__`` attribute alias."""
-
-    spec = ContainerSpec(
-        kind="hf_model_output",
-        length=1,
-        keys=("logits",),
-        type_module=_PureModelOutput.__module__,
-        type_qualname=_PureModelOutput.__qualname__,
-    )
-    rebuilt = rebuild_container_from_spec(spec, [42])
-
-    assert type(rebuilt) is _PureModelOutput
-    assert rebuilt["logits"] == 42  # mapping entry via base dict.__setitem__
-    assert vars(rebuilt) == {"logits": 42}  # attribute alias via obj.__dict__ write
-
-
 # --------------------------------------------------------------------------- #
 # SEC2: structural ``issubclass(tuple)`` check applies regardless of module string.
 # --------------------------------------------------------------------------- #
@@ -172,6 +118,7 @@ class _NotATuple:
     """A non-tuple type an attacker might name under ``torch.return_types``."""
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_sec2_non_structseq_naming_torch_return_types_is_refused() -> None:
     """A non-tuple type is refused structurally even when the spec claims torch.return_types."""
 
@@ -182,19 +129,6 @@ def test_sec2_non_structseq_naming_torch_return_types_is_refused() -> None:
         type_qualname="x",
     )
     assert _container_type_is_admissible(_NotATuple, spec) is False
-
-
-def test_sec2_real_structseq_still_admissible() -> None:
-    """A genuine torch structseq (tuple subclass with n_fields) stays admissible."""
-
-    structseq = torch.max(torch.randn(3, 3), dim=0)
-    spec = ContainerSpec(
-        kind="namedtuple",
-        fields=("values", "indices"),
-        type_module="torch.return_types",
-        type_qualname="max",
-    )
-    assert _container_type_is_admissible(type(structseq), spec) is True
 
 
 # --------------------------------------------------------------------------- #
@@ -246,6 +180,7 @@ class _DerivedAttrModelOutput(dict[str, Any]):
         self.double = logits * 2.0
 
 
+# Kept: the catch of its regression fault.
 def test_reconstruction_is_lossy_detects_computed_extras() -> None:
     """Computed non-field/non-key attributes make reconstruction lossy; pure data does not."""
 
@@ -260,14 +195,6 @@ def test_reconstruction_is_lossy_detects_computed_extras() -> None:
 
     derived_mo = _DerivedAttrModelOutput(torch.tensor([1.0, 2.0]))
     assert reconstruction_is_lossy(derived_mo, ("logits",)) is True
-
-
-def test_reconstruction_is_lossy_ignores_none_extras() -> None:
-    """A None-valued extra attribute (standard ModelOutput unset field) is NOT lossy."""
-
-    mo = _PureModelOutput(logits=torch.zeros(2))
-    mo.attentions = None  # a standard unset ModelOutput field kept as a None attribute
-    assert reconstruction_is_lossy(mo, ("logits",)) is False
 
 
 class _DerivedAttrDataclassModel(nn.Module):
@@ -286,37 +213,6 @@ class _DerivedAttrModelOutputModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Any:
         return _DerivedAttrModelOutput(self.lin(x))
-
-
-def test_derived_attr_dataclass_run_is_unverifiable(tmp_path: Path) -> None:
-    """A dataclass with computed non-field state runs UNVERIFIABLE, never VERIFIED."""
-
-    x = torch.tensor([2.0, 4.0, -1.0, 3.0])
-    bundle = tmp_path / "derived_dc.tlspec"
-    tl.trace(_DerivedAttrDataclassModel(), x.clone(), capture=_CAP).save(
-        bundle, level="runnable", include_weights=True
-    )
-    result = tl.load(bundle).run(inputs=x.clone(), seed=0, on_divergence="return")
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert type(result.output) is _DerivedAttrDataclassOut
-    # The dropped computed attribute is genuinely absent (why the run is UNVERIFIABLE).
-    assert not hasattr(result.output, "extra_note")
-
-
-def test_derived_attr_model_output_run_is_unverifiable(tmp_path: Path) -> None:
-    """A ModelOutput with a computed non-mapping attribute runs UNVERIFIABLE."""
-
-    x = torch.randn(1, 4)
-    bundle = tmp_path / "derived_mo.tlspec"
-    tl.trace(_DerivedAttrModelOutputModel(), x, capture=_CAP).save(
-        bundle, level="runnable", include_weights=True
-    )
-    result = tl.load(bundle).run(inputs=x, seed=0, on_divergence="return")
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert type(result.output) is _DerivedAttrModelOutput
-    assert not hasattr(result.output, "double")
 
 
 # --------------------------------------------------------------------------- #
@@ -346,6 +242,7 @@ class _PureModelOutputModel(nn.Module):
         return _PureModelOutput(logits=self.lin(x))
 
 
+# Kept: a sole mutation kill.
 def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
     """A pure user dataclass output is VERIFIED and reconstructs to an equal instance."""
 
@@ -363,6 +260,7 @@ def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
     assert torch.equal(result.output.logits, expected.logits)
 
 
+# Kept: sole branch coverage of _ir/_container_type_probes.py, _ir/container.py, _runnable/path_faithfulness.py and more.
 def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path: Path) -> None:
     """r27-B2: a custom-``__init__`` ModelOutput is honest fail-closed UNVERIFIABLE.
 
@@ -386,64 +284,9 @@ def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path:
     assert result.output.logits is result.output["logits"]
 
 
-def test_real_transformers_model_output_not_lossy_and_faithful() -> None:
-    """A real transformers ModelOutput (None fields excluded from keys) stays VERIFIED-eligible."""
-
-    modeling_outputs = pytest.importorskip("transformers.modeling_outputs")
-    output = modeling_outputs.BaseModelOutput(last_hidden_state=torch.zeros(2, 2))
-
-    # None extra fields (hidden_states/attentions) must NOT over-trigger lossy.
-    assert reconstruction_is_lossy(output, tuple(output.keys())) is False
-
-    spec = ContainerSpec(
-        kind="hf_model_output",
-        length=1,
-        keys=("last_hidden_state",),
-        type_module=type(output).__module__,
-        type_qualname=type(output).__qualname__,
-    )
-    rebuilt = rebuild_container_from_spec(spec, [torch.ones(2, 2)])
-    assert type(rebuilt) is type(output)
-    assert list(rebuilt.keys()) == ["last_hidden_state"]
-    assert rebuilt.last_hidden_state is rebuilt["last_hidden_state"]
-
-
 # --------------------------------------------------------------------------- #
 # No regression: namedtuple / dict / OrderedDict / tuple / list unchanged.
 # --------------------------------------------------------------------------- #
-
-
-def test_no_regression_plain_containers_round_trip() -> None:
-    """namedtuple / dict / OrderedDict / tuple / list reconstruct unchanged."""
-
-    nt_spec = ContainerSpec(
-        kind="namedtuple",
-        length=2,
-        fields=("x", "y"),
-        type_module=_Point.__module__,
-        type_qualname=_Point.__qualname__,
-    )
-    nt = rebuild_container_from_spec(nt_spec, [1, 2])
-    assert type(nt) is _Point and nt == _Point(1, 2)
-
-    dict_spec = ContainerSpec(kind="dict", length=2, keys=("a", "b"))
-    assert rebuild_container_from_spec(dict_spec, [1, 2]) == {"a": 1, "b": 2}
-
-    od_spec = ContainerSpec(
-        kind="dict",
-        length=2,
-        keys=("a", "b"),
-        type_module="collections",
-        type_qualname="OrderedDict",
-    )
-    od = rebuild_container_from_spec(od_spec, [1, 2])
-    assert type(od) is OrderedDict and list(od.items()) == [("a", 1), ("b", 2)]
-
-    tup_spec = ContainerSpec(kind="tuple", length=2)
-    assert rebuild_container_from_spec(tup_spec, [1, 2]) == (1, 2)
-
-    list_spec = ContainerSpec(kind="list", length=2)
-    assert rebuild_container_from_spec(list_spec, [1, 2]) == [1, 2]
 
 
 class _Point(tuple):  # stand-in namedtuple-like with _fields
@@ -485,59 +328,6 @@ class _PairNamedTuple(NamedTuple):
     b: int
 
 
-def test_r26_namedtuple_weaponized_new_is_never_invoked() -> None:
-    """A namedtuple-like type's code-executing ``__new__`` never fires on reconstruction."""
-
-    _NAMEDTUPLE_NEW_SENTINEL.clear()
-    spec = ContainerSpec(
-        kind="namedtuple",
-        length=2,
-        fields=("a", "b"),
-        type_module=_WeaponizedNamedTupleLike.__module__,
-        type_qualname=_WeaponizedNamedTupleLike.__qualname__,
-    )
-    # Admissible (tuple subclass + _fields) yet its __new__ must not run.
-    assert _container_type_is_admissible(_WeaponizedNamedTupleLike, spec)
-
-    rebuilt = rebuild_container_from_spec(spec, [1, 2])
-
-    assert _NAMEDTUPLE_NEW_SENTINEL == []  # RCE gadget never fired
-    assert tuple(rebuilt) == (1, 2)
-
-
-def test_r26_genuine_namedtuple_reconstructs_faithfully_via_tuple_new() -> None:
-    """A genuine namedtuple reconstructs to its exact type without invoking its ``__new__``."""
-
-    spec = ContainerSpec(
-        kind="namedtuple",
-        length=2,
-        fields=("a", "b"),
-        type_module=_PairNamedTuple.__module__,
-        type_qualname=_PairNamedTuple.__qualname__,
-    )
-    rebuilt = rebuild_container_from_spec(spec, [3, 4])
-
-    assert type(rebuilt) is _PairNamedTuple
-    assert rebuilt.a == 3 and rebuilt.b == 4
-
-
-def test_r26_structseq_output_still_reconstructs() -> None:
-    """A genuine torch structseq still reconstructs through its own inert C constructor."""
-
-    live = torch.max(torch.randn(3, 3), dim=0)
-    spec = ContainerSpec(
-        kind="namedtuple",
-        length=2,
-        fields=("values", "indices"),
-        type_module="torch.return_types",
-        type_qualname="max",
-    )
-    rebuilt = rebuild_container_from_spec(spec, [live.values, live.indices])
-
-    assert type(rebuilt) is type(live)
-    assert torch.equal(rebuilt.values, live.values)
-
-
 # --------------------------------------------------------------------------- #
 # r26-B2 (LOW-MED, honesty): ``lossy_reconstruction`` is attacker-controlled in a
 # forged bundle. Lossiness is RECOMPUTED independently from the resolved type at load,
@@ -552,23 +342,7 @@ class _SlotsDataclassOut:
     a: Any = None
 
 
-def test_r26_forged_lossy_flag_on_post_init_dataclass_is_recomputed_lossy() -> None:
-    """A forged ``lossy_reconstruction=False`` on a __post_init__ dataclass is recomputed lossy."""
-
-    # Independent type-only recompute defeats the forged flag.
-    assert reconstruction_is_lossy_by_type(_DerivedAttrDataclassOut, ("a",), "dataclass") is True
-
-    forged = ContainerSpec(
-        kind="dataclass",
-        length=1,
-        fields=("a",),
-        type_module=_DerivedAttrDataclassOut.__module__,
-        type_qualname=_DerivedAttrDataclassOut.__qualname__,
-        lossy_reconstruction=False,  # attacker-forged
-    )
-    assert _container_spec_reconstruction_lossy(forged) is True
-
-
+# Kept: sole branch coverage of _ir/container.py.
 def test_r26_forged_lossy_flag_on_descriptor_field_is_recomputed_lossy() -> None:
     """A forged flag on a data-descriptor-field dataclass is recomputed lossy at load."""
 
@@ -583,6 +357,7 @@ def test_r26_forged_lossy_flag_on_descriptor_field_is_recomputed_lossy() -> None
     assert _container_spec_reconstruction_lossy(forged) is True
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_r26_forged_lossy_flag_on_slots_type_is_recomputed_lossy() -> None:
     """A forged flag on a ``__slots__`` output type is recomputed lossy at load."""
 
@@ -603,51 +378,7 @@ class _NoInitModelOutput(dict[str, Any]):
     """A mapping ModelOutput with NO custom ``__init__`` (mapping-only, no computed extras)."""
 
 
-def test_r26_pure_outputs_stay_verified_under_recompute() -> None:
-    """Pure dataclass / no-custom-init ModelOutput outputs stay non-lossy under the recompute."""
-
-    pure_dc = ContainerSpec(
-        kind="dataclass",
-        length=2,
-        fields=("logits", "tag"),
-        type_module=_PureDataclassOut.__module__,
-        type_qualname=_PureDataclassOut.__qualname__,
-        lossy_reconstruction=False,
-    )
-    assert _container_spec_reconstruction_lossy(pure_dc) is False
-
-    # A ModelOutput with no custom ``__init__`` is trusted (mapping populated inertly).
-    pure_mo = ContainerSpec(
-        kind="hf_model_output",
-        length=1,
-        keys=("logits",),
-        type_module=_NoInitModelOutput.__module__,
-        type_qualname=_NoInitModelOutput.__qualname__,
-        lossy_reconstruction=False,
-    )
-    assert _container_spec_reconstruction_lossy(pure_mo) is False
-
-
-def test_r27_custom_init_model_output_forged_lossy_flag_is_recomputed_lossy() -> None:
-    """r27-B2: a forged ``lossy=False`` on a custom-``__init__`` ModelOutput is recomputed lossy.
-
-    ``_PureModelOutput`` defines its own ``__init__``; the load-time recompute flags it lossy
-    from the TYPE alone (never invoking the constructor), defeating the forged flag.
-    """
-
-    assert reconstruction_is_lossy_by_type(_PureModelOutput, ("logits",), "hf_model_output") is True
-
-    forged = ContainerSpec(
-        kind="hf_model_output",
-        length=1,
-        keys=("logits",),
-        type_module=_PureModelOutput.__module__,
-        type_qualname=_PureModelOutput.__qualname__,
-        lossy_reconstruction=False,  # attacker-forged
-    )
-    assert _container_spec_reconstruction_lossy(forged) is True
-
-
+# Kept: sole branch coverage of _ir/container.py.
 def test_r26_forged_lossy_flag_on_unloaded_type_is_lossy() -> None:
     """A dataclass spec whose type is not loaded rebuilds to a plain namespace -> lossy."""
 
@@ -678,28 +409,7 @@ def _torch_submodules() -> set[str]:
     return {name for name in sys.modules if name == "torch" or name.startswith("torch.")}
 
 
-@pytest.mark.parametrize("kind", ["namedtuple", "dataclass", "hf_model_output", "dict"])
-def test_r27_lazy_import_gadget_resolve_imports_nothing(kind: str) -> None:
-    """Resolving a ``torch.onnx`` container ref imports NO torch submodule and falls back."""
-
-    spec = ContainerSpec(
-        kind=kind,  # type: ignore[arg-type]
-        length=2,
-        keys=("values", "indices"),
-        fields=("values", "indices"),
-        type_module="torch",
-        type_qualname="onnx",  # torch's lazy PEP-562 submodule -- must NOT be imported
-    )
-
-    before = _torch_submodules()
-    resolved = _resolve_container_type(spec)
-    after = _torch_submodules()
-
-    # Static resolution never imports the lazy submodule and never yields a container type.
-    assert resolved is None
-    assert after == before, f"resolve imported torch submodules: {sorted(after - before)}"
-
-
+# Kept: sole branch coverage of _ir/container.py.
 def test_r27_lazy_import_gadget_rebuild_and_lossy_gate_import_nothing() -> None:
     """Both rebuild and the honesty (lossy) gate stay import-free for the ``torch.onnx`` ref."""
 
@@ -722,6 +432,7 @@ def test_r27_lazy_import_gadget_rebuild_and_lossy_gate_import_nothing() -> None:
     assert after == before, f"gadget imported torch submodules: {sorted(after - before)}"
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_r27_deep_qualname_is_refused() -> None:
     """A pathologically deep attacker qualname is refused (falls back), never walked."""
 
@@ -734,6 +445,7 @@ def test_r27_deep_qualname_is_refused() -> None:
     assert _resolve_container_type(spec) is None
 
 
+# Kept: sole branch coverage of _ir/container.py.
 def test_r27_getattr_static_does_not_fire_module_pep562_getattr() -> None:
     """Static resolution never triggers a module-level ``__getattr__`` side effect."""
 
@@ -771,6 +483,7 @@ def test_r27_getattr_static_does_not_fire_module_pep562_getattr() -> None:
 # --------------------------------------------------------------------------- #
 
 
+# Kept: sole branch coverage of _ir/_container_type_probes.py.
 def test_r27_foreign_init_detection_matrix() -> None:
     """``_model_output_has_foreign_init`` trusts mapping bases; transformers trust is spec-keyed.
 

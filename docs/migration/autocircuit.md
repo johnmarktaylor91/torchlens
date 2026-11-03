@@ -49,7 +49,7 @@ RESULT = (
 | AutoCircuit operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
 | Identify circuit nodes | `log.find_sites(...)`, graph metadata, and visualization | TorchLens exposes raw graph sites; automated circuit search is separate. |
-| Patch edges/nodes | `.do(site, edit)` on a forked trace (replays the recorded graph from the edited value; `.do(site, edit, model=model, inputs=x)` runs the model again), or `.attach_hooks(...)` then `.run(...)` | Node patching equivalent; edges patch with `torchlens.mechinterp.patch_edges` (one or several receivers per call). |
+| Patch edges/nodes | `.do(site, edit)` on a forked trace (replays the recorded graph from the edited value; `.do(site, edit, model=model, inputs=x)` runs the model again) | Node patching equivalent; edges patch with `torchlens.mechinterp.patch_edges` (one or several receivers per call). |
 | Run path patching sweeps | Fork logs or loop over selectors and compute an explicit metric (or call your metric on the `tl.Bundle`) | Manual but supported. |
 | Compare clean/corrupted datasets | Capture logs and group them with `Bundle` | Equivalent container workflow. |
 | Automatic circuit discovery | Recipe: `docs/field-guide/acdc_ioi.md` (ACDC as a driver loop); edge scores: `torchlens.mechinterp.edge_scores` | Recipe-level; no built-in pruning optimizer. |

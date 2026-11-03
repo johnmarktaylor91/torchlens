@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import Report
+from .._debug_report import Report, at_source
 from .._errors import InvalidArgumentError
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
-from ._common import _compute_ops, _op_label, _safe_out, _source_line
+from ._common import _compute_ops, _nonfinite_kind, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
 
 if TYPE_CHECKING:
@@ -95,6 +95,14 @@ class DeterminismReport(Report):
         Actionable next steps.
     message:
         Human-readable summary; discloses total capture count up front.
+
+    Examples
+    --------
+    >>> report = tl.debug.check_determinism(model, x)
+    >>> isinstance(report, DeterminismReport), report.verdict
+    (True, 'repeatable_under_test')
+    >>> report.runs, report.policy
+    (2, 'exact')
     """
 
     verdict: str
@@ -132,7 +140,13 @@ class DeterminismReport(Report):
         """One-line findings for the card, most severe first."""
 
         findings = [self.message] if self.message else []
-        findings.extend(f"divergent op: {label}" for label in self.divergent_ops)
+        first = self.first_divergence or {}
+        first_label = first.get("op")
+        first_line = first.get("source_line")
+        findings.extend(
+            f"divergent op: {label}{at_source(first_line) if label == first_label else ''}"
+            for label in self.divergent_ops
+        )
         findings.extend(f"non-finite op: {label}" for label in self.nonfinite_ops)
         findings.extend(f"remedy: {remedy}" for remedy in self.remedies)
         return findings
@@ -267,8 +281,6 @@ def _compare_runs(
     atol: float | None,
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Walk two runs in execution order; return (divergences, unchecked, nonfinite)."""
-
-    from ._nan import _nonfinite_kind  # deferred: cycle debug
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference)}
     candidate_ops = {_op_label(op): op for op in _compute_ops(candidate)}
@@ -498,6 +510,17 @@ def check_determinism(
     ------
     InvalidArgumentError
         If ``runs < 2`` (code ``determinism_runs_invalid``).
+
+    Examples
+    --------
+    >>> report = check_determinism(model, x, runs=2, seed=0)
+    >>> report.verdict, report.divergent_ops
+    ('repeatable_under_test', ())
+    >>> try:
+    ...     check_determinism(model, x, runs=1)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(err.fields["code"])
+    determinism_runs_invalid
     """
 
     from ._rerun import isolated_capture  # deferred: cycle debug

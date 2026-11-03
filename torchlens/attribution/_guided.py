@@ -460,6 +460,14 @@ def guided_backprop(
     -------
     AttributionResult
         Guided gradients with the site census disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.guided_backprop(model, x, target=0)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.method
+    'guided_backprop'
     """
 
     return _modified_backward_attribution(
@@ -512,6 +520,14 @@ def deconvolution(
     -------
     AttributionResult
         Deconvolution gradients with the site census disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.deconvolution(model, x, target=0)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.method
+    'deconvolution'
     """
 
     return _modified_backward_attribution(

@@ -152,6 +152,13 @@ class UncapturedCollectiveOpError(CompatibilityError, RuntimeError):
     refused (``1`` for allowlist set-inequality, ``2`` for the dispatcher
     schema scan); ``mismatches`` / ``offending_ops`` carry the evidence.
     Callers branch on these fields, never on message text.
+
+    Examples
+    --------
+    >>> issubclass(UncapturedCollectiveOpError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(UncapturedCollectiveOpError, RuntimeError)
+    True
     """
 
 
@@ -327,6 +334,12 @@ def is_vetted_build() -> bool:
     product's correct behavior, not a bug to route around. A caller that wants
     to assert the refusal itself should call ``arm()``/``derive_collective_recognizer()``
     directly rather than branch on this flag first.
+
+    Examples
+    --------
+    >>> vetted = tl.distributed.is_vetted_build()
+    >>> isinstance(vetted, bool)
+    True
     """
 
     try:

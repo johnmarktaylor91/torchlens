@@ -95,7 +95,7 @@ def datasets(
         sites.
     """
 
-    rsatoolbox = require_rsatoolbox()
+    rsatoolbox = require_rsatoolbox(attribute="datasets")
     pool_token = check_pool(pool)
     del pool_token  # recorded per-site by base_descriptors; validated here.
     kind = _source_kind(source)
@@ -228,7 +228,7 @@ def single_dataset(source: Any, site: str | None = None) -> Any:
         site, and the historical no-tensor-output error.
     """
 
-    rsatoolbox = require_rsatoolbox()
+    rsatoolbox = require_rsatoolbox(owner="torchlens.bridge.rsatoolbox", attribute="dataset")
     kind = _source_kind(source)
 
     if site is None:

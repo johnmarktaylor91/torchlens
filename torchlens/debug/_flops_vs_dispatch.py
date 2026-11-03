@@ -39,6 +39,14 @@ class FlopsCrossCheck(Report):
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic
     counts; ``delta`` is signed (native - torchlens). A zero paired with a
     non-empty ``coverage_notes`` row is a registry gap, not a measurement.
+
+    Examples
+    --------
+    >>> check = tl.report.flops_vs_dispatch(model, x)
+    >>> isinstance(check, FlopsCrossCheck), check.convention.startswith("fma2")
+    (True, True)
+    >>> check.native_total > 0, check.torchlens_total > 0
+    (True, True)
     """
 
     torch_version: str
@@ -159,6 +167,14 @@ def flops_vs_dispatch(
         ``flops_crosscheck_witness_failed`` when the two executions diverge
         in output -- the formulas would then describe different programs
         and no comparison is honest.
+
+    Examples
+    --------
+    >>> check = flops_vs_dispatch(model, x)
+    >>> check.witness["output_agrees"]
+    True
+    >>> check.native_total > 0, check.torchlens_total > 0
+    (True, True)
     """
 
     from torch.utils.flop_counter import FlopCounterMode

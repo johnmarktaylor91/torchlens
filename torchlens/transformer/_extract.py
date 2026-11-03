@@ -286,6 +286,15 @@ def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (ax
     AttentionView
         The canonical ``[head, destination, source]`` view with provenance,
         mask provenance (or none), and the GQA disclosure when declared.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.transformer.attention_view(trace, "no.such.layer")
+    ... except tl.errors.RenderError as err:
+    ...     print(err.fields["code"])
+    tv_facet_missing
     """
 
     if layer not in getattr(trace, "modules", {}):
@@ -358,6 +367,15 @@ def attention_views(  # noqa: PLR0913 -- same record-shaped surface, list form
     -------
     list[AttentionView]
         One view per layer.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.transformer.attention_views(trace)
+    ... except tl.errors.RenderError as err:
+    ...     print(err.fields["code"])
+    tv_facet_missing
     """
 
     if layers is None:

@@ -103,7 +103,16 @@ def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
 
 
 class ReceptiveFieldView:
-    """Lazy query surface for one operation's per-input receptive fields."""
+    """Lazy query surface for one operation's per-input receptive fields.
+
+    Examples
+    --------
+    >>> view = tl.trace(model, x)["conv2d_2_3"].receptive_field
+    >>> (isinstance(view, ReceptiveFieldView), view.size)
+    (True, (5, 5))
+    >>> view.at((4, 4)).exact
+    True
+    """
 
     __slots__ = ("_op", "_solution", "_direction", "per_input")
 

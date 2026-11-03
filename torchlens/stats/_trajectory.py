@@ -71,6 +71,16 @@ class TrajectoryStats:
         Whether each row's own input tokens were banned before reduction.
     tie_convention:
         How ``target_rank`` breaks ties.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> gpt = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=16,
+    ...                                  n_positions=8, use_cache=False)).eval()
+    >>> result = tl.mechinterp.measure_trajectory(gpt, torch.randint(0, 16, (2, 4)))
+    >>> isinstance(result, TrajectoryStats), result.statistics, result.num_examples
+    (True, ('entropy', 'kl_to_final', 'max_prob'), 2)
     """
 
     module_addresses: tuple[str, ...]
@@ -153,6 +163,17 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     TrajectoryStats
         Per-position means and pooled ``Spine`` accumulators per statistic
         and layer.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> gpt = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=16,
+    ...                                  n_positions=8, use_cache=False)).eval()
+    >>> result = tl.mechinterp.measure_trajectory(gpt, torch.randint(0, 16, (2, 4)),
+    ...                                           statistics=["entropy"])
+    >>> result.statistics, result.position_means["entropy"].shape
+    (('entropy',), torch.Size([2, 4]))
     """
 
     _check_flags(mask_input=mask_input, validate=verify)

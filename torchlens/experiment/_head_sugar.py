@@ -93,6 +93,16 @@ def head_ablation_candidates(
         geometry is GQA/MQA (one KV head serves several query heads) or
         cannot be derived — the v-lowering may not claim single-head
         semantics it cannot prove.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> gpt = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=16,
+    ...                                  n_positions=8, use_cache=False)).eval()
+    >>> base = tl.trace(gpt, torch.randint(0, 16, (1, 4)))
+    >>> sorted(tl.experiment.head_ablation_candidates(base, "transformer.h.0.attn", heads=2))
+    ['h0', 'h1']
     """
 
     from .._selection.selectors import head as head_selector

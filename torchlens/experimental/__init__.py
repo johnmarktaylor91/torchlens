@@ -70,6 +70,13 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
         If any index component is invalid.
     ValueError
         If the address syntax is malformed.
+
+    Examples
+    --------
+    >>> net = nn.Sequential()
+    >>> net.add_module("block", nn.Sequential(nn.Linear(4, 4), nn.ReLU()))
+    >>> type(attribute_walk(net, "block[1]")).__name__
+    'ReLU'
     """
 
     current: Any = model
@@ -111,6 +118,14 @@ def stop_after(site: Any) -> Iterator[None]:
     ------
     None
         Context body.
+
+    Examples
+    --------
+    >>> full = tl.trace(model, x)
+    >>> with stop_after("1"):
+    ...     early = tl.trace(model, x)
+    >>> len(early.ops) < len(full.ops)
+    True
     """
 
     global _STOP_AFTER_SITE
@@ -141,6 +156,14 @@ class Session:
     ----------
     model:
         Model to invoke repeatedly.
+
+    Examples
+    --------
+    >>> session = Session(model)
+    >>> first = session.invoke(x)
+    >>> second = session.invoke(x + 1)
+    >>> len(session.traces), len(session.to_bundle())
+    (2, 2)
     """
 
     model: nn.Module
@@ -227,6 +250,15 @@ def freeze_module(layer: nn.Module) -> Iterator[nn.Module]:
     ------
     nn.Module
         The frozen module.
+
+    Examples
+    --------
+    >>> layer = nn.Linear(4, 2)
+    >>> with freeze_module(layer) as frozen:
+    ...     print(frozen.weight.requires_grad)
+    False
+    >>> layer.weight.requires_grad
+    True
     """
 
     parameters = list(layer.parameters(recurse=True))
@@ -268,6 +300,14 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
     ------
     RuntimeError
         If ``TORCHLENS_AUTO=1`` is set.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> with auto_capture(net, every=2) as session:
+    ...     outputs = [net(torch.randn(1, 4)) for _ in range(4)]
+    >>> session.calls, len(session.logs)
+    (4, 2)
     """
 
     if closed_bool_env("TORCHLENS_AUTO"):

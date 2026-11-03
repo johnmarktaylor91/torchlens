@@ -61,6 +61,14 @@ def dataset(source: Any, site: str | None = None) -> Any:
         stimulus response).
     torchlens.errors.FeatureShapingError
         When the site holds no payload or row/id cardinality disagrees.
+
+    Examples
+    --------
+    >>> # requires: rsatoolbox
+    >>> trace = tl.trace(model, x)
+    >>> ds = tl.bridge.rsatoolbox.dataset(trace)
+    >>> ds.n_obs, ds.n_channel
+    (1, 128)
     """
 
     return single_dataset(source, site)

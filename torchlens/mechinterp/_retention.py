@@ -72,6 +72,18 @@ class SavePlan:
     ``predicate`` composes with ordinary ``save=``; ``module_subtrees`` are
     whole-module saves (attention interiors for head analyses). The
     ``basis`` string disclosing the superset match is part of the contract.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> plan = tl.mechinterp.retention_plan(trace)
+    >>> isinstance(plan, SavePlan), len(plan.sites) > 0, plan.estimated_bytes > 0
+    (True, True, True)
     """
 
     analyses: tuple[str, ...]
@@ -231,6 +243,18 @@ def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> Save
     -------
     RetentionPlan
         Printable, priced, ``save=``-composable.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> plan = tl.mechinterp.retention_plan(trace, ("decomposition", "dla"))
+    >>> plan.analyses
+    ('decomposition', 'dla')
     """
 
     wanted = [analyses] if isinstance(analyses, str) else list(analyses)

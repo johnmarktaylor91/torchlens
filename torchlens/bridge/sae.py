@@ -285,6 +285,21 @@ class SpliceResult:
         With ``log_latents=True``, the label of the latents node in
         ``spliced`` (the encoder output, between the encoder and decoder
         ops); ``None`` otherwise.
+
+    Examples
+    --------
+    >>> class IdentitySae:
+    ...     def encode(self, h):
+    ...         return h
+    ...     def decode(self, z):
+    ...         return z
+    >>> result = tl.bridge.sae.splice(model, x, site="0", sae=IdentitySae())
+    >>> type(result).__name__
+    'SpliceResult'
+    >>> tuple(result.latents.shape)
+    (1, 4, 8, 8)
+    >>> result.output_delta_max < 1e-6
+    True
     """
 
     site: str
@@ -517,7 +532,7 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     """
 
     fork = clean.fork(name)
-    fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))
+    fork._attach_hooks(label_selector(site), splice_module(module, input_route="out"))
     fork.push()
     return fork
 
@@ -730,6 +745,19 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
         (``sae_splice_bos_needs_sequence_axis``); with ``log_latents=True``,
         a Trace door (``sae_splice_logged_needs_live_model``) or a site no
         single module call returns (``bridge_module_site_*``).
+
+    Examples
+    --------
+    >>> class IdentitySae:
+    ...     def encode(self, h):
+    ...         return h
+    ...     def decode(self, z):
+    ...         return z
+    >>> result = tl.bridge.sae.splice(model, x, site="0", sae=IdentitySae())
+    >>> len(result.spliced_outputs)
+    1
+    >>> result.reconstruction_mse < 1e-6
+    True
     """
 
     require_codec(sae)

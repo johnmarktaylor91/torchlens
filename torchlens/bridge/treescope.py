@@ -139,6 +139,14 @@ class BridgeStatus:
         object id.
     disabled:
         Whether a :func:`disabled` scope is active.
+
+    Examples
+    --------
+    >>> snapshot = tl.bridge.treescope.status()
+    >>> isinstance(snapshot, BridgeStatus)
+    True
+    >>> snapshot.disabled
+    False
     """
 
     treescope_importable: bool
@@ -179,6 +187,13 @@ def probe_tensor_support() -> tuple[bool, str | None]:
     -------
     tuple[bool, str | None]
         ``(True, None)`` when the adapter renders, else ``(False, reason)``.
+
+    Examples
+    --------
+    >>> # requires: treescope
+    >>> supported, reason = tl.bridge.treescope.probe_tensor_support()
+    >>> isinstance(supported, bool)
+    True
     """
 
     if _STATE.probe_cache is not None:
@@ -237,6 +252,14 @@ def register() -> None:
         ``treescope_bridge_unavailable`` when treescope is not installed.
     InvalidArgumentError
         ``treescope_slot_occupied`` when a foreign handler holds a slot.
+
+    Examples
+    --------
+    >>> # requires: treescope
+    >>> tl.bridge.treescope.register()
+    >>> tl.bridge.treescope.status().registered
+    True
+    >>> tl.bridge.treescope.unregister()
     """
 
     treescope = _import_treescope()
@@ -268,7 +291,14 @@ def register() -> None:
 
 
 def unregister() -> None:
-    """Remove exactly OUR handlers by identity; foreign handlers survive."""
+    """Remove exactly OUR handlers by identity; foreign handlers survive.
+
+    Examples
+    --------
+    >>> tl.bridge.treescope.unregister()
+    >>> tl.bridge.treescope.status().registered
+    False
+    """
 
     try:
         treescope = _import_treescope()
@@ -288,6 +318,14 @@ def registered() -> Iterator[None]:
 
     Entering with the bridge already registered leaves it registered on
     exit (the scope only undoes its own installation).
+
+    Examples
+    --------
+    >>> # requires: treescope
+    >>> with tl.bridge.treescope.registered():
+    ...     inside = tl.bridge.treescope.status().registered
+    >>> inside
+    True
     """
 
     was_registered = bool(_STATE.installed)
@@ -301,7 +339,15 @@ def registered() -> Iterator[None]:
 
 @contextlib.contextmanager
 def disabled() -> Iterator[None]:
-    """Scope in which every bridge hook falls through to treescope defaults."""
+    """Scope in which every bridge hook falls through to treescope defaults.
+
+    Examples
+    --------
+    >>> with tl.bridge.treescope.disabled():
+    ...     inside = tl.bridge.treescope.status().disabled
+    >>> inside, tl.bridge.treescope.status().disabled
+    (True, False)
+    """
 
     _STATE.disabled_depth += 1
     try:
@@ -311,7 +357,21 @@ def disabled() -> Iterator[None]:
 
 
 def status() -> BridgeStatus:
-    """Report the bridge's live state (memo 3.1)."""
+    """Report the bridge's live state (memo 3.1).
+
+    Returns
+    -------
+    BridgeStatus
+        Snapshot of importability, registration, probe verdict and scopes.
+
+    Examples
+    --------
+    >>> snapshot = tl.bridge.treescope.status()
+    >>> type(snapshot).__name__
+    'BridgeStatus'
+    >>> isinstance(snapshot.handlers, tuple)
+    True
+    """
 
     try:
         import treescope
@@ -485,6 +545,14 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
     ``shown K of N`` (container rule 3.4: strings only, never child TL
     objects). Falls through to ``NotImplemented`` on the disabled scope or
     any fault.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> with tl.bridge.treescope.disabled():
+    ...     result = tl.bridge.treescope.treescope_repr(trace, None, None)
+    >>> result is NotImplemented
+    True
     """
 
     if _STATE.disabled_depth > 0:
@@ -567,6 +635,12 @@ def consume_repr_suppression(obj: Any) -> bool:
     build) and a treescope postprocessor frame is on the call stack. The
     slot is consumed on a hit; any fault answers ``False`` (fail-safe: the
     duplicate quietly returns rather than the card vanishing).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.bridge.treescope.consume_repr_suppression(trace)
+    False
     """
 
     try:
@@ -601,6 +675,19 @@ def display(obj: Any) -> None:
 
     Spelling is [UI-SPRINT]; ``layer.show(kind="treescope")`` is the
     candidate method form.
+
+    The render needs a live IPython kernel. Outside one (a script, a plain
+    interpreter) treescope has nowhere to display and raises its own
+    ``RuntimeError``; in a notebook cell the same call renders and returns
+    None.
+
+    Examples
+    --------
+    >>> # requires: treescope
+    >>> trace = tl.trace(model, x)
+    >>> tl.bridge.treescope.display(trace)  # not in a notebook kernel
+    Traceback (most recent call last):
+    RuntimeError: Cannot use `display` outside of IPython.
     """
 
     treescope = _import_treescope()

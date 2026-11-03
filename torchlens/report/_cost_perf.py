@@ -82,7 +82,15 @@ CACHE_RESIDENT_BYTES_DEFAULT: int = 4 * 1024 * 1024
 
 @dataclass(frozen=True)
 class PeakRow:
-    """One advertised dense per-mode peak with full provenance (D18)."""
+    """One advertised dense per-mode peak with full provenance (D18).
+
+    Examples
+    --------
+    >>> row = tl.report.PeakRow("TestGPU", "fp32", 1e12, "vendor datasheet", "2026-01-01", "boost clock")
+    >>> row.sparse_policy
+    'dense_only'
+    >>> row.source == 'user_supplied'
+    True"""
 
     device_identity: str
     execution_mode: str
@@ -96,7 +104,16 @@ class PeakRow:
 
 @dataclass(frozen=True)
 class DevicePeaks:
-    """An explicit peaks catalog: constructed, never auto-selected (D18)."""
+    """An explicit peaks catalog: constructed, never auto-selected (D18).
+
+    Examples
+    --------
+    >>> row = tl.report.PeakRow("TestGPU", "fp32", 1e12, "vendor datasheet", "2026-01-01", "boost clock")
+    >>> peaks = tl.report.device_peaks([row])
+    >>> peaks.for_device("TestGPU", "fp32").dense_flops_per_s == 1e12
+    True
+    >>> len(peaks.rows)
+    1"""
 
     rows: tuple[PeakRow, ...]
 
@@ -132,6 +149,18 @@ def device_peaks(rows: Any) -> DevicePeaks:
     mode, the ADVERTISED dense peak, a source citation, a date, and clock
     assumptions. Sparse marketing peaks never default (``sparse_policy``
     stays ``"dense_only"`` unless a row says otherwise, disclosed).
+
+    Examples
+    --------
+    >>> row = tl.report.PeakRow("TestGPU", "fp32", 1e12, "vendor datasheet", "2026-01-01", "boost clock")
+    >>> peaks = tl.report.device_peaks([row])
+    >>> [r.execution_mode for r in peaks.rows]
+    ['fp32']
+    >>> try:
+    ...     peaks.for_device("OtherGPU", "fp32")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     validated: list[PeakRow] = []
@@ -166,6 +195,16 @@ class MfuReport:
     seconds); the peaks' source rides ``peaks_source`` (D17: modes are
     recorded ``user_supplied`` until joined kernel metadata can discharge
     them).
+
+    Examples
+    --------
+    >>> report = tl.report.mfu(flops_by_mode={"fp32": 10**9}, peaks_by_mode={"fp32": 1e12}, step_seconds=0.01)
+    >>> report.denominator
+    'step_wall_time'
+    >>> report.mode_terms[0][0]
+    'fp32'
+    >>> 0 < report.mfu < 1
+    True
     """
 
     mfu: float
@@ -195,6 +234,15 @@ class MfuProvenance:
     the step covers, and ``peaks_source`` records where the advertised
     peaks came from (D17: ``user_supplied`` until joined kernel metadata
     can discharge a ``catalog`` claim).
+
+    Examples
+    --------
+    >>> prov = tl.report.MfuProvenance(peaks_source="catalog")
+    >>> prov.denominator
+    'step_wall_time'
+    >>> report = tl.report.mfu(flops_by_mode={"fp32": 10**9}, peaks_by_mode={"fp32": 1e12}, step_seconds=0.01, provenance=prov)
+    >>> report.peaks_source
+    'catalog'
     """
 
     denominator: str = MFU_DENOMINATOR
@@ -219,6 +267,17 @@ def mfu(
     ``provenance`` bundles the D16/D17 disclosure knobs; the defaults are
     the honest ones (``step_wall_time`` over the forward, user-supplied
     peaks) and every non-default claim is validated here.
+
+    Examples
+    --------
+    >>> report = tl.report.mfu(flops_by_mode={"fp32": 10**9}, peaks_by_mode={"fp32": 1e12}, step_seconds=0.01)
+    >>> report.ideal_seconds < report.step_seconds
+    True
+    >>> try:
+    ...     tl.report.mfu(flops_by_mode={"fp32": 10**9}, peaks_by_mode={"fp32": 1e12}, step_seconds=0)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     if provenance is None:
@@ -305,6 +364,15 @@ def attributed_kernel_utilization(*_args: Any, **_kwargs: Any) -> Any:
     -- it gets its own name and stays a typed refusal until the
     correlation-ID device-time join lands (D22's real-GPU acceptance
     gate). Never renders under the letters M-F-U.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.report.attributed_kernel_utilization()
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'InvalidArgumentError'
     """
 
     raise InvalidArgumentError(
@@ -321,7 +389,15 @@ def attributed_kernel_utilization(*_args: Any, **_kwargs: Any) -> Any:
 
 @dataclass(frozen=True)
 class CleanStepTime:
-    """One opt-in clean-step measurement (D16): method fully disclosed."""
+    """One opt-in clean-step measurement (D16): method fully disclosed.
+
+    Examples
+    --------
+    >>> step = tl.report.measure_clean_step(model, x, warmup=0, repeats=2)
+    >>> step.num_forward_runs
+    2
+    >>> step.scope
+    ('forward',)"""
 
     seconds: float
     spread_seconds: float
@@ -346,6 +422,14 @@ def measure_clean_step(
     with TorchLens capture inactive, takes the median, and records its
     scope (forward only -- no backward, optimizer, or data loading; a
     training MFU needs the caller's own full-step timing).
+
+    Examples
+    --------
+    >>> step = tl.report.measure_clean_step(model, x, warmup=1, repeats=2)
+    >>> step.seconds > 0
+    True
+    >>> step.repeats
+    2
     """
 
     if repeats < 1 or warmup < 0:
@@ -386,6 +470,15 @@ class RooflineRow:
     TWO-SIDED estimate (fusion and cache residency push real traffic
     below it; tiling and reloads push above), so ``bound_hypothesis`` is
     a HYPOTHESIS, never a proof.
+
+    Examples
+    --------
+    >>> report = tl.report.roofline(tl.trace(model, x))
+    >>> covered = [row for row in report.rows if row.reason == "covered"]
+    >>> len(covered) > 0
+    True
+    >>> covered[0].evidence
+    'estimated+ideal_read_once_write_once'
     """
 
     label: str
@@ -400,7 +493,15 @@ class RooflineRow:
 
 @dataclass(frozen=True)
 class RooflineReport:
-    """The roofline map: rows, sum/sum aggregate, coverage by reason."""
+    """The roofline map: rows, sum/sum aggregate, coverage by reason.
+
+    Examples
+    --------
+    >>> report = tl.report.roofline(tl.trace(model, x), ridge_intensity=10.0)
+    >>> report.ridge_intensity
+    10.0
+    >>> report.coverage_by_reason["covered"] > 0
+    True"""
 
     rows: tuple[RooflineRow, ...]
     aggregate_intensity: float | None
@@ -488,6 +589,14 @@ def roofline(
     cache_resident_bytes:
         Ops whose ideal traffic fits under this threshold are excluded
         from headline bound counts (hinted, still listed).
+
+    Examples
+    --------
+    >>> report = tl.report.roofline(tl.trace(model, x))
+    >>> len(report.rows) > 0
+    True
+    >>> all(row.bound_hypothesis is None for row in report.rows)
+    True
     """
 
     from ._compute_truth import classify_row  # deferred: cycle report
@@ -591,7 +700,15 @@ def roofline(
 
 @dataclass(frozen=True)
 class MachineBalance:
-    """A roofline ceiling pair and its ridge point (D18): basis disclosed."""
+    """A roofline ceiling pair and its ridge point (D18): basis disclosed.
+
+    Examples
+    --------
+    >>> balance = tl.report.MachineBalance(1e12, 1e11, 10.0, "advertised", "user_supplied ceilings")
+    >>> balance.basis
+    'advertised'
+    >>> tl.report.roofline(tl.trace(model, x), ridge_intensity=balance.ridge_intensity).ridge_intensity
+    10.0"""
 
     peak_flops_per_s: float
     peak_bytes_per_s: float
@@ -755,7 +872,14 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
 
 @dataclass(frozen=True)
 class CostTierMeasurement:
-    """One measured tier: absolute time first, ratio derived (D24)."""
+    """One measured tier: absolute time first, ratio derived (D24).
+
+    Examples
+    --------
+    >>> result = tl.report.overhead(model, x, tiers=("raw_forward",), repeats=1)
+    >>> tier = result.tiers[0]
+    >>> (tier.tier, tier.ratio_vs_raw)
+    ('raw_forward', 1.0)"""
 
     tier: str
     median_seconds: float
@@ -765,7 +889,15 @@ class CostTierMeasurement:
 
 @dataclass(frozen=True)
 class OverheadReport:
-    """Measured capture costs on the USER'S model and host (D27)."""
+    """Measured capture costs on the USER'S model and host (D27).
+
+    Examples
+    --------
+    >>> result = tl.report.overhead(model, x, tiers=("raw_forward", "trace"), repeats=1)
+    >>> [tier.tier for tier in result.tiers]
+    ['raw_forward', 'trace']
+    >>> "capture cost" in str(result)
+    True"""
 
     tiers: tuple[CostTierMeasurement, ...]
     num_forward_runs: int
@@ -813,6 +945,17 @@ def overhead(
     across models and 6x across hosts for one cell, so nothing is
     interpolated. Absolute milliseconds lead; the ratio is derived; the
     report discloses exactly how many forwards ran.
+
+    Examples
+    --------
+    >>> result = tl.report.overhead(model, x, repeats=1)
+    >>> result.tiers[1].ratio_vs_raw > 0
+    True
+    >>> try:
+    ...     tl.report.overhead(model, x, tiers=("trace",))
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torch

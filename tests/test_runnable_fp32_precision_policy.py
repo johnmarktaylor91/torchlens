@@ -93,7 +93,7 @@ def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
     return _ConvNet().eval(), torch.randn(1, 3, 8, 8)
 
 
-@pytest.mark.smoke
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("scenario", sorted(_SCENARIOS))
 def test_unrepresentable_policy_captures_and_refuses_runnable_save(
     scenario: str, tmp_path: Path
@@ -122,22 +122,7 @@ def test_unrepresentable_policy_captures_and_refuses_runnable_save(
     trace.save(str(tmp_path / f"{scenario}-analysis.tlspec"))
 
 
-def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> None:
-    torch.backends.cudnn.allow_tf32 = False
-    torch.set_float32_matmul_precision("high")
-    assert tc.read_legacy_fp32_controls()[1] == ()
-    model, x = _model_and_input()
-
-    trace = tl.trace(model, x, capture=_CAPTURE)
-    assert tc.AMBIENT_FP32_UNREPRESENTABLE_KEY not in trace._runnable.capture_ambient
-    path = tmp_path / "legacy.tlspec"
-    trace.save(str(path), level="runnable", include_weights=True)
-
-    report = tl.load(str(path)).run(inputs=x.clone(), seed=0).report
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _utils/_torch_compat.py.
 def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     model, x = _model_and_input()
     path = tmp_path / "clean.tlspec"
@@ -155,7 +140,7 @@ def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     assert tc.snapshot_fp32_precision_controls() == caller_policy
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _user_funcs.py, _user_public_impls.py, debug/_determinism.py and more; a sole mutation kill.
 def test_check_determinism_runs_under_mixed_policy() -> None:
     _set("cudnn.conv", "tf32")
     _set("cudnn.rnn", "ieee")

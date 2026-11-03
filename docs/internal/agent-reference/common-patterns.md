@@ -31,6 +31,7 @@ print(log.summary())
 print(log.explain())
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
+log.draw("overview.svg")  # the extension picks the format; a bare draw in a notebook shows inline
 print(log.module_collapse_order[:10])
 tl.release_model(model)  # restore whole-model pickle / torch.save serializability
 
@@ -305,6 +306,12 @@ for row in trace["relu_1_2"].aten_ops:  # the ATen calls this op's torch call di
     print(row.operator, row.overload, row.sequence)
 len(trace.aten_ops)  # every recorded row, forward then backward, in dispatch order
 trace.aten_gaps  # disclosed interiors the recorder could not observe; () when complete
+
+valued = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops="values"))
+for row in valued["relu_1_2"].aten_ops:  # same rows, plus what each call returned
+    print(row.operator, row.out.shape)  # row.out mirrors op.out: tensor, tuple, or None
+# values are detached snapshots kept only beneath ops whose output was saved (save=);
+# aten_ops=True keeps every row.out None and copies nothing
 
 plain = tl.trace(model, x)
 try:

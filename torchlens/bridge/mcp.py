@@ -66,6 +66,17 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
     -------
     dict[str, Any]
         The result envelope.
+
+    Examples
+    --------
+    >>> doctor = tl.bridge.mcp.call_tool("torchlens_doctor")
+    >>> doctor["schema"]
+    'torchlens.agent.doctor.v1'
+    >>> try:
+    ...     tl.bridge.mcp.call_tool("torchlens_nope")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     if all(spec.name != name for spec in tool_specs()):
@@ -223,6 +234,14 @@ def main() -> None:
     ------
     ImportError
         If the ``mcp`` package is unavailable; the message names the extra.
+
+    Examples
+    --------
+    >>> # requires: mcp
+    >>> callable(tl.bridge.mcp.main)
+    True
+    >>> tl.bridge.mcp.main.__name__
+    'main'
     """
 
     try:

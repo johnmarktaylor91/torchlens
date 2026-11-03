@@ -69,7 +69,19 @@ ENTRY_POINT_GROUPS: tuple[str, ...] = (
 
 
 class PluginLoadWarning(TorchLensWarning):
-    """Categorized warning for soft (non-strict) provider-load failures."""
+    """Categorized warning for soft (non-strict) provider-load failures.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> issubclass(PluginLoadWarning, tl.errors.TorchLensWarning)
+    True
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     warnings.warn(PluginLoadWarning("demo failed", code="plugin_provider_load_failed"))
+    >>> caught[0].message.fields["code"]
+    'plugin_provider_load_failed'
+    """
 
 
 @dataclass(frozen=True)

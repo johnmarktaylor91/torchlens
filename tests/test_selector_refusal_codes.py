@@ -115,7 +115,7 @@ def test_model_input_site_refusals_carry_one_code_from_both_doors() -> None:
     with pytest.raises(SelectorCapabilityError) as set_info:
         trace.set(tl.model_input(0), lambda out: out * 0.5, confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError) as attach_info:
-        trace.attach_hooks(tl.model_input(0), _scale_hook, confirm_mutation=True)
+        trace._attach_hooks(tl.model_input(0), _scale_hook, confirm_mutation=True)
     assert set_info.value.fields["code"] == "model_input_selector_not_live"
     assert attach_info.value.fields["code"] == "model_input_selector_not_live"
     assert "not live hook application sites" in str(set_info.value)

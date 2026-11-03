@@ -838,7 +838,7 @@ def _run_patch(
         """Fork the corrupted trace, attach the counting hook, and rerun from the pristine state."""
         fire_ledger.update(fires=0, identical=0)
         log = corrupted_log.fork(name)
-        log.attach_hooks(selector, tracked_hook)
+        log._attach_hooks(selector, tracked_hook)
         guard.reset()
         log.run(model, corrupted_input)
         return log

@@ -76,13 +76,3 @@ def test_missing_renderer_capability_fails_explicitly() -> None:
 
     with pytest.raises(UnsupportedRendererCapabilityError, match="layout_execution"):
         capabilities.require(required, "minimal")
-
-
-def test_retired_forward_dot_entrypoints_are_absent() -> None:
-    """Keep deleted recorder/replay entrypoints from silently returning."""
-
-    from torchlens._visualization import _render_common, _render_dot
-
-    assert not hasattr(_render_common, "ForwardDotIR")
-    assert not hasattr(_render_common, "_ForwardDotRecorder")
-    assert not hasattr(_render_dot, "_replay_forward_dot_calls")

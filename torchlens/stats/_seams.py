@@ -130,6 +130,15 @@ class NarrationObserver:
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
     the echo can never contaminate the capture with its own torch ops.
+
+    Examples
+    --------
+    >>> echo = tl.stats.narrate(tl.func("relu"))
+    >>> isinstance(echo, NarrationObserver)
+    True
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(echo.lines)
+    1
     """
 
     site: Any = None
@@ -159,7 +168,7 @@ class NarrationObserver:
             address = self._address(ctx)
             # Never break a forward from an echo: degrade to the typed token.
             core = fail_open(
-                lambda: render_core_line(tensor_stats(out, identity=address), style=self.style),
+                lambda: render_core_line(tensor_stats(out, _identity=address), style=self.style),
                 lambda error: f"(echo unavailable: {type(error).__name__})",
             )
             line = f"{address} -> {core}" if address else core
@@ -210,6 +219,14 @@ def narrate(
     -------
     EchoObserver
         Callable observer for the ``hooks=`` surface.
+
+    Examples
+    --------
+    >>> lines = []
+    >>> echo = tl.stats.narrate(tl.func("relu"), sink=lines.append)
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(lines), "->" in lines[0]
+    (1, True)
     """
 
     return NarrationObserver(site=site, sink=sink, style=style)

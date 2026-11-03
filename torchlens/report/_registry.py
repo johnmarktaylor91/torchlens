@@ -315,7 +315,16 @@ def registry_entry(key: str) -> SurfaceEntry:
 
 @dataclass(frozen=True)
 class CapabilityRow:
-    """One capability-card row: THIS object's answer for one surface."""
+    """One capability-card row: THIS object's answer for one surface.
+
+    Examples
+    --------
+    >>> row = tl.trace(model, x).capabilities().rows[0]
+    >>> type(row).__name__
+    'CapabilityRow'
+    >>> isinstance(row.is_available, bool)
+    True
+    """
 
     key: str
     spelling: str
@@ -326,7 +335,16 @@ class CapabilityRow:
 
 @dataclass(frozen=True)
 class CapabilityCard:
-    """The registry filtered by the object in hand (D24): metadata-only."""
+    """The registry filtered by the object in hand (D24): metadata-only.
+
+    Examples
+    --------
+    >>> card = tl.trace(model, x).capabilities()
+    >>> card.object_kind
+    'trace'
+    >>> len(card.rows) > 0
+    True
+    """
 
     object_kind: str
     rows: tuple[CapabilityRow, ...]

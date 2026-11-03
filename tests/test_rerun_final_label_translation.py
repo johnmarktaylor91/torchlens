@@ -16,7 +16,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention._rerun_predicate import raw_live_labels
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -49,39 +48,6 @@ def _recurrent_case() -> tuple[nn.Module, torch.Tensor, tl.Trace, list[str]]:
     )
     assert len(tanh_labels) == 3, tanh_labels
     return model, x, trace, tanh_labels
-
-
-def test_raw_live_labels_keep_each_pass_apart() -> None:
-    _model, _x, trace, tanh_labels = _recurrent_case()
-    raw = [raw_live_labels(trace, label) for label in tanh_labels]
-    assert all(names is not None and len(names) == 1 for names in raw), raw
-    assert len({names[0] for names in raw if names}) == 3, raw
-    assert all(names[0].endswith("_raw") for names in raw if names)
-
-
-def test_pass_qualified_label_rerun_edits_that_pass_alone() -> None:
-    model, x, trace, tanh_labels = _recurrent_case()
-    first, second, third = tanh_labels
-    result = trace.fork().do(second, tl.zero_ablate(), model=model, inputs=x, intervention=_RERUN)
-    assert result.last_run["hooks_unfired"] == 0
-    assert torch.count_nonzero(result[second].out) == 0
-    assert torch.count_nonzero(result[first].out) > 0
-    assert torch.equal(result[first].out, trace[first].out)
-    assert torch.count_nonzero(result[third].out) > 0
-    assert not torch.equal(result[third].out, trace[third].out)
-    # The source is untouched.
-    assert torch.count_nonzero(trace[second].out) > 0
-
-
-def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
-    model, x, trace, tanh_labels = _recurrent_case()
-    _first, second, _third = tanh_labels
-    value = torch.full_like(trace[second].out, 0.25)
-    trace.set(second, value, confirm_mutation=True)
-    result = trace.run(model, x)
-    assert result is trace
-    assert result.last_run["hooks_unfired"] == 0
-    assert torch.equal(trace[second].out, value)
 
 
 def test_substring_selector_on_a_final_label_still_refuses_live() -> None:

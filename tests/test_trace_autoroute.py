@@ -44,21 +44,6 @@ def _fail_trace_text(model: Any, text: Any, **kwargs: Any) -> object:
 
 
 @pytest.mark.slow
-def test_string_input_hf_model_matches_trace_text() -> None:
-    """String input should auto-route and match direct HF bridge tracing."""
-
-    transformers = pytest.importorskip("transformers")
-    model = transformers.DistilBertModel.from_pretrained("distilbert-base-uncased")
-
-    auto_log = tl.trace(model, "Hello world!", save="none")
-    direct_log = tl.bridge.transformers.trace_text(model, "Hello world!", save="none")
-
-    assert auto_log._num_ops == direct_log._num_ops
-    assert len(auto_log._layer_logs) == len(direct_log._layer_logs)
-    assert len(auto_log.modules) == len(direct_log.modules)
-
-
-@pytest.mark.slow
 def test_list_of_strings_input_hf_model_batches() -> None:
     """List-of-strings input should auto-route as a batch."""
 
@@ -105,20 +90,6 @@ def test_explicit_transform_overrides_autoroute(monkeypatch: pytest.MonkeyPatch)
         _HFLikeTensorModel(),
         "text",
         capture=tl.options.CaptureOptions(input_transform=lambda value: torch.ones(1)),
-        save="none",
-    )
-
-    assert log._num_ops > 0
-
-
-def test_tensor_input_passes_through_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Tensor input should not auto-route even when the model has HF metadata."""
-
-    monkeypatch.setattr(hf_bridge, "trace_text", _fail_trace_text)
-
-    log = tl.trace(
-        _HFLikeTensorModel(),
-        torch.ones(1),
         save="none",
     )
 

@@ -14,14 +14,26 @@ oracles through the public surface:
 | `equality` | the loaded trace equals the live one: op labels, structural hash, per-op shape, dtype, parents, children, pass index, module addresses and saved payloads |
 | `forward_match` | the trace's reconstructed output equals a plain `model(*inputs)` exactly; under a capture edit it is the replay (`trace.run`) that must reproduce the captured output; under `halt` the halt feature checks the op prefix instead |
 
-A seventh test per cell, `test_feature_checks`, asserts each active feature's
-own promise (for example `save` keeps exactly the selected ops, `fork_do`
+After the six, each active feature's own promise is checked as the oracle
+`feature:<name>` (for example `save` keeps exactly the selected ops, `fork_do`
 halves the edited site, `record` reproduces the op sequence).
+
+Each cell is ONE test, `test_cell[<case>-<featureA>-<featureB>]`, that judges
+every oracle and never stops at the first unsatisfied one. A failing cell
+fails with one message that names each failing oracle with its status and
+reason, one line per oracle:
+
+```text
+Neural_Gas-save-index: 2 oracle(s) failed
+save: fail: ...
+equality: fail: ...
+```
 
 An oracle outcome is `pass`, `refused` (a typed TorchLens error, recorded with
 its class and code), `not_applicable` (the case cannot take the feature by
 design, for example `multipass` on a model with no repeated layer) or `fail`.
-Only `fail` fails the test, and a failure is a capture, validation or
+`pass`, `refused` and `not_applicable` satisfy an oracle; `fail` (or
+`not_run`, a base oracle the cell never reached) fails the cell's test, and a failure is a capture, validation or
 persistence finding: root-cause it. Never loosen a tolerance, exempt a check
 or mark the cell to make it pass (the validation-integrity rule in
 `AGENTS.md`).
@@ -33,8 +45,8 @@ or mark the cell to make it pass (the validation-integrity rule in
 | `cases.py` | the case registry: corpus entries (from `tests/classics_corpus/manifest.json`) and the toy rows |
 | `features.py` | the feature rows (one per interaction-matrix feature): name, cost class, oracles changed, tags required, `prepare` and `after` hooks |
 | `harness.py` | `run_cell(case, features, tmp) -> CellResult` and the public-surface helpers |
-| `test_matrix.py` | the cell universe, one test per oracle, and the pins that tie the feature axis to `tests/interaction_matrix.json` |
-| `conftest.py` | the per-cell result cache and the xdist grouping |
+| `test_matrix.py` | the cell universe, one test per cell (`test_cell`), the smoke hook (`SMOKE_CELLS`), and the four structural pins (the feature axis equals `tests/interaction_matrix.json`'s, the core pairs are admitted by it, the six base oracles, the stochastic tag), plus a pin that a cell's verdict names every unsatisfied oracle |
+| `conftest.py` | the `cell_result` fixture: runs one cell in its own temp directory |
 | `test_cell_tmp.py` | pins that a cell removes its temp directory when it ends |
 
 ## The cell universe
@@ -47,15 +59,14 @@ or mark the cell to make it pass (the validation-integrity rule in
 * Every other case (the rest of the corpus and the toys) times `CORE_PAIRS`:
   `slow`.
 
-Run it with the cell grouping so one cell's seven tests share one worker
-(measured 2026-10-31: under this repository's root `conftest.py` the
-`xdist_group` marks are not yet honoured, so each worker recomputes the cells
-it draws; the cheap tier still finishes in under 3 minutes at `-n 4`):
+Each cell runs once, inside its own test, so no worker ever recomputes a
+cell another worker ran. Cells keep their `xdist_group` marks; run with
+`--dist loadgroup`:
 
 ```bash
 OMP_NUM_THREADS=1 TORCHLENS_SMOKE_PREFILTER=0 pytest tests/behaviour -m "not slow" -n 4 --dist loadgroup
 pytest tests/behaviour -n 8 --dist loadgroup          # everything, including slow
-pytest tests/behaviour -k "Neural_Gas-save-index"       # one cell
+pytest "tests/behaviour/test_matrix.py::test_cell[Neural_Gas-save-index]"   # one cell
 TORCHLENS_BEHAVIOUR_UNIVERSE=sweep pytest tests/behaviour -n 4   # every pair once (slow)
 ```
 
@@ -69,9 +80,14 @@ a failing cell's files, set `TORCHLENS_BEHAVIOUR_KEEP_TMP=1`: the directory of
 a cell with a failing oracle (or one that crashed) is then kept under pytest's
 basetemp, named after the cell id. Passing cells are removed either way.
 
-Nothing here carries `smoke`: the smoke tier sits near its size ceiling
+Nothing here carries `smoke` yet: the smoke tier sits near its size ceiling
 (`SMOKE_TIER_SIZE_CEILING` in `tests/conftest.py`), and smoke admission is a
-separate decision recorded in `tests/AGENTS.md`.
+separate decision recorded in `tests/AGENTS.md`. The hook for it is
+`SMOKE_CELLS` in `test_matrix.py`: cheap-cell ids listed there run in the
+smoke tier instead of `heavy` once `_SMOKE_TIER` is set to the smoke marker
+spelled in that file (the smoke file list is a text scan of each test file's
+own source, so the marker is spelled there, never through a conftest alias).
+An id that is not a cheap cell raises at import.
 
 ## Adding a case
 

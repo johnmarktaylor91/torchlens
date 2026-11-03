@@ -54,6 +54,15 @@ class SixNDFacts:
     (heuristic-vs-exact); ``six_nd`` (= 6*N*D) is the full training
     heuristic, printed as a fact, never compared against an executed
     quantity unless the hypothetical backward door was invoked.
+
+    Examples
+    --------
+    >>> report = tl.report.flops(tl.trace(model, x), main_input_numel=x.numel())
+    >>> facts = report.six_nd
+    >>> facts.d_numel
+    192
+    >>> facts.six_nd == 3 * facts.two_nd
+    True
     """
 
     num_params: int
@@ -81,7 +90,16 @@ class SixNDFacts:
 
 @dataclass(frozen=True)
 class FlopsReport:
-    """The detached one-call cost report (D10). Raw ints or None only."""
+    """The detached one-call cost report (D10). Raw ints or None only.
+
+    Examples
+    --------
+    >>> report = tl.report.flops(model, x)
+    >>> report.forward_flops > 0
+    True
+    >>> "forward compute" in str(report)
+    True
+    """
 
     convention: str
     forward_flops: int | None
@@ -338,6 +356,17 @@ def flops(
         is OMITTED without it, never guessed).
     breakdown_k:
         Depth-1 module rows in the optional breakdown block (0 disables).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.report.flops(trace).forward_flops == tl.report.flops(model, x).forward_flops
+    True
+    >>> try:
+    ...     tl.report.flops(model)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torch.nn as nn

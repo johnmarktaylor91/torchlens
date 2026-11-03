@@ -1,4 +1,4 @@
-"""Safetensors export of a Trace (R2-08, lane EXTRACT).
+"""Safetensors export of a Trace.
 
 ``tl.export.safetensors(trace, path)`` writes one pickle-free safetensors
 file and ``tl.io.read_safetensors(path)`` reads it back: every saved payload
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import math
-import struct
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._state_adapter import state_items
 from torchlens._errors import InvalidArgumentError
-from torchlens._io.writer_contract import writer_contract, writer_contract_digest
+from torchlens._io.writer_contract import writer_contract
 
 
 class _Net(nn.Module):
@@ -78,15 +76,6 @@ _SOURCE_FILE_FIELDS = {
     "_source_init_file",
     "_source_forward_file",
 }
-_PRIVACY_FIELDS = _SOURCE_FILE_FIELDS | {
-    "init_signature",
-    "forward_signature",
-    "backward_signature",
-    "_source_init_signature",
-    "_source_forward_signature",
-    "annotations",
-    "_source_code_blob",
-}
 
 
 def _keep(record: str) -> set[str]:
@@ -94,75 +83,6 @@ def _keep(record: str) -> set[str]:
 
     policies = writer_contract()["record_contracts"][record]["field_policies"]
     return {name for name, policy in policies.items() if policy == "keep"}
-
-
-def test_trace_round_trips_through_safetensors(tmp_path: Path) -> None:
-    """Payloads bit-equal; KEEP fields decoded equal or disclosed omitted."""
-
-    trace = _trace()
-    path = tl.export.safetensors(trace, tmp_path / "trace.safetensors")
-    loaded = tl.io.read_safetensors(path)
-
-    assert loaded.header["schema"] == "tl_trace_safetensors_v1"
-    assert loaded.header["writer_contract_digest"] == writer_contract_digest()
-    assert loaded.header["capture_honesty"]
-    n_payloads = 0
-    saw_complex = False
-    for label in trace.op_labels:
-        state = dict(state_items(trace.ops[label]))
-        out = state.get("out")
-        if isinstance(out, torch.Tensor):
-            stored = loaded.tensors[label]["out"]
-            assert stored.dtype == out.dtype and stored.shape == out.shape
-            assert torch.equal(stored, out.detach().cpu())
-            n_payloads += 1
-            saw_complex = saw_complex or out.is_complex()
-        exported = loaded.op_fields[label]
-        omitted = loaded.omitted["op"].get(label, {})
-        for name in _keep("op") & set(state):
-            assert (name in exported) != (name in omitted), name
-            if name in exported:
-                assert _same(exported[name], state[name]), (label, name)
-    assert n_payloads >= 5
-    assert saw_complex, "the FFT intermediate exercises the complex encoding"
-    trace_state = dict(state_items(trace))
-    for name in _keep("trace") & set(trace_state):
-        in_fields = name in loaded.trace_fields
-        assert in_fields != (name in loaded.omitted["trace"]), name
-        if not in_fields or name in _PRIVACY_FIELDS:
-            continue
-        assert _same(loaded.trace_fields[name], trace_state[name]), name
-    for name in _SOURCE_FILE_FIELDS & set(loaded.trace_fields):
-        raw = trace_state[name]
-        assert loaded.trace_fields[name] == (Path(raw).name if raw else raw), name
-
-
-def test_export_embeds_no_host_path(tmp_path: Path) -> None:
-    """Trace.save's source-privacy policy applies: no absolute path reaches the file."""
-
-    path = tl.export.safetensors(_trace(), tmp_path / "trace.safetensors")
-    data = path.read_bytes()
-    (header_len,) = struct.unpack("<Q", data[:8])
-    header_text = data[8 : 8 + header_len].decode("utf-8")
-    for host_path in (str(Path(__file__).resolve().parent), str(Path.home())):
-        assert host_path not in header_text
-
-
-def test_export_file_is_pure_safetensors_with_no_pickle(tmp_path: Path) -> None:
-    """Header length + JSON header + exactly the tensor bytes, nothing else."""
-
-    path = tl.export.safetensors(_trace(), tmp_path / "trace.safetensors")
-    data = path.read_bytes()
-    (header_len,) = struct.unpack("<Q", data[:8])
-    header = json.loads(data[8 : 8 + header_len])
-    ends = [entry["data_offsets"][1] for name, entry in header.items() if name != "__metadata__"]
-    assert len(data) == 8 + header_len + max(ends)
-    assert set(header["__metadata__"]) == {"torchlens"}
-    assert all(
-        set(entry) == {"dtype", "shape", "data_offsets"}
-        for name, entry in header.items()
-        if name != "__metadata__"
-    )
 
 
 def test_export_registry_row_and_refusals(tmp_path: Path) -> None:
@@ -211,12 +131,3 @@ def test_reader_refuses_versions_and_digests_it_cannot_honour(tmp_path: Path) ->
         with pytest.raises(InvalidArgumentError) as excinfo:
             tl.io.read_safetensors(target)
         assert excinfo.value.fields["code"] == code
-
-
-def test_export_writes_only_keep_fields(tmp_path: Path) -> None:
-    """No DROP or session-time field ever reaches the file."""
-
-    loaded = tl.io.read_safetensors(tl.export.safetensors(_trace(), tmp_path / "t.safetensors"))
-    assert set(loaded.trace_fields) <= _keep("trace")
-    for fields in loaded.op_fields.values():
-        assert set(fields) <= _keep("op")

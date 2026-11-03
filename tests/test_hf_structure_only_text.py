@@ -1,4 +1,4 @@
-"""U38.1: structure-only text capture with token ids plus an all-ones mask.
+"""Structure-only text capture with token ids plus an all-ones mask.
 
 Ruling (adopt only if discharge passes): the text bridge moves the tokenized
 ids to the meta device with a meta all-ones mask. Measured on distilgpt2,

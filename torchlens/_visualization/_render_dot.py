@@ -22,13 +22,14 @@ from ._edit_highlighter import (
 )
 from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
+from ._focus_scope import focus_address, reading_notes, strip_focus_ancestors
 from ._header_block import (
     caption_from_label,
     drawn_count_line,
-    drawn_module_marks,
     graph_caption_body,
     header_block_label,
     key_swatches,
+    render_module_marks,
 )
 from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 from ._mutated_params import add_mutated_parameter_nodes
@@ -59,9 +60,8 @@ from ._render_regions import (
     _setup_subgraphs_recurse,
 )
 from ._render_utils import (
-    DEFAULT_DRAW_STEM,
     announce_written_graph,
-    collision_safe_outpath,
+    resolve_draw_outpath,
     strip_known_extension,
 )
 from ._stacking import resolve_stack_by
@@ -454,11 +454,9 @@ def _build_graphviz_shell(
     }
     if request.collapse_fn is not None:
         graph_args["newrank"] = "true"
-    # r-b6 R19-6 / T9 (grind-p3): node image attributes are emitted RELATIVE
-    # to the trace visualizer scratch root, and the root is supplied to
-    # Graphviz OUT OF BAND (subprocess cwd at render time), never as an
-    # in-source ``imagepath`` — a baked per-run mkdtemp path made every
-    # user-saved DOT unrenderable once the trace's scratch dir was GC'd.
+    # r-b6 R19-6 / T9: node images are RELATIVE to the trace scratch root, which
+    # Graphviz gets out of band (subprocess cwd), never as an in-source
+    # ``imagepath``: a baked temp path broke saved DOT once the dir was GC'd.
     graph_args.update(
         theme_graph_attrs(
             theme,
@@ -754,22 +752,14 @@ def _finalize_forward_ir(
     context: _ForwardRenderContext,
     work: _ForwardIRWork,
 ) -> "RenderIR":
-    """Resolve sibling constraints, nested regions, and ordered statements.
-
-    Returns
-    -------
-    RenderIR
-        Decision-complete forward IR ready for renderer dispatch.
-    """
+    """Resolve sibling constraints, nested regions and statements into the final forward IR."""
 
     from ._rank_layout_internal.layout import RANK_LAYOUT_COST_THRESHOLD
 
     request = context.request
     sibling_order_chains: tuple[SiblingOrderChain, ...] = ()
-    # Stacking fence (L5 M3, conservative no-op): stack_by pins ranks, and
-    # two independent constraint systems fighting over dot's layout is how
-    # oscillation starts (visualization/CLAUDE.md no-op pattern). Stacking
-    # is strictly opt-in, so this never fires on plain draw().
+    # Stacking fence (L5 M3): stack_by pins ranks, and two constraint systems
+    # fighting over dot's layout oscillate. Opt-in, so plain draw() never fires it.
     stack_channel_active = (
         request.encoding is not None and getattr(request.encoding, "stack_spec", None) is not None
     )
@@ -829,6 +819,9 @@ def _finalize_forward_ir(
         rankdir=context.rankdir,
         theme=context.theme,
     )
+    forward_render_ir, flatten = strip_focus_ancestors(
+        forward_render_ir, work.module_clusters, request.module
+    )
     _setup_subgraphs(
         trace,
         cast(graphviz.Digraph, work.builder),
@@ -840,6 +833,7 @@ def _finalize_forward_ir(
         [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
         container_ink=_theme_cluster_attrs(context.theme),
+        flatten=flatten,
     )
     return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
 
@@ -852,28 +846,32 @@ def _forward_header_label(
 ) -> str | None:
     """Return the graph label with the key under the header, or ``None`` for no key.
 
-    Legend visibility rule (L5 channel core): ``show_legend`` is tri-state
-    (None = AUTO: the channel disclosure only, when a channel is active;
-    explicit False is honoured and the docs state the encoding is then
-    undisclosed). The key sits inside the header label so the two stay
-    together in the top-left corner on every engine. A label set through
-    ``vis_graph_overrides`` (or a lens caption) stays the header.
+    ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
+    channel disclosure when a channel is active and, on a ``module=`` focused
+    draw, the swatches and the reading key; ``False`` is honoured (the docs
+    state the encoding is then undisclosed). The key sits inside the header
+    label so both stay top left on every engine. A ``vis_graph_overrides``
+    label (or a lens caption) stays the header.
     """
 
     request = context.request
     swatches: tuple[Any, ...] = ()
-    if request.show_legend is True:
+    notes: tuple[str, ...] = ()
+    focused = request.show_legend is None and focus_address(request.module) is not None
+    if request.show_legend is True or focused:
         node_attrs = list(statement_node_attrs(forward_render_ir.dot_statements))
         swatches = key_swatches(
             context.theme,
             drawn_legend_roles(node_attrs, context.theme),
-            has_module=drawn_module_marks(node_attrs, bool(forward_render_ir.regions)),
+            has_module=False,
+            module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
         )
+        notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
     if request.encoding is not None and request.show_legend is not False:
         sections = encoding_sections(request.encoding)
-    if not swatches and not sections:
+    if not swatches and not sections and not notes:
         return None
     caption = context.graph_caption
     override = cast(VisualizationOverrides, request.overrides).graph.get("label")  # type: ignore[union-attr]
@@ -881,7 +879,7 @@ def _forward_header_label(
         caption = caption_from_label(
             str(override(trace) if callable(override) else override), context.theme
         )
-    return header_block_label(caption, swatches, sections, context.theme)
+    return header_block_label(caption, swatches, sections, context.theme, notes=notes)
 
 
 def _emit_and_finish_forward(
@@ -1320,6 +1318,7 @@ def draw(
     show_redundant_args: bool = False,
     show_saved_for_backward: bool = False,
     announce_path: bool | None = None,
+    request_sink: dict[str, Any] | None = None,
 ) -> Any:
     """Render the computational graph through the resolved forward IR pipeline.
 
@@ -1350,7 +1349,6 @@ def draw(
     encoding_channel_spec = resolve_color_by(color_by)
     size_channel_spec = resolve_size_by(size_by)
     size_scale = resolve_size_scale(scale, size_by_active=size_channel_spec is not None)
-
     stack_channel_spec = resolve_stack_by(stack_by, vis_mode)
     request = ResolvedRenderRequest(
         vis_mode=vis_mode,
@@ -1408,6 +1406,10 @@ def draw(
             size_scale=size_scale,
         )
     show_buffer_layers = request.show_buffer_layers
+    if request_sink is not None:
+        # The resolved request is the render context the collapse plan and
+        # schedule of the returned Drawing are computed against.
+        request_sink["request"] = request
 
     if vis_renderer not in renderer_names():
         raise InvalidArgumentError(
@@ -1425,15 +1427,8 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
-    # a bare draw (no vis_outpath) writes a collision-safe file and
-    # always prints where; an explicit path is written exactly, as before.
-    # ``Trace.draw`` resolves the collision-safe path itself and says so.
-    if announce_path is None:
-        announce_path = vis_outpath is None
-    resolved_outpath = (
-        collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
-        if vis_outpath is None
-        else _strip_render_extension(vis_outpath)
+    resolved_outpath, announce_path = resolve_draw_outpath(
+        vis_outpath, vis_fileformat, announce_path
     )
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")

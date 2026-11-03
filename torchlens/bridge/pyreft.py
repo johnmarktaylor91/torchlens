@@ -99,6 +99,23 @@ class LoreftArtifact:
     ``units_per_example`` is how many positions per example pyreft edits.
     ``provenance`` records the repo, revision, file digests, dtypes and
     parameter digests.
+
+    Examples
+    --------
+    >>> artifact = LoreftArtifact(
+    ...     rotation=torch.eye(4)[:, :2],
+    ...     weight=torch.zeros(2, 4),
+    ...     bias=torch.zeros(2),
+    ...     layer=0,
+    ...     component="block_output",
+    ...     unit="pos",
+    ...     units_per_example=1,
+    ...     provenance={},
+    ... )
+    >>> artifact.rank
+    2
+    >>> tuple(artifact.rotation.shape)
+    (4, 2)
     """
 
     rotation: torch.Tensor
@@ -403,6 +420,28 @@ def read(
     InvalidArgumentError
         ``pyreft_artifact_invalid`` for a missing or malformed file,
         ``pyreft_artifact_unsupported`` for anything but one LoReFT intervention.
+
+    Examples
+    --------
+    >>> import json, tempfile
+    >>> from pathlib import Path
+    >>> config = {
+    ...     "sorted_keys": ["k0"],
+    ...     "intervention_types": ["LoreftIntervention"],
+    ...     "representations": [[0, "block_output", "pos", 1, 2]],
+    ...     "intervention_dimensions": [4],
+    ... }
+    >>> state = {
+    ...     "weight": torch.zeros(2, 4),
+    ...     "bias": torch.zeros(2),
+    ...     "rotate_layer": torch.eye(4)[:, :2].contiguous(),
+    ... }
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     _ = Path(tmp, "config.json").write_text(json.dumps(config))
+    ...     torch.save(state, Path(tmp, "intkey_k0.bin"))
+    ...     artifact = tl.bridge.pyreft.read(tmp)
+    >>> artifact.rank, artifact.component
+    (2, 'block_output')
     """
 
     root = Path(directory)

@@ -114,6 +114,12 @@ def register(
     ArgumentConflictError
         ``appliance_name_taken`` when ``name`` is registered and ``replace``
         is false.
+
+    Examples
+    --------
+    >>> register("example.layer_count", lambda trace: len(trace.layers), replace=True)
+    >>> tl.trace(model, x).using("example.layer_count")
+    5
     """
 
     checked = _validated_name(name)
@@ -161,6 +167,13 @@ def names() -> dict[str, str]:
     -------
     dict[str, str]
         ``name -> summary`` for every registered appliance.
+
+    Examples
+    --------
+    >>> echo = lambda trace: trace
+    >>> tl.appliances.register("example.echo", echo, summary="the trace", replace=True)
+    >>> names()["example.echo"]
+    'the trace'
     """
 
     entries = _APPLIANCES.snapshot().values

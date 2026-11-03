@@ -12,6 +12,30 @@ TorchLens records.
 pip install torchlens weightwatcher==0.7.7
 ```
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). WeightWatcher reads weight
+matrices; `trace.params` lists every parameter of the running CNN by address. The recipe below
+builds its own model for the method.
+
+```python
+# recipe-test: tool=weightwatcher expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+addresses = {param.address for param in trace.params}
+RESULT = addresses == {name for name, _ in model.named_parameters()}
+```
+
 ## Hand the traced parameters to WeightWatcher
 
 WeightWatcher accepts a plain dict of tensors keyed like a PyTorch

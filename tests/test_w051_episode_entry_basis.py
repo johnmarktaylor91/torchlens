@@ -110,6 +110,7 @@ class _Flow(nn.Module):
         return x
 
 
+@pytest.mark.smoke
 def test_timestep_first_denoiser_grades_the_sample() -> None:
     torch.manual_seed(0)
     model = _Flow(replace=False)

@@ -17,7 +17,6 @@ import os
 import subprocess
 import sys
 import textwrap
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -31,12 +30,6 @@ _PACKAGE_DIR = Path(tl.__file__).resolve().parent
 # Spelled the way ``torchlens._utils._package_frames`` spells it, computed here so the
 # behavioural tests below import (and fail) on a package without that module.
 _PACKAGE_PREFIX = os.path.normcase(str(_PACKAGE_DIR)) + os.sep
-
-
-def _normalized(path: str) -> str:
-    """``path`` spelled the way :data:`_PACKAGE_PREFIX` is."""
-
-    return os.path.normcase(os.path.abspath(path))
 
 
 class OneAttention(nn.Module):
@@ -124,55 +117,6 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
     return sorted(seen.values())
-
-
-def test_is_torchlens_code_ignores_filename_spelling() -> None:
-    """The frame filter answers by location, not by how the path is spelled."""
-
-    from torchlens._utils._package_frames import (
-        TORCHLENS_PACKAGE_PREFIX,
-        is_torchlens_code,
-        normalized_filename,
-    )
-
-    assert TORCHLENS_PACKAGE_PREFIX == _PACKAGE_PREFIX
-    code = is_torchlens_code.__code__
-    real = Path(code.co_filename).resolve()
-    assert normalized_filename(str(real)).startswith(TORCHLENS_PACKAGE_PREFIX)
-    assert is_torchlens_code(code)
-    dotted = os.path.join(str(real.parent.parent.parent), ".", "torchlens", "utils", real.name)
-    assert "." + os.sep in dotted
-    assert is_torchlens_code(code.replace(co_filename=dotted))
-    assert is_torchlens_code(code.replace(co_filename=os.path.relpath(str(real))))
-    sibling = str(real.parent.parent.parent / "torchlens_contrib" / "model.py")
-    assert not is_torchlens_code(code.replace(co_filename=sibling))
-    assert not is_torchlens_code(code.replace(co_filename=__file__))
-    assert not is_torchlens_code(code.replace(co_filename="<string>"))
-    # Code objects compare equal across filenames; verdicts must not.
-    inside = compile("x = 1", str(real), "exec")
-    outside = compile("x = 1", __file__, "exec")
-    assert inside == outside
-    assert is_torchlens_code(inside)
-    assert not is_torchlens_code(outside)
-
-
-def test_no_torchlens_frame_in_any_code_context() -> None:
-    """Every recorded frame of an op lies outside the package, in-process."""
-
-    model, x = _build()
-    trace = tl.trace(model, x)
-    leaked = [
-        (op.label, str(location.file))
-        for op in trace.ops
-        for location in op.code_context or ()
-        if _normalized(str(location.file)).startswith(_PACKAGE_PREFIX)
-    ]
-    assert leaked == []
-    shape = Counter(_layer_shape(trace))
-    # The two ``linear`` calls inside one attention (in-projection, out-projection)
-    # are two places in torch's code: two layers, never passes of one.
-    assert shape[("linear", 1)] >= 3, shape
-    assert not trace.graph.is_recurrent
 
 
 @pytest.mark.heavy

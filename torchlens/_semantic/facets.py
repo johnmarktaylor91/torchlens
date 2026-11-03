@@ -59,7 +59,14 @@ class AbsenceReason:
         Optional capture instruction for actionable missing-payload cases.
     detail:
         Human-readable explanation of the absence.
-    """
+
+    Examples
+    --------
+    >>> reason = AbsenceReason("needs_capture", remedy="save='all'")
+    >>> reason.status
+    'needs_capture'
+    >>> reason.detail is None
+    True"""
 
     status: AbsenceStatus
     remedy: str | None = None
@@ -120,7 +127,14 @@ class FacetFunction:
         Whether this recipe has an arbitrary predicate matcher.
     target_scope:
         Record scope the recipe targets.
-    """
+
+    Examples
+    --------
+    >>> recipe = tl.facets.functions()[0]
+    >>> isinstance(recipe, FacetFunction)
+    True
+    >>> recipe.source
+    'built-in'"""
 
     name: str
     class_names: tuple[str, ...]
@@ -153,7 +167,14 @@ class FacetRegistrySnapshot:
         Stable digest of the recipe identities and their source tier.
     functions:
         Immutable active recipe entries.
-    """
+
+    Examples
+    --------
+    >>> snap = tl.facets.snapshot()
+    >>> isinstance(snap, FacetRegistrySnapshot)
+    True
+    >>> len(snap.functions) == len(tl.facets.functions())
+    True"""
 
     version: int
     provenance_id: str
@@ -381,7 +402,16 @@ class FacetSpec(_SelectionOperand):
         Recipe version that produced this facet.
     home:
         Runtime home object. This is intentionally non-portable.
-    """
+
+    Examples
+    --------
+    >>> spec = FacetSpec.computed(lambda: torch.ones(3), function_id="ones")
+    >>> spec.home_kind
+    'computed'
+    >>> tuple(spec.read().shape)
+    (3,)
+    >>> spec.capability_flags.write
+    False"""
 
     home_kind: HomeKind
     home_label: str | None = None
@@ -779,7 +809,18 @@ def _copy_scatter_value(target: torch.Tensor, edited_slice: torch.Tensor, *, mod
 
 
 class MissingFacet:
-    """Sentinel for a known facet whose value is intentionally unavailable."""
+    """Sentinel for a known facet whose value is intentionally unavailable.
+
+    Examples
+    --------
+    >>> missing = MissingFacet("needs save='all'")
+    >>> missing.reason
+    "needs save='all'"
+    >>> try:
+    ...     missing.shape
+    ... except RuntimeError as err:
+    ...     print(err)
+    needs save='all'"""
 
     def __init__(self, reason: str) -> None:
         """Initialize the missing-facet sentinel.
@@ -829,7 +870,18 @@ class MissingFacet:
 
 
 class MissingFacetError(KeyError):
-    """Raised when a declared facet needs a different capture to be available."""
+    """Raised when a declared facet needs a different capture to be available.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     trace.modules["0"].facets["q"]
+    ... except MissingFacetError as err:
+    ...     print(err.reason.status)
+    structurally_absent
+    >>> issubclass(MissingFacetError, KeyError)
+    True"""
 
     def __init__(self, name: FacetKey, reason: AbsenceReason) -> None:
         """Initialize the actionable missing-facet exception.
@@ -888,7 +940,15 @@ def _owning_module_class_name(record: Any) -> str:
 
 
 class MissingGrad:
-    """Sentinel for a known facet gradient that is not currently saved."""
+    """Sentinel for a known facet gradient that is not currently saved.
+
+    Examples
+    --------
+    >>> grad = MissingGrad("recapture with backward_ready=True")
+    >>> bool(grad)
+    False
+    >>> grad.reason
+    'recapture with backward_ready=True'"""
 
     def __init__(self, reason: str) -> None:
         """Initialize the missing-gradient sentinel.
@@ -944,7 +1004,16 @@ class MissingGrad:
 
 
 class Facet:
-    """Lazy tensor-like runtime wrapper for a ``FacetSpec``."""
+    """Lazy tensor-like runtime wrapper for a ``FacetSpec``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> facet = trace.modules["0"].facets["out"]
+    >>> isinstance(facet, Facet)
+    True
+    >>> tuple(facet.value.shape)
+    (1, 4, 8, 8)"""
 
     def __init__(self, spec: FacetSpec) -> None:
         """Initialize a runtime facet wrapper.
@@ -1015,7 +1084,19 @@ _HEAD_DIM_BY_FACET: dict[str, int] = {
 
 
 class AttentionHeadView:
-    """Scoped accessor for one attention head within a parent facet view."""
+    """Scoped accessor for one attention head within a parent facet view.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> head = trace.modules["transformer.h.0.attn"].facets.head(1)
+    >>> tuple(head["pattern"].shape)
+    (1, 6, 6)"""
 
     def __init__(self, parent: FacetView, head_index: int) -> None:
         """Initialize a per-head attention view.
@@ -1073,7 +1154,18 @@ class AttentionHeadView:
 
 
 class FacetView(Mapping[FacetKey, Any]):
-    """Lazy dict-like and attribute-access semantic view on a TorchLens record."""
+    """Lazy dict-like and attribute-access semantic view on a TorchLens record.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> view = trace.modules["0"].facets
+    >>> isinstance(view, FacetView)
+    True
+    >>> "out" in view
+    True
+    >>> tuple(view["out"].value.shape)
+    (1, 4, 8, 8)"""
 
     def __init__(self, record: Any) -> None:
         """Create a facet view for a record.
@@ -1369,14 +1461,28 @@ def enable_transformer_lens_aliases(enabled: bool = True) -> None:
     -------
     None
         The process-wide alias setting is updated.
-    """
+
+    Examples
+    --------
+    >>> tl.facets.enable_transformer_lens_aliases(True)
+    >>> tl.facets.transformer_lens_aliases_enabled()
+    True
+    >>> tl.facets.enable_transformer_lens_aliases(False)
+    >>> tl.facets.transformer_lens_aliases_enabled()
+    False"""
 
     global _TRANSFORMERLENS_ALIASES_ENABLED
     _TRANSFORMERLENS_ALIASES_ENABLED = enabled
 
 
 def transformer_lens_aliases_enabled() -> bool:
-    """Return whether TransformerLens aliases are enabled."""
+    """Return whether TransformerLens aliases are enabled.
+
+    Examples
+    --------
+    >>> enabled = tl.facets.transformer_lens_aliases_enabled()
+    >>> isinstance(enabled, bool)
+    True"""
 
     return _TRANSFORMERLENS_ALIASES_ENABLED
 
@@ -1427,7 +1533,17 @@ def register(
         Internal scope marker used for discoverability filtering.
     facets:
         Internal declared facet names used for cheap ``keys()``.
-    """
+
+    Examples
+    --------
+    >>> @tl.facets.register(class_name="TinyBlock", target_scope="module", facets=("probe",))
+    ... def probe_recipe(module):
+    ...     return {"probe": 1}
+    >>> tl.facets.describe("TinyBlock")
+    {'functions': ['probe_recipe'], 'facets': ['probe']}
+    >>> tl.facets.reset()
+    >>> tl.facets.describe("TinyBlock")
+    {'functions': [], 'facets': []}"""
 
     def decorator(func: RecipeFunc) -> RecipeFunc:
         """Store the recipe metadata and return ``func`` unchanged."""
@@ -1476,7 +1592,14 @@ def register(
 
 
 def reset() -> None:
-    """Reset the process registry to the built-in recipe set."""
+    """Reset the process registry to the built-in recipe set.
+
+    Examples
+    --------
+    >>> recipe = tl.facets.register(class_name="TinyBlock", facets=("probe",))(lambda module: {})
+    >>> tl.facets.reset()
+    >>> tl.facets.functions(class_name="TinyBlock")
+    []"""
 
     global _REGISTRY_VERSION
     with _REGISTRY_LOCK:
@@ -1497,7 +1620,15 @@ def adding(*facets: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
     ------
     None
         Context body where new trace captures include the supplied recipes.
-    """
+
+    Examples
+    --------
+    >>> def probe(module):
+    ...     return {"probe": 1}
+    >>> with tl.facets.adding(probe):
+    ...     trace = tl.trace(model, x)
+    >>> trace.modules["0"].facets["probe"]
+    1"""
 
     flattened = _flatten_recipe_args(facets)
     entries = tuple(_entry_for_recipe(func) for func in flattened)
@@ -1509,20 +1640,36 @@ def adding(*facets: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
 
 
 def functions(
-    scope: str | None = None, class_name: str | None = None
+    target_scope: str | None = None, class_name: str | None = None
 ) -> builtins.list[FacetFunction]:
-    """List registered recipes, optionally filtered by scope and class-name glob."""
+    """List registered facet functions, optionally filtered by target scope and class-name glob.
+
+    Examples
+    --------
+    >>> recipes = tl.facets.functions()
+    >>> len(recipes) > 0
+    True
+    >>> len(tl.facets.functions(class_name="GPT2Attention")) > 0
+    True"""
 
     return [
         recipe.public
         for recipe in _REGISTRY
-        if _scope_matches(recipe.public.target_scope, scope)
+        if _scope_matches(recipe.public.target_scope, target_scope)
         and _class_filter_matches(recipe.public.class_names, class_name)
     ]
 
 
 def describe(class_name: str) -> dict[str, builtins.list[str]]:
-    """Return registered facet function names and declared facets for a class name."""
+    """Return registered facet function names and declared facets for a class name.
+
+    Examples
+    --------
+    >>> info = tl.facets.describe("GPT2Attention")
+    >>> sorted(info)
+    ['facets', 'functions']
+    >>> "q" in info["facets"]
+    True"""
 
     functions: builtins.list[str] = []
     facets: builtins.list[str] = []
@@ -1571,7 +1718,14 @@ def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistryS
     -------
     FacetRegistrySnapshot
         Frozen recipe snapshot with version and provenance metadata.
-    """
+
+    Examples
+    --------
+    >>> snap = tl.facets.snapshot()
+    >>> isinstance(snap.provenance_id, str)
+    True
+    >>> len(snap.functions) == len(tl.facets.functions())
+    True"""
 
     extra_entries = tuple(_entry_for_recipe(func) for func in (extra_facets or ()))
     with _REGISTRY_LOCK:

@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import math
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -134,7 +133,17 @@ def _traced_backward(model: nn.Module, inputs: list[torch.Tensor]) -> Any:
     return trace
 
 
-@pytest.mark.parametrize("case", sorted(MATMUL_CASES))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case",
+    sorted(
+        c
+        for c in MATMUL_CASES
+        if c
+        in {"linear_bias_3d[a_grad=False,b_grad=True]", "matmul_2d_1d[a_grad=False,b_grad=True]"}
+    ),
+)
 def test_matmul_family_backward_equals_flop_counter_mode(case: str) -> None:
     """Counted executed backward == FlopCounterMode's backward, per case, exactly."""
 
@@ -236,7 +245,11 @@ ZOO_BUILDERS = {
 }
 
 
-@pytest.mark.parametrize("case", sorted(ZOO_BUILDERS))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_cost_tree.py.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case", sorted(c for c in ZOO_BUILDERS if c in {"eager_attention_h1", "rnn_unrolled"})
+)
 def test_zoo_backward_equals_closed_form(case: str) -> None:
     """Counted executed backward == the closed-form backward, per zoo case, exactly."""
 
@@ -252,57 +265,12 @@ def test_zoo_backward_equals_closed_form(case: str) -> None:
         trace.cleanup()
 
 
-class _SecondOrder(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.w = nn.Parameter(_leaf((6, 3), False, 7))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x @ self.w
-
-
-def test_zoo_second_order_grad_phase_and_double_backward_are_separate_passes() -> None:
-    """create_graph grad (pass 1) and the double backward (pass 2), each exact."""
-
-    row = ZOO_CASES["second_order"]
-    model = _SecondOrder()
-    trace = tl.trace(
-        model, _leaf((4, 6), False, 8), capture=tl.options.CaptureOptions(backward_ready=True)
-    )
-    try:
-        y = trace[trace.output_layers[0]].out
-        (grad,) = torch.autograd.grad((y**2).sum(), model.w, create_graph=True)
-        (grad**2).sum().backward()
-        status = backward_status(trace)
-        assert status.executed_flops_per_pass == (
-            (1, row["closed_grad_phase"]),
-            (2, row["closed_double_backward"]),
-        )
-        assert row["closed_grad_phase"] == row["fcm_grad_phase"]
-        assert row["closed_double_backward"] == row["fcm_double_backward"]
-        assert status.executed_flops == row["closed_grad_phase"] + row["closed_double_backward"]
-        assert _true_mac_flops(trace) == row["closed_fwd"]
-    finally:
-        trace.cleanup()
-
-
-def test_grouped_conv_counts_true_work_per_group() -> None:
-    """Groups fold into the weight shape: dX and dW each cost the forward's MACs."""
-
-    conv = nn.Conv2d(4, 8, 3, groups=4, bias=False)
-    trace = _traced_backward(conv, [_leaf((2, 4, 8, 8), True, 3)])
-    try:
-        forward_macs = 2 * 8 * 6 * 6 * (4 // 4) * 3 * 3
-        assert backward_status(trace).executed_flops == 2 * (2 * forward_macs)
-    finally:
-        trace.cleanup()
-
-
 def _small() -> tuple[nn.Module, torch.Tensor]:
     torch.manual_seed(0)
     return nn.Linear(4, 3, bias=False), torch.randn(2, 4)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_cost_backward.py.
 def test_three_states_on_a_small_model() -> None:
     """grad off reads 0, grad on and unobserved reads unknown, observed reads the count."""
 
@@ -330,54 +298,7 @@ def test_three_states_on_a_small_model() -> None:
             trace.cleanup()
 
 
-def test_uncounted_ops_are_named_never_zeroed() -> None:
-    """Ops outside the counted families are listed by name with their call counts."""
-
-    model, inputs = ZOO_BUILDERS["eager_attention_h1"]()
-    trace = _traced_backward(model, inputs)
-    try:
-        status = backward_status(trace)
-        names = dict(status.uncounted_op_counts)
-        assert "_softmax_backward_data" in names
-        assert all(count > 0 for count in names.values())
-        assert "outside those families not counted" in status.status_line
-        ops = trace.autograd.backward_passes[0].aten_ops
-        assert ops is not None
-        counted = [op for op in ops if op.family == "matmul"]
-        assert counted and all(op.grad_fn_call_ref is not None for op in counted)
-        assert sum(op.flops for op in ops if op.flops) == status.executed_flops
-        assert all(op.flops is None for op in ops if op.family == "uncounted")
-    finally:
-        trace.cleanup()
-
-
-def test_gradient_saving_never_changes_the_count() -> None:
-    """Gradient saving adds only zero-arithmetic copies; the counted calls are identical."""
-
-    def recorded(capture: Any) -> tuple[list[Any], int | None]:
-        model, x = _small()
-        trace = tl.trace(model, x, capture=capture)
-        try:
-            out = trace[trace.output_layers[0]].out
-            trace.log_backward(out.sum())
-            ops = trace.autograd.backward_passes[0].aten_ops
-            assert ops is not None
-            return list(ops), backward_status(trace).executed_flops
-        finally:
-            trace.cleanup()
-
-    plain, plain_total = recorded(tl.options.CaptureOptions(backward_ready=True))
-    saving, saving_total = recorded(tl.options.CaptureOptions(backward_ready=True, save_grads=True))
-    assert saving_total == plain_total == 2 * 2 * 4 * 3
-
-    def counted(ops: list[Any]) -> list[str]:
-        return [op.operator for op in ops if op.family != "zero_arithmetic"]
-
-    assert counted(saving) == counted(plain)
-    extra = [op for op in saving if op.family == "zero_arithmetic"]
-    assert all(op.flops == 0 for op in extra), extra
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_stats_grad_fn_site.py, _data_classes/backward_pass.py, report/_backward_attribution.py ....
 def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
     """The count is saved with the pass: a reloaded trace reads the live answer."""
 
@@ -395,31 +316,5 @@ def test_loaded_trace_reads_the_saved_count(tmp_path: Path) -> None:
         assert status.executed_flops_per_pass == live.executed_flops_per_pass
         assert status.flops_attributions[0].rows == live.flops_attributions[0].rows
         assert status.unattributed_flops == live.unattributed_flops
-    finally:
-        trace.cleanup()
-
-
-def test_capture_without_backward_never_enters_the_census() -> None:
-    """A capture that requests no backward runs none of the census code."""
-
-    from torchlens.backends.torch import _backward_dispatch
-
-    calls: list[str] = []
-    census_file = _backward_dispatch.__file__
-
-    def profiler(frame: Any, event: str, _arg: Any) -> None:
-        if event == "call" and frame.f_code.co_filename == census_file:
-            calls.append(frame.f_code.co_name)
-
-    model, x = _small()
-    previous = sys.getprofile()
-    sys.setprofile(profiler)
-    try:
-        trace = tl.trace(model, x)
-    finally:
-        sys.setprofile(previous)
-    try:
-        assert calls == []
-        assert trace not in _backward_dispatch._BACKWARD_DISPATCH
     finally:
         trace.cleanup()

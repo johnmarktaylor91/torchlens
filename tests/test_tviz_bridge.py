@@ -10,7 +10,6 @@ real-model suite (R4).
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 
 import pytest
 import torch
@@ -35,18 +34,6 @@ def _views(n_layers: int = 2) -> list[tviz.AttentionView]:
         )
         for layer in range(n_layers)
     ]
-
-
-def test_payload_matches_record_values_with_bridge_provenance() -> None:
-    """Identical coordinates and values, different provenance (comp row 1)."""
-
-    views = _views()
-    payload = tviz.circuitsvis_payload(views)
-    assert payload["tokens"] == [f"t{i}" for i in range(5)]
-    assert payload["layers"] == ["blk.0.attn", "blk.1.attn"]
-    reconstructed = torch.tensor(payload["attention"][0])
-    assert torch.allclose(reconstructed, views[0].pattern, atol=1e-6)
-    assert "dormant" in payload["disclosure"]
 
 
 def test_rectangular_axes_refuse_the_bridge() -> None:
@@ -74,7 +61,6 @@ def test_oversized_payload_refuses_typed() -> None:
     assert error.fields["payload_bytes"] > error.fields["limit_bytes"]
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(
     importlib.util.find_spec("circuitsvis") is not None,
     reason="the refusal row needs circuitsvis absent",
@@ -87,15 +73,6 @@ def test_missing_bridge_dependency_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "tv_bridge_unavailable"
 
 
-def test_native_path_unaffected_by_bridge_state(tmp_path: Path) -> None:
-    """Composition row 14: static rendering never depends on the bridge."""
-
-    artifact = torchlens.viz.attention(_views()[0], tmp_path / "native.svg")
-    assert artifact.paths[0].exists()
-    assert "<image" not in artifact.paths[0].read_text()
-
-
-@pytest.mark.smoke
 def test_bertviz_tuple_layout() -> None:
     """One [1, heads, dst, src] tensor per layer (the HF tuple layout)."""
 

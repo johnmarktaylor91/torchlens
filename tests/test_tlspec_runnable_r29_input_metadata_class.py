@@ -89,6 +89,7 @@ class ViewContiguityBranch(nn.Module):
         return x + 1 if x.t().is_contiguous() else x - 1
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py; a sole mutation kill; the catch of its regression fault.
 def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
     """A same-shape input with a different storage_offset must diverge, never false VERIFIED."""
 
@@ -108,6 +109,7 @@ def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r29_is_leaf_flip_diverges(tmp_path: Path) -> None:
     """A non-leaf runtime input on a ``is_leaf``-branching model must diverge."""
 
@@ -120,6 +122,7 @@ def test_r29_is_leaf_flip_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=nonleaf)
 
 
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_r29_grad_fn_presence_diverges(tmp_path: Path) -> None:
     """A runtime input carrying a grad_fn on a grad_fn-branching model must diverge."""
 
@@ -132,21 +135,7 @@ def test_r29_grad_fn_presence_diverges(tmp_path: Path) -> None:
         tl.load(path).run(inputs=with_grad_fn)
 
 
-def test_r29_storage_geometry_view_diverges(tmp_path: Path) -> None:
-    """A same-shape input that is a view of a larger storage must diverge on a geometry read."""
-
-    base = torch.randn(16)
-    x_full = base[0:4].clone()  # own storage, exactly numel * element_size
-    x_view = base[0:4]  # base storage is larger
-    path = _save(StorageBytesBranch(), x_full, tmp_path / "sb.tlspec")
-    assert tl.load(path).run(inputs=x_full.clone()).report.path_faithfulness is (
-        PathFaithfulness.VERIFIED
-    )
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=x_view)
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_boundaries.py; a sole mutation kill.
 def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
     """A layout read on an input-derived VIEW fails closed to UNVERIFIABLE (cannot re-verify)."""
 
@@ -156,32 +145,6 @@ def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
     report = tl.load(path).run(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_r29_metadata_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
-    """A model that never reads the new accessors stays VERIFIED even for exotic inputs."""
-
-    model = nn.Linear(4, 4)
-    x = torch.randn(2, 4)
-    path = _save(model, x, tmp_path / "plain.tlspec")
-
-    # Original input verifies (a Linear's matmul activation is only ULP-reproducible, so its
-    # attestation is legitimately NOT_APPLICABLE -- the point here is no metadata divergence).
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-    # A same-shape slice-of-larger-buffer input (non-zero storage_offset, larger storage)
-    # is a legal changed input here: no witnessed metadata read means it must NOT diverge.
-    base = torch.randn(4, 4)
-    exotic = base[1:3]  # storage_offset != 0, larger base storage, same shape as x
-    twin = tl.load(path).run(inputs=exotic)
-    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 class LoopAccumScalarView(nn.Module):
@@ -194,14 +157,3 @@ class LoopAccumScalarView(nn.Module):
         for i in range(x.shape[0]):
             total = total + x[i].item()
         return x * total
-
-
-def test_r29_autograd_reads_on_input_view_do_not_over_trigger(tmp_path: Path) -> None:
-    """Framework autograd reads on an input-derived view must stay VERIFIED+ATTESTED."""
-
-    x = torch.tensor([2.0, 3.0])
-    path = _save(LoopAccumScalarView(), x, tmp_path / "loop.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED

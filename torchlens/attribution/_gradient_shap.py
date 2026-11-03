@@ -401,6 +401,17 @@ def gradient_shap(
     ------
     AttributionError
         On pool/draw-bank misalignment or invalid sampling parameters.
+
+    Examples
+    --------
+    >>> pool = torch.zeros(2, 3, 8, 8)
+    >>> result = tl.attribution.gradient_shap(
+    ...     model, x, target=0, baselines=pool, num_samples=2, seed=0
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.method
+    'gradient_shap'
     """
 
     _validate_positive_int("n_samples", num_samples)

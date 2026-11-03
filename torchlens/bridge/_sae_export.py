@@ -221,6 +221,18 @@ def write_delphi(  # noqa: PLR0913 -- the two subjects plus the cache's where (s
         If ``latents`` is neither shape (``sae_export_latents_invalid``) or
         ``tokens`` is not an integer ``[examples, sequence]`` tensor that
         covers them (``sae_export_tokens_invalid``).
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> latents = torch.rand(2, 3, 4)
+    >>> tokens = torch.randint(0, 10, (2, 3))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     folder = tl.bridge.sae.write_delphi(
+    ...         latents, tokens, site="blocks.0", model_name="gpt2", n_splits=2, directory=tmp
+    ...     )
+    ...     print(folder.name, len(list(folder.glob("*.safetensors"))))
+    blocks.0 2
     """
 
     from safetensors.numpy import save_file
@@ -392,6 +404,19 @@ def write_sae_dashboard(  # noqa: PLR0913 -- the two subjects plus what (latent 
         If ``latents`` is neither shape or ``latent_ids`` names a latent out
         of range (``sae_export_latents_invalid``), or ``tokens`` does not
         cover the latents (``sae_export_tokens_invalid``).
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> latents = torch.rand(2, 3, 4)
+    >>> tokens = torch.randint(0, 10, (2, 3))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.bridge.sae.write_sae_dashboard(
+    ...         latents, tokens, k=2, path=Path(tmp) / "dash.json"
+    ...     )
+    ...     print(out.name, out.is_file())
+    dash.json True
     """
 
     writer = "tl.bridge.sae.write_sae_dashboard"

@@ -33,6 +33,18 @@ def test_removed_nonfinite_fields_name_on_nonfinite(removed: str) -> None:
     assert "on_nonfinite=" in str(excinfo.value)
 
 
+def test_trace_takes_inputs_and_refuses_the_old_input_args_keyword() -> None:
+    """``inputs=`` binds the model input; ``input_args=`` is an unrouted keyword, never forwarded."""
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    trace = tl.trace(model, inputs=torch.ones(1, 3))
+    assert isinstance(trace, tl.Trace)
+    with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
+        tl.trace(model, input_args=torch.ones(1, 3))
+    assert excinfo.value.fields["code"] == "trace_forward_kwargs_unrouted"
+    assert excinfo.value.fields["unrouted_keywords"] == ["input_args"]
+
+
 def test_private_selection_survives_option_merges() -> None:
     selection = ["relu"]
     original = merge_capture_options(capture=CaptureOptions(seed=7), _layers_to_save=selection)

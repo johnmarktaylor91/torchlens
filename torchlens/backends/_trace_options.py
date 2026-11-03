@@ -46,7 +46,9 @@ class _BackendCapability:
     public_spine: bool = False
 
 
-_INTERVENTIONS = _BackendCapability("can_intervene", ("intervene", "halt"), gated=True)
+_INTERVENTIONS = _BackendCapability(
+    "can_intervene", ("intervene", "halt", "stop_after"), gated=True
+)
 _STREAMING = _BackendCapability("has_streaming", ("storage", "streaming"), gated=True)
 _BACKWARD_CAPTURE = _BackendCapability(
     "backward_capture", ("save_grads", "backward_ready"), gated=True

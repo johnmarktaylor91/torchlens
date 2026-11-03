@@ -9,15 +9,13 @@ the body of those verbs, so it is the one settle-layer door to them.
 from __future__ import annotations
 
 import contextlib
-import os
 import random
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
-from tqdm import tqdm
 
 from torchlens.backends.registry import BackendUnsupportedError
 
@@ -65,9 +63,6 @@ from .options import CaptureOptions, CaptureOptions as _CaptureOptions
 # FACADE by role: the body of the public ``torchlens.*`` verbs, whose upward
 # calls into the renderers and reports are the facade's own (Rule F).
 __tl_layer__ = "FACADE"
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 def trace(*args: Any, **kwargs: Any) -> Trace:
@@ -552,7 +547,7 @@ def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
     return f"{mode_part}, {grad_part}, state restored"
 
 
-_GRAPH_VERBS = frozenset({"show_model_graph", "show_bundle_graph"})
+_GRAPH_VERBS = frozenset({"show_model_graph"})
 
 
 def __getattr__(name: str) -> Any:
@@ -615,6 +610,12 @@ def validate_forward_pass(
     ------
     BackendUnsupportedError
         If a non-default save option is requested for a non-torch backend.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_forward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
 
     _validate_output_device(output_device)
@@ -1536,6 +1537,12 @@ def validate_backward_pass(
     -------
     bool
         True if backward capture matches stock autograd.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_backward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
     from .validation.backward import validate_backward_pass as _impl  # deferred: cycle validation
 
@@ -1552,87 +1559,3 @@ def validate_backward_pass(
         layer_grad_atol=layer_grad_atol,
         layer_grad_rtol=layer_grad_rtol,
     )
-
-
-def validate_batch_of_models_and_inputs(
-    models_and_inputs_dict: dict[str, dict[str, Any]],
-    out_path: str,
-    redo_model_if_already_run: bool = True,
-    show_progress: bool = True,
-) -> pd.DataFrame:
-    """Batch-validate multiple models, writing incremental results to a CSV.
-
-    For each model/input pair, calls ``validate_forward_pass`` and appends the
-    result to a running CSV at *out_path*.  If the CSV already exists, previously
-    validated models can be skipped (controlled by *redo_model_if_already_run*).
-
-    Parameters
-
-    ----------
-        models_and_inputs_dict: Mapping of model_class_name to a dict with keys:
-            - ``model_category`` (str): grouping label (e.g. 'torchvision').
-            - ``model_loading_func`` (callable): zero-arg function returning an nn.Module.
-            - ``model_sample_inputs`` (dict[str, input]): named sample inputs.
-        out_path: File path for the results CSV (created if absent, appended otherwise).
-        redo_model_if_already_run: Re-validate models already present in the CSV.
-        show_progress: Show the tqdm bar and per-model status lines. Pass False
-            for quiet batch runs (b8 B8-38: the bar was ungated and a bare print
-            inside the loop corrupted the live bar).
-
-    Returns
-
-    -------
-        DataFrame with columns: model_category, model_class_name, input_name, validation_success.
-    """
-    try:
-        import pandas as pd
-    except ImportError as e:
-        raise ImportError(
-            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
-        ) from e
-
-    if os.path.exists(out_path):
-        current_csv = pd.read_csv(out_path)
-    else:
-        current_csv = pd.DataFrame.from_dict(
-            {
-                "model_category": [],
-                "model_class_name": [],
-                "input_name": [],
-                "validation_success": [],
-            }
-        )
-    models_already_run = current_csv["model_class_name"].unique()
-    progress = tqdm(
-        models_and_inputs_dict.items(), desc="Validating models", disable=not show_progress
-    )
-    for model_class_name, model_info in progress:
-        # Route the status line through the bar so it never corrupts it.
-        progress.set_postfix_str(model_class_name)
-        if model_class_name in models_already_run and not redo_model_if_already_run:
-            continue
-        model_category = model_info["model_category"]
-        model_loading_func = model_info["model_loading_func"]
-        model = model_loading_func()
-        model_sample_inputs = model_info["model_sample_inputs"]
-        for input_name, input_data in model_sample_inputs.items():
-            validation_success = validate_forward_pass(model, input_data)
-            current_csv = pd.concat(
-                [
-                    current_csv,
-                    pd.DataFrame(
-                        [
-                            {
-                                "model_category": model_category,
-                                "model_class_name": model_class_name,
-                                "input_name": input_name,
-                                "validation_success": validation_success,
-                            }
-                        ]
-                    ),
-                ],
-                ignore_index=True,
-            )
-        current_csv.to_csv(out_path, index=False)
-        del model
-    return current_csv

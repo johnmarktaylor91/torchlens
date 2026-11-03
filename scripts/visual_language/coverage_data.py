@@ -255,7 +255,9 @@ ROWS: Mapping[str, Row] = {
     "VR01": _R(
         "region.module_cluster", "module-boxes", P, "_render_utils:make_module_cluster_attrs"
     ),
-    "VR02": _R("region.depth_penwidth", "module-boxes", P, "_render_utils:compute_module_penwidth"),
+    "VR02": _R(
+        "region.depth_penwidth", "module-boxes", P, "_frame_penwidth:compute_module_penwidth"
+    ),
     "VR03": _R(
         "region.nesting_pruning", "module-boxes", P, "_render_regions:_module_subtree_payload_empty"
     ),
@@ -550,6 +552,20 @@ ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
         "show_grad_values",
         "backward_node_spec_fn",
         "intervening_cluster",
+    ),
+    # Bundle.draw is the bundle's own door (the merged graph and graph="diff"); the slides
+    # teach Trace.draw, so its bundle-only keywords are cheat lines here.
+    "Bundle.draw": (
+        "path",
+        "graph",
+        "nodes",
+        "rolled",
+        "theme",
+        "node_overrides",
+        "edge_overrides",
+        "members",
+        "metric",
+        "on",
     ),
 }
 

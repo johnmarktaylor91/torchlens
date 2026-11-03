@@ -22,11 +22,9 @@ op-shape or thread API that slips past the operand observer turns a cell RED.
 from __future__ import annotations
 
 import _thread
-import shutil
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -34,9 +32,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._state as _state
-import torchlens.backends.torch.wrappers as wrappers_mod
-from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.backends.torch._completeness_escape_state import (
     host_escape_has_cross_thread_captured_tensor,
 )
@@ -208,6 +203,7 @@ def _data() -> torch.Tensor:
     return torch.randn(1, 4)
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("api_name", list(_THREAD_APIS))
 @pytest.mark.parametrize("deriv_name", list(_DERIVATIONS))
 def test_worker_derived_consumption_ceilings(api_name: str, deriv_name: str) -> None:
@@ -221,162 +217,12 @@ def test_worker_derived_consumption_ceilings(api_name: str, deriv_name: str) -> 
     )
 
 
-@pytest.mark.parametrize("deriv_name", list(_DERIVATIONS))
-def test_preexisting_worker_derived_consumption_ceilings(
-    deriv_name: str, preexisting_worker: Any
-) -> None:
-    """A PRE-EXISTING (non-hooked) worker deriving from a captured operand also ceilings."""
-
-    class _Model(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.a = nn.Linear(4, 4)
-            self.b = nn.Linear(4, 4)
-            self.w = nn.Parameter(torch.randn(4, 4))
-            self._worker = worker
-            self._deriv = _DERIVATIONS[deriv_name]
-
-        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-            flag = self._worker.run(
-                lambda: bool(self._deriv(gate, self.w).reshape(-1).sum().item() > 0)
-            )
-            return self.a(data) if flag else self.b(data)
-
-    trace = _capture(_Model(preexisting_worker), (_gate_pos(), _data()))
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-
-
-@pytest.mark.parametrize("escape_name", list(_ESCAPES))
-def test_escape_spelling_sweep_ceilings(escape_name: str) -> None:
-    """Regardless of the eventual escape spelling, a worker-derived captured consumption ceilings
-    (the operand observer fires at the derivation op, before any escape)."""
-
-    model = _WorkerDerivedGuard(_DERIVATIONS["mul"], _ESCAPES[escape_name], _run_thread)
-    trace = _capture(model, (_gate_pos(), _data()))
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-
-
-def test_deep_derivation_chain_ceilings_at_first_consumption() -> None:
-    """A deep worker chain (``(((gate+0).clone()*2).relu()).sum()``) escaping only the final
-    scalar still ceilings -- proving first-consumption marking, not per-op enumeration."""
-
-    class _DeepChain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.a = nn.Linear(4, 4)
-            self.b = nn.Linear(4, 4)
-
-        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-            box: dict[str, bool] = {}
-
-            def _worker() -> None:
-                z = (((gate + 0.0).clone() * 2.0).relu()).sum()
-                box["flag"] = bool(z.item() > 0)
-
-            _run_thread(_worker)
-            return self.a(data) if box["flag"] else self.b(data)
-
-    trace = _capture(_DeepChain(), (_gate_pos(), _data()))
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-
-
-def test_arbitrary_op_is_op_agnostic() -> None:
-    """Op-agnostic: an ARBITRARY wrapped op run on a worker (``torch.sigmoid(gate)``), not one of
-    the enumerated derivations, still ceilings by construction."""
-
-    class _ArbitraryOp(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.a = nn.Linear(4, 4)
-            self.b = nn.Linear(4, 4)
-
-        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-            box: dict[str, bool] = {}
-
-            def _worker() -> None:
-                box["flag"] = bool(torch.sigmoid(gate).sum().item() > 0)
-
-            _run_thread(_worker)
-            return self.a(data) if box["flag"] else self.b(data)
-
-    trace = _capture(_ArbitraryOp(), (_gate_pos(), _data()))
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-
-
-@pytest.mark.parametrize("deriv_name", ["mul", "clone", "sum", "matmul"])
-def test_changed_input_is_unverifiable_not_attested(deriv_name: str, tmp_path: Path) -> None:
-    """End-to-end: a ceilinged capture reloaded and run on a CHANGED input is
-    ``UNVERIFIABLE`` + ``NOT_APPLICABLE`` (never a false VERIFIED)."""
-
-    model = _WorkerDerivedGuard(_DERIVATIONS[deriv_name], _ESCAPES["item"], _run_thread)
-    trace = _capture(model, (_gate_pos(), _data()))
-    path = tmp_path / "r45x.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=(_gate_neg(), _data()))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_belt_flag_armed_only_during_runnable_forward() -> None:
-    """Structural: ``_state._nonowner_belt_armed`` is True DURING a runnable forward and False
-    after (a leak would over-trigger every subsequent plain trace)."""
-
-    observed: dict[str, bool] = {}
-
-    class _FlagReader(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            observed["during"] = _state._nonowner_belt_armed
-            return self.lin(x)
-
-    assert _state._nonowner_belt_armed is False
-    _capture(_FlagReader(), torch.randn(1, 4))
-    assert observed["during"] is True
-    assert _state._nonowner_belt_armed is False
-
-
-def test_observer_invoked_on_worker_op(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Structural: the wrapper's non-owner fast path invokes ``observe_nonowner_operands`` for a
-    worker op during an armed capture (spy records the captured ``gate`` operand)."""
-
-    seen: list[bool] = []
-    original = wrappers_mod.observe_nonowner_operands
-
-    def _spy(args: Any, kwargs: Any) -> None:
-        for a in args:
-            if isinstance(a, torch.Tensor) and a.shape == torch.Size([4]):
-                seen.append(True)
-        return original(args, kwargs)
-
-    monkeypatch.setattr(wrappers_mod, "observe_nonowner_operands", _spy)
-
-    class _Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-            box: dict[str, bool] = {}
-
-            def _worker() -> None:
-                box["flag"] = bool(torch.sigmoid(gate).sum().item() > 0)
-
-            _run_thread(_worker)
-            return self.lin(data)
-
-    _capture(_Model(), (_gate_pos(), _data()))
-    assert seen, "observe_nonowner_operands was not invoked for the worker op"
-
-
 # --------------------------------------------------------------------------------------
 # Over-trigger pins -- MUST stay VERIFIED (no captured operand consumed).
 # --------------------------------------------------------------------------------------
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("api_name", list(_THREAD_APIS))
 def test_own_tensor_worker_stays_clean(api_name: str) -> None:
     """A non-owner worker that derives + escapes only from a tensor IT created independently of
@@ -397,45 +243,4 @@ def test_own_tensor_worker_stays_clean(api_name: str) -> None:
             return self.lin(x)
 
     trace = _capture(_OwnTensorWorker(_THREAD_APIS[api_name]), torch.randn(1, 4))
-    assert not host_escape_has_cross_thread_captured_tensor(trace)
-
-
-def test_own_tensor_worker_roundtrip_verified(tmp_path: Path) -> None:
-    """The own-tensor worker round-trips VERIFIED + ATTESTED for any input."""
-
-    class _OwnTensorWorker(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            def _worker() -> None:
-                own = torch.randn(4)
-                _ = bool((own + 1.0).sum().item() > 0)
-
-            _run_thread(_worker)
-            return self.lin(x)
-
-    trace = _capture(_OwnTensorWorker(), torch.randn(1, 4))
-    path = tmp_path / "own.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=torch.randn(1, 4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_idle_preexisting_worker_stays_clean(preexisting_worker: Any) -> None:
-    """An idle pre-existing worker that runs no torch op does not ceiling."""
-
-    class _Idle(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            _ = self._worker.run(lambda: 1 + 1)
-            return self.lin(x)
-
-    trace = _capture(_Idle(preexisting_worker), torch.randn(1, 4))
     assert not host_escape_has_cross_thread_captured_tensor(trace)

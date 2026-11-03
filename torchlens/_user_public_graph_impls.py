@@ -1,12 +1,12 @@
-"""Bodies of the public graph verbs (``show_model_graph``, ``show_bundle_graph``).
+"""Body of the public graph verb ``show_model_graph``.
 
-Loaded by :mod:`torchlens._user_public_impls` on first use of one of these
-verbs, so the renderers behind them stay off the path of the other verbs.
+Loaded by :mod:`torchlens._user_public_impls` on first use of this verb, so
+the renderers behind it stay off the path of the other verbs.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -22,15 +22,11 @@ from ._input_coerce import _coerce_input_args
 from ._literals import (
     CollapseLiteral,
     FoldRepeatsLiteral,
-    VisDirectionLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
 from ._robustness import check_model_and_input_variants
-from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-from ._visualization._render_utils import direction_to_rankdir
 from ._visualization.code_panel import CodePanelOption
 from .options import (
     VisualizationOptions,
@@ -163,94 +159,3 @@ def show_model_graph(
         trace.draw(**render_kwargs)
     finally:
         trace.cleanup()
-
-
-def show_bundle_graph(
-    bundle: Any,
-    path: str = "bundle_modelgraph",
-    vis_mode: VisModeLiteral = "unrolled",
-    signal: str = "forward",
-    vis_direction: VisDirectionLiteral = "bottomup",
-    vis_graph_overrides: dict[str, Any] | None = None,
-    vis_node_overrides: dict[str, Any] | None = None,
-    vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
-    vis_save_only: bool = False,
-    file_format: str = "pdf",
-    nodes: Literal["ops", "members"] = "ops",
-    theme: str = "torchlens",
-    show_legend: bool | None = None,
-) -> str | None:
-    """Render a multi-trace bundle graph.
-
-    Parameters
-    ----------
-    bundle:
-        ``torchlens.Bundle`` instance.
-    path:
-        Output path for Graphviz rendering.
-    vis_mode:
-        ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    signal:
-        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
-        ``"overlay"``.
-    vis_direction:
-        Graphviz layout direction.
-    vis_graph_overrides:
-        Graph-level Graphviz overrides.
-    vis_node_overrides:
-        Per-node Graphviz style overrides.
-    vis_edge_overrides:
-        Per-edge Graphviz style overrides keyed by ``(source, target)``.
-    vis_save_only:
-        If True, save without opening a viewer.
-    file_format:
-        Output file format.
-    nodes:
-        What the picture's nodes are (spelling documented-unstable).
-        ``"ops"`` (default): the bundle's union op graph. ``"members"``: one
-        node per member and one edge per relation row, from the earlier
-        member to the later one, labelled with the kind, the row's
-        ``label`` and, on ``fed_by``, its basis and coverage; solid edges
-        carry token spans TorchLens checked, every other row is dashed.
-        Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
-    theme:
-        Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
-        ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
-        Op nodes take ``draw``'s shapes and fills; a node or arrow every
-        member runs carries no member list.
-    show_legend:
-        ``True`` draws the key under the header, as ``draw`` does.
-
-    Returns
-    -------
-    str | None
-        DOT source, or ``None`` when ``vis_mode='none'``.
-    """
-
-    if nodes not in {"ops", "members"}:
-        raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and signal != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
-    if vis_mode == "none":
-        return None
-    if vis_mode not in {"rolled", "unrolled"}:
-        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if signal not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
-
-    options = BundlePictureOptions(
-        outpath=path,
-        vis_mode=vis_mode,
-        direction=signal,
-        rankdir=direction_to_rankdir(vis_direction),
-        graph_overrides=vis_graph_overrides,
-        node_overrides=vis_node_overrides,
-        edge_overrides=vis_edge_overrides,
-        save_only=vis_save_only,
-        fileformat=file_format,
-        nodes=nodes,
-        theme_name=theme,
-        show_legend=show_legend is True,
-    )
-    return render_bundle_graph(bundle, options)

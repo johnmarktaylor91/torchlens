@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from .._plots import node_plots
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
+from ..errors import InvalidArgumentError
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
@@ -191,6 +192,13 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> style = node_spec(trace["conv2d_2_3"])
+    >>> callable(style)
+    True
     """
 
     _ = overlay, grad, box_color, alpha, cmap
@@ -536,7 +544,12 @@ def _rendered_labels(layer: Any) -> frozenset[str]:
 
     values = set(getattr(layer, "op_labels", ()))
     for name in ("label", "layer_label", "_layer_label_raw"):
-        value = getattr(layer, name, None)
+        try:
+            value = getattr(layer, name, None)
+        except InvalidArgumentError:
+            # A multi-pass Layer refuses its single-pass fields; its ops are
+            # already represented through ``op_labels``.
+            continue
         if isinstance(value, str):
             values.add(value)
     return frozenset(values)
