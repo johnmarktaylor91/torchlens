@@ -130,7 +130,7 @@ beside `fwd flops`).
 |---|---|---|
 | `name` | `name (type)` | attribute name and class, indented by depth; `[never ran]`, `[pruned]`, and `*` (tied) tags |
 | `input` | `input` | shapes of the distinct tensors entering the row |
-| `output` | `output` | every member shape of the row's output in return order (an LSTM row shows `output`, `h_n`, `c_n`) |
+| `output` | `output` | every member shape of the row's output in return order (an LSTM row shows `output`, `h_n`, `c_n`); past 60 characters identical runs print once as `shape ×N` (a GPT-2 row with a key/value cache shows `(1, 5, 768), (1, 12, 5, 64) ×24`), and a list still too long ends in `... +K more` |
 | `kernel_size` | `kernel` | kernel size of the row's own conv or pooling op |
 | `groups` | `groups` | conv groups of the row's own conv op |
 | `params` | `params` | parameters per module path |

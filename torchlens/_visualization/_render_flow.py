@@ -1273,7 +1273,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="input",
-                child_label=node.layer_label,
+                inner_node=node,
             )
             if node.layer_label not in boundary.children:
                 boundary.children.append(node.layer_label)
@@ -1294,7 +1294,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="output",
-                parent_label=node.layer_label,
+                inner_node=node,
             )
             if node.layer_label not in boundary.parents:
                 boundary.parents.append(node.layer_label)
@@ -1340,10 +1340,9 @@ def _get_or_create_boundary_node(
     *,
     vis_mode: str,
     boundary_kind: str,
-    child_label: str | None = None,
-    parent_label: str | None = None,
+    inner_node: GraphNode,
 ) -> BoundaryNode:
-    """Create or return a boundary node for one external layer."""
+    """Create or return a boundary node for one external layer next to ``inner_node``."""
 
     external_label = external_node.layer_label.replace(":", "pass")
     boundary_label = f"__module_focus_{boundary_kind}_{external_label}"
@@ -1351,28 +1350,28 @@ def _get_or_create_boundary_node(
     if boundary is not None:
         return boundary
 
-    module_path = _boundary_module_path(target_module, vis_mode)
+    inner = [inner_node.layer_label]
     boundary = BoundaryNode(
         layer_label=boundary_label,
         display_label=f"ext: {external_node.layer_label}",
         boundary_kind=boundary_kind,
-        children=[] if child_label is None else [child_label],
-        parents=[] if parent_label is None else [parent_label],
-        modules=module_path,
+        children=inner if boundary_kind == "input" else [],
+        parents=inner if boundary_kind == "output" else [],
+        modules=_boundary_module_path(target_module, vis_mode, inner_node.modules),
     )
     boundary_nodes[boundary_label] = boundary
     return boundary
 
 
-def _boundary_module_path(target_module: "Module", vis_mode: str) -> list[str]:
-    """Return a module path for focus boundary node cluster placement."""
+def _boundary_module_path(target_module: "Module", vis_mode: str, stack: Any) -> list[str]:
+    """Boundary cluster path: the inner op's called-module stack (no uncalled ModuleList)."""
 
-    module_path = []
-    parts = target_module.address.split(".") if target_module.address != "self" else ["self"]
-    for idx in range(len(parts)):
-        address = ".".join(parts[: idx + 1])
-        module_path.append(address if vis_mode == "rolled" else f"{address}:1")
-    return module_path
+    addresses = [str(call).split(":", 1)[0] for call in stack]
+    if target_module.address in addresses:
+        path = [str(call) for call in stack][: addresses.index(target_module.address) + 1]
+    else:
+        path = [f"{target_module.address}:1"]
+    return [call.split(":", 1)[0] for call in path] if vis_mode == "rolled" else path
 
 
 def _simplify_boundary_labels(
