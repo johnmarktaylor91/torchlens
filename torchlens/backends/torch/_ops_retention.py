@@ -40,6 +40,7 @@ from ...recording.types import (
     RecordContext,
     StorageIntent,
 )
+from ._aten_capture import _note_aten_owner_verdict
 from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
 from ._ops_payload_stream import _stream_predicate_payloads
 from ._tl import (
@@ -610,7 +611,6 @@ def _settle_aten_values_for_candidate(trace: Trace, candidate: Any, verdict: str
 
     if getattr(trace, "_options_aten_ops", False) != "values":
         return
-    from ._aten_capture import _note_aten_owner_verdict
 
     _note_aten_owner_verdict(trace, getattr(candidate, "owner_call_id", None), verdict)
 

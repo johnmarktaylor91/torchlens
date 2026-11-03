@@ -365,6 +365,11 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   `include_outs=False` drops them while the facts stay). The `aten_values_consistent` invariant
   checks every kept value against its facts and, under `save_mode="copy"`, that some row beneath
   each saved op equals the op's `out`.
+  A `run()` refresh re-records the profile against the new input, so values follow `Op.out`; the
+  fast tier (`run(inputs=..., fast=True)`, and the guarded fast rerun behind `run(model, x)` with
+  staged hooks) never re-records ATen values, so it refuses a values capture with
+  `run_capability_unavailable` at stage `fast_run_aten_values_unsupported` and the legacy door
+  falls back to the capture engine.
 
 **AtenOpsUnavailableError**
 : `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code

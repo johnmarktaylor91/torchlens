@@ -38,6 +38,7 @@ from ...recording.types import (
     CaptureSpec,
     RecordContext,
 )
+from ._aten_capture import _note_aten_owner_verdict
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -315,7 +316,6 @@ def _make_layer_log_entry(
         # The ATen values recorded beneath this call follow its save verdict:
         # kept with a saved output, parked while a lookback candidate may still
         # be saved retroactively, freed at the next recorded call otherwise.
-        from ._aten_capture import _note_aten_owner_verdict
 
         _note_aten_owner_verdict(
             self,

@@ -169,11 +169,40 @@ def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
         refresh_rerun_op_from(trace, layer, new_layer)
     refresh_rerun_layer_logs_from(trace, new_log)
     refresh_rerun_trace_fields_from(trace, new_log)
+    refresh_rerun_primitive_profile_from(trace, new_log)
     trace.__dict__.pop("_validation_replay_status", None)
     _invalidate_trace_op_layer_accessor_caches(trace)
     _invalidate_trace_module_call_accessor_cache(trace)
     trace._rebind_fork_owner_refs()
     return True
+
+
+def refresh_rerun_primitive_profile_from(trace: Trace, new_log: Trace) -> None:
+    """Adopt the rerun's ATen profile (rows and values) on a same-shape refresh.
+
+    The rerun re-records the profile the source capture asked for; its rows
+    resolve against the fresh op list, which the label precondition of the
+    fast refresh makes positionally identical to the retained one. The rows'
+    kind table travels with them so the profile/store invariant keeps holding.
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    new_log:
+        Fully captured and postprocessed rerun candidate.
+    """
+
+    trace._primitive_op_profile = new_log.__dict__.get("_primitive_op_profile")
+    core = trace.__dict__.get("_trace_core")
+    if core is None:
+        return
+    new_core = new_log.__dict__.get("_trace_core")
+    store = None if new_core is None else new_core.kind_rows.get("primitive_op")
+    if store is None:
+        core.kind_rows.pop("primitive_op", None)
+    else:
+        core.kind_rows["primitive_op"] = store
 
 
 def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:

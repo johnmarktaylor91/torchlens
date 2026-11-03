@@ -19,6 +19,7 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._data_classes._op_save import _effective_activation_save_mode
 from ..._ir.events import (
     _AtenCallEvent,
     _AtenExecutionContext,
@@ -27,7 +28,9 @@ from ..._ir.events import (
     _ModePausedInteriorEvent,
 )
 from ..._utils._torch_compat import get_current_autograd_node_fn
+from ..._utils.tensor_utils import copy_tensor_payload
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
+from ._function_boundary import _active_witness_state
 
 
 @dataclass(frozen=True, slots=True)
@@ -511,17 +514,51 @@ def _retain_aten_values(
         for this capture (an active out sink or released streamed outs).
     """
 
-    from ..._data_classes._op_save import _effective_activation_save_mode
-    from ..._utils.tensor_utils import copy_tensor_payload
-
     trace = state.trace
     if getattr(trace, "_out_sink", None) is not None or not getattr(
         trace, "_keep_outs_in_memory", True
     ):
         return None
-    leaves = tuple(_iter_tensors(result))
-    if not leaves:
-        return None
+    # Every tensor read below runs with logging paused: this hook executes INSIDE
+    # the owning wrapper call, and a wrapped tensor method (``numel``,
+    # ``element_size``, the clone) that reaches the wrapper resets its bottom-level
+    # barcode, after which an in-place owner's already-labelled return is never
+    # logged (the torch-level ``add_`` op vanished while its ATen row stayed).
+    with _state.pause_logging():
+        leaves = tuple(_iter_tensors(result))
+        if not leaves:
+            return None
+        copies = _copy_aten_leaves(trace, pending, leaves)
+        cell = _AtenValueCell(copies[0] if isinstance(result, torch.Tensor) else tuple(copies))
+    owner = pending.owner_func_call_id
+    if pending.capture_phase == "forward" and owner is not None:
+        if state.aten_owner_verdicts.get(owner) == "drop":
+            return None
+        if state.aten_owner_verdicts.get(owner) != "keep":
+            state.aten_value_cells.setdefault(owner, []).append(cell)
+    return cell
+
+
+def _copy_aten_leaves(
+    trace: Any, pending: _PendingAtenCall, leaves: tuple[torch.Tensor, ...]
+) -> list[torch.Tensor]:
+    """Copy each returned leaf under the Op save rules, charging the save budget.
+
+    Parameters
+    ----------
+    trace
+        Trace under capture; its save options and budget accountant apply.
+    pending
+        Pre-dispatch facts naming the operator (the budget label) and mutation kind.
+    leaves
+        Tensors the dispatcher returned, in output order.
+
+    Returns
+    -------
+    list[torch.Tensor]
+        One copy per leaf, same order.
+    """
+
     save_mode = _effective_activation_save_mode(
         trace, func_name=pending.operator, is_inplace=pending.mutation_kind != "none"
     )
@@ -543,14 +580,7 @@ def _retain_aten_values(
         if accountant is not None and reservation is not None:
             accountant.commit(reservation, (copy,))
         copies.append(copy)
-    cell = _AtenValueCell(copies[0] if isinstance(result, torch.Tensor) else tuple(copies))
-    owner = pending.owner_func_call_id
-    if pending.capture_phase == "forward" and owner is not None:
-        if state.aten_owner_verdicts.get(owner) == "drop":
-            return None
-        if state.aten_owner_verdicts.get(owner) != "keep":
-            state.aten_value_cells.setdefault(owner, []).append(cell)
-    return cell
+    return copies
 
 
 def _note_aten_owner_verdict(trace: Any, func_call_id: int | None, verdict: str) -> None:
@@ -572,8 +602,6 @@ def _note_aten_owner_verdict(trace: Any, func_call_id: int | None, verdict: str)
 
     if func_call_id is None:
         return
-    from ._function_boundary import _active_witness_state
-
     state = _active_witness_state(trace)
     if state is None or not getattr(state, "record_aten_values", False):
         return

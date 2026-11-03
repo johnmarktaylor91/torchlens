@@ -133,6 +133,7 @@ def test_values_equal_a_plain_torch_recomputation() -> None:
     inplace = _rows(trace, "add_")[0]
     assert inplace.mutation_kind == "in_place"
     assert inplace.view_copy_kind == "alias"
+    assert inplace.owner_status == "forward_op"
     assert torch.equal(inplace.out, expected["add_"])
     # The in-place row stores what the call returned: the mutated tensor.
     assert torch.equal(inplace.out, trace.output_ops[0].out)
@@ -374,15 +375,56 @@ def test_backward_rows_keep_values_when_the_profile_records_them() -> None:
     assert check_metadata_invariants(trace)
 
 
-def test_refresh_inherits_values() -> None:
-    """``run()`` refreshes keep the values spelling of the source capture."""
+@pytest.mark.smoke
+def test_values_leave_the_op_graph_unchanged() -> None:
+    """Recording values never changes what the torch-level capture logs (in-place ops too)."""
+
+    captures = []
+    for options in (tl.options.CaptureOptions(), _ROWS_ONLY, _VALUES):
+        torch.manual_seed(0)
+        model = _BlockModel().eval()
+        captures.append(tl.trace(model, torch.randn(2, 16), capture=options))
+    plain, rows_only, valued = captures
+    labels = [[op.layer_label for op in trace.ops] for trace in captures]
+    assert labels[0] == labels[1] == labels[2]
+    assert any(label.startswith("add_") for label in labels[0])
+    assert plain._raw_event_shape_hash == rows_only._raw_event_shape_hash
+    assert plain._raw_event_shape_hash == valued._raw_event_shape_hash
+    inplace = _rows(valued, "add_")[0]
+    assert inplace.owner_status == "forward_op"
+    assert inplace.parent_op_refs[0].op_label.startswith("add_")
+
+
+@pytest.mark.smoke
+def test_refresh_re_records_values() -> None:
+    """``run()`` refreshes re-record the profile, so values follow the new input."""
 
     torch.manual_seed(0)
     model = _BlockModel().eval()
     trace = tl.trace(model, torch.randn(2, 16), capture=_VALUES)
-    refreshed = trace.run(model, torch.randn(2, 16))
+    stale = _rows(trace, "gelu")[0].out.clone()
+    x2 = torch.randn(2, 16)
+    refreshed = trace.run(model, x2)
     assert refreshed.has_aten_ops
     assert all(row.out is not None for row in refreshed.aten_ops if row.output_tensor_facts)
+    fresh = _rows(refreshed, "gelu")[0].out
+    assert torch.equal(fresh, _recompute(model, x2)["gelu"])
+    assert not torch.equal(fresh, stale)
+    assert check_metadata_invariants(refreshed)
+
+
+def test_fast_run_refuses_a_values_capture() -> None:
+    """The fast tier never re-records ATen values, so it refuses a values capture typed."""
+
+    from torchlens.errors import RunCapabilityUnavailableError
+
+    torch.manual_seed(0)
+    model = _BlockModel().eval()
+    trace = tl.trace(model, torch.randn(2, 16), capture=_VALUES)
+    with pytest.raises(RunCapabilityUnavailableError) as refused:
+        trace.run(inputs=torch.randn(2, 16), fast=True)
+    assert refused.value.fields["detection_stage"] == "fast_run_aten_values_unsupported"
+    assert torch.equal(_rows(trace, "gelu")[0].out, _recompute(model, trace.input)["gelu"])
 
 
 @pytest.mark.smoke

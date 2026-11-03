@@ -677,6 +677,30 @@ class _FastSparseSession:
         )
 
 
+def _refuse_fast_aten_values(trace: Any) -> None:
+    """Refuse the fast tier for a values-profile trace.
+
+    The native forward refreshes saved ``Op.out`` values only; the ATen profile
+    and its values are recorded by the capture engine, so a fast run would hand
+    back ATen values from the source input.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When the trace was captured with ``CaptureOptions(aten_ops="values")``.
+    """
+
+    if getattr(trace, "_options_aten_ops", False) != "values":
+        return
+    raise RunCapabilityUnavailableError(
+        "The fast live run does not re-record ATen values "
+        "(CaptureOptions(aten_ops='values')); run(model, x) re-captures them.",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        provider=RunProvider.LIVE,
+        detection_stage="fast_run_aten_values_unsupported",
+    )
+
+
 class _FastLiveSession:
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
@@ -689,6 +713,7 @@ class _FastLiveSession:
         nothing and refreshes the trace in place.
         """
 
+        _refuse_fast_aten_values(trace)
         self.trace = trace
         self.target = trace if target is None else target
         self.model_ref = weakref.ref(model)
