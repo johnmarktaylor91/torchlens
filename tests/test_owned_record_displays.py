@@ -117,6 +117,9 @@ def test_frame_display_does_not_load_source(monkeypatch):
     monkeypatch.setattr(frame, "_ensure_source_loaded", lambda: pytest.fail("source read"))
     assert repr(frame) == "FuncCallLocation: missing.py:12, in forward"
     assert "  function  forward" in str(frame)
+    frame.file = "/very/long/" * 20 + "model/forward.py"
+    assert len(repr(frame)) <= 100
+    assert "model/forward.py:12" in repr(frame)
 
 
 def test_aten_records_and_event_stream_are_bounded(trace):

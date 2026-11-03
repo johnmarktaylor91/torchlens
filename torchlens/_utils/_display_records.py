@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._display_bounded import short_dataclass_repr
-from ._display_card import inline_names, one_line, render_card
+from ._display_card import REPR_COLS, inline_names, one_line, render_card
 from ._display_numbers import format_count, format_duration, format_iec_bytes
 from ._display_text import tensor_text
 from .fail_open import fail_open
@@ -67,11 +67,18 @@ def _backward_card(record: Any) -> str:
 
 def frame_repr(frame: Any) -> str:
     return fail_open(
-        lambda: one_line(
-            "FuncCallLocation", [f"{frame.file}:{frame.line_number}"], [f"in {frame.func_name}"]
-        ),
+        lambda: one_line("FuncCallLocation", [_frame_location(frame)], [f"in {frame.func_name}"]),
         lambda _error: "FuncCallLocation: metadata unavailable",
     )
+
+
+def _frame_location(frame: Any) -> str:
+    path = str(frame.file).replace("\\", "/")
+    location = f"{path}:{frame.line_number}"
+    budget = REPR_COLS - len("FuncCallLocation: ")
+    if len(location) > budget:
+        location = f"{'/'.join(path.rsplit('/', 2)[-2:])}:{frame.line_number}"
+    return location if len(location) <= budget else "..." + location[-(budget - 3) :]
 
 
 def frame_str(frame: Any) -> str:
@@ -144,7 +151,11 @@ def capture_events_repr(events: Any) -> str:
     return fail_open(
         lambda: one_line(
             "CaptureEvents",
-            [f"{format_count(len(getattr(events, field)))} {noun}" for field, noun in _EVENT_LANES],
+            [f"{format_count(len(events.op_events))} ops"],
+            [
+                f"{format_count(len(getattr(events, field)))} {noun}"
+                for field, noun in _EVENT_LANES[1:]
+            ],
         ),
         lambda _error: "CaptureEvents: metadata unavailable",
     )

@@ -6,7 +6,7 @@ from typing import Any
 
 from .._utils._display_card import inline_names, one_line, render_card
 from .._utils._display_keys import display_key
-from .._utils._display_numbers import format_exact_count
+from .._utils._display_numbers import format_exact_count, plural
 from .._utils._display_text import tensor_text
 from .._utils.fail_open import fail_open
 
@@ -28,7 +28,7 @@ def _tensor_flow(row: Any) -> str:
     inputs, outputs = row.input_tensor_facts, row.output_tensor_facts
     if len(inputs) == len(outputs) == 1:
         return f"{_fact_text(inputs[0], device=False)} to {_fact_text(outputs[0])}"
-    return f"{len(inputs)} tensor inputs, {len(outputs)} tensor outputs"
+    return f"{len(inputs)} tensor {plural(len(inputs), 'input')}, {len(outputs)} tensor {plural(len(outputs), 'output')}"
 
 
 def aten_repr(row: Any) -> str:

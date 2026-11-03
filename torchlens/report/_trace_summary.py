@@ -270,7 +270,7 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
     if trace.__dict__.get("_tl_cleaned_up", False):
         return []
     exact = format_exact_count
-    modules = len(getattr(trace, "_module_logs", {}) or {})
+    modules = max(0, len(getattr(trace, "_module_logs", {}) or {}) - 1)
     params = exact(getattr(trace, "num_params", 0))
     param_ops = exact(getattr(trace, "_num_layers_with_params", 0))
     duration = float(getattr(trace, "_provenance_duration", 0))
@@ -290,7 +290,10 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
             "saved",
             f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
         ),
-        ("outputs", f"{exact(len(trace.output_layers))} output sites"),
+        (
+            "outputs",
+            f"{exact(len(trace.output_layers))} output {'site' if len(trace.output_layers) == 1 else 'sites'}",
+        ),
         ("flops", "MACs reported as FLOPs // 2"),
     ]
     if getattr(trace, "_provenance_verified", None) is False:
