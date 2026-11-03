@@ -29,7 +29,7 @@ import pytest
 
 from tests.behaviour.cases import Case, _draws_random_numbers, all_cases, smoke_cases
 from tests.behaviour.features import FEATURES, Feature, feature
-from tests.behaviour.harness import BASE_ORACLES, CellResult, cell_id
+from tests.behaviour.harness import BASE_ORACLES, CellResult, Outcome, cell_id
 
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "interaction_matrix.json"
 
@@ -178,6 +178,28 @@ def test_oracles_are_the_six_the_net_promises() -> None:
     """The base oracle list is the one the README documents."""
 
     assert BASE_ORACLES == ("trace", "validate", "save", "load", "equality", "forward_match")
+
+
+def test_cell_verdict_names_every_unsatisfied_oracle() -> None:
+    """A cell's failures list every failing or unreached oracle and nothing satisfied."""
+
+    result = CellResult(
+        "toy-a-b",
+        {
+            "trace": Outcome("pass"),
+            "validate": Outcome("fail", "replay differs"),
+            "save": Outcome("refused", "typed", "TorchLensError", "code"),
+            "load": Outcome("not_applicable", "by design"),
+            "equality": Outcome("pass"),
+            "feature:a": Outcome("fail", "promise broken"),
+            "feature:b": Outcome("pass"),
+        },
+    )
+    assert result.failures() == [
+        "validate: fail: replay differs",
+        "forward_match: not_run: the cell did not reach this oracle",
+        "feature:a: fail: promise broken",
+    ]
 
 
 def test_stochastic_tag_names_samplers_not_training_gated_ops() -> None:

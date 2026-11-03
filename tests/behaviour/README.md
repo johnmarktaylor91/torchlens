@@ -45,7 +45,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 | `cases.py` | the case registry: corpus entries (from `tests/classics_corpus/manifest.json`) and the toy rows |
 | `features.py` | the feature rows (one per interaction-matrix feature): name, cost class, oracles changed, tags required, `prepare` and `after` hooks |
 | `harness.py` | `run_cell(case, features, tmp) -> CellResult` and the public-surface helpers |
-| `test_matrix.py` | the cell universe, one test per cell (`test_cell`), the smoke hook (`SMOKE_CELLS`), and the four structural pins (the feature axis equals `tests/interaction_matrix.json`'s, the core pairs are admitted by it, the six base oracles, the stochastic tag) |
+| `test_matrix.py` | the cell universe, one test per cell (`test_cell`), the smoke hook (`SMOKE_CELLS`), and the four structural pins (the feature axis equals `tests/interaction_matrix.json`'s, the core pairs are admitted by it, the six base oracles, the stochastic tag), plus a pin that a cell's verdict names every unsatisfied oracle |
 | `conftest.py` | the `cell_result` fixture: runs one cell in its own temp directory |
 | `test_cell_tmp.py` | pins that a cell removes its temp directory when it ends |
 
