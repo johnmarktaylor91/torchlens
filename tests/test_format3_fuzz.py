@@ -190,7 +190,7 @@ def test_tensor_in_metadata_position_is_disclosed() -> None:
 def test_decoder_refuses_unknown_tags(seed: int) -> None:
     rng = random.Random(seed)
     bogus = "".join(rng.choices("abcdefgh", k=8))
-    with pytest.raises(ArtifactError, match="unknown tag") as caught:
+    with pytest.raises(ArtifactError, match="unknown typed-value tag") as caught:
         decode_value({"x": [{TYPED_VALUE_KEY: bogus}]}, at="fuzz")
     assert caught.value.fields["code"] == "record_schema_invalid"
 
