@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -301,11 +302,20 @@ def test_flash_attention_4_capture_gap_is_flagged_not_silent() -> None:
     """
 
     model, input_ids = _fa4_llama()
-    with pytest.warns(tl.errors.CaptureGapWarning):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
     try:
-        assert trace.provenance.verified is False
-        assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
-        assert trace.completeness_diagnostics
+        provenance = trace.provenance
+        facts = (
+            provenance.verified,
+            provenance.verification_reason,
+            trace.completeness_diagnostics,
+        )
+        assert provenance.verified is False, facts
+        assert provenance.verification_reason == "dispatch_witness_unaccounted_ops", facts
+        assert trace.completeness_diagnostics, facts
     finally:
         trace.cleanup()
+    gap_warnings = [w for w in caught if issubclass(w.category, tl.errors.CaptureGapWarning)]
+    assert gap_warnings, [str(w.message)[:200] for w in caught]
