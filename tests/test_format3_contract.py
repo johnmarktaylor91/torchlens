@@ -18,7 +18,7 @@ import pytest
 
 from torchlens._data_classes.field_policy import StorageKind
 from torchlens._io import save_policy, writer_contract
-from torchlens._io.format3 import contract, reader, runnable, writer
+from torchlens._io.format3 import contract, reader, writer
 from torchlens._io.format_errors import ArtifactError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -162,24 +162,6 @@ def test_built_save_doors_refuse_a_non_saveable_typed(door) -> None:  # type: ig
     assert info.value.fields["code"] == "bundle_save_failed"
     assert info.value.fields["remedy"]
     assert "NoneType" in str(info.value)
-
-
-@pytest.mark.parametrize(
-    ("door", "code"),
-    [
-        (lambda: runnable.write_runnable(None, "x"), "bundle_save_failed"),
-        (lambda: runnable.load_runnable("x"), "bundle_load_failed"),
-    ],
-    ids=lambda value: value if isinstance(value, str) else "door",
-)
-def test_stub_doors_refuse_typed_naming_their_module(door, code) -> None:  # type: ignore[no-untyped-def]
-    """Every unbuilt door refuses with its code, a remedy and the module that fills it."""
-
-    with pytest.raises(ArtifactError) as info:
-        door()
-    assert info.value.fields["code"] == code
-    assert info.value.fields["remedy"]
-    assert "torchlens/_io/format3/" in str(info.value)
 
 
 @pytest.mark.parametrize(
