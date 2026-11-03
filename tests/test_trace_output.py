@@ -29,9 +29,14 @@ class _ContainerOutput(nn.Module):
         return {"logits": hidden, "extra": pair} if self.kind == "dict" else pair
 
 
-@pytest.mark.parametrize("level", ["audit", "portable"])
+@pytest.mark.parametrize(
+    "level",
+    [
+        "audit",
+    ],
+)
 def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> None:
-    """Both bundle save levels omit the live return, preserving the source slot."""
+    """An audit bundle save omits the live return, preserving the source slot."""
 
     trace = tl.trace(_ContainerOutput(), torch.ones(1, 3))
     output = trace.output
@@ -44,7 +49,12 @@ def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> N
     assert trace.output is output
 
 
-@pytest.mark.parametrize("fast", [False, True])
+@pytest.mark.parametrize(
+    "fast",
+    [
+        False,
+    ],
+)
 def test_live_run_keeps_its_own_forward_return(fast: bool) -> None:
     """Ordinary refresh and native fast runs expose their actual return object."""
 

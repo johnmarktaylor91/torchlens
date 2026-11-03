@@ -8472,9 +8472,6 @@ test-docstrings	tests/test_peak_memory_counter_lag.py	64
 test-docstrings	tests/test_perf5_rf_invariant_cost.py	40
 test-docstrings	tests/test_perf7_eviction_walk.py	512
 test-docstrings	tests/test_perf7_eviction_walk.py	545
-test-docstrings	tests/test_perf7_fork_reads.py	512
-test-docstrings	tests/test_perf7_fork_reads.py	545
-test-docstrings	tests/test_perf8_fork_copy.py	512
 test-docstrings	tests/test_perf_bundle.py	18
 test-docstrings	tests/test_perf_bundle.py	36
 test-docstrings	tests/test_perf_capture_ab.py	10

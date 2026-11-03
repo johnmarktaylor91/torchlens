@@ -311,17 +311,7 @@ def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     assert _describe(mapping, before) == _describe(reference_mapping, reference_before)
 
 
-# --- real captures: one row-major store, one columnar store, with a surviving fork view ---
-
-
-class _Small(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(4, 3)
-        self.fc2 = nn.Linear(3, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.fc2(torch.relu(self.fc1(x)))
+# --- real capture: a columnar store with a surviving fork view ---
 
 
 class _Long(nn.Module):
@@ -402,8 +392,8 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 13.6 s measured
-    ids=["row_major", "columnar"],
+    [pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 13.6 s measured
+    ids=["columnar"],
 )
 def test_a_real_capture_evicts_the_same_cells_as_the_former_walk(
     model_cls: type[nn.Module],

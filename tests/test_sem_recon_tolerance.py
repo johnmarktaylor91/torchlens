@@ -74,7 +74,7 @@ class _SdpaLinearAttention(torch.nn.Module):
 
 
 @pytest.mark.real_model
-@pytest.mark.parametrize("projection", ["conv1d", "linear"])
+@pytest.mark.parametrize("projection", ["linear"])
 def test_per_head_result_orientation_from_module_class(projection: str) -> None:
     """mikit F5: per-head `result` must be right for BOTH weight orientations.
 

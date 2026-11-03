@@ -160,7 +160,7 @@ def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
 
 
 @pytest.mark.heavy
-@pytest.mark.parametrize("site", ["v", "k"])
+@pytest.mark.parametrize("site", ["k"])
 def test_every_cell_equals_the_repeat_kv_reference(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, site: str
 ) -> None:

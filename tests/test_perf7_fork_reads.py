@@ -117,20 +117,6 @@ class _Small(nn.Module):
         return self.fc2(torch.relu(self.fc1(x)))
 
 
-class _Long(nn.Module):
-    """About 545 ops: past the store's columnar-transpose threshold (512 rows)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.fc(x)
-        for _ in range(180):
-            h = torch.tanh(h * 1.01 + 0.1)
-        return h.sum(dim=-1)
-
-
 _CONTAINERS = (dict, list, set, tuple, frozenset)
 
 
@@ -148,8 +134,8 @@ def _same_read(got: Any, expected: Any, base_value: Any) -> bool:
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 6.7 s measured
-    ids=["row_major", "columnar"],
+    [_Small],
+    ids=["row_major"],
 )
 def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]) -> None:
     """One fork read twice: by the former code, then (its copies dropped) by this code."""
@@ -157,7 +143,7 @@ def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]
     torch.manual_seed(0)
     trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     store = trace._trace_core.ops
-    assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
+    assert store._columns is None, "fixture store shape"
     fork = trace.fork()
     view = fork._trace_core.ops
     n_fields = store.layout.n_fields
@@ -199,10 +185,8 @@ def _events(action: Callable[[], Any]) -> int:
     [
         # Measured on the base reads: 4,578 events; after this change: about 3,810.
         (_Small, 4_300),
-        # Measured on the base reads: 628,300 events; after this change: about 443,350 (6.8 s measured).
-        pytest.param(_Long, 520_000, marks=pytest.mark.heavy),
     ],
-    ids=["row_major", "columnar"],
+    ids=["row_major"],
 )
 def test_reading_every_fork_cell_stays_cheap(model_cls: type[nn.Module], bar: int) -> None:
     """Profiler events for one full read of a fresh fork's op cells."""

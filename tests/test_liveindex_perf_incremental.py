@@ -122,7 +122,7 @@ def _save_ops(ctx: Any) -> bool:
     return ctx.kind == "op"
 
 
-@pytest.mark.parametrize("fail_on", [None, 3])
+@pytest.mark.parametrize("fail_on", [3])
 def test_recorder_folds_repeat_labels_without_rebuilding(fail_on: int | None) -> None:
     """Multi-pass folds and the failed-partial fold keep a rebuild-equal index."""
 

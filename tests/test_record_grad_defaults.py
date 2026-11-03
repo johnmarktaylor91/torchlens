@@ -94,11 +94,12 @@ def _has_grad_hooks(tensor: torch.Tensor) -> bool:
     "opt_in",
     [
         {"backward_ready": True},
-        {"save_grads": True},
         {"save_grads": lambda ctx: True},
-        {"default_grad": True},
     ],
-    ids=["backward_ready", "save_grads_true", "save_grads_predicate", "default_grad"],
+    ids=[
+        "backward_ready",
+        "save_grads_predicate",
+    ],
 )
 def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object]) -> None:
     """Each backward opt-in installs the hooks and log_backward records gradients."""

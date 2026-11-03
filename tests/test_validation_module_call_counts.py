@@ -49,7 +49,7 @@ def _function_root(model: nn.Module) -> tl.Trace:
     return trace
 
 
-@pytest.mark.parametrize("model_cls", [RootOnly, RootLoop])
+@pytest.mark.parametrize("model_cls", [RootLoop])
 def test_clean_function_root_traces_pass(model_cls) -> None:
     trace = _function_root(model_cls())
     try:

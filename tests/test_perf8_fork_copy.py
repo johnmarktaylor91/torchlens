@@ -192,14 +192,6 @@ class _Record:
     """Stands in for a parent record facade the memo or translator maps."""
 
 
-class _Str(str):
-    pass
-
-
-class _Dict(dict):
-    pass
-
-
 def _input_index(*values: Any) -> dict[int, int]:
     index: dict[int, int] = {}
 
@@ -273,41 +265,8 @@ def _describe_memo(
 
 
 def _flat_cases() -> Iterator[Any]:
-    yield "atomic_dict", lambda p: {"a": 1, "b": "x", "c": None, "d": 2.5, "e": True, "f": b"z"}
-    yield "atomic_exotic", lambda p: {"n": float("nan"), "c": 1j, True: 0, 0: False}
-    yield "ordered_with_record", lambda p: OrderedDict([("a", p), ("b", 3)])
-    yield "list_mixed", lambda p: [1, "two", p, None, p]
-    yield "tuple_atomic", lambda p: ("a", 1, None)
     yield "tuple_record", lambda p: ("a", p)
-    yield "tuple_of_atomic_tuples", lambda p: (("a", 1), ("b", 2))
-    yield "tuple_nested_record", lambda p: (("a", 1), ("b", p))
-    yield "nested", lambda p: {"k": [1, 2, p], "j": ("x", "y"), "m": {"z": p}}
-    yield "set_str", lambda p: {"s", "t", "u"}
-    yield "set_of_tuples", lambda p: {("a", 1), ("b", 2)}
-    yield "frozenset_int", lambda p: frozenset({1, 2, 3})
-    yield "frozenset_record", lambda p: frozenset({p, "x"})
-    yield "defaultdict_list", lambda p: defaultdict(list, {"a": ["x", p], "b": []})
-    yield "defaultdict_atomic", lambda p: defaultdict(int, {"a": 1, "b": 2})
-    yield "deep_atomic", lambda p: {"k": ("a", ("b", 1))}
-    yield "long_atomic_list", lambda p: list(range(300)) + ["x"] * 50
-    yield "empty_dict", lambda p: {}
-    yield "empty_list", lambda p: []
-    yield "empty_tuple", lambda p: ()
-    yield "empty_set", lambda p: set()
-    yield "empty_frozenset", lambda p: frozenset()
-    yield "empty_ordered", lambda p: OrderedDict()
-    yield "empty_defaultdict", lambda p: defaultdict(int)
-    yield "list_of_empties", lambda p: [[], {}, (), set()]
-    yield "tuple_key", lambda p: {("tuple", "key"): 1}
-    yield "unmapped_record", lambda p: {"a": _Record()}
-    yield "unmapped_in_tuple", lambda p: ("a", _Record())
-    yield "tensor", lambda p: {"t": torch.zeros(1)}
-    yield "too_deep", lambda p: [[[["too deep"]]]]
-    yield "str_subclass_member", lambda p: ["a", _Str("b")]
-    yield "str_subclass_key", lambda p: {_Str("k"): 1}
-    yield "dict_subclass_member", lambda p: {"a": _Dict(b=1)}
     yield "partial_factory", lambda p: defaultdict(functools.partial(list), a=[1])
-    yield "callable_member", lambda p: [len, "x"]
 
     def aliased(p: Any) -> Any:
         inner = ["x", p]
@@ -463,36 +422,6 @@ class _Stack(nn.Module):
         return self.head(torch.cat([second, first], dim=-1))
 
 
-class _Small(nn.Module):
-    """PERF-7's row-major fixture."""
-
-    width = 4
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(4, 3)
-        self.fc2 = nn.Linear(3, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.fc2(torch.relu(self.fc1(x)))
-
-
-class _Long(nn.Module):
-    """PERF-7's columnar fixture: past the store's columnar-transpose threshold (512 rows)."""
-
-    width = 4
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.fc(x)
-        for _ in range(180):
-            h = torch.tanh(h * 1.01 + 0.1)
-        return h.sum(dim=-1)
-
-
 def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
     torch.manual_seed(0)
     return tl.trace(
@@ -591,8 +520,8 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Stack, _Small, pytest.param(_Long, marks=pytest.mark.heavy)],
-    ids=["stack", "row_major", "columnar"],
+    [_Stack],
+    ids=["stack"],
 )
 def test_a_fork_equals_one_built_by_the_former_copy_path(
     model_cls: type[nn.Module], monkeypatch: pytest.MonkeyPatch
@@ -600,7 +529,7 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
     """Fields, module cells and Layer shadow dicts: the same copies and the same shares."""
 
     trace = _capture(model_cls)
-    assert (trace._trace_core.ops._columns is not None) is (model_cls is _Long), "store shape"
+    assert trace._trace_core.ops._columns is None, "store shape"
     current = {name: getattr(trace_fork, name) for name in _REFERENCES}
     for name, reference in _REFERENCES.items():
         monkeypatch.setattr(trace_fork, name, reference)

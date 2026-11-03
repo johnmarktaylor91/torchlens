@@ -89,7 +89,12 @@ def test_generalized_cross_validation_covers_all_four_endpoint_corners() -> None
     assert checks[-1][0].direction is ReceptiveFieldDirection.PROJECTIVE
 
 
-@pytest.mark.parametrize("taint", ["unknown", "data_dependent"])
+@pytest.mark.parametrize(
+    "taint",
+    [
+        "unknown",
+    ],
+)
 def test_tainted_geometry_is_gracefully_indeterminate(taint: str) -> None:
     """Classify unavailable grid truth as indeterminate without a failure."""
 

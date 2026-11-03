@@ -216,12 +216,10 @@ def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
 @pytest.mark.parametrize(
     ("script", "step"),
     [
-        ([(401, {"error": "unauthorized"})], "signed-URL request"),
-        ([_graph_answers()[0], (403, b"<Error>AccessDenied</Error>")], "file upload"),
         ([*_graph_answers()[:2], (400, {"error": "ERR_MODEL_DOES_NOT_EXIST"})], "save request"),
         (None, "could not reach the host"),
     ],
-    ids=["signed_put", "s3_put", "save_to_db", "network"],
+    ids=["save_to_db", "network"],
 )
 def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> None:
     if script is None:

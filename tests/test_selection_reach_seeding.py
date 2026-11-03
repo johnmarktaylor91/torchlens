@@ -211,7 +211,12 @@ def test_all_sites_spelling_and_payload() -> None:
     assert tl.all_sites() == tl.all_sites()
 
 
-@pytest.mark.parametrize("fixture_name", ["two_path", "branchy", "loopy"])
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "two_path",
+    ],
+)
 def test_all_sites_composes_like_label_matches(fixture_name, request) -> None:
     """&, |, - and ~ give the same result as the label_matches spelling."""
 

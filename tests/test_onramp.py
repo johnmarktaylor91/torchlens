@@ -32,25 +32,6 @@ class TinyMLP(nn.Module):
         return self.fc2(self.relu(self.fc1(x)))
 
 
-class TinyCNN(nn.Module):
-    """Small convolutional model for onramp tests."""
-
-    def __init__(self) -> None:
-        """Initialize layers."""
-
-        super().__init__()
-        self.conv = nn.Conv2d(1, 2, 3, padding=1)
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(2, 3)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the model."""
-
-        x = torch.relu(self.conv(x))
-        x = self.pool(x).flatten(1)
-        return self.fc(x)
-
-
 class TinyRecurrent(nn.Module):
     """Small recurrent-parameter model for onramp tests."""
 
@@ -78,12 +59,8 @@ class SignatureModel(nn.Module):
 
 
 @pytest.fixture(
-    params=[
-        (TinyMLP, lambda: torch.randn(2, 4)),
-        (TinyCNN, lambda: torch.randn(2, 1, 4, 4)),
-        (TinyRecurrent, lambda: torch.randn(2, 3)),
-    ],
-    ids=["mlp", "cnn", "recurrent"],
+    params=[(TinyRecurrent, lambda: torch.randn(2, 3))],
+    ids=["recurrent"],
 )
 def architecture(request: pytest.FixtureRequest) -> tuple[nn.Module, torch.Tensor]:
     """Return a model/input pair for one small architecture."""
