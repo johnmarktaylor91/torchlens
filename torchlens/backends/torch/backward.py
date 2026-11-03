@@ -21,8 +21,6 @@ from typing import Any, Literal, cast
 
 import torch
 
-from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
-
 from ... import _state
 from ..._capture import projections
 from ..._capture.peak_memory import (
@@ -33,7 +31,6 @@ from ..._capture.peak_memory import (
 )
 from ..._capture.predicates import _evaluate_keep_op
 from ..._capture.projections import sync_recording_grad_records_from_sidecar
-from ..._data_classes import _trace_intervention
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
@@ -1252,6 +1249,8 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     adoption succeeded. Non-core-backed traces (loaded artifacts, previews)
     keep detached-backed records.
     """
+
+    from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
 
     core = trace.__dict__.get("_trace_core")
     if core is None:
@@ -3252,9 +3251,8 @@ def _run_backward_with_capture(
 def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
     """Write the settle rows of the gradient edits armed on ``trace`` (SPEC 3.3).
 
-    The settle law lives with the doors that arm (``_trace_intervention``);
-    this is the one call at backward pass end. Until that function exists on
-    the branch this runs on, there is nothing armed to settle.
+    The settle law lives with the doors that arm (``_trace_grad_sites``);
+    this is the one call at backward pass end.
 
     Parameters
     ----------
@@ -3264,9 +3262,9 @@ def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
         One-based index of that pass.
     """
 
-    settle = getattr(_trace_intervention, "settle_armed_gradient_edits", None)
-    if settle is not None:
-        settle(trace, pass_index=pass_index)
+    from ..._data_classes._trace_grad_sites import settle_armed_gradient_edits
+
+    settle_armed_gradient_edits(trace, pass_index=pass_index)
 
 
 def disarm_triggers(trace: Any) -> None:

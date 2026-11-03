@@ -1,6 +1,6 @@
 """Staged intervention spec reads shared by the ``Trace.run()`` door.
 
-Split out of ``_trace_validation.py`` (file cap).
+Split out of the ``Trace.run`` family (file cap).
 """
 
 from __future__ import annotations

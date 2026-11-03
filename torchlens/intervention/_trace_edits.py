@@ -474,7 +474,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
             result = trace.push(replay=ReplayOptions(strict=strict_value))
         else:
             assert model is not None
-            result = trace.run(model, x, replay=ReplayOptions(strict=strict_value))
+            result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
     except BaseException as exc:
         # A failed do() must not leave its sticky hooks attached: the
         # next push would silently re-fire them (contamination). Detach

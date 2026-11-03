@@ -3,7 +3,7 @@
 Every user-visible name of the read-time decode door lives here so that a
 rename is one edit in this file plus the matching keyword in the two ``Trace``
 signatures (``decode_output`` and ``output_table`` in
-``torchlens/_data_classes/_trace_export.py``) and the glossary rows.
+``torchlens/_data_classes/trace.py``) and the glossary rows.
 ``tests/test_output_decode_read_time.py`` pins the signatures to these
 constants so a half flip fails.
 """

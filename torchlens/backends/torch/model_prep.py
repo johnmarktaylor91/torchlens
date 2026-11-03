@@ -105,11 +105,7 @@ from .escape_detection import (
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 from .offload_hooks import uninstall_offload_hook_shims
 from .ops import _add_tensor_backward_hook
-from .prehook_provenance import (
-    bind_invocation,
-    install_prehook_provenance,
-    rollback_prehook_provenance,
-)
+from .prehook_provenance import bind_invocation
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
 from .wrappers import wrap_torch
@@ -624,6 +620,7 @@ def _prepare_model_session(
         from .buffer_writes import install_buffer_write_tracker
 
         install_buffer_write_tracker(trace, model)
+    from .prehook_provenance import install_prehook_provenance
 
     install_prehook_provenance(
         trace,
@@ -2254,6 +2251,8 @@ def _cleanup_model_session(
     _restore_session_forward_wrappers(trace)
     try:
         uninstall_offload_hook_shims(trace)
+        from .prehook_provenance import rollback_prehook_provenance
+
         rollback_prehook_provenance(trace)
     finally:
         # Restore requires_grad and remove session-scoped param attributes

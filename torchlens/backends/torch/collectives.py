@@ -50,7 +50,6 @@ from torchlens._distributed._lifecycle import (
     resolve_group_identity,
     restore_wrapped_attr,
 )
-from torchlens._utils._torch_compat import mark_torch_capability_missing, probe_c10d_capabilities
 
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._transport import to_cpu_contiguous
@@ -376,6 +375,11 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
         and returns the ``"c10d_group_seq_read_failed"`` disclosure token for
         the boundary record where the witness vanished.
     """
+
+    from torchlens._utils._torch_compat import (
+        mark_torch_capability_missing,
+        probe_c10d_capabilities,
+    )
 
     if not probe_c10d_capabilities()["HAS_C10D_GROUP_SEQ"]:
         return None, None

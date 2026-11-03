@@ -1178,7 +1178,7 @@ class Recording(TraceLike):
         # crash. Self._output_tensors is empty for a halted pass, so seed the
         # frontier's saved payload as the sole output tensor (no fabrication --
         # the tensor is the recording's own retained raw activation).
-        halt_output_tensors = list(projection.output_tensors)
+        halt_output_tensors = cast("list[torch.Tensor]", list(projection.output_tensors))
         halt_output_addresses = list(projection.output_tensor_addresses)
         if self.is_stopped:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
