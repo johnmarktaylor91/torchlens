@@ -22,8 +22,10 @@ from safetensors import SafetensorError, safe_open
 from safetensors.torch import load, load_file
 
 from .._utils.hashing import sha256_file
-from . import ArtifactError, PayloadLoadHints
+from . import ArtifactError, BlobRef, PayloadLoadHints
 from ._chunk_digest import _chunk_digest, _file_identity
+from .format3.reader import read_manifest, read_tables
+from .manifest import Manifest, TensorEntry
 from .paths import resolve_bundle_blob_path
 from .payload_codec import materialize_transport_tensor
 
@@ -296,3 +298,73 @@ class LazyActivationRef:
                 code="bundle_load_failed",
             )
         return tensor
+
+
+def _build_manifest_index(
+    manifest: Manifest | dict[str, Any],
+) -> Mapping[str, dict[str, Any] | TensorEntry]:
+    """Index manifest tensor entries by blob id."""
+
+    if isinstance(manifest, Manifest):
+        return {entry.blob_id: entry for entry in manifest.tensors}
+
+    tensors = manifest.get("tensors", [])
+    if not isinstance(tensors, list):
+        raise ArtifactError("Portable manifest must contain a list under 'tensors'.")
+    index: dict[str, dict[str, Any]] = {}
+    for entry in tensors:
+        blob_id = entry.get("blob_id")
+        if not isinstance(blob_id, str):
+            raise ArtifactError("Portable manifest tensor entries must include string blob_id.")
+        index[blob_id] = entry
+    return index
+
+
+def _manifest_entry_for_blob_ref(
+    blob_ref: BlobRef,
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
+) -> TensorEntry | None:
+    """Return the manifest entry corresponding to one ``BlobRef``.
+
+    Parameters
+    ----------
+    blob_ref:
+        Blob reference to resolve.
+    manifest_index:
+        Manifest tensor entries indexed by blob id.
+
+    Returns
+    -------
+    TensorEntry | None
+        Resolved manifest entry, or ``None`` when the manifest only contains the
+        older minimal tensor schema.
+
+    Raises
+    ------
+    ArtifactError
+        If the blob id is missing from the manifest.
+    """
+
+    if blob_ref.blob_id not in manifest_index:
+        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
+    entry = manifest_index[blob_ref.blob_id]
+    if isinstance(entry, TensorEntry):
+        return entry
+    required_fields = {
+        "backend",
+        "shape",
+        "dtype",
+        "device_at_save",
+        "layout",
+        "bytes",
+        "sha256",
+    }
+    if not required_fields.issubset(entry.keys()):
+        return None
+    return TensorEntry.from_dict(entry)
+
+
+def _read_materialization_manifest(root: Path) -> dict[str, Any]:
+    """Validate the format 3 source and derive its payload index from the record cells."""
+
+    return read_tables(root, read_manifest(root)).manifest_for_rehydrate()

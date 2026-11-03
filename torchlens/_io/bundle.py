@@ -106,7 +106,7 @@ from .format3.writer import (
     settle_live_side,
     write_trace_envelope,
 )
-from .lazy import LazyActivationRef
+from .lazy import LazyActivationRef, _read_materialization_manifest
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
     _make_tmp_bundle_path,
@@ -2780,8 +2780,8 @@ def _load_and_verify_fast_copy_source(
             "source bundle manifest has changed since load; materialize refs and retry"
         )
 
-    manifest = Manifest.read(manifest_path)
-    manifest_index = {entry.blob_id: entry for entry in manifest.tensors}
+    manifest = _read_materialization_manifest(source_bundle_path)
+    manifest_index = {row["blob_id"]: TensorEntry.from_dict(row) for row in manifest["tensors"]}
     cache[source_bundle_path] = manifest_index
     return manifest_index
 
@@ -2831,27 +2831,16 @@ def _fast_copy_tensor_blob(
             f"{fast_copy_spec.source_ref.expected_sha256} got {observed_sha256}"
         )
 
-    source_tensor = _load_safetensors_file(source_blob_path, "cpu").get(_BLOB_TENSOR_KEY)
-    if not isinstance(source_tensor, torch.Tensor):
-        raise ArtifactError(
-            f"Tensor blob {source_blob_path} lacks {_BLOB_TENSOR_KEY!r}.",
-            code="bundle_save_failed",
-        )
-    host = source_tensor.contiguous()
-    blob, key = store.submit(host, codec=TORCH_CODEC)
-    reference = tensor_reference(host, blob=blob, key=key)
-    reference.update(
-        device=source_entry.device_at_save, requires_grad=bool(source_entry.requires_grad)
+    source_value = fast_copy_spec.source_ref.materialize(map_location="cpu")
+    backend = source_entry.logical_backend or "torch"
+    spec = BlobSpec(
+        fast_copy_spec.blob_id, source_value, fast_copy_spec.kind, fast_copy_spec.label, backend
     )
-    tensor_refs[fast_copy_spec.blob_id] = reference
-    return dataclasses.replace(
-        source_entry,
-        blob_id=fast_copy_spec.blob_id,
-        kind=fast_copy_spec.kind,
-        label=fast_copy_spec.label,
-        relative_path=blob,
-        sha256="",
+    entry = _write_payload_blob(
+        store=store, tensor_refs=tensor_refs, blob_spec=spec, codec=get_payload_codec(backend)
     )
+    tensor_refs[fast_copy_spec.blob_id]["device"] = source_entry.device_at_save
+    return dataclasses.replace(entry, device_at_save=source_entry.device_at_save)
 
 
 _CUSTOM_ATTRIBUTES_DISCLOSURE_KEY_CAP = 100
