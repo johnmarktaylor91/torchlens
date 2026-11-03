@@ -2,7 +2,8 @@
 
 The C07X split-off join, landed: ``bundle_id`` / ``forked_from_bundle_id`` /
 ``member_construction`` anchors / hash-chained ``operations`` /
-``member_effect_tables`` persist as writer-owned ``bundle.json`` sections and
+``member_effect_tables`` persist as writer-owned sections of the bundle's
+``relations.json`` (the format 3 home of the 2.x ``bundle.json``) and
 load back fail-closed. The effect-table registry survives save/load/released
 members (D3c); pre-F03 artifacts (sections absent) load with honest
 ``origin="loaded"`` anchors.
@@ -16,9 +17,11 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
+from torchlens._io.format3.container import RELATIONS_FILE
 from torchlens.bundle._lineage import MemberEffectRow, MemberEffectTable
 from torchlens.errors.episode import BundleRelationError
 
@@ -91,7 +94,7 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
     bundle = _pair()
     path = tmp_path / "f03_pre_bundle"
     bundle.save(str(path))
-    metadata_path = path / "bundle.json"
+    metadata_path = path / RELATIONS_FILE
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     for key in (
         "bundle_id",
@@ -102,6 +105,7 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
     ):
         metadata.pop(key, None)
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(path, RELATIONS_FILE)
 
     loaded = tl.load(str(path))
     # A fresh identity is minted; anchors disclose no construction evidence.
@@ -114,10 +118,17 @@ def test_pre_f03_artifact_loads_with_loaded_anchors(tmp_path: Path) -> None:
 
 
 def _tamper(path: Path, mutate) -> None:
-    metadata_path = path / "bundle.json"
+    """Forge the bundle's ``relations.json`` and re-digest it.
+
+    The re-digest keeps the manifest's file table true, so the forged lineage
+    reaches the lineage validator instead of the byte-integrity check.
+    """
+
+    metadata_path = path / RELATIONS_FILE
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     mutate(metadata)
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(path, RELATIONS_FILE)
 
 
 @pytest.mark.parametrize(

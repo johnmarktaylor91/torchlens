@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+from _format3_envelope import tensor_references
 from torch import nn
 
 import torchlens as tl
@@ -29,7 +30,13 @@ def trace():
 
 
 def _blob_count(path) -> int:
-    return len(list((path / "blobs").iterdir()))
+    """Tensor payloads the artifact persists.
+
+    Format 3 packs every tensor into shared safetensors chunks, so the count is
+    of the distinct tensor references the record cells carry, not of files.
+    """
+
+    return len(tensor_references(path))
 
 
 def test_executable_level_refuses_explicit_rng_states_opt_out(trace, tmp_path):
