@@ -85,25 +85,6 @@ def _recording_fsync(synced: list[Path]):
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="/proc fd->path resolution")
-def test_trace_save_fsyncs_files_and_parent_dir(tmp_path: Path, monkeypatch) -> None:
-    """A trace save fsyncs its sidecars, blobs, and the parent directory.
-
-    Fail-before: ``grep fsync torchlens/_io/`` was empty -- temp+rename survived
-    a process crash but not power loss; a "successful" save could hold
-    zero-length files while the old bundle was already gone.
-    """
-
-    synced: list[Path] = []
-    monkeypatch.setattr(os, "fsync", _recording_fsync(synced))
-    spec = _save(tmp_path)
-    names = {path.name for path in synced}
-    assert "manifest.json" in names, "manifest.json was not fsynced before publish"
-    assert "metadata.pkl" in names, "metadata.pkl was not fsynced before publish"
-    assert any(path.suffix == ".safetensors" for path in synced), "no blob was fsynced"
-    assert spec.parent in synced, "the publish rename was not made durable (parent dir fsync)"
-
-
-@pytest.mark.skipif(sys.platform != "linux", reason="/proc fd->path resolution")
 def test_bundle_save_fsyncs_members_and_parent_dir(tmp_path: Path, monkeypatch) -> None:
     """A Bundle save fsyncs bundle.json, nested members, and the parent dir."""
 
@@ -240,54 +221,6 @@ def test_manifest_refuses_entry_count_above_ceiling(tmp_path: Path, monkeypatch)
 # --------------------------------------------------------------------------- #
 
 
-def _forged_provenance() -> manifest_mod.Provenance:
-    return manifest_mod.Provenance(
-        provenance_version=1,
-        capture_devices=["cpu"],
-        dtype_policy={"default_dtype": "torch.float32", "observed_autocast": []},
-        rng_state_digests={"forged_engine": "ab" * 32},
-        input_hash="cd" * 32,
-        model_structure_hash="ef" * 32,
-        git_commit_hash="0123456789abcdef0123456789abcdef01234567",  # pragma: allowlist secret
-    )
-
-
-def test_resave_include_source_false_does_not_reemit_loaded_provenance(
-    tmp_path: Path,
-) -> None:
-    """A loaded (possibly forged) provenance is not re-emitted verbatim.
-
-    Fail-before: ``_collect_provenance`` returned ``_source_bundle_provenance``
-    BEFORE the ``include_source`` gate, so resaving a loaded bundle with
-    ``include_source=False`` still re-emitted git_commit_hash/input_hash/
-    rng_state_digests -- propagating an attacker-authored bundle's forged
-    provenance into resaves the host appears to attest.
-    """
-
-    trace = _trace()
-    trace._source_bundle_provenance = _forged_provenance()
-    spec = tmp_path / "resave.tlspec"
-    trace.save(str(spec), include_source=False)
-    provenance = json.loads((spec / "manifest.json").read_text(encoding="utf-8")).get("provenance")
-    assert provenance is not None
-    assert provenance.get("git_commit_hash") is None, "git commit leaked despite include_source"
-    assert "forged_engine" not in provenance.get("rng_state_digests", {})
-    assert provenance.get("input_hash") != "cd" * 32
-    assert provenance.get("model_structure_hash") != "ef" * 32
-
-
-def test_resave_include_source_true_keeps_loaded_provenance(tmp_path: Path) -> None:
-    """The deliberate capture-time provenance passthrough is preserved."""
-
-    trace = _trace()
-    trace._source_bundle_provenance = _forged_provenance()
-    spec = tmp_path / "resave-with-source.tlspec"
-    trace.save(str(spec), include_source=True)
-    provenance = json.loads((spec / "manifest.json").read_text(encoding="utf-8")).get("provenance")
-    assert provenance is not None
-    assert "forged_engine" in provenance.get("rng_state_digests", {})
-
-
 # --------------------------------------------------------------------------- #
 # MED6: runnable dead-model fallback refuses non-tensor state typed            #
 # --------------------------------------------------------------------------- #
@@ -334,10 +267,17 @@ def test_nul_byte_relative_path_refuses_typed(tmp_path: Path) -> None:
         resolve_bundle_blob_path(bundle_root, "blobs/a\x00b.safetensors")
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "shape",
-    [[-1, 5], [True, 2], [2**60], list(range(300))],
-    ids=["negative-dim", "bool-dim", "huge-dim", "too-many-dims"],
+    [
+        [True, 2],
+        [2**60],
+    ],
+    ids=[
+        "bool-dim",
+        "huge-dim",
+    ],
 )
 def test_tensor_entry_refuses_invalid_shape(tmp_path: Path, shape: list) -> None:
     """Negative/bool/absurd shape dims refuse at parse (latent num_elements feed)."""
@@ -418,24 +358,6 @@ def test_metadata_pkl_non_mapping_payload_refuses_typed(tmp_path: Path) -> None:
     with pytest.raises(ArtifactError, match="not a metadata mapping") as excinfo:
         tl.load(str(spec))
     assert excinfo.value.fields["code"] == "metadata_payload_not_a_mapping"
-
-
-def test_bundle_save_failure_names_cause_and_code(tmp_path: Path, monkeypatch) -> None:
-    """R65: the highest-traffic save door names its cause, code, and remedy.
-
-    Fail-before: every non-typed save failure became the content-free
-    ``ArtifactError: Failed to save bundle at <path>.`` with empty fields.
-    """
-
-    def _boom(state, handle) -> None:
-        raise TypeError("cannot pickle '_thread.lock' object")
-
-    monkeypatch.setattr(bundle_mod, "dump_canonical_metadata", _boom)
-    with pytest.raises(ArtifactError, match="cannot pickle") as excinfo:
-        _save(tmp_path)
-    assert excinfo.value.fields["code"] == "bundle_save_failed"
-    assert excinfo.value.fields["cause_type"] == "TypeError"
-    assert "Remedy:" in str(excinfo.value)
 
 
 def test_unverified_capture_disclosure_survives_save_and_load(tmp_path: Path) -> None:

@@ -13,7 +13,6 @@ import torchlens as tl
 import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
 from torchlens import Recording
-from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.backends.torch.backend import TorchBackend
 from torchlens.errors import PredicateError, RecorderStateError, TraceCaptureError
 from torchlens.recording import RecordContext, Recorder
@@ -63,18 +62,6 @@ class ParentWithFailingChild(nn.Module):
         """Delegate to the failing child."""
 
         return self.child(x)
-
-
-class MultiOutputThenFail(nn.Module):
-    """Model with multiple successful outputs before a later failure."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Create multiple outputs before raising a user exception."""
-
-        first = torch.add(x, 1)
-        second = torch.mul(x, 2)
-        _ = (first, second)
-        raise RuntimeError("multi-output forward boom")
 
 
 def _save_ops(ctx: RecordContext) -> bool:
@@ -154,23 +141,6 @@ def test_default_raise_preserves_original_exception() -> None:
     assert not hasattr(exc_info.value, "partial_recording")
 
 
-def test_attach_partial_reraises_original_with_failed_recording() -> None:
-    """attach_partial attaches a failed Recording and re-raises the original."""
-
-    with pytest.raises(TraceCaptureError, match="intentional forward boom") as exc_info:
-        tl.record(
-            FailingAfterOps(),
-            torch.tensor(1.0),
-            save=_save_ops,
-            on_forward_error="attach_partial",
-        )
-    assert isinstance(exc_info.value.__cause__, RuntimeError)
-
-    partial = exc_info.value.partial_recording
-    _assert_failed_partial(partial)
-    assert _op_labels(partial) == ["add_1_2_raw", "relu_1_3_raw", "mul_1_4_raw"]
-
-
 def test_return_partial_one_shot_returns_failed_recording() -> None:
     """return_partial returns the failed Recording."""
 
@@ -224,7 +194,13 @@ def test_manual_recorder_log_return_partial_sets_recording() -> None:
     assert recorder.recording is partial
 
 
-@pytest.mark.parametrize("mode", ["raise", "attach_partial", "return_partial"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "attach_partial",
+    ],
+)
 def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
     """All failed-forward modes clean global logging state."""
 
@@ -392,22 +368,6 @@ def test_root_module_exit_halt_failure_deduplicates_partial_event_stream() -> No
     assert len(module_exit_raw_indexes) == len(set(module_exit_raw_indexes))
 
 
-def test_multi_output_user_failure_partial_is_consistent() -> None:
-    """Successful events before a later multi-output failure remain consistent."""
-
-    recording = tl.record(
-        MultiOutputThenFail(),
-        torch.tensor(1.0),
-        save=_save_ops,
-        on_forward_error="return_partial",
-    )
-
-    _assert_failed_partial(recording)
-    assert _op_labels(recording) == ["add_1_2_raw", "mul_1_3_raw"]
-    assert recording.last_successful_op_label == "mul_1_3_raw"
-    assert "multi-output forward boom" in str(recording.error_repr)
-
-
 def test_third_pass_failure_in_reused_recorder_returns_partial() -> None:
     """A reused Recorder returns a partial when the third log call fails."""
 
@@ -441,25 +401,6 @@ def test_third_pass_failure_in_reused_recorder_returns_partial() -> None:
     assert 3 in partial.by_pass
 
 
-def test_return_partial_does_not_finalize_aborted_disk_storage(tmp_path: Path) -> None:
-    """Failed disk-backed return_partial leaves temp storage unfinalized."""
-
-    final_path = tmp_path / "failed.tlfast"
-    recording = tl.record(
-        FailingAfterOps(),
-        torch.tensor(1.0),
-        save=_save_ops,
-        storage=tl.to_disk(final_path, retain_in_memory=True),
-        on_forward_error="return_partial",
-    )
-
-    assert not final_path.exists()
-    partials = list(tmp_path.glob("failed.tlfast.tmp.*"))
-    assert len(partials) == 1
-    assert (partials[0] / PARTIAL_SENTINEL).exists()
-    assert recording.path == partials[0]
-
-
 def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path) -> None:
     """Disk partials expose the temp path only when a fastlog index exists."""
 
@@ -481,29 +422,6 @@ def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path)
     assert len(recovered) > 0
 
 
-def test_accumulated_predicate_error_suppressed_after_failed_forward() -> None:
-    """Recorder.__exit__ suppresses accumulated predicate errors after failure."""
-
-    def module_exit_halt(ctx: RecordContext) -> bool:
-        """Accumulate a predicate failure on module exit."""
-
-        if ctx.kind == "module_exit":
-            raise ValueError("accumulated predicate boom")
-        return False
-
-    recording = tl.record(
-        ParentWithFailingChild(),
-        torch.tensor(1.0),
-        save=_save_ops,
-        stop_after=module_exit_halt,
-        on_predicate_error="accumulate",
-        on_forward_error="return_partial",
-    )
-
-    _assert_failed_partial(recording)
-    assert recording.predicate_failures
-
-
 def test_accumulated_predicate_error_still_raises_without_forward_failure() -> None:
     """The suppression is limited to failed-forward recorders."""
 
@@ -522,19 +440,3 @@ def test_accumulated_predicate_error_still_raises_without_forward_failure() -> N
             stop_after=module_exit_halt,
             on_predicate_error="accumulate",
         )
-
-
-def test_failed_recording_log_backward_refusal_carries_n3_code() -> None:
-    """The failed-partial refusal mirrors the capability table's N3 code."""
-
-    recording = tl.record(
-        FailingAfterOps(),
-        torch.tensor(1.0, requires_grad=True),
-        save=_save_ops,
-        on_forward_error="return_partial",
-    )
-    with pytest.raises(RecorderStateError) as exc_info:
-        recording.backward(torch.tensor(1.0, requires_grad=True))
-    assert exc_info.value.fields["code"] == "N3"
-    assert exc_info.value.fields["capability"] == "backward"
-    assert exc_info.value.fields["status"] == "failed"

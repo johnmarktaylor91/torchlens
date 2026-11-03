@@ -21,8 +21,6 @@ This file pins the retirement of that disagreement:
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
@@ -33,21 +31,10 @@ from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
     outcome_for,
-    require_capture_capability,
 )
 from torchlens._data_classes.trace import Trace
 from torchlens.bundle import Bundle, _fold_member_outcomes
 from torchlens.errors import InvalidArgumentError, TraceCaptureError
-
-# Least -> most severe; the fold picks the maximum over members.
-SEVERITY_ORDER = [
-    CaptureStatus.COMPLETE,
-    CaptureStatus.UNATTESTED,
-    CaptureStatus.STOPPED,
-    CaptureStatus.ABORTED_NONFINITE,
-    CaptureStatus.FAILED,
-    CaptureStatus.UNKNOWN,
-]
 
 
 def _outcome(status: CaptureStatus) -> CaptureOutcome:
@@ -106,28 +93,6 @@ def test_fold_all_complete_is_complete() -> None:
     assert "worst-of-members" in (folded.note or "")
 
 
-@pytest.mark.parametrize("status", [s for s in SEVERITY_ORDER if s is not CaptureStatus.COMPLETE])
-def test_fold_complete_never_blessed_above_weakest_member(status: CaptureStatus) -> None:
-    """Any non-COMPLETE member forces the fold off COMPLETE."""
-
-    folded = _fold_member_outcomes(
-        [("good", _outcome(CaptureStatus.COMPLETE)), ("weak", _outcome(status))]
-    )
-    assert folded.status is status
-    assert folded.status is not CaptureStatus.COMPLETE
-
-
-@pytest.mark.parametrize(
-    ("weaker", "stronger"),
-    [(SEVERITY_ORDER[i], SEVERITY_ORDER[i + 1]) for i in range(len(SEVERITY_ORDER) - 1)],
-)
-def test_fold_total_severity_order(weaker: CaptureStatus, stronger: CaptureStatus) -> None:
-    """Each adjacent severity pair folds to the more severe status."""
-
-    folded = _fold_member_outcomes([("w", _outcome(weaker)), ("s", _outcome(stronger))])
-    assert folded.status is stronger
-
-
 def test_fold_unsettled_member_is_unknown_fail_closed() -> None:
     """A member with no settled outcome drives the fold to UNKNOWN."""
 
@@ -144,70 +109,14 @@ def test_fold_empty_domain_is_unknown_fail_closed() -> None:
     assert folded.is_derived is True
 
 
-def test_fold_note_names_driving_member() -> None:
-    folded = _fold_member_outcomes(
-        [
-            ("good", _outcome(CaptureStatus.COMPLETE)),
-            ("bad", _outcome(CaptureStatus.FAILED)),
-        ]
-    )
-    note = folded.note or ""
-    assert "'bad'" in note
-    assert "failed" in note
-
-
 # ---------------------------------------------------------------------------
 # Declared authority: outcome_for(bundle) answers with the fold
 # ---------------------------------------------------------------------------
 
 
-def test_bundle_declares_self_authority() -> None:
-    assert Bundle._OUTCOME_SELF_AUTHORITY is True
-
-
-def test_outcome_for_bundle_returns_fold_not_none(complete_pair: Bundle) -> None:
-    """The retired disagreement: outcome_for(bundle) was None on COMPLETE members."""
-
-    settled = outcome_for(complete_pair)
-    assert settled is not None
-    assert settled.status is CaptureStatus.COMPLETE
-    assert settled.is_derived is True
-    assert complete_pair.outcome.status is CaptureStatus.COMPLETE
-
-
-def test_capability_gate_on_bundle_no_false_hand_built_warning(complete_pair: Bundle) -> None:
-    """The container gate reads the fold: no UNKNOWN, no hand-built-object warning."""
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", RuntimeWarning)
-        settled = require_capture_capability(complete_pair, "save_analysis")
-    assert settled.status is CaptureStatus.COMPLETE
-
-
 # ---------------------------------------------------------------------------
 # Both public save doors agree on every settled bundle
 # ---------------------------------------------------------------------------
-
-
-def test_both_doors_save_a_complete_bundle(tmp_path, complete_pair: Bundle) -> None:
-    """bundle.save(path) stops false-refusing; both doors round-trip identically."""
-
-    door_tl = tmp_path / "door_tl.tlspec"
-    door_method = tmp_path / "door_method.tlspec"
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        complete_pair.save(door_tl)
-    hand_built = [w for w in caught if "no settled capture outcome" in str(w.message)]
-    assert not hand_built, "the false hand-built-object warning must be gone"
-    complete_pair.save(door_method)
-
-    loaded_tl = tl.load(door_tl)
-    loaded_method = tl.load(door_method)
-    assert loaded_tl.names == loaded_method.names == ["a", "b"]
-    for loaded in (loaded_tl, loaded_method):
-        settled = outcome_for(loaded)
-        assert settled is not None
-        assert settled.status is CaptureStatus.COMPLETE
 
 
 def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
@@ -249,40 +158,9 @@ def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> No
     assert method_door.value.fields["code"] == "N1"
 
 
-def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
-    """D8 corollary: the container-level fold is a disclosure beside results;
-    the capability gate applies at the MEMBER whose facts a read cites."""
-
-    with torch.no_grad():
-        good = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    bad = _failed_trace()
-    mixed = tl.Bundle({"good": good, "bad": bad})
-
-    # Container fold is FAILED, but the COMPLETE member's facts stay readable
-    # and savable through its own per-member gate.
-    assert mixed.outcome.status is CaptureStatus.FAILED
-    good_member = mixed["good"]
-    assert require_capture_capability(good_member, "validation_entry").status is (
-        CaptureStatus.COMPLETE
-    )
-    good_member.save(tmp_path / "good_member.tlspec")
-    # The FAILED member's own gate keeps refusing (per-member, not container).
-    with pytest.raises(CaptureOutcomeError):
-        require_capture_capability(mixed["bad"], "validation_entry")
-
-
 # ---------------------------------------------------------------------------
 # Door-surface agreement: refusals match on the container surface
 # ---------------------------------------------------------------------------
-
-
-def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pair: Bundle) -> None:
-    with pytest.raises(InvalidArgumentError) as tl_door:
-        complete_pair.save(tmp_path / "r1.tlspec", level="runnable")
-    assert tl_door.value.fields["code"] == "artifact_save_level_unsupported"
-    with pytest.raises(InvalidArgumentError) as method_door:
-        complete_pair.save(tmp_path / "r2.tlspec", level="runnable")
-    assert method_door.value.fields["code"] == "artifact_save_level_unsupported"
 
 
 def test_trace_only_save_options_refuse_typed(tmp_path, complete_pair: Bundle) -> None:

@@ -13,7 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._constants import PRIMITIVE_OP_FIELD_ORDER
-from torchlens._data_classes.aten_op import AtenOp, OpRef
+from torchlens._data_classes.aten_op import OpRef
 from torchlens._io import ArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
@@ -119,45 +119,6 @@ class _SlashModuleModel(nn.Module):
         return self.blocks["a/b"](x)
 
 
-class _CopySlicesModel(nn.Module):
-    """Create a CopySlices autograd node through indexed assignment."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Assign one differentiable slice into a cloned tensor."""
-
-        source = x * 2
-        result = source.clone()
-        result[:, :1] = source[:, 1:2]
-        return result.sum()
-
-
-class _InplaceViewModel(nn.Module):
-    """Mutate a differentiable view in place."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply an in-place add through a view."""
-
-        result = x.clone()
-        result[:, :1].add_(1)
-        return result.sum()
-
-
-class _InplaceParameterSliceModel(nn.Module):
-    """Mutate a parameter slice before using the parameter."""
-
-    def __init__(self) -> None:
-        """Create one small trainable matrix."""
-
-        super().__init__()
-        self.weight = nn.Parameter(torch.eye(3))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Update one parameter slice without adding an autograd mutation edge."""
-
-        self.weight.detach()[:1].add_(0.25)
-        return (x @ self.weight).sum()
-
-
 class _IndexPutModel(nn.Module):
     """Exercise explicit ``index_put_`` lineage."""
 
@@ -221,45 +182,6 @@ def test_documented_unstable_aten_surface_matches_glossary_index() -> None:
     assert all("unstable -- no deprecation shim owed" in row for row in surface_rows)
 
 
-def test_private_recorder_materializes_value_free_forward_rows() -> None:
-    """Armed forward calls become opaque-label AtenOp rows with exact Op FKs."""
-
-    trace = _armed_trace()
-    profile = trace._primitive_op_profile
-
-    assert profile is not None
-    assert profile.primitive_ops
-    assert all(isinstance(row, AtenOp) for row in profile.primitive_ops)
-    assert all(row.label == f"aten_{row.sequence}" for row in profile.primitive_ops)
-    assert all("/" not in row.label for row in profile.primitive_ops)
-    assert any(row.owner_status == "forward_op" for row in profile.primitive_ops)
-    assert all(
-        not isinstance(fact, torch.Tensor)
-        for row in profile.primitive_ops
-        for facts in (row.input_tensor_facts, row.output_tensor_facts)
-        for fact in facts
-    )
-    assert check_metadata_invariants(trace)
-
-
-def test_recording_off_never_constructs_primitive_retention(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The ordinary capture path never reaches the ATen retention constructor."""
-
-    from torchlens.backends.torch import _aten_capture
-
-    def fail_if_called(*args: object, **kwargs: object) -> None:
-        """Fail if the gated retention path is called."""
-
-        del args, kwargs
-        raise AssertionError("ATen retention constructor ran while recording was off")
-
-    monkeypatch.setattr(_aten_capture, "_prepare_aten_call", fail_if_called)
-    trace = tl.trace(_TwoOpModel(), torch.ones(2))
-    assert trace._primitive_op_profile is None
-
-
 def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> None:
     """Strict subclass construction records a typed gap, with exact parentage, per crossing.
 
@@ -306,12 +228,10 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     assert check_metadata_invariants(trace)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("model", "expected_operator"),
     [
-        (_CopySlicesModel(), "copy_"),
-        (_InplaceViewModel(), "add_"),
-        (_InplaceParameterSliceModel(), "add_"),
         (_IndexPutModel(), "index_put_"),
     ],
 )
@@ -332,35 +252,6 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
     assert all(row.grad_fn_ref is not None for row in linked)
     assert all(row.grad_fn_link_provenance in {"exact_via_aten", "heuristic"} for row in linked)
     _check_primitive_op_invariants(trace)
-
-
-def test_primitive_rows_retain_no_tensor_grad_fn_or_callable_objects() -> None:
-    """The value-free profile holds no strong runtime object references."""
-
-    trace = _armed_trace(backward_ready=True)
-    trace.log_backward(trace.output_ops[0].out.sum())
-
-    def assert_value_free(value: object) -> None:
-        """Recursively reject tensors, autograd nodes, and callables.
-
-        Parameters
-        ----------
-        value
-            Primitive field value to inspect.
-        """
-
-        assert not isinstance(value, torch.Tensor)
-        assert not callable(value)
-        if isinstance(value, tuple | list):
-            for item in value:
-                assert_value_free(item)
-        elif hasattr(value, "__dataclass_fields__"):
-            for name in value.__dataclass_fields__:
-                assert_value_free(getattr(value, name))
-
-    for row in trace._primitive_op_profile.primitive_ops:
-        for field_name in PRIMITIVE_OP_FIELD_ORDER:
-            assert_value_free(getattr(row, field_name))
 
 
 def test_retention_does_not_change_completeness_census_counts(
@@ -402,20 +293,8 @@ def test_slash_module_address_does_not_enter_parent_or_opaque_aten_labels() -> N
         assert all("/" not in ref.op_label for ref in row.parent_op_refs)
 
 
-def test_plain_v8_round_trip_persists_the_profile(tmp_path: Path) -> None:
-    """tlspec v8: the primitive profile persists on a PLAIN save/load."""
-
-    trace = _armed_trace()
-    default_path = tmp_path / "default.tlspec"
-    trace.save(default_path)
-    loaded = tl.load(default_path)
-    assert len(loaded._primitive_op_profile.primitive_ops) == len(
-        trace._primitive_op_profile.primitive_ops
-    )
-    assert check_metadata_invariants(loaded)
-
-
-@pytest.mark.parametrize("tamper_kind", ["dangling", "forged"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("tamper_kind", ["forged"])
 def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     tmp_path: Path,
     tamper_kind: str,

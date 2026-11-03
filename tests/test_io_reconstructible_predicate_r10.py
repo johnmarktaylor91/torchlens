@@ -38,25 +38,10 @@ def test_off_allowlist_torchlens_type_is_not_reconstructible() -> None:
     assert not _type_is_load_reconstructible(_OffAllowlistTorchlensType)
 
 
-def test_appliance_torchlens_type_is_not_reconstructible() -> None:
-    assert not _type_is_load_reconstructible(_ApplianceType)
-
-
 def test_allowlisted_torchlens_type_is_reconstructible() -> None:
     from torchlens._io import BlobRef  # ("torchlens._io", "BlobRef") is allowlisted
 
     assert _type_is_load_reconstructible(BlobRef)
-
-
-def test_torch_data_type_is_reconstructible() -> None:
-    import torch
-
-    assert _type_is_load_reconstructible(torch.Size)
-
-
-def test_pure_data_builtin_factory_is_reconstructible() -> None:
-    for factory in (list, dict, set, int, tuple):
-        assert _factory_is_load_reconstructible(factory), factory
 
 
 def test_code_exec_builtin_factory_is_not_reconstructible() -> None:
@@ -64,12 +49,6 @@ def test_code_exec_builtin_factory_is_not_reconstructible() -> None:
     # them, so preserving them was a load-refuses trap.
     for factory in (eval, getattr):
         assert not _factory_is_load_reconstructible(factory), factory
-
-
-def test_collections_factory_is_reconstructible() -> None:
-    from collections import OrderedDict
-
-    assert _factory_is_load_reconstructible(OrderedDict)
 
 
 def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> None:

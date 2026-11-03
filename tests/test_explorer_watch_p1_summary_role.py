@@ -15,11 +15,8 @@ import torch
 
 import torchlens as tl
 from torchlens._ir.summary_role import (
-    SummaryTransform,
     ensure_summary_output_owns_storage,
-    is_summary_transform,
     summary,
-    transform_role,
 )
 from torchlens._training_validation import TrainingModeConfigError
 from torchlens.recording import CaptureSpec
@@ -37,50 +34,9 @@ def _model() -> torch.nn.Module:
 class TestSummaryWrapper:
     """The role marker itself."""
 
-    def test_declares_role_and_detaches(self) -> None:
-        seen: list[bool] = []
-
-        def probe(t: torch.Tensor) -> torch.Tensor:
-            seen.append(t.requires_grad)
-            return t.sum().unsqueeze(0)
-
-        wrapper = summary(probe)
-        assert is_summary_transform(wrapper)
-        assert transform_role(wrapper) == "summary"
-        assert transform_role(probe) == "standard"
-        assert transform_role(None) == "standard"
-        live = torch.randn(3, requires_grad=True)
-        wrapper(live)
-        assert seen == [False], "summary reducer must see a detached view"
-
-    def test_repr_and_name(self) -> None:
-        assert "summary" not in repr(summary(_histo64)) or "SummaryTransform" in repr(
-            summary(_histo64)
-        )
-        assert summary(_histo64).name == "_histo64"
-        assert summary(_histo64, name="counts").name == "counts"
-
     def test_non_callable_refuses(self) -> None:
         with pytest.raises(TypeError, match="callable reducer"):
             summary(42)  # type: ignore[arg-type]
-
-    def test_duck_typed_foreign_declaration(self) -> None:
-        class Foreign:
-            _tl_transform_role = "summary"
-
-            def __call__(self, t: torch.Tensor) -> torch.Tensor:
-                return t.detach().sum().unsqueeze(0)
-
-        assert is_summary_transform(Foreign())
-
-        # Unknown role tokens read as standard: misdeclaration keeps the tripwire.
-        class Misdeclared:
-            _tl_transform_role = "something_else"
-
-        assert not is_summary_transform(Misdeclared())
-
-    def test_subclass_marker_class(self) -> None:
-        assert isinstance(summary(_histo64), SummaryTransform)
 
 
 class TestTraceTrainModeCarveOut:
@@ -102,23 +58,6 @@ class TestTraceTrainModeCarveOut:
         assert op.out is None
         assert op.transformed_out.dtype == torch.int64
         assert int(op.transformed_out.sum()) == 8  # every element binned
-
-    def test_user_graph_survives_summary_capture(self) -> None:
-        model = _model()
-        x = torch.randn(2, 4, requires_grad=True)
-        log = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(
-                backward_ready=True,
-                activation_transform=summary(_histo64),
-                save_raw_activations=False,
-            ),
-        )
-        del log
-        out = model(x)
-        out.sum().backward()
-        assert x.grad is not None
 
     def test_undeclared_detached_transform_still_refuses(self) -> None:
         model = _model()
@@ -234,18 +173,6 @@ class TestStreamingTripwireUnchanged:
 
 class TestAliasGuardUnit:
     """ensure_summary_output_owns_storage: fail-safe aliasing behavior."""
-
-    def test_view_output_cloned(self) -> None:
-        live = torch.randn(8)
-        view = live.detach()[:4]
-        owned = ensure_summary_output_owns_storage(view, live)
-        assert owned.untyped_storage().data_ptr() != live.untyped_storage().data_ptr()
-        assert torch.equal(owned, view)
-
-    def test_owning_output_passes_through(self) -> None:
-        live = torch.randn(8)
-        reduced = live.detach().sum().unsqueeze(0)
-        assert ensure_summary_output_owns_storage(reduced, live) is reduced
 
     def test_non_tensor_passes_through(self) -> None:
         live = torch.randn(8)

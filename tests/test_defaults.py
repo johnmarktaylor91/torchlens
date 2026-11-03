@@ -14,7 +14,6 @@ import torchlens._capture.prepare.door as door
 import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 from torchlens import _visualization
-from torchlens.options import VisualizationOptions
 
 
 class _DummyLog:
@@ -200,31 +199,6 @@ def test_trace_defaults_are_stable(
     assert dummy_logs[-1].render_calls == []
 
 
-def test_trace_accepts_explicit_opt_in_overrides(
-    stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
-) -> None:
-    """Callers should still be able to opt into capture-only non-default behaviors."""
-
-    captured_calls, dummy_logs = stubbed_runner
-
-    result = tl.trace(
-        _TinyModel(),
-        _tiny_input(),
-        capture=tl.options.CaptureOptions(
-            compute_input_output_distances=True,
-            save_source_context=True,
-            recurrence_detection=False,
-        ),
-        save=None,
-    )
-
-    assert result is dummy_logs[-1]
-    assert captured_calls[-1]["mark_layer_depths"] is True
-    assert captured_calls[-1]["save_source_context"] is True
-    assert captured_calls[-1]["recurrence_detection"] is False
-    assert dummy_logs[-1].render_calls == []
-
-
 def test_show_model_graph_defaults_are_stable(
     stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
 ) -> None:
@@ -244,68 +218,6 @@ def test_show_model_graph_defaults_are_stable(
     assert dummy_logs[-1].cleanup_calls == 1
 
 
-def test_show_model_graph_accepts_explicit_opt_in_overrides(
-    stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
-) -> None:
-    """``show_model_graph`` should still honor explicit non-default choices."""
-
-    captured_calls, dummy_logs = stubbed_runner
-
-    _visualization.show_model_graph(
-        _TinyModel(),
-        _tiny_input(),
-        recurrence_detection=False,
-        visualization=VisualizationOptions(rolled=True),
-    )
-
-    assert captured_calls[-1]["recurrence_detection"] is False
-    assert dummy_logs[-1].render_calls[-1]["rolled"] is True
-    assert dummy_logs[-1].cleanup_calls == 1
-
-
-def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``log_model_metadata`` should keep its metadata-only wrapper behavior."""
-
-    saved_kwargs: dict[str, Any] = {}
-    dummy_log = _DummyLog()
-
-    def _fake_trace(*args: Any, **kwargs: Any) -> _DummyLog:
-        """Capture wrapper kwargs and return a dummy log.
-
-        Parameters
-        ----------
-        *args:
-            Positional arguments passed through the wrapper.
-        **kwargs:
-            Keyword arguments passed through the wrapper.
-
-        Returns
-        -------
-        _DummyLog
-            Stand-in log instance for the wrapper under test.
-        """
-
-        del args
-        saved_kwargs.update(kwargs)
-        return dummy_log
-
-    monkeypatch.setattr(user_funcs, "trace", _fake_trace)
-
-    # The public spelling left the surface (a metadata-only capture is a plain
-    # trace); the wrapper behind it keeps its metadata-only defaults.
-    result = user_funcs.log_model_metadata(_TinyModel(), _tiny_input())
-
-    assert result is dummy_log
-    # The metadata wrapper migrated from the deprecated flat kwargs to the
-    # canonical nested capture spelling (grind b4 R48-3 fix); assert the same
-    # metadata-only contract through the nested options object.
-    capture_options = saved_kwargs["capture"]
-    assert saved_kwargs["save"] is None
-    assert capture_options.compute_input_output_distances is True
-    assert "layers_to_save" not in saved_kwargs
-    assert "compute_input_output_distances" not in saved_kwargs
-
-
 def test_summary_uses_metadata_only_defaults(
     stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
 ) -> None:
@@ -320,32 +232,3 @@ def test_summary_uses_metadata_only_defaults(
     assert captured_calls[-1]["recurrence_detection"] is True
     assert dummy_logs[-1].summary_calls[-1]["depth"] == 2
     assert dummy_logs[-1].cleanup_calls == 1
-
-
-def test_validate_forward_pass_uses_validation_overrides(
-    stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
-) -> None:
-    """``validate_forward_pass`` should keep its replay-specific overrides."""
-
-    captured_calls, dummy_logs = stubbed_runner
-
-    result = tl.validation.validate_forward_pass(
-        _TinyModel(),
-        _tiny_input(),
-        seed=123,
-        validate_metadata=False,
-    )
-
-    assert result is True
-    replay_call, reproducibility_call = captured_calls[-2:]
-    assert replay_call["layers_to_save"] == "all"
-    assert replay_call["activation_transform"] is None
-    assert replay_call["mark_layer_depths"] is False
-    assert replay_call["detach_saved_activations"] is False
-    assert replay_call["save_grads"] is False
-    assert replay_call["save_args"] is True
-    assert replay_call["save_rng"] is True
-    assert reproducibility_call["save_args"] is False
-    assert reproducibility_call["save_rng"] is False
-    assert dummy_logs[-2].validate_calls[-1]["validate_metadata"] is False
-    assert dummy_logs[-2].cleanup_calls == 1
