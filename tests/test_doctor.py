@@ -393,4 +393,4 @@ def test_doctor_cairosvg_row_names_the_missing_library(monkeypatch: pytest.Monke
     assert row.status == "PASS" and "HAS_CAIROSVG=True" in row.detail
     live = next(check for check in tl.report.doctor().checks if check.key == "cairosvg")
     assert live.status in {"pass", "not_tested"}
-    assert "HAS_CAIROSVG=" in live.detail
+    assert "HAS_CAIROSVG=" in live.details

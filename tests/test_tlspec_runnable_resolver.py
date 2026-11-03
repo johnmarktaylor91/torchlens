@@ -597,10 +597,10 @@ def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
 
     from torchlens._utils._torch_compat import _runtime_alias_identity_holds
 
-    # torch re-exports every _VariableFunctions op as the same object on torch.*
-    assert torch.add is torch._C._VariableFunctions.add
-    assert _runtime_alias_identity_holds("torch._C._VariableFunctions.add", "torch", "add")
-    assert _runtime_alias_identity_holds("_C._VariableFunctions.add", "torch", "add")
+    # Two spellings of one object on every torch: the dtype aliases.
+    assert torch.float is torch.float32
+    assert _runtime_alias_identity_holds("torch.float", "torch", "float32")
+    assert _runtime_alias_identity_holds("float", "torch", "float32")
     # linear is bound straight to the C function on torch 2.15+, wrapped before; follow this torch.
     assert _runtime_alias_identity_holds(
         "torch._C._nn.linear", "torch.nn.functional", "linear"

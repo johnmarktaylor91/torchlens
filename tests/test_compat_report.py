@@ -305,6 +305,7 @@ def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -
         "mechanical belt",
         "cuda",
         "graphviz",
+        "cairosvg",
         "safetensors",
         "extras",
         "model fingerprint",
