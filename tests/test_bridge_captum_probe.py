@@ -83,6 +83,24 @@ def test_site_ordinal_counts_earlier_ops_sharing_the_key() -> None:
     assert captum._site_ordinal(log, SimpleNamespace(raw_index=None), key) == 1
 
 
+def test_pick_pass_selects_one_pass_of_a_multi_pass_record_or_refuses() -> None:
+    """A record with several ops needs ``pass_index``; a single op refuses a stray one."""
+
+    first, second = SimpleNamespace(raw_index=3), SimpleNamespace(raw_index=7)
+    multi = SimpleNamespace(ops=(first, second))
+    single = SimpleNamespace(ops=(first,))
+    assert captum._pick_pass(multi, "relu_9_55", 2) is second
+    assert captum._pick_pass(single, "relu_9_55", None) is single
+    assert captum._pick_pass(first, "add_1_4", None) is first
+    for index in (None, 3):
+        with pytest.raises(InvalidArgumentError) as info:
+            captum._pick_pass(multi, "relu_9_55", index)
+        assert info.value.fields["code"] == "bridge_pass_index_invalid"
+    with pytest.raises(InvalidArgumentError) as info:
+        captum._pick_pass(first, "add_1_4", 1)
+    assert info.value.fields["code"] == "bridge_pass_index_needs_module_address"
+
+
 def test_spliced_forward_calls_the_probe_once_and_refuses_a_missed_site() -> None:
     """The spliced forward returns the plain output, calls the probe on its ordinal, and refuses a miss."""
 

@@ -249,9 +249,9 @@ def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
         Module address, module pass label, op label, layer selector, or
         layer object.
     pass_index:
-        Which call of a module ``site`` names (1-based) when it runs more
-        than once; ``"layer4.1.relu"`` with ``pass_index=2`` is the same as
-        the pass-qualified address ``"layer4.1.relu:2"``.
+        1-based call of a module ``site`` that runs more than once
+        (``"layer4.1.relu"`` with ``pass_index=2`` is ``"layer4.1.relu:2"``),
+        or 1-based pass of a label that names several passes.
 
     Returns
     -------
@@ -265,18 +265,21 @@ def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
         If Captum is unavailable.
     InvalidArgumentError
         ``bridge_pass_index_invalid`` for a ``pass_index`` that is not a
-        positive integer; ``bridge_pass_index_needs_module_address`` when
-        ``pass_index`` accompanies anything but a plain module address.
+        positive integer, is past the last pass, or is missing for a site
+        that names several passes; ``bridge_pass_index_needs_module_address``
+        when ``pass_index`` accompanies a single-pass site that is not a
+        plain module address.
     """
 
     _require_captum()
-    site = _apply_pass_index(trace, site, pass_index)
-    try:
-        return module_for_site(trace, site, bridge="Captum")
-    except InvalidArgumentError as exc:
-        if exc.fields.get("code") not in _PROBE_FALLBACK_CODES:
-            raise
-    resolved = resolve_one_site(trace, site)
+    site, pass_index = _apply_pass_index(trace, site, pass_index)
+    if pass_index is None:
+        try:
+            return module_for_site(trace, site, bridge="Captum")
+        except InvalidArgumentError as exc:
+            if exc.fields.get("code") not in _PROBE_FALLBACK_CODES:
+                raise
+    resolved = _pick_pass(resolve_one_site(trace, site), site, pass_index)
     site_key = str(resolved.site_key)
     return _SiteProbe(
         source_model(trace),
@@ -284,6 +287,52 @@ def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
         str(resolved.label),
         _site_ordinal(trace, resolved, site_key),
     )
+
+
+def _pick_pass(resolved: Any, site: Any, pass_index: int | None) -> Any:
+    """Return the one op ``site`` names: ``resolved`` itself, or its ``pass_index``-th pass.
+
+    Parameters
+    ----------
+    resolved:
+        Op or layer record from the selector resolver.
+    site:
+        Site as passed to :func:`layer`, for messages.
+    pass_index:
+        1-based pass to pick when ``resolved`` carries several ops, or
+        ``None``.
+
+    Returns
+    -------
+    Any
+        A single-pass record.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``bridge_pass_index_invalid`` or ``bridge_pass_index_needs_module_address``.
+    """
+
+    ops = getattr(resolved, "ops", None)
+    count = len(ops) if ops is not None and hasattr(ops, "__len__") else 0
+    if count < 2:
+        if pass_index is not None:
+            raise InvalidArgumentError(
+                f"Captum layer pass_index={pass_index} needs a plain module address or a "
+                f"label naming several passes as the site; got {site!r}, which names one op",
+                code="bridge_pass_index_needs_module_address",
+                remedy="pass a module address such as 'layer4.1.relu' with pass_index=, or "
+                "the op label or 'address:pass' spelling alone",
+            )
+        return resolved
+    if pass_index is None or pass_index > count:
+        raise InvalidArgumentError(
+            f"Captum site {site!r} names {count} passes; pass_index={pass_index!r} does not "
+            "pick one of them",
+            code="bridge_pass_index_invalid",
+            remedy=f"pass pass_index= between 1 and {count}, or the pass-qualified label",
+        )
+    return ops[pass_index - 1]
 
 
 def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
@@ -320,8 +369,8 @@ def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
     return earlier + 1
 
 
-def _apply_pass_index(trace: Any, site: Any, pass_index: int | None) -> Any:
-    """Fold ``pass_index`` into a pass-qualified module address.
+def _apply_pass_index(trace: Any, site: Any, pass_index: int | None) -> tuple[Any, int | None]:
+    """Fold ``pass_index`` into a pass-qualified module address when ``site`` is one.
 
     Parameters
     ----------
@@ -334,34 +383,27 @@ def _apply_pass_index(trace: Any, site: Any, pass_index: int | None) -> Any:
 
     Returns
     -------
-    Any
-        ``site`` unchanged, or ``f"{site}:{pass_index}"``.
+    tuple[Any, int | None]
+        ``(f"{site}:{pass_index}", None)`` for a module address; otherwise
+        ``(site, pass_index)`` for :func:`_pick_pass` to apply.
 
     Raises
     ------
     InvalidArgumentError
-        ``bridge_pass_index_invalid`` or ``bridge_pass_index_needs_module_address``.
+        ``bridge_pass_index_invalid`` when ``pass_index`` is not a positive integer.
     """
 
     if pass_index is None:
-        return site
+        return site, None
     if isinstance(pass_index, bool) or not isinstance(pass_index, int) or pass_index < 1:
         raise InvalidArgumentError(
             f"Captum layer pass_index must be a positive integer; got {pass_index!r}",
             code="bridge_pass_index_invalid",
             remedy="pass the 1-based call index of the module, such as pass_index=2",
         )
-    modules = dict(source_model(trace).named_modules())
-    if not isinstance(site, str) or site not in modules:
-        raise InvalidArgumentError(
-            f"Captum layer pass_index={pass_index} needs a plain module address as the "
-            f"site; got {site!r}, which is not a module of the source model (an op label "
-            "or pass-qualified address already names one call)",
-            code="bridge_pass_index_needs_module_address",
-            remedy="pass a module address such as 'layer4.1.relu' with pass_index=, or the "
-            "op label or 'address:pass' spelling alone",
-        )
-    return f"{site}:{pass_index}"
+    if isinstance(site, str) and site in dict(source_model(trace).named_modules()):
+        return f"{site}:{pass_index}", None
+    return site, pass_index
 
 
 def _single_probe(method: Any) -> _SiteProbe | None:
@@ -450,7 +492,7 @@ def _run_spliced(
         captured = _trace(
             model,
             list(args) if args else None,
-            dict(kwargs) if kwargs else None,
+            input_kwargs=dict(kwargs) if kwargs else None,
             save=_save_nothing,
             intervene=spec,
         )

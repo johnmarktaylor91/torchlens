@@ -59,10 +59,12 @@ pick out in TorchLens into a layer Captum's layer methods can hook.
   spliced into the forward at the op's structural `site_key` (its
   `repr` names the label and key), usable only through
   `tl.bridge.captum.attribute`. `pass_index=` (1-based) picks the call of a
-  module that runs more than once: `layer(trace, "layer4.1.relu", pass_index=2)`
-  is `layer(trace, "layer4.1.relu:2")`, and it needs a plain module address
-  (`bridge_pass_index_needs_module_address`; a non-positive value refuses
-  `bridge_pass_index_invalid`). One probe per method object
+  module that runs more than once, `layer(trace, "layer4.1.relu", pass_index=2)`
+  is `layer(trace, "layer4.1.relu:2")`, or the pass of a label that names
+  several passes. A site naming several passes without it, an index past the
+  last pass or a non-positive value refuses `bridge_pass_index_invalid`;
+  `pass_index=` on a single-pass op label refuses
+  `bridge_pass_index_needs_module_address`. One probe per method object
   (`bridge_captum_multi_probe_unsupported`).
 - Extra: `captum`.
 
@@ -327,8 +329,6 @@ profiler event lands on the TorchLens op it timed.
   at most one layer: a `record_function` range named exactly like a layer
   label, else the k-th outermost `aten::<op>` event to the k-th layer of that
   op. Unmatched event types are reported, never guessed.
-- `tl.bridge.profiler.execution_trace(log, path)` writes TorchLens's own
-  per-layer execution-trace JSON (not the Chakra schema).
 - Extra: none.
 
 ## Viewers, trackers and sharing

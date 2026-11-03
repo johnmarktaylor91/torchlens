@@ -42,7 +42,7 @@ optional dependency.
   `add` where capture names it `iadd`, and `tl.record` tracks no module
   stack. A forward that fires the site fewer times than the ordinal refuses
   `bridge_captum_site_not_reached`; `pass_index` folds into `"address:N"`
-  (module addresses only).
+  for a module address and picks one op of a multi-pass label otherwise.
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -118,7 +118,6 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
-- `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
 - `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function
   (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip

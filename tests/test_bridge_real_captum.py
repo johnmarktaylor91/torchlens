@@ -32,11 +32,11 @@ _N_STEPS = 4
 _IG_METHOD = "gausslegendre"
 
 
-def _outermost(layer: Any) -> str | None:
+def _outermost(op: Any) -> str | None:
     """Return the outermost module address an op's tensor is the output of."""
 
     addresses = []
-    for call in getattr(layer, "output_of_module_calls", ()) or ():
+    for call in getattr(op, "output_of_module_calls", ()) or ():
         if isinstance(call, tuple):
             addresses.append(str(call[0]))
         else:
@@ -45,11 +45,11 @@ def _outermost(layer: Any) -> str | None:
     return min(addresses, key=lambda a: a.count(".")) if addresses else None
 
 
-def _module_calls(layer: Any) -> set[str]:
+def _module_calls(op: Any) -> set[str]:
     """Return the pass-qualified module calls whose output an op's tensor is."""
 
     calls = set()
-    for call in getattr(layer, "output_of_module_calls", ()) or ():
+    for call in getattr(op, "output_of_module_calls", ()) or ():
         calls.add(f"{call[0]}:{call[1]}" if isinstance(call, tuple) else str(call))
     return calls
 
@@ -153,7 +153,7 @@ def _bridged(log: Any, method_cls: Any, site: Any, x: torch.Tensor, **kwargs: An
 def _add_label(log: Any) -> str:
     """Return the label of the residual add in ``layer4.1`` (the second relu call's parent)."""
 
-    second_relu = [layer for layer in log._layer_list if "layer4.1.relu:2" in _module_calls(layer)]
+    second_relu = [op for op in log.ops if "layer4.1.relu:2" in _module_calls(op)]
     assert len(second_relu) == 1, second_relu
     parents = list(second_relu[0].parents)
     assert len(parents) == 1, parents
@@ -166,7 +166,7 @@ def test_label_site_layer_gradcam_matches_direct(resnet) -> None:
     """LayerGradCam on layer(log, label) equals LayerGradCam on model.layer4 exactly."""
 
     model, x, log = resnet
-    label = [layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4"][-1]
+    label = [op.label for op in log.ops if _outermost(op) == "layer4"][-1]
     resolved = tl.bridge.captum.layer(log, label)
     assert resolved is model.layer4
     direct = captum_attr.LayerGradCam(model, model.layer4).attribute(x, target=_TARGET)

@@ -1680,7 +1680,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module for any site: the live module when a single-call module returns the site's tensor,
   otherwise a site probe that `tl.bridge.captum.attribute` splices into the forward at the
   op's `site_key` (`pass_index`, 1-based, picks one call of a repeated module, the same as
-  the `"address:N"` spelling). Published traces come back through
+  the `"address:N"` spelling, or one pass of a label naming several). Published traces come back through
   `torchlens.bridge.huggingface_hub.from_hub` (its own entry), the reader for `push_to_hub`.
 
 **Streaming statistics**
