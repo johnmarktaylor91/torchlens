@@ -390,6 +390,55 @@ def projective_supports_by_row_sweep(
     )
 
 
+def _projective_columns(
+    source: Op,
+    targets: Sequence[Op],
+    source_tensor: torch.Tensor,
+    target_tensors: Sequence[torch.Tensor],
+    seed: torch.Tensor,
+    *,
+    retain_graph: bool,
+) -> tuple[torch.Tensor | None, ...]:
+    """Linearize the target cotangents and pull one projective column per target."""
+
+    trace: Trace = source.source_trace
+    try:
+        with _probe_suppressed(trace):
+            cotangents = tuple(
+                torch.zeros_like(tensor, requires_grad=True) for tensor in target_tensors
+            )
+            vjp = torch.autograd.grad(
+                target_tensors,
+                source_tensor,
+                grad_outputs=cotangents,
+                create_graph=True,
+                retain_graph=True,
+                allow_unused=True,
+            )[0]
+            if vjp is None:
+                raise ReceptiveFieldUnavailableError(
+                    _no_projective_vjp_reason(source, targets, trace)
+                )
+            columns = torch.autograd.grad(
+                vjp,
+                cotangents,
+                grad_outputs=seed,
+                retain_graph=retain_graph,
+                allow_unused=True,
+            )
+    except ReceptiveFieldUnavailableError:
+        raise
+    except RuntimeError as exc:
+        raise ReceptiveFieldUnavailableError(
+            "Projective gradient cotangent linearization unavailable at the captured "
+            f"autograd node: {exc}. Use a receptive-probe sweep over candidate target "
+            "units as the O(units) alternative (a field view's .of(method='gradient') "
+            "runs that sweep itself when the target site has at most probe_budget "
+            "elements)."
+        ) from exc
+    return columns
+
+
 def projective_gradient_for_unit(
     source: Op,
     unit: Sequence[int],
@@ -456,40 +505,9 @@ def projective_gradient_for_unit(
 
     seed = torch.zeros_like(source_tensor)
     seed[normalized_unit] = 1
-    try:
-        with _probe_suppressed(trace):
-            cotangents = tuple(
-                torch.zeros_like(tensor, requires_grad=True) for tensor in target_tensors
-            )
-            vjp = torch.autograd.grad(
-                target_tensors,
-                source_tensor,
-                grad_outputs=cotangents,
-                create_graph=True,
-                retain_graph=True,
-                allow_unused=True,
-            )[0]
-            if vjp is None:
-                raise ReceptiveFieldUnavailableError(
-                    _no_projective_vjp_reason(source, targets, trace)
-                )
-            columns = torch.autograd.grad(
-                vjp,
-                cotangents,
-                grad_outputs=seed,
-                retain_graph=retain_graph,
-                allow_unused=True,
-            )
-    except ReceptiveFieldUnavailableError:
-        raise
-    except RuntimeError as exc:
-        raise ReceptiveFieldUnavailableError(
-            "Projective gradient cotangent linearization unavailable at the captured "
-            f"autograd node: {exc}. Use a receptive-probe sweep over candidate target "
-            "units as the O(units) alternative (a field view's .of(method='gradient') "
-            "runs that sweep itself when the target site has at most probe_budget "
-            "elements)."
-        ) from exc
+    columns = _projective_columns(
+        source, targets, source_tensor, target_tensors, seed, retain_graph=retain_graph
+    )
 
     results: dict[str, GradReceptiveField] = {}
     for target_op, column in zip(targets, columns, strict=True):
