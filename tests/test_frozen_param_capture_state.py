@@ -173,7 +173,7 @@ def test_backward_capture_on_a_partly_frozen_model() -> None:
     eager(x).sum().backward()
 
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True, save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
 
     for address in TRAINABLE:
         assert trace.params[address].has_grad is True, address

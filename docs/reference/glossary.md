@@ -119,7 +119,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
   available. An explicit `inference_only=True` is never changed. `Trace.options.inference_only` and
-  `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
+  `outcome.inference_only` report the effective value; a later `backward()` refuses and names
   the cause (`recording_backward_inference_only` on a `Recording`).
 
 **carry_state (CaptureOptions) / pure-observer capture** — *unstable — no deprecation shim owed*
@@ -1150,7 +1150,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed). These are NODE selectors: they address an
   autograd node and its `grad_input` tuple, resolved against `trace.autograd.grad_fns` after
-  `log_backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
+  `backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
   instead (see **tl.grad**).
 
 **tl.grad(site)** *(spelling documented-unstable)*

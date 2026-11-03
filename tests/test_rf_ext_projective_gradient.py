@@ -251,7 +251,7 @@ def test_projective_probe_does_not_pollute_trace_state() -> None:
             assert current is not None and torch.equal(current, previous)
     assert "_tl_rf_probe_active" not in trace.__dict__
 
-    trace.log_backward(target.out.sum())
+    trace.backward(target.out.sum())
     assert len(trace.autograd.backward_passes) == 1
     assert trace.autograd.has_grads
     assert trace.event_stream.backward_events

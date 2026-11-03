@@ -465,23 +465,6 @@ class TraceValidationMixin(_TraceMixinBase):
             reservation_resume=reservation_resume,
         )
 
-    def log_backward(self: "Trace", loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
-        """Run backward from ``loss`` while capturing first-class backward metadata.
-
-        Parameters
-        ----------
-        loss:
-            Tensor whose ``grad_fn_handle`` roots the backward graph.
-        **backward_kwargs:
-            Keyword arguments forwarded to ``torch.Tensor.backward``.
-
-        Returns
-        -------
-        Trace
-            This model log, for chaining.
-        """
-        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
-
     def backward(self: "Trace", loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata.
 
@@ -498,7 +481,7 @@ class TraceValidationMixin(_TraceMixinBase):
             This Trace, for chaining.
         """
 
-        return self.log_backward(loss, **backward_kwargs)
+        return _doors.backends_torch()._trace_backward.backward(self, loss, **backward_kwargs)
 
     def capture_backward(self: "Trace") -> Any:
         """Return a context manager that captures user-managed backward calls.

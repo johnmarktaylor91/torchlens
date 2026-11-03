@@ -204,7 +204,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
 def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Tensor-hook opt-out leaves grad-fn registration and ``log_backward`` intact."""
+    """Tensor-hook opt-out leaves grad-fn registration and ``backward`` intact."""
 
     register_hook_calls: list[str] = []
     original_register_hook = torch.Tensor.register_hook
@@ -238,7 +238,7 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     assert registered_ids
     assert registered_ids <= pinned_ids
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
 
     assert register_hook_calls == []
     assert trace.autograd.has_backward_pass

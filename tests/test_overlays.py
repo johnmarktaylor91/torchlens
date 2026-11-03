@@ -71,7 +71,7 @@ def test_grad_norm_overlay_renders_after_backward(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(save_grads=True),
     )
     loss = log[log.output_layers[0]].out.sum()
-    log.log_backward(loss)
+    log.backward(loss)
 
     dot = _render_dot(log, tmp_path, node_overlay="grad_norm")
 

@@ -93,7 +93,7 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
         elif variant == "backward":
             trace = tl.trace(m, xs, capture=tl.options.CaptureOptions(backward_ready=True))
             out = trace[-1].out
-            trace.log_backward(out)
+            trace.backward(out)
         else:
             raise ValueError(f"Unknown trace variant {variant!r} without builder")
     _TRACE_CACHE[ck] = trace
@@ -1938,7 +1938,7 @@ SECTIONS: list[Section] = [
                 label="h1_backward",
                 title="draw_backward: the grad_fn graph",
                 caption=(
-                    "After log_backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
+                    "After backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
                     "(AddmmBackward, ReluBackward, ...) connected by gradient-flow edges. Default vis_mode "
                     "is 'rolled'; 'unrolled' shows per-call grad_fn instances.\n"
                     "CHECK: grad_fn names match the forward ops they differentiate; edge direction follows "

@@ -351,7 +351,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
     "backward": "autograd execution; writes gradient state",
-    "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",

@@ -219,7 +219,7 @@ def test_fork_probe_does_not_mint_parent_backward_pass() -> None:
     probe flag sat on the fork only, and one fork probe used to mint a full
     managed ``autograd_grad`` pass with retained gradient payloads on the
     parent -- indistinguishable from a real user pass, and shifting the
-    user's next ``log_backward`` to pass 2.
+    user's next ``backward`` to pass 2.
     """
 
     _register_conv_rule()

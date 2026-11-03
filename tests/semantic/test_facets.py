@@ -506,7 +506,7 @@ def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
         torch.randn(4, 3),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     facet = log.modules["linear"].facets["first_feature"]
     home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
 
@@ -543,7 +543,7 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
         torch.randn(4, 3),
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=["relu"]),
     )
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     missing = log.modules["linear"].facets["first_feature"].grad
 
     assert isinstance(missing, MissingGrad)
@@ -822,7 +822,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
         x,
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all", save_args=True),
     )
-    log.log_backward(_trace_output(log).sum())
+    log.backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])

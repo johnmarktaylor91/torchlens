@@ -33,7 +33,7 @@ grows into.
 | `module.register_forward_hook(save_output)` | `log = tl.trace(model, x, save=tl.in_module("encoder"))` then `log["encoder"].out` |
 | Hook on every ReLU | `tl.trace(model, x, save=tl.func("relu"))` |
 | Hook dict keyed by module name | `log[label].out`; labels are stable, pass-qualified, and listable |
-| `register_full_backward_hook` | `capture=CaptureOptions(backward_ready=True)` + `log.log_backward(loss)`; per-fire grad records with node identity |
+| `register_full_backward_hook` | `capture=CaptureOptions(backward_ready=True)` + `log.backward(loss)`; per-fire grad records with node identity |
 | Mutating outputs inside a hook | `intervene=tl.when(tl.func("relu"), tl.zero_ablate())` — declared, audited, replayable |
 | Hook that only computes a running scalar | KEEP THE HOOK — cheaper, and correct for always-on telemetry |
 

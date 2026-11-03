@@ -325,7 +325,7 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
     assert recorder.recording.stops_by_pass == {1: "halt 1", 2: "halt 2"}
 
 
-def test_recording_log_backward_on_halted_raises() -> None:
+def test_recording_backward_on_halted_raises() -> None:
     """Backward logging is rejected on halted recordings."""
 
     recording = _as_recording(
@@ -399,7 +399,7 @@ def test_halt_signal_inherits_from_base_exception_not_exception() -> None:
     assert not issubclass(StopSignal, Exception)
 
 
-def test_recording_log_backward_refusals_carry_stable_codes() -> None:
+def test_recording_backward_refusals_carry_stable_codes() -> None:
     """Refusals are machine-branchable via fields['code'], not message text.
 
     The failed arm mirrors the capability table's backward/FAILED cell (N3);

@@ -145,7 +145,7 @@ def _is_state_entangled(trace: Any) -> bool:
 def _owning_backward_is_running(*candidates: Any) -> bool:
     """Return whether one of ``candidates`` holds its managed backward bracket now.
 
-    A state-entangled trace records only its own managed passes (``log_backward``,
+    A state-entangled trace records only its own managed passes (``backward``,
     ``trace.backward()``, or a plain ``.backward()`` whose roots match the trace):
     any other backward that reaches its hooks came in through the model's
     autograd history and is not this trace's.
@@ -518,7 +518,7 @@ def _install_tensor_grad_hook(
         ):
             return None
         # A managed backward directed at a FORK RELATIVE (a fork's
-        # ``log_backward`` over the shared forward tensors) owns this
+        # ``backward`` over the shared forward tensors) owns this
         # gradient: recording it here would silently mutate the hook trace's
         # projection with a pass the user directed at the fork. Fork
         # relatives share one label space, so the observation redirects to
@@ -548,7 +548,7 @@ def _install_tensor_grad_hook(
         prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
         # Gate the legacy layer-slot write on the ACTIVE per-call policy,
         # not the deprecated ``save_grads`` attribute: a per-call
-        # ``log_backward(..., save_grads=False)`` sets the policy while
+        # ``backward(..., save_grads=False)`` sets the policy while
         # the attribute can stay truthy, and the attribute-keyed gate
         # kept retaining full grad payloads the caller disabled.
         # The event-sidecar payloads are handed down for REUSE: the
@@ -697,7 +697,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     if "implicit_backward_pass" not in trace._warned_once:
         warnings.warn(
             "TorchLens observed gradients outside a managed backward trigger; recording an "
-            "implicit backward pass. Use trace.log_backward(), trace.backward(), or a TorchLens "
+            "implicit backward pass. Use trace.backward() or a TorchLens "
             "autograd trigger for precise pass boundaries.",
             RuntimeWarning,
             stacklevel=3,

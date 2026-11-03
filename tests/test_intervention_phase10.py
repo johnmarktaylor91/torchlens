@@ -482,7 +482,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
-    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -504,7 +504,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
-    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -518,7 +518,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     fresh._intervention_spec = spec
-    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+    fresh.backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
     assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
 
@@ -548,7 +548,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     fresh._intervention_spec = spec
-    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+    fresh.backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
     assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
 

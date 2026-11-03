@@ -85,7 +85,7 @@ def test_armed_but_silent_hooks_leave_later_passes_clean() -> None:
     trace = _backward_trace(model, torch.randn(3, 4))
     ya = trace["linear_2_3:1"].out
     yb = trace["linear_3_4:1"].out
-    trace.log_backward((ya.sum() + yb.sum()), retain_graph=True)
+    trace.backward((ya.sum() + yb.sum()), retain_graph=True)
     hooked = {e.object_id for e in trace.backward_events if isinstance(e, GradFnDiscovered)}
     pass1 = _fired(trace)
     assert {e.object_id for e in pass1} == hooked  # full pass fires every armed hook
@@ -98,9 +98,9 @@ def test_armed_but_silent_hooks_leave_later_passes_clean() -> None:
     assert silent  # the orphan condition actually occurred
 
     # The full pass AFTER the partial one must be complete and coherent. Each
-    # log_backward seeds fresh sum/add grad_fns, so pass 3's graph is
+    # backward seeds fresh sum/add grad_fns, so pass 3's graph is
     # ISOMORPHIC to pass 1's, not identical: compare shape, not object ids.
-    trace.log_backward(ya.sum() + yb.sum())
+    trace.backward(ya.sum() + yb.sum())
     pass3 = [e for e in _fired(trace) if e.pass_index == 3]
     assert len(pass3) == len(pass1)
     # Every model-graph hook orphaned by the partial pass fires again: the
@@ -119,7 +119,7 @@ def test_hooks_firing_after_pass_close_open_an_implicit_pass() -> None:
         nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)), torch.randn(3, 4)
     )
     out = trace.output_ops[0].out
-    trace.log_backward(out.sum(), retain_graph=True)
+    trace.backward(out.sum(), retain_graph=True)
     pass1 = _fired(trace)
     assert pass1 and {e.pass_index for e in pass1} == {1}
 
@@ -159,9 +159,9 @@ def test_interrupted_backward_discards_stale_timing_stamps() -> None:
     trace = _backward_trace(_BombModel(), torch.randn(3, 4))
     out = trace.output_ops[0].out
     with pytest.raises(RuntimeError, match="mid-backward bomb"):
-        trace.log_backward(out.sum(), retain_graph=True)
+        trace.backward(out.sum(), retain_graph=True)
     _Bomb.armed = False
-    trace.log_backward(out.sum())
+    trace.backward(out.sum())
     events = _fired(trace)
     assert {e.pass_index for e in events} == {1, 2}
     retry = [e for e in events if e.pass_index == 2]
@@ -183,7 +183,7 @@ def test_reentrant_backward_keeps_outer_pass_accounting() -> None:
         return grad
 
     trace["tanh_1_2:1"].out.register_hook(reentrant_hook)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     events = _fired(trace)
     assert events and {e.pass_index for e in events} == {1}
     assert _gaps(trace) == []

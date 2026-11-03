@@ -704,7 +704,7 @@ def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
     if resolved != "node":
         raise SiteResolutionError(f"unknown site universe {universe!r}.")
     if not log._autograd_has_backward_pass:
-        raise SiteResolutionError("Backward selectors require log_backward() to run first.")
+        raise SiteResolutionError("Backward selectors require backward() to run first.")
     return tuple(log._grad_fn_logs.values())
 
 

@@ -43,7 +43,7 @@ guard) by ``backends/torch/backward.py`` -- was silently absent from both
 ``MODEL_LOG_FIELD_ORDER`` and (as a direct consequence) ``_MODEL_LOG_DEFAULT_FILL``,
 so any ``Trace`` reconstructed from a state dict that predates the field (a
 supported path for same-``tlspec_version`` states saved before the field
-existed) crashed with ``AttributeError`` mid-way through ``log_backward()``.
+existed) crashed with ``AttributeError`` mid-way through ``backward()``.
 ``Trace`` was never added to ``test_field_order_has_no_keep_field_desync``'s
 parametrize list either, even though ``Trace.to_pandas()`` genuinely has no
 per-record projection built from ``MODEL_LOG_FIELD_ORDER`` (so the to_pandas()
@@ -186,7 +186,7 @@ def coverage_trace() -> Any:
     model = _FieldCoverageModel()
     x = torch.ones(2, 2, requires_grad=True)  # forces mean() > 0 -> the relu (then) arm
     trace = trace_fn(model, x, capture=CaptureOptions(save_source_context=True, save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
     try:
         yield trace
     finally:

@@ -19,10 +19,10 @@ are retained (`capture=CaptureOptions(save_grads=...)`; the bare flat kwarg is r
 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 
 relu_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.func("relu")))
-relu_trace.log_backward(relu_trace[relu_trace.output_layers[0]].out.sum())
+relu_trace.backward(relu_trace[relu_trace.output_layers[0]].out.sum())
 ```
 
 `save_grads=True` saves all observed op gradients. `False` or `None` observes backward structure
@@ -34,11 +34,11 @@ plus backward selectors such as `tl.grad_fn(...)` (by class name, or `label=` fo
 standing trace policy can be widened or narrowed per trigger:
 
 ```python
-trace.log_backward(loss, save_grads=tl.func("attn") & tl.in_backward_pass(2))
+trace.backward(loss, save_grads=tl.func("attn") & tl.in_backward_pass(2))
 ```
 
 Plain `loss.backward()`, `torch.autograd.backward`, `torch.autograd.grad`,
-`trace.log_backward(...)`, and recording backward calls are all triggers when the autograd graph
+`trace.backward(...)`, and recording backward calls are all triggers when the autograd graph
 belongs to a live TorchLens trace. If an engine path bypasses those wrappers, tensor hooks open an
 implicit pass. Consecutive bypassed backwards may merge because hook events alone do not reveal a
 hard engine boundary; use TorchLens triggers for exact pass boundaries.
@@ -47,9 +47,9 @@ A `Recording` captures gradients only when the `tl.record` call asked for a back
 `backward_ready=True`, `save_grads=` or `default_grad=`; without one it installs no gradient hooks
 and `Recording.backward()` refuses with `recording_backward_not_requested`. A capture entered
 under `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
-`inference_only=True`, and its `log_backward()` refuses naming that cause. A forward that turns
+`inference_only=True`, and its `backward()` refuses naming that cause. A forward that turns
 grad back on itself (`with torch.enable_grad():`) keeps its autograd graph, so such a capture is
-not inference-only and `log_backward()` stays available.
+not inference-only and `backward()` stays available.
 
 ## Backprop To The Stimulus
 
@@ -61,7 +61,7 @@ z = torch.nn.Parameter(torch.randn(1, latent_dim))
 trace = tl.trace(generator, z, capture=tl.options.CaptureOptions(save_grads=True))
 
 loss = score(trace[trace.output_layers[0]].out)
-trace.log_backward(loss)
+trace.backward(loss)
 
 optimizer.step()  # reads z.grad
 stimulus_grad = trace[trace.input_layers[0]].grad
@@ -82,7 +82,7 @@ parameter.
 latest projected pass.
 
 `BackwardPass.backward_call_context` stores the Python source location where
-`trace.log_backward(loss)` or `trace.backward(loss)` was invoked. It is a `FuncCallLocation`, so it
+`trace.backward(loss)` was invoked. It is a `FuncCallLocation`, so it
 exposes fields such as `file`, `line_number`, and `func_name`. Implicit passes inferred from
 orphan tensor-hook emissions have no explicit TorchLens call site and leave
 `backward_call_context` as `None`.
@@ -139,7 +139,7 @@ Differentiable replay creates a new trace:
 
 ```python
 patched = source_trace.push(replay=tl.options.ReplayOptions(differentiable=True))
-patched.log_backward(patched[patched.output_layers[0]].out.sum())
+patched.backward(patched[patched.output_layers[0]].out.sum())
 ```
 
 Saved frontier tensors enter replay as fresh leaves, so gradients flow within the replayed
@@ -233,7 +233,7 @@ from torchlens.report import backward_status, cost_tree
 
 model = torch.nn.Sequential(torch.nn.Linear(4, 6), torch.nn.ReLU(), torch.nn.Linear(6, 3))
 trace = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(backward_ready=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 
 status = backward_status(trace)
 (attribution,) = status.flops_attributions
@@ -309,7 +309,7 @@ second guarded Paddle AD pass over module params and selected inputs, and can op
 exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
 `op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
 capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
-TF traces are forward eager-capture records only. `trace.log_backward(...)`,
+TF traces are forward eager-capture records only. `trace.backward(...)`,
 `trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
 

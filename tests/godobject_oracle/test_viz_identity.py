@@ -252,7 +252,7 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
             save_mode="reference",
         )
     loss = trace[trace.ops.keys()[-1]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
 
     first = trace.draw_backward(
         vis_save_only=True,

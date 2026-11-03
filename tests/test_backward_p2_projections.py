@@ -57,8 +57,8 @@ def _captured_two_pass_trace() -> tl.Trace:
         model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
     return trace
 
 
@@ -505,8 +505,8 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
         save_mode="reference",
     )
     try:
-        trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)
-        trace.log_backward(trace[-1].out.sum(), create_graph=True)
+        trace.backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)
+        trace.backward(trace[-1].out.sum(), create_graph=True)
         assert "_backward_grad_fn_type_counter" not in trace.__dict__
         trace.save(str(tmp_path / "two_pass.tlspec"))
     finally:

@@ -626,7 +626,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
     log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
-    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
     log.save(path)
@@ -768,7 +768,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     model = UnifiedTinyModel().eval()
     x = torch.randn(2, 3, requires_grad=True)
     log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     path = tmp_path / "backward.tlspec"
 
     log.save(path)
@@ -798,7 +798,7 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     model = UnifiedTinyModel().eval()
     x = torch.randn(2, 3, requires_grad=True)
     log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     path = tmp_path / "bad_backward_kind.tlspec"
     log.save(path)
     manifest = _read_manifest(path)

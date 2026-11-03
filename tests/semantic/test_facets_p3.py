@@ -217,7 +217,7 @@ def test_residual_facets_read_and_grad() -> None:
             layers_to_save="all", backward_ready=True, save_grads="all"
         ),
     )
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
     facets = log.modules["self"].facets
 
     assert facets.resid_pre.shape == x.shape

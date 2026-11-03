@@ -679,7 +679,7 @@ def validate_backward_pass(
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)
-        trace.log_backward(logged_loss)
+        trace.backward(logged_loss)
         if validate_metadata:
             check_metadata_invariants(trace)
         unexplained_gaps = _unexplained_backward_gaps(trace)

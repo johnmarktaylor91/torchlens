@@ -97,7 +97,7 @@ class _CounterfactualStateGuard:
 
         The copy is equality-gated on purpose: an unconditional ``copy_``
         bumps the autograd version counter of every parameter consumed by an
-        earlier captured forward, so the later ``log_backward`` on the clean
+        earlier captured forward, so the later ``backward`` on the clean
         and corrupted baselines raised "modified by an inplace operation" on
         ANY model with parameters (attribution patching was unusable outside
         zero-parameter toys). A value-equal tensor needs no write and keeps
@@ -555,8 +555,8 @@ def attribution_patch_attention_heads(
         )
         clean_metric = _require_scalar_metric(metric(clean_log))
         corrupted_metric = _require_scalar_metric(metric(corrupted_log))
-        clean_log.log_backward(clean_metric)
-        corrupted_log.log_backward(corrupted_metric)
+        clean_log.backward(clean_metric)
+        corrupted_log.backward(corrupted_metric)
         modules = _modules_with_facet(clean_log, facet_name)
         _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
         if not modules:

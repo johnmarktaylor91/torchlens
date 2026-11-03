@@ -675,7 +675,7 @@ def draw_backward(
     Parameters
     ----------
     trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
+        Trace with backward metadata captured by ``trace.backward(loss)``
         or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
@@ -756,7 +756,7 @@ def draw_combined(
     Parameters
     ----------
     trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
+        Trace with backward metadata captured by ``trace.backward(loss)``
         or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)``.

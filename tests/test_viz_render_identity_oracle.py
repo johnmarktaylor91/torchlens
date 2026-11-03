@@ -912,7 +912,7 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
     )
     try:
         loss = trace[trace.output_layers[0]].out.sum()
-        trace.log_backward(loss)
+        trace.backward(loss)
         _stabilize_backward_identifiers(trace)
         backward = trace.draw_backward(
             path=str(tmp_path / "backward"), vis_save_only=True, file_format="svg"

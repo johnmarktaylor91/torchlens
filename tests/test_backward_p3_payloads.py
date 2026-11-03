@@ -53,8 +53,8 @@ def _trace_with_two_backward_passes() -> tl.Trace:
         model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
     )
     loss = trace[trace.output_layers[0]].out
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
     return trace
 
 
@@ -113,7 +113,7 @@ def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
         trace.cleanup()
 
 
-def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
+def test_backward_save_grads_override_widens_and_narrows_payloads() -> None:
     """Per-trigger save_grads overrides decide payload retention at hook fire time."""
 
     torch.manual_seed(0)
@@ -124,10 +124,10 @@ def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
     )
     try:
         loss = trace[trace.output_layers[0]].out
-        trace.log_backward(loss, retain_graph=True, save_grads=True)
+        trace.backward(loss, retain_graph=True, save_grads=True)
         assert any(record.grad is not None for op in trace.ops for record in op.grads)
 
-        trace.log_backward(loss, retain_graph=True, save_grads=None)
+        trace.backward(loss, retain_graph=True, save_grads=None)
         second_pass_records = [
             record for op in trace.ops for record in op.grads if record.backward_pass_number == 2
         ]
@@ -156,8 +156,8 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
     )
     try:
         loss = trace[trace.output_layers[0]].out
-        trace.log_backward(loss, retain_graph=True)
-        trace.log_backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
         first_pass_records = [
             record for op in trace.ops for record in op.grads if record.backward_pass_number == 1
         ]
@@ -186,8 +186,8 @@ def test_grad_transform_is_projected_per_backward_pass() -> None:
     )
     try:
         loss = trace[trace.output_layers[0]].out
-        trace.log_backward(loss, retain_graph=True)
-        trace.log_backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         assert all(record.transformed_grad is not None for record in op.grads)
         assert all(record.transformed_grad_shape == () for record in op.grads)
@@ -212,7 +212,7 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
     )
     try:
         loss = trace[trace.output_layers[0]].out
-        trace.log_backward(loss)
+        trace.backward(loss)
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 1)
         record = op.grads.for_pass(1)
         assert record.grad is None
@@ -318,7 +318,7 @@ def test_param_grads_capture_accumulategrad_increments() -> None:
     )
     try:
         loss = trace[trace.output_layers[0]].out
-        trace.log_backward(loss)
+        trace.backward(loss)
         param = trace.params["fc.weight"]
         assert param.grad is model.fc.weight.grad
         assert len(param.grads) == 1

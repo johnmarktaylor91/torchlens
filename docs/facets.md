@@ -107,7 +107,7 @@ log = tl.trace(
     x,
     capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
 )
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 q_grad = log.modules["attn"].facets["q"].grad
 ```
 

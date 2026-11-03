@@ -157,10 +157,10 @@ def record(
         Gradient hooks are installed only when ``backward_ready=True``,
         ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
         or ``False`` and ``default_grad=False`` do not count); without one,
-        ``log_backward()`` refuses with code ``recording_backward_not_requested``.
+        ``backward()`` refuses with code ``recording_backward_not_requested``.
         With none of them, a record made under ``torch.no_grad()`` or
         ``torch.inference_mode()`` implies ``inference_only=True``, reported on
-        ``Recording.outcome``, and ``log_backward()`` refuses with
+        ``Recording.outcome``, and ``backward()`` refuses with
         ``recording_backward_inference_only``.
     narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a

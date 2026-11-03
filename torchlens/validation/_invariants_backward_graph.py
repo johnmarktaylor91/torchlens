@@ -240,7 +240,7 @@ def _check_backward_grad_fn_handle_records(
             )
         # Domain check for EVERY handle, not only higher-order ones. This used to
         # live under ``creator_object_id is not None``, which is populated only by
-        # ``create_graph=True`` autograd, so an ordinary ``log_backward`` never
+        # ``create_graph=True`` autograd, so an ordinary ``backward`` never
         # reached it. ``origin_backward_pass`` is declared ``int | None`` and is
         # legitimately None on handles built outside a backward pass, so None is
         # explicitly allowed here; the stricter creator-branch form below is

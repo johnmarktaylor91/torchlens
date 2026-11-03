@@ -236,7 +236,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
 `storage=tl.to_disk(...)`/`streaming=`. Loaded or live chunked traces also reject
-`log_backward()` because they do not retain one full-batch autograd graph.
+`backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
 containers (`list`, `tuple`, `dict`, or `namedtuple`). If there are several candidates, pass
@@ -381,7 +381,7 @@ model[0].requires_grad_(False)  # frozen first layer, and x needs no gradient
 x = torch.randn(2, 16)
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 
 status = tl.report.backward_status(trace)
 # Only the last layer's weight gradient runs (2 * 2 * 32 * 4 FLOPs): nothing upstream of
@@ -405,7 +405,7 @@ class Attend(nn.Module):
 
 def executed(model, x):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return tl.report.backward_status(trace).executed_flops
 
 

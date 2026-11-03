@@ -115,14 +115,14 @@ _INSTALLED_SAVED_TENSORS_HOOKS_INIT: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
 _INFERENCE_ONLY_BACKWARD_ERROR = (
-    "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
+    "Cannot run backward on a trace captured with inference_only=True: the autograd "
     "graph was discarded during capture. inference_only is either passed explicitly or "
     "implied when the capture runs under torch.no_grad() or torch.inference_mode(). "
     "Re-capture with gradients enabled and without inference_only (optionally with "
     "backward_ready=True) to enable deferred backward."
 )
 _CHUNKED_FORWARD_BACKWARD_ERROR = (
-    "Cannot run log_backward on a trace captured with chunk_size: chunked forward capture "
+    "Cannot run backward on a trace captured with chunk_size: chunked forward capture "
     "concatenates forward payloads across independent sub-batches and does not retain a "
     "single full-batch autograd graph. Re-capture without chunk_size to enable deferred backward."
 )
@@ -2335,7 +2335,7 @@ def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str
     """Return the pre-pass memory baseline WITHOUT resetting peak tracking.
 
     R36-2: this used to call ``torch.cuda.reset_peak_memory_stats`` on every
-    ``log_backward``, clobbering the caller's process-wide high-water counter.
+    ``backward``, clobbering the caller's process-wide high-water counter.
     The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
     a backward that pushes a new device peak reports the exact excess over
     the prior high-water mark, and one that stays under it honestly reads
@@ -2442,7 +2442,7 @@ def _walk_and_hook_backward_graph(
         Hook handles to remove after backward finishes.
     """
     if loss.grad_fn is None:
-        raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
+        raise ValueError("backward requires a loss tensor with a grad_fn_handle.")
 
     layer_lookup = _layer_by_grad_fn_id(trace)
     root_grad_fns = [loss.grad_fn, *(root.grad_fn for root in extra_roots)]
@@ -3211,7 +3211,7 @@ def _run_backward_with_capture(
         # justify discarding a failure here, so fold it into cleanup_error
         # like the sibling steps. suppress(BaseException) silently discarded
         # a KeyboardInterrupt delivered during handle removal after a
-        # successful backward and log_backward returned normally (grind-r6
+        # successful backward and backward returned normally (grind-r6
         # b8 R63, fable probe). Already-removed / framework-debris handles
         # still never mask a real first failure: the fold keeps the FIRST.
         for handle in handles:
@@ -3320,7 +3320,7 @@ def _capture_autograd_engine_call(
 
     # A backward the user directed at one trace (open managed bracket) must
     # not be re-captured by that trace's FORK RELATIVES just because they
-    # share the root tensors: a fork's ``log_backward`` would otherwise
+    # share the root tensors: a fork's ``backward`` would otherwise
     # silently append a pass to its parent's projection (and vice versa).
     # Unrelated root-owning traces keep the historical multi-trace capture.
     directing_trace, _ = _state.active_capture()
@@ -4088,7 +4088,7 @@ def _finalize_grad_streaming(trace: Any) -> None:
         trace.__dict__.pop(field_name, None)
 
 
-def log_backward(
+def trace_backward(
     self: Any,
     loss: torch.Tensor,
     *,

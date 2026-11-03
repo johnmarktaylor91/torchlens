@@ -122,7 +122,7 @@ Enforced through the ONE chokepoint
 | `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `stopped_capture_unsupported`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
 | live replay: refresh / `save_new_outs` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
-| `log_backward` / `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
+| `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
 | draw / `report.explain` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |
 
 Row rationales, stated once:

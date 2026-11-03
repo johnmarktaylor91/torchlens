@@ -594,7 +594,7 @@ class TestRefusedSurfacesTyped:
 
     @pytest.mark.parametrize(
         "surface",
-        ["fork", "intervene", "log_backward", "receptive_fields", "projective_fields"],
+        ["fork", "intervene", "backward", "receptive_fields", "projective_fields"],
     )
     def test_surface_refuses_typed(self, gloo_world, surface):
         """Fail-before: these raised bare AttributeError despite the contract

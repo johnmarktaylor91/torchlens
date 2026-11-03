@@ -5,6 +5,10 @@
 
 ### Behavior changes
 
+- **backward**: `Trace.log_backward(loss)` is gone; `trace.backward(loss)` is the one spelling (round-2
+  walk names.5). It was already an alias of `log_backward`, so the behaviour and keywords
+  (`save_grads=`, `retain_graph=`, and the other `torch.Tensor.backward` keywords) are unchanged.
+  The old spelling refuses with the typed `facade_redirect` error naming `trace.backward(loss)`.
 - **backward**: `Trace.disarm_triggers()` is now `trace.autograd.disarm()` (round-2 walk names.4):
   detaching a Trace from global autograd interception belongs with the other autograd members. The
   old spelling refuses with the typed `facade_redirect` error naming `trace.autograd.disarm()`.

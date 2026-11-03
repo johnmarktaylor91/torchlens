@@ -903,8 +903,8 @@ def test_publish_backward_capture_nests_same_thread_and_restores() -> None:
     assert _state._active_owner_thread_id is None
 
 
-def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
-    """``log_backward`` concurrent with a foreign capture window refuses typed.
+def test_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
+    """``backward`` concurrent with a foreign capture window refuses typed.
 
     The last unconverted raw ``_active_trace`` swap: interleaved with another
     thread's live window, the unlocked save could snapshot that window's trace
@@ -941,7 +941,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     assert entered.wait(timeout=5.0), "foreign window never opened"
     try:
         with pytest.raises(_state.ReentrantTraceError, match="not re-entrant"):
-            trace.log_backward(loss)
+            trace.backward(loss)
     finally:
         release.set()
         holder.join(timeout=10.0)
@@ -951,7 +951,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     # later capture is admitted.
     assert _state._active_trace is None
     assert _state._active_owner_thread_id is None
-    trace.log_backward(loss)
+    trace.backward(loss)
     assert int(len(trace.autograd.backward_passes)) == 1
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)

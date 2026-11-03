@@ -54,6 +54,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
+    "log_backward": "use trace.backward(loss) -- Trace.log_backward was renamed",
     "disarm_triggers": (
         "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"
     ),

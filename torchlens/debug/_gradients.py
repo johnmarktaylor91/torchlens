@@ -475,7 +475,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     num_backward = len(backward_passes)
     if num_backward == 0 or len(saved_grad_ops) == 0:
         return [], {
-            "message": "no saved gradients; re-trace backward_ready=True + trace.log_backward(loss)",
+            "message": "no saved gradients; re-trace backward_ready=True + trace.backward(loss)",
             "vanishing": 0,
             "exploding": 0,
             "dead": 0,

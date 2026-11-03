@@ -150,7 +150,7 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     Notes
     -----
     The projection is the authority here, rather than ``Trace.options.save_grads``:
-    ``log_backward(save_grads=...)`` may override that capture-time default on
+    ``backward(save_grads=...)`` may override that capture-time default on
     each pass.
     """
 
