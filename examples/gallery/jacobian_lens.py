@@ -151,6 +151,8 @@ def fit_autograd(model: Any, blocks: Any, prompts: list[torch.Tensor]) -> dict[i
     dict
         Corpus-average exact Jacobians, independently of capture and batched VJPs.
     """
+    # Keep the independent prompt/dimension/layer reduction explicit for auditing;
+    # this essential numerical nesting exceeds the cognitive-complexity default.
     sums: dict[int, torch.Tensor] = {}
     for ids in prompts:
         states: dict[int, torch.Tensor] = {}
@@ -318,6 +320,8 @@ def measure_arch(arch: str, args: argparse.Namespace, entry: gallery.Entry, fitt
     fitting:
         Pinned reference estimator, needed for GPT-2.
     """
+    # One architecture's checks share the same fitted matrices and residuals;
+    # retaining that measurement scope exceeds the cognitive-complexity default.
     from transformers import AutoTokenizer, GPT2Config, GPT2LMHeadModel, MambaForCausalLM
 
     identifier, revision = (

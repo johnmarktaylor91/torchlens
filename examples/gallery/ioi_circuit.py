@@ -176,6 +176,8 @@ def token_batch(tokenizer: Any, rows: list[dict[str, Any]], scramble: bool) -> t
     tuple
         Two token tensors and the metric's position and answer indices.
     """
+    # Keep paired tokenization, seeded scrambling and answer alignment together;
+    # this essential data-alignment logic exceeds the cognitive-complexity default.
     rng = random.Random(SEED)
     clean, corrupt, answers, subjects, last = [], [], [], [], []
     for row in rows:
