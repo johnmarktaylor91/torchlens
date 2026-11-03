@@ -4331,3 +4331,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
 recorded: 2026-10-29T04:14:24.023243+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-138 merge: union of indexing-coherence (_lookup_kinds.py typed-door reads) and repr-1 (_value_repr.py split into _value_ops.py/_value_state.py) read-site moves; neither member refreshed the ledger
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6faa7ca11d40da3ceb95d83cbd67c264747be85d (dirty)
+recorded: 2026-11-03T23:47:33.890921+00:00
