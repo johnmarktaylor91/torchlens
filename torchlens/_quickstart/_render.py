@@ -17,6 +17,7 @@ Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -197,33 +198,29 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     else:
         target = _collision_safe_path(type(model).__name__, fileformat)
 
-    import tempfile
-
     if target is None:
         with tempfile.TemporaryDirectory(prefix="tl-render-") as tmpdir:
             call_kwargs["path"] = str(Path(tmpdir) / "graph")
             drawn = trace.draw(**call_kwargs)
-            dot = str(drawn)
             rendered = Path(tmpdir) / f"graph.{fileformat}"
             data = rendered.read_bytes() if rendered.exists() else None
     else:
         call_kwargs["path"] = str(target)
         drawn = trace.draw(**call_kwargs)
-        dot, fileformat = str(drawn), drawn.file_format
+        fileformat = drawn.file_format
         target = drawn.path if drawn.path is not None else target
         print(f"TorchLens graph written to {target}")
         if open_viewer:
             _open_viewer(target)
 
     result = Drawing(
-        dot=dot,
+        dot=str(drawn),
         _data=data,
         file_format=fileformat,
         path=target,
         provenance=provenance,
         receipt=receipt,
-        # Re-render (display, save) the way the draw rendered.
-        _render=drawn._render,
+        _render=drawn._render,  # re-render (display, save) the way the draw rendered
         num_ops=len(trace) if hasattr(trace, "__len__") else None,
         policy={
             "theme": theme,

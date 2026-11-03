@@ -235,15 +235,29 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         str(outpath),
         num_ops=num_ops,
         policy=policy,
-        _collapse_source=weakref.ref(trace),
-        _collapse_context=collapse_context,
-        _collapse_tools=(_collapse_plan, _collapse_schedule)
+        **_detached_fields(trace, collapse_context),
+    )
+
+
+def _detached_fields(trace: Trace, collapse_context: Any) -> dict[str, Any]:
+    """Return the private ``Drawing`` fields that serve it after the draw returns.
+
+    The collapse diagnostics (a forward drawing's plan and schedule, read
+    from a weak reference to the trace) and the renderer its notebook display
+    and ``save`` to another format use: the draw's own Graphviz child, bound to
+    the trace's image root.
+    """
+
+    return {
+        "_collapse_source": weakref.ref(trace),
+        "_collapse_context": collapse_context,
+        "_collapse_tools": (_collapse_plan, _collapse_schedule)
         if collapse_context is not None
         else None,
-        _render=functools.partial(
+        "_render": functools.partial(
             render_detached_dot, image_root=getattr(trace, "_visualizer_dir", None)
         ),
-    )
+    }
 
 
 def animate(
