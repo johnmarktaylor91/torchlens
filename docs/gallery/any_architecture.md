@@ -168,11 +168,11 @@ import torchlens as tl
 
 
 def model(params, x):
-    hidden = jnp.tanh(x @ params["w1"])
-    return hidden @ params["w2"]
+    hidden = jnp.tanh(x @ params["in_proj"])
+    return hidden @ params["out_proj"]
 
 
-params = {"w1": jnp.ones((3, 4)) * 0.1, "w2": jnp.ones((4, 2)) * 0.1}
+params = {"in_proj": jnp.ones((3, 4)) * 0.1, "out_proj": jnp.ones((4, 2)) * 0.1}
 x = (params, jnp.ones((2, 3)))
 
 trace = tl.trace(model, x, backend="jax")
