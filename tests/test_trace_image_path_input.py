@@ -45,7 +45,7 @@ def test_image_path_string_takes_the_image_route(tmp_path: Path) -> None:
     path = _write_image(tmp_path / "dog.jpg")
     model = _attached_model()
 
-    trace = tl.trace(model, str(path), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    trace = tl.trace(model, str(path), save="none")
 
     assert trace.provenance.input_preprocessor is not None
     assert trace.provenance.input_preprocessor.source == "torchvision_weights"
@@ -128,7 +128,8 @@ def test_explicit_input_transform_still_receives_the_opened_image(tmp_path: Path
     tl.trace(
         _ImageModel(),
         str(path),
-        capture=tl.options.CaptureOptions(input_transform=transform, layers_to_save="none"),
+        capture=tl.options.CaptureOptions(input_transform=transform),
+        save="none",
     )
     assert len(seen) == 1
     assert not isinstance(seen[0], str)

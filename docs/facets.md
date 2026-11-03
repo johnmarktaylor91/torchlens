@@ -324,7 +324,7 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-`reconstruction_ready=True` enables `save_args=True` and
+`CaptureOptions(reconstruction_ready=True)` enables `save_args=True` and
 `save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
 so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
 the q_proj/k_proj outputs.

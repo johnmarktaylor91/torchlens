@@ -11,7 +11,7 @@
 | Neuron conductance | `tl.attribution.layer_conductance` (layer level) | Layer conductance only; neuron-level conductance stays in Captum. |
 | Compare attribution metrics across runs | A metric called on the `tl.Bundle`, or `bundle.map(fn)` per member | Equivalent container-level computation. |
 | Persist attribution setup | `.tlspec/` for intervention recipe, separate code for metric | Partial; metrics are not fully serialized. |
-| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
 
 ## SHAP
 

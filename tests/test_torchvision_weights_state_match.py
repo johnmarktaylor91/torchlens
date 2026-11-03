@@ -148,9 +148,7 @@ def test_state_match_resolves_preprocessing_and_imagenet_labels(
     _Image.__module__ = _Fake.__module__
     image_model = _Image().eval()
     image_model.load_state_dict(model.state_dict())
-    trace = tl.trace(
-        image_model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    trace = tl.trace(image_model, _pil_image(), save="none")
     assert trace.provenance.input_preprocessor is not None
     assert trace.provenance.input_preprocessor.source == "torchvision_weights"
     assert trace.provenance.input_preprocessor.config["resolution_method"] == "state_match"
@@ -182,7 +180,7 @@ def test_real_resnet18_is_recognised_from_its_cached_checkpoint() -> None:
     model = torchvision_models.resnet18(weights=weights).eval()
 
     assert tvw.match_torchvision_weights(model) is weights
-    trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    trace = tl.trace(model, _pil_image(), save="none")
     assert trace.provenance.input_preprocessor.source == "torchvision_weights"
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.source == "torchvision_weights"

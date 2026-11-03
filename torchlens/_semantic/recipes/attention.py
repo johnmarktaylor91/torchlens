@@ -175,9 +175,9 @@ def _no_attention_evidence(module: Any) -> AbsenceReason:
             f"attn_implementation={implementation!r} at {label}, an external fused kernel "
             "whose internals TorchLens cannot observe or reconstruct. To READ "
             "pattern/scores/z, reload the model with attn_implementation='sdpa' and "
-            "capture with tl.trace(model, x, reconstruction_ready=True); to EDIT them, reload with "
+            "capture with tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)); to EDIT them, reload with "
             "attn_implementation='eager' so they are real, editable ops.",
-            "attn_implementation='sdpa' + tl.trace(..., reconstruction_ready=True) (read) or 'eager' (write)",
+            "attn_implementation='sdpa' + CaptureOptions(reconstruction_ready=True) (read) or 'eager' (write)",
         )
     declared = (
         f" (the config declares attn_implementation={implementation!r})"

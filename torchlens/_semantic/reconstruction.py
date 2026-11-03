@@ -205,7 +205,7 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
 
     if getattr(op, "saved_args", None) is None or getattr(op, "saved_kwargs", None) is None:
         return (
-            "tl.trace(..., reconstruction_ready=True) or "
+            "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
             "capture=tl.options.CaptureOptions(save_args=True)"
         )
     args = list(getattr(op, "saved_args", ()) or ())

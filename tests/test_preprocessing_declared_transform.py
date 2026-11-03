@@ -52,7 +52,7 @@ def test_attached_explicit_mapping_traces_a_pil_image() -> None:
 
     pytest.importorskip("torchvision.transforms")
     model = pp.attach_authority(_ImageModel(), dict(_EXPLICIT))
-    trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    trace = tl.trace(model, _pil_image(), save="none")
     record = trace.provenance.input_preprocessor
     assert record is not None
     assert record.source == "explicit_declaration"
@@ -75,7 +75,7 @@ def test_attached_timm_style_mapping_traces_a_pil_image() -> None:
     assert tuple(resolution.input_transform(_pil_image()).shape) == (3, 32, 32)
 
     model = pp.attach_authority(_ImageModel(), mapping)
-    trace = tl.trace(model, _pil_image(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    trace = tl.trace(model, _pil_image(), save="none")
     assert trace.provenance.input_preprocessor.source == "timm"
 
 
