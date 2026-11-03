@@ -369,6 +369,7 @@ def build_recipe(
         }
         for i, (target, edit) in enumerate(header.capture_rules)
     ]
+    capture_rules = [rule for rule in capture_rules if not _placeholders_in(rule)]
     executable = (
         header.save_level != _AUDIT_LEVEL and not encoder.placeholders and not encoder.disclosures
     )
@@ -582,6 +583,8 @@ def _capture_rules_problem(rules: Any) -> str | None:
 
     if not isinstance(rules, list):
         return "capture_rules is not an array"
+    if _placeholders_in(rules):
+        return "capture_rules requires portable built-in edits"
     selector_keys = {"selector_kind", "selector_value", "strict", "slice_spec", "metadata"}
     edit_keys = {
         "name",

@@ -311,7 +311,15 @@ def test_save_preflight_and_loaded_validators_run_on_both_traces(
 
 
 @pytest.mark.parametrize(
-    "fault", ["unknown_recipe_key", "unknown_capture_key", "bad_capture_index", "capture_not_array"]
+    "fault",
+    [
+        "unknown_recipe_key",
+        "unknown_capture_key",
+        "bad_capture_index",
+        "capture_not_array",
+        "bad_capture_args",
+        "bad_capture_slice",
+    ],
 )
 def test_forged_capture_rule_schema_refuses(
     builtin_saved: Saved, tmp_path: Path, fault: str
