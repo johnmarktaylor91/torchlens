@@ -23,6 +23,7 @@ the same object is reached by, or a dotted tail of one (`` `Bundle.rank_changes`
 from __future__ import annotations
 
 import argparse
+import enum
 import importlib
 import inspect
 import json
@@ -149,6 +150,20 @@ def _inherited_from(cls: type, spellings: dict[int, list[str]]) -> list[str]:
     return spellings[id(base)]
 
 
+def _foreign_constructor(cls: type, package: str) -> bool:
+    """Return whether a class's constructor signature is not TorchLens's own.
+
+    Enum classes (their call signature is ``Enum``'s functional API) and classes whose
+    constructor is defined outside ``package`` (a bare ``Exception`` or ``dict`` subclass)
+    take no TorchLens keywords.
+    """
+
+    if issubclass(cls, enum.Enum):
+        return True
+    base = next((k for k in cls.__mro__ if "__init__" in vars(k) or "__new__" in vars(k)), None)
+    return base is None or not inventory._in_package(base.__module__, package)
+
+
 def _default_text(param: inspect.Parameter) -> str | None:
     """Return a short, stable spelling of a parameter's default, or None when it has none."""
 
@@ -183,6 +198,8 @@ def public_parameters(
     spellings = {id(value): paths for paths, value in callables}
     rows: list[dict[str, Any]] = []
     for paths, target in callables:
+        if inspect.isclass(target) and _foreign_constructor(target, package):
+            continue
         signature = inventory._signature(target)
         if signature is None:
             continue
