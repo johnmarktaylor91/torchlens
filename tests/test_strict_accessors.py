@@ -152,7 +152,7 @@ def test_all_pass_token_selects_every_pass() -> None:
     assert every.labels == trace[trace.layers["linear_1_1"].__selection__()].labels
     single = trace["mul_1_2:all"]
     assert isinstance(single, tl.Selection)
-    assert single.labels == ("mul_1_2",)
+    assert single.labels == (trace.layers["mul_1_2"].ops[0].label,)  # the op's own spelling
     assert trace.layers["linear_1_1:all"] is trace.layers["linear_1_1"]
     assert "linear_1_1:all" not in trace.ops
     with pytest.raises(KeyError, match="resolve_all"):

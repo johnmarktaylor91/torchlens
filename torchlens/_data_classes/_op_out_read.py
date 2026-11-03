@@ -36,7 +36,10 @@ def _synthesized_out_read_due(source_trace: Any) -> bool:
 
     if source_trace is None:
         return False
-    record = source_trace._provenance_input_preprocessor
+    # Instance-dict read: a partially built or loaded trace may lack the field,
+    # and an AttributeError raised inside ``Op.__getattribute__`` would turn the
+    # ``out`` read into a ``__getattr__`` fallback.
+    record = source_trace.__dict__.get("_provenance_input_preprocessor")
     return (
         record is not None
         and not getattr(record, "verified", True)
