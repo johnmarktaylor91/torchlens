@@ -69,7 +69,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | options | 6 | 0 |
 | preprocessing | 16 | 0 |
 | receptive_field | 32 | 0 |
-| recording | 25 | 0 |
+| recording | 21 | 0 |
 | repgeom | 20 | 0 |
 | report | 45 | 0 |
 | stats | 27 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1059** | **0** |
+| **total** | **1055** | **0** |
 
-Public callable members of those classes (methods and properties): 1482.
+Public callable members of those classes (methods and properties): 1481.
