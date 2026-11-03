@@ -335,8 +335,7 @@ def _tensor_outputs(log: Any) -> tuple[torch.Tensor, ...]:
         raise ValueError(
             "SAE splice needs saved tensor model outputs to compare runs; "
             "this capture retained none. Capture with the default exhaustive "
-            "save (tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)))."
+            "save (tl.trace(model, x))."
         )
     return outputs
 
