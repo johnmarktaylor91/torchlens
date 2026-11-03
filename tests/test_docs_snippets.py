@@ -678,7 +678,6 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
         "comparison fence is collected and skipped)"
     ),
-    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
 
