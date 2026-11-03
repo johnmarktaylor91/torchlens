@@ -1,6 +1,6 @@
 """Resolve the object handed to ``save`` into the Trace it stands for.
 
-``trace.save()`` and ``tl.save()`` accept one subject kind, a Trace. Presenters
+``trace.save()`` accepts one subject kind, a Trace. Presenters
 (MergedTrace, TraceSlice) refuse typed here, and a sparse ``Recording`` cooks
 into its Trace through ``Recording.to_trace()`` so the Trace save contract is
 the one contract. Every branch dispatches on a disjoint type and uses the
