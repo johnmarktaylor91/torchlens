@@ -28,11 +28,13 @@ from torchlens.intervention.injection import (
 from torchlens.intervention.types import FunctionRegistryKey
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
-# The injected hooks here are user callables: format 3 writes a recipe holding a
-# callable placeholder only at the audit level (saved_format_3.md section 5); the
-# portable default refuses intervention_spec_not_portable. The injected family
-# itself persists in the op record table at every non-runnable level.
-_SAVE_LEVEL = "audit"
+# The injected hooks are user callables, so the portable default refuses
+# intervention_spec_not_portable (saved_format_3.md section 5). Audit is
+# payload-free (no outs, no arg snapshots), which would void the payload and
+# replay-attestation guarantees under test; executable_with_callables is the
+# non-runnable level that keeps outs and arg snapshots, so the injected family
+# persists with its payloads exactly as the 2.x analysis save did.
+_SAVE_LEVEL = "executable_with_callables"
 
 
 class _Chain(nn.Module):

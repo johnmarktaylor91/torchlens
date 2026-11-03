@@ -44,10 +44,13 @@ def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     return torch.sigmoid(z)
 
 
-# The injected hook is a user callable: format 3 writes its recipe (a callable
-# placeholder) only at a non-portable level (saved_format_3.md section 5); the
-# portable default refuses intervention_spec_not_portable before any row is read.
-_SAVE_LEVEL = "audit"
+# The injected hooks are user callables, so the portable default refuses
+# intervention_spec_not_portable (saved_format_3.md section 5). Audit is
+# payload-free (no outs, no arg snapshots), which would void the payload and
+# replay-attestation guarantees under test; executable_with_callables is the
+# non-runnable level that keeps outs and arg snapshots, so the injected family
+# persists with its payloads exactly as the 2.x analysis save did.
+_SAVE_LEVEL = "executable_with_callables"
 _OP_TABLE = "records/op.json"
 _TUPLE_TAG = "tuple"
 
