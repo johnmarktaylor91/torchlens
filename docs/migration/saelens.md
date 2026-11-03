@@ -17,7 +17,7 @@ model. You load one with `SAE.from_pretrained(release, sae_id)`, for example the
 `"gemma-scope-2b-pt-res-canonical"` and the id `"layer_12/width_16k/canonical"`; then
 `sae.encode(activations)` turns the residual stream at the hook point into latents and
 `sae.decode(latents)` reconstructs it. The SAE downloads from the Hugging Face Hub, so this is
-described here rather than run; the [pretrained-SAE recipe](../recipes/pretrained_saes.md)
+described here rather than run; the [pretrained-SAE recipe](../field-guide/pretrained_saes.md)
 runs the same calls on an SAE built in memory.
 
 ### In TorchLens
