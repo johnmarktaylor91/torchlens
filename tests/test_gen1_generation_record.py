@@ -129,6 +129,64 @@ def test_cost_is_linear_in_generated_tokens() -> None:
         assert abs(ratio - 47 / 11) <= 0.01
 
 
+def _reachable_tensor_storages(root: object) -> dict[int, int]:
+    """Map storage pointer to bytes for every tensor reachable from ``root``.
+
+    The walk follows ``gc`` referents through containers and plain objects and
+    stops at modules, classes, functions and frames; parameters are not counted.
+    """
+
+    import gc
+    from collections import deque
+    from types import FrameType, FunctionType, ModuleType
+
+    storages: dict[int, int] = {}
+    seen = {id(root)}
+    queue = deque([root])
+    while queue:
+        for child in gc.get_referents(queue.popleft()):
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
+            if isinstance(child, torch.Tensor):
+                if not isinstance(child, nn.Parameter):
+                    storage = child.untyped_storage()
+                    storages[storage.data_ptr()] = storage.nbytes()
+                continue
+            if isinstance(child, (nn.Module, type, ModuleType, FunctionType, FrameType)):
+                continue
+            queue.append(child)
+    return storages
+
+
+@pytest.mark.heavy
+def test_retained_bytes_are_linear_in_generated_tokens() -> None:
+    """A recorded generation retains its saved payload plus one pass's outputs, not every pass's.
+
+    Each decode forward returns the whole KV cache among its outputs; keeping every pass's
+    output tensors made retention quadratic in generated tokens (gigabytes for megabytes of
+    saved activations). Counters: reachable tensor count and bytes beyond the saved payload.
+    """
+
+    model = build_distilgpt2("eager")
+    save = _save(FAMILIES["distilgpt2"][1])
+    short, long = 12, 48
+    runs = {
+        n: tl.record(model, PROMPT, save=save, generate_kwargs=_greedy(n)) for n in (short, long)
+    }
+    reachable = {n: _reachable_tensor_storages(runs[n]) for n in runs}
+    payload = {n: sum(step.saved_bytes for step in runs[n].steps) for n in runs}
+    records_per_step = runs[short].steps[1].n_records
+    assert records_per_step == len(FAMILIES["distilgpt2"][1])
+    # Tensors: one more record per site per added token, nothing else.
+    assert len(reachable[long]) - len(reachable[short]) == (long - short) * records_per_step
+    # Bytes beyond the payload: only the last pass's own cache grows, by one position per token.
+    config = model.config
+    kv_bytes_per_position = config.n_layer * 2 * config.n_embd * torch.float32.itemsize
+    extra = {n: sum(reachable[n].values()) - payload[n] for n in runs}
+    assert extra[long] - extra[short] <= (long - short) * kv_bytes_per_position, extra
+
+
 def test_sampled_generation_records_its_seed_and_reproduces() -> None:
     model = build_distilgpt2("eager")
     settings = {"max_new_tokens": 4, "do_sample": True, "top_k": 20, "use_cache": True}
