@@ -17,6 +17,7 @@ software, machine and inputs the verdict was measured on.
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
@@ -156,10 +157,10 @@ def stamp(device: str, started: float) -> dict[str, Any]:
     """
 
     versions: dict[str, str] = {}
-    for module in ("transformers", "torchvision", "rsatoolbox", "numpy"):
-        try:
-            versions[module] = __import__(module).__version__
-        except ImportError:
+    for distribution in ("transformers", "torchvision", "rsatoolbox", "numpy"):
+        try:  # installed metadata: some packages (rsatoolbox 0.3.2) have no __version__
+            versions[distribution] = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
             continue
     machine = platform.processor() or platform.machine()
     if device.startswith("cuda") and torch.cuda.is_available():
