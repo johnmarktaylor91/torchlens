@@ -129,6 +129,9 @@ EXCLUDES = (
     "torchlens/_io/_pre3_module_paths.py",
     # Demonstrates the old tl.viz.batch_summary spelling refusing typed.
     "notebooks/audit/11_visualization_in_workflow.ipynb",
+    # Pickled module paths an earlier release wrote, kept as refusal inputs.
+    "tests/test_r23_type_reduce_rce.py",
+    "tests/test_edit_legacy_pickle_name.py",
 )
 SUFFIXES = {
     ".py",

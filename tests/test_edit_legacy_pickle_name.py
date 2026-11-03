@@ -18,7 +18,7 @@ from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.errors import ArtifactTooOldError
 
 _OLD_GLOBAL = b"ctorchlens.intervention.types\nHelperSpec\n"
-_NEW_GLOBAL = b"ctorchlens.intervention.types\nEdit\n"
+_NEW_GLOBAL = b"ctorchlens.intervention._types\nEdit\n"
 
 
 def _scrubbed_edit() -> tl.Edit:

@@ -69,10 +69,67 @@ _PRE_3_PRIVATE_MODULES = frozenset(
     }
 )
 
+#: Submodules of public packages that 3.0 made private (a leading underscore): a pickled
+#: module path at or below one of them names a module only an earlier release had. Matched as a
+#: prefix, because ``attribution.onebackward`` and ``receptive_field.rules`` were packages.
+_PRE_3_SUBMODULES = frozenset(
+    {
+        "torchlens.agent.cli",
+        "torchlens.attribution.graph",
+        "torchlens.attribution.onebackward",
+        "torchlens.backends.default_specs",
+        "torchlens.bridge.hf_attention",
+        "torchlens.errors.episode",
+        "torchlens.errors.runnable",
+        "torchlens.intervention.audit",
+        "torchlens.intervention.binding",
+        "torchlens.intervention.bundle",
+        "torchlens.intervention.compose",
+        "torchlens.intervention.edge_semantics",
+        "torchlens.intervention.edge_substitution",
+        "torchlens.intervention.handles",
+        "torchlens.intervention.helpers",
+        "torchlens.intervention.injection",
+        "torchlens.intervention.masked_edit",
+        "torchlens.intervention.model_door",
+        "torchlens.intervention.param_substitution",
+        "torchlens.intervention.population",
+        "torchlens.intervention.predicates",
+        "torchlens.intervention.regions",
+        "torchlens.intervention.replay",
+        "torchlens.intervention.rerun",
+        "torchlens.intervention.runtime",
+        "torchlens.intervention.save",
+        "torchlens.intervention.site_keys",
+        "torchlens.intervention.spec",
+        "torchlens.intervention.spec_compat",
+        "torchlens.intervention.sweep",
+        "torchlens.intervention.types",
+        "torchlens.receptive_field.rules",
+        "torchlens.recording.cleanup",
+        "torchlens.recording.dry_run",
+        "torchlens.recording.exceptions",
+        "torchlens.recording.options",
+        "torchlens.recording.recover",
+        "torchlens.recording.storage_disk",
+        "torchlens.recording.storage_ram",
+        "torchlens.recording.types",
+        "torchlens.validation.backward",
+        "torchlens.validation.consolidated",
+        "torchlens.validation.core",
+        "torchlens.validation.diagnostics",
+        "torchlens.validation.exemptions",
+        "torchlens.validation.invariants",
+        "torchlens.validation.status",
+        "torchlens.viz.batch_summary",
+        "torchlens.viz.feature_maps",
+        "torchlens.viz.node_plots",
+    }
+)
+
 #: Individual globals whose module still exists but whose class name only 2.x wrote.
 _PRE_3_GLOBALS = frozenset(
     {
-        ("torchlens.intervention.types", "HelperSpec"),
         ("torchlens._data_classes.op", "TensorLog"),
     }
 )
@@ -167,6 +224,13 @@ def modellog_216_error(
     )
 
 
+def _under_pre_3_submodule(module: str) -> bool:
+    """Return whether ``module`` is, or lies under, a submodule 3.0 made private."""
+
+    parts = module.split(".")
+    return any(".".join(parts[:depth]) in _PRE_3_SUBMODULES for depth in range(3, len(parts) + 1))
+
+
 def refuse_pre_3_module_path(module: str, name: str = "") -> None:
     """Refuse a pickled module path that only torchlens 2.x wrote.
 
@@ -188,6 +252,7 @@ def refuse_pre_3_module_path(module: str, name: str = "") -> None:
     if root == "torchlens" and (
         rest.partition(".")[0] in _PRE_3_PACKAGES
         or module in _PRE_3_PRIVATE_MODULES
+        or _under_pre_3_submodule(module)
         or (module, name) in _PRE_3_GLOBALS
     ):
         raise pre_3_artifact_error(f"module_path={module}", code="artifact_version_below_floor")

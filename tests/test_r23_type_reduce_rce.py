@@ -135,7 +135,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     "module",
     [
         "torchlens.intervention._spec_values",  # where the class lives
-        "torchlens.intervention._save",  # where it lived; the path resolves to nothing
+        "torchlens.intervention._save",  # the module it lived in; resolves to nothing
     ],
 )
 def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
@@ -155,7 +155,7 @@ def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
     ("module", "name"),
     [
         ("torchlens._data_classes.op", "TensorLog"),
-        ("torchlens.intervention._types", "HelperSpec"),
+        ("torchlens.intervention.types", "HelperSpec"),
     ],
 )
 def test_class_names_only_2x_wrote_refuse_as_2x(module: str, name: str) -> None:
@@ -168,6 +168,38 @@ def test_class_names_only_2x_wrote_refuse_as_2x(module: str, name: str) -> None:
         unpickler.find_class(module, name)
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
     assert excinfo.value.fields["observed"] == f"module_path={module}"
+
+
+@pytest.mark.parametrize(
+    ("module", "name"),
+    [
+        ("torchlens.intervention.types", "Edit"),
+        ("torchlens.intervention.save", "LazyImportRef"),
+        ("torchlens.recording.options", "CaptureOptions"),
+        ("torchlens.attribution.onebackward.engine", "OneBackward"),
+        ("torchlens.receptive_field.rules.conv", "ConvRule"),
+    ],
+)
+def test_submodule_paths_made_private_refuse_as_2x(module: str, name: str) -> None:
+    """A pickled path at or below a submodule 3.0 made private refuses as a 2.x file."""
+
+    from torchlens.errors import ArtifactTooOldError
+
+    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        unpickler.find_class(module, name)
+    assert excinfo.value.fields["observed"] == f"module_path={module}"
+
+
+def test_private_submodule_prefix_matches_whole_components_only() -> None:
+    """A module whose name only starts with an old submodule name is not refused as 2.x."""
+
+    from torchlens.errors import ArtifactTooOldError
+
+    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
+    with pytest.raises(pickle.UnpicklingError) as excinfo:
+        unpickler.find_class("torchlens.intervention.typesx", "Edit")
+    assert not isinstance(excinfo.value, ArtifactTooOldError)
 
 
 def test_legit_data_types_and_snapshot_still_admit() -> None:
