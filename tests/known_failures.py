@@ -111,11 +111,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_maskrcnn_resnet50_eval",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_mobilebert",
         reason="RuntimeError: mat1 and mat2 shapes cannot be multiplied (32x128 and 64x64)",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
