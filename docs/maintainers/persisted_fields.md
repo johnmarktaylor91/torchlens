@@ -621,7 +621,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `conditional_wrapper_kind` | interned | required: every level | keep | fact | `Op.control_flow.wrapper_kind` (field) |
 | `container_path` | interned | required: every level | keep | fact | `Op.container_path` (field) |
 | `container_spec` | interned | required: every level | keep | fact | `Op.container_spec` (field) |
-| `detach_saved_activations` | interned | required: every level | keep | fact | `Op.detach_saved_activations` (field) |
+| `detach_saved_activations` | interned | required: every level | keep | fact | none (`Op.detach_saved_activations` removed) |
 | `device_ref` | interned | required: every level | keep | fact | `Op.device_ref` (field) |
 | `dropped_edge_tensor_args` | interned | required: every level | keep | fact | `Op.call.dropped_edge_tensor_args` (field) |
 | `dtype` | interned | required: every level | keep | fact | `Op.dtype` (field) |
@@ -649,7 +649,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `grad_dtype` | interned | required: every level | keep | fact | `Op.autograd.grad_dtype` (field) |
 | `grad_fn_class_name` | interned | required: every level | keep | fact | `Op.autograd.grad_fn_class_name` (field) |
 | `grad_fn_class_qualname` | interned | required: every level | keep | fact | `Op.autograd.grad_fn_class_qualname` (field) |
-| `grad_fn_object_id` | interned | required: every level | keep | fact | `Op.grad_fn_object_id` (field) |
+| `grad_fn_object_id` | interned | required: every level | keep | fact | none (`Op.grad_fn_object_id` removed) |
 | `grad_shape` | interned | required: every level | keep | fact | `Op.autograd.grad_shape` (field) |
 | `gradient_memory` | interned | required: every level | keep | fact | `Op.gradient_memory` (field) |
 | `has_children` | interned | required: every level | keep | fact | `Op.graph.has_children` (field) |
@@ -712,7 +712,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `out` | payload | optional: `include_outs` (executable_with_callables, portable) | blob | fact | `Op.out` (field) |
 | `out_versions_by_child` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.out_versions_by_child` (field) |
 | `output_descendants` | edge | required: every level | keep | derived | `Op.output_descendants` (field) |
-| `output_device` | interned | required: every level | keep | fact | `Op.output_device` (field) |
+| `output_device` | interned | required: every level | keep | fact | none (`Op.output_device` removed) |
 | `output_of_module_calls` | edge | required: every level | keep | fact | `Op.module_context.output_of_module_calls` (field) |
 | `output_of_modules` | edge | required: every level | keep | fact | `Op.module_context.output_of_modules` (field) |
 | `param_memory` | interned | required: every level | keep | fact | `Op.cost.param_memory` (field) |
@@ -788,7 +788,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `conditional_entry_children` | scalar | required: every level | keep | fact | `Layer.control_flow.entry_children` (field) |
 | `conditional_role_stacks` | scalar | required: every level | keep | fact | `Layer.control_flow.role_stacks` (field) |
 | `conditional_then_children` | scalar | required: every level | keep | fact | `Layer.control_flow.then_children` (field) |
-| `detach_saved_activations` | scalar | required: every level | keep | fact | `Layer.detach_saved_activations` (field) |
+| `detach_saved_activations` | scalar | required: every level | keep | fact | none (`Layer.detach_saved_activations` removed) |
 | `device_ref` | scalar | required: every level | keep | fact | `Layer.device_ref` (field) |
 | `dtype` | scalar | required: every level | keep | fact | `Layer.dtype` (field) |
 | `dtype_ref` | scalar | required: every level | keep | fact | `Layer.dtype_ref` (field) |
@@ -801,7 +801,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `func_qualname` | scalar | required: every level | keep | fact | `Layer.func_qualname` (field) |
 | `grad_fn_class_name` | scalar | required: every level | keep | fact | `Layer.autograd.grad_fn_class_name` (field) |
 | `grad_fn_class_qualname` | scalar | required: every level | keep | fact | `Layer.autograd.grad_fn_class_qualname` (field) |
-| `grad_fn_object_id` | scalar | required: every level | keep | fact | `Layer.grad_fn_object_id` (field) |
+| `grad_fn_object_id` | scalar | required: every level | keep | fact | none (`Layer.grad_fn_object_id` removed) |
 | `has_input_ancestor` | scalar | required: every level | keep | fact | `Layer.graph.has_input_ancestor` (field) |
 | `in_conditionals` | scalar | required: every level | keep | fact | `Layer.control_flow.in_conditionals` (field) |
 | `in_multi_output` | scalar | required: every level | keep | fact | `Layer.in_multi_output` (field) |
@@ -834,7 +834,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `num_pos_args` | scalar | required: every level | keep | fact | `Layer.call.num_pos_args` (field) |
 | `ops` | edge | required: every level | keep | fact | `Layer.ops` (field) |
 | `ordinal_index` | scalar | required: every level | keep | fact | `Layer.ordinal_index` (field) |
-| `output_device` | scalar | required: every level | keep | fact | `Layer.output_device` (field) |
+| `output_device` | scalar | required: every level | keep | fact | none (`Layer.output_device` removed) |
 | `output_of_module_calls` | edge | required: every level | keep | fact | `Layer.module_context.output_of_module_calls` (field) |
 | `output_of_modules` | edge | required: every level | keep | fact | `Layer.module_context.output_of_modules` (field) |
 | `param_shapes` | scalar | required: every level | keep | fact | `Layer.param_shapes` (field) |
@@ -1243,7 +1243,7 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 
 ## Private keys with no public accessor
 
-44 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `layer._is_in_conditional_body`, `param._derived_grad_record_path`.
+50 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `op.detach_saved_activations`, `op.grad_fn_object_id`, `op.output_device`, `layer._is_in_conditional_body`, `layer.detach_saved_activations`, `layer.grad_fn_object_id`, `layer.output_device`, `param._derived_grad_record_path`.
 
 ## Group view members with no stored key
 

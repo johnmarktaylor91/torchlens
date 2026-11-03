@@ -142,21 +142,13 @@ def test_renamed_and_removed_spellings_refuse_typed(
 
 
 def test_renamed_buffer_address_reads_the_persisted_column() -> None:
-    """``buffer_address`` serves the persisted ``address`` column on a buffer Op and Layer."""
+    """``buffer_address`` serves the persisted ``address`` column on a buffer Layer."""
 
-    class _Buffered(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.register_buffer("scale", torch.ones(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x * self.scale
-
-    captured = tl.trace(_Buffered(), torch.ones(2, 3))
+    captured = tl.trace(nn.BatchNorm1d(3).eval(), torch.ones(2, 3), save="none")
     try:
-        buffers = [op for op in captured.ops if op.graph.is_buffer]
+        buffers = [node for node in captured._layer_dict_main_keys.values() if node.graph.is_buffer]
         assert buffers
-        assert buffers[0].buffer_address.endswith("scale")
+        assert buffers[0].buffer_address.startswith("running_")
         assert record_member(buffers[0], "address") == buffers[0].buffer_address
     finally:
         captured.cleanup()

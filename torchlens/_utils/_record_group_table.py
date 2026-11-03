@@ -457,8 +457,8 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
 
     Duck-typed readers accept an ``Op``, a ``Layer`` or another record with
     the same flat name (``Module.total_flops_forward``); on an Op or Layer the
-    former name reads through its current spelling, on anything else this is
-    plain ``getattr``.
+    former name reads through its current spelling (a removed member reads its
+    stored value), on anything else this is plain ``getattr``.
 
     Parameters
     ----------
@@ -487,7 +487,9 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         path = _SPELLING_PATHS["Op"].get(name)
     try:
         if path is None:
-            return getattr(obj, name)
+            # A renamed or removed member keeps its value under its storage
+            # attribute; internal readers still need it.
+            return getattr(obj, name if kind is None else record_storage_attr(obj, name))
         value = obj
         for part in path:
             value = getattr(value, part)
