@@ -120,6 +120,18 @@ def test_boxes_nested_two_levels_down_leave_neighbours_expanded(mini_trace: tl.T
     assert "stem" not in boxes and "head" not in boxes
 
 
+def test_a_partly_boxed_family_of_identical_blocks_stays_as_the_ladder_left_it(
+    mini_trace: tl.Trace,
+) -> None:
+    # A stack of identical blocks, two boxed by the ladder: the four still
+    # expanded twins are not stray, so auto keeps "just enough" boxed. The
+    # unique downsample beside them still boxes.
+    signals = analyze_collapse(mini_trace).signals
+    selected = frozenset({"stages.1.blocks.0", "stages.1.blocks.1"})
+    boxes = _even_auto_boxes(mini_trace, signals, selected)
+    assert boxes == selected | {"stages.1.downsample"}
+
+
 def test_a_module_larger_than_the_box_beside_it_stays_expanded(mini_trace: tl.Trace) -> None:
     signals = analyze_collapse(mini_trace).signals
     selected = frozenset({"stages.0.downsample"})

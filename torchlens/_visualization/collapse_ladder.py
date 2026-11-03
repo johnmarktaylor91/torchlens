@@ -575,7 +575,11 @@ def _even_auto_boxes(
     A module qualifies when it may render as a box, runs once, contains no
     box, is inside no box, and hides no more ops than the smallest box that
     is a sibling or a sibling's child: left expanded it reads as stray raw
-    ops between boxes. Outermost first, so the parent the user wrote wins over its child.
+    ops between boxes. It must also be the only expanded sibling of its
+    structure: when identical siblings are still expanded, the ladder is part
+    way through that family and its in-band point stays as the ladder left it
+    (a stack of identical blocks keeps "just enough" boxed). Outermost first,
+    so the parent the user wrote wins over its child.
     """
 
     boxes = set(selected)
@@ -587,6 +591,8 @@ def _even_auto_boxes(
         if not _may_box_expanded(trace, address, signal, boxes):
             continue
         siblings = [item for item in children[_parent_address(address)] if item != address]
+        if _has_expanded_twin(trace, signal, siblings, boxes, signals):
+            continue
         sibling_box_ops = _subtree_box_ops(siblings, boxes, signals)
         if sibling_box_ops and signal.hidden_ops <= min(sibling_box_ops):
             boxes.add(address)
@@ -599,6 +605,18 @@ def _may_box_expanded(trace: Trace, address: str, signal: Any, boxes: set[str]) 
     if signal.num_calls > 1 or not _optimizer()._eligible_box(trace, address, signal):
         return False
     return not any(_within(address, box) or _within(box, address) for box in boxes)
+
+
+def _has_expanded_twin(
+    trace: Trace, signal: Any, siblings: list[str], boxes: set[str], signals: Mapping[str, Any]
+) -> bool:
+    """Return whether a sibling with the same structure is also fully expanded."""
+
+    return any(
+        signals[sibling].structural_digest == signal.structural_digest
+        and _may_box_expanded(trace, sibling, signals[sibling], boxes)
+        for sibling in siblings
+    )
 
 
 def _subtree_box_ops(roots: list[str], boxes: set[str], signals: Mapping[str, Any]) -> list[int]:
