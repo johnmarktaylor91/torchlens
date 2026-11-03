@@ -421,6 +421,7 @@ class DecodedArtifact(_RecordResolver):
     def decode_tables(self) -> None:
         """Decode every record table the manifest lists, in record order."""
 
+        # Essential complexity: decode each closed table and establish its row identities together.
         for kind in self.manifest["records"]:
             raw_rows = read_record_table(self.root, self.manifest, kind)
             if kind == "trace" and raw_rows:
@@ -486,6 +487,7 @@ class DecodedArtifact(_RecordResolver):
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
+        # Essential complexity: leaf-first restoration and computed-slot repair share one governed load.
         if not self.objects.get("trace"):
             self.objects["trace"] = [state_new(record_class("trace"))]
             if self._deferred_trace_refs:

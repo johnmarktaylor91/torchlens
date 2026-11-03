@@ -115,6 +115,7 @@ def _expect_manifest_refusal(root, key, built_counter, *, code="manifest_schema_
     )
 
 
+# Essential complexity: one exact refusal oracle covers the closed manifest mutation grammar.
 def _manifest_swap_code(key, value):
     """Pin the contract's format-window, level and record-coherence refusal doors."""
 
