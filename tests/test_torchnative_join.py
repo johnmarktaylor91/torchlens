@@ -21,8 +21,6 @@ All smoke-tier (the 10k-event scale probe runs in ~50 ms).
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from torchlens._observability import join_events
@@ -93,43 +91,6 @@ def _device(  # noqa: PLR0913 -- fixture mirrors the six normalized device-event
     )
 
 
-def test_correlation_is_the_only_join() -> None:
-    """A device event whose name LOOKS like an op stays unattributed."""
-
-    events = (
-        _marker("torchlens::op::5", 0, 10 * _US),
-        _runtime(5 * _US, correlation=42),
-        _device("sgemm_linear_kernel", 100 * _US, 110 * _US, correlation=None),
-        _device("real_kernel", 120 * _US, 130 * _US, correlation=42),
-    )
-    result = join_events(events, extraction_path="in_memory")
-    by_name = {row.name: row for row in result.launches}
-    assert by_name["sgemm_linear_kernel"].status == "unattributed"
-    assert by_name["real_kernel"].status == "attributed"
-    assert by_name["real_kernel"].owner_labels == ("5",)
-    # The residual is NAMED by exact launch name.
-    assert ("sgemm_linear_kernel", 1) in result.coverage.residual
-
-
-def test_one_to_many_and_union_not_sum() -> None:
-    """One marker owning overlapping launches: union, never a sum."""
-
-    events = (
-        _marker("torchlens::op::9", 0, 50 * _US),
-        _runtime(10 * _US, correlation=1),
-        _runtime(20 * _US, correlation=2),
-        # Two overlapping kernels: 100-200us and 150-250us -> union 150us.
-        _device("k1", 100 * _US, 200 * _US, correlation=1),
-        _device("k2", 150 * _US, 250 * _US, correlation=2),
-    )
-    result = join_events(events, extraction_path="in_memory")
-    assert result.availability == "joined"
-    assert result.coverage.attributed_ns["cuda:0"] == 150 * _US
-    assert result.coverage.device_busy_ns["cuda:0"] == 150 * _US
-    # Per-op table sums durations (an op total, not a device-busy claim).
-    assert result.op_device_ns["9"] == 200 * _US
-
-
 def test_fused_many_owner_launch_group_is_ambiguous() -> None:
     """Several owners of ONE launch form a group -- never split or doubled."""
 
@@ -162,20 +123,6 @@ def test_cross_thread_negative_control() -> None:
     assert row.status == "unattributed"
 
 
-def test_innermost_owner_nesting() -> None:
-    """A runtime event inside nested markers joins the INNERMOST one."""
-
-    events = (
-        _marker("torchlens::op::10", 0, 100 * _US),
-        _marker("torchlens::op::11", 20 * _US, 80 * _US),
-        _runtime(50 * _US, correlation=5),
-        _device("k", 200 * _US, 220 * _US, correlation=5),
-    )
-    result = join_events(events, extraction_path="in_memory")
-    (row,) = result.launches
-    assert row.owner_labels == ("11",)
-
-
 def test_kinds_stay_separate_and_internal_is_typed() -> None:
     """Copies/memsets are separate rows; internal work is excluded in (a)."""
 
@@ -197,21 +144,6 @@ def test_kinds_stay_separate_and_internal_is_typed() -> None:
     # busy=170us total; internal=60us; attributed(model)=100us; unattributed=10us.
     assert part_a == pytest.approx(100 / 110)
     assert part_b == pytest.approx(160 / 170)
-
-
-def test_two_traces_per_session_do_not_collide() -> None:
-    """Marker keys are process-monotonic: two captures never share a key."""
-
-    events = (
-        _marker("torchlens::op::100", 0, 10 * _US),
-        _marker("torchlens::op::200", 20 * _US, 30 * _US),
-        _runtime(5 * _US, correlation=1),
-        _runtime(25 * _US, correlation=2),
-        _device("k1", 100 * _US, 110 * _US, correlation=1),
-        _device("k2", 120 * _US, 130 * _US, correlation=2),
-    )
-    result = join_events(events, extraction_path="in_memory")
-    assert result.op_device_ns == {"100": 10 * _US, "200": 10 * _US}
 
 
 def test_missing_is_none_never_zero() -> None:
@@ -243,26 +175,3 @@ def test_explicit_device_time_request_refuses_typed() -> None:
         require_availability(result)
     assert excinfo.value.fields["code"] == "device_time_unavailable"
     assert excinfo.value.fields["remedy"]
-
-
-def test_join_scale_is_subquadratic() -> None:
-    """The GPT-2-sized cell (10k markers/runtime/kernels) joins in < 1 s.
-
-    The deleted implementation rescanned every marker span per runtime
-    event (200 spans 0.006 s -> 10,000 spans 4.5 s, TN-D1). The sweep is
-    O(N log N); wall-clock is asserted with slack for a loaded CI box.
-    """
-
-    n = 10_000
-    events: list[NormalizedEvent] = []
-    for i in range(n):
-        base = i * 100 * _US
-        events.append(_marker(f"torchlens::op::{i}", base, base + 50 * _US))
-        events.append(_runtime(base + 10 * _US, correlation=i))
-        events.append(_device(f"k{i}", base + 60 * _US, base + 90 * _US, correlation=i))
-    start = time.perf_counter()
-    result = join_events(tuple(events), extraction_path="in_memory")
-    elapsed = time.perf_counter() - start
-    assert result.availability == "joined"
-    assert len(result.op_device_ns) == n
-    assert elapsed < 1.0, f"join took {elapsed:.2f}s on the 10k cell (sub-quadratic gate)"

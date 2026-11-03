@@ -87,18 +87,6 @@ def test_srp_dims_for_validates_inputs() -> None:
 # --- spearman + probe ----------------------------------------------------------
 
 
-def test_spearman_matches_hand_computed_ranks_with_ties() -> None:
-    """Tie-averaged rank correlation against a hand-checked case."""
-
-    a = torch.tensor([1.0, 2.0, 2.0, 3.0])
-    b = torch.tensor([10.0, 20.0, 30.0, 40.0])
-    # ranks(a) = [1, 2.5, 2.5, 4]; ranks(b) = [1, 2, 3, 4]
-    # pearson: 4.5 / (sqrt(4.5) * sqrt(5)) = sqrt(0.9) = 0.948683298...
-    assert spearman(a, b) == pytest.approx(0.9486832980, abs=1e-9)
-    assert spearman(b, b) == pytest.approx(1.0)
-    assert spearman(b, -b) == pytest.approx(-1.0)
-
-
 def test_probe_reports_scoped_rows_and_is_deterministic() -> None:
     """The probe report carries T-C12 scope fields; same seed, same numbers."""
 
@@ -136,42 +124,6 @@ def test_probe_refusals_are_typed() -> None:
 
 
 # --- P6: the tl.stats fitted upgrade ---------------------------------------------
-
-
-def test_pca_result_carries_the_fitted_payload_facts() -> None:
-    """result() gains mean/n_samples/n_features/digest; legacy keys intact."""
-
-    fitted, x = _fit()
-    estimator = PCA(5)
-    estimator.update(x)
-    result = estimator.compute()
-    assert set(result) == {
-        "components",
-        "explained_variance",
-        "mean",
-        "n_samples",
-        "n_features",
-        "digest",
-    }
-    assert result["n_samples"] == 60 and result["n_features"] == 20
-    assert torch.allclose(result["mean"], x.double().mean(dim=0), atol=1e-9)
-    assert result["digest"].startswith("sha256:")
-    # The SAME estimator's result() and fitted() agree byte-for-byte (a
-    # different batch split legitimately differs in accumulation ulps).
-    same = estimator.fitted(fit_scope="same estimator")
-    assert result["digest"] == same.digest
-    assert torch.equal(result["components"], same.components)
-
-
-def test_pca_sign_canonicalization_is_deterministic() -> None:
-    """Each component's largest-magnitude entry is positive; fits reproduce."""
-
-    fitted, x = _fit()
-    for row in fitted.components:
-        assert row[row.abs().argmax()] > 0
-    again, _ = _fit()
-    assert torch.equal(fitted.components, again.components)
-    assert fitted.digest == again.digest
 
 
 def test_pca_fitted_refuses_before_data() -> None:

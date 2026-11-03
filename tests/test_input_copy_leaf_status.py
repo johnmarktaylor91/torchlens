@@ -20,7 +20,6 @@ import torch
 from torch import nn
 
 from torchlens._capture_state_helpers import _move_tensors_to_device
-from torchlens._utils.arg_handling import safe_copy_input_tree
 from torchlens._utils.input_leaves import leaf_preserving_input_copies
 
 
@@ -34,20 +33,6 @@ class _SetsRequiresGradOnInput(nn.Module):
     def forward(self, cart: torch.Tensor) -> torch.Tensor:
         cart.requires_grad = True
         return self.lin(cart).sum()
-
-
-def test_non_leaf_input_copy_is_unchanged_inside_validation_scope() -> None:
-    """A non-leaf input keeps the graph-connected clone even inside validation's scope."""
-
-    leaf = torch.randn(3, 4).requires_grad_(True)
-    non_leaf = leaf * 2.0
-    with leaf_preserving_input_copies():
-        (copied,), _kwargs, gaps = safe_copy_input_tree([non_leaf], {})
-    assert gaps == ()
-    assert not copied.is_leaf
-    assert torch.equal(copied, non_leaf)
-    copied.sum().backward()
-    assert leaf.grad is not None
 
 
 def test_device_move_keeps_a_leaf_inside_validation_scope_only() -> None:

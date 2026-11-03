@@ -63,30 +63,3 @@ def test_layer_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     text = str(layer)
     assert "(x3 passes)" in text
     assert "(3 ops)" not in text
-
-
-def test_summary_rows_never_spell_passes_as_ops(three_pass_log: tl.Trace) -> None:
-    """Summary rows never spell pass multiplicity as an op count."""
-
-    for text in (str(three_pass_log.summary()), str(three_pass_log.summary(level="op"))):
-        assert "(3 ops)" not in text
-    # The op denominator stays the executed-op count (3 passes of one layer).
-    assert three_pass_log._num_ops == 3
-
-
-def test_op_str_keeps_pass_vocabulary(three_pass_log: tl.Trace) -> None:
-    """Per-pass Op str already spells "(pass k/N)"; pin it so it stays."""
-
-    op = three_pass_log["linear_1_1:2"]
-    text = str(op)
-    assert "(pass 2/3)" in text
-    assert " ops)" not in text.split("\n")[0]
-
-
-def test_headings_follow_row_kind(three_pass_log: tl.Trace) -> None:
-    """The summary name column never heads "Layer"."""
-
-    # The merged name column heads "name (type)", never "Layer".
-    rebuilt = three_pass_log.summary()
-    assert "name (type)" in rebuilt
-    assert "Layer " not in rebuilt

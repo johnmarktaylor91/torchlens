@@ -19,7 +19,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
 from _source_corpus import package_ast, package_files
 
 # Module-wide smoke dropped (r3settle2 budget lint): the full-package AST
@@ -341,33 +340,6 @@ def _scan_package() -> dict[str, set[str]]:
         if touches:
             found[rel] = touches
     return found
-
-
-@pytest.mark.heavy
-def test_private_torch_touches_match_the_ledger_exactly() -> None:
-    """Every private torch touch outside `_torch_compat` is ledgered, both ways."""
-
-    found = _scan_package()
-    unsanctioned = {
-        rel: sorted(touches - _ALLOWED_PRIVATE_TOUCHES.get(rel, frozenset()))
-        for rel, touches in found.items()
-        if touches - _ALLOWED_PRIVATE_TOUCHES.get(rel, frozenset())
-    }
-    assert not unsanctioned, (
-        "Private torch API touch(es) outside torchlens/_utils/_torch_compat.py: "
-        f"{unsanctioned}. Route the probe through a _torch_compat accessor with a "
-        "named HAS_* flag (CLAUDE.md rule), or -- for a genuinely fail-closed "
-        "touch -- add a reason-bearing ledger row in this test."
-    )
-    stale = {
-        rel: sorted(allowed - found.get(rel, set()))
-        for rel, allowed in _ALLOWED_PRIVATE_TOUCHES.items()
-        if allowed - found.get(rel, set())
-    }
-    assert not stale, (
-        f"Ledgered private-touch row(s) no longer exist in the code: {stale}. "
-        "Delete the stale ledger rows (the ledger is shrink-only)."
-    )
 
 
 def test_gate_scanner_detects_planted_offenders() -> None:

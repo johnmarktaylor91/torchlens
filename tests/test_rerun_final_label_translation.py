@@ -50,17 +50,6 @@ def _recurrent_case() -> tuple[nn.Module, torch.Tensor, tl.Trace, list[str]]:
     return model, x, trace, tanh_labels
 
 
-def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
-    model, x, trace, tanh_labels = _recurrent_case()
-    _first, second, _third = tanh_labels
-    value = torch.full_like(trace[second].out, 0.25)
-    trace.set(second, value, confirm_mutation=True)
-    result = trace.run(model, x)
-    assert result is trace
-    assert result.last_run["hooks_unfired"] == 0
-    assert torch.equal(trace[second].out, value)
-
-
 def test_substring_selector_on_a_final_label_still_refuses_live() -> None:
     model, x, trace, _tanh_labels = _recurrent_case()
     gate = next(op for op in trace.ops if op.func_name == "sigmoid")

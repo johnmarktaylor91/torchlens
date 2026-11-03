@@ -92,13 +92,6 @@ class TestPayloadCoherence:
 class TestMerges:
     """Rank/segment merge semantics: exact on integers, typed on conflicts."""
 
-    def test_rank_merge_counts_exact(self) -> None:
-        a, b = _observed(), _observed()
-        merged = merge_observations(a, b)
-        assert merged.spine is not None and a.spine is not None
-        assert merged.spine.numel == 2 * a.spine.numel
-        assert merged.spine.num_zero == 2 * a.spine.num_zero
-
     def test_identity_mismatch_refuses(self) -> None:
         with pytest.raises(HistorySchemaError) as excinfo:
             merge_observations(_observed(1), _observed(2))

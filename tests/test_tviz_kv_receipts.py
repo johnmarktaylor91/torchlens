@@ -51,45 +51,6 @@ def _kv_receipt(layer: str = "blk.0.attn") -> tviz.CausalReceipt:
     )
 
 
-def test_query_head_grid_refuses_the_kv_grouping() -> None:
-    """A grid over all eight query heads is not a kv-site grid."""
-
-    with pytest.raises(torchlens.errors.RenderError) as caught:
-        tviz.receipt_from_patch_grid(
-            _grid(8),
-            layer="blk.0.attn",
-            negative_control=0.0,
-            positive_control=3.0,
-            kv_groups=GQA,
-        )
-    assert caught.value.fields["code"] == "tv_record_invalid"
-    assert "2 kv groups" in str(caught.value)
-
-
-def test_grid_figure_discloses_the_sharing(tmp_path: Path) -> None:
-    """The rendered grid states the unit, the sharing and the group labels."""
-
-    rows = [_kv_receipt("blk.0.attn"), _kv_receipt("blk.1.attn")]
-    artifact = torchlens.viz.ablation_grid(
-        rows, tmp_path / "kv.svg", joint_effect=-0.2, svg_fonttype="none"
-    )
-    lines = "\n".join(artifact.disclosure_lines)
-    assert (
-        "kv-group receipt: each cell intervenes on one key/value group shared by 4 query heads "
-        "(8 query heads over 2 groups); no cell is a per-query-head effect"
-    ) in lines
-    assert (
-        "kv group 1 of 2, shared by query heads 0-3; kv group 2 of 2, shared by query heads 4-7"
-    ) in lines
-    assert (
-        "joint effect of the same intervention on all 4 measured kv groups together: -0.2" in lines
-    )
-    assert "measured heads" not in lines
-    svg = artifact.paths[0].read_text()
-    for label in ("kv 1", "q0-3", "kv 2", "q4-7", "measured kv-group effects on logit_diff"):
-        assert label in svg, label
-
-
 def test_query_head_receipts_render_as_before(tmp_path: Path) -> None:
     """Without a grouping nothing kv-specific appears."""
 

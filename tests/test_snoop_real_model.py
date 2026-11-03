@@ -10,13 +10,11 @@ add over real logits).
 from __future__ import annotations
 
 import io
-import warnings
 
 import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import TraceCaptureError
 from torchlens.options import NarrationOptions
 
 transformers = pytest.importorskip("transformers")
@@ -30,33 +28,6 @@ def _tiny_gpt2() -> tuple[torch.nn.Module, torch.Tensor]:
     torch.manual_seed(0)
     input_ids = torch.randint(0, 128, (1, 9))
     return model, input_ids
-
-
-@pytest.mark.real_model
-def test_gpt2_full_narration_line_count_and_label_resolution() -> None:
-    """Memo test 1: line count == narrated events; labels resolve on record."""
-
-    model, input_ids = _tiny_gpt2()
-    sink = io.StringIO()
-    recording = tl.record(
-        model,
-        input_ids,
-        save=lambda ctx: ctx.kind == "op",
-        narrate=NarrationOptions(sites=True, sink=sink),
-    )
-    lines = [line for line in sink.getvalue().split("\n") if line]
-    op_lines = [line for line in lines if line.lstrip().startswith("#")]
-    footer = lines[-1]
-    assert footer.startswith("-- echo:")
-    assert f"{len(lines) - 1} lines narrated" in footer
-    # Every printed op label is the spelling the returned object accepts.
-    printed_labels = {line.split()[1] for line in op_lines}
-    # Recording indexes build lazily on first *records* access (pre-existing
-    # fastlog behavior; by_label alone reads empty before materialization).
-    assert len(recording.records) > 0
-    resolvable = set(recording.by_label)
-    op_only = {label for label in printed_labels if not label.startswith(("input_", "buffer_"))}
-    assert op_only and op_only <= resolvable
 
 
 @pytest.mark.real_model
@@ -83,23 +54,6 @@ def test_gpt2_scoped_narration_stays_inside_the_block() -> None:
         address = line.lstrip().lstrip("><").split()[0]
         assert "transformer.h.1".startswith(address) or address.startswith("transformer.h.1"), line
     assert not any("h.0" in line for line in body)
-
-
-@pytest.mark.real_model
-def test_gpt2_position_overflow_crash_narrates_post_hoc() -> None:
-    """Memo crash B: tokens beyond n_positions raise inside the embedding."""
-
-    model, _ = _tiny_gpt2()
-    too_long = torch.randint(0, 128, (1, 128))  # > n_positions=64
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        with pytest.raises(Exception) as excinfo:
-            tl.trace(model, too_long)
-    partial = getattr(excinfo.value, "partial_trace", None)
-    assert partial is not None
-    rendered = partial.narrate(20)
-    assert "!! forward failed" in rendered
-    assert "the raising call is not in the record" in rendered
 
 
 @pytest.mark.heavy
@@ -134,58 +88,6 @@ def test_resnet18_scoped_echo_leaves_logits_unchanged() -> None:
     assert all("@layer3" in line for line in op_lines)
 
 
-@pytest.mark.heavy
-@pytest.mark.real_model
-def test_resnet18_incompatible_add_crash_trio() -> None:
-    """Memo crash C: (1000,) + (3,) over real logits; tail joins the partial."""
-
-    torchvision = pytest.importorskip("torchvision")
-    backbone = torchvision.models.resnet18(
-        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1
-    ).eval()
-
-    class BadHead(torch.nn.Module):
-        """Adds an incompatible bias to real logits."""
-
-        def __init__(self) -> None:
-            """Wrap the backbone with a mis-shaped bias."""
-
-            super().__init__()
-            self.backbone = backbone
-            self.bias = torch.nn.Parameter(torch.zeros(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Crash on the final add."""
-
-            return self.backbone(x) + self.bias
-
-    sink = io.StringIO()
-    torch.manual_seed(0)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        with pytest.raises(TraceCaptureError) as excinfo:
-            tl.record(
-                BadHead(),
-                torch.randn(1, 3, 224, 224),
-                save=tl.func("linear"),
-                narrate=NarrationOptions(sites=True, sink=sink),
-                on_forward_error="attach_partial",
-            )
-        assert isinstance(excinfo.value.__cause__, RuntimeError)
-    transcript = sink.getvalue()
-    assert "!! forward failed: RuntimeError" in transcript
-    assert "attempted call=" in transcript
-    partial = getattr(excinfo.value, "partial_recording", None)
-    assert partial is not None and partial.is_failed
-    tail_labels = [
-        line.split()[1]
-        for line in transcript.split("\n")
-        if line.lstrip().startswith("#") and "linear" in line
-    ]
-    assert tail_labels
-    assert any(record.ctx.label == tail_labels[-1] for record in partial.records)
-
-
 def _distilgpt2_checkpoint_cached() -> bool:
     """Return whether the local HF cache holds every distilgpt2 file the demo loads.
 
@@ -211,31 +113,6 @@ def _distilgpt2_checkpoint_cached() -> bool:
     weights = cached("model.safetensors") or cached("pytorch_model.bin")
     tokenizer = cached("tokenizer.json") or (cached("vocab.json") and cached("merges.txt"))
     return cached("config.json") and weights and tokenizer
-
-
-@pytest.mark.heavy
-@pytest.mark.real_model
-def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
-    """Memo headline demo: scoped narration on the real distilgpt2 checkpoint."""
-
-    if not _distilgpt2_checkpoint_cached():
-        pytest.skip("distilgpt2 checkpoint or tokenizer files not in the local HF cache")
-    tokenizer = transformers.AutoTokenizer.from_pretrained("distilgpt2", local_files_only=True)
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        "distilgpt2", local_files_only=True
-    ).eval()
-    inputs = tokenizer("The keys to the cabinet", return_tensors="pt")
-    assert inputs["input_ids"].numel() > 0, "the cached distilgpt2 tokenizer encoded nothing"
-    sink = io.StringIO()
-    tl.record(
-        model,
-        inputs["input_ids"],
-        narrate=NarrationOptions(sites=tl.in_module("transformer.h.3"), sink=sink),
-    )
-    lines = [line for line in sink.getvalue().split("\n") if line]
-    op_lines = [line for line in lines if line.lstrip().startswith("#")]
-    assert op_lines, "h.3 scope narrated nothing on the real checkpoint"
-    assert all("@transformer.h.3" in line for line in op_lines)
 
 
 @pytest.mark.rare

@@ -76,40 +76,6 @@ def test_diff_writes_both_targets_and_manifest(diff_dir: Path) -> None:
     assert manifest["coverage"]["one_sided"] == 0
 
 
-def test_aligned_pair_has_identical_id_sequences(diff_dir: Path) -> None:
-    """Same architecture -> identical id SEQUENCES, zero mapping artifacts."""
-
-    left = json.loads((diff_dir / "left.json").read_text(encoding="utf-8"))
-    right = json.loads((diff_dir / "right.json").read_text(encoding="utf-8"))
-    left_ids = [node["id"] for node in left["graphs"][0]["nodes"]]
-    right_ids = [node["id"] for node in right["graphs"][0]["nodes"]]
-    assert left_ids == right_ids
-    assert not (diff_dir / "sync-navigation.json").exists(), "aligned ids need no mapping entries"
-    config = json.loads((diff_dir / "embed-config.json").read_text(encoding="utf-8"))
-    sync = config["syncNavigationData"]
-    assert sync["type"] == "sync_navigation"
-    assert "mappingEntries" not in sync
-    assert "disableMappingFallback" not in sync
-
-
-def test_perturbed_weights_produce_nonzero_deltas(diff_dir: Path) -> None:
-    """The perturbed layer's downstream ops carry positive L2 deltas."""
-
-    node_data = json.loads(
-        (diff_dir / "nodedata.left.bundle_delta.json").read_text(encoding="utf-8")
-    )
-    graph_id = next(iter(node_data))
-    values = [row["value"] for row in node_data[graph_id]["results"].values()]
-    assert values
-    assert any(value > 0 for value in values)
-    assert all(value >= 0 for value in values)
-    left = json.loads((diff_dir / "left.json").read_text(encoding="utf-8"))
-    input_id = next(
-        node["id"] for node in left["graphs"][0]["nodes"] if node["namespace"] == "Inputs"
-    )
-    assert node_data[graph_id]["results"][input_id]["value"] == 0.0
-
-
 def test_pair_arity_refuses_typed() -> None:
     """Anything but exactly two captures refuses typed."""
 

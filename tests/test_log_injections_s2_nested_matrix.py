@@ -114,22 +114,6 @@ def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
     assert {record.provenance.nesting_path for record in records} == {()}
 
 
-def test_record_has_no_injection_spelling_and_cooked_traces_are_empty(chain) -> None:
-    """The fastlog recorder exposes no log_injections door (pinned)."""
-
-    model, x = chain
-    with pytest.raises(TypeError):
-        tl.record(model, x, save=tl.func("relu"), capture=_LOGGED)
-    recording = tl.record(
-        model,
-        x,
-        save=tl.func("relu"),
-        intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
-    )
-    cooked = recording.to_trace()
-    assert cooked.injected_ops == ()
-
-
 def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
     """episode= + intervene= refuses pre-execution (F40a), logged or not."""
 

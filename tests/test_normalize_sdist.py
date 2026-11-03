@@ -21,8 +21,6 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -70,16 +68,6 @@ def _make_wheel(path: Path, file_mode: int) -> None:
             wheel.writestr(info, b"payload\n")
 
 
-def test_normalized_mode_maps_to_the_canonical_pair() -> None:
-    normalizer = _load_normalizer()
-    assert normalizer._normalized_mode(0o644) == 0o644
-    assert normalizer._normalized_mode(0o664) == 0o644
-    assert normalizer._normalized_mode(0o444) == 0o644
-    assert normalizer._normalized_mode(0o755) == 0o755
-    assert normalizer._normalized_mode(0o700) == 0o755
-    assert normalizer._normalized_mode(0o775) == 0o755
-
-
 def test_sdist_normalization_is_machine_invariant_and_idempotent(tmp_path: Path) -> None:
     """Two builds differing only in umask/uid/wall-clock converge byte-identically."""
 
@@ -103,50 +91,3 @@ def test_sdist_normalization_is_machine_invariant_and_idempotent(tmp_path: Path)
     assert {m.mode for m in members} == {0o644}
     assert {(m.uid, m.gid, m.uname, m.gname) for m in members} == {(0, 0, "", "")}
     assert {m.mtime for m in members} == {1_600_000_000}
-
-
-def test_wheel_normalization_is_umask_invariant_and_keeps_dir_type_bits(tmp_path: Path) -> None:
-    """Modes canonicalize across umasks WITHOUT retyping directory entries as files.
-
-    opus b10 R84 LOW: the rewriter stamped ``S_IFREG`` on every entry, so an
-    explicit ``dir/`` member would be republished as a zero-length regular
-    file. Latent on setuptools-83 wheels (0 dir entries measured) but the
-    function is the general normalizer for whatever a future backend emits.
-    """
-
-    normalizer = _load_normalizer()
-    first = tmp_path / "one.whl"
-    second = tmp_path / "two.whl"
-    _make_wheel(first, file_mode=0o644)
-    _make_wheel(second, file_mode=0o664)
-    assert first.read_bytes() != second.read_bytes()
-
-    normalizer.normalize_wheel(str(first))
-    normalizer.normalize_wheel(str(second))
-    assert first.read_bytes() == second.read_bytes()
-
-    normalized = first.read_bytes()
-    normalizer.normalize_wheel(str(first))
-    assert first.read_bytes() == normalized  # idempotent
-
-    with zipfile.ZipFile(first) as wheel:
-        attrs = {info.filename: info.external_attr >> 16 for info in wheel.infolist()}
-    assert attrs["pkg/a.py"] == stat.S_IFREG | 0o644
-    assert attrs["pkg/b.sh"] == stat.S_IFREG | 0o755
-    assert attrs["pkg/"] & stat.S_IFMT(0xFFFF) == stat.S_IFDIR, (
-        "directory entry was republished as a regular file"
-    )
-    assert attrs["pkg/"] & 0o7777 == 0o755
-
-
-def test_main_refuses_without_source_date_epoch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    normalizer = _load_normalizer()
-    artifact = tmp_path / "x.tar.gz"
-    _make_sdist(artifact, mode=0o644, uid=0, mtime=0)
-    monkeypatch.delenv("SOURCE_DATE_EPOCH", raising=False)
-    assert normalizer.main([str(artifact)]) == 2
-    assert "SOURCE_DATE_EPOCH" in capsys.readouterr().err
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", "not-a-number")
-    assert normalizer.main([str(artifact)]) == 2

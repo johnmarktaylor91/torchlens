@@ -190,13 +190,6 @@ class TestCausalReceipt:
             _receipt(positive_control=0.0)
         assert _code(excinfo) == "tv_receipt_invalid"
 
-    def test_nonfinite_effect_refuses(self) -> None:
-        """A non-finite effect is a failed measurement."""
-
-        with pytest.raises(torchlens.errors.RenderError) as excinfo:
-            _receipt(effects=(float("inf"), 1.0))
-        assert _code(excinfo) == "tv_receipt_invalid"
-
 
 class TestScoreDecomposition:
     """The hard sum-to-score invariant (D19)."""

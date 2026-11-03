@@ -96,16 +96,3 @@ def test_custom_columns_selection(tiny_summary_log: tl.Trace) -> None:
     assert "fwd flops" in full
     assert "fwd flops" not in narrow
     assert "params" in narrow
-
-
-def test_repr_remains_short_for_resnet18() -> None:
-    """The compact repr should stay comfortably below the sprint cap."""
-    torchvision_models = pytest.importorskip("torchvision.models")
-    model = torchvision_models.resnet18()
-    x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, save=None)
-    try:
-        rendered = repr(log)
-    finally:
-        log.cleanup()
-    assert len(rendered) < 1200

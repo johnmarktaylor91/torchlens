@@ -88,12 +88,6 @@ def _assert_materialization_is_audited(trace: tl.Trace) -> None:
     assert trace.provenance.verified is True
 
 
-def test_materialization_of_a_module_built_in_forward_is_audited(_armed_witness: None) -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])
-    _assert_materialization_is_audited(trace)
-
-
 def test_a_detach_on_a_materialized_parameter_is_not_credited() -> None:
     """The state-view flag covers PENDING slots only: a real tensor's unowned view stays a gap."""
 

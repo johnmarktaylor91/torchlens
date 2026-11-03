@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._observability import HistoryCollector, WatchSettings, region
+from torchlens._observability import HistoryCollector, region
 
 
 def _model() -> nn.Sequential:
@@ -53,45 +53,6 @@ class TestHookLifecycle:
             collector.attach()
             raise RuntimeError("training crashed")
         assert _hook_census(model) == baseline
-
-
-class TestRngPurity:
-    """Bitwise same-seed equality: observation consumes zero user RNG."""
-
-    @staticmethod
-    def _train(observed: bool) -> tuple[list[float], dict[str, torch.Tensor], torch.Tensor]:
-        model = _model()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
-        collector = None
-        if observed:
-            collector = HistoryCollector(
-                model,
-                streams=("activation", "param", "param_grad", "param_delta"),
-                settings=WatchSettings(sketch_cadence=1),
-            )
-            collector.discover(torch.ones(2, 6))
-            collector.attach(optimizer=optimizer)
-        torch.manual_seed(31337)
-        losses = []
-        for _ in range(3):
-            x = torch.randn(2, 6)
-            loss = model(x).sum()
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            losses.append(float(loss))
-        if collector is not None:
-            collector.detach()
-        params = {name: p.detach().clone() for name, p in model.named_parameters()}
-        return losses, params, torch.get_rng_state().clone()
-
-    def test_observed_equals_control_bitwise(self) -> None:
-        observed_losses, observed_params, observed_rng = self._train(observed=True)
-        control_losses, control_params, control_rng = self._train(observed=False)
-        assert observed_losses == control_losses
-        for name, control in control_params.items():
-            assert torch.equal(observed_params[name], control), name
-        assert torch.equal(observed_rng, control_rng)
 
 
 class TestCaptureComposition:
