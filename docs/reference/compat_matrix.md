@@ -17,7 +17,7 @@ version table, the limitations catalog) lives in
 |---|---|---|---|---|---|---|
 | Router-logit outputs (`output_router_logits=True`) | `test_router_logit_outputs_capture_exactly_and_validate[mixtral, qwen2_moe, olmoe]` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | `test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks (torch-native sharding) |
-| `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn-4 4.0.0b37 | pass under `torch.no_grad()`: exact output, each attention call one `autogradfunction` boundary op (exit `flash_attn.cute`), forward validation passes, witnessed trace verified; with autograd enabled the call's second output (log-sum-exp) fails the perturbation check on its v edge (strict expected failure) |
+| `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn-4 4.0.0b37 | pass under `torch.no_grad()`: exact output, each attention call one `autogradfunction` boundary op (exit `flash_attn.cute`), forward validation passes, witnessed trace verified; with autograd enabled the call's second output (log-sum-exp) validates through the kernel table's declared per-output dependence (q and k only) |
 | Router-logit outputs | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host (CPU tensors) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
 | Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
@@ -76,17 +76,19 @@ is verified (`trace.provenance.verified is True`, no `CaptureGapWarning`). Under
 scope="forward")` passes with the dispatch census balanced (nothing exempted). With
 autograd enabled the kernel also returns its log-sum-exp, so each call is two sibling
 ops sharing one `func_call_id` (index 0 the bfloat16 attention output, index 1 the
-float32 log-sum-exp that nothing consumes); the log-sum-exp depends on q and k only,
-and the perturbation check reports its v edge as insensitive, so forward validation
-fails there. That failure is correct about the edge and is pinned as a strict expected
-failure (`test_flash_attention_4_grad_enabled_validates`) until a rule for multi-output
-boundary calls is decided; nothing is exempted to hide it. The same
+float32 log-sum-exp that nothing consumes); the log-sum-exp depends on q and k only.
+The known-kernel table declares that per-output dependence (ruling: "(b) Declare
+per-output dependence per kernel in a table."), so the perturbation check excuses the
+log-sum-exp's v edge by declaration and nothing else: the attention output's q, k and v
+edges and the log-sum-exp's q and k edges stay perturbation-tested, an undeclared kernel,
+output or argument position is strict, and `test_flash_attention_4_grad_enabled_validates`
+asserts the grad-enabled capture validates. The same
 model on `sdpa` or `eager` attention, same GPU and dtype (bfloat16), captures and
 validates op by op. `tl.report.doctor()` reports whether the package is
 installed as `HAS_FLASH_ATTENTION_4_INTERFACE` (read from the package's search path;
 nothing is imported). The row's test asserts the boundary ops, the exact output and
-the passing validation under `torch.no_grad()`; a companion test pins the verified
-marking under the armed witness.
+the passing validation under `torch.no_grad()` and with autograd enabled; a companion test
+pins the verified marking under the armed witness.
 
 ## Model Explorer with adapter 0.2.x
 

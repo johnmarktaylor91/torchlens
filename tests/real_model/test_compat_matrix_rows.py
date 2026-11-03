@@ -18,8 +18,9 @@ measured on.
   ``autogradfunction`` boundary call (exit ``flash_attn.cute``) that validates through replay
   under ``torch.no_grad()``; a companion test pins that the armed completeness witness sees no
   gap. With autograd enabled the kernel also returns its log-sum-exp, a second output of the
-  same call that does not depend on v, and forward validation reports that edge as
-  insensitive (strict xfail until the per-output rule is decided).
+  same call that depends on q and k only; the kernel table declares that per-output
+  dependence (ruling: declare per-output dependence per kernel in a table) and the grad-enabled
+  row validates too, with the attention output's every edge still tested.
 """
 
 from __future__ import annotations
@@ -325,25 +326,19 @@ def test_flash_attention_4_capture_and_validate() -> None:
     assert last_validation_failure() is None
 
 
-_FA4_LSE_EDGE = (
-    "with autograd enabled FlashAttention 4 returns (out, lse); lse is a second output of the "
-    "same boundary call that depends on q and k only, and the perturbation check reports its "
-    "v edge (arg 2) as insensitive. A per-output or per-call rule for multi-output boundary "
-    "calls is a validation-integrity decision; until it is made this pins the failure."
-)
-
-
 @pytest.mark.cuda
 @pytest.mark.heavy
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA4_LSE_EDGE)
 def test_flash_attention_4_grad_enabled_validates() -> None:
-    """With autograd on, each call is two sibling ops (out, lse) and validation fails on lse.
+    """With autograd on, each call is two sibling ops (out, lse) and validation passes.
 
-    The capture itself is right: both siblings share one call with q, k and v at arg
-    positions 0 to 2, the attention output (index 0, bfloat16) feeds the next op and the
-    log-sum-exp (index 1, float32) feeds nothing. Forward validation fails only on the lse
-    sibling's v edge; when a rule for that edge lands this xfail must be dropped.
+    Both siblings share one call with q, k and v at arg positions 0 to 2, the attention
+    output (index 0, bfloat16) feeds the next op and the log-sum-exp (index 1, float32)
+    feeds nothing. The kernel table declares the log-sum-exp dependent on q and k only, so
+    its v edge is excused by declaration while every other edge of both outputs is
+    perturbation-tested (``tests/test_foreign_kernel_dependence.py`` pins the edges).
     """
+
+    from torchlens.validation import last_validation_failure
 
     model, input_ids = _fa4_llama()
     with torch.no_grad():
@@ -365,6 +360,7 @@ def test_flash_attention_4_grad_enabled_validates() -> None:
     finally:
         trace.cleanup()
     assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
+    assert last_validation_failure() is None
 
 
 @pytest.mark.cuda

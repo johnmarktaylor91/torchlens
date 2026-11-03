@@ -112,7 +112,12 @@
     `autogradfunction` boundary op (`transform_kind="autograd.Function"`,
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
-    validation replays it by calling the Function's `apply` again. An ordinary custom Function
+    validation replays it by calling the Function's `apply` again; when a known kernel returns
+    several tensors, the kernel table declares per output which positional arguments it depends
+    on (ruling: "(b) Declare per-output dependence per kernel in a table."; FlashAttention 4's
+    log-sum-exp reads q and k, not v) and the perturbation check excuses exactly the
+    declared-independent edges, every undeclared kernel, output and position staying strict
+    (`validation/_foreign_kernel_dependence.py`). An ordinary custom Function
     (interior in torch) is captured op by op exactly as before. A round trip outside any
     Function is never collapsed into a boundary that hides ops: the export is journaled as a
     departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited

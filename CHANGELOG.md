@@ -182,8 +182,12 @@
   verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
   before, the trace recorded the output allocation in place of the attention and validation
   failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
-  as a second output of the same call, which depends on q and k only, and forward validation
-  still reports that output's v edge as insensitive (a pinned, strict expected failure).
+  as a second output of the same call, which depends on q and k only; the known-kernel table
+  declares that per-output dependence (ruling: "(b) Declare per-output dependence per kernel
+  in a table.") and the perturbation check excuses exactly the declared edge (the
+  log-sum-exp's v edge), so the grad-enabled capture validates too. Every other edge stays
+  tested: the attention output has no row, an undeclared kernel, output or argument position
+  is strict, and a declared-dependent argument that does not move its output still fails.
   `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
 - **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
   `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
