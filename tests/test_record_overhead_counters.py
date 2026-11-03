@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+import warnings
 from collections import OrderedDict
 from typing import Any
 
@@ -22,6 +23,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens._ir.capture_events import _clone_op_event_for_replay
 from torchlens._ir.op_record import OpRecord
 from torchlens._ir.refs import _clone_frozen_record
@@ -31,6 +33,7 @@ from torchlens.backends.torch._session_cleanup import (
     _clear_module_attribute_tensor_metadata,
     _clear_session_tensor_metadata,
 )
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 
 def _block() -> nn.Sequential:
@@ -224,3 +227,31 @@ def test_one_module_record_bookkeeping_counters() -> None:
     # accessor; only the stamps minted while the run collector is active still
     # go through the wrapper (one per saved module output here; 46 before).
     assert counts["wrapped_untyped_storage"] <= 4, counts
+
+
+def test_shadow_escape_detector_relu_trace_has_no_unattributed_args() -> None:
+    """The original-accessor storage read stays invisible to the shadow detector.
+
+    The docs/performance.md shadow example: a plain ``nn.ReLU`` trace must attribute
+    its input. Reading storage through the raw accessor while logging was live made the
+    detector report it and the capture then flagged ``relu`` arg0 as source-less.
+    """
+
+    saved_escape_detector = _state._escape_detector_mode
+    saved_completeness_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    try:
+        wrap_torch(escape_detector="shadow")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace = tl.trace(nn.ReLU(), torch.randn(4))
+    finally:
+        unwrap_torch()
+        wrap_torch(
+            escape_detector=saved_escape_detector,
+            completeness_witness=saved_completeness_witness,
+        )
+    messages = [str(item.message) for item in caught]
+    assert not [m for m in messages if "no graph/source provenance" in m], messages
+    assert not [m for m in messages if "untyped_storage" in m], messages
+    assert not trace.__dict__.get("escape_diagnostics"), trace.__dict__.get("escape_diagnostics")
