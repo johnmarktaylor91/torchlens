@@ -65,6 +65,24 @@ PINNED: dict[str, tuple[str, ...]] = {
     "torchlens/_visualization/theme_registry.py": ("tests/test_themes.py",),
 }
 
+#: Reviewed per-module test additions (from per-test coverage), read by the builder.
+OVERRIDES_FILE = "scripts/affected_test_map_overrides.json"
+
+#: Defaults for ``inner.tier``: paths whose reach no 8-file list covers run this tier.
+TIER_DEFAULTS: dict[str, object] = {
+    "marker": "smoke",
+    "seconds": 900,
+    "cpus": 4,
+    "args": ["tests/", "-o", "addopts=", "-m", "smoke", "-n", "4", "-x", "--tb=short"],
+}
+#: Repository files outside ``torchlens/`` whose change reaches the whole suite.
+TIER_FIXED_PATHS: dict[str, str] = {
+    "pyproject.toml": "pytest-config",
+    "torchlens/schemas/*": "schema-json",
+}
+#: A module whose top-level ``register*`` function this many other modules import.
+REGISTRY_MIN_IMPORTERS = 3
+
 #: Module-level ``pytestmark`` markers that make a whole file a poor budget fit.
 EXPENSIVE_MARKERS = frozenset({"slow", "rare", "big_memory"})
 
@@ -898,6 +916,10 @@ class BuildResult:
         Module paths that fell back to the root package's list.
     expensive_listed:
         Distinct slow/rare-marked files that still appear in a list.
+    tier:
+        Path or glob -> rule name for paths that run the tier (``inner.tier``).
+    overridden:
+        Module paths carrying a reviewed override row.
     """
 
     mapping: dict[str, list[str]]
@@ -908,9 +930,13 @@ class BuildResult:
     submodule_fallback: list[str]
     root_fallback: list[str]
     expensive_listed: list[str]
+    tier: dict[str, str] = field(default_factory=dict)
+    overridden: list[str] = field(default_factory=list)
 
 
-def _rank_candidates(pkg: Package, index: ReferenceIndex) -> tuple[dict[str, list[str]], list[str]]:
+def _rank_candidates(
+    pkg: Package, index: ReferenceIndex, overrides: dict[str, list[str]] | None = None
+) -> tuple[dict[str, list[str]], list[str]]:
     """Rank candidate tests for every module (before fallback and collapse).
 
     Parameters
@@ -919,12 +945,15 @@ def _rank_candidates(pkg: Package, index: ReferenceIndex) -> tuple[dict[str, lis
         Package model.
     index:
         Test reference index.
+    overrides:
+        Module path -> reviewed tests ranked right after the pinned entries.
 
     Returns
     -------
     tuple[dict[str, list[str]], list[str]]
         Module path -> capped ranked list (possibly empty), and capped modules.
     """
+    overrides = overrides or {}
     users: dict[str, Counter[str]] = defaultdict(Counter)
     inherited_users: dict[str, Counter[str]] = defaultdict(Counter)
     for test, refs in index.own.items():
@@ -993,6 +1022,7 @@ def _rank_candidates(pkg: Package, index: ReferenceIndex) -> tuple[dict[str, lis
         )
         tiers: list[list[str]] = [
             list(PINNED.get(path, ())),
+            list(overrides.get(path, ())),
             sorted(referenced, key=lambda t: (-direct[t], -reach[t], len(t), t)),
             sorted(direct, key=lambda t: (-direct[t], t)),
             unreferenced[:MAX_UNREFERENCED_NAMED],
@@ -1134,6 +1164,279 @@ def _collapse(final: dict[str, list[str]]) -> dict[str, list[str]]:
     return dict(sorted(mapping.items()))
 
 
+# --------------------------------------------------------------------------- #
+# Reviewed overrides and the tier broadening
+# --------------------------------------------------------------------------- #
+
+
+def load_overrides(repo: Path, pkg: Package, index: ReferenceIndex) -> dict[str, list[str]]:
+    """Read the reviewed per-module additions in :data:`OVERRIDES_FILE`.
+
+    The file holds ``{"modules": {module path: {"tests": [...], "why": "..."}}}``.
+    A stale row (a module or test that no longer exists, an empty reason, more
+    than :data:`MAX_TESTS` tests) is an error, so a rename forces a review.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    pkg:
+        Package model.
+    index:
+        Test reference index.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Module path -> reviewed tests, in file order.
+
+    Raises
+    ------
+    ValueError
+        If a row is stale or malformed.
+    """
+    path = repo / OVERRIDES_FILE
+    if not path.is_file():
+        return {}
+    rows = json.loads(path.read_text(encoding="utf-8")).get("modules", {})
+    modules = set(pkg.path_of.values())
+    tests = set(index.tests)
+    result: dict[str, list[str]] = {}
+    for module, row in sorted(rows.items()):
+        listed = list(row.get("tests", []))
+        problems = [
+            *([f"unknown module {module}"] if module not in modules else []),
+            *(f"unknown test {t}" for t in listed if t not in tests),
+            *(["no reason given"] if not str(row.get("why", "")).strip() else []),
+            *([f"more than {MAX_TESTS} tests"] if not 0 < len(listed) <= MAX_TESTS else []),
+        ]
+        if problems:
+            raise ValueError(f"{OVERRIDES_FILE}: {module}: " + "; ".join(problems))
+        result[module] = listed
+    return result
+
+
+def _eager_targets(pkg: Package, name: str, body: Iterable[ast.stmt]) -> Iterator[str]:
+    """Yield torchlens modules a module imports at import time.
+
+    ``if TYPE_CHECKING:`` bodies are skipped; function and class bodies are
+    never entered.
+
+    Parameters
+    ----------
+    pkg:
+        Package model.
+    name:
+        Importing module.
+    body:
+        Statement list.
+
+    Returns
+    -------
+    Iterator[str]
+        Imported torchlens module names.
+    """
+    for stmt in body:
+        if isinstance(stmt, ast.If):
+            if "TYPE_CHECKING" not in ast.unparse(stmt.test):
+                yield from _eager_targets(pkg, name, stmt.body)
+            yield from _eager_targets(pkg, name, stmt.orelse)
+        elif isinstance(stmt, ast.Try):
+            for block in (stmt.body, *(h.body for h in stmt.handlers), stmt.orelse):
+                yield from _eager_targets(pkg, name, block)
+        elif isinstance(stmt, ast.With):
+            yield from _eager_targets(pkg, name, stmt.body)
+        elif isinstance(stmt, ast.ImportFrom):
+            src = _resolve_relative(name, name in pkg.is_package, stmt.level, stmt.module)
+            found, _ = pkg.longest_module(src)
+            if found is not None:
+                yield found
+                for alias in stmt.names:
+                    if f"{found}.{alias.name}" in pkg.path_of:
+                        yield f"{found}.{alias.name}"
+        elif isinstance(stmt, ast.Import):
+            for alias in stmt.names:
+                found, _ = pkg.longest_module(alias.name)
+                if found is not None:
+                    yield found
+
+
+def _eager_packages(repo: Path, pkg: Package) -> set[str]:
+    """Return the package ``__init__`` modules ``import torchlens`` executes.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    pkg:
+        Package model.
+
+    Returns
+    -------
+    set[str]
+        Package module names in the eager import closure of the root package.
+    """
+    seen: set[str] = set()
+    stack = [PACKAGE]
+    while stack:
+        name = stack.pop()
+        if name in seen or name not in pkg.path_of:
+            continue
+        seen.add(name)
+        parts = name.split(".")
+        stack.extend(".".join(parts[:i]) for i in range(1, len(parts)))
+        tree = _parse(repo / pkg.path_of[name])
+        stack.extend(_eager_targets(pkg, name, tree.body))
+    return {name for name in seen if name in pkg.is_package}
+
+
+def _facade_modules(repo: Path, pkg: Package) -> set[str]:
+    """Return the modules the root package's ``__getattr__``/``__dir__`` import.
+
+    The root package is lazy: every ``tl.<name>`` lookup runs this facade.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    pkg:
+        Package model.
+
+    Returns
+    -------
+    set[str]
+        Module names imported inside the root ``__getattr__`` and ``__dir__``.
+    """
+    tree = _parse(repo / pkg.path_of[PACKAGE])
+    found: set[str] = set()
+    for stmt in tree.body:
+        if isinstance(stmt, ast.FunctionDef) and stmt.name in {"__getattr__", "__dir__"}:
+            found.update(_eager_targets(pkg, PACKAGE, stmt.body))
+    return found - {PACKAGE}
+
+
+def _registry_hubs(repo: Path, pkg: Package) -> set[str]:
+    """Return modules whose top-level ``register*`` functions many modules import.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    pkg:
+        Package model.
+
+    Returns
+    -------
+    set[str]
+        Module names imported for a ``register*`` name by at least
+        :data:`REGISTRY_MIN_IMPORTERS` other modules.
+    """
+    defines: set[str] = set()
+    for name, rel in pkg.path_of.items():
+        body = _parse(repo / rel).body
+        if any(isinstance(s, ast.FunctionDef) and s.name.startswith("register") for s in body):
+            defines.add(name)
+    importers: dict[str, set[str]] = defaultdict(set)
+    for name, table in pkg.exports.items():
+        for target, attr in table.values():
+            if attr is not None and attr.startswith("register") and target in defines:
+                importers[target].add(name)
+    return {m for m, users in importers.items() if len(users - {m}) >= REGISTRY_MIN_IMPORTERS}
+
+
+def _name_rule(path: str) -> str | None:
+    """Return the name-based tier rule a module path matches, if any.
+
+    Parameters
+    ----------
+    path:
+        Repository-relative module path.
+
+    Returns
+    -------
+    str | None
+        ``schema-name``, ``io-contract``, ``registry-name`` or
+        ``refusal-registry``; ``None`` when no name rule applies.
+    """
+    stem = path.rsplit("/", 1)[-1][: -len(".py")]
+    tokens = set(stem.strip("_").split("_"))
+    if tokens & {"schema", "schemas"} or {"field", "policy"} <= tokens:
+        return "schema-name"
+    if path.startswith("torchlens/_io/") and stem.endswith("_contract"):
+        return "io-contract"
+    if tokens & {"registry", "registries"} or path.startswith("torchlens/_registry/"):
+        return "registry-name"
+    if path.startswith("torchlens/errors/") or path == "torchlens/_errors.py":
+        return "refusal-registry"
+    return None
+
+
+def _pytest_plugins(repo: Path, conftest: str) -> Iterator[str]:
+    """Yield ``tests/`` plugin modules a conftest registers through ``pytest_plugins``.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    conftest:
+        Repository-relative conftest path.
+
+    Returns
+    -------
+    Iterator[str]
+        Repository-relative plugin paths that exist.
+    """
+    directory = conftest.rsplit("/", 1)[0]
+    for stmt in _parse(repo / conftest).body:
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else []
+        if any(isinstance(t, ast.Name) and t.id == "pytest_plugins" for t in targets):
+            for node in ast.walk(stmt.value):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    rel = f"{directory}/{node.value.replace('.', '/')}.py"
+                    if (repo / rel).is_file():
+                        yield rel
+
+
+def tier_paths(repo: Path, pkg: Package) -> dict[str, str]:
+    """Select the paths whose change runs the tier instead of a file list.
+
+    Rules: ``conftest`` (every ``conftest.py`` under ``tests/``),
+    ``pytest-plugin`` (modules those conftests register), ``import-wiring``
+    (the root package, every package ``__init__`` that ``import torchlens``
+    executes, and the modules its lazy ``__getattr__``/``__dir__`` facade
+    imports), ``schema-name``/``io-contract`` (persisted-field and format
+    contract modules), ``registry-name``/``registry-callsites``/
+    ``refusal-registry`` (registries), plus :data:`TIER_FIXED_PATHS`.
+
+    Parameters
+    ----------
+    repo:
+        Repository root.
+    pkg:
+        Package model.
+
+    Returns
+    -------
+    dict[str, str]
+        Path or glob -> rule name, sorted by path.
+    """
+    found: dict[str, str] = dict(TIER_FIXED_PATHS)
+    for path in sorted(_rel(p, repo) for p in _iter_py(repo / "tests")):
+        if path.endswith("/conftest.py"):
+            found[path] = "conftest"
+            for plugin in _pytest_plugins(repo, path):
+                found.setdefault(plugin, "pytest-plugin")
+    for name in _eager_packages(repo, pkg) | _facade_modules(repo, pkg):
+        found[pkg.path_of[name]] = "import-wiring"
+    for name in _registry_hubs(repo, pkg):
+        found.setdefault(pkg.path_of[name], "registry-callsites")
+    for path in pkg.path_of.values():
+        rule = _name_rule(path)
+        if rule is not None:
+            found.setdefault(path, rule)
+    return dict(sorted(found.items()))
+
+
 def build(repo: Path = REPO_ROOT) -> BuildResult:
     """Build the affected-test map from the source tree.
 
@@ -1157,7 +1460,8 @@ def build(repo: Path = REPO_ROOT) -> BuildResult:
     finally:
         if collector_was_enabled:
             gc.enable()
-    ranked, capped = _rank_candidates(pkg, index)
+    overrides = load_overrides(repo, pkg, index)
+    ranked, capped = _rank_candidates(pkg, index, overrides)
     final, ancestor, via_importers, via_submodules, via_root = _apply_fallbacks(pkg, ranked)
     mapping = _collapse(final)
     listed = {test for tests in mapping.values() for test in tests}
@@ -1170,11 +1474,17 @@ def build(repo: Path = REPO_ROOT) -> BuildResult:
         submodule_fallback=via_submodules,
         root_fallback=via_root,
         expensive_listed=sorted(listed & index.expensive),
+        tier=tier_paths(repo, pkg),
+        overridden=sorted(overrides),
     )
 
 
-def render(repo: Path, mapping: dict[str, list[str]]) -> str:
-    """Return ``test-tiers.json`` text with ``inner.map`` replaced.
+def render(repo: Path, mapping: dict[str, list[str]], tier: dict[str, str]) -> str:
+    """Return ``test-tiers.json`` text with ``inner.map`` and ``inner.tier`` replaced.
+
+    ``inner.tier.paths`` is regenerated; the tier's other settings (marker,
+    seconds, cpus, args) keep their committed values, or take
+    :data:`TIER_DEFAULTS` when absent.
 
     Parameters
     ----------
@@ -1182,6 +1492,8 @@ def render(repo: Path, mapping: dict[str, list[str]]) -> str:
         Repository root.
     mapping:
         New ``inner.map`` content.
+    tier:
+        New ``inner.tier.paths`` content (path or glob -> rule).
 
     Returns
     -------
@@ -1190,6 +1502,8 @@ def render(repo: Path, mapping: dict[str, list[str]]) -> str:
     """
     data = json.loads((repo / TIERS_FILE).read_text(encoding="utf-8"))
     data["inner"]["map"] = mapping
+    settings = {**TIER_DEFAULTS, **data["inner"].get("tier", {})}
+    data["inner"]["tier"] = {**settings, "paths": tier}
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
@@ -1215,7 +1529,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     result = build(REPO_ROOT)
-    text = render(REPO_ROOT, result.mapping)
+    text = render(REPO_ROOT, result.mapping, result.tier)
     target = REPO_ROOT / TIERS_FILE
     print(f"modules: {result.module_count}")
     print(f"keys written: {len(result.mapping)}")
@@ -1233,11 +1547,18 @@ def main(argv: list[str] | None = None) -> int:
     for path in fallbacks:
         print(f"  fallback: {path}")
     print(f"slow/rare/big_memory-marked files still listed: {len(result.expensive_listed)}")
+    print(f"reviewed override rows: {len(result.overridden)}")
+    rules = Counter(result.tier.values())
+    print(
+        f"tier paths: {len(result.tier)} ({', '.join(f'{k} {v}' for k, v in sorted(rules.items()))})"
+    )
     if args.check:
         if target.read_text(encoding="utf-8") != text:
-            print(f"{TIERS_FILE}: inner.map is stale; run scripts/build_affected_test_map.py")
+            print(
+                f"{TIERS_FILE}: inner.map or inner.tier is stale; run scripts/build_affected_test_map.py"
+            )
             return 1
-        print(f"{TIERS_FILE}: inner.map is current")
+        print(f"{TIERS_FILE}: inner.map and inner.tier are current")
         return 0
     target.write_text(text, encoding="utf-8")
     print(f"wrote {TIERS_FILE}")

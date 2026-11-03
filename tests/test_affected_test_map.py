@@ -153,7 +153,36 @@ def test_committed_map_is_fresh() -> None:
     """
     builder = _load_builder()
     result = builder.build(REPO_ROOT)
-    expected = builder.render(REPO_ROOT, result.mapping)
+    expected = builder.render(REPO_ROOT, result.mapping, result.tier)
     assert TIERS_PATH.read_text(encoding="utf-8") == expected, (
-        "test-tiers.json inner.map is stale; run python scripts/build_affected_test_map.py"
+        "test-tiers.json inner.map or inner.tier is stale; "
+        "run python scripts/build_affected_test_map.py"
     )
+
+
+def test_every_conftest_runs_the_tier() -> None:
+    """Every ``conftest.py`` under ``tests/`` is an ``inner.tier`` path (rule ``conftest``)."""
+    paths = json.loads(TIERS_PATH.read_text(encoding="utf-8"))["inner"]["tier"]["paths"]
+    conftests = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "tests").rglob("conftest.py")
+    )
+    assert conftests
+    assert {path: paths.get(path) for path in conftests} == dict.fromkeys(conftests, "conftest")
+
+
+def test_reviewed_overrides_reach_the_committed_lists() -> None:
+    """Every reviewed override test is listed for its module in the committed map."""
+    overrides_path = REPO_ROOT / "scripts" / "affected_test_map_overrides.json"
+    if not overrides_path.is_file():
+        pytest.skip("no reviewed overrides file")
+    rows = json.loads(overrides_path.read_text(encoding="utf-8"))["modules"]
+    mapping = _load_map()
+    missing: list[str] = []
+    for module, row in rows.items():
+        keys = [
+            k for k in mapping if k == module or (_is_glob(k) and fnmatch.fnmatchcase(module, k))
+        ]
+        listed = {test for key in keys for test in mapping[key]}
+        missing.extend(f"{module} -> {test}" for test in row["tests"] if test not in listed)
+    assert not missing, missing[:10]
