@@ -89,6 +89,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_capture/_record_stores.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_capture/_weightsfree_admission.py",
   "has_default": true,
@@ -6499,14 +6507,6 @@
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/backends/torch/_predicate_boundary_replacements.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/torch/_predicate_forward.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
