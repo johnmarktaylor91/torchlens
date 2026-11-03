@@ -1254,8 +1254,8 @@ torchlens/intervention/types.py	859
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67
-torchlens/mechinterp/_causal_audit.py::_ablated_sets	64
-torchlens/mechinterp/_causal_audit.py::causal_audit	156
+torchlens/attribution/_causal_audit.py::_ablated_sets	64
+torchlens/attribution/_causal_audit.py::causal_audit	156
 torchlens/mechinterp/_compose.py::apply_norm_scale	86
 torchlens/mechinterp/_compose.py::full_decomposition	78
 torchlens/mechinterp/_demo.py::tlens_agreement_demo	67

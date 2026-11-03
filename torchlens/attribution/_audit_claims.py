@@ -103,7 +103,7 @@ class _AuditPlan:
         not complete is measured by its own fork.
         """
 
-        from torchlens.mechinterp._audit_sites import _swept_scores
+        from torchlens.attribution._audit_sites import _swept_scores
 
         swept = _swept_scores(
             self.trace,

@@ -41,10 +41,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
-from torchlens.attribution._core import InputKwargs
-from torchlens.attribution._eval_maps import _spearman
-from torchlens.attribution._result import AttributionWarning
-from torchlens.mechinterp._audit_claims import (
+from torchlens.attribution._audit_claims import (
     _AUDIT_DOCS_POINTER,
     _AuditPlan,
     _AuditRequest,
@@ -54,10 +51,13 @@ from torchlens.mechinterp._audit_claims import (
     _trace_once,
     _validate_settings,
 )
-from torchlens.mechinterp._audit_edges import EDGES_REMEDY, _is_edge_table, _plan_edge_audit
-from torchlens.mechinterp._audit_logits import _is_contribution_table, _plan_logit_audit
-from torchlens.mechinterp._audit_reads import _is_read_table, _plan_read_audit
-from torchlens.mechinterp._audit_sites import _SitesPlan
+from torchlens.attribution._audit_edges import EDGES_REMEDY, _is_edge_table, _plan_edge_audit
+from torchlens.attribution._audit_logits import _is_contribution_table, _plan_logit_audit
+from torchlens.attribution._audit_reads import _is_read_table, _plan_read_audit
+from torchlens.attribution._audit_sites import _SitesPlan
+from torchlens.attribution._core import InputKwargs
+from torchlens.attribution._eval_maps import _spearman
+from torchlens.attribution._result import AttributionWarning
 
 # Single-unit ablations past this count warn once and name per_unit=False.
 _PER_UNIT_WARN_COUNT = 1024

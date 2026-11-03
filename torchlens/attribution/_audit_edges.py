@@ -39,10 +39,10 @@ from typing import Any
 import torch
 from torch import Tensor
 
+from torchlens.attribution._audit_claims import _AUDIT_DOCS_POINTER, _AuditRequest
+from torchlens.attribution._audit_sites import _SitesPlan, _SiteUnit
 from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
-from torchlens.mechinterp._audit_claims import _AUDIT_DOCS_POINTER, _AuditRequest
-from torchlens.mechinterp._audit_sites import _SitesPlan, _SiteUnit
 
 # The reductions ``edge_scores`` records, mapped to the reduction over examples.
 _REDUCTIONS = {"sum_positions_mean_examples": "mean", "sum_positions_sum_examples": "sum"}
@@ -209,7 +209,7 @@ def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
 def _mixed_remedy(claim: Any, rows: tuple[Any, ...]) -> str:
     """Return the audit of a mixed table's site reads (seeded), else of its edges rescored."""
 
-    from torchlens.mechinterp._audit_reads import _read_remedy, _recorded_target, _seed_spelling
+    from torchlens.attribution._audit_reads import _read_remedy, _recorded_target, _seed_spelling
 
     act = next(row for row in rows if row.kind != "EDGE")
     seed = _seed_spelling(_recorded_target(claim, act.target_id))

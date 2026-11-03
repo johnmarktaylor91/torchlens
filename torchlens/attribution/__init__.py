@@ -1,8 +1,12 @@
 """Input-attribution methods for TorchLens."""
 
-from typing import TYPE_CHECKING, Any
-
 from torchlens.attribution._cam import grad_cam
+from torchlens.attribution._causal_audit import (
+    CausalAudit,
+    CausalAuditSet,
+    CausalAuditUnit,
+    causal_audit,
+)
 from torchlens.attribution._core import (
     Attribution,
     input_x_grad,
@@ -43,28 +47,6 @@ from torchlens.attribution.onebackward import (
     read,
     seed,
 )
-
-if TYPE_CHECKING:
-    from torchlens.mechinterp._causal_audit import (
-        CausalAudit,
-        CausalAuditSet,
-        CausalAuditUnit,
-        causal_audit,
-    )
-
-_CAUSAL_AUDIT_EXPORTS = frozenset(
-    {"CausalAudit", "CausalAuditSet", "CausalAuditUnit", "causal_audit"}
-)
-
-
-def __getattr__(name: str) -> Any:
-    """Resolve the causal audit (a mechinterp appliance) on first use of its public name here."""
-    if name in _CAUSAL_AUDIT_EXPORTS:
-        from torchlens.mechinterp import _causal_audit  # deferred: cycle mechinterp
-
-        return getattr(_causal_audit, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 
 __all__ = [
     "AttributionGraph",

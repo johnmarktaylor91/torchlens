@@ -324,7 +324,7 @@ def test_bad_settings_refuse_and_the_remedy_runs(settings: dict[str, Any]) -> No
 def test_many_units_warn_once_and_name_per_unit_false(monkeypatch: pytest.MonkeyPatch) -> None:
     """Past the per-unit guard the audit warns once; ``per_unit=False`` measures only the sets."""
 
-    import torchlens.mechinterp._causal_audit as audit_module
+    import torchlens.attribution._causal_audit as audit_module
 
     monkeypatch.setattr(audit_module, "_PER_UNIT_WARN_COUNT", 2)
     model, x = _linear_case()

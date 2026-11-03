@@ -78,6 +78,9 @@ _EAGER_TORCHLENS_MODULES = frozenset(
         # _save_budget, _state, utils, visualization.node_spec) is fully
         # deferred behind _LAZY_ATTRS rows.
         "torchlens",
+        # The version string lives in its own module so that nothing below
+        # the facade imports the package root to read it; the root re-exports it.
+        "torchlens._version",
     }
 )
 

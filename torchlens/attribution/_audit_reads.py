@@ -27,9 +27,9 @@ from typing import Any
 import torch
 from torch import Tensor
 
+from torchlens.attribution._audit_claims import _AUDIT_DOCS_POINTER, _AuditRequest
+from torchlens.attribution._audit_sites import _site_edits, _SitesPlan, _SiteUnit
 from torchlens.attribution._result import AttributionError
-from torchlens.mechinterp._audit_claims import _AUDIT_DOCS_POINTER, _AuditRequest
-from torchlens.mechinterp._audit_sites import _site_edits, _SitesPlan, _SiteUnit
 
 
 def _is_read_table(claim: Any) -> bool:
