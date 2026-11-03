@@ -540,8 +540,8 @@ torchlens/_utils/rng/monitor.py	1569
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor.__init__	114
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._classify_c_call	107
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._install_profile_hooks	77
-torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook	106
-torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook.hook	91
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook	84
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook.hook	69
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_frame_rngs	103
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
