@@ -6160,6 +6160,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `hidden_flops=` | constructor keyword of `tl.report.CostTree` (required) |
 | `high=` | keyword of `tl.clamp` (keyword-only; default `None`): Optional upper bound; constructor keyword of `tl.repgeom.ScoreInterval` (required): Percentile interval bounds over the resampled scores; keyword of `tl.saturated` (keyword-only; default `None`); constructor keyword of `tl.types.InputSpec` (default `None`) |
 | `higher=` | constructor keyword of `tl.repgeom.DisagreeingPair` (required): Per metric, the site that metric scores higher (`None` for a tie or a missing score) |
+| `highlight=` | keyword of `Trace.draw` (keyword-only; default `None`): Keyword-only. Named highlight drawn over the graph. `None` (the default) draws the plain graph. `"interventions"` draws the surgery lens: every recorded intervention is marked on its node (solid border = recorded fact, dashed = heuristic attribution), the caption carries the per-lane census, .. |
 | `hist_every=` | constructor keyword of `tl.trackers.HFTrainerWatchCallback`, `tl.trackers.LightningWatchCallback` (keyword-only; optional); keyword of `tl.trackers.watch` (keyword-only; default `None`): Histogram cadence; may run coarser than scalars. `None` disables the sketch tier (scalars remain) |
 | `histogram_counts=` | constructor keyword of `tl.stats.TensorStats` (required) |
 | `histogram_edges=` | constructor keyword of `tl.stats.TensorStats` (required) |
