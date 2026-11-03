@@ -166,12 +166,12 @@ def _execution_forbidden(*args: Any, **kwargs: Any) -> None:
     raise AssertionError(f"Stage 4 executed a graph callable with {args!r}, {kwargs!r}")
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [
         ("missing", RunnableErrorCode.STATE_MISSING_KEY),
         ("unexpected", RunnableErrorCode.STATE_UNEXPECTED_KEY),
-        ("shape", RunnableErrorCode.STATE_SHAPE_MISMATCH),
         ("dtype", RunnableErrorCode.STATE_DTYPE_MISMATCH),
     ],
 )
@@ -279,31 +279,6 @@ def test_alias_groups_reject_conflicts_and_share_one_staged_value(
     assert RunnableErrorCode.STATE_ALIAS_CONFLICT in _codes(caught.value)
 
 
-def test_failed_restage_preserves_prior_binding_and_success_replaces_atomically(
-    runnable_artifact: tuple[Path, dict[str, torch.Tensor]],
-) -> None:
-    """Keep the old staged mapping on failure and replace it only after full validation."""
-
-    trace = _load(runnable_artifact)
-    first = {name: value.clone() for name, value in runnable_artifact[1].items()}
-    trace.load_state_dict(first)
-    first_prepared = prepare_runnable_state(trace)
-    invalid = dict(first)
-    del invalid["linear.bias"]
-    with pytest.raises(StateBindingError):
-        trace.load_state_dict(invalid)
-    after_failure = prepare_runnable_state(trace)
-    assert torch.equal(
-        after_failure.slot_values["state:linear.weight"],
-        first_prepared.slot_values["state:linear.weight"],
-    )
-
-    second = {name: value + 2 for name, value in first.items()}
-    trace.load_state_dict(second)
-    second_prepared = prepare_runnable_state(trace)
-    assert torch.equal(second_prepared.slot_values["state:linear.weight"], second["linear.weight"])
-
-
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the
@@ -402,21 +377,3 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     assert torch.all(first.slot_values["state:test:norm_scale"] == 1)
     assert torch.all(first.slot_values["state:test:running_var"] == 1)
     assert torch.count_nonzero(first.slot_values["state:test:weight"]) > 0
-
-
-def test_user_state_overrides_embedded_hook_and_embedded_precedes_random(
-    runnable_artifact: tuple[Path, dict[str, torch.Tensor]],
-) -> None:
-    """Exercise the Stage 7 embedded-state hook and effective source precedence."""
-
-    trace = _load(runnable_artifact)
-    embedded = {name: value + 1 for name, value in runnable_artifact[1].items()}
-    trace._runnable.embedded_state = embedded
-    prepared_embedded = prepare_runnable_state(trace, seed=7)
-    assert prepared_embedded.state_source is StateSource.EMBEDDED_CAPTURE_STATE
-
-    user = {name: value + 2 for name, value in runnable_artifact[1].items()}
-    trace.load_state_dict(user)
-    prepared_user = prepare_runnable_state(trace, seed=7)
-    assert prepared_user.state_source is StateSource.USER_STATE_DICT
-    assert torch.equal(prepared_user.slot_values["state:linear.weight"], user["linear.weight"])

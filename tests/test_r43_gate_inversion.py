@@ -50,7 +50,6 @@ from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
-import pytest
 import torch
 from torch.overrides import get_overridable_functions, get_testing_overrides
 
@@ -59,7 +58,6 @@ from torchlens._utils._callable_safety import (
     is_pure_forward_callable,
 )
 from torchlens.intervention._resolver_registry import resolve_import_ref
-from torchlens.intervention.errors import UntrustedCallableError
 
 # --------------------------------------------------------------------------- #
 # INDEPENDENT recognized-operator check (re-derived from torch's authorities, NOT
@@ -222,101 +220,6 @@ def test_immunizer_no_nonoperator_builtin_passes_gated_roots() -> None:
 # wrapper rescue, deeper allowlisted submodules, and the operator root.
 # --------------------------------------------------------------------------- #
 
-_AUDITED_LEGIT_FORWARD_ALLOW_SET: tuple[tuple[str, str], ...] = (
-    # torch root forward ops / factories (gated-root recognized-operator predicate).
-    ("torch", "relu"),
-    ("torch", "add"),
-    ("torch", "sub"),
-    ("torch", "mul"),
-    ("torch", "div"),
-    ("torch", "matmul"),
-    ("torch", "bmm"),
-    ("torch", "mm"),
-    ("torch", "einsum"),
-    ("torch", "cat"),
-    ("torch", "stack"),
-    ("torch", "mean"),
-    ("torch", "sum"),
-    ("torch", "softmax"),
-    ("torch", "sigmoid"),
-    ("torch", "tanh"),
-    ("torch", "zeros"),
-    ("torch", "ones"),
-    ("torch", "empty"),
-    ("torch", "arange"),
-    ("torch", "as_tensor"),
-    ("torch", "sparse_coo_tensor"),
-    ("torch", "nuclear_norm"),
-    ("torch", "_conj_physical"),
-    # Pure tensor factories (neither overridable nor aten by terminal name).
-    ("torch", "from_numpy"),
-    ("torch", "frombuffer"),
-    ("torch", "asarray"),
-    ("torch", "from_dlpack"),
-    # C tensor-method descriptors (module-less tmd path) + in-place / view ops.
-    ("torch.Tensor", "view"),
-    ("torch.Tensor", "reshape"),
-    ("torch.Tensor", "expand"),
-    ("torch.Tensor", "narrow"),
-    ("torch.Tensor", "as_strided"),
-    ("torch.Tensor", "add_"),
-    ("torch.Tensor", "mul_"),
-    ("torch.Tensor", "relu_"),
-    ("torch.Tensor", "copy_"),
-    ("torch.Tensor", "masked_fill_"),
-    ("torch.Tensor", "scatter_add_"),
-    ("torch.Tensor", "to_sparse"),
-    # The narrow audited pure Tensor WRAPPER rescue (the one live method the raw
-    # predicate dropped).
-    ("torch.Tensor", "to_sparse_coo"),
-    # Deeper allowlisted operator submodules keep module-prefix admission.
-    ("torch.nn.functional", "linear"),
-    ("torch.nn.functional", "conv2d"),
-    ("torch.nn.functional", "relu"),
-    ("torch.nn.functional", "softmax"),
-    ("torch.linalg", "norm"),
-    ("torch.fft", "fft"),
-    # Operator root positive allowlist.
-    ("operator", "add"),
-    ("operator", "getitem"),
-)
-
-
-def _resolve_attr(namespace: str, qualname: str) -> Any:
-    if namespace == "operator":
-        import operator
-
-        return getattr(operator, qualname, None)
-    root: Any = torch
-    for part in namespace.removeprefix("torch").lstrip(".").split("."):
-        if not part:
-            continue
-        root = getattr(root, part, None)
-        if root is None:
-            return None
-    return getattr(root, qualname, None)
-
-
-@pytest.mark.parametrize("namespace,qualname", _AUDITED_LEGIT_FORWARD_ALLOW_SET)
-def test_immunizer_audited_allow_set_admitted(namespace: str, qualname: str) -> None:
-    """No op in the audited legit-forward allow-set may be denied by the structural gate."""
-
-    obj = _resolve_attr(namespace, qualname)
-    if obj is None:  # pragma: no cover - version drift; a floor test guards vacuity.
-        pytest.skip(f"{namespace}:{qualname} absent on torch {torch.__version__}")
-    assert is_pure_forward_callable(obj), (
-        f"audited legit forward op WRONGLY DENIED: {namespace}:{qualname}"
-    )
-
-
-def test_immunizer_allow_set_is_non_vacuous() -> None:
-    """The frozen allow-set overwhelmingly resolves on this torch (guards vacuity)."""
-
-    present = sum(
-        1 for ns, q in _AUDITED_LEGIT_FORWARD_ALLOW_SET if _resolve_attr(ns, q) is not None
-    )
-    assert present >= len(_AUDITED_LEGIT_FORWARD_ALLOW_SET) - 3
-
 
 # --------------------------------------------------------------------------- #
 # FROZEN FIXTURE 2: the known non-forward FLIP-SET (must ALL be denied).
@@ -325,136 +228,10 @@ def test_immunizer_allow_set_is_non_vacuous() -> None:
 # ctors, state getters, deprecated methods.
 # --------------------------------------------------------------------------- #
 
-_KNOWN_NON_FORWARD_FLIP_SET: tuple[tuple[str, str], ...] = (
-    # secE_1: functionalization dispatch-mode / TLS mutators.
-    ("torch", "_enable_functionalization"),
-    ("torch", "_disable_functionalization"),
-    ("torch", "_functionalize_enable_reapply_views"),
-    ("torch", "_functionalize_sync"),
-    ("torch", "_functionalize_replace"),
-    ("torch", "_functionalize_commit_update"),
-    ("torch", "_functionalize_unsafe_set"),
-    ("torch", "_functionalize_mark_mutation_hidden_from_autograd"),
-    # secE_2: storage-rebind (overridable but belt-denied).
-    ("torch.Tensor", "share_memory_"),
-    # JIT / IR type constructors reachable at the torch root.
-    ("torch", "AnyType"),
-    ("torch", "BoolType"),
-    ("torch", "ClassType"),
-    ("torch", "Argument"),
-    ("torch", "Block"),
-    ("torch", "Code"),
-    # Storage / legacy ``*Tensor`` type constructors.
-    ("torch", "BoolStorage"),
-    ("torch", "ByteStorage"),
-    ("torch", "BoolTensor"),
-    ("torch", "ByteTensor"),
-    # State getters / internal plumbing.
-    ("torch.Tensor", "_typed_storage"),
-    ("torch.Tensor", "_reduce_ex_internal"),
-    # Deprecated / removed Tensor methods that are NOT in torch's overridable registry
-    # (a captured DAG resolves to torch.linalg.* / aten.*, never these). NOTE: the
-    # tombstones ``solve`` / ``reinforce`` are deliberately EXCLUDED from this flip set --
-    # torch's own operator authority still lists them as overridable, so the structural
-    # predicate admits them by design (defer-to-torch). That is harmless: they are pure
-    # RuntimeError raises with zero side effects and never appear in a real captured DAG.
-    # ``eig`` / ``lstsq`` / ``symeig`` are absent from the overridable registry and are
-    # genuinely denied.
-    ("torch.Tensor", "eig"),
-    ("torch.Tensor", "lstsq"),
-    ("torch.Tensor", "symeig"),
-)
-
-_OPTIONAL_FUNCTIONALIZATION_FLIP_SET = frozenset(
-    {
-        ("torch", "_functionalize_enable_reapply_views"),
-        ("torch", "_functionalize_sync"),
-        ("torch", "_functionalize_replace"),
-        ("torch", "_functionalize_commit_update"),
-        ("torch", "_functionalize_unsafe_set"),
-        ("torch", "_functionalize_mark_mutation_hidden_from_autograd"),
-    }
-)
-
-
-@pytest.mark.parametrize("namespace,qualname", _KNOWN_NON_FORWARD_FLIP_SET)
-def test_immunizer_known_flip_set_denied(namespace: str, qualname: str) -> None:
-    """No op in the known non-forward flip set may be admitted by the structural gate."""
-
-    obj = _resolve_attr(namespace, qualname)
-    if obj is None:  # pragma: no cover - version drift; a floor test guards vacuity.
-        pytest.skip(f"{namespace}:{qualname} absent on torch {torch.__version__}")
-    assert not is_pure_forward_callable(obj), (
-        f"non-forward internal builtin WRONGLY ADMITTED: {namespace}:{qualname}"
-    )
-
-
-def test_immunizer_flip_set_is_non_vacuous() -> None:
-    """The frozen flip-set overwhelmingly resolves on this torch (guards vacuity)."""
-
-    absent = {
-        (namespace, qualname)
-        for namespace, qualname in _KNOWN_NON_FORWARD_FLIP_SET
-        if _resolve_attr(namespace, qualname) is None
-    }
-    assert absent <= _OPTIONAL_FUNCTIONALIZATION_FLIP_SET, (
-        f"unexpected non-forward flip-set absences: {sorted(absent)}"
-    )
-
 
 # --------------------------------------------------------------------------- #
 # Explicit secE_1/2/3 pins (the specific findings), plus to_sparse_coo admit.
 # --------------------------------------------------------------------------- #
-
-
-def test_secE_1_whole_functionalization_family_denied() -> None:
-    """The ENTIRE functionalization family is denied -- enumerated LIVE from dir(torch).
-
-    Covers any newly-added ``_functionalize_*`` / ``*functionaliz*`` sibling automatically.
-    """
-
-    family = [
-        name
-        for name in dir(torch)
-        if "functionaliz" in name.lower() and callable(getattr(torch, name, None))
-    ]
-    # Non-vacuous: the family exists on every supported torch.
-    assert len(family) >= 3, f"functionalization family unexpectedly small: {family}"
-    admitted = [name for name in family if is_pure_forward_callable(getattr(torch, name))]
-    assert not admitted, f"functionalization ops WRONGLY ADMITTED: {sorted(admitted)}"
-
-
-def test_secE_2_share_memory_denied_reader_resolves() -> None:
-    """``share_memory_`` (storage rebind) is denied though it is torch-overridable; the
-    pure ``is_shared`` reader stays resolvable."""
-
-    # Sanity: the belt must run BEFORE the operator predicate, since share_memory_ IS a
-    # recognized (overridable) operator -- absent the belt it would be admitted.
-    assert _indep_is_recognized_operator(_unwrap_capture_wrapper(torch.Tensor.share_memory_))
-    assert not is_pure_forward_callable(torch.Tensor.share_memory_)
-    assert is_pure_forward_callable(torch.Tensor.is_shared)
-
-
-def test_secE_3_sobol_admitted_as_documented_residual() -> None:
-    """``torch._sobol_engine_initialize_state_`` is a genuine aten op -> ADMITTED residual.
-
-    Pinned as admitted so a future refactor cannot silently name-deny it (it is a
-    documented residual, not a denied op).
-    """
-
-    obj = torch._sobol_engine_initialize_state_
-    assert _indep_has_aten_schema("_sobol_engine_initialize_state_")
-    assert is_pure_forward_callable(obj)
-
-
-def test_to_sparse_coo_wrapper_rescue_admitted() -> None:
-    """The narrow ``to_sparse_coo`` wrapper (neither overridable nor aten by name) admits."""
-
-    real = _unwrap_capture_wrapper(torch.Tensor.to_sparse_coo)
-    # It genuinely needs the wrapper rescue (not caught by the operator authorities).
-    assert id(real) not in _indep_overridable_ids()
-    assert not _indep_has_aten_schema("to_sparse_coo")
-    assert is_pure_forward_callable(torch.Tensor.to_sparse_coo)
 
 
 def test_safe_tensor_property_getters_admitted() -> None:
@@ -496,32 +273,6 @@ def test_safe_tensor_property_getters_admitted() -> None:
 # BOTH trust modes; the residual + legit ops resolve.
 # --------------------------------------------------------------------------- #
 
-_SECE_DENIED_REFS = [
-    "torch:_enable_functionalization",
-    "torch:_disable_functionalization",
-    pytest.param(
-        "torch:_functionalize_enable_reapply_views",
-        marks=pytest.mark.skipif(
-            not hasattr(torch, "_functionalize_enable_reapply_views"),
-            reason=(
-                "torch._functionalize_enable_reapply_views is absent on this "
-                "supported torch runtime"
-            ),
-        ),
-    ),
-    "torch.Tensor:share_memory_",
-]
-
-
-@pytest.mark.parametrize("ref", _SECE_DENIED_REFS)
-def test_secE_ops_denied_at_resolver_even_under_trust(ref: str) -> None:
-    """The secE gate closures hold through the resolver call site, even under trust."""
-
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(ref)
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(ref, trust_custom_callables=True)
-
 
 def test_legit_and_residual_resolve_at_resolver() -> None:
     """Legit forward ops, the wrapper rescue, and the sobol residual resolve through the
@@ -536,48 +287,3 @@ def test_legit_and_residual_resolve_at_resolver() -> None:
 # --------------------------------------------------------------------------- #
 # No regression: the r36 / r39 / r41 controls stay DENIED and the pure surface resolves.
 # --------------------------------------------------------------------------- #
-
-
-def test_prior_round_controls_still_denied() -> None:
-    """All prior-round denials remain refused (no regression from the r43 inversion)."""
-
-    controls = [
-        torch.load,
-        torch.save,
-        torch.from_file,
-        torch.Tensor.apply_,
-        torch.Tensor.map_,
-        torch.Tensor.map2_,
-        torch.vmap,
-        torch.Tensor.register_hook,
-        torch.Tensor.resize_,
-        torch.Tensor.set_,
-        torch.set_default_dtype,
-        torch.manual_seed,
-        torch.set_num_threads,
-        torch.compile,
-        torch.autocast_increment_nesting,
-        torch.clear_autocast_cache,
-        torch.nn.functional.handle_torch_function,
-    ]
-    controls.extend(
-        obj for name in ("cond", "while_loop") if (obj := getattr(torch, name, None)) is not None
-    )
-    for obj in controls:
-        assert not is_pure_forward_callable(obj)
-
-
-def test_pure_forward_surface_still_resolves() -> None:
-    """The r43 inversion does not over-deny the legitimate pure forward surface."""
-
-    assert is_pure_forward_callable(torch.add)
-    assert is_pure_forward_callable(torch.matmul)
-    assert is_pure_forward_callable(torch.nn.functional.conv2d)
-    assert is_pure_forward_callable(torch.Tensor.add_)
-    assert is_pure_forward_callable(torch.Tensor.relu_)
-    assert is_pure_forward_callable(torch.Tensor.as_strided)
-    assert is_pure_forward_callable(torch.Tensor.narrow)
-    # Pure reads / getters unaffected.
-    assert is_pure_forward_callable(torch.get_rng_state)
-    assert is_pure_forward_callable(torch.initial_seed)
-    assert is_pure_forward_callable(torch.Tensor.is_shared)

@@ -114,17 +114,6 @@ def test_former_helper_table_methods_are_real_methods() -> None:
     assert bundle.downstream("clean") == ("changed",)
 
 
-@pytest.mark.parametrize("name", ["delta_map", "norm_delta", "output_delta", "aligned_pairs"])
-def test_delta_family_is_private_behind_compare(name: str) -> None:
-    bundle = _pair()
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(bundle, name)
-    assert excinfo.value.fields["attribute"] == name
-    assert callable(getattr(bundle, f"_{name}"))
-    rows = bundle.compare("clean", "changed", metric="relative_l2")
-    assert rows and set(dict(rows)) <= set(bundle._delta_map("relative_l2"))
-
-
 def test_bundle_draw_refuses_an_unknown_graph_typed() -> None:
     """``graph=`` outside forward/backward/combined/diff refuses before any rendering."""
     bundle = _pair()

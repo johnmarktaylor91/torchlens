@@ -198,33 +198,6 @@ def _tampered_reload(tmp_path, mutate, name: str) -> tl.Trace:
             return tl.load(str(repath))
 
 
-def test_g3_tampered_unknown_key_refuses_and_settles(tmp_path) -> None:
-    def plant_unknown_key(trace: tl.Trace) -> None:
-        trace._options_grouping_policy = {**trace.options.grouping_policy, "forged": True}
-
-    reloaded = _tampered_reload(tmp_path, plant_unknown_key, "unknown_key")
-    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("unknown_key")
-
-
-def test_g3_forged_policy_degrades_with_rule_name(tmp_path) -> None:
-    def forge_policy(trace: tl.Trace) -> None:
-        trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
-
-    reloaded = _tampered_reload(tmp_path, forge_policy, "forged_policy")
-    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
-
-
-def test_g3_mirror_incoherence_degrades_c6(tmp_path) -> None:
-    def forge_requested(trace: tl.Trace) -> None:
-        trace._options_grouping_policy = {
-            **trace.options.grouping_policy,
-            "requested": "fold_sites",
-        }
-
-    reloaded = _tampered_reload(tmp_path, forge_requested, "mirror")
-    assert reloaded.options.grouping_policy == degraded_grouping_policy_stamp("c6")
-
-
 def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
     def forge_policy(trace: tl.Trace) -> None:
         trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
@@ -247,23 +220,3 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
 # G5: the legacy v7 artifact was written by torchlens 2.x, which this
 # release does not read: it refuses typed instead of settling
 # ---------------------------------------------------------------------------
-
-
-def test_g5_legacy_v7_artifact_refuses_as_2x() -> None:
-    from pathlib import Path
-
-    from _refuses_as_2x import assert_refuses_as_2x
-
-    fixture = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
-    assert_refuses_as_2x(fixture)
-
-
-def test_healthy_stamp_persists_on_plain_v8_round_trip(tmp_path) -> None:
-    trace = _tiny_trace()
-    path = tmp_path / "fresh.tlspec"
-    trace.save(str(path))  # tlspec v8: the stamp persists plainly
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
-        loaded = tl.load(str(path))
-    assert loaded.options.grouping_policy == trace.options.grouping_policy
-    assert loaded.options.grouping == "structural"

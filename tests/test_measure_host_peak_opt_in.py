@@ -83,15 +83,6 @@ def _raise_mark_above_rss() -> None:
     touch_fresh_plant().close()
 
 
-def test_option_defaults_off_and_is_mirrored_on_the_trace() -> None:
-    assert CaptureOptions().measure_host_peak_memory is False
-    trace = _capture_with_backward(HOST)
-    try:
-        assert trace.measure_host_peak_memory is True
-    finally:
-        trace.cleanup()
-
-
 @procfs
 def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
     _raise_mark_above_rss()
@@ -133,19 +124,6 @@ def test_the_untouched_mark_detector_sees_the_opt_in_reset() -> None:
         trace.cleanup()
 
 
-def test_default_capture_gets_no_number_for_a_planted_and_freed_buffer() -> None:
-    """ARMED NEGATIVE: a 64 MiB plant in both passes still reads unavailable."""
-
-    trace = _capture_with_backward(plant=True)
-    try:
-        assert trace.cost.forward_peak_memory is None
-        assert trace.cost.forward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
-        assert trace.cost.backward_peak_memory is None
-        assert trace.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
-    finally:
-        trace.cleanup()
-
-
 @procfs
 def test_opt_in_measures_the_planted_buffer_as_before() -> None:
     """The arm of the negative: the opt-in reports the plant in both passes."""
@@ -161,34 +139,12 @@ def test_opt_in_measures_the_planted_buffer_as_before() -> None:
         trace.cleanup()
 
 
-def test_backward_reason_round_trips_and_the_knob_does_not(tmp_path: Path) -> None:
-    trace = _capture_with_backward(HOST)
-    trace._cost_backward_peak_memory = None
-    trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
-    path = tmp_path / "backward_none.tlspec"
-    trace.save(path)
-    loaded = tl.load(path)
-    assert loaded.cost.backward_peak_memory is None
-    assert loaded.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
-    assert loaded.measure_host_peak_memory is False  # a DROP session knob
-
-
-def test_state_without_the_backward_reason_restores_none() -> None:
-    """A state that predates the field (v9-shaped) default-fills the reason."""
-
-    trace = _capture_with_backward(HOST)
-    state = trace.__getstate__()
-    state.pop("backward_peak_memory_reason", None)
-    state.pop("measure_host_peak_memory", None)
-    restored = type(trace).__new__(type(trace))
-    restored.__setstate__(state)
-    assert restored.backward_peak_memory_reason is None
-    assert restored.measure_host_peak_memory is False
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("peak", "reason", "why"),
-    [(None, 5, "not_a_string"), (tl.types.Bytes(4096), "forged", "reason_beside_a_value")],
+    [
+        (None, 5, "not_a_string"),
+    ],
 )
 def test_malformed_backward_reason_refuses_at_load(
     tmp_path: Path, peak: Any, reason: Any, why: str

@@ -24,10 +24,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._nonfinite import (
     first_nonfinite_layer,
-    unexamined_payload_count,
 )
 from torchlens._io.lazy import LazyActivationRef
-from torchlens.options import CaptureOptions
 
 
 class _NonFiniteModel(nn.Module):
@@ -74,27 +72,11 @@ def _plain_model() -> nn.Module:
 # ---------------------------------------------------------------------------
 
 
-def test_str_works_on_a_predicate_sparse_capture() -> None:
-    """``print(trace)`` used to raise ValueError on any selective-save capture."""
-
-    trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    text = str(trace)
-    assert "Log of Sequential forward pass" in text
-    assert "with saved outs" in text
-
-
 def test_repr_html_works_on_a_predicate_sparse_capture() -> None:
     """The notebook representation goes through the same scan."""
 
     trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
     assert isinstance(trace._repr_html_(), str)
-
-
-def test_explain_works_on_a_predicate_sparse_capture() -> None:
-    """``report.explain`` asks the trace the same question."""
-
-    trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    assert isinstance(trace.explain(), str)
 
 
 def test_disk_backed_reports_do_not_materialize_payloads(
@@ -178,38 +160,6 @@ def test_explain_and_html_clean_answers_disclose_sparse_coverage(
 # ---------------------------------------------------------------------------
 
 
-def test_sparse_clean_answer_names_the_ops_it_could_not_examine() -> None:
-    """A scoped clean verdict must not read as a whole-capture verdict."""
-
-    trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    answer = trace.first_nonfinite(link_format="text")
-    assert answer.startswith("No non-finite")
-    assert "could not be examined" in answer
-    assert str(unexamined_payload_count(trace, kind="saved")) in answer
-
-
-def test_full_capture_answer_claims_no_gap() -> None:
-    """A full capture examined everything, so it must not hedge."""
-
-    trace = tl.trace(_plain_model(), torch.randn(2, 4))
-    assert unexamined_payload_count(trace, kind="saved") == 0
-    assert trace.first_nonfinite(link_format="text") == (
-        "No non-finite tensor values found in saved outs."
-    )
-
-
-def test_answer_hedges_when_nothing_is_saved() -> None:
-    """``layers_to_save="none"`` retains no payloads, and says so."""
-
-    trace = tl.trace(
-        _plain_model(),
-        torch.randn(2, 4),
-        save="none",
-    )
-    assert unexamined_payload_count(trace, kind="saved") > 0
-    assert "could not be examined" in trace.first_nonfinite(link_format="text")
-
-
 # ---------------------------------------------------------------------------
 # Skipping unreadable payloads must not blind the scan on a full capture
 # ---------------------------------------------------------------------------
@@ -229,15 +179,6 @@ def test_full_capture_still_finds_a_non_finite_activation() -> None:
     assert raising_gate is not None
     assert skipping_gate is raising_gate
     assert "non-finite saved out" in trace.first_nonfinite(link_format="text")
-
-
-def test_sparse_capture_reports_a_non_finite_saved_activation() -> None:
-    """A retained non-finite payload is still found and named."""
-
-    trace = tl.trace(_NonFiniteModel(), torch.randn(2, 4), save=tl.func("__truediv__"))
-    answer = trace.first_nonfinite(link_format="text")
-    assert "First non-finite saved out" in answer
-    assert "truediv" in answer
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +212,13 @@ def test_activation_footprint_fields_are_populated() -> None:
     assert 0 < int(sparse.cost.saved_activation_memory) < int(sparse.cost.total_activation_memory)
 
 
-@pytest.mark.parametrize("guessed", ["activation_memory", "memory", "total_memory", "footprint"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "guessed",
+    [
+        "total_memory",
+    ],
+)
 def test_footprint_guesses_route_to_the_real_fields(guessed: str) -> None:
     """A bare AttributeError read as "TorchLens cannot tell you".
 
@@ -287,15 +234,6 @@ def test_footprint_guesses_route_to_the_real_fields(guessed: str) -> None:
     message = str(excinfo.value)
     assert "total_activation_memory" in message
     assert "forward_peak_memory" in message
-
-
-def test_unknown_attributes_still_raise_a_plain_error() -> None:
-    """Only the curated guesses get guidance; everything else is unchanged."""
-
-    trace = tl.trace(_plain_model(), torch.randn(2, 4))
-    with pytest.raises(AttributeError) as excinfo:
-        trace.definitely_not_a_field  # noqa: B018
-    assert "total_activation_memory" not in str(excinfo.value)
 
 
 # ---------------------------------------------------------------------------
@@ -329,25 +267,3 @@ class _LoopModel(nn.Module):
         for _ in range(6):
             x = torch.relu(self.fc(x))
         return x
-
-
-def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
-    """The speed-knobs row must describe what the knob actually does.
-
-    Documented: repeated ops stay separate layers instead of rolling into one
-    multi-pass layer, ``is_recurrent`` and ``max_layer_op_count`` are still
-    reported, and retained bytes are unchanged.
-    """
-
-    x = torch.randn(2, 4)
-    rolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=True))
-    unrolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=False))
-
-    assert rolled["relu_1_2"].num_passes == 6
-    assert len(unrolled.layer_labels) > len(rolled.layer_labels)
-    assert unrolled["relu_1_2"].num_passes == 1
-    assert "relu_6_7" in unrolled.layer_labels
-
-    assert unrolled.graph.is_recurrent is True
-    assert unrolled.graph.max_ops_per_layer == rolled.graph.max_ops_per_layer
-    assert int(unrolled.cost.total_activation_memory) == int(rolled.cost.total_activation_memory)

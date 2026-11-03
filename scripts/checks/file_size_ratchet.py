@@ -524,17 +524,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
     "tests/test_conditional_branches.py": 2150,
-    # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
-    # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
-    # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the
-    # lane's foreign-thread join coverage, whose thread-routing pins live in
-    # tests/test_w051_nondeterminism_foreign_join.py. The rows are entries in the ONE
-    # registry table the parametrized held-ref test consumes, so a split would sever
-    # the table from its recipe type; next 50-line step above the measured 2088.
-    # T105: +16 lines splitting the held-ref sweep into two alternating-half
-    # families for the smoke duration budget (2s isolated, boundary-flaky
-    # in-session at 76 cells); next 50-line step above the measured 2104.
-    "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2150,
 }
 
 

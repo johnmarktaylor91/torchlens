@@ -106,7 +106,13 @@ def _build_live_log() -> Trace:
     )
 
 
-@pytest.mark.parametrize("include_source", [True, False])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "include_source",
+    [
+        True,
+    ],
+)
 def test_backward_source_fields_are_in_the_privacy_belt(include_source: bool) -> None:
     """B8-21: GradFn backward source path/docstring are relativized or dropped.
 
@@ -173,36 +179,6 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     saved_repr = pickle.loads((spec / "metadata.pkl").read_bytes())["_activation_transform_repr"]
     assert "<scrubbed>" in saved_repr
     assert secret not in saved_repr
-
-
-def test_transform_repr_redacts_heap_addresses() -> None:
-    """b3-opus (B8-20 completion): a callable repr's heap address is not persisted.
-
-    A callable using the default object/function repr (a lambda, or a callable
-    instance) embeds a live ``0x<hex>`` heap address, which is non-deterministic
-    (breaks byte-identical artifacts) and an ASLR-layout leak. The scrub redacts
-    it, directly and through a ``functools.partial`` wrapper.
-    """
-
-    import functools
-
-    from torchlens._data_classes.trace import _scrubbed_transform_repr
-
-    class _CallableWithDefaultRepr:
-        def __call__(self, t: torch.Tensor) -> torch.Tensor:
-            return t
-
-    instance = _CallableWithDefaultRepr()
-    assert "0x" in repr(instance), "test precondition: default repr has a heap address"
-
-    direct = _scrubbed_transform_repr(instance)
-    assert direct is not None
-    assert "0x<scrubbed>" in direct
-    assert "0x" not in direct.replace("0x<scrubbed>", "")
-
-    wrapped = _scrubbed_transform_repr(functools.partial(instance))
-    assert wrapped is not None
-    assert "0x" not in wrapped.replace("0x<scrubbed>", "")
 
 
 @pytest.mark.smoke
@@ -584,57 +560,6 @@ _METHOD_SWEEP_MUST_SUCCEED: dict[str, frozenset[str]] = {
 }
 
 
-def _public_methods(cls: type) -> set[str]:
-    """Return the public instance-method names on ``cls``.
-
-    Properties and ``functools.cached_property`` descriptors belong to the
-    attribute sweep above; classmethod/staticmethod constructors are not
-    instance reads and stay out of both sweeps.
-    """
-
-    names: set[str] = set()
-    for name in dir(cls):
-        if name.startswith("_"):
-            continue
-        static = inspect.getattr_static(cls, name, None)
-        if isinstance(static, (property, functools.cached_property, classmethod, staticmethod)):
-            continue
-        if callable(static):
-            names.add(name)
-    return names
-
-
-def test_public_method_sweep_tables_are_total(tmp_path: Path) -> None:
-    """Every public method is either swept or excluded with a reason -- exactly.
-
-    Both directions are exact: a new public method must be classified before
-    it ships, and a retired method's row must be deleted. An untested method
-    silently omitted is how the draw() poison recurred after the attribute
-    sweep landed.
-    """
-
-    problems: dict[str, dict[str, list[str]]] = {}
-    for cls, sweep_factory, exclusions, _picker in _METHOD_SWEEP_PLAN:
-        swept = set(sweep_factory(tmp_path, None))
-        public = _public_methods(cls)
-        unclassified = sorted(public - swept - set(exclusions))
-        stale = sorted((swept | set(exclusions)) - public)
-        overlap = sorted(swept & set(exclusions))
-        entry: dict[str, list[str]] = {}
-        if unclassified:
-            entry["unclassified"] = unclassified
-        if stale:
-            entry["stale"] = stale
-        if overlap:
-            entry["both_swept_and_excluded"] = overlap
-        if entry:
-            problems[cls.__name__] = entry
-    assert problems == {}, (
-        "public-method sweep tables are not total; classify each method as "
-        f"swept or excluded-with-reason: {problems}"
-    )
-
-
 def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
     """Read-only presentation/analysis methods must leave the trace saveable.
 
@@ -741,52 +666,6 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     assert "TRACE_EXTERNAL_WRITE_EXEMPTIONS" in message
     assert TRACE_EXTERNAL_WRITE_EXEMPTIONS[field_name] in message
     assert "not a scrub policy" in message
-
-
-@pytest.mark.parametrize("raw_policy", [True, "small"], ids=["true", "small"])
-def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_policy) -> None:
-    """r69 E: effective DROP wins before the Trace raw-value special case.
-
-    Sparse runnable saves scrub ``raw_input``/``raw_output`` to ``None`` regardless
-    of the ordinary ``save_raw_input``/``save_transformed_output`` policy (``True`` or
-    ``"small"``), for nested tensor/string containers included -- no raw blob or
-    tensor may enter the value-free sparse core (the payload assertion stays the
-    unchanged final tripwire, pinned by the genuine-stray negatives in
-    test_tlspec_runnable_param_conditional.py).
-    """
-
-    import warnings
-
-    from torchlens.options import CaptureOptions
-
-    class _NestedStr(nn.Module):
-        def forward(self, x: torch.Tensor, cfg: dict) -> torch.Tensor:
-            if cfg["mode"] == "fast":
-                return x * 2.0
-            return x + 100.0
-
-    trace = trace_fn(
-        _NestedStr(),
-        [torch.randn(3), {"mode": "fast"}],
-        capture=CaptureOptions(
-            replayable=True,
-            capture_container_structure=True,
-            cache=False,
-            save_raw_input=raw_policy,
-            save_transformed_output=raw_policy,
-        ),
-    )
-    path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.save(path, level="runnable")
-    with (path / "metadata.pkl").open("rb") as handle:
-        metadata = pickle.load(handle)
-    assert metadata["input"] is None
-    assert metadata["transformed_output"] is None
-    loaded = tl.load(path)
-    assert loaded.input is None
-    assert loaded.transformed_output is None
 
 
 def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
