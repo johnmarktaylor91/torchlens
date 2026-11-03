@@ -230,7 +230,7 @@ def reference_module(out: Path, url: str | None) -> Any:
     ).strip()
     if actual != REFERENCE_COMMIT:
         raise ValueError("reference revision mismatch")
-    sys.path.insert(0, str(root))
+    sys.path.insert(0, str(path))
     return importlib.import_module("jlens.fitting")
 
 
