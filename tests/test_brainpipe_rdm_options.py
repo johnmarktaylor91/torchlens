@@ -59,7 +59,6 @@ def test_condensed_output_is_strict_upper_triangle() -> None:
     assert np.allclose(condensed, square[np.triu_indices(8, k=1)])
 
 
-@pytest.mark.smoke
 def test_batched_input_kind_is_explicit() -> None:
     """[B, N, D] means one RDM per batch element ONLY under input_kind."""
 
@@ -75,7 +74,6 @@ def test_batched_input_kind_is_explicit() -> None:
         repgeom.rdm(batch, input_kind="stacked")
 
 
-@pytest.mark.smoke
 def test_rdm_compare_descriptive_correlations() -> None:
     """D-6: aligned upper triangles, diagonal excluded, three methods."""
 

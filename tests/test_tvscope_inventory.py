@@ -46,7 +46,6 @@ class _Branchy(nn.Module):
         return self.a(x) + self.b(x)
 
 
-@pytest.mark.smoke
 def test_no_input_rung_lists_modules_without_forward() -> None:
     """Rung one: free listing, shapes honestly unknown, no forward runs."""
 
@@ -119,7 +118,6 @@ def test_ambiguous_spelling_teaches_working_selectors() -> None:
     assert all(c in out for c in candidates)
 
 
-@pytest.mark.smoke
 def test_unknown_spelling_refuses_typed_with_candidates() -> None:
     """Unknown needles refuse typed, nearest candidates disclosed."""
 
@@ -160,7 +158,6 @@ def test_structure_only_shapes_are_labeled_hypotheses() -> None:
     assert payload["shapes_are_hypotheses"] is True
 
 
-@pytest.mark.smoke
 def test_inventory_serializes_to_json() -> None:
     """Structured rows are JSON-portable (the deferred-CLI plumbing)."""
 

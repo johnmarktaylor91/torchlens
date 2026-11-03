@@ -134,7 +134,6 @@ def test_session_records_op_join_markers() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
     """The NATIVE chrome trace is preserved with the exact-ID mapping sidecar."""
 

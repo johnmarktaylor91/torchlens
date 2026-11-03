@@ -190,7 +190,6 @@ def test_synthetic_kineto_join_covers_required_async_and_many_to_many_shapes() -
     assert payload._launches[0].duration == 4.0
 
 
-@pytest.mark.smoke
 def test_marker_begin_end_and_capture_exception_shape_close_cleanly() -> None:
     """A boundary-closed marker still correlates after an exceptional exit.
 

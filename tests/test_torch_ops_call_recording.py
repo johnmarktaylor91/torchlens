@@ -90,7 +90,6 @@ class _Wrap(nn.Module):
         return self.child(x) + 1.0
 
 
-@pytest.mark.smoke
 def test_raw_aten_packet_call_is_recorded_and_validates() -> None:
     """``torch.ops.aten.tanh(x) * 1.0`` used to fail ``bfs_completeness``."""
 
@@ -352,7 +351,6 @@ def test_receiver_write_no_logged_op_recorded_fails_validation() -> None:
     assert "unrecorded_operator_mutation" in failure.extra["reasons"], failure
 
 
-@pytest.mark.smoke_cells("test_unrecordable_mutating_operator_fails_validation[write_into]")
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["write_into", "foreach"])
 def test_unrecordable_mutating_operator_fails_validation(op_name: str) -> None:

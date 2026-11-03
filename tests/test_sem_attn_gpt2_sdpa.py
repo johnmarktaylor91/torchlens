@@ -56,7 +56,6 @@ def test_plain_sdpa_capture_declares_actionable_absences(sdpa_captures):
         assert view.has(facet), facet
 
 
-@pytest.mark.smoke
 def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
     """scores/pattern/z reconstruct, validate against the SDPA op, read-only."""
 

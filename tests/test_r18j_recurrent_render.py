@@ -147,7 +147,6 @@ def test_get_multipass_attr_propagates_unrelated_value_error():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_h1_module_key_for_forward_op_no_multipass_leak():
     from torchlens._visualization._render_leaf import (
         _forward_op_is_module_output,
@@ -290,7 +289,6 @@ def test_f15_nan_overlay_reports_na_when_nothing_inspected():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     from torchlens._visualization.fastlog_preview import (
         _build_preview_nodes,
@@ -331,7 +329,6 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
     from torchlens._selection import resolver
     from torchlens._visualization.node_spec import (

@@ -235,7 +235,6 @@ def test_runnable_tensor_digest_includes_dtype_and_shape() -> None:
     assert runnable_tensor_byte_digest(float_value) != runnable_tensor_byte_digest(reshaped_value)
 
 
-@pytest.mark.smoke
 def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     tmp_path: Path,
 ) -> None:

@@ -52,6 +52,7 @@ def _write_golden(payload: dict) -> None:
         fh.write("\n")
 
 
+@pytest.mark.smoke
 def test_contract_of_record_matches_live_tree() -> None:
     from _oracle_env import (
         flag_armed,
@@ -116,7 +117,6 @@ def test_removed_persisted_fields_require_aliases() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_digest_tracks_persisted_field_name_sets() -> None:
     """The same-stamp drift catcher: field-name sets are digest inputs."""
 

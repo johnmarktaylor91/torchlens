@@ -184,7 +184,6 @@ def test_r63_state_metadata_read_emits_escape_witness(
     assert read_kind in host_escape_state_metadata_reads(trace).get(state_name, frozenset())
 
 
-@pytest.mark.smoke_cells("test_r63_read_noncanonical_capture_refuses_at_save[is_neg]")
 @pytest.mark.parametrize(
     "model_cls, state_name, read_kind, x",
     _READ_CASES,

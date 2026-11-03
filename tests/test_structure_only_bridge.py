@@ -101,7 +101,6 @@ def test_bridge_module_is_imported_nowhere_in_the_package() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     """House rule: the L7b refusals name the flip boundary (declared
     late-bind posture) and what to do INSTEAD, not just the code."""
@@ -204,7 +203,6 @@ def test_declared_digest_is_geometry_only_and_substrate_independent() -> None:
     assert declared_slot_geometry_digest(real) != declared_slot_geometry_digest(torch.randn(2, 4))
 
 
-@pytest.mark.smoke
 def test_declared_and_bound_digests_never_cross_domains() -> None:
     """G2 at the bind boundary: the geometry digest of a tensor never equals
     its byte digest — the meta domain tag separates them by construction."""
@@ -250,6 +248,7 @@ def loaded_runnable_trace(tmp_path):
     return tl.load(str(path))
 
 
+@pytest.mark.smoke
 def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace) -> None:
     """The bridge binds through the EXISTING validator and every staged slot
     gets both digest families — present for every slot, never skipped."""

@@ -175,7 +175,6 @@ def test_amendment_registry_exact_sets() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_strict_protocol_refusal_type() -> None:
     from ._models import SmallCNN, _cnn_input
 

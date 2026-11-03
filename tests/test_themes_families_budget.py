@@ -75,7 +75,6 @@ def test_speed_resolves_per_pass_member_on_unrolled(mlp_log: Any) -> None:
     assert any(line.startswith("coverage: encoded") for line in resolution.disclosure)
 
 
-@pytest.mark.smoke
 def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     """Rolled speed binds total_func_duration WITH the aggregation line."""
 
@@ -97,7 +96,6 @@ def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
             "total_func_duration",
             "lens_source_zero_coverage",
             id="one_view_zero_coverage_names_the_zero_coverage_code",
-            marks=pytest.mark.smoke,
         ),
     ],
 )
@@ -192,7 +190,6 @@ def test_budget_search_is_deterministic_and_disclosed() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_overview_budget_rides_resolution(mlp_log: Any) -> None:
     """Overview (collapse='auto') routes through the resolver and discloses."""
 
@@ -201,7 +198,6 @@ def test_overview_budget_rides_resolution(mlp_log: Any) -> None:
     assert any("detail dial" in line for line in resolution.disclosure)
 
 
-@pytest.mark.smoke
 def test_band_missed_warns_coded_and_discloses(mlp_log: Any, monkeypatch: Any) -> None:
     """No schedule point in the band: nearest point served with the coded warning."""
 
@@ -221,7 +217,6 @@ def test_band_missed_warns_coded_and_discloses(mlp_log: Any, monkeypatch: Any) -
     assert any("band missed" in line for line in budget.disclosure)
 
 
-@pytest.mark.smoke
 def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> None:
     """Above the optimizer ceiling with no in-band depth: estimate served, coded."""
 

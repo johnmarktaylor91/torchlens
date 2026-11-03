@@ -26,7 +26,7 @@ lax = pytest.importorskip("jax.lax")
 random = pytest.importorskip("jax.random")
 
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _params() -> dict[str, Any]:

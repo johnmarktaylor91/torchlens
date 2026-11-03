@@ -10,14 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-
-pytestmark = pytest.mark.smoke
 
 
 class _WeightLoop(nn.Module):

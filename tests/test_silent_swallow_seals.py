@@ -39,7 +39,6 @@ def test_object_dtype_ndarray_fragment_never_matches() -> None:
     assert first != second, "object-dtype ndarray produced a stable fragment -- false cache HITs"
 
 
-@pytest.mark.smoke
 def test_plain_ndarray_fragment_stays_content_keyed() -> None:
     """The sealed branch keeps honest content hashing for readable arrays."""
 
@@ -87,7 +86,6 @@ def test_readable_config_cache_key_is_stable() -> None:
     assert first == second
 
 
-@pytest.mark.smoke
 def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
     """A tripped decode belt must leave trace.annotations['decode_skipped'],
     not just a losable warning, and must roll back partial writes."""
@@ -127,7 +125,6 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
         _new_allocation_bytes(_UnreadableTensor(), frozenset())
 
 
-@pytest.mark.smoke
 def test_provenance_digest_failures_record_unavailable_sentinels(monkeypatch) -> None:
     """Could-not-compute must stay distinguishable from does-not-apply."""
 

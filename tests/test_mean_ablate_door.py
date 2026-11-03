@@ -143,7 +143,6 @@ def test_named_axis_refuses_until_evidence(token: str) -> None:
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
 
 
-@pytest.mark.smoke
 def test_derived_flags() -> None:
     donors = population(torch.randn(3, 5, 4), origin="pop")
     assert tl.mean_ablate(dim=None).is_batch_independent is False
