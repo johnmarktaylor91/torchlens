@@ -3621,6 +3621,7 @@ describe each surface in depth.
 ### Fields and methods
 | Spelling | Meaning |
 | --- | --- |
+| `AbsenceReason.detail` | Human-readable explanation of the absence |
 | `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
 | `Attribution.target_repr` | Compact representation of the scalarization target |
 | `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
@@ -4257,6 +4258,7 @@ The sections above describe each surface in depth.
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `Layer.short_label` | Short pass-qualified label of a single-pass layer |
 | `Layer.short_layer_label` | Short layer label (no pass suffix) |
+| `Layer.source_trace` | Back-reference to the owning Trace; a detached Layer refuses instead of returning `None` |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
 | `MachineBalance.peak_bytes_per_s` | Peak memory bandwidth used for the roofline, in bytes per second |
@@ -4284,6 +4286,7 @@ The sections above describe each surface in depth.
 | `Op.pass_number` | 1-based pass of this op within its layer |
 | `Op.short_label` | Short pass-qualified op label |
 | `Op.short_layer_label` | Short layer label (no pass suffix) |
+| `Op.source_trace` | Back-reference to the owning Trace; a detached Op refuses instead of returning `None` |
 | `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `OptimizerFacts.decoupled_decay` | Whether the optimizer applies weight decay decoupled from the gradient step |
@@ -4442,7 +4445,7 @@ Members of classes whose public home changed, one entry per class.
 : Merge-level value verdict derived from the join ledger. `MergeValueStatus.ATTESTED_COMPLETE`: every applicable join boundary is attested; `MergeValueStatus.ATTESTED_PARTIAL`: some applicable join boundaries are attested, not all; `MergeValueStatus.DIVERGENT`: at least one join boundary mismatched across ranks; `MergeValueStatus.UNWITNESSED`: no join boundary is attested.
 
 **`tl.types.MergedFinding`**
-: One structured merge finding. `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
+: One structured merge finding. `MergedFinding.detail`: human-readable explanation (diagnostics may sharpen it but are never authority); `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
 
 **`tl.report.MergeReport`**
 : Graph-free diagnostic summary of a merge. `MergeReport.alignment`: the effective structural verdict; `MergeReport.conflicts`: the structural conflict findings, which never join and never become gaps; `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed value; `MergeReport.expected_ranks`: the declared world, when one was given; `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded; `MergeReport.stored_alignment`: the structural verdict derived at merge time; `MergeReport.value_status`: the merge-level value verdict.
@@ -4487,7 +4490,7 @@ Members of classes whose public home changed, one entry per class.
 : Honesty, state, resolution and contract metadata for one run. `RunReport.contract_checks`: the contract checks the run recorded; `RunReport.first_mismatch`: the first mismatch diagnostic, or `None`; `RunReport.initializer_policy_version`: version of the initializer policy used to fill slots, or `None`; `RunReport.nondeterministic_sources`: sources of nondeterminism the run met; `RunReport.numeric_attestation`: the saved-activation check result; `RunReport.path_faithfulness`: whether the run followed the recorded path; `RunReport.random_filled_slot_ids`: slots filled with random values; `RunReport.readiness`: the readiness report the run started from; `RunReport.state_source`: where the run's state came from.
 
 **`tl.types.RunnableCompatibility`**
-: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
+: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.torchlens_version`: the torchlens version that produced the artifact; `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
 
 **`tl.types.RunnableDiagnostic`**
 : Structured diagnostic shared by preflight, readiness and run reports. `RunnableDiagnostic.affected_op_labels`: labels of the ops the diagnostic concerns; `RunnableDiagnostic.current_runtime`: the runtime now in use, or `None`; `RunnableDiagnostic.details`: extra (key, value) details; `RunnableDiagnostic.detection_stage`: the stage that found the problem; `RunnableDiagnostic.recorded_runtime`: the runtime recorded at capture, or `None`; `RunnableDiagnostic.registry_id`: the registry entry involved, or `None`; `RunnableDiagnostic.resolver_provenance`: how the callable was resolved, or `None`.
@@ -4547,16 +4550,21 @@ alphabetical order.
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
+| `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
+| `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
 | `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
 | `Trace.buffer_write_ops` | Labels of buffer Ops that record writes to registered buffers |
 | `Trace.call_tree` | The root `ModuleCall` of the nested module call tree, as structured data |
+| `Trace.capture_end_time` | Wall-clock time (seconds since the epoch) when the capture ended |
 | `Trace.capture_guard_passes` | List with one dict per capture guard pass, giving its index, capture mode and owner thread id |
+| `Trace.capture_start_time` | Wall-clock time (seconds since the epoch) when the capture started |
 | `Trace.capture_tensor_grad_hooks` | Whether forward tensors receive tensor-level backward hooks for implicit backward events and per-op gradients |
 | `Trace.check_metadata_invariants` | Run the metadata invariant checks on this completed trace and return whether they pass |
 | `Trace.check_plan` | Audit a plan against this trace, resolving its selectors and checking declared shapes, without arming or running anything |
+| `Trace.chunked_forward` | Whether the trace was assembled from forward chunks |
 | `Trace.cleanup` | Delete log data, break reference cycles and free cached GPU memory |
 | `Trace.collapse_order` | Return each module's smart-collapse score as (module address, score) pairs, highest first, for the chosen policy |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
