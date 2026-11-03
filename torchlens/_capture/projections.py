@@ -130,6 +130,11 @@ class RecordingState:
     event_index: int = 0
     step_index: int = 0
     no_tensor_capture: bool = False
+    # Op contexts the predicate did not select are dropped from ``all_contexts``
+    # once committed: ``Recording.backward`` reads only the selected ones, so a
+    # long forward no longer retains one context per op for the recording's
+    # lifetime. A dry run keeps every context (its result is the context list).
+    keep_all_contexts: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
     pass_lookup: _PassIndex = field(default_factory=_PassIndex)
     storage_intent: StorageIntent = field(init=False)
@@ -164,10 +169,16 @@ class RecordingState:
 
             self.storage_backend = RamStorageBackend(self.recording)
 
-    def append_context(self, ctx: RecordContext) -> None:
-        """Append an event context to the bounded sliding window."""
+    def append_context(self, ctx: RecordContext, *, selected: bool = True) -> None:
+        """Append an event context to the bounded sliding window.
 
-        self.all_contexts.append(ctx)
+        ``selected`` is the forward's capture decision for an op context; an op the
+        predicate skipped is kept only in the lookback window and the pass index,
+        unless ``keep_all_contexts`` holds every context for a dry run.
+        """
+
+        if selected or self.keep_all_contexts:
+            self.all_contexts.append(ctx)
         self.pass_lookup.note_context(ctx)
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:

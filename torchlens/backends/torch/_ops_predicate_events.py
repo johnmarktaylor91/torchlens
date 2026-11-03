@@ -255,7 +255,7 @@ def _emit_predicate_operation_events(
                         trace=self,
                         intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
-                state.append_context(ctx)
+                state.append_context(ctx, selected=bool(spec.save_out or spec.save_metadata))
 
 
 def _build_graph_relationship_fields(

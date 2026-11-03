@@ -450,7 +450,12 @@ class Recorder:
                 "Recorder is in a failed state after a forward exception; "
                 "create a new Recorder for further captures."
             )
-        output = self._run_unified_capture(input_args, input_kwargs, sample_id=sample_id)
+        try:
+            output = self._run_unified_capture(input_args, input_kwargs, sample_id=sample_id)
+        finally:
+            # The pass index serves module exits inside the forward only; a
+            # finished pass must not keep one context per op until the next call.
+            self._state.pass_lookup.clear()
         self._next_pass_index += 1
         return output
 
