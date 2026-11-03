@@ -1724,14 +1724,8 @@ class TinygradBackend:
             Realized tinygrad Tensor copy detached from the source UOp lineage.
         """
 
-        from tinygrad import Tensor
-
         try:
-            if str(value.device).startswith("NPY"):
-                # The host-only NPY device stores numpy arrays and cannot copy
-                # data in, so the copy stays a numpy-backed buffer there.
-                return Tensor(value.numpy().copy(), dtype=value.dtype, device=value.device)
-            return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+            return _host_tensor(value.tolist(), value.dtype, value.device)
         except NotImplementedError as error:
             # ``need copyin``: a host-side source buffer (closure constant) that
             # the forward never realized; refuse typed instead of crashing.
@@ -2936,8 +2930,6 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         Perturbed realized tinygrad tensors with the same dtype and device.
     """
 
-    from tinygrad import Tensor
-
     payload = _payload_list(value)
     dtype_name = str(getattr(value, "dtype", ""))
     candidates: tuple[Any, ...]
@@ -2955,10 +2947,37 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
             _map_payload(payload, lambda item: float(item) - magnitude),
             _map_payload(payload, lambda item: 0.0),
         )
-    return tuple(
-        Tensor(candidate, dtype=value.dtype, device=value.device).realize()
-        for candidate in candidates
-    )
+    return tuple(_host_tensor(candidate, value.dtype, value.device) for candidate in candidates)
+
+
+def _host_tensor(values: Any, dtype: Any, device: Any) -> Any:
+    """A realized tinygrad tensor holding host ``values`` on ``device``.
+
+    The host-only ``NPY`` device stores numpy arrays and cannot copy data in
+    (``need copyin``), so a tensor there is built from a numpy array, which
+    tinygrad places on ``NPY`` directly.
+
+    Parameters
+    ----------
+    values
+        Nested Python values (``Tensor.tolist`` shape).
+    dtype
+        tinygrad dtype of the result.
+    device
+        tinygrad device of the result.
+
+    Returns
+    -------
+    Any
+        The realized tensor.
+    """
+
+    import numpy as np
+    from tinygrad import Tensor
+
+    if str(device).startswith("NPY"):
+        return Tensor(np.asarray(values), dtype=dtype, device=device)
+    return Tensor(values, dtype=dtype, device=device).realize()
 
 
 def _source_matches_payload(source_uop: Any, value: Any) -> bool:
