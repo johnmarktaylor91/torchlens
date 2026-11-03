@@ -1239,7 +1239,7 @@ torchlens/mechinterp/_prompts.py::inspect_prompt	105
 torchlens/mechinterp/_prompts.py::test_prompt	90
 torchlens/mechinterp/_residual.py::residual_accumulation	69
 torchlens/mechinterp/_residual.py::residual_decomposition	82
-torchlens/mechinterp/_scores.py::head_scores	107
+torchlens/mechinterp/_scores.py::head_scores	106
 torchlens/mechinterp/_walk.py::walk_spine	107
 torchlens/neuro/_brainpipe.py	942
 torchlens/neuro/_brainpipe.py::ExtractionPlan.run	69
