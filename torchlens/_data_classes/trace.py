@@ -3500,8 +3500,8 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_draw.to_dagua_graph(
             self,
-            vis_mode="rolled" if rolled else "unrolled",
-            vis_call_depth=depth,
+            rolled=rolled,
+            depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,

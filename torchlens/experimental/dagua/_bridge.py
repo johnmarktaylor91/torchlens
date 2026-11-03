@@ -755,15 +755,20 @@ def _torchlens_layout_config(num_nodes: int, direction: str) -> Any:
 
 def trace_to_dagua_graph(
     trace: Any,
-    vis_mode: str = "unrolled",
-    vis_call_depth: int = 1000,
+    rolled: bool = False,
+    depth: int = 1000,
     show_buffers: bool = False,
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
 ) -> Any:
-    """Translate a TorchLens Trace into a DaguaGraph."""
+    """Translate a TorchLens Trace into a DaguaGraph.
+
+    ``rolled=True`` draws each repeated module once (layer aggregates);
+    ``False`` draws every pass. ``depth`` caps how deep module boxes nest.
+    """
     import dagua
 
+    vis_mode = "rolled" if rolled else "unrolled"
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
     if not show_buffers:
@@ -866,7 +871,7 @@ def trace_to_dagua_graph(
 
     kept_modules: dict[str, list[str]] = {}
     for entry in entries:
-        mods = _module_chain(entry, vis_mode, vis_call_depth)
+        mods = _module_chain(entry, vis_mode, depth)
         if not mods:
             continue
         node_id = getattr(entry, "layer_label")
@@ -916,8 +921,8 @@ def render_trace_with_dagua(
 
     graph = trace_to_dagua_graph(
         trace,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
+        rolled=vis_mode == "rolled",
+        depth=vis_call_depth,
         show_buffers=show_buffers,
         direction=vis_direction,
     )
