@@ -14,14 +14,18 @@ from typing import Any
 import torch
 from torch import nn
 
+from torchlens import _state
+from torchlens._capture_state_helpers import compiled_plain_callable_sites
 from torchlens._distributed import DistributedFinding, detect_distributed_state
 from torchlens._doctor_types import DoctorCheck, Severity, Status
 from torchlens._robustness import _iter_tensors
+from torchlens._utils import _torch_compat
 from torchlens._utils._torch_compat import (
     get_dynamo_optimized_module_type,
     get_fp8_dtypes,
     get_fx_graph_module_type,
 )
+from torchlens.backends.torch.belt import belt_report
 
 
 def _model_checks(model: nn.Module, inputs: Any) -> tuple[DoctorCheck, ...]:
@@ -439,8 +443,6 @@ def _cuda_graphs_row(model: nn.Module) -> DoctorCheck:
     DoctorCheck
         Report row.
     """
-
-    from .._utils import _torch_compat
 
     graphed = any(
         getattr(getattr(module, "__dict__", {}).get("forward"), "__qualname__", "")
@@ -922,9 +924,6 @@ def _torch_compile_row(model: nn.Module) -> DoctorCheck:
         Report row.
     """
 
-    from .._capture_state_helpers import compiled_plain_callable_sites
-    from .._utils import _torch_compat
-
     optimized_module_type = get_dynamo_optimized_module_type()
     optimized_detected = optimized_module_type is not None and isinstance(
         model, optimized_module_type
@@ -1352,9 +1351,6 @@ def _mechanical_belt_row() -> DoctorCheck:
         so a stale pre-wrap reference to it can drop ops with zero signal
         while the capture still reports ``capture_verified=True``.
     """
-
-    from torchlens import _state
-    from torchlens.backends.torch.belt import belt_report
 
     if not _state._is_decorated:
         return DoctorCheck(
