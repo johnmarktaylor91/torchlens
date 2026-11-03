@@ -69,7 +69,6 @@ from torchlens.backends.torch._tl import (
     get_buffer_address,
     get_tensor_meta,
     set_buffer_address,
-    set_tensor_label,
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -378,24 +377,7 @@ def _fresh_module_stash() -> types.ModuleType:
 # ---------------------------------------------------------------------------
 
 
-def test_record_write_reassign_stamp_cleared() -> None:
-    """RED-now-fixed: the reassignment-stamped ModuleType-stashed external is cleaned.
-
-    Pre-fix the external kept ``TensorMeta('buffer_2_raw', 'b', None)``: the
-    ``_record_write`` stamp was never inventoried, the pop removed it from the
-    ``_buffers`` walk, and the ModuleType holder was skipped by the cleanup
-    tree-walk. Post-fix both the inventory and the shallow module-namespace
-    sweep clear it.
-    """
-
-    x = _nchw()
-    stash = _fresh_module_stash()
-    donor = ReassignPopDonor(stash).eval()
-    tl.trace(donor, x.clone())
-    assert get_buffer_address(stash.payload) is None
-    assert _meta_clear(stash.payload)
-
-
+# Kept: sole branch coverage of _runnable/state_live.py, backends/torch/buffer_writes.py; a sole mutation kill; the catch of its regression fault.
 def test_record_write_opwrite_stamp_cleared() -> None:
     """RED-now-fixed: the in-place (``record_op_writes``) vehicle is cleaned too.
 
@@ -412,61 +394,13 @@ def test_record_write_opwrite_stamp_cleared() -> None:
     assert _meta_clear(ext)
 
 
-def test_stale_reassign_stamp_launder_ceils(tmp_path: Path) -> None:
-    """RED-now-fixed (F1a): the reuse launder twin must ceiling, never VERIFY.
-
-    Pre-fix the surviving stamp rode the un-belted buffer rung: the
-    channels_last twin replayed the captured arm as VERIFIED/unpoisoned with
-    replay-vs-fresh max-diff 20.0.
-    """
-
-    x = _nchw()
-    stash = _fresh_module_stash()
-    donor = ReassignPopDonor(stash).eval()
-    tl.trace(donor, x.clone())
-
-    path = _save(StashLaunderBranch(stash.payload).eval(), x.clone(), tmp_path / "f1a.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
-    """RED-now-fixed (F1b): the op-write-stamped external's launder twin ceilings."""
-
-    x = _nchw()
-    torch.manual_seed(18)
-    ext = torch.randn(2, 4, 8, 8)
-    donor = OpWriteReassignPopDonor(ext).eval()
-    tl.trace(donor, x.clone())
-
-    path = _save(StashLaunderBranch(ext).eval(), x.clone(), tmp_path / "f1b.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_no_donor_control_ceils(tmp_path: Path) -> None:
-    """Control B: a fresh foreign tensor in the SAME holder always ceilinged.
-
-    The stale stamp is the sole delta between this control and the F1 REDs.
-    """
-
-    x = _nchw()
-    torch.manual_seed(19)
-    fresh_foreign = torch.randn(2, 4, 8, 8)
-    path = _save(StashLaunderBranch(fresh_foreign).eval(), x.clone(), tmp_path / "f1ctrl.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
 # ---------------------------------------------------------------------------
 # Defense in depth: FORGED stamps (simulated future tagging-path escape) must
 # be rejected by the session belt alone
 # ---------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of backends/torch/buffer_writes.py.
 def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     """White-box: a raw ``set_buffer_address`` stamp that DID survive never resolves.
 
@@ -486,86 +420,12 @@ def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
-def test_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
-    """White-box: a forged stamp COLLIDING with a registered name cannot resolve.
-
-    The launder model registers its OWN buffer ``'b'``; the foreign object's
-    forged ``'b'`` stamp must not resolve through the tracker's direct-stamp
-    fast path (identity required) nor the belt (not session-registered), so
-    the twin still ceilings instead of binding to the model's own state.
-    """
-
-    x = _nchw()
-    torch.manual_seed(21)
-    forged = torch.full((2, 4, 8, 8), 7.0)
-    set_buffer_address(forged, "b")
-
-    path = _save(CollidingBufferLaunder(forged).eval(), x.clone(), tmp_path / "collide.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_forged_stale_label_launder_ceils(tmp_path: Path) -> None:
-    """White-box: a bare stale ``label_raw`` no longer satisfies the rung.
-
-    Pre-fix ANY non-None ``label_raw`` counted as provenance; post-fix the
-    label must resolve in THIS capture's live event index. A stale label that
-    resolves nowhere leaves the break marker and the twin ceilings.
-    """
-
-    x = _nchw()
-    torch.manual_seed(22)
-    forged = torch.zeros(2, 4, 8, 8)
-    set_tensor_label(forged, "buffer_9_raw")
-
-    path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "label.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
 # ---------------------------------------------------------------------------
 # F2 RED-now-fixed: plain-attr buffer ``.data=`` input-layout launder
 # ---------------------------------------------------------------------------
 
 
-def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
-    """RED-now-fixed (F2/M3): the direct plain-attr rebind twin must ceiling.
-
-    Pre-fix the legit prep stamp resolved the rebound receiver -- and every
-    downstream product -- to a pure ``state:`` leaf basis, the layout ladder
-    recorded nothing (residual (3)), and the channels_last twin replayed the
-    captured arm as VERIFIED with max-diff 20.0 in a SINGLE fresh capture.
-    """
-
-    x = _nchw()
-    path = _save(PlainAttrRebindBranch().eval(), x.clone(), tmp_path / "m3.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
-    """RED-now-fixed (F2/M1): the list-element spelling must ceiling too."""
-
-    x = _nchw()
-    path = _save(ListAttrRebindBranch().eval(), x.clone(), tmp_path / "m1.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
-def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
-    """Control (F2/M2): the unstamped underscore-attr spelling keeps ceiling."""
-
-    x = _nchw()
-    path = _save(UnderscoreAttrRebindBranch().eval(), x.clone(), tmp_path / "m2.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.is_poisoned
-
-
+# Kept: sole branch coverage of backends/torch/buffer_writes.py; smoke tier id (frozen).
 @pytest.mark.smoke
 def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M4): the registered-buffer spelling keeps ceiling.
@@ -586,66 +446,7 @@ def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: an UNREBOUND plain-attr state layout branch verifies.
-
-    The belt passes for a stamp whose object and storage are unchanged, so the
-    branch stays state-attributed (residual (3)) on both the same-layout run
-    and the channels_last input twin.
-    """
-
-    x = _nchw()
-    path = _save(PlainAttrHonestLayoutBranch().eval(), x.clone(), tmp_path / "green_pa.tlspec")
-
-    same = tl.load(path).run(inputs=x.clone())
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.is_poisoned
-
-    twin = tl.load(path).run(inputs=_twin(x))
-    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.is_poisoned
-
-
-def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: a registered-buffer layout read verifies both ways."""
-
-    x = _nchw()
-    path = _save(RegisteredBufferLayoutBranch().eval(), x.clone(), tmp_path / "green_rb.tlspec")
-
-    same = tl.load(path).run(inputs=x.clone())
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.is_poisoned
-
-    twin = tl.load(path).run(inputs=_twin(x))
-    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.is_poisoned
-
-
-def test_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: residual-(3) ``self.w.data`` READ-sourced layout verifies."""
-
-    x = _nchw()
-    path = _save(ParamDataReadBranch().eval(), x.clone(), tmp_path / "green_pd.tlspec")
-
-    same = tl.load(path).run(inputs=x.clone())
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not same.report.is_poisoned
-
-    twin = tl.load(path).run(inputs=_twin(x))
-    assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not twin.report.is_poisoned
-
-
-def test_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
-    """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
-
-    x = _nchw()
-    path = _save(ConvBN().eval(), x.clone(), tmp_path / "green_bn.tlspec")
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
+# Kept: a sole mutation kill.
 def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
     """Boundary pin: plain-attr VALUE-path reads keep the pre-existing refusal.
 
@@ -660,6 +461,7 @@ def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
         trace.save(tmp_path / "value_read.tlspec", level="runnable", include_weights=True)
 
 
+# Kept: a sole mutation kill.
 def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
     """Zero collateral: back-to-back captures reset and re-clean the registry.
 

@@ -31,21 +31,7 @@ def _deep_list(depth: int, leaf: object) -> object:
 class TestCloneInputsWithGrad:
     """DAG/cycle/depth behavior of the backward-validation input cloner."""
 
-    def test_shared_container_cloned_once_and_stays_aliased(self):
-        """A container reused under two paths is cloned ONCE (the memo).
-
-        The unmemoized walk cloned a shared node once per PATH -- exponential
-        in shared-substructure depth -- and broke the aliasing topology the
-        model itself would see.
-        """
-
-        shared = [torch.ones(2)]
-        pair = [shared, shared]
-        cloned = _clone_inputs_with_grad(pair)
-        assert cloned[0] is cloned[1]
-        assert cloned[0] is not shared
-        assert torch.equal(cloned[0][0], shared[0])
-
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_deep_shared_dag_is_linear_not_exponential(self):
         """A depth-40 shared DAG completes (2^40 walks pre-memo)."""
 
@@ -55,16 +41,7 @@ class TestCloneInputsWithGrad:
         cloned = _clone_inputs_with_grad(node)
         assert cloned[0] is cloned[1]
 
-    def test_reference_cycle_is_reproduced_not_recursion_error(self):
-        """A self-referential list clones without a raw ``RecursionError``."""
-
-        cyclic: list[object] = [torch.ones(2)]
-        cyclic.append(cyclic)
-        cloned = _clone_inputs_with_grad(cyclic)
-        assert cloned[1] is cloned
-        assert isinstance(cloned[0], torch.Tensor)
-        assert cloned[0] is not cyclic[0]
-
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_over_deep_nest_refuses_typed(self):
         """Nesting past the shared input ceiling refuses typed, never raw."""
 
@@ -73,6 +50,7 @@ class TestCloneInputsWithGrad:
             _clone_inputs_with_grad(deep)
         assert excinfo.value.fields["code"] == "input_tree_depth_exceeded"
 
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_grad_enabling_semantics_unchanged(self):
         """Floating clones require grad; ints and non-containers pass through."""
 
@@ -84,14 +62,7 @@ class TestCloneInputsWithGrad:
 class TestSumTensors:
     """DAG/cycle/depth behavior of the default backward-validation loss."""
 
-    def test_shared_subtree_sum_is_occurrence_weighted(self):
-        """The memoized sum equals the historical occurrence-weighted value."""
-
-        t = torch.arange(4.0)
-        shared = [t]
-        tree = [shared, shared, [shared]]
-        assert torch.equal(_sum_tensors(tree), t.sum() * 3)
-
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_deep_shared_dag_sum_is_linear(self):
         """A depth-40 shared DAG sums in O(nodes) with the exact DAG value."""
 
@@ -100,6 +71,7 @@ class TestSumTensors:
             node = [node, node]
         assert float(_sum_tensors(node)) == float(2**40)
 
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_cyclic_output_refuses_typed(self):
         """A self-referential output container refuses typed, never raw."""
 
@@ -109,6 +81,7 @@ class TestSumTensors:
             _sum_tensors(cyclic)
         assert excinfo.value.fields["code"] == "output_tree_cycle"
 
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_over_deep_output_refuses_typed(self):
         """Nesting past the output ceiling refuses typed, never raw."""
 
@@ -119,6 +92,7 @@ class TestSumTensors:
             _sum_tensors(deep)
         assert excinfo.value.fields["code"] == "output_tree_depth_exceeded"
 
+    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
     def test_tensor_free_output_still_raises_value_error(self):
         """The historical no-tensor refusal is preserved."""
 

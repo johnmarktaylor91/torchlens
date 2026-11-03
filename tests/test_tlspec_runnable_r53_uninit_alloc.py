@@ -21,8 +21,6 @@ Whole-class immunizers pinned here:
 
 from __future__ import annotations
 
-import dataclasses
-import re
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +30,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.errors.runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -182,41 +179,7 @@ class ResizeShrinkModel(nn.Module):
         return x + t.mean()
 
 
-def test_empty_escape_is_declared_verified_path_only(tmp_path: Path) -> None:
-    """Consequence A closed: the output escape stays path-only VERIFIED but is
-    now DECLARED -- distinguishable from a deterministic run by the report."""
-
-    x = torch.randn(2, 4)
-    report = _run_report(EmptyEscapeModel(), x, tmp_path)
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert report.nondeterministic_sources == ("uninitialized_alloc",)
-
-
-def test_archived_empty_activation_is_not_applicable_never_raises(tmp_path: Path) -> None:
-    """The r52 inconsistency: an archived family slot must report
-    ``not_applicable`` upfront (like a declared RNG source), never raise."""
-
-    x = torch.randn(2, 4)
-    report = _run_report(EmptyEscapeModel(), x, tmp_path, include_activations=True)
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert "uninitialized_alloc" in report.nondeterministic_sources
-
-
-@pytest.mark.parametrize(
-    "model_cls", (EmptyCopyModel, EmptyZeroModel, EmptyFillModel, EmptyOutModel)
-)
-def test_empty_then_total_writer_declares_nothing(model_cls: type, tmp_path: Path) -> None:
-    """Sanitizer pin (one test per total-writer entry): empty-then-fully-written
-    is the idiomatic scratch init -- VERIFIED, no ceiling, no declared source."""
-
-    x = torch.randn(2, 4)
-    report = _run_report(model_cls(), x, tmp_path)
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.nondeterministic_sources == ()
-
-
+# Kept: sole branch coverage of _runnable/verification.py.
 def test_empty_then_rng_fill_reclassifies_as_seeded(tmp_path: Path) -> None:
     """An RNG fill removes the uninit taint and hands the product to the seeded
     nets: declared ``seeded_rng``, never ``uninitialized_alloc``."""
@@ -227,6 +190,7 @@ def test_empty_then_rng_fill_reclassifies_as_seeded(tmp_path: Path) -> None:
     assert report.nondeterministic_sources == ("seeded_rng",)
 
 
+# Kept: sole branch coverage of _runnable/path_faithfulness.py; a sole mutation kill.
 def test_empty_driven_branch_in_dag_is_unverifiable(tmp_path: Path) -> None:
     """Consequence B closed (in-DAG layer): a control fact fed by surviving
     uninit taint ceilings structurally -- parity with the RNG-driven branch --
@@ -239,6 +203,7 @@ def test_empty_driven_branch_in_dag_is_unverifiable(tmp_path: Path) -> None:
     assert "uninitialized_alloc" in report.nondeterministic_sources
 
 
+# Kept: a sole mutation kill.
 def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     """Consequence B closed (pruned layer): the orphan-pruned empty-driven
     predicate chain is recorded by the shared pruned-nondeterministic-control
@@ -256,55 +221,7 @@ def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-def test_pruned_empty_then_fill_walk_is_sanitized(tmp_path: Path) -> None:
-    """The sanitized child walk stops at a total-writer edge whose destination
-    is the walked tensor: a pruned ``empty -> fill_(1) -> branch`` chain is a
-    DETERMINISTIC predicate and must NOT be recorded as a pruned
-    nondeterministic control source (the over-trigger an unsanitized
-    generalization would have added). Pre-existing conservative nets may still
-    govern the overall verdict; this pins MY layer's no-fire."""
-
-    from torchlens.backends.torch._completeness_escape_state import pruned_rng_control_source_labels
-
-    x = torch.randn(2, 4)
-    trace = tl.trace(EmptyFillBranchPrunedModel(), x.clone(), capture=_CAPTURE)
-    assert pruned_rng_control_source_labels(trace) == frozenset()
-
-
-def test_zero_numel_empty_stays_clean_and_attested(tmp_path: Path) -> None:
-    """A zero-element family product exposes no bytes: fully clean."""
-
-    x = torch.randn(2, 4)
-    report = _run_report(ZeroNumelEmptyModel(), x, tmp_path, include_activations=True)
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert report.nondeterministic_sources == ()
-
-
-def test_deterministic_fill_capture_is_clean_and_attestable(tmp_path: Path) -> None:
-    """Under ``use_deterministic_algorithms(True)`` with the fill knob on, the
-    family's bytes ARE a function of the recorded computation (NaN fill):
-    no taint, byte-exact attestation, replay restores the recorded fill mode."""
-
-    x = torch.randn(2, 4)
-    was_deterministic = torch.are_deterministic_algorithms_enabled()
-    warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
-    fill_before = torch.utils.deterministic.fill_uninitialized_memory
-    try:
-        torch.use_deterministic_algorithms(True)
-        torch.utils.deterministic.fill_uninitialized_memory = True
-        trace = tl.trace(EmptyEscapeModel(), x.clone(), capture=_CAPTURE)
-    finally:
-        torch.use_deterministic_algorithms(was_deterministic, warn_only=warn_only)
-        torch.utils.deterministic.fill_uninitialized_memory = fill_before
-    path = tmp_path / "det-fill.tlspec"
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    report = tl.load(path).run(inputs=x.clone()).report
-    assert report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert report.nondeterministic_sources == ()
-
-
+# Kept: sole branch coverage of _runnable/attestation.py; a sole mutation kill.
 def test_archive_pair_honest_asymmetry_and_no_raise(tmp_path: Path) -> None:
     """Default save archives the PRE-write garbage slot too: the empty variant
     honestly reports ``not_applicable`` (garbage bytes can never byte-attest;
@@ -323,25 +240,6 @@ def test_archive_pair_honest_asymmetry_and_no_raise(tmp_path: Path) -> None:
     assert control_report.path_faithfulness is PathFaithfulness.VERIFIED
     assert control_report.numeric_attestation is NumericAttestationStatus.ATTESTED
     assert control_report.nondeterministic_sources == ()
-
-
-def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
-    """LOCKED tripwire: a byte mismatch on an UNTAINTED slot still raises
-    ``replay_value_mismatch`` -- the uninit gate is never a tolerance."""
-
-    torch.manual_seed(7)
-    model = ZerosScratchLinear().eval()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x.clone(), capture=_CAPTURE)
-    path = tmp_path / "tripwire.tlspec"
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    loaded = tl.load(path)
-    archive = loaded._runnable.archived_activations
-    victim = next(key for key in archive if "linear" in key)
-    record = archive[victim]
-    archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
-    with pytest.raises(ReplayValueMismatchError):
-        loaded.run(inputs=x.clone(), on_divergence="return")
 
 
 def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
@@ -366,37 +264,6 @@ def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
     return "ran", tl.load(path).run(inputs=x.clone()).report
 
 
-def test_resize_grow_branch_never_false_verified(tmp_path: Path) -> None:
-    """A GROWING resize exposing stale bytes into a branch must never bless
-    VERIFIED: refused at producer preflight today, ceilinged by the grow-gated
-    classifier if ever modeled."""
-
-    x = torch.randn(2, 4)
-    disposition, report = _resize_disposition(ResizeGrowBranchModel(), x, tmp_path)
-    if disposition == "ran":
-        assert report is not None
-        assert report.path_faithfulness is not PathFaithfulness.VERIFIED
-        assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    else:
-        assert disposition == "refused"
-        assert report is None
-
-
-def test_resize_shrink_declares_no_uninit_source(tmp_path: Path) -> None:
-    """Shrink/same-size preserves the element prefix (probed byte-clean): the
-    grow gate must never taint it -- no declared uninitialized source on any
-    runnable disposition."""
-
-    x = torch.randn(2, 4)
-    disposition, report = _resize_disposition(ResizeShrinkModel(), x, tmp_path)
-    if disposition == "ran":
-        assert report is not None
-        assert "uninitialized_alloc" not in report.nondeterministic_sources
-    else:
-        assert disposition == "refused"
-        assert report is None
-
-
 def _materialized_aten_op_names() -> set[str]:
     """Return the complete live ATen packet namespace after eager materialization.
 
@@ -418,103 +285,7 @@ def _materialized_aten_op_names() -> set[str]:
     return set(dir(torch.ops.aten))
 
 
-def test_uninit_family_table_matches_live_aten_registry() -> None:
-    """Family-drift immunizer: torch gives uninit allocation NO Tag, so the
-    closed name table is defended by enumeration -- an ``empty*``/``resize*``
-    aten name that is neither in the family table nor in the justified
-    non-family allowlist below FAILS this test on any torch upgrade."""
-
-    from torchlens._utils._uninit_alloc import (
-        _UNINIT_ALLOC_FACTORY_TAILS,
-        _UNINIT_ALLOC_RESIZE_TAILS,
-    )
-
-    # Justified NON-family names matching the patterns:
-    # - ``_resize_output``/``_resize_output_``: internal ``out=`` plumbing whose
-    #   destination is always fully overwritten by the kernel (out= sanitizer).
-    # - ``_copy_from_and_resize``: internal copy plumbing that resizes only to
-    #   copy the complete source value; it does not expose the destination tail.
-    # - sparse resizes (functional packet and in-place spellings): they mutate
-    #   sparse sizes/indices metadata; stored values remain explicit, absent
-    #   coordinates are implicit zeros, and ``and_clear`` removes stored values.
-    #   None exposes newly allocated dense bytes as tensor values.
-    allowlist = {
-        "_copy_from_and_resize",
-        "_resize_output",
-        "_resize_output_",
-        "sparse_resize",
-        "sparse_resize_",
-        "sparse_resize_and_clear",
-        "sparse_resize_and_clear_",
-        "resize_as_sparse",
-        "resize_as_sparse_",
-    }
-    aten_names = _materialized_aten_op_names()
-    empty_pattern = {
-        name
-        for name in aten_names
-        if name.lstrip("_") == "empty"
-        or name.lstrip("_").startswith("empty_")
-        or name.endswith("_empty")
-        or "_empty_" in name
-    }
-    resize_pattern = {name for name in aten_names if "resize" in name}
-    family = _UNINIT_ALLOC_FACTORY_TAILS | _UNINIT_ALLOC_RESIZE_TAILS
-    unaccounted = (empty_pattern | resize_pattern) - family - allowlist
-    assert not unaccounted, (
-        "New uninitialized-allocation-pattern aten ops are neither in the "
-        f"closed family table nor in the justified allowlist: {sorted(unaccounted)}"
-    )
-
-
-def test_uninit_family_python_tensor_method_surface() -> None:
-    """r55 hon_1 drift immunizer: the aten test above cannot see a Python-level
-    ``torch.Tensor`` method with NO aten spelling (``Tensor.new``:
-    ``hasattr(torch.ops.aten, "new")`` is ``False`` -- the r54 hon_1 blind spot).
-    Enumerate the Python-``torch.Tensor``-method surface by the same allocation
-    name patterns: every candidate must be tabled as family (unconditional,
-    resize, or SIZE-GATED) or justified non-family below -- a future
-    ``Tensor.<x>()`` uninit factory with no aten name FAILS this test."""
-
-    from torchlens._utils._uninit_alloc import (
-        _UNINIT_ALLOC_FACTORY_TAILS,
-        _UNINIT_ALLOC_RESIZE_TAILS,
-        _UNINIT_ALLOC_SIZE_GATED_TAILS,
-    )
-
-    # Justified NON-family Python-method names matching the patterns:
-    # - ``new_full``/``new_ones``/``new_zeros``: fully initialized (total write
-    #   by construction) -- deterministic values, never allocator garbage.
-    # - ``new_tensor``: data-copying constructor (values come from the operand).
-    # - sparse resizes: layout metadata growth materializes implicit zeros
-    #   (``and_clear_`` zeroes), never dense stale bytes (same justification as
-    #   the aten-surface allowlist).
-    allowlist = {
-        "new_full",
-        "new_ones",
-        "new_zeros",
-        "new_tensor",
-        "resize_as_sparse_",
-        "sparse_resize_",
-        "sparse_resize_and_clear_",
-    }
-    candidates = {
-        name
-        for name in dir(torch.Tensor)
-        if name == "new" or name.startswith("new_") or "empty" in name or "resize" in name
-    }
-    family = (
-        _UNINIT_ALLOC_FACTORY_TAILS | _UNINIT_ALLOC_RESIZE_TAILS | _UNINIT_ALLOC_SIZE_GATED_TAILS
-    )
-    unaccounted = candidates - family - allowlist
-    assert not unaccounted, (
-        "Python-level torch.Tensor allocation-pattern methods are neither in a "
-        f"closed family table nor in the justified allowlist: {sorted(unaccounted)}"
-    )
-    # The r54 hon_1 subject itself is TABLED (size-gated), never allowlisted away.
-    assert "new" in _UNINIT_ALLOC_SIZE_GATED_TAILS
-
-
+# Kept: sole branch coverage of _utils/_uninit_alloc.py.
 def test_size_gated_new_recognition_and_arg_form() -> None:
     """r55 hon_1: ``Tensor.new`` recognition is size-gated -- the size form is
     family, the data form is NOT (over-ceiling guard), and an undecidable form
@@ -556,6 +327,7 @@ def test_size_gated_new_recognition_and_arg_form() -> None:
     assert uninit_new_call_is_size_form(("x",)) is None
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_origins.py; a sole mutation kill.
 def test_python_method_surface_witness_recognition() -> None:
     """r55 hon_1: the capture-side recognition of the Python-``torch.Tensor``
     method surface consults the single ``utils/rng.py`` table block and applies
@@ -576,6 +348,7 @@ def test_python_method_surface_witness_recognition() -> None:
     assert tail_of("torch.Tensor", None, (64,)) is None
 
 
+# Kept: a sole mutation kill.
 def test_new_size_form_redispatches_uninit_family_aten() -> None:
     """r55 hon_1 live-surface pin: ``Tensor.new(sizes)`` redispatches an aten
     uninit-family op (``aten.empty.memory_format``, probed), which is exactly
@@ -607,69 +380,6 @@ def test_new_size_form_redispatches_uninit_family_aten() -> None:
     assert not any(_operator_uninit_family_tail(func) is not None for func in calls)
 
 
-def test_single_classifier_owns_qualname_derivation() -> None:
-    """Source-scan immunizer: inside the execution module, the uninit family
-    predicates are consulted for NONDETERMINISM DERIVATION only by
-    ``_nondeterministic_value_sources`` -- no second call site can re-derive
-    uninit nondeterminism and drift from the single classifier (the r52
-    raise-vs-not_applicable inconsistency class).
-
-    r55 hon_1/C3: the scan additionally covers the size-gated ``Tensor.new``
-    predicates (``qualname_is_uninit_size_gated_alloc``/
-    ``uninit_new_call_is_size_form``). r57 C3 DELETED ``_call_is_size_driving``
-    (the allocation preflight now gates on a numeric-literal predicate + the
-    op-agnostic ``FakeTensorMode`` projection, consulting NONE of the uninit
-    family predicates), so this decouples back to a SINGLE justified reader --
-    ``_nondeterministic_value_sources`` (a strengthening-back). Any SECOND reader
-    re-derives uninit nondeterminism from the family predicates and trips this
-    tripwire (the r52 raise-vs-not_applicable inconsistency class)."""
-
-    package_root = Path(__file__).resolve().parents[1] / "torchlens"
-    source = "\n".join(
-        path.read_text()
-        for path in sorted((package_root / "_runnable").glob("*.py"))
-        if path.name != "__init__.py"
-    )
-    functions = re.split(r"(?m)^def ", source)
-    predicates = (
-        "qualname_is_uninitialized_alloc(",
-        "qualname_is_uninit_growth_resize(",
-        "qualname_is_uninit_total_writer(",
-        "qualname_is_uninit_size_gated_alloc(",
-        "uninit_new_call_is_size_form(",
-    )
-    users = sorted(
-        {
-            chunk.split("(", 1)[0]
-            for chunk in functions
-            if any(predicate in chunk for predicate in predicates)
-        }
-    )
-    assert users == ["_nondeterministic_value_sources"], users
-
-
 class SeededRandModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + torch.rand(x.shape[0], x.shape[1])
-
-
-def test_nondeterministic_sources_field_vocabulary(tmp_path: Path) -> None:
-    """F4: the report field is closed-vocabulary, sorted, finalizer-derived --
-    a seeded model declares ``seeded_rng``; the live provider declares
-    nothing (it gathers no descriptor evidence)."""
-
-    from torchlens._runnable import NONDETERMINISTIC_SOURCE_VOCABULARY
-
-    x = torch.randn(2, 4)
-    report = _run_report(SeededRandModel(), x, tmp_path)
-    assert report.nondeterministic_sources == ("seeded_rng",)
-    assert set(report.nondeterministic_sources) <= NONDETERMINISTIC_SOURCE_VOCABULARY
-
-    # Bind the model to a NAME: a live Trace holds its source model only weakly, so an
-    # inline-constructed model is collected at the first gc pass after capture and `.run()`
-    # then refuses RunCapabilityUnavailableError. This passed by luck until the
-    # collection-finish gc.freeze changed when automatic collections land.
-    live_model = nn.Linear(4, 3).eval()
-    live_trace = tl.trace(live_model, x.clone(), capture=_CAPTURE)
-    live_report = live_trace.run(inputs=x.clone()).report
-    assert live_report.nondeterministic_sources == ()

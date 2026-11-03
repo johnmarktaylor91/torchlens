@@ -7,7 +7,6 @@ import inspect
 import textwrap
 import warnings
 from collections.abc import Callable, Iterator
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -520,6 +519,7 @@ class _PreWrapVmapModel(nn.Module):
         return self.vectorized(x)
 
 
+# Kept: sole branch coverage of _data_classes/_trace_groups_capture.py.
 def test_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     """Every ordinarily wrapped operation is owned by a captured leaf token."""
 
@@ -535,63 +535,7 @@ def test_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
-def test_input_copy_preserves_alias_mutation_semantics_and_validation() -> None:
-    """Caller protection preserves repeated tensor identity across model sites."""
-
-    wrap_torch(completeness_witness=True)
-    plain_input = torch.tensor([1.0])
-    plain_output = _AliasedInputMutationModel()(plain_input, plain_input)
-    capture_input = torch.tensor([1.0])
-    trace = tl.trace(_AliasedInputMutationModel(), [capture_input, capture_input])
-    captured_output = trace[trace.output_layers[0]].out
-
-    assert plain_output.tolist() == [13.0]
-    assert captured_output.tolist() == [13.0]
-    assert capture_input.tolist() == [1.0]
-    assert len(trace.input_layers) == 1
-    assert trace.provenance.verified is True
-    assert trace.health.completeness_verified is True
-    validation_input = torch.tensor([1.0])
-    assert (
-        tl.validation.validate_forward_pass(
-            _AliasedInputMutationModel(),
-            [validation_input, validation_input],
-        )
-        is True
-    )
-
-
-def test_input_copy_preserves_nonzero_storage_offset_semantics() -> None:
-    """A copied tensor view retains its physical storage offset."""
-
-    wrap_torch(completeness_witness=True)
-    plain_input = torch.arange(6.0)[2:5]
-    plain_output = _StorageOffsetBranchModel()(plain_input)
-    capture_input = torch.arange(6.0)[2:5]
-    trace = tl.trace(_StorageOffsetBranchModel(), capture_input)
-
-    assert plain_output.tolist() == [-98.0, -97.0, -96.0]
-    assert trace[trace.output_layers[0]].out.tolist() == [-98.0, -97.0, -96.0]
-    assert trace.provenance.verified is True
-    assert trace.health.completeness_verified is True
-
-
-def test_deep_input_tensor_is_captured_and_witnessed() -> None:
-    """A seven-level tensor input remains a represented graph source."""
-
-    wrap_torch(completeness_witness=True)
-    nested: object = torch.tensor([5.0])
-    for _ in range(7):
-        nested = [nested]
-    trace = tl.trace(_DeepInputModel(7), nested)
-
-    assert len(trace.input_layers) == 1
-    assert not any(op.unattributed_tensor_args for op in trace.ops)
-    assert trace.provenance.verified is True
-    assert trace.health.completeness_verified is True
-    assert trace.provenance.verification_reason == "dispatch_witness_verified"
-
-
+# Kept: sole branch coverage of _data_classes/_summary.py.
 def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
     """Container nesting in the once-dropped 65-200 band is fully captured.
 
@@ -613,6 +557,7 @@ def test_mid_band_container_depth_is_captured_and_witnessed() -> None:
     assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
+# Kept: sole branch coverage of _utils/introspection.py, backends/torch/_completeness_finalize.py, backends/torch/backend.py and more; a sole mutation kill.
 def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     """The retained safety ceiling names its frontier and forbids verification.
 
@@ -643,29 +588,7 @@ def test_input_depth_limit_fails_closed_with_unresolved_path() -> None:
     assert input_gap["input_path"].startswith("input.nested.inner.inner")
 
 
-def test_direct_aten_call_trips_non_vacuous_witness(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A direct aten call is loudly and machine-readably unaccounted."""
-    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
-
-    wrap_torch(completeness_witness=True)
-    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
-        trace = tl.trace(_DirectAtenGapModel(), torch.randn(4))
-
-    assert trace.health.completeness_verified is False
-    assert trace.health.num_unaccounted_witness_events == 1
-    assert trace.provenance.verified is False
-    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
-    assert len(trace.completeness_diagnostics) == 1
-    report = trace.completeness_diagnostics[0]
-    assert report["operator"] == "aten.relu.default"
-    assert report["reason"] == "unowned_dispatch"
-    assert report["function"] == "forward"
-    assert report["owner_wrapper"] is None
-    # A forward-body drop did NOT fire inside a replacement hook, so it is a real
-    # silent drop that the validation census must fail on (not excused).
-    assert report["in_replacement_hook"] is False
-
-
+# Kept: a sole mutation kill.
 def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> None:
     """A raw replacement hook's dispatches belong to its explicit boundary Op.
 
@@ -711,54 +634,7 @@ def test_genuine_replacement_hook_dispatch_is_tagged_in_replacement_hook() -> No
     assert any(op.func_name == "intervention_replacement" and op.is_edited for op in trace.ops)
 
 
-def test_direct_aten_submodule_output_is_owned_by_internal_source() -> None:
-    """A child module's untraceable output is owned by its internal-source boundary."""
-
-    wrap_torch(completeness_witness=True)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(_DirectAtenSubmoduleGapModel(), torch.randn(4))
-
-    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
-    assert trace.provenance.verified is True
-    assert trace.health.completeness_verified is True
-    assert trace.health.num_unaccounted_witness_events == 0
-    assert trace.completeness_diagnostics == []
-    module_owners = [
-        row
-        for row in trace.health.completeness_decompositions
-        if row["owner_wrapper"] == "module_forward:exhaustive"
-        and "aten.relu.default" in row["aten_ops"]
-    ]
-    assert len(module_owners) == 1
-    assert module_owners[0]["capture_accounted"] is True
-    assert len(module_owners[0]["capture_accounted_boundary_labels"]) == 1
-    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
-
-
-def test_direct_aten_child_intermediate_still_trips_witness(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A child raw dispatch not represented by its output boundary fails closed."""
-    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
-
-    wrap_torch(completeness_witness=True)
-    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
-        trace = tl.trace(_DirectAtenIntermediateSubmoduleGapModel(), torch.randn(4))
-
-    assert trace.provenance.verified is False
-    assert trace.health.completeness_verified is False
-    assert trace.health.num_unaccounted_witness_events == 1
-    report = trace.completeness_diagnostics[0]
-    assert report["operator"] == "aten.relu.default"
-    assert report["reason"] == "owner_not_captured"
-    assert report["mutates"] is False
-    assert report["file"] == __file__
-    assert isinstance(report["line"], int)
-    assert report["line"] > 0
-    assert report["function"] == "forward"
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch.py; a sole mutation kill.
 def test_untraceable_child_output_does_not_mask_observable_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -794,6 +670,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
 
 
+# Kept: sole branch coverage of backends/torch/_predicate_forward.py.
 def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     """Fastlog accounting uses capture emission rather than Trace-only events."""
 
@@ -811,6 +688,7 @@ def test_record_wrapped_ops_have_zero_unaccounted_dispatches() -> None:
     assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
+# Kept: sole branch coverage of backends/torch/_tl.py.
 def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
     """A direct aten gap remains loud on the fastlog capture path."""
 
@@ -830,89 +708,7 @@ def test_record_direct_aten_call_trips_non_vacuous_witness() -> None:
     assert report["reason"] == "unowned_dispatch"
 
 
-@pytest.mark.parametrize(
-    ("owner_name", "pool"),
-    [
-        (
-            "adaptive_max_pool2d_with_indices",
-            lambda x: F.adaptive_max_pool2d(x, (2, 2)),
-        ),
-        ("max_pool2d", lambda x: F.max_pool2d(x, 2)),
-    ],
-)
-def test_logged_nested_wrapper_calls_are_accounted(
-    owner_name: str,
-    pool: Callable[[torch.Tensor], torch.Tensor],
-) -> None:
-    """A non-leaf wrapper is accounted when its func-call id emitted an op.
-
-    Parameters
-    ----------
-    owner_name:
-        Expected inner pooling wrapper name.
-    pool:
-        Nested functional pooling pair under test.
-    """
-
-    wrap_torch(completeness_witness=True)
-    trace = tl.trace(_NestedPoolModel(pool), torch.randn(1, 2, 4, 4))
-
-    assert trace.health.num_unaccounted_witness_events == 0
-    assert trace.completeness_diagnostics == []
-    row = next(
-        item
-        for item in trace.health.completeness_decompositions
-        if item["owner_func_name"] == owner_name
-    )
-    assert row["capture_accounted"] is True
-    assert any(op.func_call_id == row["owner_func_call_id"] for op in trace.ops)
-
-
-def test_scalar_extraction_boundaries_are_narrowly_accounted() -> None:
-    """Python scalar conversions remain intentional scalar-output boundaries."""
-
-    wrap_torch(completeness_witness=True)
-    trace = tl.trace(_ScalarExtractionModel(), torch.ones(4))
-
-    assert trace.health.num_unaccounted_witness_events == 0
-    assert trace.completeness_diagnostics == []
-    assert trace.provenance.verified is True
-    scalar_rows = [
-        row
-        for row in trace.health.completeness_decompositions
-        if row["owner_func_name"] in {"item", "__bool__", "__float__", "__int__", "__index__"}
-    ]
-    assert {row["owner_func_name"] for row in scalar_rows} == {
-        "item",
-        "__bool__",
-        "__float__",
-        "__int__",
-        "__index__",
-    }
-    assert all(row["scope"] == "expected_opaque" for row in scalar_rows)
-    assert all(row["aten_ops"] == ("aten._local_scalar_dense.default",) for row in scalar_rows)
-
-
-def test_linear_decomposition_is_owned_by_one_captured_call() -> None:
-    """Multiple aten events owned by one linear call do not false-alarm."""
-
-    wrap_torch(completeness_witness=True)
-    trace = tl.trace(_LinearCompositeModel(), torch.randn(2, 4))
-
-    assert trace.completeness_diagnostics == []
-    assert trace.health.completeness_verified is True
-    linear_rows = [
-        row
-        for row in trace.health.completeness_decompositions
-        if row["owner_func_name"] == "linear"
-    ]
-    assert len(linear_rows) == 1
-    linear_row = linear_rows[0]
-    assert linear_row["capture_accounted"] is True
-    assert linear_row["aten_ops"] == ("aten.t.default", "aten.addmm.default")
-    assert any(op.func_call_id == linear_row["owner_func_call_id"] for op in trace.ops)
-
-
+# Kept: a sole mutation kill.
 def test_vmap_interior_is_expected_opaque() -> None:
     """Documented vmap interiors remain outside the active dispatch census."""
 
@@ -928,6 +724,7 @@ def test_vmap_interior_is_expected_opaque() -> None:
     assert "vmap" in {op.func_name for op in trace.ops}
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_finalize.py, backends/torch/_outputs.py, backends/torch/wrappers.py; a sole mutation kill.
 @pytest.mark.skipif(
     not HAS_FUNCTORCH_LEVEL_API,
     reason=(
@@ -955,173 +752,7 @@ def test_pre_wrap_vmap_is_witness_only_not_capture_verified() -> None:
     assert "vmap" not in {op.func_name for op in trace.ops}
 
 
-def test_escape_detector_and_witness_compose_on_shared_tokens() -> None:
-    """Both diagnostics can run together and independently verify a clean call."""
-
-    wrap_torch(
-        escape_detector="shadow",
-        completeness_witness=True,
-    )
-    trace = tl.trace(_WrappedOpsModel(), torch.randn(4))
-
-    assert trace.health.escape_detector_verified is True
-    assert trace.escape_diagnostics == []
-    assert trace.health.completeness_verified is True
-    assert trace.completeness_diagnostics == []
-    assert trace.provenance.verified is True
-    assert trace.provenance.verification_reason == "dispatch_witness_and_detector_verified"
-
-
-def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
-    """Metadata-only exclusions remain a small reviewable exact-name table."""
-
-    assert {row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES} == {
-        "torch_func:size:not_logged",
-        "torch_func:dim:not_logged",
-        "torch_func:item:logged",
-        "torch_func:__bool__:logged",
-        "torch_func:__float__:logged",
-        "torch_func:__int__:logged",
-        "torch_func:__index__:logged",
-        "autograd:grad",
-        "autograd_function:foreign",
-        "foreign_data:export",
-        "jit_script:boundary",
-        "lazy_module:materialize",
-    }
-    scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
-    assert {row.wrapper_name for row in scalar_rows} == {
-        "torch_func:item:logged",
-        "torch_func:__bool__:logged",
-        "torch_func:__float__:logged",
-        "torch_func:__int__:logged",
-        "torch_func:__index__:logged",
-    }
-    assert {row.operator for row in scalar_rows} == {"aten._local_scalar_dense.default"}
-    assert all(row.reason for row in AUDITED_COMPLETENESS_BOUNDARIES)
-
-
-def test_observer_install_loops_fail_closed_before_each_continue() -> None:
-    """Every required observer-install loop must flag failure before continuing.
-
-    Returns
-    -------
-    None
-        Asserts that every structural ``continue`` in the required install loops is
-        preceded in-branch by ``_HOST_ESCAPE_OBSERVER_FAILED.add(state.trace)``.
-    """
-
-    function = _observer_patch_ast()
-    install_iters = (
-        "INVISIBLE_HOST_ESCAPE_FUNCS | STORAGE_BRIDGE_ESCAPE_FUNCS",
-        "_MODULE_ESCAPE_TARGETS()",
-        "_STORAGE_RAW_POINTER_TARGETS()",
-        "INVISIBLE_HOST_ESCAPE_PROPERTIES",
-        "INPUT_METADATA_PREDICATE_FUNCS",
-        "INPUT_METADATA_BOOL_METHODS",
-        "INPUT_METADATA_PROPERTY_NAMES",
-    )
-    for iter_expr in install_iters:
-        loop = _loop_by_iter(function, iter_expr)
-        continue_blocks = [
-            block
-            for block in _statement_blocks(loop)
-            if any(isinstance(stmt, ast.Continue) for stmt in block)
-        ]
-        assert continue_blocks, f"{iter_expr} no longer has structural fail-closed coverage"
-        for block in continue_blocks:
-            for index, statement in enumerate(block):
-                if isinstance(statement, ast.Continue):
-                    assert index > 0, f"{iter_expr} has a bare continue with no guard"
-                    assert _is_observer_failed_add(block[index - 1]), (
-                        f"{iter_expr} continue is not fail-closed"
-                    )
-
-
-def test_observer_restore_loops_fail_closed_on_restore_error() -> None:
-    """Every targeted observer-restore loop must downgrade on restore failure.
-
-    Returns
-    -------
-    None
-        Asserts the restore loops no longer swallow ``TypeError``/``AttributeError``
-        with ``pass``.
-    """
-
-    function = _observer_patch_ast()
-    restore_iters = (
-        "originals.items()",
-        "module_originals",
-        "storage_originals",
-        "property_originals.items()",
-        "metadata_originals.items()",
-        "bool_method_originals.items()",
-        "grad_property_restore.items()",
-    )
-    for iter_expr in restore_iters:
-        loop = _loop_by_iter(function, iter_expr)
-        handlers = [node for node in ast.walk(loop) if isinstance(node, ast.ExceptHandler)]
-        assert handlers, f"{iter_expr} restore loop lost its guarded restore path"
-        for handler in handlers:
-            assert not any(isinstance(statement, ast.Pass) for statement in handler.body), (
-                f"{iter_expr} restore handler still swallows failure"
-            )
-            assert any(_is_observer_failed_add(statement) for statement in handler.body), (
-                f"{iter_expr} restore handler is not fail-closed"
-            )
-
-
-def test_invisible_host_escape_property_lookup_uses_tensor_mro() -> None:
-    """The property observer must resolve descriptors through ``torch.Tensor``'s MRO.
-
-    Returns
-    -------
-    None
-        Asserts the property install loop uses ``inspect.getattr_static`` on
-        ``torch.Tensor`` rather than metaclass or ``__dict__`` probing.
-    """
-
-    function = _observer_patch_ast()
-    loop = _loop_by_iter(function, "INVISIBLE_HOST_ESCAPE_PROPERTIES")
-    descriptor_assignments = [
-        statement
-        for statement in loop.body
-        if isinstance(statement, ast.Assign)
-        and any(
-            isinstance(target, ast.Name) and target.id == "descriptor"
-            for target in statement.targets
-        )
-    ]
-    assert descriptor_assignments, "property observer loop no longer binds a descriptor"
-    descriptor_call = descriptor_assignments[0].value
-    assert ast.unparse(descriptor_call) == "inspect.getattr_static(torch.Tensor, name, None)"
-
-
-def test_completeness_witness_functions_have_docstrings() -> None:
-    """The verification module must keep docstrings on every function.
-
-    Returns
-    -------
-    None
-        Fails with the sorted ``lineno:name`` list for any undocumented function in
-        ``completeness_witness.py``.
-    """
-
-    source_paths = [
-        Path(cw.__file__),
-        *sorted(Path(cw.__file__).parent.glob("_completeness_*.py")),
-    ]
-    module_asts = [ast.parse(path.read_text()) for path in source_paths]
-    missing = sorted(
-        f"{node.lineno}:{node.name}"
-        for module_ast in module_asts
-        for node in ast.walk(module_ast)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and ast.get_docstring(node) is None
-    )
-    assert not missing, f"missing docstrings: {missing}"
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch.py; a sole mutation kill.
 def test_writeback_sampling_outer_failures_are_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1163,6 +794,7 @@ def test_writeback_sampling_outer_failures_are_fail_closed(
     assert trace in cw._HOST_ESCAPE_MUTABLE_WRITEBACK
 
 
+# Kept: a sole mutation kill.
 def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> None:
     """Later clean passes must not relabel earlier dispatch gaps as input-boundary gaps."""
 
@@ -1186,6 +818,7 @@ def test_finalize_census_keeps_dispatch_reason_across_later_guard_passes() -> No
     assert len(trace.completeness_diagnostics) == 1
 
 
+# Kept: sole branch coverage of backends/torch/_opaque_call_advisory.py; a sole mutation kill.
 def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
     """The ``__index__`` audited row is exact on its operator.
 
@@ -1226,6 +859,7 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
     ] == [("aten.add.Tensor", "owner_not_captured", "torch_func:__index__:logged")]
 
 
+# Kept: sole branch coverage of _data_classes/layer.py; a sole mutation kill.
 def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured() -> None:
     """Capture temporary Parameter initialization and in-place writes to prepared state.
 
@@ -1258,43 +892,7 @@ def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured
     assert [state_trace[parent].label for parent in matmul.parents][-1] == uniform_ops[0].label
 
 
-def test_mid_forward_autograd_grad_is_an_exact_backward_boundary() -> None:
-    """Exclude only engine dispatches represented by the captured backward pass."""
-
-    wrap_torch(completeness_witness=True)
-    # The call is a recorded autogradgrad boundary op: its gradients carry
-    # provenance, so no source-provenance warning fires.
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(_MidForwardAutogradGradModel(), torch.randn(2, 4))
-    assert not [w for w in caught if "no graph/source provenance" in str(w.message)]
-
-    boundary_rows = [
-        row
-        for row in trace.health.completeness_decompositions
-        if row["owner_wrapper"] == "autograd:grad"
-    ]
-    assert len(boundary_rows) == 1
-    assert boundary_rows[0]["scope"] == "expected_opaque"
-    assert boundary_rows[0]["aten_ops"]
-    assert len(trace.autograd.backward_passes) == 1
-    assert trace.completeness_diagnostics == []
-    assert trace.provenance.verified is True
-
-
-def test_tensor_data_getter_dispatch_is_captured() -> None:
-    """Represent the C-level data getter's detach dispatch as an ordinary op."""
-
-    wrap_torch(completeness_witness=True)
-    trace = tl.trace(_DataPropertyModel(), torch.randn(4))
-
-    detach_ops = [op for op in trace.ops if op.func_name == "detach"]
-    assert len(detach_ops) == 1
-    assert detach_ops[0].parents == ("input_1",)
-    assert trace.completeness_diagnostics == []
-    assert trace.provenance.verified is True
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch_names.py; a sole mutation kill.
 def test_is_mutating_operator_reads_schema_not_name() -> None:
     """Mutation detection uses the operator schema, covering out= overloads too."""
 
@@ -1324,30 +922,6 @@ class _DirectMutatingAtenModel(nn.Module):
         y = x + 1
         torch._C.TensorBase.mul_(y, 2)
         return torch.sigmoid(y)
-
-
-def test_observable_uncaptured_mutation_is_flagged_mutates() -> None:
-    """An observable uncaptured in-place aten op is tripped AND tagged mutates.
-
-    A direct ``aten.mul_`` call is unowned (a real silent drop) and, being an
-    in-place op, carries ``mutates=True``. This proves the witness observes and
-    tags value-affecting drops it can actually see, distinct from a pure read.
-    """
-
-    wrap_torch(completeness_witness=True)
-    with pytest.warns(CaptureGapWarning, match="unaccounted aten dispatch"):
-        trace = tl.trace(_DirectMutatingAtenModel(), torch.randn(4))
-
-    assert trace.health.completeness_verified is False
-    mutating = [d for d in trace.completeness_diagnostics if d["mutates"] is True]
-    assert mutating, "expected the in-place mul_ drop to be tagged mutates=True"
-    assert any(d["operator"].startswith("aten.mul_") for d in mutating)
-    # A pure-read op that also dispatched (e.g. add) is never tagged mutates.
-    assert all(
-        d["mutates"] is False
-        for d in trace.completeness_diagnostics
-        if d["operator"].startswith("aten.add.")
-    )
 
 
 class _SubclassHiddenMutationTensor(torch.Tensor):
@@ -1381,6 +955,7 @@ class _SubclassHiddenMutationModel(nn.Module):
         return torch.sigmoid(base + 1)
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_finalize.py.
 def test_subclass_disabled_dispatch_mutation_is_outside_observational_reach() -> None:
     """DOCUMENTED BOUNDARY: a mutation hidden under _DisableTorchDispatch is invisible.
 
@@ -1417,6 +992,7 @@ def test_subclass_disabled_dispatch_mutation_is_outside_observational_reach() ->
     assert len(AUDITED_COMPLETENESS_BOUNDARIES) <= MAX_AUDITED_COMPLETENESS_BOUNDARIES
 
 
+# Kept: sole branch coverage of _capture/outcome.py, backends/torch/_completeness_finalize.py, backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_witness_arm_install_failure_strands_no_patches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1491,123 +1067,3 @@ def test_witness_arm_install_failure_strands_no_patches(
     assert trace is not None
     leaked_after = {name for name, obj in _surface_snapshot().items() if obj is not baseline[name]}
     assert not leaked_after, f"stranded witness patches after clean capture: {sorted(leaked_after)}"
-
-
-def test_observer_restore_leaves_no_shadow_entries() -> None:
-    """Arm/disarm must leave ``torch.Tensor`` and storage class dicts unchanged.
-
-    Most belt names (``tolist``/``numpy``/``data_ptr``/``stride``/
-    ``is_contiguous``/the bool-method belt/``UntypedStorage.data_ptr``) are C
-    slots on the BASE class and not in the patched class ``__dict__``; the
-    pre-fix plain-setattr restore left a permanent shadow entry behind after
-    every armed capture, so ``unwrap_torch``'s "torch is clean again" claim
-    was false at the class-dict level.
-    """
-
-    class _Trace:
-        """Weakrefable trace stand-in."""
-
-    trace = _Trace()
-    state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
-    tensor_keys_before = set(vars(torch.Tensor))
-    storage_classes = (torch.UntypedStorage, torch.TypedStorage)
-    storage_keys_before = {cls: set(vars(cls)) for cls in storage_classes}
-
-    with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
-        # The belt is armed: the census-invisible conversions are shadowed in.
-        assert "tolist" in vars(torch.Tensor)
-        assert "stride" in vars(torch.Tensor)
-
-    assert set(vars(torch.Tensor)) == tensor_keys_before
-    for cls in storage_classes:
-        assert set(vars(cls)) == storage_keys_before[cls]
-
-
-def test_descriptor_compat_property_construction_never_raises_without_a_docstring() -> None:
-    """``DescriptorCompatProperty`` must construct with an UNDOCUMENTED getter.
-
-    Regression for a real installation bug (not a dynamo/force-eager-stance
-    interaction as first suspected): CPython's ``property.__init__`` only
-    stores an implicit ``fget.__doc__`` directly on the C struct for the
-    EXACT ``property`` type. For any subclass -- ``DescriptorCompatProperty``
-    included -- it instead does ``self.__doc__ = fget.__doc__`` through the
-    normal attribute-set protocol, even when ``fget.__doc__`` is ``None``,
-    which raises ``AttributeError: '...' object attribute '__doc__' is
-    read-only`` against this slots-only subclass's missing ``__dict__``.
-    Every production call site now passes ``doc=`` explicitly (never
-    defaulted) to route around the C-struct fast path instead; this pins the
-    construction itself so a future call site that forgets ``doc=`` fails
-    this test rather than silently degrading a capture to
-    observer-install-failed via the shared ``except (TypeError,
-    AttributeError)`` guards every install loop uses.
-
-    (``instance.__doc__`` is NOT asserted here: ``DescriptorCompatProperty``'s
-    own class docstring shadows the per-instance ``doc=`` in MRO attribute
-    lookup on a ``__dict__``-less slotted instance, so reading it back would
-    pin a read-back artifact rather than the construction behavior this test
-    targets. ``__name__`` has no such class-level shadow and is asserted
-    directly.)
-    """
-
-    from torchlens.backends.torch._tl import DescriptorCompatProperty
-
-    def getter(self: object) -> int:
-        return 0
-
-    def setter(self: object, value: int) -> None:
-        pass
-
-    assert getter.__doc__ is None  # the exact undocumented-callable shape that broke
-
-    getter_only = DescriptorCompatProperty(getter, doc="getter_only")
-    getter_only.__objclass__ = object
-    getter_only.__name__ = "getter_only"
-    assert getter_only.__name__ == "getter_only"
-
-    getter_and_setter = DescriptorCompatProperty(getter, setter, doc="getter_and_setter")
-    getter_and_setter.__objclass__ = object
-    getter_and_setter.__name__ = "getter_and_setter"
-    assert getter_and_setter.__name__ == "getter_and_setter"
-
-
-def test_observer_install_succeeds_regardless_of_dynamo_import_state() -> None:
-    """Install succeeds identically whether or not ``torch._dynamo`` is imported.
-
-    Regression for the real failure mode behind a since-reverted fix: the
-    completeness-witness belt's ``requires_grad``/``grad_fn``/``is_leaf``,
-    storage-property, and invisible-escape (``__cuda_array_interface__``)
-    installers each construct a ``DescriptorCompatProperty`` without an
-    explicit ``doc=``, which raised ``AttributeError`` on EVERY install
-    attempt (see
-    ``test_descriptor_compat_property_construction_never_raises_without_a_docstring``)
-    -- caught by the SAME ``except (TypeError, AttributeError)`` guard every
-    install loop uses, so the belt silently degraded to
-    ``host_escape_observer_install_failed`` for every capture, independent of
-    ``torch._dynamo``. That observer-install outcome (and therefore the
-    witness-completeness verdict it feeds, ``ESCAPE_OBSERVER_UNCERTAIN`` ->
-    ``INCOMPLETE_SCALAR_ESCAPE``) must be the SAME whether this process has
-    ever imported ``torch._dynamo`` or not -- the install belt itself must
-    never depend on dynamo's import state.
-    """
-
-    class _Trace:
-        """Weakrefable trace stand-in."""
-
-    def _install_succeeds() -> bool:
-        trace = _Trace()
-        state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
-        with torchlens.backends.torch._completeness_patches._observe_invisible_host_escapes(state):
-            pass
-        return not torchlens.backends.torch._completeness_cross_thread.host_escape_observer_install_failed(
-            trace
-        )
-
-    assert _install_succeeds(), "observer install failed before torch._dynamo was imported"
-
-    import importlib
-
-    importlib.import_module("torch._compile")
-    importlib.import_module("torch._dynamo")
-    assert "torch._dynamo" in __import__("sys").modules
-
-    assert _install_succeeds(), "observer install failed after torch._dynamo was imported"

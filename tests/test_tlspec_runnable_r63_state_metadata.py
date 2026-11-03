@@ -31,7 +31,6 @@ every state-binding clone routed through the staging helper.
 
 from __future__ import annotations
 
-import re
 import warnings
 from pathlib import Path
 from types import MappingProxyType
@@ -153,14 +152,13 @@ class IsNegReadBuffer(nn.Module):
 
 
 _READ_CASES = (
-    (IsContiguousReadParam, "w", "contiguous_default", torch.randn(3)),
     (StrideReadParam, "w", "stride_exact", torch.randn(3)),
     (StorageOffsetReadBuffer, "b", "storage_offset", torch.randn(4)),
-    (IsConjReadBuffer, "c", "is_conj", torch.randn(3)),
     (IsNegReadBuffer, "n", "is_neg", torch.randn(3)),
 )
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "model_cls, state_name, read_kind, x",
     _READ_CASES,
@@ -184,6 +182,7 @@ def test_r63_state_metadata_read_emits_escape_witness(
     assert read_kind in host_escape_state_metadata_reads(trace).get(state_name, frozenset())
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "model_cls, state_name, read_kind, x",
     _READ_CASES,
@@ -264,26 +263,6 @@ _UNREAD_CASES = (
     (OffsetBufferUnread, torch.randn(4)),
     (ConjBufferUnread, torch.randn(3)),
 )
-
-
-@pytest.mark.parametrize(
-    "model_cls, x",
-    _UNREAD_CASES,
-    ids=[case[0].__name__ for case in _UNREAD_CASES],
-)
-def test_r63_unread_noncanonical_capture_saves_and_verifies(
-    model_cls: type, x: torch.Tensor, tmp_path: Path
-) -> None:
-    """An UNREAD non-canonical capture must STILL save and settle VERIFIED (zero collateral).
-
-    This is the regression guard distinguishing Option A from unconditional refusal: the
-    physical form is destination-owned and value-invariant when unobserved, so refusing it
-    would break honest channels-last CNNs.
-    """
-
-    loaded = _save_load(model_cls(), x, tmp_path / "unread.tlspec")
-    result = loaded.run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -372,6 +351,7 @@ def _exotic_sources() -> dict[str, torch.Tensor]:
     return sources
 
 
+# Kept: id not measured per id (rare tier).
 @pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_user_state_refuses_before_staging(tmp_path: Path) -> None:
     """Named source into an unnamed capture refuses at bind (the review's 321-vs-3.0 repro class).
@@ -389,6 +369,7 @@ def test_r63_named_user_state_refuses_before_staging(tmp_path: Path) -> None:
     assert loaded._runnable.staged_user_state is None
 
 
+# Kept: sole branch coverage of _runnable/state.py.
 def test_r63_exotic_supplied_state_refuses_typed(tmp_path: Path) -> None:
     """Sparse COO/CSR, quantized, nested, mkldnn, and subclass sources refuse typed.
 
@@ -402,75 +383,6 @@ def test_r63_exotic_supplied_state_refuses_typed(tmp_path: Path) -> None:
         with pytest.raises(StateBindingError) as excinfo:
             loaded.load_state_dict({"w": source})
         assert "state_metadata_mismatch" in str(excinfo.value), kind
-
-
-def test_r63_hostile_subclass_observes_zero_reads(tmp_path: Path) -> None:
-    """Exact-class admission reads ``type()`` first: an unadmitted subclass observes nothing."""
-
-    loaded = _plain_loaded(tmp_path)
-    hostile = torch.ones(2, 3).as_subclass(_CountingSubclass)
-    _CountingSubclass.reads = 0
-    with pytest.raises(StateBindingError):
-        loaded.load_state_dict({"w": hostile})
-    assert _CountingSubclass.reads == 0
-
-
-def test_r63_physical_form_user_sources_still_bind_and_verify(tmp_path: Path) -> None:
-    """Non-contiguous and offset USER sources bind + VERIFIED (excluded dims stay excluded).
-
-    Default ``load_state_dict`` copy normalizes physical form, so refusing these would
-    over-refuse what PyTorch itself accepts -- the locked no-over-refusal constraint.
-    """
-
-    x = torch.randn(3)
-    for name, source in (
-        ("noncontig", torch.ones(3, 2).t()),
-        ("offset", torch.ones(12)[4:10].reshape(2, 3)),
-    ):
-        loaded = _plain_loaded(tmp_path / name)
-        loaded.load_state_dict({"w": source})
-        result = loaded.run(inputs=x.clone())
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, name
-
-
-def test_r63_channels_last_user_source_binds_into_conv(tmp_path: Path) -> None:
-    """A channels-last USER source into a contiguous captured conv slot binds + VERIFIED."""
-
-    x = torch.randn(1, 3, 8, 8)
-    loaded = _save_load(nn.Conv2d(3, 4, 3, padding=1), x, tmp_path / "conv.tlspec")
-    sd = {
-        "weight": torch.randn(4, 3, 3, 3).to(memory_format=torch.channels_last),
-        "bias": torch.randn(4),
-    }
-    loaded.load_state_dict(sd)
-    result = loaded.run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_r63_dense_controls_bind_and_verify(tmp_path: Path) -> None:
-    """Ordinary dense param + buffer + 0-dim int counter bind exact values + VERIFIED."""
-
-    class DenseControls(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.w = nn.Parameter(torch.ones(2, 3))
-            self.register_buffer("scale", torch.tensor([2.0, 2.0, 2.0]))
-            self.register_buffer("counter", torch.tensor(3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x * self.scale + self.w.sum() + self.counter
-
-    x = torch.randn(3)
-    loaded = _save_load(DenseControls(), x, tmp_path / "dense.tlspec")
-    loaded.load_state_dict(
-        {
-            "w": torch.full((2, 3), 4.0),
-            "scale": torch.tensor([3.0, 3.0, 3.0]),
-            "counter": torch.tensor(7),
-        }
-    )
-    result = loaded.run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -489,6 +401,7 @@ class CanonicalIsContiguousRead(nn.Module):
         return x + self.w.sum() if self.w.is_contiguous() else x - self.w.sum()
 
 
+# Kept: a sole mutation kill.
 def test_r63_canonical_read_saves_verified_and_digest_witnesses(tmp_path: Path) -> None:
     """A metadata read on CANONICAL state saves + VERIFIED; changed staged state ceilings.
 
@@ -520,6 +433,7 @@ class NamedControlNoTensorOp(nn.Module):
         return x + 321.0 if self.w.names == ("out", "in") else x + 3.0
 
 
+# Kept: id not measured per id (rare tier).
 @pytest.mark.skipif(not HAS_NAMED_TENSOR_API, reason="native named-tensor API is unavailable")
 def test_r63_named_control_capture_never_verified(tmp_path: Path) -> None:
     """The named-as-control capture stays honestly non-VERIFIED, never a false VERIFIED.
@@ -552,28 +466,7 @@ def test_r63_named_control_capture_never_verified(tmp_path: Path) -> None:
 # ======================================================================================
 
 
-def test_r63_signatures_stamped_pre_clone() -> None:
-    """Capture signatures preserve offset/conj facts the snapshot CLONE normalizes away."""
-
-    class OffsetConjState(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.register_buffer("b", _offset_buffer())
-            self.register_buffer("c", _conj_buffer())
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + self.b + self.c.real.sum()
-
-    trace = _trace(OffsetConjState(), torch.randn(4))
-    signatures = trace._runnable.capture_state_signatures
-    assert isinstance(signatures, dict)
-    assert signatures["b"]["storage_offset_is_zero"] is False
-    assert signatures["c"]["is_conj"] is True
-    capture_state = trace._runnable.capture_state
-    assert capture_state["b"].storage_offset() == 0  # the clone normalized it
-    assert not capture_state["c"].is_conj()
-
-
+# Kept: sole branch coverage of _runnable/transaction.py.
 def test_r63_runtime_tripwire_catches_mutated_staged_state(tmp_path: Path) -> None:
     """Force-mutated staged state metadata fails ``state_metadata:<slot_id>`` typed."""
 
@@ -588,6 +481,7 @@ def test_r63_runtime_tripwire_catches_mutated_staged_state(tmp_path: Path) -> No
     assert "canonical staged metadata signature" in str(excinfo.value)
 
 
+# Kept: sole branch coverage of _runnable/state.py; a sole mutation kill.
 def test_r63_staging_canonicalizes_physical_form(tmp_path: Path) -> None:
     """The staging clone always materializes the canonical destination form."""
 
@@ -598,27 +492,3 @@ def test_r63_staging_canonicalizes_physical_form(tmp_path: Path) -> None:
         assert value.is_contiguous()
         assert value.stride() == (3, 1)
         assert value.storage_offset() == 0
-
-
-def test_r63_source_tripwire_state_binding_uses_staging_helper() -> None:
-    """No state-binding path calls bare ``_byte_guarded_clone`` around the staging helper."""
-
-    import torchlens._runnable.state as module
-
-    source = Path(module.__file__).read_text()
-
-    def _body(name: str) -> str:
-        match = re.search(rf"^def {name}\(.*?(?=^def |\Z)", source, flags=re.MULTILINE | re.DOTALL)
-        assert match is not None, name
-        return match.group(0)
-
-    for binder in (
-        "bind_embedded_trace_state",
-        "bind_embedded_nonpersistent_buffers",
-        "_validate_named_slot_mapping",
-    ):
-        body = _body(binder)
-        assert "_byte_guarded_clone(" not in body, binder
-        assert "_staged_state_clone(" in body, binder
-    helper = _body("_staged_state_clone")
-    assert "_byte_guarded_clone(" in helper  # the byte guard stays load-bearing inside

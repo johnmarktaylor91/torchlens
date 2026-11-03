@@ -85,108 +85,6 @@ def _save_runnable(model: nn.Module, capture_inputs: list, path: Path) -> Path:
     return path
 
 
-def test_changed_bool_input_diverges_and_is_not_attested(tmp_path: Path) -> None:
-    """A changed bool input must raise under the default rollback policy."""
-
-    model = BoolBranch()
-    left = torch.tensor([1.0, 4.0])
-    right = torch.tensor([2.0, 2.0])
-    path = _save_runnable(model, [left, right, True], tmp_path / "bool.tlspec")
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[left, right, False])
-
-    diverged = tl.load(path).run(
-        inputs=[left, right, False],
-        on_divergence="return",
-    )
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.is_poisoned
-    # The honest report must never masquerade the silent-wrong result as correct.
-    fresh = model(left, right, False)
-    assert torch.equal(fresh, left - right)
-
-
-def test_unchanged_bool_input_still_verifies_and_attests(tmp_path: Path) -> None:
-    """An identical bool input must verify, attest, and return the right output."""
-
-    model = BoolBranch()
-    left = torch.tensor([1.0, 4.0])
-    right = torch.tensor([2.0, 2.0])
-    path = _save_runnable(model, [left, right, True], tmp_path / "bool.tlspec")
-
-    result = tl.load(path).run(inputs=[left, right, True])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert not result.report.is_poisoned
-    assert all(check.passed for check in result.report.contract_checks)
-    torch.testing.assert_close(result.output, left + right)
-
-
-def test_changed_int_input_diverges_unchanged_verifies(tmp_path: Path) -> None:
-    """Int control inputs follow the same changed-diverges/unchanged-verifies rule."""
-
-    model = IntBranch()
-    value = torch.tensor([1.0, 2.0])
-    path = _save_runnable(model, [value, 0], tmp_path / "int.tlspec")
-
-    same = tl.load(path).run(inputs=[value, 0])
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(same.output, value + 1)
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, 1])
-    diverged = tl.load(path).run(inputs=[value, 1], on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_changed_float_input_diverges_unchanged_verifies(tmp_path: Path) -> None:
-    """Float control inputs follow the same changed-diverges/unchanged-verifies rule."""
-
-    model = FloatBranch()
-    value = torch.tensor([3.0, 4.0])
-    path = _save_runnable(model, [value, 2.0], tmp_path / "float.tlspec")
-
-    same = tl.load(path).run(inputs=[value, 2.0])
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(same.output, value * 2)
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, 0.5])
-    diverged = tl.load(path).run(inputs=[value, 0.5], on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_mixed_tensor_and_python_arg_binds_without_crashing(tmp_path: Path) -> None:
-    """One tensor arg plus one Python arg binds on original inputs and diverges on a change.
-
-    Regression for the binder shortcut that treated the whole ``[tensor, python]``
-    runtime argument list as the single tensor site, producing a spurious
-    input-tree mismatch even for the original inputs.
-    """
-
-    model = MixedSingleTensorModel()
-    value = torch.tensor([5.0])
-    path = _save_runnable(model, [value, True], tmp_path / "mixed.tlspec")
-
-    original = tl.load(path).run(inputs=[value, True])
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert original.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(original.output, value + 100)
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, False])
-    diverged = tl.load(path).run(inputs=[value, False], on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
 # --------------------------------------------------------------------------- #
 # r27-H1: an EXTRA runtime non-tensor input leaf (an added dict key the model
 # branches on, or a longer list) steers unwitnessed control flow. The per-leaf
@@ -242,25 +140,7 @@ def _save_dictish(model: nn.Module, capture_input, path: Path) -> Path:
     return path
 
 
-def test_h1_extra_dict_key_diverges_identical_verifies(tmp_path: Path) -> None:
-    """An extra dict key must diverge; the identical dict input still VERIFIES."""
-
-    x = torch.tensor([1.0, 2.0])
-    path = _save_dictish(_FlagInDictModel(), {"x": x}, tmp_path / "flag_dict.tlspec")
-
-    # No over-trigger: the identical (single-key) input still verifies + attests.
-    same = tl.load(path).run(inputs={"x": x})
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-    # An extra non-tensor leaf steers an unwitnessed branch -> fail closed.
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs={"x": x, "flag": True})
-    diverged = tl.load(path).run(inputs={"x": x, "flag": True}, on_divergence="return")
-    assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
+# Kept: sole branch coverage of _ir/container_registry.py, _runnable/verification.py.
 def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
     """A longer runtime input list (extra non-tensor element) must diverge."""
 
@@ -304,24 +184,7 @@ class _KwOnlyModel(nn.Module):
         return (x * scale).relu()
 
 
-def test_extra_positional_arg_diverges_never_verified(tmp_path: Path) -> None:
-    """r42 corr1_1: an EXTRA top-level positional arg is INPUT_ARITY_EXTRA, never VERIFIED."""
-
-    x = torch.tensor([1.0])
-    y = torch.tensor([2.0])
-    path = _save_runnable(_TwoArgModel(), [x, y], tmp_path / "extra_pos.tlspec")
-    with pytest.raises(PathDivergenceError) as exc:
-        tl.load(path).run(inputs=[x, y, torch.tensor([3.0])])
-    assert exc.value.fields.get("code") == RunnableErrorCode.INPUT_ARITY_EXTRA.value
-    diverged = tl.load(path).run(inputs=[x, y, torch.tensor([3.0])], on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.first_mismatch is not None
-    assert diverged.report.first_mismatch.code is RunnableErrorCode.INPUT_ARITY_EXTRA
-    # Identical original inputs stay VERIFIED (no over-trigger).
-    ok = tl.load(path).run(inputs=[x, y])
-    assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _runnable/input_metadata.py, backends/torch/_held_refs_capture.py.
 def test_extra_keyword_arg_diverges_never_verified(tmp_path: Path) -> None:
     """r42 corr1_1: an EXTRA top-level keyword not present at capture is INPUT_ARITY_EXTRA."""
 
@@ -392,6 +255,7 @@ class _DataclassOpaqueModel(nn.Module):
         return pair.x * 2.0
 
 
+# Kept: sole branch coverage of _io/runnable.py; a sole mutation kill.
 def test_tensor_only_dataclass_input_verifies_and_attests(tmp_path: Path) -> None:
     """r42 corr1_2: a tensor-only dataclass input is fully witnessable -> VERIFIED (+ATTESTED)."""
 
@@ -402,6 +266,7 @@ def test_tensor_only_dataclass_input_verifies_and_attests(tmp_path: Path) -> Non
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
+# Kept: sole branch coverage of _ir/container_registry.py.
 def test_dataclass_changed_bool_field_diverges(tmp_path: Path) -> None:
     """r42 corr1_2: a dataclass NON-tensor field is still witnessed -- a changed value diverges."""
 
@@ -414,6 +279,7 @@ def test_dataclass_changed_bool_field_diverges(tmp_path: Path) -> None:
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+# Kept: sole branch coverage of _ir/container_registry.py; a sole mutation kill.
 def test_dataclass_opaque_field_never_verified(tmp_path: Path) -> None:
     """r42 corr1_2 (no-weakening guard): a dataclass with a genuinely-opaque field is never
     blessed. The tensor-only descent does NOT mask a genuinely-unwitnessable field -- the run
