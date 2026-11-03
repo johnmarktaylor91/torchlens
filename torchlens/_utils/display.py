@@ -191,7 +191,7 @@ def int_list_to_compact_str(int_list: list[int]) -> str:
 
 
 def human_readable_size(size: float, decimal_places: int = 1) -> str:
-    """Convert a byte count into a human-readable string (e.g. ``"1.5 MB"``).
+    """Convert a byte count into a human-readable string (e.g. ``"1.5 MiB"``).
 
     Args:
         size: Number of bytes.
@@ -204,7 +204,14 @@ def human_readable_size(size: float, decimal_places: int = 1) -> str:
         raise ValueError("size must be non-negative.")
     if decimal_places == 1:
         return str(Bytes(size))
-    return format(Bytes(size), f".{decimal_places}f")
+    return (
+        format(Bytes(size), f".{decimal_places}f")
+        .replace("KB", "KiB")
+        .replace("MB", "MiB")
+        .replace("GB", "GiB")
+        .replace("TB", "TiB")
+        .replace("PB", "PiB")
+    )
 
 
 def format_size(size: float, decimal_places: int = 1) -> str:
@@ -215,12 +222,12 @@ def format_size(size: float, decimal_places: int = 1) -> str:
     size:
         Number of bytes.
     decimal_places:
-        Number of decimal places for KB and larger units.
+        Number of decimal places for KiB and larger units.
 
     Returns
     -------
     str
-        Human-readable byte string such as ``"1.2 MB"``.
+        Human-readable byte string such as ``"1.2 MiB"``.
     """
 
     return human_readable_size(size, decimal_places=decimal_places)

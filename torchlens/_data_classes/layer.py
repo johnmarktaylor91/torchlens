@@ -1637,28 +1637,9 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Layer card (F10; lovely D15/4.3).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        Data-model contract: never raises. A Layer detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of propagating the typed relation
-        refusal out of ``repr()``/``print()``/f-string interpolation
-        (r4 b7-opus R52-A). The historical numberless five-line summary is
-        replaced by the card: line 1 is the envelope+core repr, multi-pass
-        layers show per-pass cores (never a pooled statistic, D32), and
-        exits are named on the ``More:`` line.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_card(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_card(self)
 
     def _describe_bound(self) -> str:
         """Build the full summary; relation reads require a live Trace."""
@@ -1690,23 +1671,9 @@ class Layer(_SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        The lovely demo moment: ``log['label']`` at a REPL answers with
-        dtype/shape/device, distribution, and health in one line. Never
-        raises; detached layers keep the placeholder contract.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_repr_line(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_repr_line(self)
 
     def _detached_from_trace(self) -> bool:
         """Whether this Layer lost its owning Trace (R52-A placeholder gate).

@@ -750,12 +750,7 @@ class Param:
         self._grad_memory = Bytes(value)
 
     def __repr__(self) -> str:
-        """One live/versioned envelope+core line (F10; lovely D30).
-
-        Params are live records: the core is computed from the live
-        ``nn.Parameter`` and version-checked per render; a released ref
-        degrades to metadata with the explicit basis. Never raises.
-        """
+        """Live metadata and version-valid cached values; never scan a parameter."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import param_repr_line
@@ -766,17 +761,20 @@ class Param:
         )
 
     def __str__(self) -> str:
-        """Bounded Param card with tie disclosure (F10; lovely matrix).
-
-        Line 1 is the repr; the body adds module home, consuming sites
-        (tied params NAMED -- real gpt2's ``wte.weight`` feeds two sites),
-        grad/optimizer facts. Never raises.
-        """
+        """Bounded live-basis card, with parameter ties and captured gradient facts."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import param_card
 
         return fail_open(lambda: param_card(self), lambda _error: self.__repr__())
+
+    def _repr_html_(self) -> str:
+        """Render the same facts as the text card in safe notebook HTML."""
+
+        from ..report._notebook._value_cards import param_value_card
+        from ..report._notebook.cardtree import safe_card_html
+
+        return safe_card_html(lambda: param_value_card(self))
 
     def _release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""
