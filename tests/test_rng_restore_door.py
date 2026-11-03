@@ -161,9 +161,7 @@ def test_trace_method_validation_returns_the_callers_streams() -> None:
     x = torch.randn(2, 4)
     # Replay needs the saved activations and arguments; a default capture
     # keeps neither and reports an unverified status instead of a verdict.
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True), save="all")
     ground_truth = model(x).detach().clone()
     _seed_all(11)
     expected = _draw()

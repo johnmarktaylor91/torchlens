@@ -74,7 +74,7 @@ def test_save_selection_composes_with_other_capture_options(net) -> None:
     trace = tl.trace(model, x, save=["fc"], capture=tl.options.CaptureOptions(save_args=True))
     assert trace["fc"].has_saved_activation
     assert all(
-        op.has_saved_activation is False for op in trace.layer_list if op.layer_type == "relu"
+        op.has_saved_activation is False for op in trace._layer_list if op.layer_type == "relu"
     )
 
 
