@@ -127,6 +127,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "output_id2label": FieldPolicy.KEEP,
     "output_num_classes": FieldPolicy.KEEP,
     "_output_transform": FieldPolicy.DROP,
+    "_output_slot": FieldPolicy.DROP,
     "_options_save_transformed_output": FieldPolicy.KEEP,
     "layer_visualizers": FieldPolicy.DROP,
     "save_visualizations": FieldPolicy.KEEP,

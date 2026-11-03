@@ -39,7 +39,7 @@ remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 `size_by` accepts the same builtin tokens as `color_by` with the same
 meaning and legend units (`"time"`, `"bytes"`, `"flops"`, `"magnitude"`,
 `"grad_norm"`, `"device_time"`), plus record field names, callables, and
-the shape token `"dims"`: `draw(size_by="dims", scale="sqrt")` sizes nodes
+the shape token `"dims"`: `draw(size_by="dims", size_scale="sqrt")` sizes nodes
 by the numel of the non-batch output shape (the conservative area-only
 mapping). On rolled multi-pass nodes a source that cannot be certified
 single-valued refuses (`size_by_rolled_varying`).

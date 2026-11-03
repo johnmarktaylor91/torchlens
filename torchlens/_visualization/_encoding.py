@@ -52,6 +52,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from ._encoding_aggregate import AggregateTargets, collect_aggregate, encoding_aggregate_targets
+from ._encoding_request import EncodingChannelRequest
 from ._encoding_size_layout import (
     DEFAULT_NODE_HEIGHT_IN,
     DEFAULT_NODE_WIDTH_IN,
@@ -453,20 +454,6 @@ def interpolate_hex(start: str, end: str, fraction: float) -> str:
         for start_value, end_value in zip(start_rgb, end_rgb, strict=True)
     ]
     return "#{:02X}{:02X}{:02X}".format(*values)
-
-
-@dataclass(frozen=True)
-class EncodingChannelRequest:
-    """A color source paired with an explicit transform (lens layer door).
-
-    The lens roster's performance rows pass this as ``color_by`` so the
-    view-resolved member arrives WITH its rank transform; a bare string or
-    callable ``color_by`` keeps the historical linear default.
-    """
-
-    source: Any
-    transform: str = "linear"
-    display_name: str | None = None
 
 
 @dataclass(frozen=True)

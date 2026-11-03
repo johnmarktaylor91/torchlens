@@ -236,10 +236,9 @@ def _trace(model: nn.Module) -> tl.Trace:
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render ``trace`` and return the DOT source."""
 
-    kwargs.setdefault("vis_node_placement", "dot")
+    kwargs.setdefault("layout", "dot")
     return str(
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / name),
             **kwargs,
@@ -400,7 +399,7 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
 
     trace = _trace(_MixHicToy())
     try:
-        dot = _dot(trace, tmp_path, "rolled", vis_mode="rolled")
+        dot = _dot(trace, tmp_path, "rolled", rolled=True)
         clamp_layer = next(op.layer_label for op in trace._layer_list if op.func_name == "clamp_")
     finally:
         trace.cleanup()
@@ -548,8 +547,8 @@ def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> 
     trace = _trace(_MixHicToy())
     plain = _trace(_NeverMutated())
     try:
-        dot = _dot(trace, tmp_path, "rank", vis_node_placement="rank", show_legend=True)
-        plain_dot = _dot(plain, tmp_path, "rank_plain", vis_node_placement="rank", show_legend=True)
+        dot = _dot(trace, tmp_path, "rank", layout="rank", show_legend=True)
+        plain_dot = _dot(plain, tmp_path, "rank_plain", layout="rank", show_legend=True)
         clamp = _node_name(trace, "clamp_")
     finally:
         trace.cleanup()

@@ -71,21 +71,21 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
     )
     if facts.raise_on_nan_value:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with raise_on_nan=True: a "
+            "structure_only=True cannot combine with on_nonfinite='raise': a "
             "structure-only capture has no tensor values for a nonfinite "
             "predicate to test",
             code="structure_only_option_conflict",
             remedy=conflict_remedy,
-            arguments=("structure_only", "raise_on_nan"),
+            arguments=("structure_only", "on_nonfinite"),
         )
     if facts.track_nonfinite_value:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with track_nonfinite=True: a "
+            "structure_only=True cannot combine with on_nonfinite='track' or 'warn': a "
             "structure-only capture has no tensor values for a per-op "
             "finiteness check to examine",
             code="structure_only_option_conflict",
             remedy=conflict_remedy,
-            arguments=("structure_only", "track_nonfinite"),
+            arguments=("structure_only", "on_nonfinite"),
         )
     if facts.replayable:
         raise StructureOnlyOptionConflictError(
@@ -160,18 +160,18 @@ def _refuse_structure_only_payload_selections(
             "activations are never recorded under the structure-only contract",
             "save",
         )
-    if capture_options.is_field_explicit("layers_to_save") and facts.layers_to_save not in (
+    if capture_options._layers_to_save_explicit and facts.layers_to_save not in (
         "none",
         None,
         [],
     ):
         _refuse_values(
-            "structure_only=True cannot honor an explicit layers_to_save "
+            "structure_only=True cannot honor an explicit save= "
             "payload selection; activations are never recorded under the "
             "structure-only contract",
-            "layers_to_save",
+            "save",
         )
-    if capture_options.is_field_explicit("save_grads") and facts.should_save_grads:
+    if capture_options._is_field_explicit("save_grads") and facts.should_save_grads:
         _refuse_values(
             "structure_only=True cannot honor save_grads: gradient payloads "
             "are values and backward capture is refused under the "
@@ -192,25 +192,28 @@ def _refuse_structure_only_option_payloads(
 ) -> None:
     """Payload-recording OPTION values refuse typed."""
 
-    if capture_options.is_field_explicit("save_args") and capture_options.save_args:
+    if capture_options._is_field_explicit("save_args") and capture_options.save_args:
         _refuse_values(
             "structure_only=True cannot record non-tensor argument VALUES as "
             "payloads via save_args",
             "save_args",
         )
-    if capture_options.is_field_explicit("layer_visualizers") and capture_options.layer_visualizers:
+    if (
+        capture_options._is_field_explicit("layer_visualizers")
+        and capture_options.layer_visualizers
+    ):
         _refuse_values(
             "structure_only=True cannot run payload-consuming layer "
             "visualizers; they require tensor values",
             "layer_visualizers",
         )
-    if capture_options.is_field_explicit("save_raw_input") and capture_options.save_raw_input:
+    if capture_options._is_field_explicit("save_raw_input") and capture_options.save_raw_input:
         _refuse_values(
             "structure_only=True cannot retain the raw input payload",
             "save_raw_input",
         )
     if (
-        capture_options.is_field_explicit("save_transformed_output")
+        capture_options._is_field_explicit("save_transformed_output")
         and capture_options.save_transformed_output
     ):
         _refuse_values(

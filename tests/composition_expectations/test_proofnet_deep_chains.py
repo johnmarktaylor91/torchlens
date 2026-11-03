@@ -36,7 +36,7 @@ def test_chain_halted_settle_save_load_report_doors(tmp_path: Any) -> None:
 
     import torchlens as tl
 
-    halted = tl.trace(_model(), _x(), halt=tl.func("relu"))
+    halted = tl.trace(_model(), _x(), stop_after=tl.func("relu"))
     assert halted.outcome.status.name == "STOPPED"
     path = tmp_path / "halted.tlspec"
     halted.save(str(path))

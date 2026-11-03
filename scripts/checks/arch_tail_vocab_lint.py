@@ -45,6 +45,7 @@ DECLARED_VOCABULARY: frozenset[str] = frozenset(
         "_vocab.trace_state",
         "_vocab.node_spec",
         "_io.format_errors",
+        "_output_slot",
         "recording.types",
     }
 )
@@ -260,6 +261,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
     "_vocab.trace_state": 0,
     "_vocab.node_spec": 0,
     "_io.format_errors": 1,  # errors._base (L0 error vocabulary)
+    "_output_slot": 2,  # _errors and errors._base (L0 error vocabulary)
     "recording.types": 25,  # the declared residue; splits burn this down
 }
 
