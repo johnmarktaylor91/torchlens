@@ -1419,7 +1419,7 @@ def patch_from(
     Examples
     --------
     >>> donor = tl.trace(model, torch.randn(1, 3, 8, 8))
-    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> fork = tl.trace(model, x).fork()
     >>> _ = fork.do("relu_1_2", tl.patch_from(donor))
     >>> torch.equal(fork["relu_1_2"].out, donor["relu_1_2"].out)
     True
