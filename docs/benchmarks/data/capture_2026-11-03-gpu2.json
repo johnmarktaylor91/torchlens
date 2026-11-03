@@ -1,0 +1,1818 @@
+{
+ "measured_on": "2026-11-03",
+ "host": {
+  "name": "a 48-core Intel Xeon Gold 6126 2.60 GHz Linux GPU node with an NVIDIA GeForce RTX 2080 Ti (11 GiB), one torch thread per process, load average 1 to 3",
+  "cpu": "Intel(R) Xeon(R) Gold 6126 CPU @ 2.60GHz",
+  "cpus": 48,
+  "gpu": "NVIDIA GeForce RTX 2080 Ti",
+  "torch_threads": 1
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CUDA 12.6 build)",
+  "transformers": "5.18.0",
+  "torchlens": "development branch, 2026-11-03",
+  "nnsight": "0.8.1",
+  "transformer_lens": "4.3.0"
+ },
+ "harness": "TL_BENCH_DEVICE=cuda python -m benchmarks.capture.mi_workloads.matrix --model gpt2; benchmarks/capture/driver.py --device cuda --subjects lstm-tagger,resnet18; generation: tl.record(model, ids, save=<every block MLP and the final layer norm>, generate_kwargs={max_new_tokens: N, min_new_tokens: N, do_sample: False, use_cache: True}) on EleutherAI/pythia-70m float32",
+ "page_rows": [
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | forward hooks | 239 ms (239 ms to 240 ms) |",
+   "cell": "cache/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.record` | 7.08 s (7.06 s to 7.10 s) |",
+   "cell": "cache/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.trace` (full trace) | 41.63 s (41.60 s to 41.67 s) |",
+   "cell": "cache/tl_trace"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | forward hooks | 181 ms (180 ms to 182 ms) |",
+   "cell": "steer_sweep/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.record` | 5.30 s (5.28 s to 5.35 s) |",
+   "cell": "steer_sweep/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.trace` (full trace) | 18.47 s (18.45 s to 18.57 s) |",
+   "cell": "steer_sweep/tl_trace"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | forward hooks | 408 ms (407 ms to 410 ms) |",
+   "cell": "patch_sweep/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.record` | 21.59 s (21.50 s to 21.61 s) |",
+   "cell": "patch_sweep/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.trace` (full trace) | 70.18 s (69.86 s to 70.64 s) |",
+   "cell": "patch_sweep/tl_trace"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | plain forward, nothing attached | 0.49 ms (0.49 ms to 0.50 ms) |",
+   "cell": "A/single_module_output/raw/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | forward hook | 0.52 ms (0.52 ms to 0.53 ms) |",
+   "cell": "A/single_module_output/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.record(..., save=tl.module(site))` | 19.14 ms (19.13 ms to 19.30 ms) |",
+   "cell": "A/single_module_output/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.trace(..., save=tl.module(site))` | 36.02 ms (35.73 ms to 36.17 ms) |",
+   "cell": "A/single_module_output/tl_trace_sparse/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.extract` | 36.15 ms (36.06 ms to 36.34 ms) |",
+   "cell": "A/single_module_output/tl_extract/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | forward hook | 0.54 ms (0.54 ms to 0.54 ms) |",
+   "cell": "A/replacement_edit/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.when(...).bind(model)` | 0.93 ms (0.93 ms to 0.93 ms) |",
+   "cell": "A/replacement_edit/tl_bind/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.record(..., intervene=tl.when(...))` | 19.80 ms (19.71 ms to 19.86 ms) |",
+   "cell": "A/replacement_edit/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | forward hooks | 2.81 ms (2.80 ms to 2.82 ms) |",
+   "cell": "A/repeated_steering/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.when(...).bind(model)` | 9.68 ms (9.49 ms to 9.69 ms) |",
+   "cell": "A/repeated_steering/tl_bind/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.record(..., intervene=...)` per strength | 159.54 ms (157.59 ms to 159.76 ms) |",
+   "cell": "A/repeated_steering/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 309.16 ms (306.88 ms to 311.22 ms) |",
+   "cell": "A/repeated_steering/tl_trace_sparse/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 1.56 ms (1.56 ms to 1.58 ms) |",
+   "cell": "A/ordered_dataset_features/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 76.34 ms (75.49 ms to 76.42 ms) |",
+   "cell": "A/ordered_dataset_features/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.extract_dataset` | 151.73 ms (150.82 ms to 153.55 ms) |",
+   "cell": "A/ordered_dataset_features/tl_extract_dataset/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | plain forward | 0.49 ms (0.49 ms to 0.65 ms) |",
+   "cell": "B/raw_forward/reference/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 0.50 ms (0.50 ms to 0.51 ms) |",
+   "cell": "B/raw_forward_wrapped/torchlens/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | forward hooks on every module | 0.53 ms (0.53 ms to 0.73 ms) |",
+   "cell": "B/hooks_all_modules/reference/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | `tl.record` (sparse recorder) | 19.30 ms (19.20 ms to 19.36 ms) |",
+   "cell": "B/record/torchlens/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | `tl.trace(model, x)` (full trace) | 37.04 ms (36.90 ms to 37.08 ms) |",
+   "cell": "B/full_trace_default/torchlens/lstm-tagger"
+  },
+  {
+   "section": "resnet18_gpu2",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 8.29 ms (8.28 ms to 8.33 ms) |",
+   "cell": "A/ordered_dataset_features/hooks/resnet18"
+  },
+  {
+   "section": "resnet18_gpu2",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | torchvision fx `create_feature_extractor` | 3.67 ms (3.62 ms to 3.68 ms) |",
+   "cell": "A/ordered_dataset_features/tv_fx/resnet18"
+  },
+  {
+   "section": "resnet18_gpu2",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 428.00 ms (416.55 ms to 450.06 ms) |",
+   "cell": "A/ordered_dataset_features/tl_record/resnet18"
+  },
+  {
+   "section": "resnet18_gpu2",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.extract_dataset` | 1.99 s (1.83 s to 2.02 s) |",
+   "cell": "A/ordered_dataset_features/tl_extract_dataset/resnet18"
+  },
+  {
+   "section": "generation_cpu",
+   "text": "| 500 | 356 ms | 2.1 GiB | 6.9 MiB |"
+  },
+  {
+   "section": "generation_cpu",
+   "text": "| 1,000 | 395 ms | 3.4 GiB | 13.8 MiB |"
+  },
+  {
+   "section": "generation_cpu",
+   "text": "| 2,000 | 397 ms | 6.2 GiB | 27.4 MiB |"
+  }
+ ],
+ "gpt2_gpu": {
+  "cells": {
+   "cache/hooks": {
+    "median_s": 0.239,
+    "min_s": 0.239,
+    "max_s": 0.24,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1290.1,
+    "peak_device_mib": 1173.30859375,
+    "max_abs_diff_vs_hooks": null
+   },
+   "cache/nnsight": {
+    "status": "nnsight not importable: No module named 'nnsight'"
+   },
+   "cache/tlens": {
+    "status": "transformer_lens has neither HookedTransformer nor a bridge: No module named 'transformer_lens'"
+   },
+   "cache/tl_record": {
+    "median_s": 7.081,
+    "min_s": 7.059,
+    "max_s": 7.102,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1287.4,
+    "peak_device_mib": 1658.36962890625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "cache/tl_trace": {
+    "median_s": 41.63,
+    "min_s": 41.596,
+    "max_s": 41.666,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1510.2,
+    "peak_device_mib": 1364.5546875,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "steer_sweep/hooks": {
+    "median_s": 0.181,
+    "min_s": 0.18,
+    "max_s": 0.182,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1287.5,
+    "peak_device_mib": 715.50244140625,
+    "max_abs_diff_vs_hooks": null
+   },
+   "steer_sweep/nnsight": {
+    "status": "nnsight not importable: No module named 'nnsight'"
+   },
+   "steer_sweep/tlens": {
+    "status": "transformer_lens has neither HookedTransformer nor a bridge: No module named 'transformer_lens'"
+   },
+   "steer_sweep/tl_record": {
+    "median_s": 5.301,
+    "min_s": 5.282,
+    "max_s": 5.349,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1289.4,
+    "peak_device_mib": 1210.49072265625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "steer_sweep/tl_trace": {
+    "median_s": 18.47,
+    "min_s": 18.449,
+    "max_s": 18.566,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1288.9,
+    "peak_device_mib": 991.669921875,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "patch_sweep/hooks": {
+    "median_s": 0.408,
+    "min_s": 0.407,
+    "max_s": 0.41,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1288.9,
+    "peak_device_mib": 491.568359375,
+    "max_abs_diff_vs_hooks": null
+   },
+   "patch_sweep/nnsight": {
+    "status": "nnsight not importable: No module named 'nnsight'"
+   },
+   "patch_sweep/tlens": {
+    "status": "transformer_lens has neither HookedTransformer nor a bridge: No module named 'transformer_lens'"
+   },
+   "patch_sweep/tl_record": {
+    "median_s": 21.589,
+    "min_s": 21.496,
+    "max_s": 21.607,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1291.4,
+    "peak_device_mib": 506.8212890625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "patch_sweep/tl_trace": {
+    "median_s": 70.178,
+    "min_s": 69.864,
+    "max_s": 70.642,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1287.3,
+    "peak_device_mib": 499.95458984375,
+    "max_abs_diff_vs_hooks": 0.0
+   }
+  },
+  "env": [
+   {
+    "kind": "env",
+    "tool": "hooks",
+    "host": "benchmark-host",
+    "python": "3.10.19",
+    "torch": "2.13.0+cu126",
+    "transformers": "5.18.0",
+    "threads": 1,
+    "loadavg": [
+     1.71875,
+     0.89501953125,
+     0.73193359375
+    ],
+    "cpus": 48,
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "torchlens": "2.36.3",
+    "model": "gpt2",
+    "workload": "cache",
+    "load_s": 4.543706385884434
+   }
+  ]
+ },
+ "lstm_gpu": {
+  "groups": {
+   "A/single_module_output/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.49,
+    "min_ms": 0.49,
+    "max_ms": 0.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/single_module_output/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.52,
+    "min_ms": 0.52,
+    "max_ms": 0.53,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/single_module_output/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/single_module_output/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.02,
+    "min_ms": 35.73,
+    "max_ms": 36.17,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 19.14,
+    "min_ms": 19.13,
+    "max_ms": 19.3,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.15,
+    "min_ms": 36.06,
+    "max_ms": 36.34,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/matched_retained/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.5,
+    "min_ms": 0.49,
+    "max_ms": 0.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/matched_retained/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.55,
+    "min_ms": 0.54,
+    "max_ms": 0.55,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/matched_retained/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/matched_retained/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.83,
+    "min_ms": 36.57,
+    "max_ms": 36.99,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 19.8,
+    "min_ms": 19.73,
+    "max_ms": 19.92,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 37.71,
+    "min_ms": 37.69,
+    "max_ms": 37.91,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/replacement_edit/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.5,
+    "min_ms": 0.49,
+    "max_ms": 0.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/replacement_edit/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.54,
+    "min_ms": 0.54,
+    "max_ms": 0.54,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/replacement_edit/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/replacement_edit/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 37.61,
+    "min_ms": 36.93,
+    "max_ms": 38.12,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 19.8,
+    "min_ms": 19.71,
+    "max_ms": 19.86,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_bind/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.93,
+    "min_ms": 0.93,
+    "max_ms": 0.93,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.7,
+    "min_ms": 2.69,
+    "max_ms": 2.7,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/repeated_steering/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.81,
+    "min_ms": 2.8,
+    "max_ms": 2.82,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/repeated_steering/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/repeated_steering/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 309.16,
+    "min_ms": 306.88,
+    "max_ms": 311.22,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 159.54,
+    "min_ms": 157.59,
+    "max_ms": 159.76,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_bind/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 9.68,
+    "min_ms": 9.49,
+    "max_ms": 9.69,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/same_site_gradient/raw/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/hooks/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/same_site_gradient/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/captum/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "captum.attr not importable: ModuleNotFoundError: No module named 'captum'"
+   },
+   "A/ordered_dataset_features/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.53,
+    "min_ms": 1.51,
+    "max_ms": 1.53,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/ordered_dataset_features/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.56,
+    "min_ms": 1.56,
+    "max_ms": 1.58,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/ordered_dataset_features/nnsight/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/ordered_dataset_features/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 143.77,
+    "min_ms": 143.21,
+    "max_ms": 145.14,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 76.34,
+    "min_ms": 75.49,
+    "max_ms": 76.42,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 143.89,
+    "min_ms": 143.67,
+    "max_ms": 144.83,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract_dataset/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 151.73,
+    "min_ms": 150.82,
+    "max_ms": 153.55,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/ordered_dataset_features/thingsvision/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision has no release that installs beside this torch, torchvision and transformers (see peers.txt); thingsvision not importable: ModuleNotFoundError: No module named 'thingsvision'"
+   },
+   "B/raw_forward/reference/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.49,
+    "min_ms": 0.49,
+    "max_ms": 0.65,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/hooks_all_modules/reference/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.53,
+    "min_ms": 0.53,
+    "max_ms": 0.73,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/raw_forward_wrapped/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.5,
+    "min_ms": 0.5,
+    "max_ms": 0.51,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_default/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 37.04,
+    "min_ms": 36.9,
+    "max_ms": 37.08,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_declared/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.35,
+    "min_ms": 36.2,
+    "max_ms": 36.4,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/record/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 19.3,
+    "min_ms": 19.2,
+    "max_ms": 19.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/validate/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 363.23,
+    "min_ms": 360.43,
+    "max_ms": 363.62,
+    "processes": 3,
+    "samples_per_process": [
+     10,
+     11,
+     11
+    ]
+   },
+   "B/save_load/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 240.78,
+    "min_ms": 193.39,
+    "max_ms": 241.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/backward_capture/torchlens/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "B/draw/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 84.94,
+    "min_ms": 81.93,
+    "max_ms": 85.9,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/bundle_compare/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 80.81,
+    "min_ms": 80.69,
+    "max_ms": 81.04,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   }
+  },
+  "meta": {
+   "environment": null,
+   "versions": null,
+   "protocol": null,
+   "aa_noise": null
+  },
+  "missing": [
+   "A/single_module_output/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/single_module_output/tv_fx: symbolic tracing refuses this model (data-dependent control flow)",
+   "A/replacement_edit/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/repeated_steering/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/ordered_dataset_features/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/ordered_dataset_features/tv_fx: symbolic tracing refuses this model (data-dependent control flow)",
+   "A/same_site_gradient/hooks: RuntimeError: cudnn RNN backward can only be called in training mode",
+   "A/same_site_gradient/captum: captum.attr not importable: ModuleNotFoundError: No module named 'captum'",
+   "A/same_site_gradient/tl_trace_sparse: RuntimeError: cudnn RNN backward can only be called in training mode"
+  ]
+ },
+ "resnet18_gpu2": {
+  "groups": {
+   "A/single_module_output/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.48,
+    "min_ms": 2.48,
+    "max_ms": 2.49,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/single_module_output/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.49,
+    "min_ms": 2.47,
+    "max_ms": 2.56,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/single_module_output/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/single_module_output/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 373.9,
+    "min_ms": 364.45,
+    "max_ms": 391.82,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 107.96,
+    "min_ms": 105.12,
+    "max_ms": 111.22,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 401.22,
+    "min_ms": 384.13,
+    "max_ms": 407.41,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.94,
+    "min_ms": 0.92,
+    "max_ms": 0.95,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.47,
+    "min_ms": 2.47,
+    "max_ms": 2.48,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/matched_retained/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.56,
+    "min_ms": 2.56,
+    "max_ms": 2.61,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/matched_retained/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/matched_retained/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 393.76,
+    "min_ms": 389.37,
+    "max_ms": 402.62,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 111.56,
+    "min_ms": 110.68,
+    "max_ms": 113.13,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 416.68,
+    "min_ms": 412.98,
+    "max_ms": 426.24,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.49,
+    "min_ms": 2.45,
+    "max_ms": 2.55,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.49,
+    "min_ms": 2.43,
+    "max_ms": 2.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/replacement_edit/hooks/resnet18": {
+    "statuses": [
+     "error",
+     "ok"
+    ],
+    "median_ms": 2.53,
+    "min_ms": 2.47,
+    "max_ms": 2.58,
+    "processes": 2,
+    "samples_per_process": [
+     20,
+     20
+    ]
+   },
+   "A/replacement_edit/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/replacement_edit/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 384.94,
+    "min_ms": 375.12,
+    "max_ms": 399.43,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 116.86,
+    "min_ms": 110.89,
+    "max_ms": 119.29,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_bind/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 4.08,
+    "min_ms": 3.95,
+    "max_ms": 4.1,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 14.55,
+    "min_ms": 14.45,
+    "max_ms": 15.25,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/repeated_steering/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 15.02,
+    "min_ms": 14.72,
+    "max_ms": 15.29,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/repeated_steering/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/repeated_steering/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3521.19,
+    "min_ms": 3518.24,
+    "max_ms": 3724.8,
+    "processes": 3,
+    "samples_per_process": [
+     5,
+     5,
+     5
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1087.09,
+    "min_ms": 1066.67,
+    "max_ms": 1155.61,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_bind/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 34.66,
+    "min_ms": 33.7,
+    "max_ms": 35.88,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/same_site_gradient/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 14.89,
+    "min_ms": 14.66,
+    "max_ms": 15.05,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/same_site_gradient/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 15.0,
+    "min_ms": 14.92,
+    "max_ms": 15.32,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/same_site_gradient/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/same_site_gradient/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 540.3,
+    "min_ms": 532.32,
+    "max_ms": 574.14,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/same_site_gradient/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "captum.attr not importable: ModuleNotFoundError: No module named 'captum'"
+   },
+   "A/ordered_dataset_features/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.25,
+    "min_ms": 8.25,
+    "max_ms": 8.29,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/ordered_dataset_features/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.29,
+    "min_ms": 8.28,
+    "max_ms": 8.33,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/ordered_dataset_features/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "nnsight not importable: ModuleNotFoundError: No module named 'nnsight'"
+   },
+   "A/ordered_dataset_features/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1663.25,
+    "min_ms": 1639.37,
+    "max_ms": 1802.47,
+    "processes": 3,
+    "samples_per_process": [
+     11,
+     11,
+     12
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 428.0,
+    "min_ms": 416.55,
+    "max_ms": 450.06,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1846.24,
+    "min_ms": 1733.31,
+    "max_ms": 1846.33,
+    "processes": 3,
+    "samples_per_process": [
+     10,
+     9,
+     11
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1988.29,
+    "min_ms": 1834.19,
+    "max_ms": 2022.14,
+    "processes": 3,
+    "samples_per_process": [
+     9,
+     9,
+     10
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.67,
+    "min_ms": 3.62,
+    "max_ms": 3.68,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision has no release that installs beside this torch, torchvision and transformers (see peers.txt); thingsvision not importable: ModuleNotFoundError: No module named 'thingsvision'"
+   },
+   "B/raw_forward/reference/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.46,
+    "min_ms": 2.42,
+    "max_ms": 2.49,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/hooks_all_modules/reference/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.54,
+    "min_ms": 3.47,
+    "max_ms": 3.6,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/raw_forward_wrapped/torchlens/resnet18": {
+    "statuses": [
+     "error",
+     "ok"
+    ],
+    "median_ms": 2.6,
+    "min_ms": 2.57,
+    "max_ms": 2.64,
+    "processes": 2,
+    "samples_per_process": [
+     20,
+     20
+    ]
+   },
+   "B/full_trace_default/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 418.27,
+    "min_ms": 388.48,
+    "max_ms": 421.83,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_declared/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 385.67,
+    "min_ms": 374.83,
+    "max_ms": 394.54,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/record/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 112.33,
+    "min_ms": 105.41,
+    "max_ms": 112.95,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/validate/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3099.05,
+    "min_ms": 2990.77,
+    "max_ms": 3126.52,
+    "processes": 3,
+    "samples_per_process": [
+     5,
+     5,
+     6
+    ]
+   },
+   "B/save_load/torchlens/resnet18": {
+    "statuses": [
+     "error",
+     "ok"
+    ],
+    "median_ms": 2333.14,
+    "min_ms": 2333.14,
+    "max_ms": 2333.14,
+    "processes": 1,
+    "samples_per_process": [
+     7
+    ],
+    "reason": "ArtifactError: Failed to save bundle at /tmp/tl-bench-mn1kmy37/trace-0.tlspec: SafetensorError: Error while serializing: I/O error: No space left on device (os error 28). Remedy: the staging directory"
+   },
+   "B/backward_capture/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 542.3,
+    "min_ms": 538.36,
+    "max_ms": 575.63,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/draw/torchlens/resnet18": {
+    "statuses": [
+     "error",
+     "ok"
+    ],
+    "median_ms": 270.19,
+    "min_ms": 269.26,
+    "max_ms": 271.11,
+    "processes": 2,
+    "samples_per_process": [
+     20,
+     20
+    ]
+   },
+   "B/bundle_compare/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1179.37,
+    "min_ms": 1100.36,
+    "max_ms": 1205.53,
+    "processes": 3,
+    "samples_per_process": [
+     16,
+     16,
+     17
+    ]
+   }
+  },
+  "meta": {
+   "environment": null,
+   "versions": null,
+   "protocol": null,
+   "aa_noise": null
+  },
+  "missing": [
+   "A/single_module_output/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/replacement_edit/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/repeated_steering/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/ordered_dataset_features/nnsight: nnsight not importable: ModuleNotFoundError: No module named 'nnsight'",
+   "A/same_site_gradient/captum: captum.attr not importable: ModuleNotFoundError: No module named 'captum'"
+  ]
+ },
+ "generation_2000": {
+  "cpu-500": {
+   "n_steps": 500,
+   "wall_s": 178.17,
+   "wall_per_token_ms": 356.33,
+   "peak_saved_bytes": null,
+   "total_saved_bytes": 7254016,
+   "rss_mib": 2099.3,
+   "rss_after_load_mib": 777.2,
+   "peak_device_mib": null,
+   "threads": 4,
+   "torch": "2.13.0+cpu",
+   "device": null,
+   "gpu": null,
+   "pass_wall_first10_ms": [
+    272.9,
+    260.4,
+    261.2,
+    262.0,
+    521.8,
+    269.3,
+    267.0,
+    295.9,
+    295.8,
+    261.3
+   ],
+   "pass_wall_last10_ms": [
+    267.7,
+    267.0,
+    268.0,
+    268.7,
+    267.0,
+    269.5,
+    261.7,
+    335.1,
+    274.9,
+    276.6
+   ],
+   "source": "gen-memory lane, job bench-4, head 3d76c98b6"
+  },
+  "cpu-1000": {
+   "n_steps": 1000,
+   "wall_s": 394.7,
+   "wall_per_token_ms": 394.7,
+   "peak_saved_bytes": null,
+   "total_saved_bytes": 14422016,
+   "rss_mib": 3502.7,
+   "rss_after_load_mib": 777.2,
+   "peak_device_mib": null,
+   "threads": 4,
+   "torch": "2.13.0+cpu",
+   "device": null,
+   "gpu": null,
+   "pass_wall_first10_ms": [
+    466.9,
+    294.1,
+    266.5,
+    258.7,
+    255.5,
+    256.5,
+    256.2,
+    248.2,
+    250.9,
+    255.3
+   ],
+   "pass_wall_last10_ms": [
+    269.4,
+    268.5,
+    271.8,
+    271.0,
+    281.8,
+    270.4,
+    265.6,
+    268.1,
+    264.3,
+    262.0
+   ],
+   "source": "gen-memory lane, job bench-4, head 3d76c98b6"
+  },
+  "cpu-2000": {
+   "n_steps": 2000,
+   "wall_s": 794.61,
+   "wall_per_token_ms": 397.3,
+   "peak_saved_bytes": null,
+   "total_saved_bytes": 28758016,
+   "rss_mib": 6381.8,
+   "rss_after_load_mib": 776.8,
+   "peak_device_mib": null,
+   "threads": 4,
+   "torch": "2.13.0+cpu",
+   "device": "cpu",
+   "gpu": null,
+   "pass_wall_first10_ms": [
+    280.9,
+    272.3,
+    270.7,
+    293.1,
+    306.1,
+    280.1,
+    260.9,
+    294.2,
+    292.3,
+    291.1
+   ],
+   "pass_wall_last10_ms": [
+    316.3,
+    308.9,
+    286.9,
+    282.0,
+    286.2,
+    285.7,
+    286.9,
+    285.0,
+    288.3,
+    313.5
+   ]
+  },
+  "gpu-2000": {
+   "n_steps": 2000,
+   "wall_s": 538.79,
+   "wall_per_token_ms": 269.39,
+   "peak_saved_bytes": null,
+   "total_saved_bytes": 28758016,
+   "rss_mib": 6933.1,
+   "rss_after_load_mib": 1155.6,
+   "peak_device_mib": 458.0,
+   "threads": 4,
+   "torch": "2.13.0+cu126",
+   "device": "cuda",
+   "gpu": "NVIDIA GeForce RTX 2080 Ti",
+   "pass_wall_first10_ms": [
+    352.4,
+    202.2,
+    198.7,
+    201.9,
+    198.7,
+    198.3,
+    441.8,
+    202.1,
+    198.6,
+    199.1
+   ],
+   "pass_wall_last10_ms": [
+    210.5,
+    208.5,
+    208.2,
+    210.4,
+    211.9,
+    209.8,
+    208.3,
+    210.1,
+    206.4,
+    206.7
+   ]
+  }
+ }
+}
