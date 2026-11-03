@@ -97,6 +97,7 @@ if TYPE_CHECKING:
         StateByteDigest,
     )
     from ..bundle import Bundle
+    from ..intervention.spec import Recipe
     from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
@@ -1235,7 +1236,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object with eager tensor materialization.
 
     Parameters
@@ -1253,7 +1254,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1271,7 +1272,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
     Parameters
@@ -1289,7 +1290,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1306,7 +1307,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
     Parameters
@@ -1340,7 +1341,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by ``manifest.kind`` for unified files, or
         by legacy format detection for older files.
 
@@ -1476,7 +1477,7 @@ def _load_trace_payload(
     sparse_run: Mapping[str, Any] | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a portable Trace payload after manifest dispatch.
 
     Parameters
@@ -2035,7 +2036,7 @@ def _load_unified_tlspec(
     allowed_custom_callable_modules: Collection[str] | None,
     bundle_visited: frozenset[Path] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
@@ -2058,7 +2059,7 @@ def _load_unified_tlspec(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Loaded object selected by unified manifest kind.
 
     Raises
@@ -2083,6 +2084,14 @@ def _load_unified_tlspec(
         from ..intervention.save import load_intervention_spec
 
         return load_intervention_spec(
+            bundle_path,
+            trust_custom_callables=trust_custom_callables,
+            allowed_custom_callable_modules=allowed_custom_callable_modules,
+        )
+    if kind == "recipe":
+        from ..intervention._recipe_io import load_recipe
+
+        return load_recipe(
             bundle_path,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,

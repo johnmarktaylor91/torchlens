@@ -230,6 +230,7 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
+| `recipe.save(path, level=...)` | Write an authored `tl.Recipe` on its own (`kind: "recipe"`); `tl.load(path)` returns the Recipe. |
 
 There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG

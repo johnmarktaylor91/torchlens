@@ -628,6 +628,17 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
+**Recipe.save and tl.load of a recipe** *(spelling documented-unstable)*
+: `Recipe.save(path, level="portable", overwrite=False)` writes the authored rules alone as a
+  `.tlspec` directory whose manifest carries `kind: "recipe"` (no trace, model or fire records;
+  tensor arguments travel as sidecars), and `tl.load(path)` returns a `tl.Recipe` whose rule
+  identities (`Recipe.digest`) equal the saved ones. A predicate WHERE term or an opaque callable
+  edit has no portable form: it refuses below `"audit"` (`OpaqueCallableError`), and an audit
+  record, which stores it by repr, refuses `tl.load` with `recipe_audit_only`. `level="runnable"`
+  refuses `artifact_save_level_unsupported`: a recipe carries no model to run. The saved
+  intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is the lowered,
+  capture-bound form and still loads as an `InterventionSpec`.
+
 **Trace.recipe and Trace.clear_edits**
 : `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
@@ -4232,6 +4243,7 @@ The sections above describe each surface in depth.
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
 | `Recipe.match` | Return the single rule matching one op context, or `None` |
+| `Recipe.save` | Write the rules alone as a `kind: "recipe"` `.tlspec` that `tl.load` returns as a Recipe |
 | `RecordContext.module_pass_number` | Call number of the innermost module, or `None` |
 | `RecordContext.pass_number` | Pass number of the recorded op |
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |

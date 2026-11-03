@@ -33,6 +33,7 @@ import dataclasses
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 import torch
@@ -600,6 +601,35 @@ class Recipe:
             if _ADDRESS_CLASS_RANK[rule.address_class] > _ADDRESS_CLASS_RANK[worst]:
                 worst = rule.address_class
         return worst  # type: ignore[return-value]
+
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+    ) -> None:
+        """Save this recipe as a ``.tlspec`` directory that ``tl.load`` returns as a Recipe.
+
+        The artifact holds the rules alone (manifest ``kind: "recipe"``): no
+        trace, model or fire records. Tensor arguments go to sidecars.
+
+        Parameters
+        ----------
+        path:
+            Destination ``.tlspec`` directory path.
+        level:
+            Save level: ``"portable"`` (the default), ``"executable_with_callables"``
+            or ``"audit"``. A predicate WHERE term or an opaque callable edit is
+            portable in no form: it refuses below ``"audit"`` and is recorded by
+            repr at ``"audit"``, which ``tl.load`` refuses (``recipe_audit_only``).
+        overwrite:
+            Whether an existing target directory may be replaced.
+        """
+
+        from ._recipe_io import save_recipe
+
+        save_recipe(self, path, level=level, overwrite=overwrite)
 
     def merge(self, *others: Recipe) -> Recipe:
         """Return the multi-clause spec joining this spec's rules and others'.
