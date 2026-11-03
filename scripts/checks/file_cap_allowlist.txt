@@ -387,7 +387,7 @@ torchlens/_postprocess/loop_grouping_adapter.py::_refine_iso_groups	93
 torchlens/_postprocess/source_provenance.py::_warn_unattributed_tensor_args	72
 torchlens/_quickstart/_ladder.py::_trace_via_ladder	65
 torchlens/_quickstart/_primitive.py::capture_concrete	82
-torchlens/_quickstart/_render.py::_render_finished_trace	74
+torchlens/_quickstart/_render.py::_render_finished_trace	73
 torchlens/_registry/kernel.py::Registry.register	88
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
@@ -609,7 +609,7 @@ torchlens/_visualization/_render_utils.py::_open_file_quietly	66
 torchlens/_visualization/_stacking.py::resolve_stack_by	84
 torchlens/_visualization/_summary_internal/_discoverability.py::format_discoverability_summary	64
 torchlens/_visualization/_surgery_diff.py::surgery_diff	97
-torchlens/_visualization/_trace_draw.py::draw	115
+torchlens/_visualization/_trace_draw.py::draw	111
 torchlens/_visualization/auto_collapse.py	2150
 torchlens/_visualization/auto_collapse.py::_compute_signal_skeleton	92
 torchlens/_visualization/auto_collapse.py::_iter_collapsible_child_path_runs	78
