@@ -53,6 +53,8 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
