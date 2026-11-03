@@ -3,8 +3,8 @@
 The buffer-write tracker and the completeness witness snapshot a buffer's whole
 storage as ``uint8`` and compare it at forward end; the capture-state restore
 audit compares parameter and buffer values byte for byte. Both read a sparse
-tensor through its index and value components. Leaf module: it imports torch
-and the sparse component helpers only.
+tensor through its index and value components. Leaf module: it imports torch,
+the sparse component helpers and the flat byte view helper only.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import torch
 
 from ..._utils._sparse_parts import sparse_component_tensors
+from ..._utils.tensor_leaves import flat_byte_view
 
 
 def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
@@ -72,12 +73,8 @@ def _state_bytes_equal(current: torch.Tensor, baseline: torch.Tensor) -> bool:
     if current.layout is not torch.strided or baseline.layout is not torch.strided:
         return _sparse_state_bytes_equal(current, baseline)
     try:
-        current_bytes = (
-            current.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
-        baseline_bytes = (
-            baseline.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
+        current_bytes = flat_byte_view(current.detach().resolve_conj().resolve_neg().contiguous())
+        baseline_bytes = flat_byte_view(baseline.detach().resolve_conj().resolve_neg().contiguous())
         return bool(torch.equal(current_bytes, baseline_bytes))
     except (RuntimeError, TypeError, NotImplementedError):
         return bool(torch.equal(current, baseline))

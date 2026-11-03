@@ -950,7 +950,7 @@ torchlens/backends/torch/buffer_writes.py	1787
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
-torchlens/backends/torch/collectives.py	839
+torchlens/backends/torch/collectives.py	836
 torchlens/backends/torch/collectives.py::_build_payload	102
 torchlens/backends/torch/collectives.py::_emit_boundary_op	111
 torchlens/backends/torch/collectives.py::_make_collective_wrap	174
