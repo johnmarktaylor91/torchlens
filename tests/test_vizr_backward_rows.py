@@ -59,9 +59,7 @@ def _backward_trace() -> tl.Trace:
 
 def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render the backward graph to DOT and return the source."""
-    return trace.draw_backward(
-        path=str(tmp_path / name), vis_save_only=True, file_format="dot", **kwargs
-    )
+    return trace.draw(graph="backward", path=str(tmp_path / name), file_format="dot", **kwargs).dot
 
 
 def test_backward_rows_absent_by_default(tmp_path: Path) -> None:
@@ -100,9 +98,7 @@ def test_backward_grad_value_row_opt_in(tmp_path: Path) -> None:
     trace = _backward_trace()
     try:
         dot = _draw(trace, tmp_path, "values", show_grad_values=True)
-        unrolled = _draw(
-            trace, tmp_path, "values_unrolled", show_grad_values=True, vis_mode="unrolled"
-        )
+        unrolled = _draw(trace, tmp_path, "values_unrolled", show_grad_values=True, rolled=False)
     finally:
         trace.cleanup()
     rows = re.findall(r"grad norm ([0-9.eE+-]+), absmax ([0-9.eE+-]+)", dot)

@@ -16,9 +16,7 @@ def test_selector_composition_in_layers_to_save() -> None:
         torch.nn.ReLU(),
     )
     selector = tl.in_module("1") & tl.func("relu")
-    log = tl.trace(
-        model, torch.ones(1, 2), capture=tl.options.CaptureOptions(layers_to_save=selector)
-    )
+    log = tl.trace(model, torch.ones(1, 2), save=selector)
     saved = [layer for layer in log._layer_list if layer.has_saved_activation]
     assert saved
     assert any(layer.func_name == "relu" for layer in saved)

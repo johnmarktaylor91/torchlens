@@ -16,7 +16,6 @@ from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_stat
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.compat import _report as compat_report_module
-from torchlens.options import CaptureOptions
 from torchlens.report import DoctorReport, doctor as report
 
 EXPECTED_COMPAT_ROW_KEYS = {
@@ -460,7 +459,7 @@ def test_device_context_factory_injection_during_active_logging() -> None:
     """Factory functions honor ``torch.device`` contexts while TorchLens is logging."""
 
     model = DeviceContextFactoryModel()
-    log = tl.trace(model, torch.randn(1), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, torch.randn(1), save="none")
 
     assert stashed(log, "factory_device_type") == "meta"
 

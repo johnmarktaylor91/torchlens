@@ -38,7 +38,7 @@ TINY = 1e-30
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     torch.manual_seed(0)
-    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0))
+    return tl.trace(model, x, capture=CaptureOptions(save_args=True, seed=0), save="all")
 
 
 def _op(trace: Any, *func_names: str) -> Any:

@@ -444,7 +444,7 @@ def test_generate_and_close_ledger(tmp_path: Path) -> None:
         # event stream is never touched. The static scan cannot see the copy,
         # so this is a reviewed provably-outside-contract carve-out, not a
         # revived legacy channel.
-        and "recording/types.py" not in site
+        and "recording/_types_ancestry.py" not in site
     }
     assert not inplace_writes, (
         f"in-place op_events[i] writes resurfaced after the P4 migration: {inplace_writes}"
