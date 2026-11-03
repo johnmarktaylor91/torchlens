@@ -420,3 +420,51 @@ def raise_rerun_zero_fire(message: str, unfired_plan_ids: list[str]) -> NoReturn
         "before re-applying, or run with the default on_zero_fire='warn' or 'disclose'",
         unfired_plan_ids=list(unfired_plan_ids),
     )
+
+
+def warn_recording_intervene_fired_nowhere(intervene: object, fire_count: int) -> None:
+    """Warn when a recording's ``intervene=`` fired at no site at all.
+
+    A single activation selector keeps its plain zero-match warning. A
+    multi-clause spec has no single ``.selector``, so it is checked per forward
+    rule and warns with the coded ``trace_zero_fire`` disclosure; without this,
+    a spec whose every forward rule missed recorded silently.
+
+    Parameters
+    ----------
+    intervene:
+        The recording's ``intervene=`` option (a selector-bearing callable, a
+        ``Recipe`` or ``None``).
+    fire_count:
+        How many times the recording's intervene predicate fired.
+    """
+
+    from .._selection.selectors import BaseSelector
+    from .hooks import site_universe
+    from .spec import Recipe
+
+    if fire_count != 0:
+        return
+    selector = getattr(intervene, "selector", None)
+    if isinstance(selector, BaseSelector) and site_universe(selector) == "activation":
+        warnings.warn(
+            f"Capture-time intervention selector {selector!r} matched zero sites; "
+            "no intervention fired.",
+            UserWarning,
+            stacklevel=4,
+        )
+    if not isinstance(intervene, Recipe) or len(intervene.rules) < 2:
+        return
+    forward_rules = [rule for rule in intervene.rules if rule.signal != "backward"]
+    if not forward_rules:
+        return
+    names = ", ".join(rule.rule_id for rule in forward_rules)
+    warnings.warn(
+        TorchLensWarning(
+            f"Capture-time intervention rules [{names}] fired at zero sites; the recording "
+            "completed with them unapplied. Remedy: fix the intervene= selector so it "
+            "matches a site",
+            code="trace_zero_fire",
+        ),
+        stacklevel=4,
+    )
