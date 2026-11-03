@@ -328,12 +328,7 @@ def module_item(module: Any, key: str) -> Any:
     if len(matches) == 1:
         return trace[matches[0]]
     if len(matches) > 1:
-        raise AmbiguousOpLookupError(
-            f"Ambiguous lookup: '{key}' matches {len(matches)} layers in module "
-            f"'{module.address}': {', '.join(matches[:5])}",
-            key=str(key),
-            address=module.address,
-        )
+        refuse_several("layer", key, matches, f"layers of module '{module.address}'")
     raise KeyError(f"'{key}' not found in module '{module.address}' layers")
 
 
