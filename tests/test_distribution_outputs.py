@@ -267,7 +267,7 @@ def test_output_replacement_targets_one_distribution_parameter() -> None:
 def test_assign_by_path_rebuilds_a_nested_distribution() -> None:
     """The generic path assigner follows ``.base_dist.scale`` and keeps aliases consistent."""
 
-    from torchlens._utils.collections import assign_into_container_by_path
+    from torchlens._ir._output_path_assign import assign_into_container_by_path
 
     live = IndependentHead().eval()(_x())
     ones = torch.ones(2, 2)

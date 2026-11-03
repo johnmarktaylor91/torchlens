@@ -639,7 +639,7 @@ def _refuse_trace_entry_shapes(
     if narrate is not None and narrate is not False:
         # Entry-time echo refusals (bad spellings, finalized-label selectors)
         # fire BEFORE any capture work on every backend path.
-        from ...debug._snoop import normalize_echo
+        from ..._snoop import normalize_echo
 
         normalize_echo(narrate)
     if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
@@ -703,7 +703,7 @@ def _dispatch_trace(
     resolved_spec = explicit_backend_spec or resolve_backend_spec(
         backend, model, input_args, input_kwargs
     )
-    from ...debug._snoop._entry import refuse_echo_non_torch
+    from ..._snoop._entry import refuse_echo_non_torch
 
     # Never a silent no-op: narrate= is torch-only in wave 1 (typed refusal).
     refuse_echo_non_torch(narrate, resolved_spec)

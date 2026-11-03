@@ -285,7 +285,8 @@ def test_fast_run_pairs_a_distribution_output_by_parameter_name() -> None:
     x = torch.arange(6.0).view(2, 3)
     trace = tl.trace(model, x)
     result = trace.run(inputs=x, fast=True)
-    assert trace.last_run["engine"] == "guarded_fast"
+    assert result.trace.last_run["engine"] == "guarded_fast"
+    assert trace.last_run is None
     assert isinstance(result.output, Normal)
     with torch.no_grad():
         live = model(x)

@@ -35,6 +35,7 @@ from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import first_op
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
+from ._card_suppression import card_render_suppressed
 from ._grid import GridBudgets, array_grid_html
 from .cardtree import (
     Card,
@@ -73,18 +74,14 @@ _CARD_GRID_CELL_BUDGET = 1_000
 def _bridge_sentinel(obj: Any) -> str | None:
     """Return the suppression sentinel when the bridge claims this render.
 
-    Fails SAFE: any error (bridge absent, treescope absent, predicate
-    fault) returns ``None`` and the full card renders -- a broken sniff
-    may never suppress the user's only good rendering.
+    The treescope bridge registers its predicate in the card-suppression slot
+    when it loads; the card never imports the bridge. Fails SAFE: no bridge
+    loaded or a predicate fault returns ``None`` and the full card renders --
+    a broken sniff may never suppress the user's only good rendering.
     """
 
-    try:
-        from ...bridge.treescope import consume_repr_suppression
-
-        if consume_repr_suppression(obj):
-            return BRIDGE_SENTINEL_HTML
-    except Exception:  # noqa: BLE001 - fail-safe is the contract (memo 3.6)
-        return None
+    if card_render_suppressed(obj):
+        return BRIDGE_SENTINEL_HTML
     return None
 
 

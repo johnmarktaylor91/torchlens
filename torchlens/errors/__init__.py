@@ -346,8 +346,8 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._semantic._norm_reconstruction",
         "NormReconstructionError",
     ),
-    "NarrationConfigError": ("torchlens.debug._snoop._errors", "NarrationConfigError"),
-    "NarrationStatsError": ("torchlens.debug._snoop._errors", "NarrationStatsError"),
+    "NarrationConfigError": ("torchlens._snoop._errors", "NarrationConfigError"),
+    "NarrationStatsError": ("torchlens._snoop._errors", "NarrationStatsError"),
     "FittedArtifactError": ("torchlens.stats._fitted", "FittedArtifactError"),
     "RenderError": ("torchlens.transformer._errors", "RenderError"),
     "RankRenderEndpointError": (

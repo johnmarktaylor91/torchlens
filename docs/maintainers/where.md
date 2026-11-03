@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1393 modules, 628626 lines, 0 modules without a docstring.
+83 packages, 1395 modules, 628718 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -24,7 +24,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 35714 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 22 | 11355 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11480 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 21 | 7938 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
@@ -36,8 +36,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 18 | 9667 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 11 | 6718 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
+| `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 37 | 15964 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 37 | 15868 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 70 | 42934 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
@@ -59,14 +60,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8488 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3945 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 106 | 53063 |
-| `torchlens.bridge` | External-tool bridge namespace. | 25 | 7807 |
+| `torchlens.bridge` | External-tool bridge namespace. | 25 | 7812 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8288 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 1964 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 23 | 9609 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3825 |
-| `torchlens.debug._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1030 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
@@ -87,7 +87,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5993 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13609 |
-| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
+| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 6894 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
@@ -496,7 +496,7 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (5 m
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (22 modules, 11355 lines)
+Internal backend-neutral IR for TorchLens capture unification. (23 modules, 11480 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -504,6 +504,7 @@ Internal backend-neutral IR for TorchLens capture unification. (22 modules, 1135
 | `_container_errors` | The typed default-deny refusal shared by output-container reconstruction. | 67 |
 | `_container_type_probes` | Type-structural construction probes for output-container reconstruction. | 420 |
 | `_output_occurrences` | Output-path occurrences of captured tensors, built at capture and read at output-op build. | 110 |
+| `_output_path_assign` | Assign a value at a nested output path, rebuilding immutable containers on the way. | 125 |
 | `_selector_nodes` | Leaf plan nodes for the compiled selector evaluator. | 460 |
 | `_selector_universe` | Per-lifecycle subject universes for the selector interpreter. | 526 |
 | `capture_events` | Mutable capture event accumulator for one forward pass. | 1226 |
@@ -739,6 +740,23 @@ Built-in TorchLens semantic facet recipes. (9 modules, 2937 lines)
 | `residual` | Built-in semantic recipes for transformer residual stream facets. | 420 |
 | `vision_head` | Built-in semantic recipes for vision-model output heads. | 429 |
 
+### `torchlens._snoop`
+
+Live narration for TorchLens captures (the torchsnooper niche, better). (10 modules, 2118 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Live narration for TorchLens captures (the torchsnooper niche, better). | 33 |
+| `_entry` | Facade-side echo entry helpers (snoop /). | 184 |
+| `_errors` | Typed refusal classes for live narration (snoop -). | 31 |
+| `_event` | The frozen ''NarrationEvent'' record behind every narration line (snoop ). | 68 |
+| `_format` | The metadata line formatter for live narration (snoop ). | 280 |
+| `_narrate` | Post-hoc narration: one renderer, three carriers (snoop , tail 1). | 217 |
+| `_normalize` | ''narrate='' normalization and the entry-time typed refusals (snoop /). | 185 |
+| `_session` | The one read-only narration observer slot (snoop). | 762 |
+| `_sink` | Narration sinks: stderr, path, stream, or callable (snoop sinks). | 120 |
+| `_stats` | Echo's stats rungs on the shared tensor-stats kernel (snoop ). | 238 |
+
 ### `torchlens._trace_core`
 
 Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 4092 lines)
@@ -760,7 +778,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (37 modules, 15964 lines)
+Shared helpers used by two or more TorchLens packages. (37 modules, 15868 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -790,7 +808,7 @@ Shared helpers used by two or more TorchLens packages. (37 modules, 15964 lines)
 | `_untyped_storage_probe` | Probe for a stable ''Tensor.untyped_storage'' Python wrapper (a torch-only leaf). | 39 |
 | `alias_footprint` | THE one absolute-byte three-valued alias/overlap engine. | 293 |
 | `arg_handling` | Argument copying, normalization, and input validation for model forward calls. | 1016 |
-| `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 256 |
+| `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 160 |
 | `display` | Human-readable formatting, print overrides, and environment detection. | 662 |
 | `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 258 |
 | `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 334 |
@@ -1317,7 +1335,7 @@ Torch backend implementation package for TorchLens capture. (106 modules, 53063 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (25 modules, 7807 lines)
+External-tool bridge namespace. (25 modules, 7812 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1344,7 +1362,7 @@ External-tool bridge namespace. (25 modules, 7807 lines)
 | `shap` | SHAP bridge helpers. | 81 |
 | `steering_vectors` | steering-vectors converter. | 52 |
 | `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 804 |
-| `treescope` | The treescope bridge: external registration, probe, sniff, door (B4). | 631 |
+| `treescope` | The treescope bridge: external registration, probe, sniff, door (B4). | 636 |
 | `xarray` | xarray / NeuroidAssembly adapters over TorchLens sites (tvscope B8). | 154 |
 
 ### `torchlens.bridge.lit`
@@ -1459,23 +1477,6 @@ Training sanity checks -- the torcheck niche, honestly redefined. (11 modules, 3
 | `_records` | Immutable finding / report records for the checks kit (checks ). | 216 |
 | `_scan` | The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4). | 425 |
 | `_session` | The loop-session chassis + standalone check registry (checks /4.2). | 1636 |
-
-### `torchlens.debug._snoop`
-
-Live narration for TorchLens captures (the torchsnooper niche, better). (10 modules, 2118 lines)
-
-| Module | What it holds | Lines |
-| --- | --- | ---: |
-| `__init__` | Live narration for TorchLens captures (the torchsnooper niche, better). | 33 |
-| `_entry` | Facade-side echo entry helpers (snoop /). | 184 |
-| `_errors` | Typed refusal classes for live narration (snoop -). | 31 |
-| `_event` | The frozen ''NarrationEvent'' record behind every narration line (snoop ). | 68 |
-| `_format` | The metadata line formatter for live narration (snoop ). | 280 |
-| `_narrate` | Post-hoc narration: one renderer, three carriers (snoop , tail 1). | 217 |
-| `_normalize` | ''narrate='' normalization and the entry-time typed refusals (snoop /). | 185 |
-| `_session` | The one read-only narration observer slot (snoop). | 762 |
-| `_sink` | Narration sinks: stderr, path, stream, or callable (snoop sinks). | 120 |
-| `_stats` | Echo's stats rungs on the shared tensor-stats kernel (snoop ). | 238 |
 
 ### `torchlens.distributed`
 
@@ -1881,17 +1882,18 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 
 ### `torchlens.report._notebook`
 
-Extras-gated notebook namespace with no public objects yet. (9 modules, 2412 lines)
+Extras-gated notebook namespace with no public objects yet. (10 modules, 2470 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Extras-gated notebook namespace with no public objects yet. | 106 |
 | `_access` | The copy-expression root ladder (B2, treescope memo section 4). | 143 |
 | `_axis_labels` | Semantic axis labels, token decoding, and the SDPA hint (B3). | 171 |
+| `_card_suppression` | Card-suppression slot: a renderer bridge claims a card render without the card importing it. | 61 |
 | `_grid` | The native static array grid (B3): budgeted, masked, motif-coded. | 336 |
 | `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 264 |
 | `_truncation` | Balanced truncation budgets, ported from treescope (B3). | 290 |
-| `cards` | The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace. | 540 |
+| `cards` | The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace. | 537 |
 | `cardtree` | CardTree: presentation-only HTML card IR + native safe renderer (B1). | 411 |
 | `frontier` | The diagnostic frontier: first-dirty sites plus one hop (B6). | 151 |
 

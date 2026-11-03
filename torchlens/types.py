@@ -122,10 +122,10 @@ if TYPE_CHECKING:
         RunnableDiagnostic,
         RunReport,
     )
-    from torchlens.debug._snoop._event import NarrationEvent
+    from torchlens._snoop._event import NarrationEvent
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "NarrationEvent": ("torchlens.debug._snoop._event", "NarrationEvent"),
+    "NarrationEvent": ("torchlens._snoop._event", "NarrationEvent"),
     "RunnableDiagnostic": ("torchlens._runnable", "RunnableDiagnostic"),
     "RunnableCompatibility": ("torchlens._runnable", "RunnableCompatibility"),
     "RunReport": ("torchlens._runnable", "RunReport"),
