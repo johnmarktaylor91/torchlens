@@ -71,7 +71,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
 def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps this documented call shape; the fold removes the duplicate site)
     trace: Trace,
     model: torch.nn.Module,
-    input_args: torch.Tensor | list[Any],
+    inputs: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str] = "all",
     grad_layers_to_save: str | list[str] | None = "all",
@@ -90,7 +90,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps t
     return _save_new_outs_impl(
         trace,
         model=model,
-        input_args=input_args,
+        inputs=inputs,
         input_kwargs=input_kwargs,
         layers_to_save=layers_to_save,
         grad_layers_to_save=grad_layers_to_save,

@@ -67,7 +67,7 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
 
 def record(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     *,
     input_kwargs: dict[str, Any] | None = None,
     save: PredicateFn | None = None,
@@ -97,7 +97,7 @@ def record(
     ----------
     model:
         PyTorch module to execute.
-    input_args:
+    inputs:
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
@@ -156,7 +156,7 @@ def record(
         non-torch backends raise a canonical unsupported error.
     generate_kwargs:
         DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run
-        the model's own ``generate(*input_args, **input_kwargs,
+        the model's own ``generate(*inputs, **input_kwargs,
         **generate_kwargs)`` once instead of one forward, and record the
         selected sites at every forward it runs (the prefill, then each decode
         step) while the KV cache is on, so each decode step records only its
@@ -178,16 +178,16 @@ def record(
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
     validate_postprocess(postprocess)
-    input_args = _coerce_input_args(model, input_args)
+    inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
     if generate_kwargs is not None:
         output, generation = record_generation(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             generate_kwargs,
             {
@@ -226,7 +226,7 @@ def record(
         narrate=narrate,
         capture=capture,
     ) as recorder:
-        recorder(input_args, input_kwargs)
+        recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
         result = result.enrich(postprocess)

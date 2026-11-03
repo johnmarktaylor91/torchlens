@@ -47,7 +47,7 @@ class _RefreshRequest(NamedTuple):
 def save_new_outs(
     self: "Trace",
     model: object,
-    input_args: Any | list[Any],
+    inputs: Any | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
     grad_layers_to_save: str | list[Any] | None = "all",
@@ -70,7 +70,7 @@ def save_new_outs(
 
     ----------
         model: Model for which to save outs.
-        input_args: Either a single tensor input to the model, or list of input arguments.
+        inputs: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
         grad_layers_to_save: List of layers whose grads should be saved.
@@ -85,7 +85,7 @@ def save_new_outs(
         Nothing; mutates ``self`` in place with new out values.
     """
     request = _RefreshRequest(
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, _run_until_plan
+        model, inputs, input_kwargs, layers_to_save, grad_layers_to_save, seed, _run_until_plan
     )
     if backward_ready is not None:
         _refresh_under_backward_ready(self, request, backward_ready)
@@ -123,7 +123,7 @@ def _refresh_under_backward_ready(
         save_new_outs(
             self,
             model=model,
-            input_args=input_args,
+            inputs=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,

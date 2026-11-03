@@ -5,6 +5,8 @@
 
 ### Behavior changes
 
+- **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
+  points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
   pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
   merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at

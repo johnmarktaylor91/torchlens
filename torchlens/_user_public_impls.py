@@ -752,7 +752,7 @@ def show_bundle_graph(
 @restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     seed: int | None = None,
     verbose: bool = False,
@@ -768,7 +768,7 @@ def validate_forward_pass(
     ----------
     model:
         Model or callable to validate.
-    input_args:
+    inputs:
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
@@ -807,7 +807,7 @@ def validate_forward_pass(
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
     # Forward only non-default save options: a default call reaches every
     # backend's entry with exactly the keywords it always received.
     save_options: dict[str, Any] = {}
@@ -826,7 +826,7 @@ def validate_forward_pass(
         )
     return spec.validate_entry(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         seed=seed,
         verbose=verbose,
@@ -1672,7 +1672,7 @@ def _validate_forward_pass_torch(
 @restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -1690,7 +1690,7 @@ def validate_backward_pass(
     ----------
     model:
         PyTorch model.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
@@ -1730,7 +1730,7 @@ def validate_backward_pass(
 
     return _impl(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
