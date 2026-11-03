@@ -1273,8 +1273,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="input",
-                inner_modules=node.modules,
-                child_label=node.layer_label,
+                inner_node=node,
             )
             if node.layer_label not in boundary.children:
                 boundary.children.append(node.layer_label)
@@ -1295,8 +1294,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="output",
-                inner_modules=node.modules,
-                parent_label=node.layer_label,
+                inner_node=node,
             )
             if node.layer_label not in boundary.parents:
                 boundary.parents.append(node.layer_label)
@@ -1342,11 +1340,9 @@ def _get_or_create_boundary_node(
     *,
     vis_mode: str,
     boundary_kind: str,
-    inner_modules: Iterable[str] = (),
-    child_label: str | None = None,
-    parent_label: str | None = None,
+    inner_node: GraphNode,
 ) -> BoundaryNode:
-    """Create or return a boundary node for one external layer."""
+    """Create or return a boundary node for one external layer next to ``inner_node``."""
 
     external_label = external_node.layer_label.replace(":", "pass")
     boundary_label = f"__module_focus_{boundary_kind}_{external_label}"
@@ -1354,57 +1350,28 @@ def _get_or_create_boundary_node(
     if boundary is not None:
         return boundary
 
-    module_path = _boundary_module_path(target_module, vis_mode, inner_modules)
+    inner = [inner_node.layer_label]
     boundary = BoundaryNode(
         layer_label=boundary_label,
         display_label=f"ext: {external_node.layer_label}",
         boundary_kind=boundary_kind,
-        children=[] if child_label is None else [child_label],
-        parents=[] if parent_label is None else [parent_label],
-        modules=module_path,
+        children=inner if boundary_kind == "input" else [],
+        parents=inner if boundary_kind == "output" else [],
+        modules=_boundary_module_path(target_module, vis_mode, inner_node.modules),
     )
     boundary_nodes[boundary_label] = boundary
     return boundary
 
 
-def _boundary_module_path(
-    target_module: "Module",
-    vis_mode: str,
-    inner_modules: Iterable[str] = (),
-) -> list[str]:
-    """Return a module path for focus boundary node cluster placement.
+def _boundary_module_path(target_module: "Module", vis_mode: str, stack: Any) -> list[str]:
+    """Boundary cluster path: the inner op's called-module stack (no uncalled ModuleList)."""
 
-    The path is the call stack of the focused op that the boundary edge
-    touches, cut just after the target module's call. It names only modules
-    that were called, so an uncalled container on the address path (an
-    ``nn.ModuleList`` or ``nn.ModuleDict`` holding the target) never appears,
-    matching the region paths of the focused ops themselves.
-
-    Parameters
-    ----------
-    target_module:
-        Module being focused.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"``; rolled paths drop the call index.
-    inner_modules:
-        Pass-qualified module stack of the focused op the boundary attaches to.
-
-    Returns
-    -------
-    list[str]
-        Region path for the boundary node.
-    """
-
-    call_path: list[str] = []
-    for module_call in inner_modules:
-        call_path.append(str(module_call))
-        if str(module_call).split(":", 1)[0] == target_module.address:
-            break
+    addresses = [str(call).split(":", 1)[0] for call in stack]
+    if target_module.address in addresses:
+        path = [str(call) for call in stack][: addresses.index(target_module.address) + 1]
     else:
-        call_path = [f"{target_module.address}:1"]
-    if vis_mode == "rolled":
-        return [module_call.split(":", 1)[0] for module_call in call_path]
-    return call_path
+        path = [f"{target_module.address}:1"]
+    return [call.split(":", 1)[0] for call in path] if vis_mode == "rolled" else path
 
 
 def _simplify_boundary_labels(
