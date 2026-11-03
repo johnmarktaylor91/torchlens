@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...intervention.hooks import _resolve_facet_specs
+from ...receptive_field._path import ancestor_labels
 from .._result import AttributionError
 from ..onebackward._accessor import ReadEdgeIndex
 from ..onebackward._targets import resolve_site_edge
@@ -73,8 +75,6 @@ def check_upstream(
 ) -> None:
     """Refuse an op-label read site that does not run before every MLP output it writes."""
 
-    from ...receptive_field._path import ancestor_labels
-
     for write, _decoder in reader.decoders:
         if read not in ancestor_labels(trace, writes[write]):
             raise _site_refusal(
@@ -97,8 +97,6 @@ def _upstream_example(trace: Any, index: ReadEdgeIndex, write: str) -> str:
 
 def facet_labels(trace: Any, index: ReadEdgeIndex, selector: Any) -> list[str]:
     """Return the edge labels of the ops a facet selector names, one per facet home."""
-
-    from ...intervention.hooks import _resolve_facet_specs
 
     specs = _resolve_facet_specs(trace, selector)
     if not specs:

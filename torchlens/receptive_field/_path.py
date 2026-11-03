@@ -6,6 +6,9 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
+from .._data_classes.layer import Layer
+from .._data_classes.module import Module, ModuleCall
+from ..intervention.errors import MultiOutputModuleError
 from ._errors import (
     AmbiguousCallError,
     AmbiguousPassError,
@@ -47,10 +50,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
         If a module call has zero or multiple output operations.
     """
 
-    from .._data_classes.layer import Layer
-    from .._data_classes.module import Module, ModuleCall
     from .._data_classes.op import Op
-    from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):
         matches = [op for op in trace._layer_list if op.label == handle]

@@ -8,7 +8,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, ClassVar, Literal, cast
 
-from .._selection.selection import _SelectionOperand
+from .._selection.selection import _selection_from_box, _selection_from_gradient, _SelectionOperand
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
 if TYPE_CHECKING:
@@ -432,8 +432,6 @@ class ReceptiveFieldBox(_SelectionOperand):
         never a fuzzy mask.
         """
 
-        from .._selection.selection import _selection_from_box
-
         return _selection_from_box(self)
 
     def slices(self, pointwise_coords: Mapping[int, int] | None = None) -> tuple[slice, ...]:
@@ -574,8 +572,6 @@ class GradReceptiveField(_SelectionOperand):
         The mask's own epistemics remain the RF layer's documented claim
         (relation=``exact`` w.r.t. the empirical mask), unchanged by lifting.
         """
-
-        from .._selection.selection import _selection_from_gradient
 
         return _selection_from_gradient(self)
 

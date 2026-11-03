@@ -30,6 +30,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection.selection import units
 from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
@@ -53,6 +54,7 @@ from torchlens.attribution._curve_settings import (
 )
 from torchlens.attribution._eval_maps import _DOCS_POINTER, _input_space_maps
 from torchlens.attribution._result import Attribution, AttributionError
+from torchlens.intervention.predicates import replace_with
 
 _DEFAULT_STEPS = 20
 _DEFAULT_PATCH = 8
@@ -351,9 +353,6 @@ def _step_intervention(
         ``(tl.units(label, mask), tl.replace_with(baseline))`` per leaf whose
         mask selects anything.
     """
-
-    from torchlens._selection.selection import units
-    from torchlens.intervention.predicates import replace_with
 
     if not any(bool(mask.any()) for mask in masks):
         return ()

@@ -37,6 +37,8 @@ from torch.nn import Module
 from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
 
+from ..options import CaptureOptions
+
 TokenReshape = Callable[[Tensor], Tensor]
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section grad_cam."
@@ -304,7 +306,6 @@ def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
     """Capture a metadata-only trace of the attributed forward call."""
 
     from .._user_public_impls import trace as _capture_trace
-    from ..options import CaptureOptions
 
     options = CaptureOptions(layers_to_save=None)
     args = inputs if inputs is not None else ()

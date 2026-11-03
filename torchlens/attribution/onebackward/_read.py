@@ -22,6 +22,8 @@ from typing import Any
 
 import torch
 
+from ..._selection.selection import Selection, Selector
+from ..._selection.values import _lift_within
 from ._accessor import ReadEdgeIndex, SiteEdge, read_edge_index
 from ._engine import EngineSpec, resolve_batch_plan, run_engine
 from ._errors import ReadError
@@ -218,8 +220,6 @@ def _resolve_within_impl(
 
     if within is None:
         return (dict.fromkeys(index.edges), False)
-    from ..._selection.selection import Selection, Selector
-    from ..._selection.values import _lift_within
 
     population: dict[str, torch.Tensor | None] = {}
     if isinstance(within, Selection):
