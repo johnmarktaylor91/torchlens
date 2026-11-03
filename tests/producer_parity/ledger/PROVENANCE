@@ -3710,6 +3710,22 @@ recorded: 2026-11-02T10:10:01.634327+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: menagerie-r4-port: rung-4 validation fixes move parent_arg_positions read sites from core.py (7 to 5) into _domain_perturbations.py, _saved_value_proofs.py and _structural_slot_checks.py and the finalization.py kind read into _conditional_records.py; reviewed against the integ3 merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8840b4f586c9c5d4e3406399a01ef89d6369a1d9 (dirty)
+recorded: 2026-11-02T15:09:42.754673+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: menagerie-r4-port: rung-4 validation fixes move parent_arg_positions read sites from core.py (7 to 5) into _domain_perturbations.py, _saved_value_proofs.py and _structural_slot_checks.py and the finalization.py kind read into _conditional_records.py; reviewed against the integ3 merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8840b4f586c9c5d4e3406399a01ef89d6369a1d9 (dirty)
+recorded: 2026-11-02T15:09:49.261630+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: mp-oneoff-packages: fold checks/snoop into debug, conformance to tests
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
