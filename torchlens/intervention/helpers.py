@@ -838,7 +838,7 @@ def splice_module(
             if input_route == "in":
                 if not ctx.args and not ctx.kwargs:
                     raise HookValueError(
-                        "splice_module input routing requires captured call inputs"
+                        "input_route='in' needs call inputs: use tl.trace(intervene=), not .bind"
                     )
                 result = module(*ctx.args, **dict(ctx.kwargs))
             else:

@@ -44,7 +44,8 @@ Replace the names with your model's.
 - Change a tensor during the forward pass (ablate, patch, scale, steer):
   tl.trace(..., intervene=tl.when(site, edit)); read tr.output.
 - Only the edited output, over many inputs or sites (patching sweeps,
-  loops): tl.when(site, edit).bind(model)(x), one plain forward per call.
+  loops): tl.when(site, edit).bind(model)(x), one plain forward per call
+  (output edits only; splice_module(input_route="in") needs tl.trace).
 - Change what goes INTO a module (for example one attention head before
   the output projection): tl.splice_module(fn, input_route="in").
 - Change an op that has no module of its own (an inline softmax or add):
@@ -194,8 +195,10 @@ edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
   .address (not containing_module).
 - Capture-time selectors are tl.module, tl.func, tl.in_module; a label from
   a finished trace works with tr[label] and tr.do, not inside intervene=.
-- Same edit over many forwards (a loop, generate()): arm it once on the
-  live model with tl.when(site, edit).bind(model); no tracing cost.
+- Same output edit over many forwards (a loop, generate()): arm it once on
+  the live model with tl.when(site, edit).bind(model); no tracing cost. A
+  bound model does not pass call inputs, so input_route="in" splices raise
+  there; run those through tl.trace(model, x, intervene=...).
 - Do not trace torch.compile or TorchScript artifacts; trace the eager model.
 
 ## Saved artifacts and the read-only tools

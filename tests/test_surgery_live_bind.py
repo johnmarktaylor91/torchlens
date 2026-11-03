@@ -675,3 +675,19 @@ def test_bind_cleanup_failure_is_typed(toy) -> None:
     assert bound._cleanup_verdict.startswith("failed")
     # the REAL hooks installed before the stuck one were still removed
     assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
+
+
+def test_bound_input_route_splice_names_the_trace_spelling() -> None:
+    """A bound model passes no call inputs, so an input-routed splice says to use tl.trace."""
+
+    from torchlens.intervention.errors import HookValueError
+
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+    x = torch.randn(3, 4)
+    proj = model[2]
+    edit = tl.splice_module(lambda z: proj(z * 0), input_route="in")
+    traced = tl.trace(model, x, intervene=tl.when(tl.module("2"), edit)).output
+    assert torch.equal(traced, proj(torch.zeros(3, 4)))
+    bound = tl.when(tl.module("2"), edit).bind(model)
+    with pytest.raises(HookValueError, match=r"tl\.trace\(intervene=\), not \.bind"):
+        bound(x)
