@@ -133,8 +133,8 @@ RESULT = (
 ### baukit feeds TorchLens
 
 There is no bridge. baukit works on an `nn.Module`; the same module goes to `tl.trace` or
-`tl.extract`. Tensors you read with `Trace` can be compared against TorchLens saved outs as
-ordinary tensors.
+`tl.extract`. Tensors you read with `Trace` can be compared against TorchLens saved
+activations as ordinary tensors.
 
 ### TorchLens feeds baukit
 

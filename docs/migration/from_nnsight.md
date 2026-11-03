@@ -48,10 +48,10 @@ model = transformers.GPT2LMHeadModel(config).eval()
 ids = torch.tensor([[1, 2, 3, 4]])
 
 
-def edit(out):
-    out = out.clone()
-    out[:, :, :2] = 2.5
-    return out
+def edit(activation, *, ctx):
+    activation = activation.clone()
+    activation[:, :, :2] = 2.5
+    return activation
 
 
 trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
