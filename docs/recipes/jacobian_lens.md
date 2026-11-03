@@ -178,10 +178,10 @@ def model_jacobian(index, ids):
 def rel_error(index, ids):
     """Relative Frobenius error of the fitted lens against the whole-model Jacobian."""
     reference = model_jacobian(index, ids)
-    return float((jacobian_lens(ids[None])[blocks[index]] - reference).norm() / reference.norm())
+    return float((jacobian_lens(ids)[blocks[index]] - reference).norm() / reference.norm())
 
 
-RESULT = max(rel_error(index, corpus[0]) for index in range(config.n_layer - 1)) < 1e-4
+RESULT = max(rel_error(index, corpus[:1]) for index in range(config.n_layer - 1)) < 1e-4
 ```
 
 ## Limits
