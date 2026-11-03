@@ -709,7 +709,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
                     overlay_node.args
                 )
-    if request.show_containers in {"cluster", "nodes"}:
+    if request.show_containers == "nodes":
         container_clusters = _container_clusters_for_graphviz(
             trace,
             context.source_graph.entries_to_plot,

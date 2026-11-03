@@ -11,25 +11,33 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ._encoding import EncodingChannelRequest
+from ._encoding_request import EncodingChannelRequest
+
+
+def _attribution_kind(value: Any) -> str | None:
+    """Return the ``color_by`` kind an attribution result declares, else ``None``.
+
+    ``Attribution`` declares ``"attribution"`` and ``AttributionGraph``
+    declares ``"graph"`` (with a ``_color_by_source`` method beside it), so
+    this module reads them without importing ``torchlens.attribution``: that
+    package imports the core, and an import from here would pull all of it
+    into the core's import cycle.
+    """
+
+    kind = getattr(type(value), "_color_by_kind", None)
+    return kind if isinstance(kind, str) else None
 
 
 def _is_attribution_source(source: Any) -> bool:
     """Return whether ``source`` is an attribution result or an iterable of them."""
 
-    from ..attribution._core import Attribution
-
-    if isinstance(source, Attribution):
+    if _attribution_kind(source) is not None:
         return True
     if isinstance(source, (str, bytes, Mapping)) or callable(source):
         return False
     if isinstance(source, (list, tuple, set, frozenset)):
-        return bool(source) and all(isinstance(item, Attribution) for item in source)
-    try:
-        from ..attribution.graph import AttributionGraph
-    except ImportError:
-        return False
-    return isinstance(source, AttributionGraph)
+        return bool(source) and all(_attribution_kind(item) == "attribution" for item in source)
+    return False
 
 
 def resolve_color_source(trace: Any, color_by: Any) -> Any:
@@ -46,10 +54,9 @@ def resolve_color_source(trace: Any, color_by: Any) -> Any:
     if isinstance(color_by, Mapping):
         return _overlay_callable(trace, color_by)
     if _is_attribution_source(color_by):
-        from ..attribution._viz import attribution_color_by
-
+        result = color_by if _attribution_kind(color_by) is not None else next(iter(color_by))
         return EncodingChannelRequest(
-            source=attribution_color_by(trace, color_by), display_name="attribution"
+            source=result._color_by_source(trace, color_by), display_name="attribution"
         )
     return color_by
 

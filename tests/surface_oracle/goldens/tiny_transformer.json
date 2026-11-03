@@ -33501,6 +33501,14 @@
     }
    },
    "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 2,
+      "\"first_location\"": null,
+      "\"kind\"": "fused_attention_fastpath_held_off",
+      "\"message\"": "encoder: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program; encoder.self_attn: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program"
+     }
+    ],
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
      "\"basis\"": "saved_payloads",
@@ -66827,7 +66835,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
-   "_output_slot": "<torchlens.recording.types.OutputSlot>",
+   "_output_slot": "<torchlens._output_slot.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -67434,7 +67442,16 @@
      ]
     }
    },
-   "annotations": {},
+   "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 2,
+      "\"first_location\"": null,
+      "\"kind\"": "fused_attention_fastpath_held_off",
+      "\"message\"": "encoder: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program; encoder.self_attn: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program"
+     }
+    ]
+   },
    "archived_activations": {},
    "armed_edits": [],
    "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
@@ -100823,7 +100840,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
-   "_output_slot": "<torchlens.recording.types.OutputSlot>",
+   "_output_slot": "<torchlens._output_slot.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
@@ -101431,6 +101448,14 @@
     }
    },
    "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 2,
+      "\"first_location\"": null,
+      "\"kind\"": "fused_attention_fastpath_held_off",
+      "\"message\"": "encoder: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program; encoder.self_attn: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program"
+     }
+    ],
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
      "\"basis\"": "saved_payloads",
@@ -134177,6 +134202,14 @@
     }
    },
    "annotations": {
+    "\"capture_advisories\"": [
+     {
+      "\"count\"": 2,
+      "\"first_location\"": null,
+      "\"kind\"": "fused_attention_fastpath_held_off",
+      "\"message\"": "encoder: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program; encoder.self_attn: torch's fused attention fast path was held off, so the forward, its replay and the validation ground truth run the unfused attention program"
+     }
+    ],
     "\"health_facts\"": {
      "\"alias_nonfinite_labels\"": [],
      "\"basis\"": "saved_payloads",

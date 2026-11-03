@@ -33,6 +33,7 @@ from ..._ir.op_record import amend_preview_output_parent_rebind
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -81,6 +82,7 @@ from ._derived_grads import (
     _snapshot_tinygrad_grads,
     _tree_leaves_with_paths,
 )
+from ._execution_guard import _reject_mid_capture_execution
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
     CONSTANT_UNREALIZABLE_CODE,
@@ -467,8 +469,7 @@ class TinygradBackend:
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
         use_object_module = _resolve_tinygrad_module_identity_mode(
-            cast(str | None, module_identity_mode),
-            module_tree,
+            cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -507,33 +508,15 @@ class TinygradBackend:
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
-        observed_ops: dict[int, list[str]] = {}
-        observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
-        input_identities = self._input_identities(args)
-        module_call_context = (
-            scoped_tinygrad_module_calls(module_tree, observed_module_stacks)
-            if use_object_module and module_tree is not None
-            else _null_context()
+        output, observed_ops, observed_module_stacks = self._run_observed_forward(
+            model, args, module_tree if use_object_module else None
         )
-        with (
-            module_call_context,
-            _observe_tensor_ops(observed_ops, observed_module_stacks),
-            _reject_mid_capture_execution(),
-        ):
-            output = model(*args)
-        if self._input_identities(args) != input_identities:
+        if not (outputs := tuple(self._tensor_leaves(output))):
             raise BackendUnsupportedError(
-                "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
-                "or setitem input mutation inside the traced callable yet; return a pure lazy "
-                "tinygrad expression instead."
-            )
-        outputs = tuple(self._tensor_leaves(output))
-        if not outputs:
-            raise BackendUnsupportedError(
-                "tinygrad backend preview requires at least one tinygrad Tensor output."
+                "tinygrad backend preview requires at least one tinygrad Tensor output.",
+                code="tensor_output_required",
             )
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-        from ...recording.types import returned
 
         trace._output_slot = returned(output)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
@@ -566,6 +549,59 @@ class TinygradBackend:
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace
+
+    def _run_observed_forward(
+        self,
+        model: Callable[..., Any],
+        args: list[Any],
+        module_tree: TinygradModuleTree | None,
+    ) -> tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]]]:
+        """Run the forward once under Tensor API observation and the execution guard.
+
+        Parameters
+        ----------
+        model
+            Tinygrad callable or module root.
+        args
+            Normalized positional arguments.
+        module_tree
+            Object-module tree whose ``__call__`` methods are scoped, or
+            ``None`` for function-root attribution.
+
+        Returns
+        -------
+        tuple[Any, dict[int, list[str]], dict[int, tuple[TinygradModuleFrame, ...]]]
+            The forward output, the Tensor API names by UOp id, and the
+            first-observed module stacks by UOp id.
+
+        Raises
+        ------
+        BackendUnsupportedError
+            If the callable mutated a tensor input in place.
+        """
+
+        observed_ops: dict[int, list[str]] = {}
+        observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
+        input_identities = self._input_identities(args)
+        module_call_context = (
+            scoped_tinygrad_module_calls(module_tree, observed_module_stacks)
+            if module_tree is not None
+            else _null_context()
+        )
+        with (
+            module_call_context,
+            _observe_tensor_ops(observed_ops, observed_module_stacks),
+            _reject_mid_capture_execution(),
+        ):
+            output = model(*args)
+        if self._input_identities(args) != input_identities:
+            raise BackendUnsupportedError(
+                "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
+                "or setitem input mutation inside the traced callable yet; return a pure lazy "
+                "tinygrad expression instead.",
+                code="input_mutation_unsupported",
+            )
+        return output, observed_ops, observed_module_stacks
 
     def validate_trace(
         self,
@@ -1287,11 +1323,11 @@ class TinygradBackend:
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace.autograd.derived_grads."
+                "audit-only traces cannot expose trace.autograd.derived_grads.",
+                code="live_payloads_required",
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
-            grad_options.input_grad_argnums,
-            len(args),
+            grad_options.input_grad_argnums, len(args)
         )
         leaves = _differentiated_input_leaves(self, args, input_argnums)
         if not leaves and not grad_options.intermediate_grads:
@@ -1299,7 +1335,7 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,
@@ -1393,13 +1429,10 @@ class TinygradBackend:
             op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
-            selected_ops,
-            getattr(trace, "tinygrad_uop_captures", ()),
+            selected_ops, getattr(trace, "tinygrad_uop_captures", ())
         )
         live_candidates = _tinygrad_live_intermediate_candidates(
-            backend=self,
-            outputs=outputs,
-            observed_tensors=observed_tensors,
+            backend=self, outputs=outputs, observed_tensors=observed_tensors
         )
         cast(Any, loss).backward()
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
@@ -1444,7 +1477,8 @@ class TinygradBackend:
         if not captures:
             raise BackendUnsupportedError(
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot be replay validated."
+                "audit-only traces cannot be replay validated.",
+                code="live_payloads_required",
             )
         ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
@@ -1725,7 +1759,8 @@ class TinygradBackend:
 
         if not any(self.is_tensor(leaf) for _path, leaf in _tree_leaves_with_paths(tuple(args))):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires positional tinygrad Tensor inputs."
+                "tinygrad backend preview requires positional tinygrad Tensor inputs.",
+                code="tinygrad_input_required",
             )
 
     def _reject_unsupported_options(self, **options: Any) -> None:
@@ -2549,69 +2584,6 @@ class _observe_tensor_ops:
 
         # Restore the deliberately replaced tinygrad method after preview capture.
         Tensor._apply_uop = self.original
-
-
-class _reject_mid_capture_execution:
-    """Context manager rejecting tinygrad execution that truncates lazy UOp lineage."""
-
-    def __init__(self) -> None:
-        """Initialize the execution guard."""
-
-        self.original_tensor_run_linear: Any = None
-        self.original_jit_run_linear: Any = None
-
-    def __enter__(self) -> _reject_mid_capture_execution:
-        """Install guarded tinygrad realization hooks.
-
-        Returns
-        -------
-        _reject_mid_capture_execution
-            This context manager.
-        """
-
-        import tinygrad.engine.jit as jit_module
-        import tinygrad.tensor as tensor_module
-
-        self.original_tensor_run_linear = tensor_module.run_linear
-        self.original_jit_run_linear = jit_module.run_linear
-
-        def rejected_run_linear(*args: Any, **kwargs: Any) -> Any:
-            """Reject tinygrad realization or JIT execution during capture."""
-
-            del args, kwargs
-            raise BackendUnsupportedError(
-                "tinygrad backend preview cannot capture Tensor.realize(), Tensor.assign(), "
-                "or TinyJit execution inside the traced callable yet; return a lazy tinygrad "
-                "expression instead."
-            )
-
-        tensor_module.run_linear = rejected_run_linear
-        jit_module.run_linear = rejected_run_linear
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        """Restore tinygrad realization hooks.
-
-        Parameters
-        ----------
-        exc_type
-            Exception type, if any.
-        exc
-            Exception value, if any.
-        tb
-            Traceback, if any.
-
-        Returns
-        -------
-        None
-            The monkeypatches are removed.
-        """
-
-        import tinygrad.engine.jit as jit_module
-        import tinygrad.tensor as tensor_module
-
-        tensor_module.run_linear = self.original_tensor_run_linear
-        jit_module.run_linear = self.original_jit_run_linear
 
 
 def _unique_uops(outputs: Sequence[Any]) -> tuple[Any, ...]:

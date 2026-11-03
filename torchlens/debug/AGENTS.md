@@ -35,6 +35,9 @@ here but exported from `tl.report`.
   existing trace.
 - Results are `FindNanReport` / `BisectNanReport`; unsaved ancestors become an
   explicit `uncertainty_zone`, never a silent guess.
+- `find_nan` and `_rerun.isolated_capture` force one field on the caller's
+  `capture=` through `_capture_override._with_capture_fields`, which keeps the
+  caller's explicit-field record.
 
 ## _precision.py
 - `bisect_precision(model, input_args, input_kwargs=None, *, reference_dtype=fp64,

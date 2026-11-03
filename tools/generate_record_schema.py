@@ -3,7 +3,8 @@
 One declared schema, generated artifacts (docs/reference/trace_core_design.md
 section 3.4): this tool derives one ``StorageBinding`` per declared field for
 all 12 record classes and writes ``torchlens/_data_classes/_schema_bindings.py``
-as reviewable, deterministic source. A CI test regenerates and diffs, so the
+(the ``trace`` table goes to its sibling ``_schema_bindings_trace.py``) as
+reviewable, deterministic source. A CI test regenerates and diffs, so the
 bindings can never drift from the classes silently.
 
 Classification is mechanical and conservative; the storage kinds refine as
@@ -25,6 +26,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
 _OUT_PATH = _REPO_ROOT / "torchlens" / "_data_classes" / "_schema_bindings.py"
+#: The ``trace`` table (about a third of all bindings) is emitted into its own
+#: generated module, which ``_schema_bindings`` imports, so neither generated
+#: file outgrows the file-size cap.
+_SPLIT_KEY = "trace"
+_SPLIT_NAME = "TRACE_BINDINGS"
+_SPLIT_OUT_PATH = _REPO_ROOT / "torchlens" / "_data_classes" / "_schema_bindings_trace.py"
 
 _HEADER = '''"""GENERATED storage bindings for the declared record schema. DO NOT EDIT.
 
@@ -33,6 +40,22 @@ Regenerate with ``python tools/generate_record_schema.py``; a CI test
 generation, so hand edits cannot survive. The declared axes live in
 ``field_policy.StorageBinding``; classification policy lives in the
 generator.
+"""
+
+from __future__ import annotations
+
+from ._schema_bindings_trace import TRACE_BINDINGS
+from .field_policy import StorageBinding, StorageKind
+
+'''
+
+_SPLIT_HEADER = '''"""GENERATED storage bindings for the ``trace`` record. DO NOT EDIT.
+
+The ``trace`` table of ``_schema_bindings.STORAGE_BINDINGS``, emitted as its own
+module so neither generated file outgrows the file-size cap. Regenerate with
+``python tools/generate_record_schema.py``; a CI test
+(`tests/test_record_schema_bindings.py`) diffs this file against a fresh
+generation, so hand edits cannot survive.
 """
 
 from __future__ import annotations
@@ -320,38 +343,64 @@ def collect_primitive_candidate_bindings() -> dict[str, str]:
     return candidate
 
 
+def _binding_line(row: tuple[str, str, str | None, str], indent: str) -> str:
+    """Render one ``"field": StorageBinding(...),`` source line."""
+
+    name, kind, annotation, mutability = row
+    parts = [f"StorageKind.{kind}"]
+    if annotation is not None:
+        parts.append(f"annotation={annotation!r}")
+    if mutability != "immutable":
+        parts.append(f'mutability="{mutability}"')
+    return f'{indent}"{name}": StorageBinding({", ".join(parts)}),\n'
+
+
 def _render(schema: dict[str, list[tuple[str, str, str | None, str]]]) -> str:
     """Render the bindings module source deterministically."""
 
     lines = [_HEADER]
     lines.append("STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {\n")
     for key, rows in schema.items():
+        if key == _SPLIT_KEY:
+            lines.append(f'    "{key}": {_SPLIT_NAME},\n')
+            continue
         lines.append(f'    "{key}": {{\n')
-        for name, kind, annotation, mutability in rows:
-            parts = [f"StorageKind.{kind}"]
-            if annotation is not None:
-                parts.append(f"annotation={annotation!r}")
-            if mutability != "immutable":
-                parts.append(f'mutability="{mutability}"')
-            lines.append(f'        "{name}": StorageBinding({", ".join(parts)}),\n')
+        lines.extend(_binding_line(row, "        ") for row in rows)
         lines.append("    },\n")
     lines.append("}\n")
     return "".join(lines)
 
 
-def main() -> int:
-    """Generate (or with --check, verify) the bindings module."""
+def _render_split(schema: dict[str, list[tuple[str, str, str | None, str]]]) -> str:
+    """Render the split-out ``trace`` bindings module source deterministically."""
 
-    rendered = _render(_collect())
+    lines = [_SPLIT_HEADER]
+    lines.append(f"{_SPLIT_NAME}: dict[str, StorageBinding] = {{\n")
+    lines.extend(_binding_line(row, "    ") for row in schema[_SPLIT_KEY])
+    lines.append("}\n")
+    return "".join(lines)
+
+
+def main() -> int:
+    """Generate (or with --check, verify) the bindings modules."""
+
+    schema = _collect()
+    outputs = ((_OUT_PATH, _render(schema)), (_SPLIT_OUT_PATH, _render_split(schema)))
     if "--check" in sys.argv:
-        current = _OUT_PATH.read_text() if _OUT_PATH.exists() else ""
-        if current != rendered:
-            print("stale: _schema_bindings.py differs from a fresh generation")
+        stale = [
+            path.name
+            for path, rendered in outputs
+            if (path.read_text() if path.exists() else "") != rendered
+        ]
+        for name in stale:
+            print(f"stale: {name} differs from a fresh generation")
+        if stale:
             return 1
-        print("ok: _schema_bindings.py is current")
+        print("ok: _schema_bindings.py and _schema_bindings_trace.py are current")
         return 0
-    _OUT_PATH.write_text(rendered)
-    print(f"wrote {_OUT_PATH}")
+    for path, rendered in outputs:
+        path.write_text(rendered)
+        print(f"wrote {path}")
     return 0
 
 

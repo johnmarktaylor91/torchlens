@@ -12,6 +12,7 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -371,6 +372,12 @@ def _is_buffer_state_view_dispatch(
     * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
       current-session object + live storage identity -- a stale or input-rebound
       stamp is never credited as a benign state view).
+    * or ``args[0]`` is a PENDING LAZY slot (``UninitializedParameter`` /
+      ``UninitializedBuffer``): torch's in-place materialization reads the slot's
+      ``.data`` for its device and dtype before assigning storage, and the wrapper
+      passes those calls through unlogged (they are constructor plumbing, not model
+      dataflow). A pending slot holds no value, so the view can carry nothing that a
+      dropped op could have produced (wave-3 stress F3).
 
     Parameters
     ----------
@@ -398,10 +405,11 @@ def _is_buffer_state_view_dispatch(
     if not args:
         return False
     source = args[0]
-    return (
-        isinstance(source, torch.Tensor)
-        and session_validated_buffer_address(trace, source) is not None
-    )
+    if not isinstance(source, torch.Tensor):
+        return False
+    if _is_uninitialized_lazy_tensor(source):
+        return True
+    return session_validated_buffer_address(trace, source) is not None
 
 
 def _dispatch_callsite() -> _DispatchCallsite:

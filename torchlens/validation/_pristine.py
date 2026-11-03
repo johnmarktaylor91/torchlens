@@ -55,6 +55,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, cast
 
+from torch import nn
+
+from .._capture._fused_attention_hold import hold_fused_attention_fastpath_off
+
 if TYPE_CHECKING:
     from ..backends.torch.wrappers import CompletenessWitnessMode, EscapeDetectorMode
 
@@ -128,3 +132,18 @@ def pristine_torch_oracle() -> Iterator[bool]:
             escape_detector=detector_mode,
             completeness_witness=witness_mode,
         )
+
+
+@contextmanager
+def pristine_ground_truth_oracle(model: nn.Module) -> Iterator[bool]:
+    """Run a ground-truth forward of ``model`` on pristine torch, kernels as captured.
+
+    The ground truth runs the SAME attention program capture records: the fused
+    MHA fast path is held off here exactly as the capture scope holds it
+    (``hold_fused_attention_fastpath_off``), since capture's forced
+    ``requires_grad`` alone would otherwise steer the two forwards onto different
+    kernels (wave-3 stress F4). Yields and raises as :func:`pristine_torch_oracle`.
+    """
+
+    with pristine_torch_oracle() as pristine, hold_fused_attention_fastpath_off(model):
+        yield pristine

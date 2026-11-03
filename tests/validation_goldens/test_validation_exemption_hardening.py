@@ -828,6 +828,26 @@ def _first_op_with_func(trace: Any, func_name: str) -> Any:
     return next(layer for layer in trace._layer_list if layer.func_name == func_name)
 
 
+def _assert_only_degenerate_final_outputs(trace: Any, result: Any) -> None:
+    """Assert every op check passed and only the all-non-finite output guard failed the run.
+
+    Parameters
+    ----------
+    trace:
+        Validated TorchLens trace.
+    result:
+        Return value of ``trace.validate_forward_pass``.
+    """
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert status.num_failed_ops == 0
+    assert not any(decision["decision"] == "failed" for decision in status.decisions)
+    failure = get_validation_failure(trace)
+    assert failure is not None and failure.check_name == "degenerate_forward"
+    assert failure.extra["scope"] == "final_outputs"
+
+
 def _first_output(trace: Any) -> torch.Tensor:
     """Return a detached copy of the trace output.
 
@@ -1762,7 +1782,11 @@ def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:
 
 
 def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
-    """All-inf legitimate ops should not false-fail after boundary perturbation."""
+    """All-inf legitimate ops should not false-fail after boundary perturbation.
+
+    Every op validates or is exempted with proof; the run itself fails as a
+    degenerate forward because every output element is infinite.
+    """
 
     cases = (
         (ExpOverflowModel(), torch.full((2,), 100.0, dtype=torch.float32)),
@@ -1775,8 +1799,8 @@ def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-        assert result is True
-        assert trace.validation_replay_status.num_failed_ops == 0
+        # No op false-fails; the run still fails because its output is all inf.
+        _assert_only_degenerate_final_outputs(trace, result)
 
 
 def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
@@ -1861,8 +1885,8 @@ def test_output_bookkeeping_projection_is_structural() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert result is True
-    assert trace.validation_replay_status.num_failed_ops == 0
+    # No op false-fails; the run still fails because its output is all NaN.
+    _assert_only_degenerate_final_outputs(trace, result)
 
 
 def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
@@ -1945,7 +1969,7 @@ def test_functionless_computational_op_fails_loudly() -> None:
     status = trace.validation_replay_status
     assert status.state == "failed"
     assert any(
-        decision["decision"] == "failed" and decision["reason"] == "functionless_computational_op"
+        decision["decision"] == "failed" and decision["reason"] == "no_replayable_function"
         for decision in status.decisions
     )
 
@@ -1982,7 +2006,7 @@ def test_selective_save_interior_gap_is_unverified() -> None:
     assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     status = trace.validation_replay_status
-    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert status.unverified_reason_counts["parent_payload_missing"] >= 1
     assert "not_saved_by_user" not in status.exempted_reason_counts
     computational_ops = [op for op in trace._layer_list if op.func is not None]
     assert computational_ops
@@ -2049,7 +2073,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
 
     assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert result.unverified_reason_counts["parent_payload_missing"] >= 1
 
 
 def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
@@ -2086,7 +2110,7 @@ def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
     assert result is False
     status = trace.validation_replay_status
     assert status.state == "failed"
-    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert status.unverified_reason_counts["parent_payload_missing"] >= 1
     assert any(decision["reason"] == "replay_mismatch" for decision in status.decisions)
 
 

@@ -21,6 +21,9 @@ MLX_REFUSAL_CODES: tuple[str, ...] = (
     "foreign_tensor_input",
     "unwrapped_op_in_capture",
     "constant_unrealizable",
+    "traced_transform_entry_unsupported",
+    "intervention_with_derived_grads_unsupported",
+    "intervention_result_invalid",
 )
 
 MLX_FRAMEWORK = FrameworkRequirement(

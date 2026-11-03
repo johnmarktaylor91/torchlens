@@ -23,18 +23,23 @@ from .._capture.projections import (
     _empty_recording,
     active_recording_state,
 )
-from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, original_exception
+from .._output_slot import (
+    forward_failed as output_forward_failed,
+    returned as output_returned,
+    stopped as output_stopped,
+)
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
+from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
@@ -48,14 +53,7 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import (
-    CaptureSpec,
-    Recording,
-    _mark_recording_halted,
-    forward_failed as output_forward_failed,
-    returned as output_returned,
-    stopped as output_stopped,
-)
+from .types import CaptureSpec, Recording, _mark_recording_halted
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
@@ -502,14 +500,7 @@ class Recorder:
             inference_only=inference_only,
             inference_only_implied=inference_only,
         )
-        trace._capture_config = InternalCaptureConfig(
-            capture_mode="predicate",
-            layers_to_save=[],
-            grad_layers_to_save=[],
-            random_seed=self.options.seed,
-            postprocess=False,
-            stop=trace._stop_directive,
-        )
+        _configure_predicate_capture(trace, self.options)
         self._reset_state_for_pass(sample_id=sample_id)
         if self._echo_session is not None:
             self._echo_session.reset_pass(self._next_pass_index)
@@ -573,6 +564,9 @@ class Recorder:
             partial_build_failed = False
             try:
                 partial = self._mark_recording_failed(trace, original_exception(exc))
+                object.__setattr__(
+                    partial, "_output", output_forward_failed(safe_exception_str(exc))
+                )
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":
@@ -712,7 +706,6 @@ class Recorder:
         session.captured_run_cores = self._captured_run_cores
         recording = Recording.from_capture_events(session)
         self._stamp_failed_recording(recording, exc)
-        object.__setattr__(recording, "_output", output_forward_failed(safe_exception_str(exc)))
         return recording
 
     def _stamp_failed_recording(self, recording: Recording, exc: BaseException) -> None:

@@ -31,6 +31,13 @@ PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v10.json"
 DATA_CLASSES = REPO / "torchlens" / "_data_classes"
 BINDINGS = DATA_CLASSES / "_schema_bindings.py"
 GROUPS_MODULE = DATA_CLASSES / "_trace_groups.py"
+#: Record-rebuild body modules outside ``_data_classes`` (reached through ``_doors``):
+#: their ``f(trace, ...)`` functions hold the reads the thin record methods forward to.
+BODY_MODULES = [
+    path
+    for path in (REPO / "torchlens").glob("*/_trace_*.py")
+    if path.parent.name != "_data_classes"
+]
 OUTPUT = REPO / "docs" / "maintainers" / "persisted_fields.md"
 COMMAND = "python tools/docs/persisted_fields.py"
 
@@ -103,16 +110,43 @@ def _binding_fields(call: ast.expr) -> tuple[str, str | None]:
 
 
 def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str | None]]]:
-    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings."""
+    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings.
+
+    A record table may be split into a sibling generated module and named in
+    ``STORAGE_BINDINGS`` by a ``from .<module> import <TABLE>`` binding; such a
+    name resolves to that module's top-level ``<TABLE>`` dict literal.
+    """
 
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported = {
+        alias.asname or alias.name: path.parent / f"{node.module}.py"
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
+        for alias in node.names
+    }
+
+    def _table_node(value: ast.expr) -> ast.expr:
+        if not isinstance(value, ast.Name) or value.id not in imported:
+            return value
+        source = imported[value.id]
+        for item in ast.parse(source.read_text(encoding="utf-8"), filename=str(source)).body:
+            if (
+                isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and item.target.id == value.id
+                and item.value is not None
+            ):
+                return item.value
+        raise SystemExit(f"{source}: no {value.id} table found")
+
     for node in tree.body:
         if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
             continue
         if node.target.id != "STORAGE_BINDINGS" or not isinstance(node.value, ast.Dict):
             continue
         table: dict[str, dict[str, tuple[str, str | None]]] = {}
-        for record_node, fields_node in zip(node.value.keys, node.value.values, strict=True):
+        for record_node, value_node in zip(node.value.keys, node.value.values, strict=True):
+            fields_node = _table_node(value_node)
             if record_node is None or not isinstance(fields_node, ast.Dict):
                 continue
             fields = {}
@@ -138,8 +172,8 @@ def _type_text(binding: tuple[str, str | None] | None) -> str:
     return f"{kind}: `{text}`"
 
 
-def _self_reads(function: ast.AST) -> set[str]:
-    """Return attribute names read as ``self.<name>`` or ``self._trace.<name>`` in a body."""
+def _self_reads(function: ast.AST, subject: str = "self") -> set[str]:
+    """Return attribute names read as ``<subject>.<name>`` or ``<subject>._trace.<name>``."""
 
     names: set[str] = set()
     for node in ast.walk(function):
@@ -148,16 +182,53 @@ def _self_reads(function: ast.AST) -> set[str]:
         base = node.value
         if (
             isinstance(base, ast.Name)
-            and base.id == "self"
+            and base.id == subject
             or (
                 isinstance(base, ast.Attribute)
                 and base.attr == "_trace"
                 and isinstance(base.value, ast.Name)
-                and base.value.id == "self"
+                and base.value.id == subject
             )
         ):
             names.add(node.attr)
     return names
+
+
+def _forwarded_functions(function: ast.AST) -> set[str]:
+    """Return the names of functions a thin record method forwards ``self`` to.
+
+    A record-rebuild shell reads ``return <module>.<name>(self, ...)`` (or through a
+    ``_doors`` call); the body that touches the stores is the ``<name>(trace, ...)``
+    function, so its reads count as the method's.
+    """
+
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "self"
+        ):
+            names.add(node.func.attr)
+    return names
+
+
+def _body_function_reads(modules: list[Path]) -> dict[str, set[str]]:
+    """Map every module-level ``f(trace, ...)`` function to the ``trace.<name>`` attributes it reads."""
+
+    reads: dict[str, set[str]] = defaultdict(set)
+    for module in modules:
+        tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+        for item in tree.body:
+            if (
+                isinstance(item, ast.FunctionDef)
+                and item.args.args
+                and item.args.args[0].arg == "trace"
+            ):
+                reads[item.name] |= _self_reads(item, "trace")
+    return reads
 
 
 def _is_property(function: ast.FunctionDef) -> bool:
@@ -175,9 +246,10 @@ def read_accessors(root: Path = DATA_CLASSES) -> tuple[dict[str, set[str]], dict
     """Scan the record-class modules for public property getters and the stores they reach.
 
     Every function in the package contributes the ``self.<name>`` and
-    ``self._trace.<name>`` attributes it touches; a public property getter reaches a
-    private store directly or through private members, followed up to
-    ``ACCESSOR_DEPTH`` hops by attribute name. Returns ``(reads, members)``: ``reads``
+    ``self._trace.<name>`` attributes it touches, plus the ``trace.<name>`` reads of
+    any ``f(trace, ...)`` body function a thin method forwards ``self`` to; a public
+    property getter reaches a private store directly or through private members,
+    followed up to ``ACCESSOR_DEPTH`` hops by attribute name. Returns ``(reads, members)``: ``reads``
     maps a private attribute name to the ``Class.property`` spellings that reach it;
     ``members`` maps a class name to its public property names.
     """
@@ -185,7 +257,9 @@ def read_accessors(root: Path = DATA_CLASSES) -> tuple[dict[str, set[str]], dict
     touched: dict[str, set[str]] = defaultdict(set)
     getters: list[tuple[str, str, set[str]]] = []
     members: dict[str, set[str]] = defaultdict(set)
-    for module in sorted(root.glob("*.py")):
+    record_modules = sorted(root.glob("*.py"))
+    body_reads = _body_function_reads(record_modules + sorted(BODY_MODULES))
+    for module in record_modules:
         tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
         for class_node in tree.body:
             if not isinstance(class_node, ast.ClassDef):
@@ -194,6 +268,8 @@ def read_accessors(root: Path = DATA_CLASSES) -> tuple[dict[str, set[str]], dict
                 if not isinstance(item, ast.FunctionDef):
                     continue
                 names = _self_reads(item)
+                for forwarded in _forwarded_functions(item):
+                    names |= body_reads.get(forwarded, set())
                 touched[item.name] |= names
                 if item.name.startswith("_") or not _is_property(item):
                     continue

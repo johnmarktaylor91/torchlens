@@ -13,6 +13,7 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
 from .._input_coerce import _coerce_input_args
+from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
@@ -26,7 +27,7 @@ from ._generation import GenerationRecording, enrich_generation, record_generati
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
-from .types import Recording, returned as output_returned
+from .types import Recording
 
 _RECORDING_DOOR_FIELDS: tuple[str, ...] = (
     "default_op",
@@ -198,6 +199,8 @@ def record(
         ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
         Recording to it as ``partial_recording``, ``"return_partial"`` returns it,
         and its ``output`` refuses with ``output_forward_failed``.
+        With ``return_output=True``, the returned output is ``None`` because no
+        valid model output exists on failure.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     stop_after:

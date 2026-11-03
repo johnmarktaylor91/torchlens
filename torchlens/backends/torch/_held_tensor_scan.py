@@ -16,6 +16,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._held_plain_holders import iter_plain_holder_tensors
+
 _HELD_SCAN_MAX_DEPTH = 4
 """Container levels below a module attribute that the held-tensor scan descends.
 
@@ -178,6 +180,25 @@ class _HeldScan:
                 stack.append(_held_items(item))
         return found
 
+    def walk_items(
+        self, items: list[Any] | tuple[Any, ...], attr_name: str
+    ) -> Iterator[tuple[str, torch.Tensor]]:
+        """Yield the plain tensors among a list/tuple attribute's items, walking below them.
+
+        Top-level items keep the original unbounded ``name.<index>`` scan; only
+        containers below them enter the bounded walk.
+        """
+
+        self.entered.add(id(items))
+        for index, item in enumerate(items):
+            name = self.reserve(f"{attr_name}.{index}")
+            if isinstance(item, torch.Tensor):
+                if not isinstance(item, nn.Parameter):
+                    self.stamp(item)
+                    yield name, item
+            elif _is_enterable(item) and id(item) not in self.entered:
+                yield from self.walk(item, name, 2)
+
     def walk(self, container: Any, path: str, depth: int) -> Iterator[tuple[str, torch.Tensor]]:
         """Yield plain tensors under ``container`` (named ``path``, items at ``depth``).
 
@@ -301,15 +322,9 @@ def iter_module_held_plain_tensors(
         elif isinstance(attr_val, dict) and attr_val:
             yield from scan.walk(attr_val, attr_name, 1)
         elif isinstance(attr_val, (list, tuple)):
-            # Top-level items keep the original unbounded ``name.<index>`` scan; only
-            # containers below them enter the bounded walk.
-            scan.entered.add(id(attr_val))
-            for index, item in enumerate(attr_val):
-                name = scan.reserve(f"{attr_name}.{index}")
-                if isinstance(item, torch.Tensor):
-                    if not isinstance(item, nn.Parameter):
-                        scan.stamp(item)
-                        yield name, item
-                elif _is_enterable(item) and id(item) not in scan.entered:
-                    yield from scan.walk(item, name, 2)
+            yield from scan.walk_items(attr_val, attr_name)
+        else:
+            # A plain object's direct public tensor attributes (a distributions
+            # prior, a diffusers scheduler); never containers inside it.
+            yield from iter_plain_holder_tensors(scan, attr_name, attr_val)
     scan.finish()

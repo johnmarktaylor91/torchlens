@@ -127,6 +127,7 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "_options_structure_only": "keep",
         "_options_verbose": "keep",
         "_orphan_records": "blob_recursive",
+        "_output_slot": "drop",
         "_param_logs": "keep",
         "_parent_run": "drop",
         "_provenance_backend": "keep",

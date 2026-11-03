@@ -1,7 +1,8 @@
 """Removed public methods and attributes raise a typed redirect naming the replacement.
 
 The 2026-10-01 shim removal deleted the alias members outright (remove-and-
-rename, no alias), and lane F12 deleted ``VisualizationTheme.legend_items``.
+rename, no alias), lane F12 deleted ``VisualizationTheme.legend_items``, and the
+1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names.
 A lookup of any of them must raise ``FacadeTeachingError`` (code
 ``facade_redirect``, ``AttributeError`` lineage) whose message names the
 replacement, never a bare ``AttributeError``. Every other missing name keeps
@@ -95,6 +96,11 @@ REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
     ("torchlens.observers", "record_span", "torchlens.observers.span"),
     ("torchlens.intervention", "intervening", "torchlens.without_op"),
     ("torchlens.intervention", "replay_from", "Trace.do"),
+    ("torchlens.experiment", "ledger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "ExperimentLedger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "LedgerEntry", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "active_ledger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "read_ledger", "torchlens.experiment.sweep_sites"),
 ]
 
 
@@ -139,6 +145,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/validation/__init__.py", None),
     ("torchlens/io/__init__.py", None),
     ("torchlens/observers.py", None),
+    ("torchlens/experiment/__init__.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
     ("torchlens/_visualization/themes.py", "VisualizationTheme"),
 ]

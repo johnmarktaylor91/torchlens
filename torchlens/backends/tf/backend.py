@@ -6,6 +6,7 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
@@ -14,6 +15,7 @@ from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
 from ..._ir.capture_events import CaptureEvents
+from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
@@ -387,25 +389,11 @@ class TFBackend:
                     "conditions) require object-module attribution; this capture "
                     "entry discovered no Keras/tf.Module tree."
                 )
-            active_plan = intervention_plan
-
-            def _module_exit_hook(
-                frame: Any, module_type: str, output: Any, module_stack: Any
-            ) -> Any:
-                """Substitute matched module-boundary intervention outputs."""
-
-                return apply_tf_module_intervention(
-                    active_plan,
-                    session,
-                    tf,
-                    trace,
-                    frame,
-                    module_type,
-                    output,
-                    module_stack,
-                )
-
-            session.module_exit_hook = _module_exit_hook
+            # The session calls the hook as (frame, module_type, output,
+            # module_stack): the substitution's own trailing parameters.
+            session.module_exit_hook = partial(
+                apply_tf_module_intervention, intervention_plan, session, tf, trace
+            )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
@@ -427,7 +415,6 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-        from ...recording.types import returned
 
         trace._output_slot = returned(result.output)
         trace.transformed_output = (

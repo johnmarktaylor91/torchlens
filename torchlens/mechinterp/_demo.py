@@ -13,17 +13,18 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import torch
+
+import torchlens as tl
+import torchlens.mechinterp as mi
+
 
 def tlens_agreement_demo() -> dict[str, Any]:
     """Decomposition + DLA agreeing with TransformerLens on real gpt2."""
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    import torchlens as tl
-    import torchlens.mechinterp as mi
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -63,11 +64,23 @@ def tlens_agreement_demo() -> dict[str, Any]:
         "induction_top": scores.topk(3),
     }
 
+    exact = _tlens_parity_rows(prompt)
+    if exact is not None:
+        results["same_object_exact_rows"] = exact
+    return results
+
+
+def _tlens_parity_rows(prompt: str) -> int | None:
+    """Count decomposed gpt2 rows equal to TransformerLens's own residual cache.
+
+    Returns ``None`` (after saying so) when transformer-lens is not installed.
+    """
+
     try:
         from transformer_lens import HookedTransformer
     except ImportError:
         print("(transformer-lens not installed; parity section skipped)")
-        return results
+        return None
 
     tlens = HookedTransformer.from_pretrained_no_processing("gpt2")
     tlens.eval()
@@ -81,8 +94,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     )
     assert exact == len(dec2) == 26  # noqa: S101 -- the demo IS its own gate
     print(f"same-object parity: {exact}/26 decomposed rows torch.equal to TLens's own cache")
-    results["same_object_exact_rows"] = exact
-    return results
+    return exact
 
 
 if __name__ == "__main__":

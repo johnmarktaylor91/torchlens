@@ -46,6 +46,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _is_torch_storage_instance,
     _is_torch_storage_type,
+    _PurePythonBundleUnpickler,
 )
 from torchlens.options import CaptureOptions
 
@@ -131,7 +132,7 @@ def test_canonical_storage_ctors_denied_at_find_class() -> None:
 def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
     """``load_reduce`` refuses constructing a storage placed directly on the stack."""
 
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError, match="via REDUCE"):
         u.load_reduce()
@@ -140,7 +141,7 @@ def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
 def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
     """``load_newobj`` / ``load_newobj_ex`` refuse ``storage.__new__`` on the stack."""
 
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ"):
         u.load_newobj()
@@ -157,7 +158,7 @@ def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
 def test_build_belt_denies_tensor_rebind_white_box() -> None:
     """``load_build`` refuses a BUILD whose target is a torch Tensor / Storage."""
 
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     # BUILD stack layout: inst = stack[-2], state = stack[-1].
     u.stack = [torch.zeros(2), {"malicious": "state"}]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
@@ -212,7 +213,7 @@ def test_build_rebind_denied_end_to_end_no_setstate() -> None:
 
 
 def test_dispatch_table_repointed_to_subclass_overrides() -> None:
-    """The subclass ``dispatch`` targets its OWN opcode handlers, not the base ones."""
+    """The interpreter's ``dispatch`` targets its OWN opcode handlers, not the base ones."""
 
     for opcode, method_name in (
         (pickle.BUILD[0], "load_build"),
@@ -220,17 +221,19 @@ def test_dispatch_table_repointed_to_subclass_overrides() -> None:
         (pickle.NEWOBJ[0], "load_newobj"),
         (pickle.NEWOBJ_EX[0], "load_newobj_ex"),
     ):
-        subclass_handler = SafeBundleUnpickler.dispatch[opcode]
-        assert subclass_handler is getattr(SafeBundleUnpickler, method_name)
+        subclass_handler = _PurePythonBundleUnpickler.dispatch[opcode]
+        assert subclass_handler is getattr(_PurePythonBundleUnpickler, method_name)
         assert subclass_handler is not pickle._Unpickler.dispatch[opcode], (
             f"dispatch[{opcode!r}] still points at the inert base handler"
         )
 
 
 def test_base_swap_is_pure_python_unpickler() -> None:
-    """The base class is the pure-Python VM (a C base makes Layer-2 inert)."""
+    """The fast path runs the C machine behind a pre-scan; the interpreter is pure Python."""
 
-    assert issubclass(SafeBundleUnpickler, pickle._Unpickler)
+    assert issubclass(SafeBundleUnpickler, pickle.Unpickler)
+    assert not issubclass(SafeBundleUnpickler, pickle._Unpickler)
+    assert issubclass(_PurePythonBundleUnpickler, pickle._Unpickler)
 
 
 # --------------------------------------------------------------------------- #

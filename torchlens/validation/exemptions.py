@@ -30,7 +30,6 @@ casting, special-value args like all-zeros making perturbation irrelevant).
 # unintended value-sensitive case.
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from numbers import Number
 from typing import TYPE_CHECKING, Any
 
@@ -41,8 +40,16 @@ from ._destination_coverage import (
     _get_scatter_destination_dim_index,
     _index_positions_cover_destination_exactly,
     _index_put_destination_is_fully_overwritten,
+    _replacement_fits_selection,
     _scatter_index_fully_overwrites_dim,
     _setitem_index_targets_are_unique,
+)
+from ._exemption_table import (
+    declared_custom_check_symbols,
+    declared_structural_kwarg_aliases,
+    declared_structural_positions,
+    skip_perturbation_justifications,
+    skip_validation_justifications,
 )
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
@@ -57,8 +64,15 @@ from ._norm_zero_weight_proof import (
     norm_input_annihilated_by_zero_weight,
 )
 from ._operand_value_proofs import operand_value_proof_decision
+from ._posthoc_decision import PosthocPerturbDecision
 from ._replay_warnings import replay_warnings_ignored
+from ._saved_value_proofs import saved_value_proof_decision
 from ._sdpa_value_proofs import sdpa_value_proof_decision
+from ._structural_slot_checks import (  # noqa: F401  (the table resolves these through globals())
+    check_expand_pinned_size_exempt,
+    check_packed_rnn_batch_sizes_exempt,
+    setitem_bool_mask_at_index_slot,
+)
 from ._value_predicates import (
     _extrema_operand_dominates,
     _is_all_inf_value,
@@ -78,27 +92,7 @@ if TYPE_CHECKING:
 # These funcs produce nondeterministic output (e.g. uninitialized memory),
 # so even forward replay would fail.
 # ---------------------------------------------------------------------------
-SKIP_VALIDATION_ENTIRELY: dict[str, str] = {
-    "empty_like": "returns uninitialized memory by construction; saved bytes are not replayable",
-    # Membership for "new" is NECESSARY but not SUFFICIENT: Tensor.new is
-    # overloaded, and only the argless / integer-sizes / torch.Size forms
-    # return uninitialized memory. uninitialized_by_design_applies() proves
-    # the size-only form per call; the value-bearing new(tensor)/new(data)
-    # overloads fall through to real replay (b1-sol R08-1).
-    "new": (
-        "torch.Tensor.new() returns uninitialized memory by construction for the "
-        "argless/size-only overloads ONLY, proved per call by "
-        "uninitialized_by_design_applies"
-    ),
-    "new_empty": "torch.Tensor.new_empty() returns uninitialized memory by construction",
-    "new_empty_strided": (
-        "torch.Tensor.new_empty_strided() returns uninitialized memory by construction"
-    ),
-    "newempty": "canonical torch.Tensor.new_empty() spelling returns uninitialized memory",
-    "newemptystrided": (
-        "canonical torch.Tensor.new_empty_strided() spelling returns uninitialized memory"
-    ),
-}
+SKIP_VALIDATION_ENTIRELY: dict[str, str] = skip_validation_justifications()
 
 # ---------------------------------------------------------------------------
 # Registry 2: Skip perturbation only (forward replay still runs).
@@ -114,141 +108,23 @@ SKIP_VALIDATION_ENTIRELY: dict[str, str] = {
 # ``STRUCTURAL_ARG_POSITIONS`` so their genuine value edges stay
 # perturbation-tested.
 # ---------------------------------------------------------------------------
-SKIP_PERTURBATION_ENTIRELY: dict[str, str] = {
-    "new_zeros": "output is all zeros by construction; no parent value reaches it",
-    "new_ones": "output is all ones by construction; no parent value reaches it",
-    "zero_": "in-place zero fill; the destination's prior values are discarded",
-    "zeros_like": "shape/dtype/device template only; the output value is constant zero",
-    "ones_like": "shape/dtype/device template only; the output value is constant one",
-    "rand_like": "values are RNG-drawn; the parent supplies shape/dtype/device only",
-    "randn_like": "values are RNG-drawn; the parent supplies shape/dtype/device only",
-    # meshgrid/broadcast_tensors moved to CUSTOM_EXEMPTION_CHECKS
-    # (_check_zipped_sibling_exempt): per-output parent projection landed
-    # (R08-2), so only genuine CROSS-member perturbations are exempt and each
-    # output's OWN value edge is perturbation-tested again.
-    # The six torchvision PyCapsule ops moved to ``STRUCTURAL_ARG_POSITIONS``
-    # keyed on their coordinate/offset arg only (b1p2 D2 adjudication, all
-    # three labs converged): the whole-op skip was wider than its segfault
-    # justification, so feature/score value edges return under perturbation
-    # with zero segfault exposure.
-    "exponential_": "in-place RNG draw; the output is determined by RNG state, not inputs",
-}
+SKIP_PERTURBATION_ENTIRELY: dict[str, str] = skip_perturbation_justifications()
 
 # ---------------------------------------------------------------------------
 # Registry 3: Specific arg positions that are structural (not value-sensitive).
 # When the perturbed layer's tensor matches saved_args[pos], skip perturbation.
 # ---------------------------------------------------------------------------
-STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = {
-    # Value-bearing Tensor.new(tensor)/new(data): the SELF tensor (arg 0)
-    # supplies dtype/device only -- its values never reach the output -- while
-    # the data source (arg 1) stays strictly perturbation-tested. The
-    # size-only overloads never get here (uninitialized_by_design_applies
-    # exempts them before replay). R08-1 narrowing companion.
-    "new": {0},
-    "copy_": {0},  # destination values are overwritten; source values determine output
-    # Zipped foreach spelling of ``copy_`` (r29 F5): each destination member is
-    # TOTALLY overwritten by its zipped source member, so the destination list
-    # (arg 0, matched per zipped slot ``(0, j)``) is value-irrelevant by
-    # construction; source members (arg 1) stay strictly tested.
-    "_foreach_copy_": {0},
-    "foreachcopy": {0},  # canonicalized spelling
-    "fill_": {0},  # destination values are overwritten; the fill VALUE (arg 1) stays tested
-    # ``Tensor.set_(source)`` rebinds the receiver to the source's storage (or to
-    # an empty one, or to a storage view for the storage overload), so the
-    # receiver's prior values never reach the output; a SOURCE tensor at arg 1
-    # carries every output value and stays perturbation-tested.
-    "set_": {0},
-    "expand_as": {1},  # shape template only; arg 0 values flow into the output
-    "expandas": {1},  # canonicalized spelling
-    # ``Tensor.reshape_as(other)`` is ``self.reshape(other.sizes())`` and
-    # ``Tensor.view_as(other)`` is ``self.view(other.size())``: arg 1 is read
-    # for its SHAPE only, never its elements. Arg 0 supplies every output
-    # value and stays perturbation-tested.
-    "reshape_as": {1},
-    "reshapeas": {1},  # canonicalized spelling
-    "view_as": {1},
-    "viewas": {1},  # canonicalized spelling
-    # ``Tensor.resize_as_(the_template)`` is ``self.resize_(the_template.size())``:
-    # arg 1 is read for its SHAPE only, never its elements (the same contract as
-    # ``view_as``/``reshape_as``). Arg 0, the receiver, keeps the element prefix
-    # it carries into the output and stays perturbation-tested.
-    "resize_as_": {1},
-    # F2 tightening: the legacy OOB-justified index/target/mask blankets
-    # (``cross_entropy`` target, ``embedding`` indices, ``gather``/
-    # ``index_select``/``scatter*`` index tensors, ``masked_fill`` masks) were
-    # REMOVED from this registry. Those args are genuine VALUE dependencies --
-    # the index/mask values select which data flows to the output -- so a
-    # blanket skip could excuse a genuinely-missed dependency. They are now
-    # perturbed IN-DOMAIN (``index_domain_rotation_values`` rotates valid
-    # indices; boolean masks flip), with narrow exemptions only for provably
-    # degenerate domains (``_check_index_domain_degenerate``) and provable
-    # value-irrelevance (``_index_domain_value_irrelevance_decision``).
-    "_pack_padded_sequence": {1},  # lengths tensor
-    "_pad_packed_sequence": {1},  # lengths tensor
-    "type_as": {1},  # type template tensor (value irrelevant)
-    "new_tensor": {0},  # source tensor is a dtype/device/layout factory
-    "newtensor": {0},  # canonicalized torch.Tensor.new_tensor spelling
-    # Tensor.new_full/new_zeros/new_ones self args are pure dtype/device/layout
-    # factory templates: the output is determined entirely by size/fill args,
-    # never by the self tensor's VALUES (e.g. PyG SAGPooling's
-    # ``num_nodes.new_full((n,), -1)``). Same class as new_tensor arg 0.
-    "new_full": {0},
-    "newfull": {0},
-    "new_zeros": {0},
-    "newzeros": {0},
-    "new_ones": {0},
-    "newones": {0},
-    # torchvision C++ ops (PyCapsule): NARROWED from whole-op perturbation
-    # skips (b1p2 D2 adjudication). Only the coordinate/offset arg is skipped
-    # -- perturbed box coordinates / sampling offsets can index out of bounds
-    # inside the native kernel and segfault past Python exception handling --
-    # while feature and score args are genuine value edges that stay
-    # perturbation-tested. This is a SAFETY skip, not a value-irrelevance
-    # proof; the value edge through the coordinates stays guarded by replay.
-    "nms": {0},  # boxes; scores (arg 1) stay tested
-    "deform_conv2d": {1},  # sampling offsets; input/weight/bias/mask stay tested
-    "roi_align": {1},  # boxes; the feature map (arg 0) stays tested
-    "roi_pool": {1},  # boxes
-    "ps_roi_align": {1},  # boxes
-    "ps_roi_pool": {1},  # boxes
-}
+STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = declared_structural_positions()
 
 
-STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = {
-    "_pack_padded_sequence": {1: {"lengths"}},
-    "_pad_packed_sequence": {1: {"lengths"}},
-    "type_as": {1: {"tensor", "other"}},
-    "reshape_as": {1: {"other"}},
-    "reshapeas": {1: {"other"}},
-    "view_as": {1: {"other"}},
-    "viewas": {1: {"other"}},
-    "resize_as_": {1: {"the_template"}},
-    "nms": {0: {"boxes"}},
-    "deform_conv2d": {1: {"offset"}},
-    "roi_align": {1: {"boxes", "rois"}},
-    "roi_pool": {1: {"boxes", "rois"}},
-    "ps_roi_align": {1: {"boxes", "rois"}},
-    "ps_roi_pool": {1: {"boxes", "rois"}},
-}
+STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = declared_structural_kwarg_aliases()
 
 
-@dataclass(frozen=True)
-class PosthocPerturbDecision:
-    """Structured decision returned by posthoc perturbation predicates.
-
-    Attributes
-    ----------
-    exempt:
-        Whether the unchanged perturbation output is justified.
-    reason:
-        Stable reason code for diagnostics and golden snapshots.
-    justification:
-        Optional human-readable proof for design exemptions.
-    """
-
-    exempt: bool
-    reason: str
-    justification: str | None = None
+_VALUE_PROOFS = (
+    operand_value_proof_decision,
+    sdpa_value_proof_decision,
+    saved_value_proof_decision,
+)  # dispatch order: the operand and sdpa proofs decide first
 
 
 def _check_index_domain_degenerate(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -527,9 +403,10 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
     ):
         return True
 
+    # Case 2b: a bool mask at any slot of the index tuple (``x[:, mask] = v``).
     # Case 3: perturbed layer is the destination, but the indexed destination
     # slice is fully overwritten by the replacement value.
-    return bool(
+    return setitem_bool_mask_at_index_slot(layer, layers_to_perturb) or bool(
         _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
         and _setitem_destination_slice_is_fully_overwritten(perturbed_tensor, args)
     )
@@ -567,6 +444,7 @@ def _setitem_destination_slice_is_fully_overwritten(
 def _setitem_destination_coverage_is_total(
     perturbed_tensor: torch.Tensor | None,
     args: tuple[Any, ...],
+    broadcast_replacement: bool = False,
 ) -> bool:
     """Return whether a ``__setitem__`` write provably covers its whole destination.
 
@@ -582,13 +460,17 @@ def _setitem_destination_coverage_is_total(
         Tensor selected for perturbation.
     args:
         Saved ``__setitem__`` positional arguments.
+    broadcast_replacement:
+        Accept a tensor replacement that broadcasts onto the selected shape (the
+        posthoc decision); the pre-execution gate keeps the exact-shape match.
 
     Returns
     -------
     bool
         True when the perturbed tensor is the destination, ``destination[index]``
         selects every destination element exactly once, and a tensor replacement
-        (when present) exactly matches the selected shape.
+        (when present) matches the selected shape (or broadcasts onto it when
+        ``broadcast_replacement``).
     """
 
     if len(args) < 3:
@@ -612,9 +494,7 @@ def _setitem_destination_coverage_is_total(
         return False
     if not _index_positions_cover_destination_exactly(destination, index):
         return False
-    if isinstance(replacement, torch.Tensor):
-        return tuple(selected.shape) == tuple(replacement.shape)
-    return True
+    return _replacement_fits_selection(replacement, selected, broadcast_replacement)
 
 
 def _check_index_put_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -1197,35 +1077,7 @@ def _check_zipped_sibling_exempt(
 
 
 CUSTOM_EXEMPTION_CHECKS: dict[str, Callable[["Trace", Op, list[str]], bool]] = {
-    # R08-2 per-output parent projection: only CROSS-member zipped-sibling
-    # perturbations are exempt; each output's own value edge stays tested.
-    # Both spellings of broadcast_tensors are registered -- capture
-    # canonicalizes to "broadcasttensors", which the old whole-op skip never
-    # matched (a silently dead registry row).
-    "meshgrid": _check_zipped_sibling_exempt,
-    "broadcast_tensors": _check_zipped_sibling_exempt,
-    "broadcasttensors": _check_zipped_sibling_exempt,
-    "__getitem__": _check_getitem_exempt,
-    "__setitem__": _check_setitem_exempt,
-    "index_put": _check_index_put_exempt,
-    "index_put_": _check_index_put_exempt,
-    "lstm": _check_lstm_exempt,
-    "interpolate": _check_interpolate_exempt,
-    "scatter": _check_scatter_or_index_domain_exempt,
-    "scatter_": _check_scatter_or_index_domain_exempt,
-    "scatter_add": _check_index_domain_degenerate,
-    "scatter_add_": _check_index_domain_degenerate,
-    "scatteradd": _check_index_domain_degenerate,
-    "embedding": _check_index_domain_degenerate,
-    "gather": _check_index_domain_degenerate,
-    "index_select": _check_index_domain_degenerate,
-    "cross_entropy": _check_index_domain_degenerate,
-    "where": _check_where_exempt,
-    "maskedfill": _check_masked_fill_exempt,
-    "masked_fill": _check_masked_fill_exempt,
-    "masked_fill_": _check_masked_fill_exempt,
-    "batch_norm": _check_norm_running_stat_exempt,
-    "instance_norm": _check_norm_running_stat_exempt,
+    spelling: globals()[symbol] for spelling, symbol in declared_custom_check_symbols().items()
 }
 
 
@@ -2089,7 +1941,7 @@ def _posthoc_overwrite_decision(
         and _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
         and len(args) > 2
         and isinstance(args[0], torch.Tensor)
-        and _setitem_destination_coverage_is_total(args[0], args)
+        and _setitem_destination_coverage_is_total(args[0], args, broadcast_replacement=True)
     ):
         reason = (
             "full_destination_overwrite"
@@ -2165,7 +2017,7 @@ def _posthoc_value_proof_decision(
             "non-zero weight, so (input - running_mean) is zero and running_var cannot reach "
             "the output",
         )
-    for value_proof in (operand_value_proof_decision, sdpa_value_proof_decision):
+    for value_proof in _VALUE_PROOFS:
         decision = value_proof(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision

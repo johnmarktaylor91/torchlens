@@ -227,7 +227,7 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "parse_sparse_run_descriptor",
         "attach_sparse_run_readiness",
     ),
-    "torchlens._fast_run": ("run_fast_loaded_trace", "run_fast_live_trace"),
+    "torchlens.intervention._trace_run": ("run_fast_loaded_trace", "run_fast_live_trace"),
 }
 
 # Trace.run keyword-conflict matrix, bound as the CODE LIST (S1 contract:
@@ -301,9 +301,7 @@ def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
     from pathlib import Path
 
     package_root = Path(__file__).resolve().parent.parent / "torchlens"
-    door_source = (package_root / "_data_classes" / "_trace_validation.py").read_text(
-        encoding="utf-8"
-    )
+    door_source = (package_root / "intervention" / "_trace_run.py").read_text(encoding="utf-8")
     enum_values = {member.value for member in RunnableErrorCode}
     for code in sorted(RUN_DOOR_CONFLICT_CODES):
         if f'"{code}"' in door_source:

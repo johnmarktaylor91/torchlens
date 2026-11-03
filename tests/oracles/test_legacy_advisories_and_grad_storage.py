@@ -30,9 +30,15 @@ from torchlens.errors import ScalarEscapeWarning
 from torchlens.options import CaptureOptions
 
 #: A C function no wrapper patches (stand-in for a pybind extension call): its
-#: output carries no provenance. (A closure or forward-global tensor is a recorded
-#: ``constant`` source, so it plants no advisory.)
-_opaque_tanh = torch._C._VariableFunctions.tanh
+#: output carries no provenance. The pristine binding is held inside a tuple: the
+#: wrap-time sweep repoints module-global aliases of wrapped torch callables, and a
+#: module-global ``tanh`` alias would be captured like ``torch.tanh``. (A closure or
+#: forward-global tensor is a recorded ``constant`` source, so it plants no advisory.)
+_PRISTINE_TANH = (torch._C._VariableFunctions.tanh,)
+
+
+def _opaque_tanh(x: torch.Tensor) -> torch.Tensor:
+    return _PRISTINE_TANH[0](x)
 
 
 class Advise(nn.Module):

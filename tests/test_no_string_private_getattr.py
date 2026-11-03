@@ -177,8 +177,8 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # preview packets' reads of scratch fields the capture start declares
     # (`_<backend>_module_stack`, `_capture_depth`, `_op_captures`, the mlx
     # constants censuses and intervention plan) became direct reads; the tf
-    # loaded-flag reads use the try/except seam `_trace_validation.py` already
-    # uses for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
+    # loaded-flag reads use the try/except seam the `Trace` validation methods already
+    # use for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
     # loaded-trace guards keep their defaulted reads (absence is meaningful).
     "backends/jax": 5,
     "backends/mlx": 19,
@@ -267,7 +267,12 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 25 -> 24 (2026-11-01 batch D, grad-p5 streaming split): op.py's two
     # `_defer_streaming_bundle_finalization` reads moved into
     # _op_grad_stream.py as one read (the other reach-ins moved unchanged).
-    "_data_classes": 24,
+    # 24 -> 22 (2026-11-01 record rebuild lane D): the validation, run and
+    # backward bodies left _trace_validation.py for their destination
+    # modules; the two trace-based reads that travelled (`_runnable`,
+    # `_loaded_from_bundle`) became direct private reads guarded by
+    # try/except AttributeError, so no destination package rises.
+    "_data_classes": 22,
     "experimental": 1,
     "recording": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning

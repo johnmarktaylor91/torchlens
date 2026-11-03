@@ -6,7 +6,6 @@ __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
 import dataclasses
-import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,9 +14,25 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, cast
 import torch
 
 from .._captured_run import TraceLike
-from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
-from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
-from .._utils.tensor_utils import SaveMode
+from .._errors import CaptureNotActiveError
+from .._output_slot import read_output, returned as returned, stopped as stopped
+from . import _types_records
+from ._types_ancestry import _backfill_cooked_ancestry
+
+ActivationRecord = _types_records.ActivationRecord
+CaptureDecision = _types_records.CaptureDecision
+CaptureSpec = _types_records.CaptureSpec
+EventKind = _types_records.EventKind
+GradRecord = _types_records.GradRecord
+GradRecordContext = _types_records.GradRecordContext
+ModuleStackFrame = _types_records.ModuleStackFrame
+PredicateDecision = _types_records.PredicateDecision
+PredicateFailure = _types_records.PredicateFailure
+RecordContext = _types_records.RecordContext
+RetroactiveCaptureDecision = _types_records.RetroactiveCaptureDecision
+SaveMode = _types_records.SaveMode
+StorageIntent = _types_records.StorageIntent
+_distinct_label_index_keys = _types_records._distinct_label_index_keys
 
 __all__ = [
     "ActivationRecord",
@@ -47,292 +62,6 @@ if TYPE_CHECKING:
         PredicateFn,
         _RecordingConfig,
     )
-
-
-def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
-    """Return the distinct label keys (primary, then raw alias) that index one record."""
-    if raw_label is None or raw_label == label:
-        return (label,)
-    return (label, raw_label)
-
-
-def _backfill_cooked_ancestry(events: Any) -> None:
-    """Derive the per-op ancestry closures the sparse recorder never tracked.
-
-    Predicate-mode capture appends journal records without ancestry facts
-    (the live exhaustive path computes them incrementally per op at capture
-    time). A cooked Trace materializes its Op rows straight from these
-    records, so without a backfill every cooked row carries empty
-    ``root_ancestors`` / ``internal_source_ancestors`` and the
-    ``ancestry_closure`` metadata invariant correctly fails on the first
-    input layer. Recompute the exact closure the invariant checks, in journal
-    order (parents precede children within one sealed pass), over the AMENDED
-    view (graph-edge-insertion amendments contribute parents):
-
-    * ``input_ancestors``           = own label for input rows, else parent union;
-    * ``internal_source_ancestors`` = ``{self}`` for parentless non-input rows
-      (matching the live source-minting convention), else parent union;
-    * ``root_ancestors``            = ``input_ancestors | internal_source_ancestors``.
-
-    Mutates ``events`` in place: this runs only on the ``_copy_for_replay``
-    projection a cook owns (the sanctioned mutation surface -- postprocess
-    graph traversal replaces events on the same projection), never on the
-    sealed Recording stream. The fold cache keys on lane lengths, so it is
-    explicitly invalidated after the in-place replacement.
-
-    Parameters
-    ----------
-    events
-        Replay-projection ``CaptureEvents`` whose op lane should be
-        ancestry-backfilled before Trace postprocessing.
-    """
-    from dataclasses import replace as _dc_replace
-
-    from .._ir.op_record import AncestryFacet, OpRecord
-
-    folded = events.amended_op_records()
-    closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
-    by_raw_label = events.live_index.by_raw_label
-    mutated = False
-    for index, record in enumerate(folded):
-        # Journal op records (OpRecord / compat events) carry layer_type; never an Op.
-        layer_type = getattr(record, "layer_type", None)
-        if layer_type in (None, "module_enter", "module_exit"):
-            continue
-        label_raw = record.label_raw
-        parent_labels = [edge.parent_label_raw for edge in record.parents]
-        if layer_type == "input":
-            input_ancestors = frozenset((label_raw,))
-            internal_source_ancestors: frozenset[str] = frozenset()
-        elif not parent_labels:
-            input_ancestors = frozenset()
-            internal_source_ancestors = frozenset((label_raw,))
-        else:
-            input_ancestors = frozenset().union(
-                *(closures[parent][0] for parent in parent_labels if parent in closures)
-            )
-            internal_source_ancestors = frozenset().union(
-                *(closures[parent][1] for parent in parent_labels if parent in closures)
-            )
-        closures[label_raw] = (input_ancestors, internal_source_ancestors)
-        ancestry = AncestryFacet(
-            input_ancestors=input_ancestors,
-            internal_source_ancestors=internal_source_ancestors,
-            root_ancestors=input_ancestors | internal_source_ancestors,
-            has_internal_source_ancestor=bool(internal_source_ancestors),
-        )
-        raw_record = events.op_events[index]
-        if isinstance(raw_record, OpRecord):
-            updated = _dc_replace(raw_record, ancestry=ancestry)
-        else:
-            updated = _dc_replace(
-                raw_record,
-                input_ancestors=input_ancestors,
-                internal_source_ancestors=internal_source_ancestors,
-                root_ancestors=ancestry.root_ancestors,
-                has_internal_source_ancestor=ancestry.has_internal_source_ancestor,
-            )
-        events.op_events[index] = updated
-        mutated = True
-        if by_raw_label.get(label_raw) is raw_record:
-            by_raw_label[label_raw] = updated
-    if mutated:
-        events._amended_fold_cache = None
-
-
-@dataclass(frozen=True, slots=True)
-class CaptureSpec:
-    """Capture policy returned by predicate callbacks.
-
-    Parameters
-    ----------
-    save_out:
-        Whether tensor payloads should be retained for this event.
-    save_metadata:
-        Whether non-payload metadata should be retained for this event.
-    save_grad:
-        Whether the in-RAM tensor clone should stay attached to autograd.
-    device:
-        Optional target device for retained payloads.
-    dtype:
-        Optional target dtype for retained payloads.
-    save_mode:
-        Tensor retention mode for saved payloads.
-    """
-
-    save_out: bool = True
-    save_metadata: bool = True
-    save_grad: bool = False
-    device: torch.device | str | None = None
-    dtype: torch.dtype | None = None
-    save_mode: SaveMode = "copy"
-
-    def __post_init__(self) -> None:
-        """Normalize and validate capture save-mode settings."""
-
-        from .._utils.tensor_utils import SAVE_MODES
-
-        if self.save_mode not in SAVE_MODES:
-            raise InvalidArgumentError(
-                "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'; "
-                f"received {self.save_mode!r}",
-                code="save_mode_invalid",
-                remedy="set save_mode to 'copy', 'reference', 'view', or 'cpu_async'",
-                argument="save_mode",
-            )
-        if self.save_mode == "view" and not self.save_grad:
-            object.__setattr__(self, "save_grad", True)
-
-
-CaptureDecision = bool | CaptureSpec | None
-PredicateDecision = CaptureDecision | RetroactiveCaptureDecision
-
-
-@dataclass(frozen=True, slots=True)
-class StorageIntent:
-    """Resolved storage destinations for a capture decision."""
-
-    in_ram: bool
-    on_disk: bool
-
-
-@dataclass(frozen=True, slots=True)
-class ActivationRecord:
-    """One retained fastlog event.
-
-    Parameters
-    ----------
-    ctx:
-        Frozen record context produced for the underlying event.
-    spec:
-        Resolved capture policy for this record.
-    ram_payload:
-        Raw out copy retained in memory, or ``None`` when not stored
-        either because the record is metadata-only or the caller opted out
-        via ``save_raw_activations=False``.
-    disk_payload:
-        Raw out copy persisted to disk, or ``None`` when no disk
-        target is active or the caller opted out via
-        ``save_raw_activations=False``.
-    transformed_ram_payload:
-        Output of ``activation_transform`` retained in memory. ``None`` when
-        no transform is configured for the recording.
-    transformed_disk_payload:
-        Output of ``activation_transform`` persisted to disk. ``None`` when
-        no transform is configured for the recording.
-    metadata:
-        Auxiliary record metadata, including disk blob entries when present.
-    recorded_at:
-        Wall-clock time the record was created.
-    """
-
-    ctx: RecordContext
-    spec: CaptureSpec
-    ram_payload: torch.Tensor | None = None
-    disk_payload: torch.Tensor | None = None
-    transformed_ram_payload: torch.Tensor | None = None
-    transformed_disk_payload: torch.Tensor | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    recorded_time: float = field(default_factory=time.time)
-
-    def __repr__(self) -> str:
-        """Return a bounded one-line record summary.
-
-        Payloads render as metadata descriptors (dtype/shape/storage), never
-        contents: the dataclass auto-repr printed full tensor payloads AND
-        the recursive ``ctx`` lookback (lovely bug 1, CRITICAL).
-        """
-
-        stores = [
-            name
-            for name, payload in (
-                ("ram", self.ram_payload),
-                ("disk", self.disk_payload),
-                ("transformed_ram", self.transformed_ram_payload),
-                ("transformed_disk", self.transformed_disk_payload),
-            )
-            if payload is not None
-        ]
-        payload = self.ram_payload if self.ram_payload is not None else self.disk_payload
-        if payload is None:
-            descriptor = "metadata_only"
-        else:
-            dtype = str(payload.dtype).replace("torch.", "")
-            descriptor = f"{dtype}[{','.join(str(d) for d in payload.shape)}]"
-        return (
-            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_number}, "
-            f"payload={descriptor}, stored={'+'.join(stores) if stores else 'none'})"
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class GradRecordContext:
-    """Predicate input schema for one fastlog backward gradient event.
-
-    Parameters
-    ----------
-    label:
-        Label assigned to the autograd node during the backward walk.
-    layer_label:
-        Forward fastlog label joined by ``grad_fn_handle`` identity, when available.
-    op_label:
-        Alias of the joined forward operation label for selector parity.
-    module_stack:
-        Forward module stack captured for the joined operation.
-    has_forward_op:
-        Whether this backward node corresponds to a predicate-mode forward op.
-    has_op:
-        Whether this backward node has a joined forward op.
-    """
-
-    label: str
-    grad_fn_class_name: str
-    kind: str
-    backward_call_index: int
-    grad_kind: Literal["grad_input", "grad_output"]
-    grad_input_index: int | None = None
-    grad_output_index: int | None = None
-    layer_label: str | None = None
-    op_label: str | None = None
-    module_stack: tuple[Any, ...] = ()
-    has_forward_op: bool = False
-    has_op: bool = False
-    pass_number: int | None = None
-    order: int | None = None
-    event_index: int | None = None
-    shape: tuple[int, ...] | None = None
-    dtype: torch.dtype | None = None
-    tensor_device: torch.device | None = None
-
-    @property
-    def effective_label(self) -> str:
-        """Return the forward label when joined, otherwise the grad-fn label."""
-
-        return self.layer_label or self.label
-
-
-@dataclass(frozen=True, slots=True)
-class GradRecord:
-    """One retained fastlog gradient event."""
-
-    ctx: GradRecordContext
-    spec: CaptureSpec
-    ram_payload: torch.Tensor | None = None
-    disk_payload: torch.Tensor | None = None
-    transformed_ram_payload: torch.Tensor | None = None
-    transformed_disk_payload: torch.Tensor | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    recorded_time: float = field(default_factory=time.time)
-
-
-@dataclass(frozen=True, slots=True)
-class PredicateFailure:
-    """One captured predicate exception."""
-
-    event_index: int
-    kind: EventKind
-    label: str
-    traceback: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,102 +187,7 @@ _RAW_METADATA_FIELDS = (
 
 
 # --- Model-output readback (Recording.output / Trace.output) ---------------
-# The forward's return value is held in a private OutputSlot that lives in
-# memory only: never written to a bundle, never pickled. read_output returns
-# it or refuses typed with the reason; it never returns None for a missing output.
-
-OutputStatus = Literal["returned", "forward_failed", "stopped"]
-
-
-@dataclass(frozen=True, slots=True)
-class OutputSlot:
-    """Private holder for one capture's model output, or the reason it has none.
-
-    Attributes
-    ----------
-    status:
-        ``"returned"`` (``value`` is the model's return value),
-        ``"forward_failed"`` (the forward raised; ``detail`` names the failure)
-        or ``"stopped"`` (``stop_after=`` ended the capture before the model
-        returned; ``detail`` names the stop).
-    value:
-        The return value when ``status == "returned"``.
-    detail:
-        The failure or stop description otherwise.
-    """
-
-    status: OutputStatus
-    value: Any = None
-    detail: str | None = None
-
-
-def returned(value: Any) -> OutputSlot:
-    """Return the slot for a forward that returned ``value``."""
-
-    return OutputSlot(status="returned", value=value)
-
-
-def forward_failed(detail: str | None) -> OutputSlot:
-    """Return the slot for a forward that raised."""
-
-    return OutputSlot(status="forward_failed", detail=detail)
-
-
-def stopped(detail: str | None) -> OutputSlot:
-    """Return the slot for a capture that ``stop_after=`` ended early."""
-
-    return OutputSlot(status="stopped", detail=detail)
-
-
-def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
-    """Return the model output held by ``slot`` or refuse with the reason.
-
-    Parameters
-    ----------
-    slot:
-        The capture's private output slot; ``None`` when the object was
-        restored from disk (or a pickle) or built without a live forward.
-    owner:
-        ``"Trace"`` or ``"Recording"``, used in the refusal text.
-
-    Returns
-    -------
-    Any
-        The model's return value, exactly as returned.
-
-    Raises
-    ------
-    PayloadUnavailableError
-        ``output_not_stored`` for an object without a live output (loaded from
-        disk), ``output_forward_failed`` when the forward raised, and
-        ``output_capture_stopped`` when ``stop_after=`` ended the capture
-        before the model returned.
-    """
-
-    if slot is None:
-        raise PayloadUnavailableError(
-            f"this {owner} has no model output: the output is held in memory only and is "
-            f"not stored with saved {owner}s, so a {owner} loaded from disk (or unpickled) "
-            "never carries it",
-            code="output_not_stored",
-            remedy=f"re-run the capture and read .output on the live {owner}",
-        )
-    if slot.status == "forward_failed":
-        raise PayloadUnavailableError(
-            f"this {owner} has no model output: the forward raised before the model "
-            f"returned ({slot.detail or 'no failure text'})",
-            code="output_forward_failed",
-            remedy="fix the failing forward and re-run; the partial result keeps the failure",
-        )
-    if slot.status == "stopped":
-        raise PayloadUnavailableError(
-            f"this {owner} has no model output: stop_after= ended the capture before the "
-            f"model returned ({slot.detail or 'stop site fired'})",
-            code="output_capture_stopped",
-            remedy="drop stop_after= (or move it past the last op) to let the model return",
-        )
-    return slot.value
-
+# The output slot and its constructors live in ``torchlens._output_slot`` (vocabulary).
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their
@@ -1516,7 +1150,7 @@ class Recording(TraceLike):
         # crash. Self._output_tensors is empty for a halted pass, so seed the
         # frontier's saved payload as the sole output tensor (no fabrication --
         # the tensor is the recording's own retained raw activation).
-        halt_output_tensors = list(projection.output_tensors)
+        halt_output_tensors = cast("list[torch.Tensor]", list(projection.output_tensors))
         halt_output_addresses = list(projection.output_tensor_addresses)
         if self.is_stopped:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
