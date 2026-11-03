@@ -2,7 +2,7 @@
 
 Every field in ``Trace._FIELD_POLICY`` (declared FIELD_ORDER surface plus
 portable/runtime internals) is owned by exactly ONE lifecycle component of
-the decomposed Trace (docs/reference/trace_core_design.md section 3.7).
+the decomposed Trace (docs/internal/reference/trace_core_design.md section 3.7).
 A new Trace field must be added here with an owner, or the lockstep test
 fails — the ratchet that keeps the god object from regrowing.
 

@@ -8,8 +8,8 @@ Two gates live here:
   (``CLAUDE.md`` only imports AGENTS.md) top to bottom, statement by statement, in one
   shared namespace per page. The 2026-10-01 docs move ("docs: move agent reference
   material out of startup instructions") relocated those two fences out of AGENTS.md
-  into ``docs/agent-reference/common-patterns.md`` and
-  ``docs/agent-reference/architecture.md``, which this gate now reads directly;
+  into ``docs/internal/agent-reference/common-patterns.md`` and
+  ``docs/internal/agent-reference/architecture.md``, which this gate now reads directly;
   AGENTS.md itself carries no fences any more (just "Required reading" pointers).
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
@@ -245,8 +245,8 @@ def test_doc_python_blocks_run_reference_views(
 #: docstring); these two pages carry the content "AGENTS.md" used to name here.
 CANONICAL_PAGES = (
     "README.md",
-    "docs/agent-reference/common-patterns.md",
-    "docs/agent-reference/architecture.md",
+    "docs/internal/agent-reference/common-patterns.md",
+    "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
@@ -452,11 +452,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # instructions"): these two pages carry the fences the canonical AGENTS.md gate
     # used to execute directly; CANONICAL_PAGES now reads them by this path, so they
     # are covered there, not by the per-block DOC_FILES mechanism.
-    "agent-reference/common-patterns.md": (
+    "internal/agent-reference/common-patterns.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Common Patterns section)"
     ),
-    "agent-reference/architecture.md": (
+    "internal/agent-reference/architecture.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Architecture section's "
         "'Common unified capture patterns' fence)"
@@ -466,11 +466,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # docs/, where this lint sees it for the first time. The fences are illustrative
     # sketches over backends/inputs the canonical ambient does not provide
     # (paddle_model/paddle_x, raw_text/text_to_tensor, block1/block2 submodules).
-    "agent-reference/package/public-surface.md": (
+    "internal/agent-reference/package/public-surface.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
-    "agent-reference/package/architecture-overview.md": (
+    "internal/agent-reference/package/architecture-overview.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),

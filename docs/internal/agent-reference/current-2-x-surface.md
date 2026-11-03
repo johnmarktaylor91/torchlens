@@ -2,7 +2,7 @@
 
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
-- Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
+- Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`).

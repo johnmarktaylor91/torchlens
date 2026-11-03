@@ -51,68 +51,71 @@ pages:
     section: project
   - path: activation_transform_persistence.md
     section: concepts
-  - path: agent-reference/architecture.md
+  - path: internal/agent-reference/architecture.md
     section: internal
-    move_to: internal/agent-reference/architecture.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/brainpipe-f20-spellings-documented-unstable.md
+  - path: internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
     section: internal
-    move_to: internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/common-patterns.md
+  - path: internal/agent-reference/common-patterns.md
     section: internal
-    move_to: internal/agent-reference/common-patterns.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/conventions.md
+  - path: internal/agent-reference/conventions.md
     section: internal
-    move_to: internal/agent-reference/conventions.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/critical-invariants.md
+  - path: internal/agent-reference/critical-invariants.md
     section: internal
-    move_to: internal/agent-reference/critical-invariants.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/current-2-x-surface.md
+  - path: internal/agent-reference/current-2-x-surface.md
     section: internal
-    move_to: internal/agent-reference/current-2-x-surface.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
+  - path: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
     section: internal
-    move_to: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/known-gotchas.md
+  - path: internal/agent-reference/known-gotchas.md
     section: internal
-    move_to: internal/agent-reference/known-gotchas.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/architecture-overview.md
+  - path: internal/agent-reference/package/architecture-overview.md
     section: internal
-    move_to: internal/agent-reference/package/architecture-overview.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/files-in-this-directory.md
+  - path: internal/agent-reference/package/files-in-this-directory.md
     section: internal
-    move_to: internal/agent-reference/package/files-in-this-directory.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/key-concepts.md
+  - path: internal/agent-reference/package/key-concepts.md
     section: internal
-    move_to: internal/agent-reference/package/key-concepts.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/newer-2-x-subsystems.md
+  - path: internal/agent-reference/package/newer-2-x-subsystems.md
     section: internal
-    move_to: internal/agent-reference/package/newer-2-x-subsystems.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/public-surface.md
+  - path: internal/agent-reference/package/public-surface.md
     section: internal
-    move_to: internal/agent-reference/package/public-surface.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/subpackages.md
+  - path: internal/agent-reference/package/subpackages.md
     section: internal
-    move_to: internal/agent-reference/package/subpackages.md
     note: agent and contributor reference; AGENTS.md points here
-  - path: agent-reference/package/top-level-modules.md
+  - path: internal/agent-reference/package/top-level-modules.md
     section: internal
-    move_to: internal/agent-reference/package/top-level-modules.md
     note: agent and contributor reference; AGENTS.md points here
   - path: backends.md
     section: reference
+  - path: backends/jax.md
+    section: reference
+    group: Backends
+  - path: backends/mlx.md
+    section: reference
+    group: Backends
+  - path: backends/paddle.md
+    section: reference
+    group: Backends
+  - path: backends/tf.md
+    section: reference
+    group: Backends
+  - path: backends/tinygrad.md
+    section: reference
+    group: Backends
+  - path: backends/torch.md
+    section: reference
+    group: Backends
   - path: backward.md
     section: concepts
   - path: benchmarks/summary_performance.md
@@ -194,6 +197,24 @@ pages:
   - path: guides/fast_paths.md
     section: field-guide
     group: Scale and speed
+  - path: maintainers/architecture.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/persisted_fields.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/review_checklist.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/saved_format_3.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/testing.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/where.md
+    section: internal
+    note: maintainer page; CONTRIBUTING.md links it
   - path: guides/grouping.md
     section: concepts
   - path: guides/kv_cache.md
@@ -359,10 +380,12 @@ pages:
   - path: reference/error_refusal_contract.md
     section: reference
     note: the public list of stable refusal codes; refusal messages in the package cite this page
-  - path: reference/experiment_ledger.md
+  - path: reference/experiments.md
     section: reference
   - path: reference/export.md
     section: reference
+  - path: reference/selection_completeness.md
+    section: concepts
   - path: reference/glossary.md
     section: reference
   - path: reference/harness_bundles.md
@@ -371,9 +394,8 @@ pages:
     section: reference
   - path: reference/kernel_telemetry.md
     section: reference
-  - path: reference/lens_gallery_spec.md
+  - path: internal/reference/lens_gallery_spec.md
     section: internal
-    move_to: internal/reference/lens_gallery_spec.md
     note: normative test specification
   - path: reference/lenses.md
     section: reference
@@ -403,10 +425,6 @@ pages:
     section: internal
     move_to: internal/reference/oracle_independence.md
     note: test-oracle table
-  - path: reference/predicate_runtime.md
-    section: internal
-    move_to: internal/reference/predicate_runtime.md
-    note: extension-point contract
   - path: reference/report_family.md
     section: reference
   - path: reference/runnable_model.md
@@ -423,13 +441,11 @@ pages:
     section: reference
   - path: reference/summary.md
     section: reference
-  - path: reference/tensor_parallel_design.md
+  - path: internal/reference/tensor_parallel_design.md
     section: internal
-    move_to: internal/reference/tensor_parallel_design.md
     note: design note for an unbuilt feature
-  - path: reference/trace_core_design.md
+  - path: internal/reference/trace_core_design.md
     section: internal
-    move_to: internal/reference/trace_core_design.md
     note: internal engineering contract
   - path: reference/trackers.md
     section: reference
@@ -437,9 +453,8 @@ pages:
     section: reference
   - path: reference/tviz.md
     section: reference
-  - path: reference/ui_regrouping_plan.md
+  - path: internal/reference/ui_regrouping_plan.md
     section: internal
-    move_to: internal/reference/ui_regrouping_plan.md
     note: internal engineering contract
   - path: reference/warning_contract.md
     section: internal

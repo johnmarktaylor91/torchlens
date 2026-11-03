@@ -67,28 +67,35 @@ validation:
 exclude_docs: |
   # <generated:exclude_docs>
   /_site_map.yaml
+  /internal/
   /LIMITATIONS.md
   /_perf_numbers.md
   /_perf_numbers_provisional.md
   /_watch_perf_numbers.md
   /acknowledgments.md
   /activation_transform_persistence.md
-  /agent-reference/architecture.md
-  /agent-reference/brainpipe-f20-spellings-documented-unstable.md
-  /agent-reference/common-patterns.md
-  /agent-reference/conventions.md
-  /agent-reference/critical-invariants.md
-  /agent-reference/current-2-x-surface.md
-  /agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
-  /agent-reference/known-gotchas.md
-  /agent-reference/package/architecture-overview.md
-  /agent-reference/package/files-in-this-directory.md
-  /agent-reference/package/key-concepts.md
-  /agent-reference/package/newer-2-x-subsystems.md
-  /agent-reference/package/public-surface.md
-  /agent-reference/package/subpackages.md
-  /agent-reference/package/top-level-modules.md
+  /internal/agent-reference/architecture.md
+  /internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
+  /internal/agent-reference/common-patterns.md
+  /internal/agent-reference/conventions.md
+  /internal/agent-reference/critical-invariants.md
+  /internal/agent-reference/current-2-x-surface.md
+  /internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
+  /internal/agent-reference/known-gotchas.md
+  /internal/agent-reference/package/architecture-overview.md
+  /internal/agent-reference/package/files-in-this-directory.md
+  /internal/agent-reference/package/key-concepts.md
+  /internal/agent-reference/package/newer-2-x-subsystems.md
+  /internal/agent-reference/package/public-surface.md
+  /internal/agent-reference/package/subpackages.md
+  /internal/agent-reference/package/top-level-modules.md
   /backends.md
+  /backends/jax.md
+  /backends/mlx.md
+  /backends/paddle.md
+  /backends/tf.md
+  /backends/tinygrad.md
+  /backends/torch.md
   /backward.md
   /benchmarks/summary_performance.md
   /buffers.md
@@ -117,6 +124,12 @@ exclude_docs: |
   /for-ai-agents.md
   /gradient_contract.md
   /guides/fast_paths.md
+  /maintainers/architecture.md
+  /maintainers/persisted_fields.md
+  /maintainers/review_checklist.md
+  /maintainers/saved_format_3.md
+  /maintainers/testing.md
+  /maintainers/where.md
   /guides/grouping.md
   /guides/kv_cache.md
   /guides/offline_report.md
@@ -187,13 +200,14 @@ exclude_docs: |
   /reference/encoding.md
   /reference/episode_capture.md
   /reference/error_refusal_contract.md
-  /reference/experiment_ledger.md
+  /reference/experiments.md
   /reference/export.md
+  /reference/selection_completeness.md
   /reference/glossary.md
   /reference/harness_bundles.md
   /reference/hash.md
   /reference/kernel_telemetry.md
-  /reference/lens_gallery_spec.md
+  /internal/reference/lens_gallery_spec.md
   /reference/lenses.md
   /reference/limitations.md
   /reference/lit_bridge.md
@@ -206,19 +220,18 @@ exclude_docs: |
   /reference/observability_substrate.md
   /reference/onebackward_reads.md
   /reference/oracle_independence.md
-  /reference/predicate_runtime.md
   /reference/report_family.md
   /reference/runnable_model.md
   /reference/runnable_tlspec_contract.md
   /reference/stats.md
   /reference/structure_only_capabilities.md
   /reference/summary.md
-  /reference/tensor_parallel_design.md
-  /reference/trace_core_design.md
+  /internal/reference/tensor_parallel_design.md
+  /internal/reference/trace_core_design.md
   /reference/trackers.md
   /reference/transforms.md
   /reference/tviz.md
-  /reference/ui_regrouping_plan.md
+  /internal/reference/ui_regrouping_plan.md
   /reference/warning_contract.md
   /reference/weightsfree_capture.md
   /sae_training_handoff.md

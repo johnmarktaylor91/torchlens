@@ -67,7 +67,7 @@ matching demotion. Run `-n N` with `N` equal to the cores you have, never `-n au
 The glossary (`docs/reference/glossary.md`) is the canonical API specification and code
 conforms to it. Renaming, adding or removing any public name (a dataclass field, a property,
 a method, a top-level `tl.*` name, a keyword argument) updates, in the same change, the
-glossary entry, the examples under `docs/agent-reference/`, and the audit notebooks under
+glossary entry, the examples under `docs/internal/agent-reference/`, and the audit notebooks under
 `notebooks/audit/` and `examples/` that use it. A change that leaves them stale is
 incomplete. `python tools/name_lockstep check --base ref:<base-branch>` lists every new,
 renamed and removed public name against a base and exits 1 for each missing glossary entry,
