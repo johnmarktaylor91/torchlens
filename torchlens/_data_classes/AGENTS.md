@@ -40,7 +40,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_layer_views.py` | Layer view functions: per-pass aggregation, graph unions, row export and mirror materialization moved off `Layer` |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
-| `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
+| `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `stats/_trace_tables.py` and `report/_agent_json.py` |
 | `_trace_intervention.py` | Trace intervention mixin: thin shell of the intervention verbs; bodies live in `intervention/_trace_edits.py`, `intervention/_trace_selection_edits.py`, `intervention/_trace_hooks.py` (via `_doors`), `_trace_intervention_records.py` and `_fork_lineage.py` |
 | `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
 | `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |

@@ -1549,7 +1549,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_lookup.py", "__all__"),
         ("torchlens/bundle/_operations.py", "__all__"),
         ("torchlens/bundle/_save.py", "__all__"),
-        ("torchlens/export/_trace_tables.py", "__all__"),
         ("torchlens/intervention/_op_edits.py", "__all__"),
         ("torchlens/intervention/_trace_edits.py", "__all__"),
         ("torchlens/intervention/_trace_hooks.py", "__all__"),
@@ -1562,6 +1561,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_narrate.py", "__all__"),
         ("torchlens/report/_trace_facts.py", "__all__"),
         ("torchlens/report/_trace_summary.py", "__all__"),
+        ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
     }
 )
