@@ -143,6 +143,24 @@ def test_ioi_circuit_figures_from_figure_file(tmp_path: Path) -> None:
     _check_outputs(figures.draw_ioi_circuit(tmp_path), ["ioi_roc", "ioi_circuit"])
 
 
+def test_edge_geometry_spreads_arrow_ends_around_shared_heads() -> None:
+    figures = _load_figures()
+    edges = [
+        {"source": [0, 0], "target": [2, 1], "score": 0.9},
+        {"source": [1, 1], "target": [2, 1], "score": -0.4},
+        {"source": [0, 0], "target": [2, 0], "score": 0.3},
+    ]
+    geometry = figures._edge_geometry(edges)
+    assert [g[0] for g in geometry] == edges
+    ends = [g[2] for g in geometry]
+    starts = [g[1] for g in geometry]
+    assert ends[0] != ends[1], "two arrows into one head must land at distinct points"
+    assert starts[0] != starts[2], "two arrows out of one head must leave from distinct points"
+    for (_edge, start, end, _rad), edge in zip(geometry, edges, strict=True):
+        assert np.hypot(end[0] - edge["target"][0], end[1] - edge["target"][1]) < 0.5
+        assert np.hypot(start[0] - edge["source"][0], start[1] - edge["source"][1]) < 0.5
+
+
 def test_ioi_figure_data_reduces_scores() -> None:
     sys.path.insert(0, str(GALLERY))
     try:
