@@ -38,7 +38,8 @@ import torch
 from torch import nn
 
 from . import _state
-from ._fast_live_steer import apply_steer_paused, session_is_active
+from ._call_fingerprint import install_module_token_hooks
+from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
@@ -602,6 +603,31 @@ def install_collection_hooks(
                 session.capture_module(module_address, output)
 
         handles.append(module.register_forward_hook(hook))
+
+
+def install_session_hooks(
+    session: Any,
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+) -> weakref.finalize[Any, Any]:
+    """Install a fast live session's steer, token and collection hooks on ``model``.
+
+    Handles append to ``session.handles``. Returns the finalizer that removes
+    them; it runs when the session is collected, and at once when an install
+    raises, so a failed build leaves no hook on the user's modules.
+    """
+
+    finalizer = weakref.finalize(session, _remove_fast_live_hooks, session.handles)
+    session_ref = weakref.ref(session)
+    try:
+        session.handles.extend(install_steer_hooks(session.steer_plan, session_ref))
+        session.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
+        install_collection_hooks(session.handles, modules, plan_addresses, session_ref)
+    except BaseException:
+        finalizer()
+        raise
+    return finalizer
 
 
 @dataclass(frozen=True)

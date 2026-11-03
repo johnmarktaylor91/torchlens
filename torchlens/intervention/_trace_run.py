@@ -117,9 +117,7 @@ def run_fast_live_trace(
 ) -> RunResult:
     """Run the explicit native-forward targeted-collection live fast path.
 
-    The result Trace is a fork the cached session owns: every fast run
-    refreshes that fork and returns it, and the source trace stays untouched
-    (the same source/result split the loaded sparse fast path keeps).
+    The result is the cached session's own fork; the source trace stays untouched.
     """
 
     model = live_source_model(trace)
@@ -141,11 +139,8 @@ def run_fast_live_trace(
     ):
         if hasattr(session, "close"):
             session.close()
-        # The result is the session's own fork: repeated fast runs refresh it
-        # and the source trace stays untouched.
-        session = _FastLiveSession(
-            trace, model, target=trace._fork_trace(name=_run_fork_name(trace))
-        )
+        result_fork = trace._fork_trace(name=_run_fork_name(trace))
+        session = _FastLiveSession(trace, model, target=result_fork)
         trace.__dict__["_fast_run_session"] = session
     return session.run(inputs, seed=seed, until=until)
 

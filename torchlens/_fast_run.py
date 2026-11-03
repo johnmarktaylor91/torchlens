@@ -18,7 +18,6 @@ from torchlens._runnable import ContractCheck, ReadinessReport
 from . import _state
 from ._call_fingerprint import (
     fingerprinting,
-    install_module_token_hooks,
     module_fingerprint_address,
 )
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
@@ -33,11 +32,10 @@ from ._fast_live_plans import (
     _module_call_budget,
     _output_tensor_leaves,
     _pair_output_leaves,
-    _remove_fast_live_hooks,
     build_function_plans,
     build_module_plans,
     collected_function_output,
-    install_collection_hooks,
+    install_session_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
     save_payload_paused,
@@ -48,8 +46,6 @@ from ._fast_live_steer import (
     clear_unrefreshed_shape_metadata,
     fast_live_input_admission,
     hooked_run_diagnostic,
-    install_steer_hooks,
-    session_is_active,
 )
 from ._fast_live_until import (
     FastUntilReached,
@@ -755,15 +751,7 @@ class _FastLiveSession:
         self.last_fingerprint: tuple[int, int] | None = None
         self.refreshed_labels: frozenset[str] = frozenset(supported_labels)
         self.handles: list[Any] = []
-        self._hook_finalizer = weakref.finalize(self, _remove_fast_live_hooks, self.handles)
-        session_ref = weakref.ref(self)
-        try:
-            self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
-            self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
-            install_collection_hooks(self.handles, modules, plan_addresses, session_ref)
-        except BaseException:
-            self._hook_finalizer()
-            raise
+        self._hook_finalizer = install_session_hooks(self, model, modules, plan_addresses)
 
     def close(self) -> None:
         """Remove persistent module hooks owned by this session."""

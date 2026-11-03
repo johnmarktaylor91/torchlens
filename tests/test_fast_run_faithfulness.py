@@ -265,7 +265,7 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
-    from torchlens._fast_run import _remove_fast_live_hooks
+    from torchlens._fast_live_plans import _remove_fast_live_hooks
 
     removed: list[int] = []
 
