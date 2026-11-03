@@ -418,7 +418,7 @@ def test_ellipsis_slice_keeps_a_one_to_one_map() -> None:
     """``x[..., :2]`` reaches one parent cell; at base the key padded twice and went unknown."""
 
     torch.manual_seed(0)
-    trace = tl.trace(_TailSlice(), torch.randn(1, 2, 3, 4), capture=_ARMED)
+    trace = tl.trace(_TailSlice(), torch.randn(1, 2, 3, 4).requires_grad_(True), capture=_ARMED)
     try:
         sliced = _op(trace, "__getitem__")
         (source,) = _input_ops(trace)
@@ -441,12 +441,13 @@ def test_gather_widens_only_the_gathered_axis_of_its_source() -> None:
 
     torch.manual_seed(0)
     index = torch.tensor([[2, 0, 1]]).unsqueeze(-1).expand(1, 3, 4).contiguous()
-    trace = tl.trace(_GatherRows(), torch.randn(1, 3, 4), index, capture=_ARMED)
+    source = torch.randn(1, 3, 4).requires_grad_(True)
+    trace = tl.trace(_GatherRows(), (source, index), capture=_ARMED)
     try:
         gathered = _op(trace, "gather")
-        source, index_op = _input_ops(trace)
-        reached = gathered.receptive_field.of([(0, 1, 3)], within=[source.label, index_op.label])
-        assert _cells(_row(reached, source).mask) == [[0, 0, 3], [0, 1, 3], [0, 2, 3]]
+        source_op, index_op = _input_ops(trace)
+        reached = gathered.receptive_field.of([(0, 1, 3)], within=[source_op.label, index_op.label])
+        assert _cells(_row(reached, source_op).mask) == [[0, 0, 3], [0, 1, 3], [0, 2, 3]]
         assert _cells(_row(reached, index_op).mask) == [[0, 1, 3]]
     finally:
         trace.cleanup()
@@ -493,5 +494,77 @@ def test_output_role_spelling_names_the_projective_target() -> None:
         by_op = source.projective_field.at((4, 4), target=output)
         by_role = source.projective_field.at((4, 4), target=role)
         assert (by_role.io_role, by_role.axes) == (by_op.io_role, by_op.axes)
+    finally:
+        trace.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Paths that merge: an unconstrained axis on one route, causal depth on both.
+# ---------------------------------------------------------------------------
+
+
+class _ScorePair(nn.Module):
+    """Attention scores whose two operands read the same input."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.q = nn.Linear(4, 4)
+        self.k = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.q(x) @ self.k(x).transpose(-1, -2)
+
+
+def test_two_routes_into_one_op_keep_the_unconstrained_axis() -> None:
+    """One route reaches every key, the other every query, so the hull is the whole map.
+
+    At base the per-axis union dropped the unconstrained route and answered the
+    single cell where the two constrained axes met, which the gradient contains
+    but does not cover.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(_ScorePair(), torch.randn(1, _SEQ, 4).requires_grad_(True), capture=_ARMED)
+    try:
+        source = next(item for item in trace._layer_list if item.is_input)
+        scores = trace.output_ops[0]
+        reached = source.projective_field.of([(0, 3, j) for j in range(4)], within=scores.label)
+        mask = _row(reached, scores).mask
+        assert bool(mask.all()), _cells(mask)
+        _all_pass(cross_validate(trace, ops=[scores.label]))
+    finally:
+        trace.cleanup()
+
+
+class _TwoCausalBlocks(nn.Module):
+    """Two causal attention hops in sequence, the smallest transformer depth."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.first = _CausalAttention(fused=False, width=4)
+        self.second = _CausalAttention(fused=False, width=4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.second(self.first(x))
+
+
+def test_causal_narrowing_survives_a_second_attention_hop() -> None:
+    """Position 3 still reaches only positions 3 and later after two causal hops.
+
+    At base the second hop widened to every position: the route that carried the
+    affected keys left the query axis unconstrained, and the masked softmax did
+    not narrow it back to the rows those keys can reach.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _TwoCausalBlocks(), torch.randn(1, _SEQ, 4).requires_grad_(True), capture=_ARMED
+    )
+    try:
+        source = next(item for item in trace._layer_list if item.is_input)
+        out = trace.output_ops[0]
+        reached = source.projective_field.of([(0, 3, j) for j in range(4)], within=out.label)
+        assert _positions(_row(reached, out).mask) == [3, 4]
+        _all_pass(cross_validate(trace, ops=[out.label]))
     finally:
         trace.cleanup()
