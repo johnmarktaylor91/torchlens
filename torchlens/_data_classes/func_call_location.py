@@ -24,6 +24,7 @@ The sentinel object ``_SENTINEL`` distinguishes "not yet loaded" from an
 actual ``None`` value in the lazy-loading placeholders.
 """
 
+import functools
 import inspect
 import linecache
 import os
@@ -196,18 +197,18 @@ def _read_fingerprinted_lines(filename: str, fingerprint: Any) -> list[str] | st
     return linecache.getlines(filename) or _SOURCE_TEXT_UNAVAILABLE
 
 
-_TORCH_PACKAGE_DIR: str | None = None
-
-
+@functools.lru_cache(maxsize=1)
 def _torch_package_dir() -> str:
-    """Return the normalized directory of the installed ``torch`` package."""
+    """Return the normalized directory of the installed ``torch`` package.
 
-    global _TORCH_PACKAGE_DIR
-    if _TORCH_PACKAGE_DIR is None:
-        import torch
+    Computed on first use (torch is imported lazily here) and fixed for the
+    process: the install location never changes, so the memo is a constant,
+    not mutable module state.
+    """
 
-        _TORCH_PACKAGE_DIR = os.path.normcase(os.path.dirname(os.path.abspath(torch.__file__)))
-    return _TORCH_PACKAGE_DIR
+    import torch
+
+    return os.path.normcase(os.path.dirname(os.path.abspath(torch.__file__)))
 
 
 def display_frame(code_context: Any) -> "FuncCallLocation | None":
