@@ -30,7 +30,7 @@ def _model() -> nn.Sequential:
 def _ready_trace(**capture: Any) -> tuple[nn.Sequential, torch.Tensor, Any]:
     model = _model()
     x = torch.randn(3, 8)
-    trace = tl.trace(model, [x], capture=CaptureOptions(intervention_ready=True, **capture))
+    trace = tl.trace(model, [x], capture=CaptureOptions(replayable=True, **capture))
     return model, x, trace
 
 
@@ -185,7 +185,7 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, backward_ready=True, save_grads="all"),
+        capture=CaptureOptions(replayable=True, backward_ready=True, save_grads="all"),
     )
     events: list[str] = []
 
