@@ -56,6 +56,9 @@ def converted(accessor: Any, key: str, resolver: Any) -> Any:
     the collection still falls through to the door's not-found error.
     """
 
+    exact = getattr(accessor, "_dict", {}).get(key)
+    if exact is not None:
+        return exact  # a key that names a member of this door exactly is that member
     trace = accessor_trace(accessor)
     if trace is None:
         return None
