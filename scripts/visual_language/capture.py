@@ -209,9 +209,9 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
     if panel.call in ("bundle_graph", "bundle_diff"):
-        # The bundle doors keep the engine spelling of the viewer switch.
-        kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
         if panel.call == "bundle_graph":
+            # show_bundle_graph still keeps the engine spelling of the viewer switch.
+            kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
             return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
