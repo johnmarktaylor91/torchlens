@@ -14,6 +14,7 @@ op's code context. Both sides are normalised here, once per filename.
 
 from __future__ import annotations
 
+import inspect
 import os
 from types import CodeType
 
@@ -55,3 +56,23 @@ def is_torchlens_code(code: CodeType) -> bool:
         verdict = normalized_filename(filename).startswith(TORCHLENS_PACKAGE_PREFIX)
         _VERDICTS[filename] = verdict
     return verdict
+
+
+def external_warning_stacklevel() -> int:
+    """Return the ``warnings.warn`` stacklevel that lands in the caller's user code.
+
+    Counts frames from the function that calls this helper outward until the first
+    frame compiled outside the TorchLens package, so a warning raised deep inside a
+    door (``do`` -> staging -> expansion) still names the user's line.
+    """
+
+    level = 1
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame is not None else None
+        while frame is not None and is_torchlens_code(frame.f_code):
+            level += 1
+            frame = frame.f_back
+    finally:
+        del frame
+    return level

@@ -555,8 +555,7 @@ def test_fork_comparison_workflow_stays_open() -> None:
 
     clean = _capture(model, x)
     ablated = clean.fork("ablated")
-    ablated._attach_hooks(tl.func("relu"), tl.zero_ablate())
-    ablated.push()
+    ablated.do(tl.func("relu"), tl.zero_ablate())
 
     bundle = tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
     matrix = bundle.at(tl.func("relu")).compare()

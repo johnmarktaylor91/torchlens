@@ -437,7 +437,7 @@
    "status": "composes",
    "evidence": "tests/test_intervention_phase6.py::test_differentiable_replay_patching_captures_backward_grads",
    "confidence": "high",
-   "note": "ReplayOptions(differentiable=True); a fork does not inherit gradient state."
+   "note": "InterventionOptions(differentiable=True); a fork does not inherit gradient state."
   },
   {
    "a": "backward",
@@ -769,7 +769,7 @@
    "status": "composes",
    "evidence": "docs/intervention_api.md",
    "confidence": "high",
-   "note": "bundle.do, attach_hooks, push and fork broadcast over members; M1 matrix marks bundle fork WORKS."
+   "note": "bundle.do and fork broadcast over members; M1 matrix marks bundle fork WORKS."
   },
   {
    "a": "bundle",
@@ -1740,7 +1740,7 @@
    "status": "composes",
    "evidence": "docs/facets.md",
    "confidence": "high",
-   "note": "Facet edits reuse fork, attach_hooks and rerun; overlapping writes refuse before rerun."
+   "note": "Facet edits reuse fork, staged do and rerun; overlapping writes refuse before rerun."
   },
   {
    "a": "fork_do",
@@ -1847,7 +1847,7 @@
    "status": "composes",
    "evidence": "tests/test_fastlog_halt.py::test_record_halt_predicate_stops_after_save_decision",
    "confidence": "high",
-   "note": "The record twin refuses non-callable halt with recording_halt_predicate_type_invalid."
+   "note": "The record twin refuses non-callable halt with halt_predicate_type_invalid, the same code and class as tl.trace."
   },
   {
    "a": "halt",
@@ -2014,7 +2014,7 @@
    "status": "asymmetry",
    "asymmetry": "A28",
    "confidence": "high",
-   "note": "trace['label'] returns a Layer for a multi-pass layer; a bare label in do() and attach_hooks refuses multipass_bare_label_ambiguous, while pass-qualified labels (label:2) work."
+   "note": "trace['label'] returns a Layer for a multi-pass layer; a bare label in do() refuses multipass_bare_label_ambiguous, while pass-qualified labels (label:2) work."
   },
   {
    "a": "index",
@@ -2123,7 +2123,7 @@
    "status": "composes",
    "evidence": "tests/test_interaction_battery.py::test_intervene_x_rerun_applies_the_edit_once",
    "confidence": "high",
-   "note": "The unified run(inputs=...) door refuses a staged spec (run_staged_spec_unapplied); the legacy run(model, x) door and fast=True apply it."
+   "note": "The live run(inputs=...) door applies a staged spec and stamps fire receipts on the fork's last_run (engine \"live\", hooks, hooks_fired, hooks_unfired, unfired_plan_ids, divergence_count); zero-fire entries follow on_zero_fire (warn/error, code rerun_zero_fire). The legacy run(model, x) door and fast=True apply it too; only a loaded artifact refuses with run_staged_spec_unapplied."
   },
   {
    "a": "intervene",
@@ -2801,7 +2801,7 @@
     "index",
     "multipass"
    ],
-   "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
+   "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do refuses the bare label (multipass_bare_label_ambiguous).",
    "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
    "recommendation": "document",
    "ruling": "document"
@@ -2896,8 +2896,8 @@
   {
    "id": "A38",
    "pair": [],
-   "summary": "Predicate type errors are twin codes with different lineages: tl.trace halt_predicate_type_invalid (ArgumentTypeError, TypeError) and intervention_predicate_type_invalid, versus tl.record recording_halt_predicate_type_invalid and recording_intervention_predicate_type_invalid (InvalidArgumentError, ValueError).",
-   "evidence": "docs/reference/error_refusal_contract.md",
+   "summary": "Predicate type errors raise the same code and class on both entry points: tl.trace and tl.record refuse a non-callable halt with halt_predicate_type_invalid and a non-callable intervene with intervention_predicate_type_invalid (ArgumentTypeError, TypeError lineage).",
+   "evidence": "tests/test_exception_taxonomy_records.py",
    "recommendation": "close",
    "ruling": "close"
   },
@@ -2920,7 +2920,7 @@
   {
    "id": "A41",
    "pair": [],
-   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, unified run(inputs=...) refuses a staged spec (run_staged_spec_unapplied) unless fast=True, and carry_state, fast and until are unified-only.",
+   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, the live run(inputs=...) applies it too and stamps fire receipts on the fork's last_run (zero-fire entries follow on_zero_fire, code rerun_zero_fire) while only a loaded artifact refuses it (run_staged_spec_unapplied), and carry_state, fast and until are unified-only.",
    "evidence": "docs/guides/fast_paths.md",
    "recommendation": "document",
    "ruling": "close"

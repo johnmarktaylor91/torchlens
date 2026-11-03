@@ -97,14 +97,19 @@ if TYPE_CHECKING:
 
 _LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
 
-# Typed container defaults for every non-Optional container field Layer
-# stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
-# class as ``Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`` /
-# ``Trace._MODEL_LOG_CONTAINER_DEFAULTS``: without this,
-# ``coerce_container_typed_state`` cannot repair a present-but-wrong-typed
-# legacy value (e.g. ``equivalent_ops`` serialized as a ``list`` where a
-# ``set`` is now declared), and an absent field crashes instead of restoring
-# an empty typed container. Plain builtin types are used deliberately.
+#: Public Layer members removed by the do fold (remove-and-rename, no alias).
+_REMOVED_LAYER_MEMBERS: dict[str, str] = {
+    "attach_hooks": "use layer.do(site_or_hooks, ...) -- do stages the hooks",
+    "set": (
+        "use layer.do(value, intervention=tl.options.InterventionOptions("
+        "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
+    ),
+}
+
+# Typed container defaults for every non-Optional container field Layer stores
+# directly (same fix as ``Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS``): plain builtin
+# types let ``coerce_container_typed_state`` repair a wrong-typed legacy value,
+# and an absent field restores as an empty typed container instead of crashing.
 _LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "arg_names": (),
     "param_shapes": [],
@@ -1460,19 +1465,17 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __getattr__(self, name: str) -> Any:
-        """Fallback attribute lookup: delegates to ops[0] for single-pass layers.
+        """Fallback lookup: a removed member redirects typed, else delegate to ops[0].
 
-        Only called when normal attribute lookup has already failed (Python's
-        ``__getattr__`` protocol).  For single-pass layers, transparently
-        forwards to the underlying Op, enabling code like
-        ``layer_log.func_rng_states`` without needing an explicit property.
-
-        Private attributes (starting with '_') are never delegated — they
-        raise AttributeError immediately to avoid infinite recursion with
-        ``self.__dict__`` access.
+        Runs only after normal lookup failed. Single-pass layers forward to the
+        underlying Op (``layer_log.func_rng_states`` needs no property); private
+        names never delegate, so ``self.__dict__`` reads cannot recurse.
         """
         if name.startswith("_"):
             raise AttributeError(name)
+        # Before delegating: FacadeTeachingError is an AttributeError, so an Op
+        # redirect caught below would otherwise fall through to a bare miss.
+        refuse_removed_member("Layer", name, _REMOVED_LAYER_MEMBERS)
         if name in {
             "param_memory",
         }:
@@ -1485,16 +1488,6 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
-        refuse_removed_member(
-            type(self).__name__,
-            name,
-            {
-                "set": (
-                    "use layer.do(value, intervention=tl.options.InterventionOptions("
-                    "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
-                )
-            },
-        )
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ********************************************

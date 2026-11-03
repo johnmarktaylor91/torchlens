@@ -576,7 +576,7 @@ def _next_operation_hint(trace: Trace) -> str:
         or getattr(getattr(trace, "options", None), "save_arg_templates", False)
     ):
         return "not intervention-ready; no replay templates (pass model= and inputs= to do())"
-    return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
+    return "ready for do(), run(), or fork()"
 
 
 def _rng_note_summary(trace: Trace) -> str:

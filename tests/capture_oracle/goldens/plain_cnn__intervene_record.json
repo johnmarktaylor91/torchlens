@@ -421,7 +421,7 @@
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
-        "n_ops_completed": 0,
+        "n_ops_committed": 0,
         "status": "complete",
         "stop_reason": null
       },

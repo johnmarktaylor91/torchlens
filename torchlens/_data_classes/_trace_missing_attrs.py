@@ -50,8 +50,11 @@ _MISSING_ATTR_HINTS: dict[str, str] = {
 #: Public Trace members removed by the 2026-10-01 shim removal (remove-and-
 #: rename, no alias): a lookup names the replacement, typed.
 _REMOVED_TRACE_MEMBERS: dict[str, str] = {
-    "replay": "use trace.push(...) -- Trace.replay was renamed",
-    "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
+    "replay": "use trace.do(site, edit) -- do applies and propagates the edit",
+    "replay_from": "use trace.do(site, value) -- do sets the value and propagates it",
+    "push": "use trace.do(site, edit) -- do applies and propagates the edit",
+    "push_from": "use trace.do(site, value) -- do sets the value and propagates it",
+    "remove": "use trace.clear_edits(site) -- do returns no handle to remove",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
     "attach_hooks": (
         "use trace.do(site, edit, model=model, inputs=x) -- attach_hooks folded into do; "

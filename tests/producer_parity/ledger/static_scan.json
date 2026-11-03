@@ -1352,6 +1352,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/_io/_save_gates.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/_save_gates.py",
@@ -1452,7 +1460,7 @@
   "field": "is_edited",
   "file": "torchlens/_io/runnable.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -7846,6 +7854,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "capture_spec",
+  "file": "torchlens/intervention/_run_staged.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

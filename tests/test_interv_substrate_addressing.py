@@ -25,6 +25,9 @@ import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _Insertable(nn.Module):
     """One class, one forward source: ``extra`` inserts a value-preserving

@@ -102,7 +102,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | --- | --- |
 | Capture and sparse recording | `trace`, `recording`, `span`, `tap` (the former `record_span` alias is removed) |
 | Persistence and bundles | `load`, `save`, `bundle`, `Bundle`; schema-v2 manifests add `backend`, `backend_runtime`, and `payload_policy` |
-| Replay and edits | `do`, `push`, `push_from`, `run` (the former `replay`/`replay_from`/`rerun` aliases are removed) |
+| Replay and edits | `do` (the one editing verb: stages and propagates), `clear_edits`, `run` (the former `replay`/`replay_from`/`rerun` aliases are removed) |
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
 | Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |

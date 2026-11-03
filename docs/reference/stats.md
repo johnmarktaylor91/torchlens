@@ -257,7 +257,7 @@ A stats trace keeps nothing to read back or replay from, so it refuses
 instead of answering with an empty value: reading an op's `out` refuses
 `activation_reduced_to_stats` (the remedy names `site_stats` and
 `save="all"`), and replay or validation on the trace (`run`,
-`validate_forward_pass`, `push`, `push_from`) refuses
+`validate_forward_pass`, `save_new_outs`, `do` on the replay engine) refuses
 `stats_capture_not_replayable`; `tl.validate(model, x, scope="forward")`
 still works because it runs its own full capture. `site_stats` on a trace captured any other
 way refuses `stats_capture_not_reduced`.

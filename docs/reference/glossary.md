@@ -719,15 +719,27 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
+**Recipe.save and tl.load of a recipe** *(spelling documented-unstable)*
+: `Recipe.save(path, level="portable", overwrite=False)` writes the authored rules alone as a
+  `.tlspec` directory whose manifest carries `kind: "recipe"` (no trace, model or fire records;
+  tensor arguments travel as sidecars), and `tl.load(path)` returns a `tl.Recipe` whose rule
+  identities (`Recipe.digest`) equal the saved ones. A predicate WHERE term or an opaque callable
+  edit has no portable form: it refuses below `"audit"` (`OpaqueCallableError`), and an audit
+  record, which stores it by repr, refuses `tl.load` with `recipe_audit_only`; a hand-edited or foreign record refuses with `recipe_record_malformed`. `level="runnable"`
+  refuses `artifact_save_level_unsupported`: a recipe carries no model to run. The saved
+  intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is the lowered,
+  capture-bound form and still loads as an `InterventionSpec`.
+
 **Trace.recipe and Trace.clear_edits**
 : `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
   sticky edits staged with `do` by site or by handle id, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
-  Removal (also through the handle's `remove()`) takes effect at once, like a torch hook handle: a
+  Removal takes effect at once, like a torch hook handle: a
   rerun or backward pass in progress skips the removed hooks from the next hook site it reaches,
-  while the site firing at that moment finishes its queued hooks; afterwards the recipe and the
-  handle are the same as after a removal between runs.
+  while the site firing at that moment finishes its queued hooks; afterwards the recipe is the
+  same as after a removal between runs.
+  It is the one way to detach an edit: `do` returns the trace, not a removable handle.
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
@@ -744,14 +756,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   step, `load_state_dict`, an in-place op under `torch.no_grad()`, `param.data = t`), every replay
   door refuses `replay_param_changed_since_capture` (`ReplayPreconditionError`, naming the
   parameter and the op) rather than silently compute with the new value: `do()` on the replay
-  engine, `push`, `push_from`, differentiable replay, and later replays of every fork (a rerun
-  fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
+  engine (a single site, a mapping of several edits, or a resolved selection),
+  `do(..., intervention=InterventionOptions(differentiable=True))`, and later replays of every
+  fork (a rerun fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
   `False`) replays with the current values and records the parameter names in
   `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
   `param.data` or through a numpy or raw-storage alias. A replaced parameter object
   (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
   captured object. For an as-if weight edit use `fork.do(tl.param(name), edit)`. The rerun
   engine runs the live model and ignores the option.
+
+**differentiable** (`InterventionOptions`) *(spelling documented-unstable)*
+: `InterventionOptions(differentiable=True)` (default `False`) on `Trace.do`. Only the replay
+  engine reads it; rerun and set-only ignore it; the replay lands on a new fork whose outputs
+  stay differentiable (fresh frontier leaves), and `do` returns that fork instead of replaying
+  the trace it was called on in place. `ReplayOptions` carries no `differentiable` field. Which edits keep
+  the graph under which door: docs/gradient_contract.md.
 
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
@@ -787,8 +807,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
   graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
   `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
-  Under differentiable replay (`push(replay=ReplayOptions(differentiable=True))`) a passing
-  check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
+  Under differentiable replay
+  (`do(site, edit, intervention=InterventionOptions(differentiable=True))`) a passing check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
   replay frontier get no gradient; the live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
   reaches them. Which verbs keep the graph under which door: docs/gradient_contract.md.
 
@@ -1371,8 +1391,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
   36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
   module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
-  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`,
-  `attach_hooks`); a facet already scoped to another module refuses
+  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`);
+  a facet already scoped to another module refuses
   `selector_module_facet_scope_conflict`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
@@ -1492,18 +1512,21 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **`tl.mean_ablate(source=None, *, dim, allow_shape_change=False)`**
 : The one mean door. `dim` is required: `None` averages every axis of the source to one
-  scalar; an int or tuple of ints averages those axes (`keepdim`, broadcast back to the site).
+  scalar, whatever the source; an int or tuple of ints averages those axes (`keepdim`, broadcast
+  back to the site); `"members"` averages over a `Population`'s members and refuses
+  `intervention_over_invalid` for any other source.
   `source` is what is averaged: the site's own value (the default; it reads the whole batch, so
   the spec derives `is_batch_independent=False`, the append gate refuses and a chunked capture
   refuses `chunked_replay_batch_coupling`), a tensor or Op-like object (averaged instead of the
   site; `is_batch_independent=True`), or a `tl.intervention.Population` (its members are averaged
-  elementwise first; `dim=None` fills with that member-shaped mean, axes reduce it further; the
-  spec is `opaque_audit` and the fire record says `stochastic=False`). A mean is a reduction,
+  elementwise first; `dim="members"` fills with that member-shaped mean, `dim=None` reduces it to
+  one scalar, axes reduce it with `keepdim`; the spec is `opaque_audit` and the fire record says
+  `stochastic=False`). A mean is a reduction,
   never a draw: no seed. A semantic axis name (`"batch"`, `"position"`, `"feature"`) refuses
   `axis_semantics_unknown` until axis-role evidence exists; any other `dim` refuses
   `intervention_over_invalid` at construction. The removed `mean_fill(dim=...)` is
   `mean_ablate(dim=...)`, the removed `mean_from(population)` is `mean_ablate(population,
-  dim=None)`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
+  dim="members")`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
 
 **Edits on gradient sites**
 : A tensor edit is a function of one tensor and the site decides which tensor, so the neutral
@@ -1547,13 +1570,23 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   count in `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
-: `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
-  downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
-  pre-mutated site; `Trace.run` performs a full-forward run with the log's active
-  intervention spec; `tl.sweep` captures one intervened trace per swept replacement
-  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) Replay re-executes
-  forward ops only, so a gradient site on `do` without `model=`/`inputs=`, on `engine="replay"`, or in
-  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and inputs= to
+: `Trace.do` is the one editing verb on a captured log, and it propagates what it stages: a
+  non-callable value sets the site, a hook or helper attaches as a sticky rule, a mapping of
+  sites to edits (`trace.do({a: h1, b: h2})`) applies several edits in one propagation, and an
+  `InterventionSpec` or `Recipe` applies its rules, including a spec loaded back with
+  `tl.io.load_intervention_spec`. On the replay engine the edit is pushed
+  downstream through the recorded graph (DAG replay of the affected cone);
+  `InterventionOptions(engine="set_only")` stages the edit without propagating;
+  `InterventionOptions(differentiable=True)` replays onto a new fork whose outputs stay
+  differentiable and returns it; `Trace.clear_edits` detaches staged edits, and the scoped
+  form `with trace.fork() as scoped: scoped.do(...)` detaches the last `do`'s hooks on exit.
+  `Trace.run`
+  performs a full-forward run with the log's active intervention spec; `tl.sweep` captures one
+  intervened trace per swept replacement value. (The former `replay`/`replay_from`/`rerun`
+  aliases are removed, and so are the separate stage, propagate and detach verbs that `do`
+  folded in; docs/reference/deprecations.md maps each.) Replay re-executes
+  forward ops only, so a gradient site on `do` without `model=`/`inputs=` or on `engine="replay"`
+  refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and inputs= to
   rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
   engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
   gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
@@ -1595,7 +1628,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   trace with a staged intervention tries it first (a trace with nothing staged keeps the capture
   rerun) and falls back to the capture engine on any typed refusal, and
   `trace.run(inputs=..., fast=True)` on a live or loaded-activation trace applies the staged
-  spec through it (so the `run_staged_spec_unapplied` gate does not fire there). `last_run`
+  spec through it. The plain `trace.run(inputs=...)` on a live trace applies the staged spec
+  too, inside its refresh capture (`engine` `live`, the fork adopts the captured graph and
+  `last_run["unfired_plan_ids"]` names the staged plans that fired nowhere); only a loaded
+  artifact refuses with `run_staged_spec_unapplied`. `last_run`
   discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
@@ -1606,7 +1642,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   once to record the current plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
-  `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
+  `run(inputs=...)`, fast or not, a run that applies staged edits reports `unverifiable`, never
   `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
   it is an edited forward, and no hook-aware check exists yet. On a live trace the
   `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
@@ -2800,7 +2836,7 @@ S2/S3-gated*
   selections (whole-edge granularity; `~` complements within the trace's
   edge family). `do(edge_selection, edit)` replaces the value CONSUMED on
   the edge — only the child's consumption changes; `parent.out` stays
-  producer truth. Ships on the replay/push engine ONLY
+  producer truth. Ships on the replay engine ONLY
   (`edge_intervention_engine_unsupported` otherwise; the rerun-engine design
   is an escalated named future). Storage fork: the substituted value lives
   in the `Op.edge_substitutions` store, persisted as of the tlspec v8 bump (+
@@ -2860,11 +2896,11 @@ deprecation shim owed*
   `substitution_kind="param"`, edit-then-scatter masking over the param
   index space, one replay pass over all consumer origins (cone
   recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
-  edge kinds — so later pushes never silently revert any edit; a chained
+  edge kinds — so later replays never silently revert any edit; a chained
   `do(tl.param(p), scale(0.5))` COMPOSES on the staged "as if" value,
   0.25, keeping both FireRecords), and the same validation boundary
   (`edge_intervention_boundary` — a different check, never no check;
-  uncorroborated entries FAIL). Replay/push engine ONLY:
+  uncorroborated entries FAIL). Replay engine ONLY:
   rerun/set_only refuse `param_substitution_engine_unsupported`. The audit
   record (kind `PARAM`) discloses "substituted at consumption … live
   parameters unchanged" — the product is DERIVED-class, never a blessed
@@ -4508,6 +4544,7 @@ The sections above describe each surface in depth.
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
 | `Recipe.match` | Return the single rule matching one op context, or `None` |
+| `Recipe.save` | Write the rules alone as a `kind: "recipe"` `.tlspec` that `tl.load` returns as a Recipe |
 | `RecordContext.module_pass_number` | Call number of the innermost module, or `None` |
 | `RecordContext.pass_number` | Pass number of the recorded op |
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
@@ -4809,7 +4846,6 @@ alphabetical order.
 | `Trace.profile_enabled` | Whether this capture was run with profiling requested |
 | `Trace.reconstruct_container` | Rebuild a captured container selected by site and role from saved Op values |
 | `Trace.reconstruct_output` | Rebuild the traced model's final Python output object from saved Op values |
-| `Trace.remove` | Detach the hook attachments made by the most recent single-hook `do` call |
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
@@ -4820,7 +4856,7 @@ alphabetical order.
 | `Trace.saved_module_calls` | Accessor for the ModuleCalls whose outputs include saved activations |
 | `Trace.saved_modules` | Accessor for the Modules with at least one saved-activation ModuleCall |
 | `Trace.show_call_tree` | Print this Trace's `ModuleCall` tree as an ASCII tree, with options for depth, atomic calls and call indices |
-| `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, push, run and direct write |
+| `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, do, run and direct write |
 | `Trace.tlspec_version` | Integer version of the `.tlspec` format, used for save and load compatibility |
 | `Trace.to_dagua_graph` | Translate this trace into an experimental Dagua graph |
 | `Trace.transforms` | Tuple of the Op records that mark transform boundaries |
@@ -6658,7 +6694,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `renderer=` | keyword of `Trace.draw` (keyword-only; default `'graphviz'`): `"graphviz"` (default) or the experimental `"dagua"` after opt-in; constructor keyword of `tl.options.VisualizationOptions` (optional): Renderer backend selector |
 | `repeats=` | keyword of `tl.report.measure_clean_step` (keyword-only; default `5`); keyword of `tl.report.overhead` (keyword-only; default `3`) |
 | `replace=` | keyword of `tl.appliances.register` (keyword-only; default `False`): Allow replacing an existing registration under the same name; keyword of `tl.backends.register` (keyword-only; default `False`): Whether to replace an existing spec with the same name or alias; keyword of `tl.export.register_target` (keyword-only; default `False`): Explicit replacement opt-in (collision refusal otherwise); keyword of `tl.io.register_sidecar_family` (keyword-only; default `False`): Explicit replacement opt-in (kernel collision refusal otherwise); keyword of `tl.receptive_field.register_rf_rule` (keyword-only; default `False`): Whether existing registrations may be replaced |
-| `replay=` | keyword of `Trace.push` (default `None`): Grouped replay options (`ReplayOptions`: `strict`, `hooks`, `differentiable`); keyword of `Trace.push_from` (default `None`): Grouped replay options (`ReplayOptions`); keyword of `Trace.run` (keyword-only; default `None`) |
+| `replay=` | keyword of `Trace.run` (keyword-only; default `None`): Grouped replay options (`ReplayOptions`: `strict`, `hooks`, `differentiable`) |
 | `replayable=` | constructor keyword of `tl.options.CaptureOptions` (optional) |
 | `replicates=` | keyword of `tl.experiment.sweep_grid` (keyword-only; default `False`); keyword of `tl.experiment.sweep_sites` (keyword-only; default `False`): Whether duplicate resolved candidates are deliberate replicates |
 | `repo=` | keyword of `tl.bridge.pyreft.read` (keyword-only; default `None`): Optional names of where the directory came from (a Hub repo id and commit); recorded in `provenance` and the subspace `origin` |

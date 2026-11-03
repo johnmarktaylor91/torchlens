@@ -37,6 +37,9 @@ from torchlens.intervention._spec_values import LazyImportRef, _resolve_import_r
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import load_intervention_spec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
     """Write a module whose IMPORT writes ``sentinel`` (the RCE payload)."""

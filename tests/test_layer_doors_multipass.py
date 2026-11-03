@@ -1,6 +1,6 @@
-"""``Layer.do``, ``Layer.set`` and the sticky ``Layer.do(engine="set_only")`` address every pass of a multi-pass layer.
+"""``Layer.do`` (edit or value, propagated or ``set_only``) addresses every pass of a multi-pass layer.
 
-A bare layer label addresses only a single-pass layer, so the three Layer doors
+A bare layer label addresses only a single-pass layer, so the Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
 loop would otherwise refuse with ``SiteAmbiguityError`` on every door. A Layer
 spans all its passes, so each door discloses the two-site fan-out. Each edit
@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
-from torchlens.options import InterventionOptions
 
 
 class _SharedThenFresh(nn.Module):
@@ -87,9 +86,13 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("set", "sticky"))
+@pytest.mark.parametrize("door", ("do", "do_value", "set_only"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
-    """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
+    """Each Layer door on a two-pass layer edits both passes, matching plain torch.
+
+    ``do`` propagates at once (the fold of set or attach plus push); the ``set_only``
+    engine stages the value on both passes and leaves the outputs as captured.
+    """
 
     model, x, trace = captured
     shared, _fresh = _linear_labels(trace)
@@ -98,22 +101,23 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         if door == "do":
             layer.do(tl.scale(2.0))
-        elif door == "set":
+        elif door == "do_value":
+            layer.do(torch.zeros(2, 3))
+        else:
             layer.do(
                 torch.zeros(2, 3),
                 intervention=tl.options.InterventionOptions(
                     engine="set_only", confirm_mutation=True
                 ),
             )
-        else:
-            layer.do(
-                tl.scale(2.0),
-                intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
-            )
-        # The recipe doors apply on push, which re-resolves the same two sites.
-        if door != "do":
-            fork.push()
-    want = _oracle(model, x, shared_edit=_zero if door == "set" else _double)
+    if door == "set_only":
+        # One staged value entry covers both passes; nothing propagates yet.
+        assert len(fork._intervention_spec.target_value_specs) == 1
+        assert fork._intervention_spec.hook_specs == []
+        want = _oracle(model, x)
+        assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
+        return
+    want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
         assert fork[f"{shared}:{pass_index}"].edits

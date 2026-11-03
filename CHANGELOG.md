@@ -23,6 +23,9 @@
 - **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
   Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
   (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  A set-only `do` given a callable (an `Edit` helper such as `tl.zero_ablate()` or `tl.scale(2.0)`, or a plain
+  function) stages it as a sticky hook that the next propagating `do` or `run` fires (walk ruling names.3, 3 Nov 2026);
+  only static values are stored as one-shot set values.
   The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
   `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
   covers `Rule(direction=)`.
@@ -133,7 +136,7 @@
 
 - **replay**: replay refuses `replay_param_changed_since_capture` when a parameter the replay
   reads changed after capture (an optimizer step, `load_state_dict`, an in-place op under
-  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine, `push`, `push_from`,
+  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine,
   differentiable replay and later replays of every fork. Before, it silently computed with the
   new weight. Re-capture, or pass `allow_changed_params=True` (`InterventionOptions` or
   `ReplayOptions`) to replay with the current values; the run lists the parameters in

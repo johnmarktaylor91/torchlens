@@ -41,8 +41,8 @@ manifest plus the component specs below, and the record tables that follow.
 
 | manifest schema | digest |
 | --- | --- |
-| `tlspec_manifest_v1.json` | `be0266e58ed12debf1e1964dc56838a48576c214fe32fdbc192e04ec66d19948` |
-| `tlspec_manifest_v2.json` | `b7b6604e74132fa580c708bf8dd63677cb14bab98a69806405af75ec93bc1286` |
+| `tlspec_manifest_v1.json` | `583398ee8527538be31bdca51861f5438c45ead7a99953529cf62283a0fc3f3f` |
+| `tlspec_manifest_v2.json` | `54f461249c41fb8ff64367b7dff0b6e2af66e2e2b833b9d9b8575adae7eebe59` |
 
 Writer identity fields: `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at`.
 Payload codecs: `torch_safetensors_v1`, `numpy_safetensors_v1`.

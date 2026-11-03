@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens._utils.hashing import _hashable_path_component
+from torchlens._utils.hashing import _hashable_path_component, compute_graph_shape_hash
 from torchlens.errors import MetadataInvariantError
 from torchlens.intervention.types import ParentRef
 from torchlens.recording import RecordContext
@@ -188,6 +188,18 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     assert len(log1.provenance.fingerprint) == 64
     assert log1.provenance.fingerprint == log2.provenance.fingerprint
     assert log3.provenance.fingerprint != log1.provenance.fingerprint
+
+
+def test_provenance_fingerprint_equals_public_structural_hash() -> None:
+    """``trace.provenance.fingerprint`` is the address-free hash ``tl.fingerprint.trace`` returns."""
+
+    log = tl.trace(
+        _LinearSplitModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    assert log.provenance.fingerprint == tl.fingerprint.trace(log)
+    assert log.provenance.fingerprint == compute_graph_shape_hash(log, include_module_address=False)
 
 
 def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:

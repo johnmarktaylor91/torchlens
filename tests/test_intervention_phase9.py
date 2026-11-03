@@ -16,6 +16,9 @@ from torchlens.intervention.errors import (
 )
 from torchlens.types import Relationship
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _TanhModel(nn.Module):
     """Different-class model used for relationship blocking tests."""

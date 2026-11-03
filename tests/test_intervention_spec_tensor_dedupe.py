@@ -63,7 +63,12 @@ def _save_sticky_steer(tmp_path: Path, direction: torch.Tensor) -> tuple[Any, st
         tl.steer(direction),
         intervention=InterventionOptions(confirm_mutation=True),
     )
-    log.push()  # a second fire record: one more reference to the same direction
+    # A second sticky steer on the same direction: one more reference to it.
+    log.do(
+        tl.func("relu"),
+        tl.steer(direction),
+        intervention=InterventionOptions(confirm_mutation=True),
+    )
     path = tmp_path / "steer.tlspec"
     log.save_intervention(path, level="portable")
     return log, label, path

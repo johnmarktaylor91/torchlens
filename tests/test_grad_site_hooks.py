@@ -111,7 +111,9 @@ def test_patch_from_on_gradient_site_refuses_before_attaching() -> None:
         getattr(getattr(trace, "_intervention_spec", None), "hook_specs", ()) or ()
     )
     assert hook_specs_after == hook_specs_before
-    assert list(trace.intervention_audit) == audit_before
+    # The refused do leaves the earlier audit intact and adds only its error row.
+    assert list(trace.intervention_audit)[: len(audit_before)] == audit_before
+    assert trace.intervention_audit[-1]["status"] == "error"
 
 
 def test_hook_context_signal_state_and_run_state() -> None:
