@@ -90,7 +90,6 @@ def _ops_reading(trace: tl.Trace, address: str) -> list[Any]:
     return [op for op in trace.ops if address in [p.address for p in op.params]]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("backward_ready", [False, True])
 @pytest.mark.parametrize("grad_mode", [True, False])
 def test_capture_never_flips_requires_grad_and_leaves_model_state_identical(

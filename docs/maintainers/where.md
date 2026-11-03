@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1401 modules, 629924 lines, 0 modules without a docstring.
+83 packages, 1401 modules, 629935 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3772 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6474 |
-| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 917 |
+| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8675 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6866 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6379 |
@@ -1113,16 +1113,16 @@ Backend Protocol and public registry exports for TorchLens adapters. (16 modules
 
 ### `torchlens.backends._protocols`
 
-Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 917 lines)
+Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 |
 | `jax` | JAX preview ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 125 |
-| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 140 |
+| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 146 |
 | `mlx_wrapped_state` | Import-light probe of the MLX wrapper state for the protocol shell. | 19 |
 | `paddle` | Paddle preview ''BackendProtocol'' shell (delegating; eager dygraph). | 154 |
-| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 125 |
+| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
 | `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
 | `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
 

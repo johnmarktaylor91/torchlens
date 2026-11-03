@@ -35,7 +35,6 @@ def test_chokepoint_builds_structured_refusal() -> None:
     assert err.fields["remedy"]
 
 
-@pytest.mark.smoke
 def test_pickle_state_gate_raises_typed() -> None:
     with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": FUTURE_VERSION}, cls_name="Trace")
@@ -83,7 +82,6 @@ def test_manifest_policy_gate_raises_typed() -> None:
     assert drift.value.fields["code"] == "bundle_torch_incompatible"
 
 
-@pytest.mark.smoke
 def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     """R6 (2026-10-01): a minor torch drift is advisory, never a load refusal.
 
@@ -142,7 +140,6 @@ def test_recover_reraises_governed_refusals() -> None:
     assert ArtifactRuntimeIncompatibleError in _GOVERNED_COMPATIBILITY_REFUSALS
 
 
-@pytest.mark.smoke
 def test_recover_refuses_future_version_bundle(tmp_path) -> None:
     """End-to-end: a future-versioned fastlog bundle refuses out of recover()."""
 

@@ -95,7 +95,6 @@ def test_stop_after_selector_never_fired_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "stop_after_never_fired"
 
 
-@pytest.mark.smoke
 def test_stop_after_callable_never_fired_warns_with_ledger() -> None:
     """An exploratory callable that never fires warns coded and ledgers."""
 
@@ -153,6 +152,7 @@ def test_stop_after_ambient_context_manager_reaches_trace_and_pluck() -> None:
     assert tuple(out.shape) == (2, 8)
 
 
+@pytest.mark.smoke
 def test_stop_after_ambient_never_fired_warns_never_refuses() -> None:
     """Ambient provenance is exploratory: never-fired warns, even selector-shaped."""
 
@@ -169,7 +169,6 @@ def test_stop_after_ambient_never_fired_warns_never_refuses() -> None:
     assert "stop_after_never_fired_callable" in codes
 
 
-@pytest.mark.smoke
 def test_stop_after_explicit_wins_over_ambient() -> None:
     """CaptureOptions.stop_after beats the ambient context-manager site."""
 
@@ -178,7 +177,6 @@ def test_stop_after_explicit_wins_over_ambient() -> None:
     assert log.is_stopped is True
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_stop_after_gpt2_block_frontier() -> None:
     """R0 realism row: stop after transformer block 0 on the REAL GPT-2 class."""

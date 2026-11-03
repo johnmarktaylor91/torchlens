@@ -124,7 +124,6 @@ def test_o1a_construction_identities() -> None:
     assert abs(int(signs.to(torch.int64).sum())) <= 4 * math.sqrt(nnz)
 
 
-@pytest.mark.smoke
 def test_o1a_sparse_path_matches_dense_matmul() -> None:
     """Every path reproduces the materialized dense matmul.
 
@@ -331,7 +330,6 @@ def test_every_path_is_row_local_under_every_batch_split(construction: str, path
 # --- digest + verification --------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_digest_is_stable_and_verify_matrix_rederives() -> None:
     """The canonical digest is exact and re-derivation reproduces it."""
 
@@ -364,7 +362,6 @@ def test_verify_matrix_refuses_on_construction_drift() -> None:
     assert err.fields["recorded"].endswith("0" * 8)
 
 
-@pytest.mark.smoke
 def test_bernoulli_plan_discloses_generation_cost() -> None:
     """The O(D*k) cost rides the plan disclosures (no harvest surprises)."""
 
@@ -379,7 +376,6 @@ def test_bernoulli_plan_discloses_generation_cost() -> None:
 # --- params, coercion, records -----------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_srp_params_are_validated_typed() -> None:
     """n_components required; closed vocabularies; density domain."""
 

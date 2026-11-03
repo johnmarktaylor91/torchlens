@@ -57,7 +57,6 @@ def test_constructor_mints_the_honest_name() -> None:
     assert scramble_elements(torch.ones(3), seed=0).name == "scramble_elements"
 
 
-@pytest.mark.smoke
 def test_seeded_draws_are_reproducible() -> None:
     """Same seed, same draws (the rename changed no behavior)."""
 

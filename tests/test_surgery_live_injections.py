@@ -150,7 +150,6 @@ def test_injection_firing_index_advances_per_fire() -> None:
     assert hosts == {"relu_1_2:1", "relu_2_4:1"}
 
 
-@pytest.mark.smoke
 def test_injection_query_split_and_model_family_untouched(chain) -> None:
     """model_ops is exactly the ordinary op family; injected ops sit apart."""
 

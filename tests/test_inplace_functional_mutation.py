@@ -71,7 +71,6 @@ def _runnable_trace(model: nn.Module, inputs: torch.Tensor) -> Any:
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("case", sorted(_MUTATING))
 def test_inplace_functional_is_recorded_as_mutating(case: str) -> None:
     """Default and runnable-ready captures both flag the call as in-place."""
@@ -91,7 +90,6 @@ def test_inplace_functional_is_recorded_as_mutating(case: str) -> None:
     assert mutating == [True]
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("case", sorted(_NOT_MUTATING))
 def test_same_object_return_without_a_write_is_not_mutating(case: str) -> None:
     """Eval-mode ``dropout_`` returns its input untouched; runnable capture says so."""
@@ -117,7 +115,6 @@ def test_loaded_run_of_inplace_functional_is_verified(case: str, tmp_path: Path)
     torch.testing.assert_close(result.output, model(inputs))
 
 
-@pytest.mark.smoke
 def test_identity_return_after_a_sibling_view_write_is_not_mutating() -> None:
     """A stale version baseline never turns an identity return into a mutation."""
 

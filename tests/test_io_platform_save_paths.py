@@ -30,7 +30,6 @@ from torchlens._io import ArtifactError, _durability
 
 fcntl = pytest.importorskip("fcntl")
 
-pytestmark = pytest.mark.smoke
 
 # Captured before any test patches the helper: the platform flag sets it selects.
 _WINDOWS_FLAGS = _durability._fsync_open_flags("nt")

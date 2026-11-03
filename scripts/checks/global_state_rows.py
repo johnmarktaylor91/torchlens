@@ -1,10 +1,11 @@
 """Lifecycle-class row ledger for the global-state inventory census.
 
-Pure data, split out of ``test_global_state_inventory.py`` at the seam its
+Pure data, split out of the inventory census (now ``global_state_inventory.py``
+beside this file, formerly a test module) at the seam its
 ratchet ledger row named (2026-08-26): the lifecycle-class frozensets carry
 most of the line count and are append-per-new-global, while the census
 machinery and the assertions that consume them must be read together and
-stay in the test module. Every mutable module global in the package is
+stay together in that module. Every mutable module global in the package is
 classified into EXACTLY ONE lifecycle class below (plus the orthogonal
 ``_WEAKLY_HELD`` storage-fact ledger); a new global in ``torchlens/`` lands
 as a row HERE, with a rationale comment when the classification is not

@@ -127,7 +127,6 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
     return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
-@pytest.mark.smoke
 def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     """Audit save writes the tlspec directory and loaded specs compare cleanly."""
 
@@ -471,7 +470,6 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             sys.path.remove(str(tmp_path))
 
 
-@pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
 
@@ -653,7 +651,6 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     assert spec.records == [first, distinct_tuple]
 
 
-@pytest.mark.smoke
 def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
     """Portable saves fail closed for opaque local callables."""
 
@@ -683,7 +680,6 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 
-@pytest.mark.smoke
 def test_function_resolution_failure_raises() -> None:
     """Unresolvable function registry keys raise replay precondition errors."""
 
@@ -822,7 +818,6 @@ def test_loaded_custom_key_is_denied_at_execution_until_trusted(
     assert resolved(3) == -3
 
 
-@pytest.mark.smoke
 def test_custom_function_key_trust_gate_and_allowlist() -> None:
     """Trusted custom keys resolve, while a supplied allowlist stays restrictive."""
 
@@ -1102,7 +1097,6 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     assert compat.outcome == "EXACT"
 
 
-@pytest.mark.smoke
 def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> None:
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 

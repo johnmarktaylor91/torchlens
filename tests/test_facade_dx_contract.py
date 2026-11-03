@@ -130,10 +130,6 @@ def _get_instance(dx_trace: Trace, kind: str) -> object:
     raise KeyError(kind)
 
 
-@pytest.mark.smoke_cells(
-    "test_all_declared_fields_are_debugger_visible[layer-Layer-field_order2]",
-    "test_all_declared_fields_are_debugger_visible[module-Module-field_order3]",
-)
 @pytest.mark.parametrize(("kind", "cls", "field_order"), _CASES)
 def test_all_declared_fields_are_debugger_visible(
     dx_trace: Trace, kind: str, cls: type, field_order: tuple[str, ...]
