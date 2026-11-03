@@ -402,8 +402,11 @@ def test_axis_a_public_verbs_failure_paths(
 
     log = _capture()
     if verb == "replay":
-        # A capture without replay metadata: the replay engine refuses before any edit runs.
-        log = tl.trace(_ReluAdd(), torch.tensor([[-1.0, 2.0, 3.0]]))
+        # A predicate recording keeps no per-op argument templates (a default capture
+        # does), so the replay engine refuses before any edit runs.
+        log = tl.record(
+            _ReluAdd(), torch.tensor([[-1.0, 2.0, 3.0]]), save=tl.func("relu")
+        ).to_trace()
     with pytest.raises(expected_exc) as excinfo:
         operation(log)
     assert str(excinfo.value)

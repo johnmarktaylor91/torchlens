@@ -293,20 +293,20 @@ def test_intervention_options_differentiable_round_trips_the_merge() -> None:
 
     default = InterventionOptions()
     assert default.differentiable is False
-    assert not default.is_field_explicit("differentiable")
+    assert not default._is_field_explicit("differentiable")
 
     grouped = InterventionOptions(differentiable=True)
     assert grouped.as_dict()["differentiable"] is True
-    assert grouped.is_field_explicit("differentiable")
+    assert grouped._is_field_explicit("differentiable")
     merged = merge_intervention_options(intervention=grouped)
     assert merged == grouped
-    assert merged.is_field_explicit("differentiable")
+    assert merged._is_field_explicit("differentiable")
     rebuilt = InterventionOptions.from_values(grouped.as_dict(), frozenset({"differentiable"}))
     assert rebuilt == grouped
 
     flat = merge_intervention_options(intervention=None, differentiable=True)
     assert flat.differentiable is True
-    assert flat.is_field_explicit("differentiable")
+    assert flat._is_field_explicit("differentiable")
     assert flat.engine == "auto"
 
     with pytest.raises(ArgumentConflictError) as excinfo:

@@ -105,7 +105,11 @@ def test_patch_from_on_gradient_site_refuses_before_attaching() -> None:
     )
     audit_before = list(trace.intervention_audit)
     with pytest.raises(InvalidArgumentError) as exc_info:
-        trace._attach_hooks(tl.grad(mul), tl.patch_from(donor))
+        trace.do(
+            tl.grad(mul),
+            tl.patch_from(donor),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     assert exc_info.value.fields["code"] == "edit_signal_mismatch"
     hook_specs_after = len(
         getattr(getattr(trace, "_intervention_spec", None), "hook_specs", ()) or ()
