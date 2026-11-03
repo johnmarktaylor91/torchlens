@@ -17,6 +17,9 @@ __tl_layer__ = "L8"
 class ModelExplorerExportError(_ActionableErrorMixin, CaptureError, RuntimeError):
     """Raised when a Model Explorer export cannot be emitted honestly.
 
+    The refusal code is ``exc.fields["code"]``; this class has no ``.code``
+    attribute.
+
     Covers exporter-integrity failures (an unresolvable parent reference,
     duplicate node/graph ids, an episode join mismatch): conditions that are
     TorchLens bugs or capture-integrity gaps rather than user errors, where

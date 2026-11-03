@@ -564,7 +564,7 @@ def _operation(
         def save_once() -> None:
             path = Path(parent.name) / f"trace_{counter['i']}.tlspec"
             counter["i"] += 1
-            tl.save(trace, str(path))
+            trace.save(str(path))
             state["serialized_file_size_bytes"] = path.stat().st_size
 
         return save_once
@@ -575,7 +575,7 @@ def _operation(
         parent = tempfile.TemporaryDirectory()
         state["_tempdir"] = parent
         path = Path(parent.name) / "trace_fixture.tlspec"
-        tl.save(trace, str(path))
+        trace.save(str(path))
         state["serialized_file_size_bytes"] = path.stat().st_size
         return lambda: tl.load(str(path))
     if operation == "peer_manual_hooks":
