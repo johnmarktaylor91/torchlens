@@ -202,7 +202,8 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     if target is None:
         with tempfile.TemporaryDirectory(prefix="tl-render-") as tmpdir:
             call_kwargs["path"] = str(Path(tmpdir) / "graph")
-            dot = str(trace.draw(**call_kwargs))
+            drawn = trace.draw(**call_kwargs)
+            dot = str(drawn)
             rendered = Path(tmpdir) / f"graph.{fileformat}"
             data = rendered.read_bytes() if rendered.exists() else None
     else:
@@ -221,6 +222,8 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
         path=target,
         provenance=provenance,
         receipt=receipt,
+        # Re-render (display, save) the way the draw rendered.
+        _render=drawn._render,
         num_ops=len(trace) if hasattr(trace, "__len__") else None,
         policy={
             "theme": theme,

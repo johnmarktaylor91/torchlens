@@ -26,8 +26,6 @@ __tl_layer__ = "FACADE"
 
 #: Formats whose payload is text written as-is by ``save``.
 _TEXT_FORMATS = frozenset({"html", "gv", "dot"})
-#: Upper bound for one detached Graphviz render, matching a draw's forward render.
-_DETACHED_RENDER_TIMEOUT_S = 120
 
 
 @dataclass
@@ -83,6 +81,7 @@ class Drawing:
     _collapse_source: Any = field(default=None, repr=False)
     _collapse_context: Any = field(default=None, repr=False)
     _collapse_tools: Any = field(default=None, repr=False)
+    _render: Any = field(default=None, repr=False)
 
     @property
     def collapse_plan(self) -> Any:
@@ -166,7 +165,7 @@ class Drawing:
             if self._data is not None and fileformat == self.file_format:
                 payload = self._data
             else:
-                payload = _render_dot_source(self.dot, fileformat, self._image_root())
+                payload = _render_dot_source(self.dot, fileformat, self._render)
         tmp = target.with_name(target.name + ".tl-partial")
         tmp.write_bytes(payload)
         os.replace(tmp, target)
@@ -199,11 +198,6 @@ class Drawing:
         """
 
         self.trace = None
-
-    def _image_root(self) -> str | None:
-        """Return the retained trace's image scratch root, if it still has one."""
-
-        return getattr(self.trace, "_visualizer_dir", None)
 
     def __enter__(self) -> Drawing:
         """Enter the context manager (returns self)."""
@@ -239,7 +233,7 @@ class Drawing:
         if not self.dot:
             return None
         try:
-            return _render_dot_source(self.dot, "svg", self._image_root()).decode(
+            return _render_dot_source(self.dot, "svg", self._render).decode(
                 "utf-8", errors="replace"
             )
         except CaptureNotActiveError:
@@ -256,38 +250,26 @@ class Drawing:
         )
 
 
-def _render_dot_source(dot: str, fileformat: str, image_root: str | None = None) -> bytes:
-    """Render a DOT string to bytes the way ``draw`` renders it (typed failure).
+def _render_dot_source(dot: str, fileformat: str, render: Any = None) -> bytes:
+    """Render a DOT string to bytes (typed failure).
 
-    The detached render (notebook display of a drawing, ``save`` to another
-    format) runs the same bounded Graphviz child as ``draw``: the bundled font,
-    so the key's table, sized to its words in that face, fits them; relative
-    node images resolved against ``image_root`` (the trace's scratch root);
-    and an SVG's local image references embedded as data URIs, so the picture
-    never links a file under the temp folder.
+    ``render`` is the renderer the drawing's producer injected (``draw``'s own
+    bounded Graphviz child with the bundled font and SVG image inlining; see
+    ``Drawing._render``); without one, the graphviz pipeline renders it.
     """
 
     try:
-        import graphviz  # noqa: F401  (the documented render dependency)
+        import graphviz
     except ImportError as error:
         raise CaptureNotActiveError(
             "Rendering requires the graphviz Python package and the Graphviz system binaries.",
             code="render_engine_unavailable",
             remedy="pip install graphviz, and install Graphviz (apt install graphviz)",
         ) from error
-    from .._visualization import _render_utils
-    from .._visualization._svg_compose import _inline_svg_local_images
-    from .._visualization.render_execution import surface_layout_stderr
-
     try:
-        completed = _render_utils.run_bounded_subprocess(
-            ["dot", f"-T{fileformat}"],
-            timeout=_DETACHED_RENDER_TIMEOUT_S,
-            check=True,
-            capture_output=True,
-            input=dot.encode("utf-8"),
-            cwd=image_root,
-        )
+        if render is not None:
+            return bytes(render(dot, fileformat))
+        return bytes(graphviz.Source(dot).pipe(format=fileformat))
     except Exception as error:
         raise CaptureNotActiveError(
             f"Graphviz could not render the graph to {fileformat!r}: {error}",
@@ -297,12 +279,6 @@ def _render_dot_source(dot: str, fileformat: str, image_root: str | None = None)
                 "choose a supported format such as 'pdf' or 'svg'"
             ),
         ) from error
-    surface_layout_stderr(completed.stderr, engine="dot")
-    payload = bytes(completed.stdout)
-    if fileformat != "svg":
-        return payload
-    root = Path(image_root) if image_root else None
-    return _inline_svg_local_images(payload.decode("utf-8"), root).encode("utf-8")
 
 
 @dataclass
@@ -326,6 +302,9 @@ class DrawTarget:
     inline:
         ``True`` for a bare call inside a Jupyter kernel: the picture renders to
         memory and no file is left behind.
+    render:
+        The renderer the producer injects into the :class:`Drawing` it finishes
+        (``Drawing._render``), or ``None`` for the graphviz-pipe fallback.
     """
 
     path: str | None
@@ -333,6 +312,7 @@ class DrawTarget:
     stem: str | None = None
     inline: bool = False
     scratch: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
+    render: Any = field(default=None, repr=False)
 
     def finish(self, dot: str, outpath: str, **fields: Any) -> Drawing:
         """Return the call's :class:`Drawing`; an inline render keeps the bytes, not the file.
@@ -341,6 +321,8 @@ class DrawTarget:
         remaining :class:`Drawing` fields (``num_ops``, ``policy``).
         """
 
+        if self.render is not None:
+            fields.setdefault("_render", self.render)
         stem = self.stem if self.stem is not None else outpath
         written = Path(f"{stem}.{self.file_format}")
         if not self.inline:
