@@ -56,6 +56,7 @@ _RECORDING_DOOR_DEFAULTS: dict[str, Any] = {
     "on_forward_error": "raise",
     "default_grad": MISSING,
     "postprocess": "none",
+    "lean": False,
 }
 
 
@@ -169,8 +170,8 @@ def record(
         Grouped recorder options (``tl.options.RecordingOptions``). The fields
         ``record`` reads: ``default_op``, ``default_module``, ``default_grad``,
         ``history_size``, ``include_source_events``, ``max_predicate_failures``,
-        ``on_predicate_error``, ``on_forward_error`` and ``postprocess`` (see
-        ``RecordingOptions``); ``keep_op`` and ``intervene`` refuse with code
+        ``on_predicate_error``, ``on_forward_error``, ``postprocess`` and ``lean``
+        (see ``RecordingOptions``); ``keep_op`` and ``intervene`` refuse with code
         ``record_capture_option_unsupported`` (pass ``save=`` and ``intervene=``).
         ``on_forward_error`` controls failed-forward handling: ``"raise"`` raises
         the capture's ``TraceCaptureError``, ``"attach_partial"`` also attaches the
@@ -253,6 +254,10 @@ def record(
     model = unwrap_compiled_model(model)
     knobs = _unfold_recording_options(recording)
     postprocess = knobs.pop("postprocess")
+    # ``lean`` arrives either as the door keyword or on ``recording=``; either one asks for it.
+    recording_lean = knobs.pop("lean")
+    if lean is False:
+        lean = recording_lean
     validate_postprocess(postprocess)
     inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no

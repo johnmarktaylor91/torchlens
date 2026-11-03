@@ -171,3 +171,16 @@ def test_recorder_door_takes_the_lean_keyword() -> None:
 def test_recording_options_carry_the_lean_field() -> None:
     assert tl.options.RecordingOptions().lean is False
     assert tl.options.RecordingOptions(lean=True).lean is True
+
+
+def test_record_reads_lean_off_the_recording_options() -> None:
+    """``tl.record(recording=RecordingOptions(lean=True))`` records lean like ``lean=True``."""
+
+    model, x, site = _scenario("small_block2")
+    with torch.no_grad():
+        rec = tl.record(
+            model, x, save=tl.module(site), recording=tl.options.RecordingOptions(lean=True)
+        )
+    assert rec.options.lean is True
+    assert rec.lean_omissions == LEAN_OMISSIONS
+    assert len(rec.records) == 1
