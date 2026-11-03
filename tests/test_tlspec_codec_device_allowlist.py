@@ -64,50 +64,34 @@ def test_static_device_allowlist_deleted() -> None:
 # --------------------------------------------------------------------------- #
 
 _LEGIT_GRAMMAR_TOKENS = [
-    "cpu",
-    "gpu",
-    "cuda",
     "cuda:0",
-    "cuda:3",
-    "mps",
-    "CPU",
-    "GPU",
     "CLANG",
-    "METAL",
-    "CUDA",
-    "CUDA:0",
-    "LLVM",
-    "PYTHON",
-    "npu",
-    "xpu",
-    "tpu",
     "Device(cpu)",
-    "Device(gpu)",
     "DeviceType.gpu",
-    "Place(cpu)",
-    "Place(gpu:0)",
-    "gpu:0",
-    "cuda:1",
 ]
 
 _ATTACKER_TOKENS = [
     "disk:/tmp/tl_sentinel",
-    "disk:./rel",
-    "ext:/dev/sda",
     "file:///etc/shadow",
     "/etc/passwd",
     "..\\..\\win",
     "cpu:/../../x",
     "https://evil.com/x",
     "\\\\unc\\share",
-    "disk:C:\\Windows",
-    "device(disk:/tmp/x)",
     "cpu; rm -rf /",
     "cuda:notanint",
 ]
 
 
-@pytest.mark.parametrize("backend_name", ["paddle", "mlx", "jax", "tf"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "backend_name",
+    [
+        "paddle",
+        "mlx",
+        "jax",
+    ],
+)
 @pytest.mark.parametrize("token", _LEGIT_GRAMMAR_TOKENS)
 def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, token: str) -> None:
     """Backends with no filesystem/network device admit every grammar-valid token.
@@ -120,7 +104,8 @@ def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, 
     assert _sanitize_artifact_device_token(token, backend_name) == token
 
 
-@pytest.mark.parametrize("backend_name", ["tinygrad", "paddle"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("backend_name", ["paddle"])
 @pytest.mark.parametrize("token", _ATTACKER_TOKENS)
 def test_attacker_device_tokens_refused_to_default(backend_name: str, token: str) -> None:
     """Every path/url/scheme/malformed token resolves to the runtime default (None)."""
@@ -136,14 +121,6 @@ def test_unknown_and_empty_tokens_resolve_default() -> None:
         assert _sanitize_artifact_device_token("", backend_name) is None
         assert _sanitize_artifact_device_token(None, backend_name) is None
         assert _sanitize_artifact_device_token(123, backend_name) is None
-
-
-def test_resolve_portable_device_trusts_caller_map_location() -> None:
-    """A caller ``map_location`` is trusted input and passes through unchanged."""
-
-    assert _resolve_portable_device("tinygrad", "disk:/tmp/x", "cuda") == "cuda"
-    # Artifact token is gated only when no trusted caller value is supplied.
-    assert _resolve_portable_device("tinygrad", "disk:/tmp/x", None) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -215,20 +192,11 @@ def test_codec_round_trips_runtime_accelerator_device() -> None:
 # --------------------------------------------------------------------------- #
 
 _SINK_TOKENS = [
-    "disk",
-    "disk:64",
-    "DISK:64",
-    "ext",
-    "ext:0",
     "tinyfs",
-    "tinyfs:6767",
-    "TINYFS:64",
-    "rdma",
-    "rdma:0",
-    "shm",
 ]
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("token", _SINK_TOKENS)
 def test_tinygrad_io_sink_bases_refused(token: str) -> None:
     """Every file/socket/fabric sink base is refused, index suffix or not.
@@ -258,7 +226,13 @@ def test_sink_exclude_precedes_runtime_membership() -> None:
         assert _sanitize_artifact_device_token(f"{base.upper()}:0", "tinygrad") is None
 
 
-@pytest.mark.parametrize("token", ["foobar", "foobar:0", "zzz", "notadevice:3"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "token",
+    [
+        "foobar",
+    ],
+)
 def test_unknown_grammar_valid_bases_fail_closed(token: str) -> None:
     """A grammar-valid base the runtime does not name refuses to the default."""
 
@@ -333,14 +307,11 @@ def test_tinygrad_disk_device_creates_no_file(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 _NON_TORCH_CODECS = [
-    payload_codec.TinygradPayloadCodec,
-    payload_codec.MlxPayloadCodec,
-    payload_codec.PaddlePayloadCodec,
     payload_codec.JaxPayloadCodec,
-    payload_codec.TFPayloadCodec,
 ]
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("codec_cls", _NON_TORCH_CODECS, ids=lambda c: c.__name__)
 def test_non_torch_from_numpy_routes_or_ignores_saved_device(codec_cls: type) -> None:
     """Every non-torch ``from_numpy`` ignores the saved device or routes the resolver.

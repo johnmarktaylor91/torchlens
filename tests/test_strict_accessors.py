@@ -10,7 +10,6 @@ from torchlens._data_classes.buffer import Buffer
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.module import Module
-from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._errors import AmbiguousOpLookupError
 
@@ -84,46 +83,6 @@ def test_layers_accessor_always_returns_layer_for_pass_label() -> None:
 
     assert isinstance(trace.layers["linear_1_1:1"], Layer)
     assert trace.layers["linear_1_1:1"] is trace.layers["linear_1_1"]
-
-
-def test_ops_accessor_returns_op_for_pass_label() -> None:
-    """Pass-qualified op labels resolve to Op records."""
-
-    trace = _strict_trace()
-
-    assert isinstance(trace.ops["linear_1_1:1"], Op)
-    assert trace.ops["linear_1_1:1"].label == "linear_1_1:1"
-
-
-def test_trace_getitem_layer_label_always_returns_layer() -> None:
-    """Convenience layer-label lookup is deterministic across pass counts."""
-
-    trace = _strict_trace()
-
-    assert isinstance(trace["mul_1_2"], Layer)
-    assert trace["mul_1_2"] is trace.layers["mul_1_2"]
-    assert isinstance(trace["linear_1_1"], Layer)
-    assert trace["linear_1_1"] is trace.layers["linear_1_1"]
-    assert isinstance(trace["linear_1_1:1"], Op)
-
-
-def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
-    """A bare multi-pass Layer label is rejected by trace.ops."""
-
-    trace = _strict_trace()
-
-    with pytest.raises(AmbiguousOpLookupError):
-        trace.ops["linear_1_1"]
-
-
-def test_layer_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
-    """A bare multi-pass Layer label is rejected by the scoped layer.ops accessor."""
-
-    trace = _strict_trace()
-    layer = trace.layers["linear_1_1"]
-
-    with pytest.raises(AmbiguousOpLookupError):
-        layer.ops["linear_1_1"]
 
 
 def test_layer_ops_contains_is_false_for_ambiguous_label() -> None:

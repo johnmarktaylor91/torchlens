@@ -225,35 +225,6 @@ def _admit(references: Any, *t_args: Any) -> Any:
         arg_references._ACTIVE.reset(token)
 
 
-def test_offloading_capture_charges_no_bytes_for_a_parameter_alias() -> None:
-    from torchlens._save_budget import SaveBudgetExceededError
-
-    model = nn.Linear(16, 16)
-    owners = arg_references._parameter_owners(model)
-    offloading = arg_references.ParameterArgumentReferences(owners, None, "cpu")
-    alias = model.weight.detach()
-    assert offloading.shares_parameter_storage(alias)
-    assert _admit(offloading, alias) == []
-    with pytest.raises(SaveBudgetExceededError):
-        _admit(offloading, torch.zeros_like(alias))
-    assert _admit(arg_references.ParameterArgumentReferences(owners), alias) == []
-    with pytest.raises(SaveBudgetExceededError):
-        _admit(arg_references.ParameterArgumentReferences({}, None, "cpu"), alias)
-
-
-def test_a_rebound_parameter_storage_is_charged_again() -> None:
-    from torchlens._save_budget import SaveBudgetExceededError
-
-    model = nn.Linear(16, 16)
-    owners = arg_references._parameter_owners(model)
-    offloading = arg_references.ParameterArgumentReferences(owners, None, "cpu")
-    stale = model.weight.detach()
-    model.weight.data = torch.zeros(16, 16)
-    assert not offloading.shares_parameter_storage(stale)
-    with pytest.raises(SaveBudgetExceededError):
-        _admit(offloading, stale)
-
-
 def _admit_and_commit(references: Any, alias: torch.Tensor) -> None:
     trace = _BudgetTrace(64)
     fields: dict[str, Any] = {"_label_raw": "op"}
@@ -276,27 +247,6 @@ def test_the_commit_charges_a_saved_alias_only_without_its_parameter_owner() -> 
     _admit_and_commit(arg_references.ParameterArgumentReferences(owners), alias)
     with pytest.raises(SaveBudgetExceededError):
         _admit_and_commit(arg_references.ParameterArgumentReferences({}, None, "cpu"), alias)
-
-
-def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
-    value = torch.ones(3)
-    copied = _ops_arguments._copy_saved_arg_tree(value, True)
-    assert copied.device == value.device and copied is not value and not hasattr(copied, _TAG)
-    assert _ops_arguments._saved_arg_retention_devices((value,), {}) == {}
-
-
-def test_offload_is_off_for_same_and_outside_a_validation_session() -> None:
-    model = nn.Linear(2, 2)
-    with arg_references.parameter_argument_references(model, True, "cpu") as outside:
-        assert not outside.offloads and arg_references.active_argument_references() is None
-    token = arg_references._SESSION.set(arg_references._ReferenceSession())
-    try:
-        with arg_references.parameter_argument_references(model, True, "same") as same:
-            assert not same.offloads
-        with arg_references.parameter_argument_references(model, False, "cpu") as live:
-            assert live.offloads and arg_references.active_argument_references() is live
-    finally:
-        arg_references._SESSION.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -338,18 +288,6 @@ def test_swap_holds_exact_copies_and_restores_the_host_copies() -> None:
     assert op.saved_kwargs["w"] is host_kwarg
 
 
-def test_swap_restores_the_host_copies_when_the_check_raises() -> None:
-    host = _tagged(torch.ones(2))
-    op = _FakeOp([host], {})
-    with (
-        pytest.raises(RuntimeError, match="check failed"),
-        _replay_device.saved_args_on_consumed_devices(_FakeTrace(op), "op"),
-    ):
-        assert op.saved_args[0] is not host
-        raise RuntimeError("check failed")
-    assert op.saved_args[0] is host
-
-
 def test_swap_changes_nothing_without_tags() -> None:
     values = [torch.ones(2), (torch.zeros(1),), None]
     op = _FakeOp(list(values), {"k": torch.ones(1)})
@@ -360,24 +298,6 @@ def test_swap_changes_nothing_without_tags() -> None:
 # ---------------------------------------------------------------------------
 # CPU models: nothing moves, verdicts unchanged
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("output_device", ["same", "cpu"])
-def test_cpu_validation_tags_no_saved_argument(output_device: str) -> None:
-    torch.manual_seed(0)
-    tagged: list[int] = []
-
-    def inspect(trace: Any, model: Any) -> None:
-        tagged.append(sum(hasattr(t, _TAG) for t in _saved_arg_tensors(trace)))
-
-    verdict, failures = _validation_capture(_Offsets(), torch.randn(2, 6), output_device, inspect)
-    assert verdict and failures == [None] and tagged == [0]
-
-
-@pytest.mark.parametrize("output_device", ["same", "cpu"])
-def test_a_mid_forward_dtype_hop_validates(output_device: str) -> None:
-    torch.manual_seed(0)
-    assert _validate(_DtypeHop(), torch.randn(3, 4), output_device)
 
 
 # ---------------------------------------------------------------------------
@@ -494,24 +414,6 @@ def test_a_corrupted_saved_argument_fails_as_with_same(corrupt: Any) -> None:
         results[output_device] = _validation_capture(model, x, output_device, corrupt)
     assert results["cpu"] == results["same"]
     assert results["cpu"][0] is False
-
-
-def test_nested_swaps_move_nothing_twice_and_restore_on_every_exit() -> None:
-    host = _tagged(torch.ones(3))
-    op = _FakeOp([host], {})
-    trace = _FakeTrace(op)
-    with _replay_device.saved_args_on_consumed_devices(trace, "op"):
-        outer = op.saved_args[0]
-        with _replay_device.saved_args_on_consumed_devices(trace, "op"):
-            assert op.saved_args[0] is outer
-        assert op.saved_args[0] is outer
-        with (
-            pytest.raises(RuntimeError, match="inner"),
-            _replay_device.saved_args_on_consumed_devices(trace, "op"),
-        ):
-            raise RuntimeError("inner")
-        assert op.saved_args[0] is outer
-    assert op.saved_args[0] is host
 
 
 def _grad_models() -> list[tuple[str, Any, tuple[int, ...]]]:

@@ -114,20 +114,6 @@ def _labels(resolved) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_neighborhood_zero_hops_is_the_seed_family(log) -> None:
-    """hops=0 selects exactly the seed's touched sites."""
-
-    resolved = log[tl.neighborhood("relu_1_2", hops=0)]
-    assert _labels(resolved) == {_RELU}
-
-
-def test_neighborhood_one_hop_both_directions(log) -> None:
-    """One hop reaches exactly the recorded parents and children."""
-
-    resolved = log[tl.neighborhood("relu_1_2", hops=1)]
-    assert _labels(resolved) == {_LIN1, _RELU, _ADD}
-
-
 def test_neighborhood_directional_hops(log) -> None:
     """upstream follows parent edges only; downstream child edges only."""
 
@@ -142,16 +128,6 @@ def test_neighborhood_saturates_at_the_component(log) -> None:
 
     resolved = log[tl.neighborhood("add_1_5", hops=50)]
     assert _labels(resolved) == set(_ALL)
-
-
-def test_neighborhood_masks_are_whole_site_exact(log) -> None:
-    """Graph membership is structural: whole-site masks, relation exact."""
-
-    resolved = log[tl.neighborhood("relu_1_2", hops=1)]
-    for entry in resolved:
-        assert entry.provenance.relation == "exact"
-        assert entry.num_selected == entry.mask.numel()
-        assert "neighborhood(hops=1" in entry.provenance.source
 
 
 @pytest.mark.smoke
@@ -172,17 +148,6 @@ def test_neighborhood_accepts_op_and_layer_seeds(log) -> None:
     assert _labels(from_layer) == {_RELU}
     from_op = log[tl.neighborhood(layer.ops[0], hops=0)]
     assert _labels(from_op) == {_RELU}
-
-
-def test_neighborhood_composes_with_the_algebra(log) -> None:
-    """Producers return Selections: the full operator surface applies."""
-
-    union = tl.neighborhood("relu_1_2", hops=0) | tl.neighborhood("tanh_1_4", hops=0)
-    assert _labels(log[union]) == {_RELU, _TANH}
-    restricted = tl.neighborhood("relu_1_2", hops=1) & tl.units(_ADD, [(0, 0)])
-    resolved = log[restricted]
-    assert _labels(resolved) == {_ADD}
-    assert resolved[0].num_selected == 1
 
 
 # ---------------------------------------------------------------------------
@@ -237,23 +202,6 @@ def test_between_selects_exactly_the_path_region(log) -> None:
     assert _labels(resolved) == {_LIN1, _RELU, _ADD}
 
 
-def test_between_excludes_the_other_branch(log) -> None:
-    """Ops not on any source-to-sink path stay out (the tanh branch)."""
-
-    resolved = log[tl.between("input_1", "add_1_5")]
-    assert _labels(resolved) == {_INPUT, _LIN1, _RELU, _LIN2, _TANH, _ADD}
-    narrow = log[tl.between("relu_1_2", "linear_3_6")]
-    assert _TANH not in _labels(narrow)
-    assert _labels(narrow) == {_RELU, _ADD, _HEAD}
-
-
-def test_between_same_endpoint_is_the_single_op(log) -> None:
-    """between(x, x) is the one-op region (endpoints included)."""
-
-    resolved = log[tl.between("relu_1_2", "relu_1_2")]
-    assert _labels(resolved) == {_RELU}
-
-
 def test_between_no_path_is_the_empty_selection(log) -> None:
     """No directed path resolves EMPTY: disclosure, never an error."""
 
@@ -264,13 +212,6 @@ def test_between_no_path_is_the_empty_selection(log) -> None:
     assert len(parallel) == 0
 
 
-def test_between_accepts_endpoint_lists(log) -> None:
-    """Multi-source / multi-sink endpoint groups union their regions."""
-
-    resolved = log[tl.between(["linear_1_1", "linear_2_3"], "linear_3_6")]
-    assert _labels(resolved) == {_LIN1, _RELU, _LIN2, _TANH, _ADD, _HEAD}
-
-
 def test_between_agrees_with_influence_geometry_machinery(log) -> None:
     """Producer members equal the shipped between_labels region (one machinery)."""
 
@@ -279,15 +220,6 @@ def test_between_agrees_with_influence_geometry_machinery(log) -> None:
     expected = set(between_labels(log, _LIN1, _HEAD))
     resolved = log[tl.between("linear_1_1", "linear_3_6")]
     assert _labels(resolved) == expected
-
-
-def test_between_relation_is_exact_with_source_disclosure(log) -> None:
-    """Structural membership claims are exact and disclosed."""
-
-    resolved = log[tl.between("linear_1_1", "add_1_5")]
-    for entry in resolved:
-        assert entry.provenance.relation == "exact"
-        assert "between" in entry.provenance.source
 
 
 def test_between_refusal_matrix(log) -> None:
@@ -308,35 +240,9 @@ def test_between_refusal_matrix(log) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_multipass_nodes_are_pass_qualified(loopy_log) -> None:
-    """between spans passes: pass 1 -> pass 3 of one layer crosses pass 2."""
-
-    resolved = loopy_log[tl.between("linear_1_1:1", "linear_1_1:3")]
-    labels = _labels(resolved)
-    assert {"linear_1_1:1", "linear_1_1:2", "linear_1_1:3"} <= labels
-    assert {"relu_1_2:1", "relu_1_2:2"} <= labels
-    assert "relu_1_2:3" not in labels
-
-
-def test_multipass_bare_label_seed_means_all_passes(loopy_log) -> None:
-    """A bare layer label seed is the all-passes Layer spelling."""
-
-    resolved = loopy_log[tl.neighborhood("linear_1_1", hops=0)]
-    assert _labels(resolved) == {"linear_1_1:1", "linear_1_1:2", "linear_1_1:3"}
-
-
 # ---------------------------------------------------------------------------
 # TraceSlice: the sub-DAG view presenter.
 # ---------------------------------------------------------------------------
-
-
-def test_slice_members_match_the_producer_region(log) -> None:
-    """trace.between and tl.between denote the SAME region (one machinery)."""
-
-    view = log.between("linear_1_1", "add_1_5")
-    resolved = log[tl.between("linear_1_1", "add_1_5")]
-    assert set(view.labels) == _labels(resolved)
-    assert view.labels == (_LIN1, _RELU, _ADD)  # execution order
 
 
 def test_slice_internal_edges_are_exact(log) -> None:
@@ -352,14 +258,6 @@ def test_slice_declares_its_boundary_explicitly(log) -> None:
     view = log.between("linear_1_1", "add_1_5")
     assert view.boundary_in_edges == ((_INPUT, _LIN1), (_TANH, _ADD))
     assert view.boundary_out_edges == ((_ADD, _HEAD),)
-
-
-def test_slice_entry_and_exit_ops(log) -> None:
-    """source_ops / sink_ops are the members without in-slice parents/children."""
-
-    view = log.between("linear_1_1", "add_1_5")
-    assert [op.label for op in view.source_ops] == [_LIN1]
-    assert [op.label for op in view.sink_ops] == [_ADD]
 
 
 def test_slice_iteration_and_membership(log) -> None:

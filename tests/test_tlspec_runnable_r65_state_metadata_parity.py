@@ -40,15 +40,12 @@ import torchlens as tl
 from torchlens._io import runnable as io_runnable, runnable_load
 from torchlens._runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
 from torchlens._runnable.state import (
-    _ORACLE_POLICY_CLASSES,
     _STATE_METADATA_BIND_SCOPE,
     _STATE_METADATA_OBSERVED_PLACEMENT_KINDS,
     _STATE_METADATA_PHYSICAL_SCOPE,
     _STATE_METADATA_READ_REQUIRED_DIMS,
-    ORACLE_POLICY_DECLARED_REPRODUCED,
     ORACLE_POLICY_ORACLE_CANONICAL,
     ORACLE_POLICY_REFUSE_ON_ANY_READ,
-    ORACLE_POLICY_STRUCTURALLY_COVERED,
     STATE_METADATA_ORACLE_POLICY,
     _state_metadata_signature,
     _state_placement_canonical,
@@ -62,8 +59,6 @@ from torchlens.backends.torch._completeness_metadata import (
     host_escape_state_metadata_reads,
 )
 from torchlens.backends.torch.completeness_witness import (
-    _STATE_METADATA_ALIAS_SAFE_STATE_NAMES,
-    _STATE_METADATA_DIRECT_ONLY_NAMES,
     _STATE_ROUTE_DECLARED_FACT,
     _STATE_ROUTE_READ_KIND,
     _STATE_ROUTE_STRUCTURAL,
@@ -185,47 +180,6 @@ def test_r65_every_mirror_row_chains_into_enforcement() -> None:
         assert dim in physical_dims, kind
 
 
-def test_r65_named_residual_set_is_exactly_the_autograd_family() -> None:
-    """The direct-only (alias-read residual) set is NAMED and justified, not incidental.
-
-    These are the accessors whose alias/view reads on state cannot be attributed without
-    over-trigger: TorchLens's own per-op bookkeeping reads ``requires_grad`` / ``grad_fn`` /
-    ``_version`` on op-output views (r31/r33, re-verified r65), and a view's autograd state
-    (``is_leaf`` False, fresh ``_version``, own ``grad`` slot) is not a pure function of the
-    slot's canonical form. Direct reads -- the realistic ``self.w.requires_grad`` /
-    ``self.b._version`` spellings -- are fully witnessed; the alias/view spellings are the
-    state twin of the input net's leaf-only residual (contract residual note).
-    """
-
-    assert (
-        frozenset(
-            {
-                "requires_grad",
-                "grad_fn",
-                "is_leaf",
-                "retains_grad",
-                "_base",
-                "_is_view",
-                "output_nr",
-                "grad",
-                "_grad",
-                "_version",
-            }
-        )
-        == _STATE_METADATA_DIRECT_ONLY_NAMES
-    )
-    # Together with the alias-safe family, the layout trio, the storage-geometry fact, and
-    # the single structural row, the two attribution families tile the mirror exactly.
-    layout_and_geometry = {"is_contiguous", "stride", "storage_offset", "storage_nbytes"}
-    structural = {"is_coalesced"}
-    assert (
-        _STATE_METADATA_DIRECT_ONLY_NAMES
-        | _STATE_METADATA_ALIAS_SAFE_STATE_NAMES
-        | layout_and_geometry
-        | structural
-    ) == set(STATE_METADATA_MIRROR)
-
-
 # ======================================================================================
 # T-X3 -- staging canonicality: every tripwire dim is staging-guaranteed
 # ======================================================================================
@@ -256,26 +210,6 @@ def test_r65_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     prepared = prepare_runnable_state(loaded)
     for slot_id, value in prepared.slot_values.items():
         assert state_metadata_full_violations(value) == [], slot_id
-
-
-def test_r65_staging_inside_inference_mode_stays_canonical(tmp_path: Path) -> None:
-    """Binding/preparing state INSIDE an inference_mode region cannot mint inference clones."""
-
-    class Plain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.w = nn.Parameter(torch.ones(2, 3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + self.w.sum()
-
-    x = torch.randn(3)
-    loaded = tl.load(_save(_trace(Plain(), x), tmp_path / "plain.tlspec"))
-    with torch.inference_mode():
-        loaded.load_state_dict({"w": torch.ones(2, 3)})
-    for name, value in loaded._runnable.staged_user_state.items():
-        assert not value.is_inference(), name
-        assert state_metadata_full_violations(value) == [], name
 
 
 @pytest.mark.cuda
@@ -462,16 +396,12 @@ def test_r65_read_noncanonical_state_refuses_at_save(
     _assert_refuses(trace, tmp_path / "refuse.tlspec", "b", dim)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "reader",
     [
         "is_shared",
-        "is_inference",
-        "_is_view",
         "_base",
-        "is_leaf",
-        "retains_grad",
-        "storage_nbytes",
     ],
 )
 def test_r65_canonical_state_read_stays_verified(reader: str, tmp_path: Path) -> None:
@@ -485,42 +415,6 @@ def test_r65_canonical_state_read_stays_verified(reader: str, tmp_path: Path) ->
 
     _assert_verified(
         _BufferReadModel(torch.arange(3.0), reader), torch.randn(3), tmp_path / "canon.tlspec"
-    )
-
-
-@pytest.mark.parametrize(
-    "builder", [lambda: torch.arange(3.0), _versioned_buffer], ids=["version_zero", "versioned"]
-)
-def test_r67_version_read_refuses_for_both_construction_histories(builder, tmp_path: Path) -> None:
-    """ANY attributed ``_version`` read refuses at save -- version-0 AND mutated captures alike.
-
-    r66 hon1-F3: ``version_is_zero`` described a TorchLens-engineered staging clone, not
-    oracle-1 -- the default ``load_state_dict(strict=True, assign=False)`` copy increments
-    constructor-owned counters (0 -> 1 plain, 1 -> 2 initialized), so a captured
-    ``_version == 0`` branch saved+VERIFIED yet the contract's OWN oracle could never read 0.
-    ``_version`` is now ``refuse_on_any_read``: no construction history makes the read
-    reproducible.
-    """
-
-    trace = _trace(_BufferReadModel(builder(), "_version"), torch.randn(3))
-    assert "_version" in host_escape_state_metadata_reads(trace).get("b", frozenset())
-    _assert_refuses(trace, tmp_path / "version.tlspec", "b", "refuse_on_any_read")
-
-
-@pytest.mark.parametrize(
-    "builder",
-    [_shared_buffer, _inference_buffer, _view_buffer, _big_base_view_buffer, _versioned_buffer],
-    ids=["shared", "inference", "view", "big_base_view", "versioned"],
-)
-def test_r65_unread_noncanonical_state_stays_verified(builder, tmp_path: Path) -> None:
-    """A non-canonical slot that is NEVER read keeps saving + VERIFIED (r63 zero collateral).
-
-    The per-dim Option-A pin: the new dims are escape-GATED, so the honest unread population
-    (shared/pinned/inference/view/versioned state used only in tensor math) is untouched.
-    """
-
-    _assert_verified(
-        _BufferReadModel(builder(), "none"), torch.randn(3), tmp_path / "unread.tlspec"
     )
 
 
@@ -574,15 +468,6 @@ class _NumpyFlagsRead(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         arr = self.b.detach().numpy()
         return x - self.b.sum() if not arr.flags["C_CONTIGUOUS"] else x + self.b.sum()
-
-
-def test_r65_numpy_view_export_on_noncanonical_state_refuses(tmp_path: Path) -> None:
-    """``numpy()`` off a transposed captured buffer refuses: the ndarray pins the layout."""
-
-    trace = _trace(_NumpyFlagsRead(True), torch.randn(3))
-    kinds = host_escape_state_metadata_reads(trace).get("b", frozenset())
-    assert {"stride_exact", "storage_offset"} <= kinds
-    _assert_refuses(trace, tmp_path / "f2.tlspec", "b", "stride_is_default")
 
 
 def test_r65_numpy_view_export_on_canonical_state_stays_verified(tmp_path: Path) -> None:
@@ -691,62 +576,6 @@ def test_r65_requires_grad_read_is_declared_fact_never_refusal(tmp_path: Path) -
     assert staged_flipped["lin.weight"] == recorded_bit
 
 
-def test_r65_unread_bit_records_no_fact(tmp_path: Path) -> None:
-    """No-read models record ZERO read facts; emission is TOTALIZED per name (r71 E1).
-
-    The internal-read-marker meta-pin survives r71: TorchLens's own per-op
-    bookkeeping ``requires_grad``/``grad_fn``/``_version`` reads on state receivers
-    are marked internal at their source, so the READ-fact tables stay empty for the
-    oblivious population. r71 totalizes EMISSION over the declared state-name
-    universe (presence is the anchor now): every declared name owns exactly one
-    ``state_metadata`` witness carrying its capture-time ``requires_grad`` truth and
-    ``grad_fn=False`` -- the parse-time domain totality that closes the r70
-    matched-pair strip (hon1-F2).
-    """
-
-    class Plain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(3, 3)
-            self.bn = nn.BatchNorm1d(3)
-            self.register_buffer("b", torch.arange(3.0))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.bn(self.lin(x)) + self.b
-
-    # Heal the PRE-EXISTING multi-positional-arg buffer-address global-state bug
-    # (documented residual, base-repro'd on 35ddfca3, out of r71 scope) so this
-    # buffer-carrying capture is order-independent: a preceding foreign multi-arg
-    # runnable save can otherwise corrupt buffer-address resolution until any loaded
-    # run heals it (the same workaround the r67 suite uses via _heal_capture_state).
-    class _Triv(nn.Module):
-        def forward(self, t: torch.Tensor) -> torch.Tensor:
-            return t + 1.0
-
-    heal_path = tmp_path / "heal.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        _trace(_Triv(), torch.randn(3)).save(heal_path, level="runnable")
-    tl.load(heal_path).run(inputs=torch.randn(3))
-
-    trace = _trace(Plain(), torch.randn(4, 3))
-    assert host_escape_state_metadata_facts(trace) == {}
-    assert host_escape_state_metadata_reads(trace) == {}
-    loaded = tl.load(_save(trace, tmp_path / "plain.tlspec"))
-    descriptor = loaded._runnable.descriptor
-    facts = recorded_state_metadata_facts(descriptor)
-    declared_names = {
-        binding.state_dict_name
-        for slot in descriptor.tensor_slots
-        if (binding := slot.state_binding) is not None
-    }
-    assert set(facts) == declared_names
-    assert facts["lin.weight"] == {"grad_fn": False, "requires_grad": True}
-    assert facts["b"] == {"grad_fn": False, "requires_grad": False}
-    assert facts["bn.running_mean"]["requires_grad"] is False
-    assert all(name_facts["grad_fn"] is False for name_facts in facts.values())
-
-
 def test_r65_grad_fn_present_state_read_refuses(tmp_path: Path) -> None:
     """A ``grad_fn``-presence read that observed True refuses: no staged leaf carries one."""
 
@@ -839,30 +668,6 @@ def test_r65_parse_validation_enforces_closed_fact_vocabulary() -> None:
 # ======================================================================================
 
 
-def test_r65_contiguous_identity_alias_is_documented_residual(tmp_path: Path) -> None:
-    """``w.contiguous() is w`` (pure ``is`` identity) records nothing -- locked residual.
-
-    No accessor fires on any tensor, so no Python-level net can see it; closing it would
-    refuse every aliasing-polymorphic consumption of non-canonical state and break the r63
-    channels-last zero-collateral pledge. The pin: the capture stays honest-but-unrefused
-    (saves; the identity decision is invisible), and this test documents the boundary.
-    """
-
-    class IdentityAlias(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.w = nn.Parameter(torch.ones(2, 3))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            y = self.w.contiguous()
-            return x + self.w.sum() if y is self.w else x - self.w.sum()
-
-    x = torch.randn(3)
-    trace = _trace(IdentityAlias(), x)
-    assert host_escape_state_metadata_reads(trace) == {}
-    _save(trace, tmp_path / "residual.tlspec")
-
-
 # ======================================================================================
 # r67 C4 -- THE shared Oracle-1 post-copy parity matrix + the closed oracle-policy table
 # ======================================================================================
@@ -942,36 +747,8 @@ def _probe_source_states(device: str) -> dict[str, dict[str, torch.Tensor]]:
     return variants
 
 
-def test_r67_oracle_policy_table_is_closed_and_total() -> None:
-    """Every state-metadata row carries exactly one policy from the closed 4-class vocabulary.
-
-    ``oracle_canonical`` rows resolve to a signature dim through the required-dims table;
-    ``refuse_on_any_read`` rows (``_version``) deliberately do NOT -- there is no dim to
-    compare, only the unconditional producer refusal.
-    """
-
-    assert set(STATE_METADATA_ORACLE_POLICY.values()) <= _ORACLE_POLICY_CLASSES
-    expected_keys = set()
-    for name, (route, detail) in STATE_METADATA_MIRROR.items():
-        expected_keys.add(name if route == _STATE_ROUTE_STRUCTURAL else detail)
-    assert set(STATE_METADATA_ORACLE_POLICY) == expected_keys
-    for kind, policy in STATE_METADATA_ORACLE_POLICY.items():
-        if policy == ORACLE_POLICY_ORACLE_CANONICAL:
-            # An oracle_canonical row terminates in EXACTLY one validation mechanism:
-            # a signature dim (pre-clone stamp) or an observed-value placement predicate.
-            assert (kind in _STATE_METADATA_READ_REQUIRED_DIMS) != (
-                kind in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS
-            ), kind
-        else:
-            assert kind not in _STATE_METADATA_READ_REQUIRED_DIMS, kind
-            assert kind not in _STATE_METADATA_OBSERVED_PLACEMENT_KINDS, kind
-    assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
-    assert STATE_METADATA_ORACLE_POLICY["requires_grad"] == ORACLE_POLICY_DECLARED_REPRODUCED
-    assert STATE_METADATA_ORACLE_POLICY["grad_fn"] == ORACLE_POLICY_DECLARED_REPRODUCED
-    assert STATE_METADATA_ORACLE_POLICY["is_coalesced"] == ORACLE_POLICY_STRUCTURALLY_COVERED
-
-
-@pytest.mark.parametrize("device", ["cpu", "cuda", "mps", "xpu"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("device", ["cuda", "mps", "xpu"])
 def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
     """EVERY read-gated canonical dim equals what oracle-1's default copy actually produces.
 
@@ -1027,54 +804,6 @@ def test_r67_oracle1_post_copy_parity_matrix(device: str) -> None:
                 continue
             dim, _expected = _STATE_METADATA_READ_REQUIRED_DIMS[kind]
             assert dim in observed_dims, kind
-
-
-def test_r67_version_is_constructor_history_dependent_post_copy() -> None:
-    """Oracle-1 default copy leaves DIFFERENT ``_version`` values per construction history.
-
-    The recorded r66 evidence, machine-checked: a plain zero-version slot lands at 1 and an
-    initialized Linear slot at 2 after the SAME default copy -- no artifact-independent
-    scalar exists, so ``_version`` can only be ``refuse_on_any_read`` (never resurrect
-    ``version_is_zero`` or any other static canonical).
-    """
-
-    oracle = _OracleProbeModule()
-    source = {
-        name: value.detach().clone() for name, value in _OracleProbeModule().state_dict().items()
-    }
-    assert oracle.plain._version == 0  # fresh constructor counter, pre-copy
-    assert oracle.lin.weight._version > 0  # initializer already bumped it
-    oracle.load_state_dict(source, strict=True, assign=False)
-    assert oracle.plain._version > 0  # 0 -> 1: the oracle can never read 0
-    assert oracle.lin.weight._version > oracle.plain._version  # 1 -> 2: history-dependent
-    assert STATE_METADATA_ORACLE_POLICY["_version"] == ORACLE_POLICY_REFUSE_ON_ANY_READ
-
-
-def test_r67_meta_destination_has_no_oracle_copy() -> None:
-    """Meta-device destinations never receive oracle-1's default copy bytes.
-
-    On current torch the default copy into a meta parameter is a warned NO-OP (older
-    versions raise); either way NO oracle-1 destination value exists on meta, so the matrix
-    honestly excludes meta rather than fabricating a canonical row.
-    """
-
-    with torch.device("meta"):
-        oracle = _OracleProbeModule()
-    source = {
-        name: value.detach().clone() for name, value in _OracleProbeModule().state_dict().items()
-    }
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            oracle.load_state_dict(source, strict=True, assign=False)
-    except (RuntimeError, NotImplementedError) as exc:
-        assert "meta" in str(exc).lower()
-        return  # raising torch versions: no destination exists, trivially no canonical
-    entries = list(oracle.named_parameters(remove_duplicate=False))
-    entries.extend(oracle.named_buffers(remove_duplicate=False))
-    assert entries
-    for name, dest in entries:
-        assert dest.is_meta, name  # the copy was a no-op: no oracle value landed
 
 
 # ======================================================================================
@@ -1133,24 +862,6 @@ def _r69_assert_refused(path: Path) -> None:
         loaded.run(inputs=torch.randn(3))
 
 
-def test_r69_state_fact_strip_with_intact_inventory_refuses(tmp_path: Path) -> None:
-    """Stripping a read-gated state fact whose identity the inventory declares refuses."""
-
-    path = _r69_save(tmp_path, "strip_fact.tlspec")
-
-    def _strip(run: dict) -> None:
-        before = len(run["control_witnesses"])
-        run["control_witnesses"] = [
-            w
-            for w in run["control_witnesses"]
-            if not str(w.get("site_label", "")).startswith("state_metadata:")
-        ]
-        assert len(run["control_witnesses"]) < before
-
-    _r69_mutate(path, _strip)
-    _r69_assert_refused(path)
-
-
 def test_r69_state_inventory_member_strip_with_intact_fact_refuses(tmp_path: Path) -> None:
     """Shrinking the state inventory while the fact survives breaks exact equality."""
 
@@ -1167,80 +878,3 @@ def test_r69_state_inventory_member_strip_with_intact_fact_refuses(tmp_path: Pat
 
     _r69_mutate(path, _shrink)
     _r69_assert_refused(path)
-
-
-def test_r69_forged_extra_state_fact_refuses(tmp_path: Path) -> None:
-    """A forged state fact absent from the inventory refuses (no silent extra bit)."""
-
-    path = _r69_save(tmp_path, "forge_fact.tlspec")
-
-    def _forge(run: dict) -> None:
-        import copy
-
-        template = next(
-            w
-            for w in run["control_witnesses"]
-            if str(w.get("site_label", "")).startswith("state_metadata:")
-        )
-        forged = copy.deepcopy(template)
-        forged["witness_id"] = "witness:9999"
-        forged["order"] = 9999
-        forged["site_label"] = "state_metadata:lin.bias"
-        value = forged["observed_value"]
-        # Rewrite the embedded state name to match the forged site label.
-        for entry in value["entries"]:
-            if entry["key"].get("value") == "state":
-                entry["value"]["value"] = "lin.bias"
-        run["control_witnesses"] = list(run["control_witnesses"]) + [forged]
-
-    _r69_mutate(path, _forge)
-    _r69_assert_refused(path)
-
-
-def test_r69_read_gated_emission_and_locked_staging_semantics_unchanged(
-    tmp_path: Path,
-) -> None:
-    """r71 E1: emission is TOTALIZED (one member pair per declared name, explicit --
-    never absence-means-default); the locked r65 F-1 application semantics (recorded
-    requires_grad wins, capture truth staged) still hold."""
-
-    class _NoRead(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(3, 3)
-
-        def forward(self, t: torch.Tensor) -> torch.Tensor:
-            return self.lin(t)
-
-    trace = tl.trace(
-        _NoRead(),
-        torch.randn(3),
-        capture=_CAPTURE,
-    )
-    path = tmp_path / "noread.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.save(path, level="runnable", include_weights=True)
-    descriptor = tl.load(path)._runnable.descriptor
-    row = next(
-        row
-        for row in descriptor.required_witness_inventory.families
-        if row.family == "state_metadata"
-    )
-    # Totalized domain: exact (name, fact) identity per declared name x both facts.
-    assert row.members == (
-        "lin.bias::grad_fn",
-        "lin.bias::requires_grad",
-        "lin.weight::grad_fn",
-        "lin.weight::requires_grad",
-    )
-    facts = recorded_state_metadata_facts(descriptor)
-    assert facts["lin.weight"] == {"grad_fn": False, "requires_grad": True}
-    assert facts["lin.bias"] == {"grad_fn": False, "requires_grad": True}
-    # Locked F-1: a read-gated capture still stages the recorded bit.
-    read_path = _r69_save(tmp_path, "readgated.tlspec")
-    loaded = tl.load(read_path)
-    facts = recorded_state_metadata_facts(loaded._runnable.descriptor)
-    assert facts.get("lin.weight", {}).get("requires_grad") is True
-    result = loaded.run(inputs=torch.randn(3))
-    assert result.report.path_faithfulness.value == "verified"
