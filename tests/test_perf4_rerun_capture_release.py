@@ -50,34 +50,69 @@ def _rerun_fork(trace: Any, model: nn.Module, x: torch.Tensor) -> Any:
     )
 
 
-def _eviction_calls(action: Callable[[], Any]) -> int:
-    """Calls into the payload eviction walk made while ``action`` runs."""
+class _EvictionProbe:
+    """Profile hook counting payload eviction walks, attributed to the store they walk.
 
-    target = op_store._evict_payloads_in_cell.__code__
-    calls = 0
+    Records the ids of the op stores constructed while it is installed (``made``) and,
+    per store id, the calls into the cell eviction walk made by that store's
+    last-owner eviction (``walks``). Only ids are kept, so the probe pins nothing it
+    observes and cannot keep a discarded store from reaching the collector.
+    """
 
-    def count(frame: Any, event: str, _arg: Any) -> None:
-        nonlocal calls
-        if event == "call" and frame.f_code is target:
-            calls += 1
+    def __init__(self) -> None:
+        self.made: set[int] = set()
+        self.walks: dict[int, int] = {}
+        self._evicting: list[int] = []
 
-    sys.setprofile(count)
+    def __call__(self, frame: Any, event: str, _arg: Any) -> None:
+        code = frame.f_code
+        if event == "call":
+            if code is _STORE_INIT:
+                self.made.add(id(frame.f_locals["self"]))
+            elif code is _STORE_EVICT:
+                self._evicting.append(id(frame.f_locals["self"]))
+            elif code is _CELL_EVICT and self._evicting:
+                store = self._evicting[-1]
+                self.walks[store] = self.walks.get(store, 0) + 1
+        elif event == "return" and code is _STORE_EVICT:
+            self._evicting.pop()
+
+    def calls(self, stores: set[int] | None = None) -> int:
+        """Eviction walk calls, over every store or over the stores in ``stores``."""
+
+        return sum(n for key, n in self.walks.items() if stores is None or key in stores)
+
+
+_STORE_INIT = op_store.OpRowStore.__init__.__code__
+_STORE_EVICT = op_store.OpRowStore._evict_tensor_payloads.__code__
+_CELL_EVICT = op_store._evict_payloads_in_cell.__code__
+
+
+def _profiled(action: Callable[[], Any]) -> _EvictionProbe:
+    """Run ``action`` under a fresh eviction probe and return the probe."""
+
+    probe = _EvictionProbe()
+    sys.setprofile(probe)
     try:
         action()
     finally:
         sys.setprofile(None)
-    return calls
+    return probe
 
 
 def test_nothing_the_rerun_discarded_is_left_for_the_collector_to_evict() -> None:
     model, x, trace = _capture()
     gc.collect()
     forks: list[Any] = []
-    assert _eviction_calls(lambda: forks.append(_rerun_fork(trace, model, x))) > 0, (
-        "the rerun evicts its discarded capture's payloads itself"
-    )
+    rerun = _profiled(lambda: forks.append(_rerun_fork(trace, model, x)))
+    assert rerun.made, "the rerun builds its own capture's op store"
+    assert rerun.calls(rerun.made) > 0, "the rerun evicts its discarded capture's payloads itself"
     assert forks[0].last_run["fast_refresh"] is True
-    assert _eviction_calls(gc.collect) == 0, "no eviction walk is left for a later collection"
+    # Only the stores this rerun built are its garbage: a store an earlier test on the
+    # same worker left reachable (and released while the rerun ran) is not, and its
+    # eviction says nothing about the rerun.
+    later = _profiled(gc.collect)
+    assert later.calls(rerun.made) == 0, "no eviction walk is left for a later collection"
 
 
 def test_values_after_the_release_are_unchanged() -> None:
