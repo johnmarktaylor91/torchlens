@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
@@ -140,7 +141,7 @@ def _save_tamper_load(tmp_path, trace, tamper):
         state = pickle.load(handle)
     tamper(state)
     with metadata_path.open("wb") as handle:
-        pickle.dump(state, handle)
+        dump_canonical_metadata(state, handle)
     return tl.load(str(path))
 
 

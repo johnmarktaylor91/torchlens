@@ -218,3 +218,60 @@ def test_hook_spellings_redirect_to_do_and_clear_edits(log: Any) -> None:
     with pytest.raises(FacadeTeachingError) as excinfo:
         _ = log.save_new_outs
     assert "run(" in str(excinfo.value)
+
+
+class _ShapeBranch(torch.nn.Module):
+    """Model whose graph gains a relu only when the feature dimension is 4."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = x + 1
+        if x.shape[1] == 4:
+            out = torch.relu(out)
+        return out * 2
+
+
+class _SignBranch(torch.nn.Module):
+    """Model whose graph gains a relu only when the input sums positive (same shape, new graph)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = x + 1
+        if bool(x.sum() > 0):
+            out = torch.relu(out)
+        return out * 2
+
+
+def test_save_new_outs_redirect_names_the_graph_checked_refresh() -> None:
+    """The ``save_new_outs`` refusal names ``run(inputs=)``, and that door refuses a changed graph.
+
+    ``save_new_outs`` refreshed payloads against the recorded graph and raised a
+    ``ValueError`` when an input changed it. The legacy ``run(model, x)`` re-captures
+    and only warns on divergence, so a redirect to it would drop the mismatch raise.
+    ``run(inputs=)`` refuses the training tutorial's shape-diverging input at the input
+    contract and a same-shape input that changes the graph at the refresh compare.
+    """
+
+    shape_model = _ShapeBranch()  # run(inputs=) needs the live model; the trace holds it weakly
+    trace = tl.trace(
+        shape_model,
+        torch.ones(2, 4, requires_grad=True),
+        capture=CaptureOptions(detach_saved_activations=True, seed=7),
+    )
+    try:
+        with pytest.raises(FacadeTeachingError) as excinfo:
+            _ = trace.save_new_outs
+        assert "run(inputs=" in str(excinfo.value)
+        with pytest.raises(ValueError, match="does not match"):
+            trace.run(inputs=torch.ones(2, 5, requires_grad=True), seed=7)
+        assert trace.options.detach_saved_activations is True
+    finally:
+        trace.cleanup()
+
+    sign_model = _SignBranch()
+    trace = tl.trace(sign_model, torch.ones(2, 4), capture=CaptureOptions(seed=7))
+    try:
+        with pytest.raises(ValueError) as mismatch:
+            trace.run(inputs=-torch.ones(2, 4), seed=7)
+        refusal: Any = mismatch.value
+        assert refusal.fields["code"] == "call_structure_mismatch", refusal
+    finally:
+        trace.cleanup()
