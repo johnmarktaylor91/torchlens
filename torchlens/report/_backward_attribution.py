@@ -58,7 +58,7 @@ class BackwardFlopsRow:
 
     Attributes
     ----------
-    pass_index:
+    pass_number:
         One-based backward pass the call ran in.
     grad_fn_label:
         Label of the backward node (``"addmm_back_1_3"``).
@@ -77,7 +77,7 @@ class BackwardFlopsRow:
         tell (see the module docstring).
     """
 
-    pass_index: int
+    pass_number: int
     grad_fn_label: str
     call_index: int
     op_label: str | None
@@ -94,8 +94,8 @@ class BackwardFlopsAttribution:
 
     Attributes
     ----------
-    pass_index:
-        One-based backward pass index.
+    pass_number:
+        One-based backward pass number.
     convention:
         The counting convention (fma2, matmul and convolution families).
     executed_flops:
@@ -121,7 +121,7 @@ class BackwardFlopsAttribution:
         ``"census"`` (this session's recorded calls) or ``"saved record"``.
     """
 
-    pass_index: int
+    pass_number: int
     convention: str
     executed_flops: int | None
     rows: tuple[BackwardFlopsRow, ...]
@@ -136,7 +136,7 @@ class BackwardFlopsAttribution:
         """Bounded identity card: totals lead, rows are counted, never dumped."""
 
         return (
-            f"BackwardFlopsAttribution(pass {self.pass_index}: executed_flops="
+            f"BackwardFlopsAttribution(pass {self.pass_number}: executed_flops="
             f"{self.executed_flops}, {len(self.rows)} row(s), unattributed_flops="
             f"{self.unattributed_flops} over {len(self.unattributed_ops)} call(s), "
             f"recompute={self.recompute}; read .rows)"
@@ -383,7 +383,7 @@ def attribute_census(
             any_unknown_recompute = True
     built = tuple(
         BackwardFlopsRow(
-            pass_index=pass_index,
+            pass_number=pass_index,
             grad_fn_label=row.label,
             call_index=row.key[1],
             op_label=None if row.op_label is None else str(row.op_label),
@@ -393,7 +393,7 @@ def attribute_census(
         for row in rows.values()
     )
     return BackwardFlopsAttribution(
-        pass_index=pass_index,
+        pass_number=pass_index,
         convention=DISPATCH_COUNTING_CONVENTION,
         executed_flops=_census_executed(backward_pass, built, unattributed_flops),
         rows=built,
@@ -461,7 +461,7 @@ def attribution_from_record(
 
     rows = tuple(
         BackwardFlopsRow(
-            pass_index=int(pass_index),
+            pass_number=int(pass_index),
             grad_fn_label=str(label),
             call_index=int(call_index),
             op_label=None if op_label is None else str(op_label),
@@ -479,7 +479,7 @@ def attribution_from_record(
     )
     recompute = _saved_recompute_state(rows, _checkpoint_evidence(trace))
     return BackwardFlopsAttribution(
-        pass_index=int(pass_index),
+        pass_number=int(pass_index),
         convention=str(record["convention"]),
         executed_flops=executed,
         rows=rows,

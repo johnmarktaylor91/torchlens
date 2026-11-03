@@ -42,7 +42,7 @@ def _assert_conserved(trace: Any) -> Any:
     for attribution, (pass_index, pass_count) in zip(
         status.flops_attributions, status.executed_flops_per_pass, strict=True
     ):
-        assert attribution.pass_index == pass_index
+        assert attribution.pass_number == pass_index
         rows = sum(row.flops for row in attribution.rows)
         assert rows + attribution.unattributed_flops == attribution.executed_flops == pass_count
         assert all(isinstance(row.flops, int) for row in attribution.rows)
@@ -119,7 +119,7 @@ def test_zoo_second_order_attribution_conserves_each_pass() -> None:
             (1, row["closed_grad_phase"]),
             (2, row["closed_double_backward"]),
         )
-        assert [a.pass_index for a in status.flops_attributions] == [1, 2]
+        assert [a.pass_number for a in status.flops_attributions] == [1, 2]
     finally:
         trace.cleanup()
 

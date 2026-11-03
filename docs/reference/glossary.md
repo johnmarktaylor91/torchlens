@@ -2920,8 +2920,9 @@ shim owed*
 **BackwardPass.flops_attribution / BackwardFlopsAttribution / BackwardFlopsRow** — *unstable — no deprecation shim owed*
 : One backward pass's executed FLOPs charged to the GradFn call each counted
   call ran under and to the forward op that node differentiates. A
-  `BackwardFlopsAttribution` holds `rows` (one `BackwardFlopsRow` per GradFn
-  call: `pass_index`, `grad_fn_label`, `call_index`, `op_label` or `None` for
+  `BackwardFlopsAttribution` holds `pass_number`, `rows` (one `BackwardFlopsRow` per GradFn
+  call: `pass_number` (was `pass_index`; JMT 1 Nov 2026 3:00 PM PT, walk names.1 a), `grad_fn_label`,
+  `call_index`, `op_label` or `None` for
   a node with no forward op, `flops`, `recompute_flops`), the
   `unattributed_flops` bucket with every unattributed call named in
   `unattributed_ops` (the seed gradient, nodes no capture walked), so rows
