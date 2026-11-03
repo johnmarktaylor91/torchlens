@@ -705,8 +705,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(state.args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
-        # Former door kwargs, now CaptureOptions fields: named for the static coverage lint.
-        "grad_options": _stable_cache_fragment(opts.grad_options),
+        "grad_options": _stable_cache_fragment(opts.grad_options),  # former door kwargs from here
         "grouping": opts.grouping,
         "jax_static_argnums": _stable_cache_fragment(opts.jax_static_argnums),
         "on_nonfinite": opts.on_nonfinite,
