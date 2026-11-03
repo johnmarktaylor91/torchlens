@@ -62,7 +62,6 @@ def test_states_key_both_label_spellings(nonfinite_log: Any) -> None:
     assert bare and qualified
 
 
-@pytest.mark.smoke
 def test_motifs_per_shape_table(nonfinite_log: Any) -> None:
     """box -> striped, oval -> wedged, box3d -> border-only degrade."""
 
@@ -96,7 +95,6 @@ def test_finite_ops_carry_no_motif(nonfinite_log: Any) -> None:
     assert "striped" not in spec.style
 
 
-@pytest.mark.smoke
 def test_partial_coverage_marks_not_checked() -> None:
     """Selective save: unchecked ops get their own visible mark, never
     silence (the dangerous confusable case)."""
@@ -148,7 +146,6 @@ def test_zero_coverage_channel_level_degrade() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_debug_render_carries_motifs_end_to_end(nonfinite_log: Any, tmp_path: Any) -> None:
     """The rendered DOT carries the wedged motif and the legend lines."""
 

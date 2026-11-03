@@ -22,6 +22,7 @@ pytestmark = [
         _TF_BACKEND_SKIP_REASON is not None,
         reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
     ),
+    pytest.mark.rare,
 ]
 
 

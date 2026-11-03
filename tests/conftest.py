@@ -50,7 +50,7 @@ VIS_OUTPUT_DIR = ""
 
 #: Size ceiling of the smoke tier in collected tests; ``tests/tiers/collection.json``
 #: records the measured count and ``tests/test_tiers_artifact.py`` compares the two.
-SMOKE_TIER_SIZE_CEILING = 1500
+SMOKE_TIER_SIZE_CEILING = 400
 
 
 @pytest.hookimpl(trylast=True)

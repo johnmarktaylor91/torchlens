@@ -222,6 +222,7 @@ def test_input_facet_patch_binds_recorded_address_not_ordinal() -> None:
     assert torch.isclose(scores[0], torch.tensor(86.0)), scores
 
 
+@pytest.mark.smoke_cells("test_every_input_leaf_patches_its_own_recorded_address[leaf_a-32.0]")
 @pytest.mark.parametrize(
     ("facet_name", "expected"),
     [
@@ -245,7 +246,6 @@ def test_every_input_leaf_patches_its_own_recorded_address(
     assert torch.isclose(scores[0], torch.tensor(expected)), (facet_name, scores)
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings("ignore::torchlens._errors.CaptureGapWarning")
 def test_aliased_input_leaf_patches_every_site() -> None:
     """One tensor object at two input sites is replaced at BOTH sites.
@@ -275,7 +275,6 @@ def test_aliased_input_leaf_patches_every_site() -> None:
     assert torch.isclose(scores[0], torch.tensor(40.0)), scores
 
 
-@pytest.mark.smoke
 def test_mapping_input_container_type_is_preserved() -> None:
     """A Mapping-subclass input keeps its type through the patched rerun.
 

@@ -94,7 +94,6 @@ def test_infidelity_positive_for_wrong_attribution_and_beta_normalization() -> N
     assert scaled_result.extra["normalization_beta"] == pytest.approx(1.0 / 3.0, rel=1e-6)
 
 
-@pytest.mark.smoke
 def test_infidelity_square_removal_and_refusals() -> None:
     """square_removal works on spatial inputs and refuses on flat ones."""
 
@@ -127,7 +126,6 @@ def test_infidelity_square_removal_and_refusals() -> None:
     assert unknown.value.fields["code"] == "metric_perturbation_invalid"
 
 
-@pytest.mark.smoke
 def test_infidelity_callable_escape_contract() -> None:
     """A compatible callable works; contract violations refuse typed."""
 
@@ -157,7 +155,6 @@ def test_infidelity_callable_escape_contract() -> None:
     assert excinfo.value.fields["code"] == "metric_perturbation_invalid"
 
 
-@pytest.mark.smoke
 def test_infidelity_out_of_range_warns_coded() -> None:
     """D14: perturbations leaving the observed input range WARN, never refuse."""
 
@@ -202,7 +199,6 @@ def test_sensitivity_rung1_refuses_unseeded_stochastic_before_work() -> None:
     assert excinfo.value.fields["code"] == "metric_determinism_unfrozen"
 
 
-@pytest.mark.smoke
 def test_sensitivity_seeded_stochastic_passes_structurally() -> None:
     """Rung 1 composes: a seeded stochastic method runs without a probe."""
 
@@ -240,7 +236,6 @@ def test_sensitivity_rung2_refuses_disclosed_unseeded_provenance() -> None:
     assert excinfo.value.fields["code"] == "metric_determinism_unfrozen"
 
 
-@pytest.mark.smoke
 def test_sensitivity_rung3_behavioral_probe() -> None:
     """A hidden-noise opaque callable fails the probe; a clean one passes."""
 

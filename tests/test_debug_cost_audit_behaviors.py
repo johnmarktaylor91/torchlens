@@ -63,7 +63,6 @@ def test_hot_path_rejects_unknown_metric(cost_trace) -> None:
         hot_path(cost_trace, by="watts")
 
 
-@pytest.mark.smoke
 def test_theoretical_op_bytes_models_reads_writes_and_views(cost_trace) -> None:
     """Dense ops read inputs+params once and write once; views cost zero."""
 
@@ -79,7 +78,6 @@ def test_theoretical_op_bytes_models_reads_writes_and_views(cost_trace) -> None:
     assert int(view_written) == 0
 
 
-@pytest.mark.smoke
 def test_count_compiles_reports_zero_for_eager_blocks() -> None:
     """A block with no Dynamo activity reports zero frame compilations."""
 
@@ -116,7 +114,6 @@ class _MidwayFailModel(nn.Module):
         raise RuntimeError("midway boom")
 
 
-@pytest.mark.smoke
 def test_audit_trace_on_failed_partial_reports_exception_with_context() -> None:
     """A failed capture audits to a critical finding naming the exception."""
 

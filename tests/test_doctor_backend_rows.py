@@ -110,7 +110,6 @@ def shipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     return paths
 
 
-@pytest.mark.smoke
 def test_report_has_one_scorecard_row_per_registered_backend_without_importing_frameworks() -> None:
     """Every registered backend gets a row; no preview framework module appears in sys.modules."""
 

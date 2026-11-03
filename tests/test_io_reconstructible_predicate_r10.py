@@ -38,7 +38,6 @@ def test_off_allowlist_torchlens_type_is_not_reconstructible() -> None:
     assert not _type_is_load_reconstructible(_OffAllowlistTorchlensType)
 
 
-@pytest.mark.smoke
 def test_appliance_torchlens_type_is_not_reconstructible() -> None:
     assert not _type_is_load_reconstructible(_ApplianceType)
 
@@ -49,7 +48,6 @@ def test_allowlisted_torchlens_type_is_reconstructible() -> None:
     assert _type_is_load_reconstructible(BlobRef)
 
 
-@pytest.mark.smoke
 def test_torch_data_type_is_reconstructible() -> None:
     import torch
 

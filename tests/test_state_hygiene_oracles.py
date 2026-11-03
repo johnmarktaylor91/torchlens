@@ -289,9 +289,7 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-@pytest.mark.parametrize(
-    "door", [pytest.param("attach_hooks", marks=pytest.mark.smoke), "intervene"]
-)
+@pytest.mark.parametrize("door", ["attach_hooks", "intervene"])
 def test_legacy_rerun_repeats_exactly(mlp, door: str) -> None:
     """B0: every legacy rerun on a new input equals one hooked forward, silently."""
 
@@ -496,9 +494,7 @@ def _failing_forward(failure: type[BaseException]) -> Callable[..., torch.Tensor
     return raising_forward
 
 
-@pytest.mark.parametrize(
-    "failure", [_InjectedFailure, pytest.param(KeyboardInterrupt, marks=pytest.mark.smoke)]
-)
+@pytest.mark.parametrize("failure", [_InjectedFailure, KeyboardInterrupt])
 def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseException]) -> None:
     """F3: a rerun that raises or is interrupted mid-forward stages nothing."""
 
@@ -936,7 +932,7 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
 @pytest.mark.parametrize(
     ("origin", "door"),
     [
-        pytest.param("intervene", "run", marks=pytest.mark.smoke),
+        ("intervene", "run"),
         ("attach_hooks", "run"),
         ("fork_do", "run"),
         *(("intervene", door) for door in _LOADED_DOORS if door != "run"),

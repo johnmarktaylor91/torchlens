@@ -97,9 +97,6 @@ def test_exec_spawn_install_modules_denied_even_under_trust(import_path: str) ->
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells(
-    "test_unpickler_denies_exec_spawn_install_globals_even_under_trust[pdb:run]"
-)
 @pytest.mark.parametrize("import_path", _EXEC_SPAWN_INSTALL_REFS)
 def test_unpickler_denies_exec_spawn_install_globals_even_under_trust(
     import_path: str,
@@ -121,9 +118,6 @@ def test_unpickler_denies_exec_spawn_install_globals_even_under_trust(
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells(
-    "test_code_exec_torch_callables_denied_even_under_trust[torch.Tensor:apply_]"
-)
 @pytest.mark.parametrize(
     "import_path",
     ["torch:compile", "torch.Tensor:apply_", "torch.Tensor:map_"],

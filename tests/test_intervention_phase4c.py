@@ -395,6 +395,7 @@ def test_zero_match_capture_selectors_warn() -> None:
         tl.record(_ReluReturnModel(), torch.randn(2, 3), save=tl.func("missing"))
 
 
+@pytest.mark.smoke
 def test_unsupported_capture_selector_kind_fails_loudly() -> None:
     """Unsupported selector kinds raise instead of silently matching nothing."""
 
@@ -449,6 +450,7 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
     assert len(hooked_chunk_paths) == 1
 
 
+@pytest.mark.smoke
 def test_input_at_live_hook_target_rejects_with_honest_error() -> None:
     """Input-path selectors resolve placeholders but are not live hook sites."""
 

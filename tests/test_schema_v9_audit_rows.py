@@ -160,7 +160,6 @@ def _event_row(**overrides):
     return row
 
 
-@pytest.mark.smoke
 def test_act_site_source_is_optional_and_string_typed():
     assert _validate_audit_row(0, _act_row()) is not None
     assert _validate_audit_row(0, _act_row(source="subspace basis sha256:ab")) is not None
@@ -170,7 +169,6 @@ def test_act_site_source_is_optional_and_string_typed():
         _validate_audit_row(0, _act_row(unexpected="x"))
 
 
-@pytest.mark.smoke
 def test_param_row_grammar_is_closed():
     digest, edit, targets = _validate_audit_row(0, _param_row())
     assert digest == _DIGEST and edit == "scale"
@@ -191,7 +189,6 @@ def test_param_row_grammar_is_closed():
         _validate_audit_row(0, bad)
 
 
-@pytest.mark.smoke
 def test_event_row_grammar_and_chain_extension():
     assert _validate_audit_row(0, _event_row()) is None, (
         "EVENT rows are transaction envelopes: they stay outside the "
@@ -217,7 +214,6 @@ def test_event_row_grammar_and_chain_extension():
             _validate_audit_row(0, _event_row(**mutation))
 
 
-@pytest.mark.smoke
 def test_param_selection_recipe_form_is_admitted_and_closed():
     """The shipped param-substitution FireRecord recipe loads; malformed refuses.
 

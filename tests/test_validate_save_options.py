@@ -69,7 +69,6 @@ def _net_and_input(device: str = "cpu") -> tuple[_SmallNet, torch.Tensor]:
     return _SmallNet().to(device), torch.randn(2, 2, 6, 6, device=device)
 
 
-@pytest.mark.smoke_cells("test_output_device_cpu_on_cpu_model_validates[forward]")
 @pytest.mark.parametrize("scope", ["forward", "saved"])
 def test_output_device_cpu_on_cpu_model_validates(scope: str) -> None:
     """``output_device="cpu"`` on a CPU model is a no-op move and validates."""

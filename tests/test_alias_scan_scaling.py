@@ -104,7 +104,6 @@ def test_disjoint_leaves_produce_zero_candidate_pairs() -> None:
     assert gaps == []
 
 
-@pytest.mark.smoke
 def test_candidate_pairs_cover_identity_overlap_and_unknown() -> None:
     """Identity, interval-overlap, and unprovable-footprint pairs all survive."""
 

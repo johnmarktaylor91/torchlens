@@ -51,6 +51,7 @@ def _unit_dense() -> torch.Tensor:
     return torch.ones(_D, dtype=torch.float32) / _D**0.5
 
 
+@pytest.mark.smoke
 def test_dense_direction_do_edits_the_component_and_stamps_both_markers() -> None:
     log = _trace()
     fork = log.fork()
@@ -68,7 +69,6 @@ def test_dense_direction_do_edits_the_component_and_stamps_both_markers() -> Non
     assert PROJECTION_NOTE in site["source"]
 
 
-@pytest.mark.smoke
 def test_dense_resolution_source_carries_the_marker() -> None:
     log = _trace()
     resolved = log[tl.subspace("relu_1_2", torch.ones(_D), origin="dense probe")]

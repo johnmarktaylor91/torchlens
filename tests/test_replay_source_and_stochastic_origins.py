@@ -68,7 +68,6 @@ def _op_by_func(trace: tl.Trace, prefix: str) -> str:
     raise AssertionError(f"no saved op with func name {prefix!r}")
 
 
-@pytest.mark.smoke
 def test_fork_edit_on_input_leaf_fires_on_captured_value_and_propagates() -> None:
     torch.manual_seed(0)
     model = _Affine().eval()
@@ -89,7 +88,6 @@ def test_fork_edit_on_input_leaf_fires_on_captured_value_and_propagates() -> Non
     assert helpers == ["scale"]
 
 
-@pytest.mark.smoke
 def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path) -> None:
     torch.manual_seed(0)
     model = _Affine().eval()

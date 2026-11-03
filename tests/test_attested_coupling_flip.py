@@ -403,7 +403,6 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_selective_save_couples_and_keeps_evidence():
     """save= narrows retention; the coupling evidence still settles whole."""
 
@@ -431,6 +430,7 @@ def test_selective_save_couples_and_keeps_evidence():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
     """The coupled slots persist (reserved C07X slots); the gate holds loaded."""
 

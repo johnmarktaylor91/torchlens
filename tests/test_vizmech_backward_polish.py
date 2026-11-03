@@ -82,6 +82,7 @@ def test_key_suppressed_with_show_legend_false(tmp_path: Path) -> None:
     assert "backward key" not in dot
 
 
+@pytest.mark.smoke
 def test_double_backprop_keeps_order_rows_and_key_row(tmp_path: Path) -> None:
     """A second-order node un-suppresses order rows and earns its key row."""
 
@@ -104,7 +105,6 @@ def test_accum_edges_carry_target_identity(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.smoke
 def test_single_call_titles_drop_pass_suffix(tmp_path: Path) -> None:
     """Unrolled backward with one call per grad_fn: no stray ':1' titles."""
 
