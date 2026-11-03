@@ -41,6 +41,11 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._runnable.state import (
+    bind_embedded_nonpersistent_buffers,
+    bind_embedded_trace_state,
+    runnable_tensor_byte_digest,
+)
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
@@ -116,6 +121,7 @@ from .payload_codec import (
     numpy_to_transport_tensor,
 )
 from .rehydrate import rehydrate_trace
+from .runnable_load import attach_sparse_run_readiness
 from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
 from .state_keys import invalidate_static_class_attr_cache
@@ -979,8 +985,6 @@ def _load_216_intervention_spec(
 def _attach_run_readiness(trace: Trace, sparse_run: Any) -> None:
     """Attach the sparse-run readiness report (the loader's one late import of runnable_load)."""
 
-    from .runnable_load import attach_sparse_run_readiness
-
     attach_sparse_run_readiness(trace, sparse_run)
 
 
@@ -1004,9 +1008,8 @@ def _finish_format3_trace(
 
     root, manifest = artifact.root, artifact.manifest
     state = artifact.trace_state(ModuleAccessor)
-    blobs_dir = (
-        resolve_bundle_blobs_dir(root) if (root / format3_contract.BLOBS_DIR).is_dir() else None
-    )
+    has_blobs = (root / format3_contract.BLOBS_DIR).is_dir()
+    blobs_dir = resolve_bundle_blobs_dir(root) if has_blobs else None
     trace = rehydrate_trace(
         state,
         artifact.manifest_for_rehydrate(),
@@ -1025,44 +1028,20 @@ def _finish_format3_trace(
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
     trace._source_bundle_provenance = manifest.get("provenance")
-    _attach_run_readiness(trace, manifest.get("run"))
-    _bind_format3_runnable_payloads(
-        trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
+    # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
+    # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
+    runnable_bind.attach_runnable(
+        trace,
+        root,
+        manifest.get("runnable"),
+        manifest.get("files") or {},
+        map_location=map_location,
     )
-    disclosures = manifest.get("disclosures")
-    if disclosures is not None:
-        format3_reader.attach_disclosure_advisory(trace, disclosures)
+    if manifest.get("disclosures") is not None:
+        format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
         trace._intervention_spec = _finish_format3_recipe(root)
     return trace
-
-
-def _bind_format3_runnable_payloads(
-    trace: Trace,
-    *,
-    manifest: Mapping[str, Any],
-    root: Path,
-    map_location: str | torch.device,
-    blobs_dir: Path | None,
-) -> None:
-    """Bind a 3.0 artifact's runnable payload families (references rebuilt from its
-    blob-id index and parsed ``run`` descriptor); an analysis artifact binds nothing."""
-
-    payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
-    if not payloads.tensors and trace._sparse_run_descriptor is None:
-        return
-    for bind in (
-        _bind_embedded_nonpersistent_buffer_payload,
-        _bind_embedded_weight_payload,
-        _bind_archived_activation_payload,
-    ):
-        bind(
-            trace,
-            manifest=payloads,
-            bundle_path=root,
-            map_location=map_location,
-            resolved_blobs_dir=blobs_dir,
-        )
 
 
 def _finish_format3_bundle(
@@ -1071,26 +1050,27 @@ def _finish_format3_bundle(
     metadata: Mapping[str, Any],
     root: Path,
     tlspec_version: Any,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Bundle:
-    """Assemble a 3.0 bundle from its loaded members and the sections of ``relations.json``
-    (bare unknown keys refuse ``bundle_section_unknown``; namespaced keys load opaque)."""
+    """Assemble a 3.0 bundle from its members and ``relations.json`` (bare unknown keys refuse
+    ``bundle_section_unknown``; ``unknown_relations`` is the policy for unknown relation kinds)."""
 
     from .bundle_container import assemble_bundle
 
-    bundle = assemble_bundle(dict(members), dict(metadata), tlspec_version=tlspec_version)
+    bundle = assemble_bundle(
+        dict(members),
+        dict(metadata),
+        tlspec_version=tlspec_version,
+        unknown_relations=unknown_relations,
+    )
     setattr(bundle, "_source_bundle_path", root)
     return bundle
 
 
 def _finish_format3_recipe(root: Path) -> InterventionSpec:
-    """Stage the recipe ``intervention.json`` describes (design section 8).
-
-    The intervention package owns the rebuild: built-in edits come back
-    through the helper registry, a callable placeholder (rule level or inside
-    a built-in edit's arguments) becomes an audit-only ``Edit`` and is listed
-    in ``metadata["recipe_placeholders"]``, which every rerun door refuses
-    with ``run_intervention_spec_not_persisted``.
-    """
+    """Stage the recipe ``intervention.json`` describes (design section 8): the intervention
+    package rebuilds built-in edits through the helper registry; a callable placeholder becomes
+    an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
     from ..intervention.save import _load_trace_recipe_spec
 
@@ -1099,6 +1079,14 @@ def _finish_format3_recipe(root: Path) -> InterventionSpec:
 
 format3_reader.install_load_hooks(
     trace=_finish_format3_trace, bundle=_finish_format3_bundle, recipe=_finish_format3_recipe
+)
+runnable_bind.install_runnable_binders(
+    runnable_bind.RunnableBinders(
+        attach_readiness=attach_sparse_run_readiness,
+        bind_state=bind_embedded_trace_state,
+        bind_buffers=bind_embedded_nonpersistent_buffers,
+        byte_digest=runnable_tensor_byte_digest,
+    )
 )
 
 
@@ -1289,7 +1277,14 @@ def load(
             )
         if is_format3_root(bundle_path, tlspec_format):
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
-            return load_format3(bundle_path, lazy, map_location, materialize_nested, payload_hints)
+            return load_format3(
+                bundle_path,
+                lazy,
+                map_location,
+                materialize_nested,
+                payload_hints,
+                unknown_relations=unknown_relations,
+            )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -1607,8 +1602,6 @@ def _bind_embedded_nonpersistent_buffer_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_nonpersistent_buffers
-
     bind_embedded_nonpersistent_buffers(trace, embedded)
 
 
@@ -1681,8 +1674,6 @@ def _bind_embedded_weight_payload(
         )
         embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
-    from .._runnable.state import bind_embedded_trace_state
-
     bind_embedded_trace_state(trace, embedded)
 
 
@@ -1716,7 +1707,6 @@ def _bind_archived_activation_payload(
     """
 
     from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
-    from .._runnable.state import runnable_tensor_byte_digest
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

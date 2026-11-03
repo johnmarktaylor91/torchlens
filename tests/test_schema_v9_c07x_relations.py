@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
 from torchlens._io.sidecar import (
@@ -373,6 +374,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"].append(_foreign_kind_payload())
     metadata_path.write_text(json.dumps(metadata))
+    redigest(tmp_path / "bundle.tlspec", "relations.json")
 
     with pytest.warns(TorchLensWarning, match="unknown namespaced kinds") as caught:
         loaded = tl.load(path)
@@ -402,6 +404,7 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
     metadata = json.loads(metadata_path.read_text())
     metadata["someorg.experiment_index"] = {"runs": [1, 2, 3]}
     metadata_path.write_text(json.dumps(metadata))
+    redigest(tmp_path / "bundle.tlspec", "relations.json")
 
     with pytest.warns(TorchLensWarning, match="unknown namespaced sections") as caught:
         loaded = tl.load(path)
@@ -423,8 +426,6 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 @pytest.mark.smoke
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
-
-    from _format3_envelope import redigest
 
     from torchlens._io.format_errors import ArtifactError
 

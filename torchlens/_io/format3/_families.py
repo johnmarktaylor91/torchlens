@@ -18,11 +18,11 @@ from functools import cache
 from typing import Any, Final
 
 from ..format_errors import ArtifactError
-from .contract import PHASE_TIMING_KEY_SOURCE, REFUSAL_CODES
+from .contract import PHASE_TIMING_KEY_SOURCE
 from .schema import FAMILIES
 
-#: Code of a record cell that fails its typed schema (format.1).
-CELL_CODE: Final = REFUSAL_CODES["record_schema_invalid"]
+#: Code of a record cell that fails its typed schema (format.1; a key of ``REFUSAL_CODES``).
+CELL_CODE: Final = "record_schema_invalid"
 
 #: Field named in a family refusal, by code.
 _FAMILY_FIELDS: Final[dict[str, str]] = {
