@@ -160,6 +160,8 @@
   is `GenerationStep.pass_number`, with the same value.
   `BackwardFlopsRow.pass_index` and `BackwardFlopsAttribution.pass_index` are `pass_number`, same
   value.
+  The `TraceLike` lookups take `activations_by_pass(pass_number)` and
+  `activation_by_raw_label(raw_label, pass_number=)`.
 
 ### Features
 

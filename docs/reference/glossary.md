@@ -3427,7 +3427,8 @@ deprecation shim owed*
   `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
   (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
   `TraceLike.sibling_events`, `TraceLike.activation_by_raw_label(raw_label)`,
-  `TraceLike.activations_by_pass(pass_index)`, `TraceLike.activations_by_address(address)` and
+  `TraceLike.activations_by_pass(pass_number)` (keyword was `pass_index`, and so was
+  `activation_by_raw_label(pass_number=)`; JMT 1 Nov 2026 3:00 PM PT, walk names.1 a), `TraceLike.activations_by_address(address)` and
   `TraceLike.activation_payloads_by_raw_label`).
 
 **Backend registry**

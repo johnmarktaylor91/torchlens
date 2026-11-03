@@ -82,3 +82,15 @@ def test_generation_step_counts_its_pass_as_pass_number() -> None:
     names = {field.name for field in dataclasses.fields(GenerationStep)}
     assert "pass_number" in names
     assert "pass_index" not in names
+
+
+def test_tracelike_lookups_take_pass_number(two_pass_trace: tl.Trace) -> None:
+    """``TraceLike`` pass lookups take ``pass_number``; ``pass_index=`` refuses."""
+
+    raw_label = two_pass_trace._layer_list[0].raw_label
+    assert two_pass_trace.activations_by_pass(pass_number=1) == (
+        two_pass_trace.activations_by_pass(1)
+    )
+    assert two_pass_trace.activation_by_raw_label(raw_label, pass_number=1) is not None
+    with pytest.raises(TypeError, match="pass_index"):
+        two_pass_trace.activation_by_raw_label(raw_label, pass_index=1)

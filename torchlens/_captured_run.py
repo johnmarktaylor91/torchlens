@@ -42,11 +42,11 @@ class _ActivationLookup(Protocol[ActivationT]):
     """
 
     def activation_by_raw_label(
-        self, raw_label: str, *, pass_index: int | None = None
+        self, raw_label: str, *, pass_number: int | None = None
     ) -> ActivationT:
-        """Return one activation record by raw label and optional pass index."""
+        """Return one activation record by raw label and optional pass number."""
 
-    def activations_by_pass(self, pass_index: int) -> list[ActivationT]:
+    def activations_by_pass(self, pass_number: int) -> list[ActivationT]:
         """Return activation records captured for one model-call pass."""
 
     def activations_by_address(self, address: str) -> list[ActivationT]:
@@ -126,15 +126,15 @@ class TraceLike:
                     payloads[raw_label] = [existing_payload, payload]
         return payloads
 
-    def activation_by_raw_label(self, raw_label: str, *, pass_index: int | None = None) -> Any:
-        """Return one activation record by raw label and optional pass index.
+    def activation_by_raw_label(self, raw_label: str, *, pass_number: int | None = None) -> Any:
+        """Return one activation record by raw label and optional pass number.
 
         Parameters
         ----------
         raw_label:
             Raw operation label emitted during capture.
-        pass_index:
-            Optional 1-based model-call pass index.
+        pass_number:
+            Optional 1-based model-call pass number.
 
         Returns
         -------
@@ -151,24 +151,24 @@ class TraceLike:
             activation
             for activation in self._iter_activation_records()
             if self._activation_raw_label(activation) == raw_label
-            and (pass_index is None or self._activation_pass_index(activation) == pass_index)
+            and (pass_number is None or self._activation_pass_index(activation) == pass_number)
         ]
         if not matches:
-            pass_suffix = "" if pass_index is None else f" on pass {pass_index}"
+            pass_suffix = "" if pass_number is None else f" on pass {pass_number}"
             raise KeyError(f"No activation for raw label {raw_label!r}{pass_suffix}.")
-        if len(matches) > 1 and pass_index is None:
+        if len(matches) > 1 and pass_number is None:
             raise KeyError(
-                f"Raw label {raw_label!r} matched {len(matches)} activations; pass pass_index."
+                f"Raw label {raw_label!r} matched {len(matches)} activations; pass pass_number=."
             )
         return matches[0]
 
-    def activations_by_pass(self, pass_index: int) -> list[Any]:
+    def activations_by_pass(self, pass_number: int) -> list[Any]:
         """Return activation records captured for one model-call pass."""
 
         return [
             activation
             for activation in self._iter_activation_records()
-            if self._activation_pass_index(activation) == pass_index
+            if self._activation_pass_index(activation) == pass_number
         ]
 
     def activations_by_address(self, address: str) -> list[Any]:
