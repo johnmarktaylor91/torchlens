@@ -153,7 +153,9 @@ inf/NaN tensors, and special-value args.
 ## __init__.py Schema Checks
 
 - `validate_tlspec()` only validates unified `.tlspec` manifests.
-- Only legacy 2.16 intervention formats skip schema validation; model-log bundles below tlspec v6 refuse to load.
+- Intervention specs skip schema validation (their format has no schema document); the
+  format_version-1 spec, the 2.16 model-log bundle and a unified manifest below the current
+  tlspec were saved by torchlens 2.x and refuse with `ArtifactTooOldError`.
 - Manifest schemas live at `torchlens/schemas/tlspec_manifest_v{schema_version}.json`;
   validation selects the version declared by each artifact.
 

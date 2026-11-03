@@ -10,7 +10,8 @@ agent to run — keep this package cheap to import and side-effect free.
   `from_ilg`, and `from_sentence_transformers` (all in `__all__`), plus the
   lazy `_COMPAT_MODULES` routing.
 - `_report.py` holds private model/input probes used by `tl.report.doctor(model, inputs)`.
-  Public `DoctorCheck` and `DoctorReport` records live in `torchlens/report/_doctor.py`.
+  Public `DoctorCheck` and `DoctorReport` records are defined in the basis module
+  `torchlens/_doctor_types.py` and re-exported from `torchlens/report/_doctor.py`.
   The probes inspect wrapper coverage, capabilities and distributed findings without
   executing the model.
 - `torchextractor.py` — `Extractor`, the torchextractor-style adapter (callable and

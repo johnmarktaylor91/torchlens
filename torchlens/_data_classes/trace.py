@@ -26,7 +26,6 @@ Key design patterns:
   ``_init_module_hierarchy_data()``.
 """
 
-import inspect
 import pickle
 import weakref
 from collections import OrderedDict, defaultdict
@@ -105,6 +104,7 @@ from . import (
     _doors,
     _fork_lineage,
     _trace_annotations,
+    _trace_aten,
     _trace_intervention_records,
     _trace_inventory,
     _trace_profile,
@@ -133,6 +133,7 @@ from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_pristine import derive_pristine
 from ._trace_profile import ModelProfile
 from ._trace_removal import batch_remove_log_entries, release_param_refs, remove_log_entry
+from ._trace_source_introspection import inspect_source_attr
 from ._trace_stack import StackedActivations, stack_traces
 from ._trace_state_io import _MODEL_LOG_DEFAULT_FILL
 from ._trace_views import _CallableList
@@ -179,6 +180,7 @@ if TYPE_CHECKING:
     from ..report._profile import ProfileReport
     from ..report._trace_facts import _CallableDict
     from ..validation.status import ValidationStatus
+    from .aten_op import AtenOp, _ModePausedInteriorGap
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
     from .module import Module, ModuleCall
@@ -1024,14 +1026,14 @@ class Trace(TraceLike):
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
         self.save_budget = save_budget
-        # Built once per capture; ``None`` when budgeting is disabled. Charged on
-        # the hot path by the activation-save paths in the torch backend.
+        # Built once per capture; ``None`` when budgeting is disabled; charged on the save hot path.
         self._save_budget_accountant = SaveBudget.from_option(save_budget)
         self.facet_functions = facet_functions
         self._options_on_nonfinite: bool = False
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
+        self._options_aten_ops: bool = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []
@@ -1543,58 +1545,12 @@ class Trace(TraceLike):
         selected_nums = set(layer_nums)
         return [op.label for op in self._layer_list if op.raw_index in selected_nums]
 
-    def _source_model_class(self) -> type[Any] | None:
-        """Return the live source model class if it is still retained.
-
-        Returns
-        -------
-        type[Any] | None
-            Source model class, or ``None`` if the weakref is unavailable.
-        """
-
-        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
-        model = source_ref() if source_ref is not None else None
-        return None if model is None else type(model)
-
-    def _inspect_source_attr(self, attr_name: str) -> str | None:
-        """Inspect one source-model attribute when stored metadata is absent.
-
-        Parameters
-        ----------
-        attr_name:
-            One of the Trace source-introspection field names.
-
-        Returns
-        -------
-        str | None
-            Inspected metadata, or ``None`` when the source model is gone or
-            the callable cannot be inspected.
-        """
-
-        model_cls = self._source_model_class()
-        if model_cls is None:
-            return None
-        if attr_name == "_source_class_docstring":
-            return model_cls.__doc__
-        if attr_name in {"_source_init_signature", "_source_init_docstring"}:
-            target = getattr(model_cls, "__init__", None)
-        else:
-            target = getattr(model_cls, "forward", None)
-        if target is None:
-            return None
-        if attr_name.endswith("_docstring"):
-            return getattr(target, "__doc__", None)
-        try:
-            return str(inspect.signature(target))
-        except (TypeError, ValueError):
-            return None
-
     @property
     def _source_class_docstring(self) -> str | None:
         """Return the source model class docstring."""
 
-        return self.__dict__.get("_source_class_docstring") or self._inspect_source_attr(
-            "_source_class_docstring"
+        return self.__dict__.get("_source_class_docstring") or inspect_source_attr(
+            self, "_source_class_docstring"
         )
 
     @_source_class_docstring.setter
@@ -1613,8 +1569,8 @@ class Trace(TraceLike):
     def _source_init_signature(self) -> str | None:
         """Return the source model ``__init__`` signature."""
 
-        return self.__dict__.get("_source_init_signature") or self._inspect_source_attr(
-            "_source_init_signature"
+        return self.__dict__.get("_source_init_signature") or inspect_source_attr(
+            self, "_source_init_signature"
         )
 
     @_source_init_signature.setter
@@ -1633,8 +1589,8 @@ class Trace(TraceLike):
     def _source_init_docstring(self) -> str | None:
         """Return the source model ``__init__`` docstring."""
 
-        return self.__dict__.get("_source_init_docstring") or self._inspect_source_attr(
-            "_source_init_docstring"
+        return self.__dict__.get("_source_init_docstring") or inspect_source_attr(
+            self, "_source_init_docstring"
         )
 
     @_source_init_docstring.setter
@@ -1653,8 +1609,8 @@ class Trace(TraceLike):
     def _source_forward_signature(self) -> str | None:
         """Return the source model ``forward`` signature."""
 
-        return self.__dict__.get("_source_forward_signature") or self._inspect_source_attr(
-            "_source_forward_signature"
+        return self.__dict__.get("_source_forward_signature") or inspect_source_attr(
+            self, "_source_forward_signature"
         )
 
     @_source_forward_signature.setter
@@ -1673,8 +1629,8 @@ class Trace(TraceLike):
     def _source_forward_docstring(self) -> str | None:
         """Return the source model ``forward`` docstring."""
 
-        return self.__dict__.get("_source_forward_docstring") or self._inspect_source_attr(
-            "_source_forward_docstring"
+        return self.__dict__.get("_source_forward_docstring") or inspect_source_attr(
+            self, "_source_forward_docstring"
         )
 
     @_source_forward_docstring.setter
@@ -3351,7 +3307,7 @@ class Trace(TraceLike):
     def to_pandas(self, include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass."""
 
-        return _doors.export()._trace_tables.to_pandas(
+        return _doors.stats()._trace_tables.to_pandas(
             self, include_decoded_output_summary=include_decoded_output_summary
         )
 
@@ -3365,7 +3321,7 @@ class Trace(TraceLike):
     ) -> Any:
         """Return decoded output rows: the captured rows, or a decode on demand."""
 
-        return _doors.export()._trace_tables.decode_output(
+        return _doors.stats()._trace_tables.decode_output(
             self, k=k, style=style, head=head, tokenizer=tokenizer
         )
 
@@ -3379,7 +3335,7 @@ class Trace(TraceLike):
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe."""
 
-        return _doors.export()._trace_tables.output_table(
+        return _doors.stats()._trace_tables.output_table(
             self, k=k, batch_items=batch_items, style=style, head=head
         )
 
@@ -3720,6 +3676,21 @@ class Trace(TraceLike):
     def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
         """Render this trace's events in the live-narration grammar."""
         return _doors.report()._narrate.narrate(self, last=last, select=select)
+
+    @property
+    def has_aten_ops(self) -> bool:
+        """Whether this trace carries recorded ATen operations."""
+        return _trace_aten.has_aten_ops(self)
+
+    @property
+    def aten_ops(self) -> "tuple[AtenOp, ...]":
+        """All recorded ATen operations in dispatch order (forward, then backward)."""
+        return _trace_aten.aten_ops(self)
+
+    @property
+    def aten_gaps(self) -> "tuple[_ModePausedInteriorGap, ...]":
+        """Disclosed stretches where ATen rows are missing by construction."""
+        return _trace_aten.aten_gaps(self)
 
 
 attach_trace_docs(Trace)

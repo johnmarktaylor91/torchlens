@@ -286,6 +286,23 @@ assert probs.shape == (2, 4, 4, 4)
 assert torch.count_nonzero(probs[1, :, :2, 2:]) == 0  # padded keys get exactly zero
 ```
 
+### ATen operations behind an op
+
+```python
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+assert trace.has_aten_ops  # False on a default capture: the recorder is opt-in
+for row in trace["relu_1_2"].aten_ops:  # the ATen calls this op's torch call dispatched to
+    print(row.operator, row.overload, row.sequence)
+len(trace.aten_ops)  # every recorded row, forward then backward, in dispatch order
+trace.aten_gaps  # disclosed interiors the recorder could not observe; () when complete
+
+plain = tl.trace(model, x)
+try:
+    plain.aten_ops
+except tl.errors.AtenOpsUnavailableError as exc:  # exc.fields["code"] == "aten_ops_unavailable"
+    print(exc)  # names CaptureOptions(aten_ops=True)
+```
+
 ### Newer namespace exports
 
 Exports added to existing namespaces during 2.x; spellings DOCUMENTED-UNSTABLE, each defined
