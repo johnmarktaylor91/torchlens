@@ -598,6 +598,23 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
 }
 
 
+def _failing_rows(rows: Any, check: Callable[..., None]) -> list[str]:
+    """Run ``check`` on every table row; return one line per row whose check fails.
+
+    The tables below are folded into one test each (test-shape ruling tests.1, fold to one
+    test per table): every row still runs on every pass, and a failing run names each
+    failing row instead of stopping at the first.
+    """
+
+    failures: list[str] = []
+    for row in rows:
+        try:
+            check(*row)
+        except (Exception, pytest.fail.Exception) as error:
+            failures.append(f"{row[:2]!r}: {type(error).__name__}: {error}")
+    return failures
+
+
 def _public_error_classes() -> dict[str, type[BaseException]]:
     """Return every public ``torchlens.errors`` exception or warning class.
 
@@ -633,11 +650,7 @@ def test_builtin_lineage_golden_is_closed() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("class_name", "expected_builtins"),
-    sorted(BUILTIN_LINEAGE_GOLDEN.items()),
-)
-def test_builtin_lineage_matches_golden(
+def _check_builtin_lineage(
     class_name: str,
     expected_builtins: tuple[str, ...],
 ) -> None:
@@ -680,8 +693,7 @@ def _import_exception(class_module: str, class_name: str) -> Any:
     return getattr(module_obj, class_name)
 
 
-@pytest.mark.parametrize("base_cls", BASE_CLASSES)
-def test_base_payload_contract(base_cls: type[errors.TorchLensError]) -> None:
+def _check_base_payload(base_cls: type[errors.TorchLensError]) -> None:
     """Base error classes store the shared structured payload fields."""
 
     instance = base_cls(
@@ -730,10 +742,7 @@ def test_invalid_severity_is_rejected() -> None:
     assert "Remedy:" in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    ("class_module", "class_name", "expected_base", "status"), OLD_EXCEPTION_MAPPING
-)
-def test_old_exception_class_maps_to_new_base(
+def _check_old_exception_mapping(
     class_module: str,
     class_name: str,
     expected_base: type[BaseException],
@@ -759,18 +768,17 @@ def test_spec_portability_alias_is_unchanged() -> None:
     assert intervention_errors.SpecPortabilityError is intervention_errors.OpaqueCallableError
 
 
-@pytest.mark.parametrize(
-    ("error_cls", "expected_code"),
-    (
-        (UnknownBackendError, "unknown_backend"),
-        (BackendMismatchError, "backend_mismatch"),
-        (AmbiguousBackendError, "backend_ambiguity"),
-        (BackendUnsupportedError, "backend_unsupported"),
-        (BackendPayloadUnsupportedError, "backend_payload_unsupported"),
-        (BackendRuntimeCompatibilityError, "backend_runtime_compatibility"),
-    ),
+_BACKEND_REFUSAL_ROWS = (
+    (UnknownBackendError, "unknown_backend"),
+    (BackendMismatchError, "backend_mismatch"),
+    (AmbiguousBackendError, "backend_ambiguity"),
+    (BackendUnsupportedError, "backend_unsupported"),
+    (BackendPayloadUnsupportedError, "backend_payload_unsupported"),
+    (BackendRuntimeCompatibilityError, "backend_runtime_compatibility"),
 )
-def test_backend_refusals_use_shared_fields_and_remedies(
+
+
+def _check_backend_refusal(
     error_cls: type[errors.ConfigurationError],
     expected_code: str,
 ) -> None:
@@ -845,8 +853,7 @@ TOP_REFUSAL_CASES: tuple[tuple[str, Callable[[], object]], ...] = (
 )
 
 
-@pytest.mark.parametrize(("expected_code", "trigger"), TOP_REFUSAL_CASES)
-def test_top_refusal_messages_name_a_remedy(
+def _check_top_refusal(
     expected_code: str,
     trigger: Callable[[], object],
 ) -> None:
@@ -886,17 +893,16 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
     assert "Remedy:" in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "error_cls",
-    (
-        errors.InvalidArgumentError,
-        errors.ArgumentTypeError,
-        errors.ArgumentConflictError,
-        errors.CaptureNotActiveError,
-        errors.AtenOpsUnavailableError,
-    ),
+_ACTIONABLE_REFUSAL_CLASSES = (
+    errors.InvalidArgumentError,
+    errors.ArgumentTypeError,
+    errors.ArgumentConflictError,
+    errors.CaptureNotActiveError,
+    errors.AtenOpsUnavailableError,
 )
-def test_actionable_refusal_pickle_round_trip(
+
+
+def _check_actionable_pickle(
     error_cls: type[errors.TorchLensError],
 ) -> None:
     """Strict actionable constructors preserve fields across exception pickle."""
@@ -1664,3 +1670,47 @@ def test_output_unsupported_tensor_variant_provoked() -> None:
     with pytest.raises(OutputAttributionError) as excinfo:
         tl.trace(_NestedOut(), torch.ones(2, 4))
     assert excinfo.value.fields["code"] == "output_unsupported_tensor_variant"
+
+
+def test_builtin_lineage_matches_golden() -> None:
+    """Every public error class keeps its exact builtin-exception bases (one row per class)."""
+
+    failures = _failing_rows(sorted(BUILTIN_LINEAGE_GOLDEN.items()), _check_builtin_lineage)
+    assert not failures, "\n".join(failures)
+
+
+def test_base_payload_contract() -> None:
+    """Base error classes store the shared structured payload fields (one row per base class)."""
+
+    failures = _failing_rows([(cls,) for cls in BASE_CLASSES], _check_base_payload)
+    assert not failures, "\n".join(failures)
+
+
+def test_old_exception_class_maps_to_new_base() -> None:
+    """Every inventoried old exception class is preserved under the new taxonomy (one row per class)."""
+
+    failures = _failing_rows(OLD_EXCEPTION_MAPPING, _check_old_exception_mapping)
+    assert not failures, "\n".join(failures)
+
+
+def test_top_refusal_messages_name_a_remedy() -> None:
+    """Likely public option refusals expose codes and concrete remedies (one row per code)."""
+
+    failures = _failing_rows(TOP_REFUSAL_CASES, _check_top_refusal)
+    assert not failures, "\n".join(failures)
+
+
+def test_backend_refusals_use_shared_fields_and_remedies() -> None:
+    """Backend refusal vocabulary participates in the shared error contract (one row per class)."""
+
+    failures = _failing_rows(_BACKEND_REFUSAL_ROWS, _check_backend_refusal)
+    assert not failures, "\n".join(failures)
+
+
+def test_actionable_refusal_pickle_round_trip() -> None:
+    """Strict actionable constructors preserve fields across exception pickle (one row per class)."""
+
+    failures = _failing_rows(
+        [(cls,) for cls in _ACTIONABLE_REFUSAL_CLASSES], _check_actionable_pickle
+    )
+    assert not failures, "\n".join(failures)
