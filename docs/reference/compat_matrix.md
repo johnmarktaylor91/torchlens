@@ -42,7 +42,7 @@ refuses at entry with the typed `tl.errors.DistributedCaptureUnsupportedError`,
 whose findings name the `dtensor` and `tensor_parallel` kinds. This refusal is
 the supported behaviour today: capturing below the `DTensor` dispatch layer would
 record rank-local shims instead of the real ops. The planned capture design is
-[tensor_parallel_design.md](tensor_parallel_design.md); until it is built,
+[tensor_parallel_design.md](../internal/reference/tensor_parallel_design.md); until it is built,
 capture a rank-local dense copy of the module.
 
 Transformers applies a `tp_plan` only when the rank layout is in the process

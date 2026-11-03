@@ -11,8 +11,9 @@ measured on.
 * DTensor tensor parallelism: a forward sharded over a real two-process CPU ``gloo`` mesh
   runs, and capture refuses with the typed ``DistributedCaptureUnsupportedError`` naming the
   ``dtensor`` and ``tensor_parallel`` kinds (the planned design is
-  ``docs/reference/tensor_parallel_design.md``). Both torch-native ``parallelize_module`` and
-  transformers' DTensor-native ``tp_plan="auto"`` loading are covered.
+  ``docs/internal/reference/tensor_parallel_design.md``). Both torch-native
+  ``parallelize_module`` and transformers' DTensor-native ``tp_plan="auto"`` loading are
+  covered.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
   package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
   xfail), and a companion test pins that a witnessed trace is marked unverified, not silent.
