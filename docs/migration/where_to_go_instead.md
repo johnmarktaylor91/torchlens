@@ -21,6 +21,8 @@ CUDA graphs outside eager PyTorch, so there is nothing for it to record there, a
 Coming back: load the same checkpoint as a Hugging Face model, trace it, and check the site or
 steering vector on the eager twin
 ([deployment envelope](../reference/deployment_envelope.md#serving-engines-capture-the-hugging-face-twin)).
+To check an engine's hooks site by site against TorchLens on a small model, by TransformerLens
+or nnterp site name, see [cross-engine checks](cross_engine.md).
 
 ## Train a sparse autoencoder or a probe
 
