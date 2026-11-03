@@ -197,7 +197,9 @@ def test_set_only_do_stages_an_edit_as_a_hook_and_a_later_do_fires_it(
 
     assert replays["_run_replay"] == 0
     assert torch.equal(fork["linear_3_5"].out, baseline)
-    assert list(fork.layers["relu_1_2"].ops[0].edits or ())
+    assert _events(fork)[-1]["lane"] == "set_only"
+    operations = [row["op"] for row in fork.state_history if isinstance(row, dict) and "op" in row]
+    assert "attach_hooks" in operations and "set" not in operations
 
     fork.do("tanh_1_4", tl.scale(0.5))
 
