@@ -191,7 +191,7 @@ DOCS: dict[str, str] = {
         The site decides which tensor the edit changes: a bare site edits the
         activation, ``tl.grad(site)`` the gradient of the site's output, and
         ``tl.grad(site) | site`` both. A gradient edit needs a backward pass:
-        with ``model=`` and ``x=`` the forward reruns on a new trace with the
+        with ``model=`` and ``inputs=`` the forward reruns on a new trace with the
         edit armed (the audit row says ``"armed"``) and the next
         ``result.backward(loss)`` applies it; ``engine="set_only"`` arms it on
         this trace instead. Replay re-executes forward ops only and refuses a

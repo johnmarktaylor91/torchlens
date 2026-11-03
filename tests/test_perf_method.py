@@ -199,6 +199,25 @@ def test_runner_fastlog_halt_operation_executes_on_current_api() -> None:
     assert state["fastlog_halt_raw_index"] >= 1
 
 
+def test_runner_aux_save_reports_the_saved_bytes_not_the_directory_entry() -> None:
+    """``serialized_file_size_bytes`` sums the files a save wrote (a ``.tlspec`` is a directory)."""
+
+    model, x = _tiny_model()
+    state: dict[str, object] = {}
+
+    fn = _operation("aux_save", model, x, "cpu", state)
+    fn()
+
+    tempdir = state["_tempdir"]
+    saved = Path(tempdir.name) / "trace_0.tlspec"  # type: ignore[attr-defined]
+    expected = sum(child.stat().st_size for child in saved.rglob("*") if child.is_file())
+    assert expected > 0
+    assert state["serialized_file_size_bytes"] == expected
+    if saved.is_dir():
+        assert state["serialized_file_size_bytes"] != saved.stat().st_size
+    tempdir.cleanup()  # type: ignore[attr-defined]
+
+
 def test_select_fastlog_names_returns_nonempty_selection() -> None:
     """Name selection sees real op events from the predicate dry run."""
 

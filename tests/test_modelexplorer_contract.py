@@ -212,3 +212,13 @@ def test_validator_passes_the_shipped_payload(reuse_payload: dict[str, Any]) -> 
 
     report = tl.export.validate_model_explorer_payload(reuse_payload)
     assert report.ok, report.failures
+
+
+def test_export_error_code_lives_in_fields() -> None:
+    """The refusal code reads from ``fields["code"]``, as the class docstring says."""
+
+    error = tl.errors.ModelExplorerExportError(
+        "duplicate graph id", code="model_explorer_duplicate_node_id", remedy="report it"
+    )
+    assert error.fields["code"] == "model_explorer_duplicate_node_id"
+    assert not hasattr(error, "code")

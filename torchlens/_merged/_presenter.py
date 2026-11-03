@@ -286,7 +286,7 @@ class MergedTrace:
     Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins
     both rank traces (and their retained activations) until the presenter is
-    dropped or :meth:`release` is called. Call :meth:`release` when finished
+    dropped or :meth:`cleanup` is called. Call :meth:`cleanup` when finished
     with a presenter built over live traces you do not otherwise retain.
     """
 
@@ -308,7 +308,7 @@ class MergedTrace:
         """Read each loaded member's settled capture-outcome status once.
 
         Computed at construction (statuses are settled and frozen) so the
-        disclosure stays readable after :meth:`release` and never forces a
+        disclosure stays readable after :meth:`cleanup` and never forces a
         lazy member load. Members whose object carries no settled outcome
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
@@ -341,12 +341,12 @@ class MergedTrace:
         self._released = True
 
     def _require_members(self, surface: str) -> None:
-        """Refuse typed when ``surface`` needs member traces after release()."""
+        """Refuse typed when ``surface`` needs member traces after cleanup()."""
 
         if self._released:
             raise MergedSurfaceUnsupportedError(
                 f"MergedTrace.{surface} needs the member rank traces, but "
-                "release() dropped them. Re-merge (or re-load) the rank cores "
+                "cleanup() dropped them. Re-merge (or re-load) the rank cores "
                 "to access members again; the derivation verdicts remain "
                 "readable on this presenter.",
                 code=MergedErrorCode.MERGED_MEMBER_RELEASED,
@@ -409,7 +409,7 @@ class MergedTrace:
         never claims ``attested_complete`` silently over a halted prefix.
         Ranks whose member object carries no settled outcome sidecar are
         absent. Settled at construction; stays readable after
-        :meth:`release`.
+        :meth:`cleanup`.
         """
 
         return dict(self._member_outcomes)

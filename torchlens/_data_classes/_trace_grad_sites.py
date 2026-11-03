@@ -190,9 +190,9 @@ def select_signal_plan_engine(
     InvalidArgumentError
         ``intervention_engine_invalid`` for an unknown engine, and
         ``replay_gradient_edit_unsupported`` for ``engine="replay"`` or an
-        ``auto`` engine with neither ``model=`` nor ``x=``.
+        ``auto`` engine with neither ``model=`` nor ``inputs=``.
     EngineDispatchError
-        When only one of ``model=`` / ``x=`` is given.
+        When only one of ``model=`` / ``inputs=`` is given.
     """
 
     if engine not in {"auto", "replay", "rerun", "set_only"}:
