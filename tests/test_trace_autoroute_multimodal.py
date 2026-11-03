@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.bridge._hf_processor as hf_processor
 import torchlens.bridge.transformers as hf_bridge
 
 
@@ -19,6 +20,10 @@ class _DictModel(nn.Module):
         """Return a tensor while accepting arbitrary dict input."""
 
         return torch.ones(1)
+
+
+_received: list[tuple[Any, Any]] = []
+"""Inputs the CLIP-like forward saw; kept off the model, which capture rolls back."""
 
 
 class _ClipLikeModel(nn.Module):
@@ -32,12 +37,11 @@ class _ClipLikeModel(nn.Module):
     name_or_path = "torchlens-tests/clip-like"
 
     def __init__(self) -> None:
-        """Build the two tiny towers and the received-input ledger."""
+        """Build the two tiny towers."""
 
         super().__init__()
         self.text_embed = nn.Embedding(16, 4)
         self.vision = nn.Conv2d(3, 4, kernel_size=8)
-        self.received: list[tuple[Any, Any]] = []
 
     def forward(
         self,
@@ -48,7 +52,7 @@ class _ClipLikeModel(nn.Module):
     ) -> torch.Tensor:
         """Return a text-image similarity row from keyword inputs only."""
 
-        self.received.append((input_ids, pixel_values))
+        _received.append((input_ids, pixel_values))
         batch = pixel_values.shape[0]
         image = self.vision(pixel_values).reshape(batch, -1).mean(dim=1)
         text = self.text_embed(input_ids).mean(dim=(1, 2))
@@ -207,15 +211,16 @@ def test_clip_style_dict_routes_without_a_cached_processor(
 
     pytest.importorskip("transformers")
     processor = _FakeAutoProcessor()
-    monkeypatch.setattr(hf_bridge, "_load_hf_processor", lambda name_or_path: processor)
+    monkeypatch.setattr(hf_processor, "_load_hf_processor", lambda name_or_path: processor)
     model = _ClipLikeModel()
     image = _pil_image()
+    _received.clear()
 
     log = tl.trace(model, {"text": "a cat", "images": image}, save="none")
 
     assert processor.calls == [{"text": "a cat", "images": image, "return_tensors": "pt"}]
-    assert len(model.received) == 1
-    input_ids, pixel_values = model.received[0]
+    assert len(_received) == 1
+    input_ids, pixel_values = _received[0]
     assert isinstance(input_ids, torch.Tensor) and isinstance(pixel_values, torch.Tensor)
     record = log.provenance.input_preprocessor
     assert record is not None
@@ -237,8 +242,9 @@ def test_modality_dict_with_unresolvable_processor_refuses_typed(
 
         raise OSError(f"{name_or_path} is not cached and the Hub is unreachable")
 
-    monkeypatch.setattr(hf_bridge, "_load_hf_processor", fail_load)
+    monkeypatch.setattr(hf_processor, "_load_hf_processor", fail_load)
     model = _ClipLikeModel()
+    _received.clear()
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.trace(model, {"text": "a cat", "images": _pil_image()}, save="none")
@@ -246,7 +252,7 @@ def test_modality_dict_with_unresolvable_processor_refuses_typed(
     assert excinfo.value.fields["code"] == "preprocessing_unresolved"
     assert "model.processor = AutoProcessor.from_pretrained" in excinfo.value.fields["remedy"]
     assert excinfo.value.fields["resolution_attempt"]["name_or_path"] == model.name_or_path
-    assert model.received == []
+    assert _received == []
 
 
 def test_multimodal_gate_claims_on_model_shape_without_io(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,6 +265,6 @@ def test_multimodal_gate_claims_on_model_shape_without_io(monkeypatch: pytest.Mo
 
         raise AssertionError("detection must not load the processor")
 
-    monkeypatch.setattr(hf_bridge, "_load_hf_processor", fail_load)
+    monkeypatch.setattr(hf_processor, "_load_hf_processor", fail_load)
     assert hf_bridge._can_resolve_hf_processor(_ClipLikeModel()) is True
     assert hf_bridge._can_resolve_hf_processor(_DictModel()) is False

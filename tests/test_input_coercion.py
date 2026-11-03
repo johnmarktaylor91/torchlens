@@ -446,18 +446,22 @@ def test_trace_with_pil_image_and_attached_processor() -> None:
         trace.cleanup()
 
 
+_processor_calls: list[dict[str, Any]] = []
+"""Calls the fake processor saw; kept off the model, which capture rolls back."""
+_received: list[Any] = []
+"""Keyword inputs the multimodal forward saw; same reason."""
+
+
 class ClipLikeProcessor:
     """Attached ``AutoProcessor``-style callable returning paired keyword inputs."""
 
     def __init__(self) -> None:
         """Start the call ledger."""
 
-        self.calls: list[dict[str, Any]] = []
-
     def __call__(self, *, return_tensors: str, **modalities: Any) -> dict[str, Any]:
         """Return the keyword inputs for whichever modalities were passed."""
 
-        self.calls.append({**modalities, "return_tensors": return_tensors})
+        _processor_calls.append({**modalities, "return_tensors": return_tensors})
         out: dict[str, Any] = {}
         if "text" in modalities:
             out["input_ids"] = torch.tensor([[1, 2, 3]])
@@ -474,13 +478,12 @@ class MultimodalModel(nn.Module):
     """CLIP/BLIP/Whisper-shaped model: keyword inputs and an attached processor."""
 
     def __init__(self) -> None:
-        """Build the tiny towers, the processor and the received-input ledger."""
+        """Build the tiny towers and attach the processor."""
 
         super().__init__()
         self.embed = nn.Embedding(16, 4)
         self.conv = nn.Conv2d(3, 4, kernel_size=8)
         self.processor = ClipLikeProcessor()
-        self.received: list[list[str]] = []
 
     def forward(
         self,
@@ -495,7 +498,7 @@ class MultimodalModel(nn.Module):
             "pixel_values": pixel_values,
             "input_features": input_features,
         }
-        self.received.append(sorted(key for key, value in given.items() if value is not None))
+        _received.append(sorted(key for key, value in given.items() if value is not None))
         out = torch.zeros(1, 4)
         if input_ids is not None:
             out = out + self.embed(input_ids).mean(dim=1)
@@ -520,11 +523,12 @@ def test_modality_dict_with_attached_processor_becomes_keyword_inputs() -> None:
     model = MultimodalModel()
     image = _rgb_image()
     raw = {"text": "a cat", "images": image}
+    _processor_calls.clear()
 
     coerced = _coerce_input_args(model, raw)
     input_args, input_kwargs = _split_coerced_mapping(raw, coerced, None)
 
-    assert model.processor.calls == [{"text": "a cat", "images": image, "return_tensors": "pt"}]
+    assert _processor_calls == [{"text": "a cat", "images": image, "return_tensors": "pt"}]
     assert input_args == []
     assert set(input_kwargs) == {"input_ids", "pixel_values"}
 
@@ -578,11 +582,13 @@ def test_trace_modality_dict_with_attached_processor(
     model = MultimodalModel()
     image = _rgb_image()
     raw = raw_factory(image)
+    _received.clear()
+    _processor_calls.clear()
 
     trace = tl.trace(model, raw, save="none")
 
-    assert model.received == [expected_received]
-    assert set(model.processor.calls[0]) == expected_keys | {"return_tensors"}
+    assert _received == [expected_received]
+    assert set(_processor_calls[0]) == expected_keys | {"return_tensors"}
     assert len(trace.ops) > 0
 
 
@@ -592,11 +598,13 @@ def test_trace_audio_dict_with_attached_processor_passes_sampling_rate() -> None
     model = MultimodalModel()
     model.sampling_rate = 16_000
     waveform = np.zeros(1600, dtype=np.float32)
+    _received.clear()
+    _processor_calls.clear()
 
     tl.trace(model, {"audio": waveform}, save="none")
 
-    assert model.received == [["input_features"]]
-    call = model.processor.calls[0]
+    assert _received == [["input_features"]]
+    call = _processor_calls[0]
     assert call["audio"] is waveform
     assert call["sampling_rate"] == 16_000
     assert call["return_tensors"] == "pt"
@@ -605,19 +613,15 @@ def test_trace_audio_dict_with_attached_processor_passes_sampling_rate() -> None
 def test_modality_dict_without_processor_stays_positional() -> None:
     """A dict-taking model with no processor still receives the dict itself."""
 
+    received: list[Any] = []
+
     class DictForward(nn.Module):
         """Model whose forward takes one dict positionally."""
-
-        def __init__(self) -> None:
-            """Start the received ledger."""
-
-            super().__init__()
-            self.received: list[Any] = []
 
         def forward(self, batch: dict[str, Any]) -> torch.Tensor:
             """Record the batch and return a constant."""
 
-            self.received.append(batch)
+            received.append(batch)
             return torch.ones(1)
 
     model = DictForward()
@@ -625,7 +629,7 @@ def test_modality_dict_without_processor_stays_positional() -> None:
 
     assert _coerce_input_args(model, raw) is raw
     tl.trace(model, raw, save="none")
-    assert model.received == [raw]
+    assert received == [raw]
 
 
 def test_modality_dict_inside_positional_tuple_is_not_processed() -> None:
@@ -634,8 +638,9 @@ def test_modality_dict_inside_positional_tuple_is_not_processed() -> None:
     model = MultimodalModel()
     raw = {"text": "hello", "images": _rgb_image()}
     other = torch.ones(1)
+    _processor_calls.clear()
 
     coerced = _coerce_input_args(model, (raw, other))
 
     assert coerced == (raw, other)
-    assert model.processor.calls == []
+    assert _processor_calls == []
