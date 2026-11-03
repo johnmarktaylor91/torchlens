@@ -18,6 +18,7 @@ from _format3_envelope import read_manifest, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -138,8 +139,9 @@ def test_r35_mandatory_family_presence_and_tamper_rejection(tmp_path: Path) -> N
     blob_bytes = bytearray(blob_path.read_bytes())
     blob_bytes[-1] ^= 0xFF
     blob_path.write_bytes(bytes(blob_bytes))
-    with pytest.raises(Exception, match="[Cc]hecksum|corrupt|mismatch"):
+    with pytest.raises(ArtifactError, match="SHA-256 differs") as caught:
         tl.load(str(path))
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None:
