@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 
 
 class StorageKind(Enum):
