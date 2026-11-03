@@ -53,3 +53,29 @@ def test_generated_page_names_every_root_surface_name(generator, model) -> None:
         assert f'"n":"{name}"' in html, f"{row['canonical_path']} is not in the rendered page"
     assert str(model["commit"]) in html
     assert "tools/generate_api_map.py" in html
+
+
+def test_unresolvable_root_name_fails_loudly(generator, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    real_rows = generator.read_surface_rows(REPO_ROOT)
+    fake = dict(real_rows[0], canonical_path="torchlens.name_that_does_not_exist_anywhere")
+    monkeypatch.setattr(generator, "read_surface_rows", lambda repo: real_rows + [fake])
+    with pytest.raises(generator.ApiMapError, match="name_that_does_not_exist_anywhere"):
+        generator.build_model(REPO_ROOT)
+    assert generator.main([str(Path("/nonexistent") / "out.html"), "--repo", str(REPO_ROOT)]) == 2
+
+
+@pytest.mark.heavy
+def test_cli_writes_the_full_page(generator, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The full build (every module parsed): heavy, not smoke (about 10 s under load)."""
+
+    out = tmp_path / "map.html"
+    assert generator.main([str(out), "--repo", str(REPO_ROOT)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert text.startswith("<!doctype html>")
+    for row in generator.read_surface_rows(REPO_ROOT):
+        assert f'"n":"{row["canonical_path"].split(".")[-1]}"' in text
+    assert '"scope":"full"' in text
+    assert "http://" not in text.split('<script id="api-map-data"')[0].replace(
+        "http://www.w3.org", ""
+    )
+    assert "<link" not in text, "the page must stay self-contained (no external stylesheet)"

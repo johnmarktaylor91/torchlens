@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+import torchlens as tl
 from torchlens import repgeom
 from torchlens.stats import CKA, cka
 
@@ -80,3 +81,9 @@ def test_cka_gains_placement_through_one_seam() -> None:
     assert acc.compute() == pytest.approx(legacy, abs=1e-4)
     with pytest.raises(ValueError, match="floating"):
         cka(a, b, dtype=torch.int64)
+
+
+def test_tl_repgeom_rdm_compare_is_reachable() -> None:
+    """The facade re-exports the new descriptive comparator."""
+
+    assert tl.repgeom.compare_rdms is repgeom.compare_rdms

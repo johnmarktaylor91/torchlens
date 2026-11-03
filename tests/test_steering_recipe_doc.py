@@ -64,3 +64,11 @@ def test_recipe_bind_matches_plain_hook_exactly(recipe):
         recipe["ids"], max_new_tokens=5, do_sample=False, use_cache=True
     )
     assert not torch.equal(recipe["tokens"], unsteered), "the steer must change generation"
+
+
+def test_recipe_leaves_model_hook_free(recipe):
+    """Binding, recording and tracing leave no hooks on the user's model."""
+
+    assert not any(
+        module._forward_hooks or module._forward_pre_hooks for module in recipe["lm"].modules()
+    )

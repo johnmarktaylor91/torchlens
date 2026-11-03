@@ -10,11 +10,14 @@ and prove each stub door refuses typed with its code and a remedy.
 
 from __future__ import annotations
 
+import importlib
 import re
 from pathlib import Path
 
 import pytest
 
+from torchlens._data_classes.field_policy import StorageKind
+from torchlens._io import save_policy, writer_contract
 from torchlens._io.format3 import contract, reader, runnable, writer
 from torchlens._io.format_errors import ArtifactError
 
@@ -31,11 +34,65 @@ def _page() -> str:
     return PAGE.read_text(encoding="utf-8")
 
 
+def test_record_contract_version_matches_the_page() -> None:
+    """The pinned record contract version is the page's tlspec and reader floor."""
+
+    text = _page()
+    header = re.search(r"^# Persisted fields of the saved format \(tlspec (\d+)\)", text, re.M)
+    floor = re.search(r"^Reader floor: tlspec (\d+)\.", text, re.M)
+    assert header is not None and floor is not None
+    assert int(header.group(1)) == contract.RECORD_CONTRACT_VERSION
+    assert int(floor.group(1)) == contract.RECORD_CONTRACT_FLOOR
+
+
+def test_record_index_matches_the_page_table() -> None:
+    """Record names, class paths and key counts equal the page's Records table."""
+
+    rows = [(name, cls, int(keys)) for name, cls, keys, _ in _RECORD_ROW.findall(_page())]
+    assert rows == list(contract.RECORD_INDEX)
+
+
+def test_persisted_key_count_matches_the_page_header() -> None:
+    """The key total is the page's headline count and the sum of its record tables."""
+
+    text = _page()
+    headline = re.search(r"^(\d+) record contracts, (\d+) persisted keys\.", text, re.M)
+    assert headline is not None
+    assert int(headline.group(1)) == len(contract.RECORD_INDEX)
+    assert int(headline.group(2)) == contract.PERSISTED_KEY_COUNT
+
+
+def test_planned_keys_are_not_on_the_page_yet() -> None:
+    """A planned key is one the writer lane still adds; once added it leaves the plan."""
+
+    for record, keys in contract.PLANNED_KEYS.items():
+        section = _record_section(record)
+        present = set(_KEY_ROW.findall(section))
+        assert not present & set(keys), (
+            f"{record}: {sorted(present & set(keys))} are on the page; remove them from "
+            "PLANNED_KEYS in the same change"
+        )
+
+
 def _record_section(record: str) -> str:
     text = _page()
     start = text.index(f"\n## `{record}` (")
     end = text.find("\n## ", start + 1)
     return text[start : end if end > 0 else None]
+
+
+def test_json_type_map_covers_every_storage_kind() -> None:
+    """Every storage kind has one JSON encoding class, and the classes are the four named."""
+
+    assert set(contract.JSON_TYPE_BY_STORAGE_KIND) == set(StorageKind)
+    assert set(contract.JSON_TYPE_BY_STORAGE_KIND.values()) == {
+        "value",
+        "id_array",
+        "tensor_ref",
+        "never",
+    }
+    assert contract.JSON_TYPE_BY_STORAGE_KIND[StorageKind.RUNTIME] == "never"
+    assert contract.JSON_TYPE_BY_STORAGE_KIND[StorageKind.PAYLOAD] == "tensor_ref"
 
 
 def test_every_refusal_code_is_a_documented_row() -> None:
@@ -64,6 +121,27 @@ def test_ruled_spellings_are_on_the_contract_page() -> None:
     )
     missing = [name for name in ruled if name not in text]
     assert not missing, missing
+
+
+def test_envelope_constants_match_the_writer_contract() -> None:
+    """Identity fields, codecs and save levels are the writer contract's own."""
+
+    assert contract.WRITER_IDENTITY_FIELDS == writer_contract.WRITER_IDENTITY_FIELDS
+    assert contract.PAYLOAD_CODEC_IDS == writer_contract.PAYLOAD_CODEC_IDS
+    assert set(contract.SAVE_LEVELS) == set(save_policy._LEVEL_INCLUDE_FLAG_DEFAULTS)
+    assert contract.FORMAT_MAJOR == 3
+    assert set(contract.WRITER_IDENTITY_FIELDS) <= set(contract.MANIFEST_REQUIRED_FIELDS)
+    assert len(set(contract.TYPED_VALUE_TAGS)) == len(contract.TYPED_VALUE_TAGS)
+
+
+def test_phase_timing_keys_are_the_pipeline_step_names() -> None:
+    """The timing key source resolves to the pipeline, whose step names are unique."""
+
+    module_path, _, attribute = contract.PHASE_TIMING_KEY_SOURCE.rpartition(".")
+    pipeline = getattr(importlib.import_module(module_path), attribute)
+    names = [step.name for step in pipeline]
+    assert names and len(set(names)) == len(names)
+    assert all(re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in names)
 
 
 @pytest.mark.parametrize(

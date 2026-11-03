@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+import torchlens as tl
 from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     DEFAULT,
@@ -21,6 +22,7 @@ from torchlens.transforms import (
     TensorSpec,
     TransformContext,
     TransformDefinition,
+    TransformPipeline,
     TransformSpec,
     cast,
     chain,
@@ -371,3 +373,10 @@ class _DeclaredDouble(ContextTransform):
         """
 
         return tensor * 2
+
+
+def test_transforms_facade_is_lazily_reachable() -> None:
+    """tl.transforms is the (documented-unstable) lazy home of the library."""
+
+    assert tl.transforms.flatten is flatten
+    assert isinstance(TransformPipeline(steps=()), TransformPipeline)

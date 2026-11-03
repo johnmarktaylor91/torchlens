@@ -119,3 +119,15 @@ def test_migration_example_runs(file_name: str, tool: str, expected: Any, code: 
     finally:
         torch.use_deterministic_algorithms(deterministic_enabled)
     assert namespace["RESULT"] == expected
+
+
+def test_each_migration_file_has_old_and_torchlens_examples() -> None:
+    """Every Phase 15 migration file should contain both sides of the migration."""
+
+    by_file: dict[str, set[str]] = {file_name: set() for file_name in MIGRATION_FILES}
+    for file_name, tool, _, _ in _iter_examples():
+        by_file[file_name].add(tool)
+
+    for file_name, tools in by_file.items():
+        assert "torchlens" in tools
+        assert len(tools - {"torchlens"}) == 1

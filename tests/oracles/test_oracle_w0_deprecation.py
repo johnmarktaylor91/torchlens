@@ -16,7 +16,52 @@ from pathlib import Path
 from ._deprecation import (
     DeprecatedDoor,
     audit_registered_door,
+    call_time_deprecations,
+    load_deprecated_doors,
+    resolve_dotted,
 )
+from ._invocation_templates import SEED_TEMPLATES
+
+
+def test_registry_is_empty_and_loads() -> None:
+    """The package is deprecation-free; the registry says so as DATA."""
+
+    assert load_deprecated_doors() == (), (
+        "a deprecation-door row appeared; interim-phase policy is "
+        "remove-and-rename (scripts/checks/deprecation_inventory.py) -- a real "
+        "shim needs BOTH the registry row and a conscious policy change"
+    )
+
+
+def test_registered_doors_honor_the_contract() -> None:
+    """Direction 1 of the iff: every registered door warns, names, resolves.
+
+    Vacuously green on the empty registry; the plants below keep the
+    machinery honest so this can never rot into a dead check.
+    """
+
+    for door in load_deprecated_doors():
+        invoke = resolve_dotted(door.door)
+        findings = audit_registered_door(door, invoke)
+        assert findings == (), findings
+
+
+def test_seed_templates_cover_seven_plus_doors_or_disclose() -> None:
+    """The call-time gate's door coverage is COUNTED, never implied.
+
+    The memo sized the gate at "7+ doors" against the panel-SHA shim set;
+    P00's batch-8 deletion removed those shims, so today's honest coverage
+    is the seed template set. The count is published; item 7 (Wave 1) grows
+    templates to 12-18 and this disclosure keeps the gap visible.
+    """
+
+    print(
+        f"call-time deprecation gate coverage: {len(SEED_TEMPLATES)} doors via "
+        f"invocation templates: {[t.door for t in SEED_TEMPLATES]}; "
+        "shim set deleted at P00, registry empty by policy"
+    )
+    assert len(SEED_TEMPLATES) >= 5
+
 
 # ---------------------------------------------------------------------------
 # Plants: both directions of the iff must be able to go red.
@@ -33,9 +78,27 @@ def _planted_silent_door() -> None:
     """A door that does NOT warn (the silently-overwritten-shim direction)."""
 
 
+def test_plant_undocumented_deprecation_goes_red() -> None:
+    """PLANT: an unregistered door that warns at call time is caught."""
+
+    emitted = call_time_deprecations(_planted_warning_door)
+    assert emitted, "the call-time channel missed a planted DeprecationWarning"
+
+
 def test_plant_registered_nonwarning_door_goes_red(tmp_path: Path) -> None:
     """PLANT: a registered door that stays silent is caught."""
 
     door = DeprecatedDoor(door="planted.old", replacement="torchlens.trace", since="2026-08-26")
     findings = audit_registered_door(door, _planted_silent_door)
     assert any("silently overwritten" in finding for finding in findings), findings
+
+
+def test_plant_registry_row_parses(tmp_path: Path) -> None:
+    """PLANT: a real registry row round-trips through the loader."""
+
+    registry = tmp_path / "deprecated_doors.tsv"
+    registry.write_text("door\treplacement\tsince\nplanted.old\ttorchlens.trace\t2026-08-26\n")
+    rows = load_deprecated_doors(registry)
+    assert rows == (
+        DeprecatedDoor(door="planted.old", replacement="torchlens.trace", since="2026-08-26"),
+    )

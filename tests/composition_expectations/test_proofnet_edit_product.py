@@ -168,6 +168,12 @@ def test_edit_cell_matches_declared_state(product_name: str, edit_products: dict
         )
 
 
+def test_edit_matrix_is_closed() -> None:
+    """Every product in the fixture roster has a declared edit cell."""
+
+    assert set(EDIT_PRODUCT_MATRIX) == set(EDIT_SITE_BY_PRODUCT)
+
+
 def test_selection_lane_edit_on_presenters_refuses_foreign_trace() -> None:
     """A resolved Selection from one trace cannot do() into another product
     (the one explicit cross-run door is align_to; foldB D18 law 1: TRY it)."""

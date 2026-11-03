@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens._utils._sparse_parts import sparse_component_tensors
 from torchlens._utils._torch_compat import get_sparse_spsolve_cuda_support
@@ -175,6 +176,12 @@ def test_sparse_buffer_refuses_typed_at_entry() -> None:
     assert info.value.fields["code"] == "unsupported_tensor_variant"
     assert "model.adjacency" in str(info.value)
     assert model.adjacency.layout is torch.sparse_coo
+
+
+def test_torch_sparse_ops_are_in_the_wrap_inventory() -> None:
+    """``torch.sparse`` re-exports C builtins the overridable crawl never visits."""
+    for name in ("mm", "addmm", "sum", "softmax", "log_softmax", "sampled_addmm"):
+        assert ("torch.sparse", name) in ORIG_TORCH_FUNCS, name
 
 
 def test_whole_storage_bytes_cover_sparse_components() -> None:

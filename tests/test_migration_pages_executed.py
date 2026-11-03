@@ -119,6 +119,20 @@ def test_migration_page_example_runs(
     assert namespace["RESULT"] == expected
 
 
+@pytest.mark.parametrize("page", sorted(PAGES))
+def test_every_fence_is_headed_with_a_known_tool(page: str) -> None:
+    """Every fence on a listed page is executed: it carries a header naming a page tool."""
+
+    fences = _fences(page)
+    assert fences, f"{page} has no executed example"
+    for index, code in enumerate(fences, start=1):
+        header = HEADER_RE.match(code.splitlines()[0])
+        assert header is not None, f"{page} fence {index} has no migration-test header"
+        assert header.group("tool") in PAGES[page], (page, index, header.group("tool"))
+    tools = {HEADER_RE.match(code.splitlines()[0]).group("tool") for code in fences}  # type: ignore[union-attr]
+    assert tools & {"torchlens", "timm_torchlens"}, f"{page} has no TorchLens example"
+
+
 def test_saelens_page_names_the_splice_result_latents_fields() -> None:
     """The SAELens page's read-latents row names SpliceResult fields that exist."""
 

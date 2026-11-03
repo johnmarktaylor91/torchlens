@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import subprocess
 import sys
@@ -40,10 +41,23 @@ from torchlens._ir.op_record import (
 )
 from torchlens._ir.op_record_scatter import (
     CELL_SOURCES,
+    EXTRA_KEY_CHANNELS,
 )
 
 # Markers are additive: a file-level smoke pytestmark would keep the heavy test
 # in the `-m smoke` tier, so the smoke mark is applied per test instead.
+
+
+def test_three_way_manifest_closure() -> None:
+    from torchlens._data_classes.op import _OP_SLOT_NAMES
+
+    manifest_keys = set(CELL_SOURCES)
+    slot_keys = set(_OP_SLOT_NAMES)
+    universe = slot_keys | EXTRA_KEY_CHANNELS
+    missing = universe - manifest_keys
+    assert not missing, f"unclassified store cells: {sorted(missing)}"
+    stale = manifest_keys - universe - {"is_in_conditional_body", "source_trace"}
+    assert not stale, f"manifest rows without a store cell: {sorted(stale)}"
 
 
 def test_manifest_regenerate_and_diff() -> None:
@@ -267,3 +281,71 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
             assert cells["_label_raw"] == label
             if label in raw_labels:
                 assert cells["type_index"] is not None
+
+
+def test_ingest_inputs_v1_reserves_aten_lane_and_covers_step0_reads() -> None:
+    import json
+
+    from torchlens._postprocess._ingest_contract import (
+        INGEST_CONTRACT_ROWS,
+        IngestInputs,
+        JournalView,
+        Step0Result,
+    )
+
+    journal_fields = {f.name for f in dataclasses.fields(JournalView)}
+    assert "aten_events" in journal_fields, "reserved aten_events lane missing"
+    assert JournalView.__dataclass_fields__["aten_events"].default == ()
+    assert any(row[0] == "journal.aten_events" for row in INGEST_CONTRACT_ROWS)
+
+    input_fields = {f.name for f in dataclasses.fields(IngestInputs)}
+    for required in (
+        "journal",
+        "module_workspace",
+        "raw_graph_workspace",  # X1
+        "buffer_initial_values",
+        "op_equivalence_classes",
+        "source_model_ref",
+        "param_logs",
+        "owning_trace",
+        "op_row_store",
+        "trace_core",  # ppdag 9.1 orchestrator row
+        "input_layers_initial",  # X4
+        "timing_sink",  # X3
+        "scatter_options",
+    ):
+        assert required in input_fields, required
+    result_fields = {f.name for f in dataclasses.fields(Step0Result)}
+    assert result_fields == {
+        "raw_log_registrations",  # X2 local-map derivation
+        "input_layer_labels",
+        "equivalence_class_map",
+        "module_side_channel",
+    }
+
+    # the recorded step-0 trace-read inventory must be coverable by the
+    # enumeration (each read maps to a declared IngestInputs handle or a
+    # named orchestrator-epilogue attribute)
+    ledger_path = Path(__file__).resolve().parent / "ledger" / "step0_trace_reads.json"
+    if ledger_path.exists():
+        observed = set(json.loads(ledger_path.read_text()))
+        covered = {
+            # journal + workspaces + registries
+            "capture_events": "journal",
+            "_module_capture_ws": "module_workspace",
+            "_raw_graph_ws": "raw_graph_workspace",
+            "_buffer_initial_values": "buffer_initial_values",
+            "op_equivalence_classes": "op_equivalence_classes",
+            "_source_model_ref": "source_model_ref",
+            "param_logs": "param_logs",
+            "input_layers": "input_layers_initial",
+            "_trace_core": "trace_core",
+            "_phase_timings": "timing_sink",
+        }
+        uncovered = {
+            name
+            for name in observed
+            if name in covered
+            and covered[name] not in {f.name for f in dataclasses.fields(IngestInputs)}
+        }
+        assert not uncovered, f"declared coverage broken: {uncovered}"

@@ -8,6 +8,7 @@ dataclasses, no ANSI/OSC-8 in returned strings, never-raises on degraded
 records, purity, and the ascii==degrade byte contract for every specimen.
 """
 
+import dataclasses
 from io import StringIO
 
 import pytest
@@ -49,6 +50,15 @@ def _has_auto_repr(cls: type) -> bool:
     return "__create_fn__" in qualname or (
         wrapped is not None and "__create_fn__" in getattr(wrapped, "__qualname__", "")
     )
+
+
+@pytest.mark.parametrize("spec", _NO_AUTO_REPR_CLASSES)
+def test_no_auto_repr_on_result_report_context_classes(spec: str) -> None:
+    """D31: the Recording OOM was a CLASS of defect, not one bug."""
+
+    cls = _load(spec)
+    assert dataclasses.is_dataclass(cls)
+    assert not _has_auto_repr(cls), f"{spec} still inherits the dataclass auto-repr"
 
 
 class _Model(nn.Module):

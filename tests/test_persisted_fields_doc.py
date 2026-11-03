@@ -13,6 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools" / "docs"))
 
@@ -31,6 +33,13 @@ def test_committed_page_equals_the_generator_output() -> None:
     assert PAGE.read_text(encoding="utf-8") == expected, (
         f"{PAGE.relative_to(REPO_ROOT)} is stale; run {persisted_fields.COMMAND}"
     )
+
+
+def test_check_flag_accepts_the_committed_page(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--check`` exits 0 on the committed page and says so."""
+
+    assert persisted_fields.main(["--check"]) == 0
+    assert "is current" in capsys.readouterr().out
 
 
 def test_a_changed_contract_changes_the_page(tmp_path: Path) -> None:

@@ -91,3 +91,13 @@ def test_teaching_page_example_runs(
     finally:
         torch.use_deterministic_algorithms(deterministic)
     assert namespace["RESULT"] == expected
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_every_teaching_fence_is_headed(page: str) -> None:
+    """Every Python fence on a listed page carries the execution header."""
+
+    fences = _fences(page)
+    assert fences, f"{page} has no executed example"
+    for index, code in enumerate(fences, start=1):
+        assert HEADER_RE.match(code.splitlines()[0]), f"{page} fence {index} has no header"

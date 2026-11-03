@@ -24,12 +24,29 @@ handoff cannot silently rot.
 from __future__ import annotations
 
 import ast
+import importlib
+import pickle
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
 
 class TestTraceStateRelocation:
+    def test_shim_and_home_serve_one_object(self) -> None:
+        shim = importlib.import_module("torchlens._trace_state")
+        home = importlib.import_module("torchlens._vocab.trace_state")
+        assert shim.TraceState is home.TraceState
+        assert shim.__tl_layer__ == "FACADE"
+        assert home.__tl_layer__ == "L0"
+        assert home.__tl_vocabulary__ is True
+
+    def test_pickle_identity_is_the_historical_path(self) -> None:
+        home = importlib.import_module("torchlens._vocab.trace_state")
+        assert home.TraceState.__module__ == "torchlens._trace_state"
+        state = pickle.loads(pickle.dumps(home.TraceState.PRISTINE))
+        assert state is home.TraceState.PRISTINE
+
     def test_home_closure_is_vocabulary_only(self) -> None:
         tree = ast.parse((REPO / "torchlens/_vocab/trace_state.py").read_text())
         torchlens_imports = [
@@ -42,6 +59,21 @@ class TestTraceStateRelocation:
 
 
 class TestNodeSpecRelocation:
+    def test_shim_and_home_serve_one_object(self) -> None:
+        shim = importlib.import_module("torchlens._visualization.node_spec")
+        home = importlib.import_module("torchlens._vocab.node_spec")
+        assert shim.NodeSpec is home.NodeSpec
+        assert shim.NodeSpecFn is home.NodeSpecFn
+        assert shim.BackwardNodeSpecFn is home.BackwardNodeSpecFn
+        assert shim.CollapsedNodeSpecFn is home.CollapsedNodeSpecFn
+        assert shim.INTERVENTION_SITE_COLOR == home.INTERVENTION_SITE_COLOR
+
+    def test_pickle_identity_is_the_historical_path(self) -> None:
+        home = importlib.import_module("torchlens._vocab.node_spec")
+        assert home.NodeSpec.__module__ == "torchlens._visualization.node_spec"
+        spec = home.NodeSpec(lines=["a"])
+        assert pickle.loads(pickle.dumps(spec)) == spec
+
     def test_vocabulary_home_smuggles_no_behavior(self) -> None:
         """Rule V3: the vocabulary home holds no deferred behavior imports."""
 
@@ -52,3 +84,73 @@ class TestNodeSpecRelocation:
                     assert not isinstance(inner, (ast.Import, ast.ImportFrom)), (
                         f"deferred import inside {node.name}: behavior smuggling (V3)"
                     )
+
+    def test_lower_layer_consumers_import_the_vocabulary_home(self) -> None:
+        for consumer in (
+            "torchlens/options.py",
+            "torchlens/viz/feature_maps.py",
+            "torchlens/receptive_field/_viz.py",
+        ):
+            source = (REPO / consumer).read_text()
+            assert "_vocab.node_spec import" in source, (
+                f"{consumer} must import NodeSpec vocabulary from the L0 home, "
+                "not upward from visualization/"
+            )
+            assert "visualization.node_spec import" not in source
+
+
+class TestSiteKeyRelocation:
+    def test_shim_and_home_serve_one_object(self) -> None:
+        shim = importlib.import_module("torchlens._postprocess._site_key")
+        home = importlib.import_module("torchlens._data_classes._site_key")
+        assert shim.SiteKeyMinter is home.SiteKeyMinter
+        assert shim.parse_site_key is home.parse_site_key
+        assert shim.SITE_KEY_PREFIX == home.SITE_KEY_PREFIX
+        assert home.__tl_layer__ == "L1"
+
+    def test_engine_and_product_consumers_import_the_l1_home(self) -> None:
+        for consumer in (
+            "torchlens/backends/_finalize.py",
+            "torchlens/backends/jax/_site_dialect.py",
+            "torchlens/_data_classes/_trace_inventory.py",
+            "torchlens/validation/_invariants_sites.py",
+            "torchlens/_io/forgery_validation.py",
+            "torchlens/_postprocess/loop_detection.py",
+        ):
+            source = (REPO / consumer).read_text()
+            assert "postprocess._site_key" not in source, (
+                f"{consumer} still imports the old postprocess home"
+            )
+
+
+class TestInterventionTripleHandoff:
+    """The published-closure facts for the deferred intervention-triple move."""
+
+    def test_closure_still_drags_the_selection_substrate(self) -> None:
+        """The blocker is real: types eagerly imports torchlens._selection.
+
+        The substrate is a package (``torchlens/_selection/``), so the eager
+        import is spelled per submodule (``from .._selection.selection import``,
+        ``from .._selection.target import``). ``intervention/errors.py`` left the
+        closure with the capture batch: it takes ``SelectionError`` from
+        ``torchlens._errors`` and re-exports the site-error family from the leaf
+        ``_selection/errors.py`` (which imports only ``_errors`` and
+        ``errors._base``); ``types.py`` still drags the substrate. If this test
+        starts failing, the closure shrank (C03 or a later lane broke the
+        selection dependency) and the triple move is unblocked -- execute it as
+        the C01/F35 amendment instead of deleting this pin.
+        """
+
+        types_source = (REPO / "torchlens/intervention/types.py").read_text()
+        errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
+        eager = re.compile(r"^from \.\._selection(\.\w+)? import", re.MULTILINE)
+        assert eager.search(types_source)
+        assert "from .._selection import" not in errors_source
+        assert "from .._selection.errors import" in errors_source
+        assert "from .._errors import" in errors_source
+
+    def test_selectors_depend_on_types(self) -> None:
+        """Selectors take their target vocabulary from the substrate's own target module."""
+
+        selectors_source = (REPO / "torchlens/_selection/selectors.py").read_text()
+        assert "from .target import" in selectors_source

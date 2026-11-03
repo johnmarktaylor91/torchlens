@@ -76,6 +76,22 @@ def test_diff_writes_both_targets_and_manifest(diff_dir: Path) -> None:
     assert manifest["coverage"]["one_sided"] == 0
 
 
+def test_aligned_pair_has_identical_id_sequences(diff_dir: Path) -> None:
+    """Same architecture -> identical id SEQUENCES, zero mapping artifacts."""
+
+    left = json.loads((diff_dir / "left.json").read_text(encoding="utf-8"))
+    right = json.loads((diff_dir / "right.json").read_text(encoding="utf-8"))
+    left_ids = [node["id"] for node in left["graphs"][0]["nodes"]]
+    right_ids = [node["id"] for node in right["graphs"][0]["nodes"]]
+    assert left_ids == right_ids
+    assert not (diff_dir / "sync-navigation.json").exists(), "aligned ids need no mapping entries"
+    config = json.loads((diff_dir / "embed-config.json").read_text(encoding="utf-8"))
+    sync = config["syncNavigationData"]
+    assert sync["type"] == "sync_navigation"
+    assert "mappingEntries" not in sync
+    assert "disableMappingFallback" not in sync
+
+
 def test_pair_arity_refuses_typed() -> None:
     """Anything but exactly two captures refuses typed."""
 

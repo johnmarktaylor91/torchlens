@@ -20,6 +20,12 @@ writer is red until it is removed here.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
+
+import pytest
+from _source_corpus import package_ast, package_files
+
+import torchlens as tl
 
 #: Mutating list-method names that rewrite op-lane contents in place.
 _MUTATING_METHODS = frozenset(
@@ -104,6 +110,37 @@ def _scan_tree(tree: ast.AST, relative: str) -> set[tuple[str, str, str]]:
 
     _visit(tree, ())
     return found
+
+
+@pytest.mark.heavy
+def test_inplace_op_lane_writers_match_the_sanctioned_ledger() -> None:
+    """Package-wide scan: op-lane mutators == the reason-bearing ledger, exactly.
+
+    ``heavy`` by measured cost at marking time (5.3s standalone package
+    scan, 2026-08-17). The scan now reads the shared session corpus
+    (tests/_source_corpus.py), so the per-test cost is the walk only; the
+    tier stays conservative rather than tracking every infrastructure win.
+    """
+
+    package_root = Path(tl.__file__).parent
+    observed: set[tuple[str, str, str]] = set()
+    for source_path in package_files():
+        relative = source_path.relative_to(package_root).as_posix()
+        observed |= _scan_tree(package_ast(source_path), relative)
+
+    unsanctioned = observed - SANCTIONED_INPLACE_OP_LANE_WRITERS
+    assert not unsanctioned, (
+        "UNSANCTIONED in-place op-lane writer(s): the op lane is append-only "
+        "with post-commit knowledge riding the typed amendment lane "
+        "(append_amendment). Route the change through an amendment, or -- for "
+        "a genuinely cook-owned-projection rewrite that nulls "
+        "_amended_fold_cache -- add a reason-bearing ledger row here: "
+        f"{sorted(unsanctioned)}"
+    )
+    stale = SANCTIONED_INPLACE_OP_LANE_WRITERS - observed
+    assert not stale, (
+        f"stale sanctioned-writer ledger rows (writer moved or retired): {sorted(stale)}"
+    )
 
 
 def test_op_lane_writer_scan_is_red_capable() -> None:

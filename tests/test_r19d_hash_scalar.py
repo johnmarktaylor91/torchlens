@@ -58,6 +58,27 @@ def test_content_scalar_in_mapping_hashes() -> None:
     assert _is_sha256_hex(tl.fingerprint.content({"a": torch.tensor(1.5)}))
 
 
+def test_reshape_is_byte_identical_for_ndim_tensors() -> None:
+    """Portable stability proof: the flattened view keeps >=1-D bytes identical.
+
+    ``reshape(-1)`` on a contiguous tensor is a contiguous view, so the raw
+    bytes fed to the digest are unchanged for every >=1-D tensor. This is the
+    platform-independent guarantee that no pinned digest can drift from the fix.
+    """
+
+    tensors = [
+        torch.tensor([1.5, 2.5, -3.0]),
+        torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        torch.arange(24, dtype=torch.int64).reshape(2, 3, 4),
+        torch.tensor([True, False, True]),
+    ]
+    for tensor in tensors:
+        contiguous = tensor.contiguous()
+        old = contiguous.view(torch.uint8).numpy().tobytes()
+        new = contiguous.reshape(-1).view(torch.uint8).numpy().tobytes()
+        assert old == new
+
+
 class _ScalarInputNet(nn.Module):
     """Model whose sole forward input is a 0-dim scalar tensor."""
 

@@ -24,6 +24,7 @@ import pytest
 pytest.importorskip("transformers")
 
 import torchlens as tl
+from torchlens.intervention.errors import GraphShapeMismatchError
 
 RECIPE_PAGE = Path(__file__).resolve().parents[1] / "docs" / "skeleton_change_recipe.md"
 PYTHON_FENCE_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
@@ -124,6 +125,42 @@ def test_surviving_target_aligns_with_label_drift_disclosure(
         assert row["saved_labels"] != row["resolved_labels"]
         assert sorted(row["saved_site_keys"]) == sorted(row["resolved_site_keys"])
         assert row["resolved_site_keys"] == [LM_HEAD_SITE_KEY]
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_moved_target_refuses_typed(recipe_namespace: dict[str, Any]) -> None:
+    """A recipe whose target vanished from the edited graph refuses typed."""
+
+    refusal = recipe_namespace["refusal"]
+    assert isinstance(refusal, GraphShapeMismatchError)
+    assert "graph_shape_hash" in str(refusal)
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_site_key_diff_localizes_the_edit(recipe_namespace: dict[str, Any]) -> None:
+    """Every moved address sits inside the wrapped block; outside sites held."""
+
+    moved_out = recipe_namespace["moved_out"]
+    moved_in = recipe_namespace["moved_in"]
+    assert moved_out and moved_in
+    for key in moved_out:
+        assert "/transformer.h.1" in key, f"address outside the edited block moved: {key}"
+    for key in moved_in:
+        assert "/transformer.h.1" in key, f"new address outside the edited block: {key}"
+    assert ADAPTER_LINEAR_SITE_KEY in moved_in
+    assert LM_HEAD_SITE_KEY not in moved_out
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_reauthored_recipe_checks_exact(recipe_namespace: dict[str, Any]) -> None:
+    """Re-authored against the edited capture, the recipe verdict is EXACT."""
+
+    compat_v2 = recipe_namespace["compat_v2"]
+    assert compat_v2.outcome == "EXACT"
+    assert compat_v2.has_identical_target_resolution is True
 
 
 def test_page_states_no_torchlens_verb_edits_the_model() -> None:

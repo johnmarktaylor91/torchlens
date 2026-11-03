@@ -24,6 +24,7 @@ import pytest
 import torch
 
 from torchlens._observability._memory_parity import (
+    EMITTED_CATEGORIES,
     NEVER_EMITTED_CATEGORIES,
     categorized_key_counts,
     category_vocabulary_report,
@@ -85,6 +86,14 @@ def test_category_vocabulary_is_fully_mapped(parity_counts: dict[str, int]) -> N
     # The pinned scenario exercises both contract sides.
     assert set(report["emitted"]) >= {"PARAMETER", "GRADIENT", "INPUT", "ACTIVATION"}
     assert set(report["never_emitted"]) == set(NEVER_EMITTED_CATEGORIES)
+
+
+def test_contract_tables_are_disjoint_and_documented() -> None:
+    """The emitted / never-emitted tables partition cleanly with reasons."""
+
+    assert not set(EMITTED_CATEGORIES) & set(NEVER_EMITTED_CATEGORIES)
+    for reason in {**EMITTED_CATEGORIES, **NEVER_EMITTED_CATEGORIES}.values():
+        assert reason.strip()
 
 
 def test_golden_fixture_shape() -> None:

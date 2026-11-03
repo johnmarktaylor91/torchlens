@@ -52,6 +52,22 @@ def _ledger_new_names() -> list[str]:
     return sorted(set(_LEDGER_ROW_RE.findall(DEPRECATIONS.read_text(encoding="utf-8"))))
 
 
+def test_ledger_has_dotted_replacements() -> None:
+    """The row pattern still matches the ledger (guards the resolver test below)."""
+
+    assert len(_ledger_new_names()) >= 20
+
+
+@pytest.mark.parametrize("dotted", _ledger_new_names())
+def test_deprecations_ledger_new_name_resolves(dotted: str) -> None:
+    """Every "New name" the removed-spellings ledger teaches imports today."""
+
+    try:
+        _resolve(dotted)
+    except (ImportError, AttributeError) as exc:
+        pytest.fail(f"deprecations.md teaches {dotted!r}, which does not resolve: {exc}")
+
+
 @pytest.mark.parametrize("gallery", GALLERIES)
 def test_gallery_readme_links_every_notebook(gallery: str) -> None:
     """A gallery README links every notebook in its folder, and only existing ones."""

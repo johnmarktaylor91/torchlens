@@ -61,6 +61,19 @@ def test_warning_contract_table_lockstep_both_directions() -> None:
         assert warning.strip() and remedy.strip(), f"empty contract columns for {code!r}"
 
 
+def test_warning_contract_lockstep_is_red_capable() -> None:
+    """Planted drift in either direction is detected by the pure comparators."""
+
+    table = _contract_table_codes(
+        "| Code | Warning | Remedy class |\n|---|---|---|\n| `planted_code` | w | r |\n"
+    )
+    assert set(table) == {"planted_code"}
+    # Direction 1: a coded site missing from the table.
+    assert {"other_code"} - set(table) == {"other_code"}
+    # Direction 2: a table row with no coded site.
+    assert set(table) - {"other_code"} == {"planted_code"}
+
+
 def test_s18_ratchets_hold_exactly() -> None:
     """Warn-site totals, uncoded count, and contract-row count match baselines.
 

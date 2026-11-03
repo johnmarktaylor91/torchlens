@@ -6,6 +6,9 @@ import pytest
 import torch
 
 from torchlens._observability import (
+    PHASES,
+    PRESENCE,
+    STREAMS,
     ObservationRecord,
     RunningStats,
     RunRecord,
@@ -33,6 +36,25 @@ def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> Observa
 
 class TestVocabularies:
     """Closed vocabularies refuse invented tokens with the teaching code."""
+
+    def test_closed_sets_are_the_memo_sets(self) -> None:
+        assert STREAMS == (
+            "activation",
+            "activation_grad",
+            "param",
+            "param_grad",
+            "param_delta",
+        )
+        assert PRESENCE == (
+            "observed",
+            "not_scheduled",
+            "site_absent",
+            "unsupported",
+            "capture_failed",
+            "budget_dropped",
+        )
+        assert "pre_clip" in PHASES
+        assert "post_clip" in PHASES
 
     @pytest.mark.parametrize(
         "field_name, value",

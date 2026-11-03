@@ -15,12 +15,75 @@ import textwrap
 import pytest
 
 from tests.composition_expectations import _censuses
+from tests.composition_expectations.universes import (
+    ADEQUACY_STATUSES,
+    UNIVERSES,
+)
 
 pytestmark = pytest.mark.compo
 
 
 def _parse(module: str, source: str) -> dict[str, ast.Module]:
     return {module: ast.parse(textwrap.dedent(source))}
+
+
+def test_universe_descriptors_are_well_formed() -> None:
+    """Unique ids, closed adequacy vocabulary, owners, and OPEN coherence."""
+
+    ids = [universe.universe_id for universe in UNIVERSES]
+    assert len(ids) == len(set(ids)), "duplicate universe ids"
+    for universe in UNIVERSES:
+        assert universe.universe_id.startswith("U-")
+        assert universe.owner, universe.universe_id
+        assert universe.derivation, universe.universe_id
+        assert universe.public_boundary, universe.universe_id
+        assert universe.review_trigger, universe.universe_id
+        assert universe.adequacy_status in ADEQUACY_STATUSES, universe.universe_id
+        if universe.adequacy_status == "open":
+            assert universe.derive is None, (
+                f"{universe.universe_id} is OPEN but carries a derivation"
+            )
+        else:
+            assert universe.derive is not None, (
+                f"{universe.universe_id} claims adequacy {universe.adequacy_status!r} "
+                "without a derivation"
+            )
+        if universe.independent_census == "single_derivation":
+            assert universe.adequacy_status in {"open", "single_derivation"}, (
+                f"{universe.universe_id}: a planted status requires an independent census "
+                "that can see the plant (memo Dis-3, the review's enforceable form)"
+            )
+
+
+def test_every_declared_universe_has_an_owner_and_no_silent_absence() -> None:
+    """OPEN universes are counted as missing, never silently absent (D10)."""
+
+    open_rows = [u.universe_id for u in UNIVERSES if u.adequacy_status == "open"]
+    derived_rows = [u.universe_id for u in UNIVERSES if u.derive is not None]
+    print(f"\nuniverse registry: {len(derived_rows)} derived, {len(open_rows)} OPEN")
+    assert derived_rows, "no derived universes -- the registry lost its substance"
+    # The memo's 3.2 roster must stay represented: every roster family below
+    # has at least one registry row, derived or OPEN.
+    represented = {u.universe_id for u in UNIVERSES}
+    for required in (
+        "U-BACKENDS",
+        "U-PUBLIC-OPERATIONS",
+        "U-CAPTURE-OPTIONS",
+        "U-RAISE-SITES",
+        "U-WARN-SITES",
+        "U-ENV-VARS",
+        "U-PRODUCT-STATES",
+        "U-EDIT-VERBS",
+        "U-RENDER-SURFACES",
+        "U-MODEL-TRAITS",
+        "U-TAUGHT-PATHS",
+        "U-DEPRECATED-ALIASES",
+        "U-FOREIGN-APIS",
+        "U-PROSE-CLAIMS",
+        "U-UNTRUSTED-ENTRY",
+        "U-GLOSSARY-TERMS",
+    ):
+        assert required in represented, f"memo 3.2 roster row {required} lost its registry row"
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +198,25 @@ def test_warn_site_alias_plant() -> None:
     assert [site.scope for site in literal] == ["literal"]
     assert sorted(site.scope for site in resolved) == ["bare_name", "literal", "module_alias"]
     assert sorted(site.scope for site in resolved if site.aliased) == ["bare_name", "module_alias"]
+
+
+def test_warn_site_plant_is_live_in_the_real_tree() -> None:
+    """The live tree CONTAINS aliased warn sites: the plant is real, not staged.
+
+    If a refactor ever removes every aliased site, this assertion (not the
+    census) goes red -- the honest act then is re-planting via the snippet
+    plant above and recording the tree change, never deleting the census.
+    """
+
+    aliased = [site for site in _censuses.warn_sites() if site.aliased]
+    print("\nlive aliased warn sites:")
+    for site in aliased:
+        print(f"  {site.site_key}")
+    assert aliased, (
+        "the live tree lost its aliased warn sites; the alias-resolving census "
+        "can no longer be proven load-bearing against the real tree -- update "
+        "this gate deliberately (the snippet plant still proves the mechanism)"
+    )
 
 
 def test_warn_site_code_kwarg_is_seen() -> None:

@@ -36,6 +36,25 @@ def saved_trace_path(tmp_path: Path) -> Path:
     return path
 
 
+def test_tool_specs_are_wellformed_json_schemas() -> None:
+    """Every declared tool has a name, description, object schema, annotations."""
+
+    names = [spec["name"] for spec in tlmcp.TOOL_SPECS]
+    assert len(names) == len(set(names))
+    # Nine registry tools; MCP serves the registry and nothing beside it.
+    assert len(names) == 9
+    for spec in tlmcp.TOOL_SPECS:
+        assert spec["name"].startswith("torchlens_")
+        assert spec["description"]
+        schema = spec["input_schema"]
+        assert schema["type"] == "object"
+        assert schema.get("additionalProperties") is False
+        assert spec["annotations"] == {"readOnlyHint": True, "idempotentHint": True}
+        # Registry tools serve agent envelopes.
+        assert spec["output_schema"].startswith("torchlens.agent.")
+        json.dumps(spec)
+
+
 def test_call_tool_refusals_teach_the_fix() -> None:
     """Unknown tools, bad args, and missing paths refuse typed with remedies."""
 

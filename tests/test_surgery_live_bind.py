@@ -394,6 +394,19 @@ def test_model_door_funnel_coverage_inventory(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_execution_effect_vocabulary_is_closed() -> None:
+    """The audit chokepoint refuses effects outside the closed two-value set."""
+
+    from torchlens.intervention.audit import EXECUTION_EFFECTS
+
+    assert {
+        "values_replaced_after_execution",
+        "exits_substituted_interior_not_replayed",
+    } == EXECUTION_EFFECTS
+    for banned in ("skipped", "deleted", "removed"):
+        assert banned not in EXECUTION_EFFECTS
+
+
 def test_execution_effect_chokepoint_refuses_invalid(toy) -> None:
     """``record_intervention_event`` refuses a non-vocabulary effect typed."""
 

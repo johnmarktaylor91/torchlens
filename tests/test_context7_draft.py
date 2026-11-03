@@ -30,6 +30,24 @@ def _draft() -> dict:
     return json.loads(DRAFT.read_text(encoding="utf-8"))
 
 
+def test_draft_uses_only_documented_fields_within_limits() -> None:
+    draft = _draft()
+    assert set(draft) <= KNOWN_FIELDS, set(draft) - KNOWN_FIELDS
+    assert draft["$schema"] == "https://context7.com/schema/context7.json"
+    assert 0 < len(draft["projectTitle"]) <= 100
+    assert 0 < len(draft["description"]) <= 500
+    assert draft["rules"] and all(isinstance(rule, str) and rule for rule in draft["rules"])
+
+
+def test_draft_paths_exist() -> None:
+    draft = _draft()
+    for folder in draft["folders"] + draft["excludeFolders"]:
+        assert (REPO_ROOT / folder).is_dir(), folder
+    for name in draft["excludeFiles"]:
+        assert "/" not in name, "excludeFiles takes bare file names"
+        assert (REPO_ROOT / name).is_file(), name
+
+
 def test_draft_excludes_package_source_and_contributor_notes() -> None:
     draft = _draft()
     assert "torchlens" in draft["excludeFolders"]

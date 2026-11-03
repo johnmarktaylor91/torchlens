@@ -325,3 +325,25 @@ def test_episode_declared_steps_that_never_run_quarantine_typed() -> None:
             episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
         ),
     )
+
+
+def test_episode_option_table_is_closed() -> None:
+    """Unlisted cells refuse: every table row has a driver and vice versa."""
+
+    import inspect
+    import sys
+
+    module = sys.modules[__name__]
+    source = inspect.getsource(module)
+    for cell_id, classification, code in EPISODE_OPTION_TABLE:
+        assert classification in {ORTHOGONAL, COUPLED, TYPED_REFUSED, UNTYPED_REFUSED}
+        if classification == TYPED_REFUSED:
+            assert code, f"{cell_id}: TYPED-REFUSED without a pinned code"
+        # Every cell id must be exercised by a driver in this module.
+        occurrences = source.count(f'"{cell_id}"')
+        assert occurrences >= 2, (
+            f"table cell {cell_id!r} has no driver in this module -- a listed"
+            " combination without an executed cell is an unwitnessed claim"
+        )
+    cell_ids = [row[0] for row in EPISODE_OPTION_TABLE]
+    assert len(cell_ids) == len(set(cell_ids)), "duplicate cell ids in the table"

@@ -24,6 +24,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
+from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 WIDTH = 8
@@ -86,6 +87,15 @@ def _assert_materialization_is_audited(trace: tl.Trace) -> None:
     assert all(op.startswith(("aten.detach", "aten.alias")) for op in operators)
     assert trace.completeness_diagnostics == []
     assert trace.provenance.verified is True
+
+
+def test_the_audited_row_is_the_wrapper_wide_materialization_boundary() -> None:
+    rows = [
+        row
+        for row in AUDITED_COMPLETENESS_BOUNDARIES
+        if row.wrapper_name == LAZY_MODULE_MATERIALIZE_WRAPPER
+    ]
+    assert len(rows) == 1 and rows[0].operator is None and rows[0].reason
 
 
 def test_a_detach_on_a_materialized_parameter_is_not_credited() -> None:

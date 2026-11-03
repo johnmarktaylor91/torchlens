@@ -16,6 +16,7 @@ import pytest
 
 from tests.transforms_corpus.loader import (
     COCO_URL_PREFIX,
+    CocoChecksumMismatch,
     coco_manifest_rows,
     fetch_coco,
 )
@@ -53,6 +54,56 @@ def _fixture_server(tmp_path: Path, bodies: dict[str, bytes]) -> tuple[str, list
             }
         )
     return root.as_uri() + "/", rows
+
+
+def test_coco_fetch_verifies_and_caches_from_a_local_fixture(tmp_path: Path) -> None:
+    """On-demand fetch writes verified bytes in manifest order and reuses the cache."""
+
+    base_url, rows = _fixture_server(tmp_path, {"a.jpg": b"alpha" * 10, "b.jpg": b"beta" * 7})
+    dest = tmp_path / "cache"
+
+    paths = fetch_coco(dest, rows=rows, base_url=base_url)
+
+    assert [path.name for path in paths] == ["a.jpg", "b.jpg"]
+    assert paths[0].read_bytes() == b"alpha" * 10
+    assert not list(dest.glob("*.part"))
+    (tmp_path / "server" / "a.jpg").unlink()
+    assert fetch_coco(dest, rows=rows, base_url=base_url) == paths
+
+
+def test_coco_fetch_refuses_a_checksum_mismatch_typed(tmp_path: Path) -> None:
+    """A changed source body refuses with CocoChecksumMismatch and keeps no file."""
+
+    base_url, rows = _fixture_server(tmp_path, {"a.jpg": b"alpha" * 10})
+    (tmp_path / "server" / "a.jpg").write_bytes(b"ALPHA" * 10)
+    dest = tmp_path / "cache"
+
+    with pytest.raises(CocoChecksumMismatch) as excinfo:
+        fetch_coco(dest, rows=rows, base_url=base_url)
+
+    assert excinfo.value.file == "a.jpg"
+    assert excinfo.value.expected_sha256 == rows[0]["sha256"]
+    assert excinfo.value.actual_sha256 == hashlib.sha256(b"ALPHA" * 10).hexdigest()
+    assert not list(dest.iterdir())
+
+
+def test_coco_fetch_refuses_a_size_mismatch_and_refetches_a_corrupt_cache(
+    tmp_path: Path,
+) -> None:
+    """An oversized body refuses unhashed; a corrupted cached copy is fetched again."""
+
+    base_url, rows = _fixture_server(tmp_path, {"a.jpg": b"alpha" * 10})
+    dest = tmp_path / "cache"
+    dest.mkdir()
+    (dest / "a.jpg").write_bytes(b"stale")
+    assert fetch_coco(dest, rows=rows, base_url=base_url)[0].read_bytes() == b"alpha" * 10
+
+    (tmp_path / "server" / "a.jpg").write_bytes(b"alpha" * 11)
+    (dest / "a.jpg").write_bytes(b"stale")
+    with pytest.raises(CocoChecksumMismatch) as excinfo:
+        fetch_coco(dest, rows=rows, base_url=base_url)
+    assert excinfo.value.actual_sha256 is None
+    assert excinfo.value.actual_bytes == rows[0]["bytes"] + 1
 
 
 @pytest.mark.rare

@@ -73,6 +73,27 @@ def _baseline_counts() -> dict[str, int]:
     return {metric: int(count) for metric, count in rows.items()}
 
 
+def test_harvest_counts_print_and_lockstep() -> None:
+    """The harvested counts match the committed baseline exactly.
+
+    Teaching: a docs change that adds/removes python fences or support-claim
+    strings updates ``data/harvest_counts.tsv`` in the same change -- the
+    diff is the taught-surface change review, and the wave-A sweeps consume
+    these counts as their denominators.
+    """
+
+    live = harvest_counts()
+    baseline = _baseline_counts()
+    print("\nharvest spike counts:")
+    for metric, count in live.items():
+        print(f"  {metric}\t{count}\t(baseline {baseline.get(metric)})")
+    assert live == baseline, (
+        "harvest counts drifted (docs taught surface changed). Review the delta, "
+        "then update tests/composition_expectations/data/harvest_counts.tsv in "
+        f"this change. live={live} baseline={baseline}"
+    )
+
+
 def test_harvest_is_feasible() -> None:
     """The spike's verdict: the taught surface IS harvestable (non-trivial counts)."""
 

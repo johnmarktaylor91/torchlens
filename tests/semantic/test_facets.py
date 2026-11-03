@@ -14,6 +14,7 @@ import torchlens as tl
 from torchlens._semantic import (
     facets as facets_mod,
 )
+from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 from torchlens.errors import MissingFacetError
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
@@ -373,6 +374,26 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     assert isinstance(gamma.grad, MissingGrad)
 
 
+def test_builtin_capability_inventory_is_recorded_as_data() -> None:
+    """Every built-in inventory entry records one allowed capability class."""
+
+    allowed = {
+        "op_structural",
+        "parameter",
+        "module_input",
+        "module_output",
+        "computed_read_only",
+        "missing",
+    }
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["attention"]["q"] == "op_structural"
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["mlp"]["intermediate"] == "computed_read_only"
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["embedding"]["weight"] == "parameter"
+    for facet_map in BUILTIN_FACET_CAPABILITY_INVENTORY.values():
+        assert facet_map
+        assert set(facet_map.values()) <= allowed
+
+
 def test_list_info_glob_and_recipe_record() -> None:
     """Discoverability functions expose registered recipe metadata."""
 
@@ -629,6 +650,15 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
         log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+
+
+def test_facets_public_module_all_is_curated() -> None:
+    """The public facets module should advertise only intentional names."""
+
+    assert "register" in facets_mod.__all__
+    assert "FacetView" in facets_mod.__all__
+    assert "Any" not in facets_mod.__all__
+    assert "dataclass" not in facets_mod.__all__
 
 
 def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:

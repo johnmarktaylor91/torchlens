@@ -169,6 +169,14 @@ def test_ragged_interior_cannot_bend_the_ledger(moe_episode: dict) -> None:
     assert ledger["header"]["stepped_module"] == "model"
 
 
+def test_wrapped_tokens_match_eager(moe_episode: dict) -> None:
+    """The wrapped episode emits the same greedy tokens as the eager loop."""
+
+    rows = moe_episode["log"].annotations["episode"]["rows"]
+    ledger_tokens = [token for row in rows for token in row["step_output"]]
+    assert ledger_tokens == moe_episode["eager_tokens"]
+
+
 # Per-step expert routing for the in-test Python-loop MoE: expert 0 is hit on
 # every step, expert 1 on two of three, expert 2 never.
 LOOP_ROUTES = ([0, 1, 0, 1], [0, 0, 0, 0], [1, 0, 0, 0])
