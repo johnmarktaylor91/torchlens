@@ -133,12 +133,12 @@ Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) 
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
-~1.5k tests (1,474/39,361 collect-only, measured 2026-11-02),
+~1.5k tests (1,477/39,981 collect-only, measured 2026-11-02),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"). The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
 serial, 4 torch threads) took 186s (~3 min), collection included; `-n 4` with one thread
 per worker took 236s on a busier worker. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
-(1,500) in `tests/conftest.py`. Smoke is NOT
+(1,477) in `tests/conftest.py`. Smoke is NOT
 sub-minute and NOT a per-step gate — per-step verification is the targeted test files for
 the code touched; smoke is the commit-level gate, `not rare and not slow and not heavy`
 the mid backstop, and `not slow` the phase-boundary backstop. Partition: `smoke` tests

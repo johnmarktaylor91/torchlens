@@ -1,6 +1,4 @@
 corpus	file	numeral
-docs-md	AGENTS.md	1,474
-docs-md	AGENTS.md	1,500
 docs-md	AGENTS.md	1.5
 docs-md	AGENTS.md	10
 docs-md	AGENTS.md	11
@@ -18,7 +16,6 @@ docs-md	AGENTS.md	26.04
 docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
-docs-md	AGENTS.md	39,361
 docs-md	AGENTS.md	40
 docs-md	AGENTS.md	45
 docs-md	AGENTS.md	5.5
@@ -1040,8 +1037,6 @@ docs-md	docs/maintainers/persisted_fields.md	93
 docs-md	docs/maintainers/persisted_fields.md	98
 docs-md	docs/maintainers/review_checklist.md	60
 docs-md	docs/maintainers/review_checklist.md	800
-docs-md	docs/maintainers/testing.md	1,400
-docs-md	docs/maintainers/testing.md	1,500
 docs-md	docs/maintainers/testing.md	12,000
 docs-md	docs/maintainers/testing.md	2.13.0
 docs-md	docs/maintainers/testing.md	20
