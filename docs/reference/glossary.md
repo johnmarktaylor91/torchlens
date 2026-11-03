@@ -617,6 +617,18 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.export` holds static export helpers; `tl.bundle(...)` / `tl.Bundle` build aligned
   Trace collections and `tl.show_bundle_graph` renders a bundle's graph.
 
+**Bridges (`tl.bridge.*`)**
+: Optional-extra adapters to third-party tools (reference: `docs/bridges.md`). Two carry
+  TorchLens sites and artifacts across: `tl.bridge.captum.layer(log, site, *, pass_index=None)`
+  gives Captum's layer methods a module for any site, the live module when a single-call module
+  returns the site's tensor and otherwise a site probe that `tl.bridge.captum.attribute` splices
+  into the forward at the op's `site_key` (`pass_index`, 1-based, picks one call of a repeated
+  module, the same as the `"address:N"` spelling); `tl.bridge.huggingface.load_from_hub(repo_id,
+  *, path_in_repo=..., revision=None, token=None, cache_dir=None, extract_dir=None, api=None,
+  **load_kwargs)` is the reader for `tl.bridge.huggingface.push_to_hub`, downloading the
+  published `.tar.gz`, extracting it after checking every member, and opening the bundle
+  through the governed `tl.load` door (nothing is unpickled outside it).
+
 **Streaming statistics**
 : `tl.stats` is the streaming-statistics namespace: constant-memory accumulators
   (`tl.stats.Mean`, `tl.stats.Norm`, `tl.stats.Covariance`, `tl.stats.CrossCovariance`,

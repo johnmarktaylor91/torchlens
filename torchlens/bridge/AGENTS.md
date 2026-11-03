@@ -22,8 +22,15 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute()`, `layer()` (extra: `torchlens[captum]`;
-  `layer()` is `_utils.module_for_site`).
+- `captum.py`: `attribute()`, `layer(log, site, *, pass_index=None)` (extra:
+  `torchlens[captum]`). `layer()` tries `_utils.module_for_site` first; on its
+  three refusals it returns a `_SiteProbe` (identity module remembering the
+  op's `site_key`, label and execution-order ordinal among ops sharing that
+  key). `attribute()` with a probe in `method.layer` swaps the method's
+  `forward_func` for the bound-intervention door
+  (`tl.when(site(key), splice).bind(model)`), which calls the probe on the
+  ordinal-th firing, so a Captum hook on the probe sees exactly that tensor.
+  `pass_index` folds into `"address:N"` (module addresses only).
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -44,7 +51,8 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
-- `huggingface.py`: `push_to_hub()` for artifacts (extra: `torchlens[hf]`).
+- `huggingface.py`: `push_to_hub()` for artifacts and `load_from_hub()` (download,
+  member-checked tar extraction, then `_io.bundle.load`; extra: `torchlens[hf]`).
 - `profiler.py`: `execution_trace()`, `join()` correlate a Kineto/Chrome trace
   with captured layers; stdlib-only, no import gate. `join()` (schema
   `torchlens.profiler_join.v2`) assigns each complete event to at most one

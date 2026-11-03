@@ -39,19 +39,30 @@ trace = tl.trace(model, x)
 ### Captum
 
 [pytorch/captum](https://github.com/pytorch/captum). Runs any Captum
-attribution object against the inputs a trace retained, and resolves a
-TorchLens site to the live module that Captum's layer methods hook.
+attribution object against the inputs a trace retained, and turns any site you
+pick out in TorchLens into a layer Captum's layer methods can hook.
 
 - `tl.bridge.captum.attribute(log, method, target, *, inputs=None, **kwargs)`
   calls `method.attribute(...)` on the trace's first saved input tensor (or
-  `inputs=`).
-- `tl.bridge.captum.layer(log, site)` returns the live `nn.Module` for a
-  module address, a pass-qualified address, an op label, a selector or a layer
-  object. An op label resolves to the outermost module whose output that
-  tensor is (`relu_17_66` in resnet18 is `layer4`, not `layer4.1.relu`). A
-  site whose module runs more than once in the trace is refused, because a
-  module hook would see every call, and a site that is not the output of any
-  module is refused too: Captum's layer methods need a module.
+  `inputs=`). When `method.layer` is a site probe (below), the call runs the
+  model through the capture-free bound-intervention door with the probe
+  spliced at that op, so Captum's forward hook on the probe reads and replaces
+  exactly that tensor; the model itself keeps no hook afterwards.
+- `tl.bridge.captum.layer(log, site, *, pass_index=None)` returns the live
+  `nn.Module` for a module address, a pass-qualified address, an op label, a
+  selector or a layer object when a single-call module returns that tensor
+  (an op label resolves to the outermost such module: `relu_17_66` in
+  resnet18 is `layer4`, not `layer4.1.relu`). Every other site, an op no
+  module returns (the residual `add` of a basic block) or one call of a
+  module that runs several times, returns a site probe: an identity module
+  spliced into the forward at the op's structural `site_key` (its
+  `repr` names the label and key), usable only through
+  `tl.bridge.captum.attribute`. `pass_index=` (1-based) picks the call of a
+  module that runs more than once: `layer(log, "layer4.1.relu", pass_index=2)`
+  is `layer(log, "layer4.1.relu:2")`, and it needs a plain module address
+  (`bridge_pass_index_needs_module_address`; a non-positive value refuses
+  `bridge_pass_index_invalid`). One probe per method object
+  (`bridge_captum_multi_probe_unsupported`).
 - Extra: `captum`.
 
 ```python
@@ -60,6 +71,11 @@ from captum.attr import LayerIntegratedGradients
 lig = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, "layer4"))
 attribution = tl.bridge.captum.attribute(trace, lig, target=0, n_steps=4)
 print(tuple(attribution.shape))
+
+# A functional op: the residual add inside the last basic block.
+add_label = trace["layer4.1.relu:2"].parent_labels[0]
+lig_add = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, add_label))
+print(tuple(tl.bridge.captum.attribute(trace, lig_add, target=0, n_steps=4).shape))
 ```
 
 ### SAELens
@@ -407,7 +423,8 @@ tensor summaries and image plots over TorchLens objects.
 ### Hugging Face Hub
 
 [huggingface/huggingface_hub](https://github.com/huggingface/huggingface_hub).
-Publishes a saved trace, bundle or intervention spec to a Hub repository.
+Publishes a saved trace, bundle or intervention spec to a Hub repository, and
+loads a published trace back in one call.
 
 - `tl.bridge.huggingface.push_to_hub(artifact, repo_id, *, token=None, private=None, path_in_repo="torchlens_artifact.pkl", commit_message=..., create_repo=True, dry_run=False, api=None, save_level="portable")`.
   A `Trace` or `Bundle` is always serialised through the privacy-scrubbed
@@ -418,15 +435,27 @@ Publishes a saved trace, bundle or intervention spec to a Hub repository.
   planned upload without contacting the Hub.
   The save step warns when the bundle embeds custom module attributes or
   pre-forward buffer values; review them before publishing.
-- Loading is the reverse by hand: download the file with
-  `huggingface_hub.hf_hub_download`, extract the tarball, and open the
-  bundle directory with `tl.load(path)`. There is no download helper in
-  TorchLens.
+- `tl.bridge.huggingface.load_from_hub(repo_id, *, path_in_repo="torchlens_artifact.tar.gz", revision=None, token=None, cache_dir=None, extract_dir=None, api=None, **load_kwargs)`
+  downloads that tarball (`hf_hub_download`), extracts it into `extract_dir`
+  (default: a fresh temporary directory) and opens the bundle through the
+  governed `tl.load` door, with `load_kwargs` passed on, so a published trace
+  comes back under the same safety gates as a local `.tlspec`. Nothing is
+  unpickled outside them: a download that is not a tarball holding one
+  bundle (a raw `.pkl`, two bundles, no `manifest.json`) refuses
+  `hub_artifact_not_a_bundle` before any member is read, and a tarball with
+  a member that would land outside the extraction directory, or a link or
+  device member, refuses `hub_artifact_tar_unsafe` before anything is
+  written.
 - Extra: `hf` (brings `huggingface_hub`).
 
 ```python
 plan = tl.bridge.huggingface.push_to_hub(trace, "someone/resnet18-trace", dry_run=True)
 print(plan["format"], plan["path_in_repo"], plan["size_bytes"] > 0)
+```
+
+```python
+loaded = tl.bridge.huggingface.load_from_hub("someone/resnet18-trace")  # needs network
+print(len(loaded.layer_list))
 ```
 
 ### Model Context Protocol (MCP)
