@@ -174,7 +174,7 @@ def test_wandb_table_cells_stay_primitive_for_nullable_missing_columns(
     """Missing cells of nullable columns reach the W&B table as ``None``, never ``pd.NA``."""
 
     log = _small_trace()
-    rows = len(log._layer_list)
+    rows = len(log.layer_list)
     nullable = pd.DataFrame(
         {
             "count": pd.array([None] + [1] * (rows - 1), dtype="Int64"),
