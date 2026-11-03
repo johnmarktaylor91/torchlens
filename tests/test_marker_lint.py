@@ -1258,7 +1258,13 @@ def test_smoke_only_session_recognizes_only_smoke_requiring_expressions(
     assert smoke_only_session(config) is expected  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells(
+    "test_smoke_file_token_detection[module-mark]",
+    "test_smoke_file_token_detection[decorator]",
+    "test_smoke_file_token_detection[cell]",
+    "test_smoke_file_token_detection[smoke-cells]",
+    "test_smoke_file_token_detection[longer-name]",
+)
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
