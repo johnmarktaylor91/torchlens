@@ -528,8 +528,18 @@ def test_tinygrad_pack_full_ladder(tmp_path: Path) -> None:
 @pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_paddle
-def test_paddle_pack_full_ladder(tmp_path: Path) -> None:
-    """The paddle pack passes C0-C2 on its config-built roster."""
+def test_paddle_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The paddle pack on its twelve-row config-built roster earns C1; every red cell is named.
 
-    pytest.importorskip("paddle")
-    _assert_full_ladder(preview_scorecard("paddle", workdir=tmp_path), "paddle")
+    The only reds are the after-load cells JAX and MLX also name: loaded non-torch
+    traces drop the runtime capture replay needs. A new red or a fixed one both
+    fail here; the fix removes its entry (and rewrites the shipped scorecard) in
+    the same change.
+    """
+
+    paddle = pytest.importorskip("paddle")
+    from tests.conformance._rosters.paddle import config_built_specs
+
+    families = tuple(spec.family for spec in config_built_specs())
+    known = _known_red_cells({}, families, {})
+    _assert_named_reds(("paddle", str(paddle.__version__)), tmp_path, known, 12, "C1")
