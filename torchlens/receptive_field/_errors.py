@@ -50,7 +50,7 @@ class AmbiguousInputError(ReceptiveFieldError, ValueError):
     ...         return a + b
     >>> trace = tl.trace(Pair(), (torch.randn(1, 1, 4, 4), torch.randn(1, 1, 4, 4)))
     >>> try:
-    ...     _ = trace["add_1_1"].receptive_field.status
+    ...     _ = trace["add_1_1"].receptive_field.size
     ... except AmbiguousInputError as err:
     ...     print(type(err).__name__)
     AmbiguousInputError
@@ -81,7 +81,7 @@ class AmbiguousTargetError(ReceptiveFieldError, ValueError):
     ...         return t * 2.0, t + 1.0
     >>> trace = tl.trace(TwoOut(), torch.randn(1, 3))
     >>> try:
-    ...     _ = trace["input_1"].projective_field.status
+    ...     _ = trace["input_1"].projective_field.size
     ... except AmbiguousTargetError as err:
     ...     print(type(err).__name__)
     AmbiguousTargetError

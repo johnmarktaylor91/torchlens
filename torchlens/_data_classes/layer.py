@@ -305,7 +305,7 @@ class Layer(_SelectionOperand):
 
     Examples
     --------
-    >>> layer = tl.trace(model, x)["relu_1_2"]
+    >>> layer = tl.trace(model, x).layers["relu_1_2"]
     >>> type(layer).__name__, layer.func_name
     ('Layer', 'relu')
     >>> tuple(layer.out.shape)
