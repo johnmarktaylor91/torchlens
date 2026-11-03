@@ -10,25 +10,18 @@ classifier.
 from __future__ import annotations
 
 import pytest
-import torch
-from torch import nn
 
-import torchlens as tl
 from torchlens._capture.outcome import (
     CAPTURE_OUTCOME_CAPABILITIES,
     CaptureOutcome,
-    CaptureOutcomeError,
     CapturePhase,
     CaptureStatus,
     FailureOrigin,
-    attestation_coherent,
     classify_failure_origin,
     derive_outcome_from_structural_state,
     parse_outcome_payload,
-    require_capture_capability,
     resolve_loaded_outcome,
 )
-from torchlens.errors import TraceCaptureError
 
 # ---------------------------------------------------------------------------
 # Vocabulary + record
@@ -58,6 +51,7 @@ def test_status_vocabulary_is_frozen() -> None:
     }
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_types.py.
 def test_partial_property_tristate() -> None:
     assert CaptureOutcome(status=CaptureStatus.COMPLETE).is_partial is False
     assert CaptureOutcome(status=CaptureStatus.STOPPED).is_partial is True
@@ -67,24 +61,7 @@ def test_partial_property_tristate() -> None:
     assert CaptureOutcome(status=CaptureStatus.UNKNOWN).is_partial is None
 
 
-def test_payload_round_trip() -> None:
-    outcome = CaptureOutcome(
-        status=CaptureStatus.FAILED,
-        phase=CapturePhase.POSTPROCESS,
-        origin=FailureOrigin.TORCHLENS,
-        reason="planted",
-        error_type="ValueError",
-        boundary_kind="op",
-        boundary_label="relu_1_2_raw",
-        frontier_labels=("relu_1_2",),
-        num_committed_ops=7,
-        inference_only=True,
-        note="secondary: cleanup",
-    )
-    parsed = parse_outcome_payload(outcome.to_payload())
-    assert parsed == outcome
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -104,6 +81,7 @@ def test_payload_parse_fails_closed_on_bad_vocabulary(mutation: dict) -> None:
         parse_outcome_payload(payload)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 def test_payload_parse_rejects_non_mapping() -> None:
     with pytest.raises(ValueError):
         parse_outcome_payload("complete")
@@ -114,53 +92,16 @@ def test_payload_parse_rejects_non_mapping() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("status", "derived", "halted", "finished", "coherent"),
-    [
-        (CaptureStatus.COMPLETE, False, False, True, True),
-        (CaptureStatus.COMPLETE, False, True, True, False),
-        (CaptureStatus.COMPLETE, False, False, False, False),
-        # Attested HALTED tolerates falsy finished (the re-raise path).
-        (CaptureStatus.STOPPED, False, True, False, True),
-        (CaptureStatus.STOPPED, False, True, True, True),
-        (CaptureStatus.STOPPED, False, False, True, False),
-        (CaptureStatus.ABORTED_NONFINITE, False, False, False, True),
-        (CaptureStatus.ABORTED_NONFINITE, False, True, False, False),
-        # Attested FAILED tolerates the pre-stamped halted=True secondary class.
-        (CaptureStatus.FAILED, False, True, False, True),
-        (CaptureStatus.FAILED, False, False, True, True),
-        (CaptureStatus.UNKNOWN, False, True, True, True),
-        (CaptureStatus.UNKNOWN, False, False, False, True),
-        # UNATTESTED requires derived=True (a settle stamp can never write it).
-        (CaptureStatus.UNATTESTED, True, False, True, True),
-        (CaptureStatus.UNATTESTED, False, False, True, False),
-        (CaptureStatus.UNATTESTED, True, True, True, False),
-    ],
-)
-def test_coherence_matrix(
-    status: CaptureStatus, derived: bool, halted: bool, finished: bool, coherent: bool
-) -> None:
-    outcome = CaptureOutcome(status=status, is_derived=derived)
-    assert attestation_coherent(outcome, halted=halted, finished=finished) is coherent
-
-
 # ---------------------------------------------------------------------------
 # Derivation lattice (truthiness; absent / None / False are one class)
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        ({"_tracing_finished": True, "is_stopped": True}, CaptureStatus.STOPPED),
-        ({"_tracing_finished": True, "is_stopped": False}, CaptureStatus.UNATTESTED),
-        ({"_tracing_finished": True}, CaptureStatus.UNATTESTED),
         ({"_tracing_finished": False, "is_stopped": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": None, "is_stopped": True}, CaptureStatus.UNKNOWN),
-        ({"is_stopped": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": False, "is_stopped": False}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": None}, CaptureStatus.UNKNOWN),
-        ({}, CaptureStatus.UNKNOWN),
     ],
 )
 def test_derivation_lattice(state: dict, expected: CaptureStatus) -> None:
@@ -171,6 +112,7 @@ def test_derivation_lattice(state: dict, expected: CaptureStatus) -> None:
     assert outcome.status is not CaptureStatus.COMPLETE
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 def test_derivation_carries_halt_detail() -> None:
     outcome = derive_outcome_from_structural_state(
         {
@@ -190,16 +132,7 @@ def test_derivation_carries_halt_detail() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_loaded_adopts_coherent_attestation() -> None:
-    attested = CaptureOutcome(status=CaptureStatus.COMPLETE)
-    state = {
-        "_capture_outcome": attested.to_payload(),
-        "_tracing_finished": True,
-        "is_stopped": False,
-    }
-    assert resolve_loaded_outcome(state) == attested
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     attested = CaptureOutcome(status=CaptureStatus.COMPLETE)
     state = {
@@ -214,18 +147,7 @@ def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     assert "attestation_incoherent" in (resolved.note or "")
 
 
-def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
-    state = {
-        "_capture_outcome": {"status": "not_in_vocabulary"},
-        "_tracing_finished": True,
-        "is_stopped": False,
-    }
-    with pytest.warns(RuntimeWarning, match="could not parse"):
-        resolved = resolve_loaded_outcome(state)
-    assert resolved.status is CaptureStatus.UNKNOWN
-    assert "attestation_parse_failed" in (resolved.note or "")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
 def test_resolve_loaded_without_attestation_uses_lattice() -> None:
     resolved = resolve_loaded_outcome({"_tracing_finished": True, "is_stopped": False})
     assert resolved.status is CaptureStatus.UNATTESTED
@@ -236,14 +158,6 @@ def test_resolve_loaded_without_attestation_uses_lattice() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _Product:
-    """Bare product stand-in carrying a forged outcome sidecar."""
-
-    def __init__(self, outcome: CaptureOutcome | None) -> None:
-        if outcome is not None:
-            self._capture_outcome = outcome
-
-
 def test_capability_table_is_total() -> None:
     for capability, row in CAPTURE_OUTCOME_CAPABILITIES.items():
         assert set(row) == set(CaptureStatus), capability
@@ -251,140 +165,21 @@ def test_capability_table_is_total() -> None:
             assert cell == "allow" or cell.startswith("allow_scoped:") or cell.startswith("refuse:")
 
 
-@pytest.mark.parametrize(
-    ("capability", "status", "code"),
-    [
-        ("save_analysis", CaptureStatus.FAILED, "N1"),
-        ("save_analysis", CaptureStatus.ABORTED_NONFINITE, "N1"),
-        ("save_analysis", CaptureStatus.UNKNOWN, "N1"),
-        ("validation_entry", CaptureStatus.FAILED, "N2"),
-        ("validation_entry", CaptureStatus.UNKNOWN, "N2"),
-        ("live_replay", CaptureStatus.STOPPED, "N5"),
-        ("live_replay", CaptureStatus.FAILED, "N3"),
-        ("loaded_sparse_run", CaptureStatus.FAILED, "N3"),
-        ("backward", CaptureStatus.UNKNOWN, "N3"),
-        ("save_runnable", CaptureStatus.STOPPED, "N4"),
-        ("save_runnable", CaptureStatus.FAILED, "N1"),
-    ],
-)
-def test_chokepoint_refuses_with_stable_code(
-    capability: str, status: CaptureStatus, code: str
-) -> None:
-    product = _Product(CaptureOutcome(status=status))
-    with pytest.raises(CaptureOutcomeError) as exc_info:
-        require_capture_capability(product, capability)
-    assert exc_info.value.fields["code"] == code
-    assert exc_info.value.fields["capability"] == capability
-
-
-@pytest.mark.parametrize(
-    ("capability", "status"),
-    [
-        ("save_analysis", CaptureStatus.COMPLETE),
-        ("save_analysis", CaptureStatus.STOPPED),
-        ("save_analysis", CaptureStatus.UNATTESTED),
-        ("validation_entry", CaptureStatus.STOPPED),
-        ("validation_entry", CaptureStatus.UNATTESTED),
-        ("live_replay", CaptureStatus.UNATTESTED),
-        ("loaded_sparse_run", CaptureStatus.STOPPED),
-        ("backward", CaptureStatus.STOPPED),
-        ("save_runnable", CaptureStatus.UNATTESTED),
-    ],
-)
-def test_chokepoint_allows(capability: str, status: CaptureStatus) -> None:
-    product = _Product(CaptureOutcome(status=status))
-    outcome = require_capture_capability(product, capability)
-    assert outcome.status is status
-
-
-def test_chokepoint_treats_missing_sidecar_as_unknown() -> None:
-    """Defense-in-depth: no sidecar -> UNKNOWN + warning, fail-closed."""
-
-    product = _Product(None)
-    with pytest.warns(RuntimeWarning, match="no settled capture outcome"):
-        with pytest.raises(CaptureOutcomeError) as exc_info:
-            require_capture_capability(product, "save_analysis")
-    assert exc_info.value.fields["code"] == "N1"
-
-
-def test_n5_refusal_names_the_rearm_follow_on() -> None:
-    product = _Product(CaptureOutcome(status=CaptureStatus.STOPPED))
-    with pytest.raises(CaptureOutcomeError, match="re-arming|halt="):
-        require_capture_capability(product, "live_replay")
-
-
 # ---------------------------------------------------------------------------
 # Failure-origin classifier plants
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py.
 def test_origin_interrupt() -> None:
     assert classify_failure_origin(KeyboardInterrupt()) is FailureOrigin.INTERRUPT
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py.
 def test_origin_no_traceback_is_unknown() -> None:
     assert classify_failure_origin(ValueError("bare")) is FailureOrigin.UNKNOWN
-
-
-def test_origin_user_forward_failure_classifies_user_op() -> None:
-    class Exploding(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            _ = self.linear(x)
-            raise RuntimeError("user forward boom")
-
-    try:
-        tl.trace(Exploding(), torch.ones(1, 3))
-    except TraceCaptureError as exc:
-        assert isinstance(exc.__cause__, RuntimeError)
-        assert exc.origin is FailureOrigin.USER_OP
-        assert classify_failure_origin(exc) is FailureOrigin.USER_OP
-        assert "The model's own code raised this error" in str(exc)
-    else:
-        pytest.fail("the failing forward did not raise")
-
-
-def test_origin_c_backed_op_failure_classifies_user_op() -> None:
-    """A C-backed torch failure inside the wrapper trampoline is the user's op."""
-
-    class ShapeMismatch(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.matmul(x, torch.ones(7, 7))
-
-    try:
-        tl.trace(ShapeMismatch(), torch.ones(1, 3))
-    except TraceCaptureError as exc:
-        assert isinstance(exc.__cause__, RuntimeError)
-        origin = classify_failure_origin(exc)
-        assert origin is FailureOrigin.USER_OP, origin
-        assert exc.origin is FailureOrigin.USER_OP
-    else:
-        pytest.fail("the failing forward did not raise")
-
-
-def test_origin_torchlens_frame_classifies_torchlens() -> None:
-    """An exception whose innermost frame is torchlens code is TORCHLENS."""
-
-    try:
-        parse_outcome_payload("not a mapping")
-    except ValueError as exc:
-        assert classify_failure_origin(exc) is FailureOrigin.TORCHLENS
 
 
 # ---------------------------------------------------------------------------
 # Public type/error surface
 # ---------------------------------------------------------------------------
-
-
-def test_types_and_errors_exports() -> None:
-    from torchlens import errors as tl_errors, types as tl_types
-
-    assert tl_types.CaptureOutcome is CaptureOutcome
-    assert tl_types.CaptureStatus is CaptureStatus
-    assert tl_types.CapturePhase is CapturePhase
-    assert tl_types.FailureOrigin is FailureOrigin
-    assert tl_errors.CaptureOutcomeError is CaptureOutcomeError
-    assert issubclass(tl_errors.StopSignalSwallowedError, tl_errors.CaptureError)

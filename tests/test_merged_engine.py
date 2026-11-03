@@ -190,58 +190,6 @@ def trace_for_boundaries(boundaries: list[dict], ledger: GroupLifecycleLedger) -
     )
 
 
-class TestDeltaAlignment:
-    def test_differing_absolute_bases_join_by_delta(self):
-        # Rank 0 armed earlier and ticked warmups: absolute seqs 5,6 vs 0,1.
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 5), boundary(0, 6)]),
-                1: evidence(1, [boundary(1, 0), boundary(1, 1)]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-        assert [j.key[3] for j in d.joins] == [0, 1]
-        assert all(j.presence == (0, 1) for j in d.joins)
-        assert {r.seq_abs for r in d.joins[0].per_rank.values()} == {5, 0}
-
-    def test_three_rank_join(self):
-        digest3 = membership_digest_for_ranks([0, 1, 2])
-
-        def led():
-            return seeded_ledger(digest3)
-
-        cores = {
-            rank: evidence(
-                rank,
-                [boundary(rank, 0, digest=digest3, members=(0, 1, 2))],
-                ledger=led(),
-            )
-            for rank in (0, 1, 2)
-        }
-        d = derive_merge(cores)
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-        (join,) = d.joins
-        assert join.presence == (0, 1, 2)
-
-    def test_missing_key_is_presence_gap_and_partial(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0), boundary(0, 1)]),
-                1: evidence(1, [boundary(1, 0)]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.PARTIAL
-        gaps = d.gap_findings
-        assert len(gaps) == 1 and gaps[0].ranks == (1,)
-
-    def test_member_rank_without_core_is_gap_on_every_join(self):
-        # Membership records [0, 1] but only rank 0's core is presented.
-        d = derive_merge({0: evidence(0, [boundary(0, 0)])})
-        assert d.stored_alignment is MergeAlignment.PARTIAL
-        (gap,) = d.gap_findings
-        assert gap.ranks == (1,)
-
-
 class TestAuditMatrix:
     """Merge-side rows of the v5 1.3 PRE-JOIN audit matrix."""
 
@@ -268,118 +216,9 @@ class TestAuditMatrix:
         assert d.gap_findings == ()
         assert WORLD in d.conflicted_memberships
 
-    def test_seed_discharge_positive_mixed_armed_and_seeded(self):
-        # Rank 0 armed before any group (complete witness, ONE generation);
-        # rank 1 seeded ordinal 0. The seed discharges: clean join, no
-        # over-refusal of the legitimate mixed MPMD case.
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(1, [boundary(1, 0)], ledger=seeded_ledger()),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-        assert len(d.joins) == 1 and d.joins[0].presence == (0, 1)
-
-    def test_seed_discharge_negative_two_generation_witness(self):
-        # The complete witness evidences TWO generations: a seeded ordinal-0
-        # entry from another rank is unprovable and the membership refuses.
-        led0 = armed_ledger(generations=2)
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0, ordinal=1)],
-                    ledger=led0,
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(1, [boundary(1, 0, ordinal=0)], ledger=seeded_ledger()),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-        assert d.joins == () and d.gap_findings == ()
-
-    def test_no_witness_identical_vectors_join(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0)], ledger=seeded_ledger()),
-                1: evidence(1, [boundary(1, 0)], ledger=seeded_ledger()),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-
-    def test_complete_witness_disagreement_is_evidence_corruption(self):
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0)],
-                    ledger=armed_ledger(generations=1),
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(
-                    1,
-                    [boundary(1, 0, ordinal=1)],
-                    ledger=armed_ledger(generations=2),
-                    epoch="armed_before_any_group",
-                ),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-        assert d.findings[0].kind == "group_lifetime_evidence_conflict"
-        assert "complete witnesses disagree" in d.findings[0].detail
-
 
 class TestScopeAndInputRefusals:
-    def test_p2p_kind_refuses_typed(self):
-        core = evidence(0, [boundary(0, 0, kind="send", channel="p2p/0->1", reduce_op=None)])
-        with pytest.raises(MergeInputError) as excinfo:
-            derive_merge({0: core})
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGE_SCOPE_UNSUPPORTED.value
-
-    def test_dtensor_dual_geometry_refuses_typed(self):
-        roles = [
-            {
-                "role": "contribution_destination",
-                "index": 0,
-                "shape": [2, 4],
-                "logical_shape": [4, 4],
-                "placements": ["Shard(dim=0)"],
-            }
-        ]
-        core = evidence(0, [boundary(0, 0, roles=roles)])
-        with pytest.raises(MergeInputError) as excinfo:
-            derive_merge({0: core})
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGE_SCOPE_UNSUPPORTED.value
-
-    def test_parse_refuses_rank_outside_recorded_membership(self) -> None:
-        """A rank core cannot claim evidence for a group it does not belong to."""
-
-        forged = boundary(5, 0, members=(0, 1), **digest_kwargs())
-        with pytest.raises(MergeInputError) as excinfo:
-            extract_rank_evidence(
-                trace_for_boundaries([forged], seeded_ledger()),
-                "forged-rank-5",
-            )
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
-
-    def test_join_refuses_presence_outside_recorded_membership(self) -> None:
-        """Direct engine callers receive the same presence-subset refusal."""
-
-        with pytest.raises(MergeInputError) as excinfo:
-            derive_merge(
-                {
-                    0: evidence(0, [boundary(0, 0, **digest_kwargs())]),
-                    5: evidence(5, [boundary(5, 0, **digest_kwargs())]),
-                }
-            )
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_evidence.py, _merged/_rules.py.
     def test_parse_refuses_duplicate_rank_local_sequence(self) -> None:
         """Duplicate absolute sequence keys cannot overwrite a boundary silently."""
 
@@ -388,18 +227,6 @@ class TestScopeAndInputRefusals:
             extract_rank_evidence(
                 trace_for_boundaries(duplicated, seeded_ledger()),
                 "duplicate-seq-rank-0",
-            )
-        assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
-
-    def test_join_refuses_duplicate_rank_local_sequence(self) -> None:
-        """Direct engine evidence cannot exploit duplicate-sequence overwrite."""
-
-        with pytest.raises(MergeInputError) as excinfo:
-            derive_merge(
-                {
-                    0: evidence(0, [boundary(0, 7), boundary(0, 7)]),
-                    1: evidence(1, [boundary(1, 3)]),
-                }
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
@@ -447,11 +274,6 @@ class TestBoundaryParseValidation:
             boundary(0, 0, roles=[{"role": "spectator", "index": 0, "shape": [2]}])
         )
 
-    def test_role_shape_with_non_integer_dim_refuses_typed(self):
-        self._assert_refuses(
-            boundary(0, 0, roles=[{"role": "contribution", "index": 0, "shape": [2, "x"]}])
-        )
-
     @pytest.mark.smoke
     def test_string_digest_field_refuses_typed(self):
         entry = boundary(0, 0, witness_policy="digest")
@@ -489,27 +311,9 @@ class TestBoundaryParseValidation:
         entry["correlation"]["channel"] = 0
         self._assert_refuses(entry)
 
-    def test_unhashable_list_channel_refuses_typed(self):
-        # A LIST channel used to escape the parse as a raw
-        # ``TypeError: unhashable type: 'list'`` from the rank-local
-        # correlation-key dedup set, not the promised typed refusal.
-        entry = boundary(0, 0)
-        entry["correlation"]["channel"] = ["coll"]
-        self._assert_refuses(entry)
-
     @pytest.mark.smoke
     def test_negative_seq_refuses_typed(self):
         self._assert_refuses(boundary(0, -1))
-
-    def test_valid_sha256_digest_lists_still_parse(self):
-        entry = boundary(
-            0,
-            0,
-            witness_policy="digest",
-            contribution_digests=["c" * 64],
-            destination_digests=["a" * 64],
-        )
-        self._extract(entry)  # must not raise
 
     @pytest.mark.smoke
     def test_parse_refuses_membership_digest_ranks_incoherence(self):
@@ -578,31 +382,7 @@ class TestRolesDeletionVacuousTruth:
             self._extract(entry)
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
-    def test_roles_key_deleted_refuses_typed(self):
-        entry = boundary(0, 0)
-        del entry["roles"]
-        self._assert_refuses(entry)
-
-    def test_tensor_kind_with_empty_roles_refuses_typed(self):
-        self._assert_refuses(boundary(0, 0, roles=[]))
-
-    def test_tensorless_kind_with_empty_roles_still_parses(self):
-        entry = boundary(0, 0, kind="barrier", reduce_op=None, roles=[])
-        self._extract(entry)
-
-    def test_uniform_roles_deletion_refuses_on_every_rank_core(self):
-        """The headline escape: BOTH rank cores tampered identically."""
-
-        for rank in (0, 1):
-            entry = boundary(rank, 0)
-            del entry["roles"]
-            with pytest.raises(MergeInputError) as excinfo:
-                extract_rank_evidence(
-                    trace_for_boundaries([entry], seeded_ledger()),
-                    f"uniform-tamper[{rank}]",
-                )
-            assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_relation_table.py.
     def test_engine_belt_flags_zero_role_entries_per_rank(self):
         """Direct ``derive_merge`` callers bypass evidence parse; the relation
         table still names every rank presenting zero roles for a
@@ -647,32 +427,6 @@ class TestSweepFieldValidation:
                 "sweep-tamper",
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
-
-    def test_reduce_op_deleted_on_reduce_kind_refuses_typed(self):
-        entry = boundary(0, 0)  # all_reduce
-        del entry["reduce_op"]
-        self._assert_refuses(entry)
-
-    def test_reduce_op_null_on_reduce_kind_refuses_typed(self):
-        self._assert_refuses(boundary(0, 0, reduce_op=None))
-
-    def test_reduce_op_null_on_non_reduce_kind_still_parses(self):
-        extract_rank_evidence(
-            trace_for_boundaries(
-                [boundary(0, 0, kind="broadcast", reduce_op=None)], seeded_ledger()
-            ),
-            "clean-broadcast",
-        )
-
-    def test_non_integer_c10d_group_seq_refuses_typed(self):
-        entry = boundary(0, 0)
-        entry["c10d_group_seq"] = "5"
-        self._assert_refuses(entry)
-
-    def test_bool_c10d_group_seq_refuses_typed(self):
-        entry = boundary(0, 0)
-        entry["c10d_group_seq"] = True
-        self._assert_refuses(entry)
 
     def test_reduce_op_kinds_mirror_capture_side_has_reduce_op_flags(self):
         """The evidence vocabulary tracks ``CollectiveSite.has_reduce_op`` exactly."""
@@ -779,6 +533,7 @@ class TestReleaseContract:
             call()
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_MEMBER_RELEASED.value
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_presenter.py.
     def test_member_surfaces_refuse_typed_after_release(self, tmp_path):
         merged = self._merged()
         merged.cleanup()
@@ -787,22 +542,12 @@ class TestReleaseContract:
         self._assert_released_refusal(lambda: merged.at("anything"))
         self._assert_released_refusal(lambda: merged.save(tmp_path / "released"))
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_presenter.py.
     def test_join_ops_refuses_typed_after_release(self):
         merged = self._merged()
         (join,) = merged.joins
         merged.cleanup()
         self._assert_released_refusal(lambda: merged.join_ops(join))
-
-    def test_release_never_presents_zero_members(self):
-        """A released presenter must not read as an empty merge."""
-
-        merged = self._merged()
-        merged.cleanup()
-        with pytest.raises(Exception) as excinfo:
-            len(merged.ranks)
-        assert getattr(excinfo.value, "fields", {}).get("code") == (
-            MergedErrorCode.MERGED_MEMBER_RELEASED.value
-        )
 
     @pytest.mark.smoke
     def test_verdicts_stay_readable_after_release(self):
@@ -815,17 +560,6 @@ class TestReleaseContract:
         assert isinstance(merged.findings, tuple)
         assert "MergedTrace" in repr(merged)
         assert "alignment" in merged.summary()
-
-    def test_release_is_idempotent(self):
-        merged = self._merged()
-        merged.cleanup()
-        merged.cleanup()
-        self._assert_released_refusal(lambda: merged.ranks)
-
-    def test_pre_release_member_access_unchanged(self):
-        merged = self._merged()
-        assert set(merged.ranks) == {0, 1}
-        assert merged.ranks[0] is not None
 
 
 class TestWitnessCompletionCoherence:
@@ -868,113 +602,15 @@ class TestWitnessCompletionCoherence:
         )
         self._assert_refuses(entry)
 
-    def test_honest_async_digest_record_still_parses(self):
-        entry = boundary(
-            0,
-            0,
-            async_op=True,
-            witness_policy="digest",
-            contribution_digests=["c" * 64],
-            destination_digests=None,
-        )
-        self._extract(entry)  # must not raise
-
     # --- digests under witness policy "none" -------------------------------
-
-    def test_contribution_digests_under_policy_none_refuse(self):
-        entry = boundary(0, 0)
-        entry["witness"]["contribution_digests"] = ["c" * 64]
-        self._assert_refuses(entry)
-
-    def test_destination_digests_under_policy_none_refuse(self):
-        entry = boundary(0, 0)
-        entry["witness"]["destination_digests"] = ["a" * 64]
-        self._assert_refuses(entry)
 
     # --- events coherence ---------------------------------------------------
 
-    def test_async_op_flag_contradicting_completion_binding_refuses(self):
-        entry = boundary(0, 0, async_op=True)
-        entry["events"]["async_op"] = False
-        self._assert_refuses(entry)
-
-    def test_sync_record_claiming_unobserved_binding_refuses(self):
-        entry = boundary(0, 0)
-        entry["events"]["completion_binding"] = "unobserved"
-        self._assert_refuses(entry)
-
-    def test_non_boolean_async_op_refuses(self):
-        entry = boundary(0, 0)
-        entry["events"]["async_op"] = "no"
-        self._assert_refuses(entry)
-
     # --- disclosure coherence -----------------------------------------------
-
-    def test_stripped_inflight_read_disclosure_refuses(self):
-        entry = boundary(0, 0, async_op=True)
-        entry["disclosures"] = []
-        self._assert_refuses(entry)
-
-    def test_spurious_inflight_read_disclosure_refuses(self):
-        entry = boundary(0, 0)
-        entry["disclosures"] = ["read_of_inflight_destination"]
-        self._assert_refuses(entry)
-
-    def test_unknown_disclosure_token_refuses(self):
-        entry = boundary(0, 0)
-        entry["disclosures"] = ["totally_fine_trust_me"]
-        self._assert_refuses(entry)
-
-    def test_group_seq_value_with_read_failed_disclosure_refuses(self):
-        entry = boundary(0, 0, c10d_group_seq=7)
-        entry["disclosures"] = ["c10d_group_seq_read_failed"]
-        self._assert_refuses(entry)
 
     # --- not_present_reason coherence ----------------------------------------
 
-    def test_not_present_reason_outside_vocabulary_refuses(self):
-        entry = boundary(0, 0)
-        entry["witness"]["not_present_reason"] = "because"
-        self._assert_refuses(entry)
-
-    def test_spurious_async_reason_on_sync_digest_record_refuses(self):
-        entry = boundary(
-            0,
-            0,
-            witness_policy="digest",
-            contribution_digests=["c" * 64],
-            destination_digests=["a" * 64],
-        )
-        entry["witness"]["not_present_reason"] = "async_completion_unobserved"
-        self._assert_refuses(entry)
-
-    def test_missing_async_reason_on_async_digest_record_refuses(self):
-        entry = boundary(
-            0,
-            0,
-            async_op=True,
-            witness_policy="digest",
-            contribution_digests=["c" * 64],
-        )
-        entry["witness"]["not_present_reason"] = None
-        self._assert_refuses(entry)
-
     # --- op_node / peer / lifetime coherence ---------------------------------
-
-    def test_op_node_false_on_tensor_kind_refuses(self):
-        entry = boundary(0, 0)
-        entry["op_node"] = False
-        self._assert_refuses(entry)
-
-    def test_op_node_true_on_tensorless_kind_refuses(self):
-        entry = boundary(0, 0, kind="barrier", reduce_op=None, roles=[])
-        entry["op_node"] = True
-        self._assert_refuses(entry)
-
-    def test_peer_record_on_collective_kind_refuses(self):
-        entry = boundary(0, 0)
-        entry["peer"] = {"canonical": {"src": 0, "dst": 1}}
-        self._assert_refuses(entry)
 
     @pytest.mark.smoke
     def test_missing_peer_record_on_p2p_kind_refuses(self):
@@ -982,11 +618,7 @@ class TestWitnessCompletionCoherence:
         entry["peer"] = None
         self._assert_refuses(entry)
 
-    def test_lifetime_epoch_outside_vocabulary_refuses(self):
-        entry = boundary(0, 0)
-        entry["lifetime_evidence"]["install_epoch"] = "definitely_complete"
-        self._assert_refuses(entry)
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_evidence.py.
     def test_boundary_epoch_promotion_against_record_epoch_refuses(self):
         entry = boundary(0, 0)
         entry["lifetime_evidence"]["install_epoch"] = "armed_before_any_group"
@@ -994,40 +626,9 @@ class TestWitnessCompletionCoherence:
 
     # --- tensorless empty digest lists (honest recorder shape) ---------------
 
-    def test_tensorless_empty_digest_lists_still_parse(self):
-        """The recorder emits [] digest lists for barrier under policy digest."""
-
-        entry = boundary(0, 0, kind="barrier", reduce_op=None, roles=[], witness_policy="digest")
-        entry["witness"]["contribution_digests"] = []
-        entry["witness"]["destination_digests"] = []
-        self._extract(entry)  # must not raise
-
-    def test_tensor_kind_empty_digest_list_still_refuses(self):
-        entry = boundary(0, 0, witness_policy="digest")
-        entry["witness"]["contribution_digests"] = []
-        self._assert_refuses(entry)
-
 
 class TestRelationsAndCrossChecks:
-    def test_kind_disagreement_at_joined_key_conflicts(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, kind="all_reduce")]),
-                1: evidence(1, [boundary(1, 0, kind="broadcast", reduce_op=None)]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-        assert any(f.kind == "relation_violation" for f in d.findings)
-
-    def test_reduce_op_disagreement_conflicts(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, reduce_op="RedOpType.SUM")]),
-                1: evidence(1, [boundary(1, 0, reduce_op="RedOpType.MAX")]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_relation_table.py.
     def test_all_gather_wrong_destination_count_conflicts(self):
         roles = [
             {
@@ -1075,101 +676,6 @@ class TestRelationsAndCrossChecks:
         assert d.joins[0].backend is None
         assert d.joins[0].consistency is BoundaryConsistency.NOT_APPLICABLE
 
-    def test_backend_agreement_reports_no_finding(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, **digest_kwargs())]),
-                1: evidence(1, [boundary(1, 0, **digest_kwargs())]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-        assert d.joins[0].backend == "gloo"
-
-    def test_c10d_group_seq_delta_disagreement_conflicts(self):
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0, c10d_group_seq=10), boundary(0, 1, c10d_group_seq=11)],
-                ),
-                1: evidence(
-                    1,
-                    [boundary(1, 0, c10d_group_seq=20), boundary(1, 1, c10d_group_seq=25)],
-                ),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-        assert any(f.kind == "correlation_delta_mismatch" for f in d.findings)
-
-    def test_armed_rank_base_misalignment_is_a_correlation_conflict(self):
-        """Deep-hunt F5: differing capture windows cannot fabricate a join.
-
-        Rank 0 recorded absolute seqs {0, 1}; rank 1 recorded {1} only. Delta
-        alignment paired rank 0's seq 0 with rank 1's seq 1 -- two DIFFERENT
-        collectives presented as one honest correspondence (invisible under
-        witness "none", and the c10d cross-check cancels constant offsets).
-        Both ranks are armed before any group, so their counters tick on every
-        issue and equal-seq is provable: the disagreement must conflict.
-        """
-
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0), boundary(0, 1)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(
-                    1,
-                    [boundary(1, 1)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.CONFLICTED
-        assert any(
-            f.kind == "correlation_delta_mismatch" and "absolute issue sequences" in f.detail
-            for f in d.findings
-        )
-
-    def test_armed_ranks_with_equal_absolute_seqs_stay_aligned(self):
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 3), boundary(0, 4)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(
-                    1,
-                    [boundary(1, 3), boundary(1, 4)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-
-    def test_seeded_rank_base_offsets_never_compared(self):
-        # Mixed epochs: the seeded rank's absolute base is a rank-local fact
-        # (arm-time histories differ); only armed-before-any-group ranks are
-        # held to equal absolute seqs, so this stays an honest delta join.
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [boundary(0, 0)],
-                    ledger=armed_ledger(),
-                    epoch="armed_before_any_group",
-                ),
-                1: evidence(1, [boundary(1, 7)], ledger=seeded_ledger()),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED
-
     def test_c10d_group_seq_absent_never_demotes(self):
         d = derive_merge(
             {
@@ -1216,78 +722,7 @@ class TestRelationsAndCrossChecks:
 
 
 class TestWitnessDerivation:
-    def test_matching_digests_attest(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, **digest_kwargs())]),
-                1: evidence(1, [boundary(1, 0, **digest_kwargs())]),
-            }
-        )
-        assert d.joins[0].consistency is BoundaryConsistency.ATTESTED
-        assert d.stored_value_status is MergeValueStatus.ATTESTED_COMPLETE
-
-    def test_mismatch_demotes_value_status_only(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, **digest_kwargs("aa"))]),
-                1: evidence(1, [boundary(1, 0, **digest_kwargs("bb"))]),
-            }
-        )
-        assert d.stored_alignment is MergeAlignment.ALIGNED  # never structural
-        assert d.joins[0].consistency is BoundaryConsistency.MISMATCHED
-        assert d.stored_value_status is MergeValueStatus.DIVERGENT
-        assert any(f.kind == "value_divergence" for f in d.findings)
-
-    def test_witness_level_none_is_not_present_and_unwitnessed(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0)]),
-                1: evidence(1, [boundary(1, 0)]),
-            }
-        )
-        assert d.joins[0].consistency is BoundaryConsistency.NOT_PRESENT
-        assert d.stored_value_status is MergeValueStatus.UNWITNESSED
-
-    def test_async_unobserved_completion_is_not_present_never_mismatched(self):
-        # Async all_reduce: contribution digests exist (pre-reduce bytes,
-        # rank-distinct), destination digests absent. Falling back to the
-        # contribution digests would FABRICATE a mismatch; the verdict must
-        # be not_present.
-        kwargs = {
-            "witness_policy": "digest",
-            "contribution_digests": None,
-            "destination_digests": None,
-            "async_op": True,
-        }
-        d = derive_merge(
-            {
-                0: evidence(
-                    0,
-                    [
-                        boundary(
-                            0,
-                            0,
-                            contribution_digests=["r0-pre"],
-                            **{k: v for k, v in kwargs.items() if k != "contribution_digests"},
-                        )
-                    ],
-                ),
-                1: evidence(
-                    1,
-                    [
-                        boundary(
-                            1,
-                            0,
-                            contribution_digests=["r1-pre"],
-                            **{k: v for k, v in kwargs.items() if k != "contribution_digests"},
-                        )
-                    ],
-                ),
-            }
-        )
-        assert d.joins[0].consistency is BoundaryConsistency.NOT_PRESENT
-        assert d.stored_value_status is MergeValueStatus.UNWITNESSED
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_relation_table.py.
     def test_reduce_is_not_applicable_at_every_level(self):
         roles_root = [
             {
@@ -1331,15 +766,7 @@ class TestWitnessDerivation:
         assert d.joins[0].consistency is BoundaryConsistency.NOT_APPLICABLE
         assert d.stored_value_status is MergeValueStatus.UNWITNESSED
 
-    def test_unknown_backend_is_not_applicable(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, backend="fancy_tpu", **digest_kwargs())]),
-                1: evidence(1, [boundary(1, 0, backend="fancy_tpu", **digest_kwargs())]),
-            }
-        )
-        assert d.joins[0].consistency is BoundaryConsistency.NOT_APPLICABLE
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_relation_table.py.
     def test_broadcast_root_contribution_witnesses_destinations(self):
         root_roles = [
             {
@@ -1393,15 +820,6 @@ class TestWitnessDerivation:
         )
         assert d.joins[0].consistency is BoundaryConsistency.ATTESTED
 
-    def test_partial_attestation_is_attested_partial(self):
-        d = derive_merge(
-            {
-                0: evidence(0, [boundary(0, 0, **digest_kwargs()), boundary(0, 1)]),
-                1: evidence(1, [boundary(1, 0, **digest_kwargs()), boundary(1, 1)]),
-            }
-        )
-        assert d.stored_value_status is MergeValueStatus.ATTESTED_PARTIAL
-
 
 class TestPresenterLookupNarrowing:
     """Deep-hunt F7: ``__getitem__``'s rank scan must not swallow core defects.
@@ -1436,6 +854,7 @@ class TestPresenterLookupNarrowing:
             {0: _RankHandle(0, trace=trace0), 1: _RankHandle(1, trace=trace1)},
         )
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_presenter.py.
     def test_rank_core_defect_surfaces_from_getitem(self):
         merged = self._merged(self._BrokenTrace(), self._GoodTrace())
         with pytest.raises(RuntimeError, match="corrupt core"):

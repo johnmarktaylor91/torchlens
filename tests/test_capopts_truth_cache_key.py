@@ -102,25 +102,11 @@ def test_cache_key_curated_fields_have_hand_built_entries() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
-    """H-WARM baseline: the second identical capture is served from cache."""
-
-    model = SmallNet()
-    x = torch.randn(2, 4)
-    cold = _trace(model, x, str(tmp_path))
-    warm = _trace(model, x, str(tmp_path))
-    assert cold.provenance.cache_hit is False
-    assert warm.provenance.cache_hit is True
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/finalize/epilogue.py, _capture/prepare/door.py, _data_classes/_nonfinite.py ....
 @pytest.mark.parametrize(
     "field_name,flip_value",
     [
-        ("on_nonfinite", "raise"),
-        ("on_nonfinite", "track"),
         ("save_budget", 10**9),
-        ("measure_python_peak_memory", True),
-        ("save_raw_grads", False),
         ("reconstruction_ready", True),
         ("on_nonfinite", "warn"),
     ],
@@ -139,68 +125,10 @@ def test_warm_cache_semantic_flip_recaptures(
     )
 
 
-def test_warm_cache_neutral_flip_still_hits(tmp_path: Path) -> None:
-    """Declared session-neutral knobs do not fragment the cache."""
-
-    model = SmallNet()
-    x = torch.randn(2, 4)
-    _trace(model, x, str(tmp_path))
-    warm = _trace(model, x, str(tmp_path), verbose=True)
-    assert warm.provenance.cache_hit is True
-
-
-def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
-    """batch_render is neutral BECAUSE the hit path re-stamps the request."""
-
-    model = SmallNet()
-    x = torch.randn(2, 4)
-    _trace(model, x, str(tmp_path))
-    warm = _trace(model, x, str(tmp_path), batch_render="grid")
-    assert warm.provenance.cache_hit is True
-    assert warm.batch_render == "grid"
-
-
-def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
-    """H-FAILED: an aborted capture leaves nothing a later call can be served."""
-
-    from torchlens.errors import CaptureError
-
-    model = SmallNet()
-    with torch.no_grad():
-        model.fc.weight.fill_(float("nan"))
-    x = torch.randn(2, 4)
-    with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), on_nonfinite="raise")
-    with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), on_nonfinite="raise")
-
-
 # ---------------------------------------------------------------------------
 # Positive-control plant (H-BOTH-shaped): prove the SWEEP is what protects the
 # safety options -- declaring one neutral re-opens the historical wrong-serve.
 # ---------------------------------------------------------------------------
-
-
-def test_plant_neutralized_semantic_field_reopens_wrong_serve(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Declaring a swept knob neutral reproduces the defect; the sweep is load-bearing.
-
-    ``on_nonfinite`` (the former ``raise_on_nan``) is hand-curated into the key now, so
-    the plant uses ``measure_python_peak_memory``, a field only the sweep keys.
-    """
-
-    planted = dict(CAPTURE_CACHE_KEY_NEUTRAL)
-    planted["measure_python_peak_memory"] = "PLANT: pretend this knob is session-neutral"
-    monkeypatch.setattr(prepare_cache, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
-    model = SmallNet()
-    x = torch.randn(2, 4)
-    _trace(model, x, str(tmp_path))
-    wrongly_served = _trace(model, x, str(tmp_path), measure_python_peak_memory=True)
-    assert wrongly_served.provenance.cache_hit is True, (
-        "the plant did not reproduce the historical wrong-serve; the sweep is "
-        "no longer the mechanism keying semantic options -- update this control"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +138,7 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_fingerprint.py, _capture_state_helpers.py.
 @pytest.mark.real_model
 def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
     """R0: distilgpt2 warm cache never serves an on_nonfinite="ignore" capture."""

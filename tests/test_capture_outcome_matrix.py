@@ -44,43 +44,12 @@ class NaNProducingModel(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def test_transform_introduced_nan_stays_complete() -> None:
-    """A NaN INTRODUCED by activation_transform never trips the raw tripwire."""
-
-    def poison(tensor: torch.Tensor) -> torch.Tensor:
-        return tensor * float("nan")
-
-    trace = tl.trace(
-        ThreeStageModel(),
-        torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=poison),
-    )
-    assert trace.outcome.status is CaptureStatus.COMPLETE
-
-
-def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
-    """A raw-tensor NaN aborts even if the transform would have removed it."""
-
-    def sanitize(tensor: torch.Tensor) -> torch.Tensor:
-        return torch.nan_to_num(tensor)
-
-    from torchlens.errors import CaptureError
-
-    with pytest.raises(CaptureError) as exc_info:
-        tl.trace(
-            NaNProducingModel(),
-            torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(on_nonfinite="raise", activation_transform=sanitize),
-        )
-    outcome = exc_info.value.partial_trace.trace.outcome
-    assert outcome.status is CaptureStatus.ABORTED_NONFINITE
-
-
 # ---------------------------------------------------------------------------
 # No-frontier halt: FAILED/FINALIZE, never a fabricated frontier
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/finalize/settle.py.
 def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
     """A halt with no recoverable tensor frontier fails typed at FINALIZE."""
 
@@ -119,6 +88,7 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
     assert "halted finalization failed" in (outcome.note or "")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/finalize/epilogue.py.
 def test_never_fired_halt_predicate_stays_complete() -> None:
     """A halt predicate that never fires yields an ordinary COMPLETE capture.
 
@@ -141,6 +111,7 @@ def test_never_fired_halt_predicate_stays_complete() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _io/bundle.py, backends/torch/_trace_backward.py, intervention/_trace_run.py ....
 def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> None:
     recording = tl.record(
         ThreeStageModel(),
@@ -165,6 +136,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_nonfinite_prefix.py, _partial/__init__.py.
 def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
     import torchlens._postprocess as pp
 

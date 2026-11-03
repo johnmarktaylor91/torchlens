@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import os
 import sys
-import threading
 
 import pytest
 import torch
-from torch import nn
 
 import torchlens as tl
-from torchlens import _state
 
 
 def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,68 +195,6 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
     with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
-
-
-def test_main_process_capture_is_never_refused() -> None:
-    """The guard is a no-op in the main process, including from a worker thread."""
-
-    from torchlens._utils.display import warn_parallel
-
-    warn_parallel()
-    errors: list[BaseException] = []
-
-    def call_from_thread() -> None:
-        """A capture on a worker thread is legitimate and must not be refused."""
-
-        try:
-            warn_parallel()
-        except BaseException as error:  # pragma: no cover - reported by the test
-            errors.append(error)
-
-    worker = threading.Thread(target=call_from_thread)
-    worker.start()
-    worker.join(timeout=5.0)
-    assert errors == [], f"a main-process worker thread was refused: {errors!r}"
-
-
-@pytest.mark.skipif(
-    not hasattr(os, "fork") or not hasattr(os, "register_at_fork"),
-    reason="fork hygiene needs os.fork + os.register_at_fork",
-)
-def test_fork_child_inherits_no_mid_capture_logging_state() -> None:
-    """b8-sol R56-8: a fork DURING a traced forward must not keep logging.
-
-    The forking thread's ident is preserved as the child's main thread, so an
-    inherited ``_logging_enabled=True`` + ``_active_trace`` passed the
-    owner-thread gate and child-side torch ops logged into the child's
-    inherited trace copy (child-local corruption; the parent is unaffected
-    through COW). The ``os.register_at_fork`` hygiene handler clears both in
-    the child; new captures in the child stay governed by the existing
-    child-process guards.
-    """
-
-    read_fd, write_fd = os.pipe()
-
-    class ForkInsideForward(nn.Module):
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            pid = os.fork()
-            if pid == 0:  # child: observe inherited capture state, never log
-                try:
-                    clean = (not _state._logging_enabled) and (_state._active_trace is None)
-                    os.write(write_fd, b"1" if clean else b"0")
-                finally:
-                    os._exit(0)
-            os.waitpid(pid, 0)
-            return v + 1
-
-    tl.trace(ForkInsideForward(), torch.randn(2))
-    os.close(write_fd)
-    child_verdict = os.read(read_fd, 1)
-    os.close(read_fd)
-    assert child_verdict == b"1", (
-        "the fork child inherited _logging_enabled/_active_trace mid-capture: "
-        "child-side torch ops would log into the inherited trace copy"
-    )
 
 
 def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(

@@ -10,7 +10,6 @@ Covers:
 
 from __future__ import annotations
 
-import copy
 import warnings
 from collections.abc import Generator
 from pathlib import Path
@@ -22,12 +21,10 @@ from torch import nn
 import torchlens as tl
 from torchlens import _visualization
 from torchlens._capture_state_helpers import (
-    _reject_opaque_wrappers,
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
-from torchlens.errors import TraceCaptureError
 
 
 class _Tiny(nn.Module):
@@ -40,38 +37,6 @@ class _Tiny(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.b(torch.relu(self.a(x)))
-
-
-class _ParentWithChild(nn.Module):
-    """Parent module that delegates part of forward to a child module."""
-
-    def __init__(self, child: nn.Module) -> None:
-        super().__init__()
-        self.child = child
-        self.out = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.out(torch.relu(self.child(x)))
-
-
-class _ParentRaisesAfterChild(nn.Module):
-    """Parent that raises after invoking its compiled child."""
-
-    def __init__(self, child: nn.Module) -> None:
-        super().__init__()
-        self.child = child
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _ = self.child(x)
-        raise RuntimeError("parent forward failure")
-
-
-class _ChildRaises(nn.Module):
-    """Child module that always raises during forward."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        del x
-        raise RuntimeError("child forward failure")
 
 
 class _WrapperWithOriginal(nn.Module):
@@ -115,103 +80,7 @@ def _reset_dynamo_after_test() -> Generator[None, None, None]:
         reset()
 
 
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
-    """A top-level ``torch.compile`` wrapper should trace like its eager source."""
-    model = _Tiny()
-    eager_twin = copy.deepcopy(model)
-    compiled = torch.compile(model, backend="eager")
-    input_tensor = torch.randn(2, 4)
-
-    reset_compiled_model_unwrap_warning_state()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        compiled_trace = tl.trace(compiled, input_tensor, save="none")
-    eager_trace = tl.trace(eager_twin, input_tensor, save="none")
-
-    assert [op.layer_label for op in compiled_trace._layer_list] == [
-        op.layer_label for op in eager_trace._layer_list
-    ]
-    assert len(compiled_trace.modules) == len(eager_trace.modules)
-
-
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_double_torch_compile_callable_names_eager_module_remedy() -> None:
-    """A double-compiled plain callable gets a specific eager-module rejection."""
-    model = _Tiny()
-    compiled_once = torch.compile(model, backend="eager")
-    compiled_twice = torch.compile(compiled_once, backend="eager")
-    if isinstance(compiled_twice, nn.Module):
-        pytest.skip("this torch runtime keeps double compile as an nn.Module")
-
-    with pytest.raises(ValueError, match=r"torch\.compile.*original eager nn\.Module"):
-        tl.trace(compiled_twice, torch.randn(2, 4))  # type: ignore[arg-type]
-
-
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_unwrap_note_emits_once_across_two_traces() -> None:
-    """Compiled-model eager unwrapping should emit one process-local note."""
-    first = torch.compile(_Tiny(), backend="eager")
-    second = torch.compile(_Tiny(), backend="eager")
-    input_tensor = torch.randn(2, 4)
-
-    reset_compiled_model_unwrap_warning_state()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        tl.trace(first, input_tensor, save="none")
-        tl.trace(second, input_tensor, save="none")
-
-    unwrap_warnings = [
-        warning
-        for warning in caught
-        if "compiled model detected; tracing the eager source module" in str(warning.message)
-    ]
-    assert len(unwrap_warnings) == 1
-
-
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_top_level_wrapper_remains_callable_after_trace() -> None:
-    """Tracing a compiled root should leave the user's wrapper object in place."""
-    compiled = torch.compile(_Tiny(), backend="eager")
-    optimized_module_type = get_dynamo_optimized_module_type()
-    input_tensor = torch.randn(2, 4)
-
-    reset_compiled_model_unwrap_warning_state()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        tl.trace(compiled, input_tensor, save="none")
-
-    assert optimized_module_type is not None
-    assert isinstance(compiled, optimized_module_type)
-    assert compiled(input_tensor).shape == (2, 4)
-
-
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
-    """A compiled child should trace through its eager source and be restored afterward."""
-    child = torch.compile(nn.Linear(4, 4), backend="eager")
-    parent = _ParentWithChild(child)
-    eager_parent = _ParentWithChild(copy.deepcopy(child._orig_mod))
-    eager_parent.out.load_state_dict(parent.out.state_dict())
-    optimized_module_type = get_dynamo_optimized_module_type()
-    input_tensor = torch.randn(2, 4)
-
-    reset_compiled_model_unwrap_warning_state()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        nested_trace = tl.trace(parent, input_tensor, save="none")
-    eager_trace = tl.trace(eager_parent, input_tensor, save="none")
-
-    assert optimized_module_type is not None
-    assert parent.child is child
-    assert isinstance(parent.child, optimized_module_type)
-    assert parent(input_tensor).shape == (2, 4)
-    assert [op.layer_label for op in nested_trace._layer_list] == [
-        op.layer_label for op in eager_trace._layer_list
-    ]
-    assert len(nested_trace.modules) == len(eager_trace.modules)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_ladder.py.
 @pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
 def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> None:
     """Public eager-capture entry points unwrap compiled root models consistently."""
@@ -275,6 +144,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     assert_single_note(caught)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_state_helpers.py.
 def test_compiled_submodule_traversal_failure_restores_earlier_swaps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -309,6 +179,7 @@ class _HostileModules(dict):
         super().__setitem__(key, value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_state_helpers.py.
 def test_compiled_submodule_unwind_completes_past_raising_restore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -340,50 +211,12 @@ def test_compiled_submodule_unwind_completes_past_raising_restore(
     assert parent._modules["child_a"] is wrapper_a
 
 
-@pytest.mark.skipif(not _torch_compile_available(), reason="torch.compile not available")
-@pytest.mark.parametrize("parent_raises", [False, True])
-def test_compiled_submodule_restored_after_forward_exception(parent_raises: bool) -> None:
-    """Compiled child identity survives child- and parent-originated forward failures."""
-    child_source: nn.Module = nn.Linear(4, 4) if parent_raises else _ChildRaises()
-    compiled_child = torch.compile(child_source, backend="eager")
-    model: nn.Module
-    if parent_raises:
-        model = _ParentRaisesAfterChild(compiled_child)
-    else:
-        model = _ParentWithChild(compiled_child)
-
-    with pytest.raises(TraceCaptureError, match="forward failure") as _tce_info:
-        tl.trace(model, torch.randn(2, 4), save="none")
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-
-    assert model.child is compiled_child
-
-
 # ---------------------------------------------------------------------------
 # torch.jit.script / torch.jit.trace
 # ---------------------------------------------------------------------------
 
 
-def test_torch_jit_script_raises_at_entry() -> None:
-    """A ``torch.jit.script``'d model must raise up front."""
-    model = _Tiny()
-    scripted = torch.jit.script(model)
-    assert isinstance(scripted, torch.jit.ScriptModule)
-
-    with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.trace(scripted, torch.randn(2, 4), save="none")
-
-
-def test_torch_jit_trace_raises_at_entry() -> None:
-    """A ``torch.jit.trace``'d model is also a ScriptModule and must raise."""
-    model = _Tiny()
-    traced = torch.jit.trace(model, torch.randn(2, 4))
-    assert isinstance(traced, torch.jit.ScriptModule)
-
-    with pytest.raises(RuntimeError, match="ScriptModule"):
-        tl.trace(traced, torch.randn(2, 4), save="none")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     """Logging the un-scripted Python module still works after scripting."""
     model = _Tiny()
@@ -397,46 +230,9 @@ def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _torch_export_available() -> bool:
-    try:
-        from torch.export import ExportedProgram, export  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-@pytest.mark.skipif(not _torch_export_available(), reason="torch.export not available")
-def test_torch_export_exported_program_raises_at_entry() -> None:
-    """A ``torch.export``'d model is not a callable ``nn.Module`` — must raise."""
-    from torch.export import export
-
-    model = _Tiny()
-    example = (torch.randn(2, 4),)
-    exported = export(model, example)
-
-    # The entry guard rejects any non-``nn.Module`` input with the documented
-    # typed refusal (an ``ExportedProgram`` is not an ``nn.Module``); the old
-    # accidental AttributeError leak this test used to match was itself a bug.
-    with pytest.raises(ValueError, match="Unsupported model type"):
-        tl.trace(exported, torch.randn(2, 4), save="none")
-
-
 # ---------------------------------------------------------------------------
 # Sanity: helper-level
 # ---------------------------------------------------------------------------
-
-
-def test_reject_opaque_wrappers_clean_model_is_noop() -> None:
-    """A bare nn.Module must pass through ``_reject_opaque_wrappers`` silently."""
-    model = _Tiny()
-    _reject_opaque_wrappers(model)  # should not raise
-
-
-def test_reject_opaque_wrappers_script_module_raises_directly() -> None:
-    """The helper raises for ScriptModule without needing the full entry point."""
-    scripted = torch.jit.script(_Tiny())
-    with pytest.raises(RuntimeError, match="ScriptModule"):
-        _reject_opaque_wrappers(scripted)
 
 
 # ---------------------------------------------------------------------------

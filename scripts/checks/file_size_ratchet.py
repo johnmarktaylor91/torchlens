@@ -523,7 +523,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
-    "tests/test_conditional_branches.py": 2150,
 }
 
 

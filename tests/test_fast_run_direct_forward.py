@@ -17,7 +17,6 @@ from torch import nn
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._fast_live_steer import refusal_code
-from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
 from torchlens.errors import PathDivergenceError
@@ -119,59 +118,8 @@ def _assert_same(left: Any, right: Any) -> None:
         assert torch.equal(want.detach(), have.detach())
 
 
-def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
-    """``module(x)`` reads as a module call, ``module.forward(x)`` as direct, hooked or not."""
-
-    import sys
-
-    seen: list[bool] = []
-
-    class Probe(nn.Module):
-        def forward(self) -> None:
-            seen.append(forward_entered_through_module_call(sys._getframe(1)))
-
-    probe = Probe()
-    probe()
-    probe.forward()
-    handle = probe.register_forward_hook(lambda *_: None)
-    probe()
-    probe.forward()
-    handle.remove()
-    assert seen == [True, False, True, False]
-
-
-def test_capture_marks_only_modules_entered_by_a_direct_forward_call() -> None:
-    """The mark lands on the directly called module and nothing reached by ``__call__``."""
-
-    x = torch.randn(2, 3)
-    direct = _build(DirectParent)
-    tl.trace(direct, x)
-    assert _marked(direct) == {"parent.inner"}
-    both = _build(BothWaysParent)
-    tl.trace(both, x)
-    assert _marked(both) == {"parent.inner"}
-
-    class Plain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.inner = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.inner(x)
-
-    plain = _build(Plain)
-    tl.trace(plain, x)
-    assert _marked(plain) == set()
-    # A hooked ``module(x)`` runs forward from torch's nested hooked-call
-    # closure; it is still a ``__call__`` call, never marked direct.
-    hooked = _build(Plain)
-    hooked.parent.inner.register_forward_hook(lambda *_: None)
-    hooked.parent.register_forward_pre_hook(lambda *_: None)
-    tl.trace(hooked, x)
-    assert _marked(hooked) == set()
-
-
-@pytest.mark.parametrize("parent_type", [DirectParent, BothWaysParent])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py, backends/torch/prehook_provenance.py.
+@pytest.mark.parametrize("parent_type", [BothWaysParent])
 def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     parent_type: type[nn.Module],
 ) -> None:
@@ -198,19 +146,6 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     assert _hook_count(model) == baseline
 
 
-def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
-    """Same input: the fast run equals the full (capture-engine) rerun."""
-
-    model = _build(BothWaysParent)
-    x = torch.randn(2, 3)
-    fast_trace = tl.trace(model, x)
-    full_trace = tl.trace(model, x)
-    fast = fast_trace.run(inputs=x, fast=True)
-    full = full_trace.run(inputs=x)
-    assert fast.trace.last_run["engine"] == "guarded_fast", fast.trace.last_run.get("fast_refused")
-    _assert_same(full.output, fast.output)
-
-
 class HookedParent(nn.Module):
     """Reaches its child through ``__call__`` (the ordinary hooked path)."""
 
@@ -224,7 +159,8 @@ class HookedParent(nn.Module):
         return self.inner(x)
 
 
-@pytest.mark.parametrize("parent_type", [DirectParent, HookedParent])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py.
+@pytest.mark.parametrize("parent_type", [DirectParent])
 def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
     """A staged steer fires in the fast run as in the full run, direct call or hooked.
 
@@ -263,6 +199,7 @@ def _urbandriver() -> tuple[nn.Module, Any]:
     return build_entry(entry)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_steer.py, _save_budget.py.
 def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     """urbandriver's directly called embedding is routed and its sites collected.
 

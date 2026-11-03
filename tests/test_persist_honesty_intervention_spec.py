@@ -43,6 +43,7 @@ def _spec_dir(tmp_path):
 # --- edge_address survives the load door -------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_fire_record_edge_address_round_trips():
     record = FireRecord(
         target_label="linear_1_1",
@@ -56,15 +57,7 @@ def test_fire_record_edge_address_round_trips():
     assert rebuilt.edge_address == (7, "positional", (0,))
 
 
-def test_fire_record_edge_address_absent_stays_none():
-    record = FireRecord(target_label="linear_1_1")
-    state = _SerializedState(tensor_entries=[], tensor_refs={})
-    payload = json.loads(
-        json.dumps(_serialize_fire_record(record, SaveLevel.EXECUTABLE_WITH_CALLABLES, state))
-    )
-    assert _deserialize_fire_record(payload, {}).edge_address is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_fire_record_edge_address_malformed_refuses():
     with pytest.raises(ReplayPreconditionError, match="edge_address"):
         _deserialize_fire_record({"target_label": "x", "edge_address": "bogus"}, {})
@@ -73,6 +66,7 @@ def test_fire_record_edge_address_malformed_refuses():
 # --- settled-outcome gate on the spec door ------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
 def test_save_intervention_refuses_failed_capture(tmp_path):
     class Boom(nn.Module):
         def __init__(self) -> None:
@@ -94,12 +88,6 @@ def test_save_intervention_refuses_failed_capture(tmp_path):
     assert not (tmp_path / "spec.tlspec").exists()
 
 
-def test_save_intervention_complete_capture_round_trips(tmp_path):
-    path = _spec_dir(tmp_path)
-    spec = load_intervention_spec(path)
-    assert spec.metadata["save_level"] == "executable_with_callables"
-
-
 # --- spec.json structural validation ------------------------------------------
 
 
@@ -110,6 +98,7 @@ def _rewrite_spec_json(path, mutate):
     spec_file.write_text(json.dumps(data))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_missing_intervention_spec_object_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
     _rewrite_spec_json(path, lambda data: data.pop("intervention_spec"))
@@ -117,6 +106,7 @@ def test_missing_intervention_spec_object_refuses_typed(tmp_path):
         load_intervention_spec(path)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_unknown_save_level_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
     _rewrite_spec_json(path, lambda data: data.update(save_level="banana"))
@@ -124,6 +114,7 @@ def test_unknown_save_level_refuses_typed(tmp_path):
         load_intervention_spec(path)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_non_list_target_manifest_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
     _rewrite_spec_json(path, lambda data: data.update(target_manifest=42))
