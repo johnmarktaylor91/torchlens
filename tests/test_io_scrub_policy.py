@@ -416,7 +416,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "projective_fields": lambda t: t.projective_fields(),
         "show_call_tree": lambda t: t.show_call_tree(file=sink),
         "walk_calls": lambda t: list(t.walk_calls()),
-        "find_layers": lambda t: t.find_layers("relu"),
         "audit": lambda t: t.audit(),
         "check_metadata_invariants": lambda t: t.check_metadata_invariants(),
         "find_nan": lambda t: t.find_nan(),
@@ -568,7 +567,6 @@ _METHOD_SWEEP_MUST_SUCCEED: dict[str, frozenset[str]] = {
             "projective_fields",
             "show_call_tree",
             "walk_calls",
-            "find_layers",
             "audit",
             "check_metadata_invariants",
         }

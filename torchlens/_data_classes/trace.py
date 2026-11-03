@@ -1434,24 +1434,6 @@ class Trace(TraceOutputMixin, TraceLike):
         """
         return _trace_annotations.mark_annotations_mutated(self)
 
-    def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
-        """Return layer labels matching a fuzzy query.
-
-        Parameters
-        ----------
-        selector:
-            Layer-label substring or approximate layer name.
-        limit:
-            Maximum number of labels to return.
-
-        Returns
-        -------
-        List[str]
-            Matching no-pass layer labels in execution order, followed by close
-            fuzzy matches when substring matches are insufficient.
-        """
-        return _trace_views.find_layers(self, selector=selector, limit=limit)
-
     @property
     def uncalled_modules(self) -> _CallableList:
         """Return registered modules that were not exercised in the captured pass.

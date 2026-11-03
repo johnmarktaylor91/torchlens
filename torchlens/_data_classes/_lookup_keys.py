@@ -109,7 +109,9 @@ def _get_lookup_help_str(self: "Trace", layer_label: int | str, mode: str) -> st
     str
         Help text describing valid lookup forms.
     """
-    suggestions = self.find_layers(str(layer_label)) if hasattr(self, "find_layers") else []
+    from ._trace_views import suggest_layer_labels
+
+    suggestions = suggest_layer_labels(self, str(layer_label))
     if suggestions:
         suggestion_str = ", ".join(repr(item) for item in suggestions)
         return f"Layer {layer_label!r} not found. Did you mean {suggestion_str}?"

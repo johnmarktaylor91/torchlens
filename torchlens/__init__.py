@@ -347,6 +347,16 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
+def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
+    """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
+
+    from ._data_classes._trace_views import suggest_layer_labels
+
+    if not hasattr(trace, "layer_labels"):
+        return []
+    return suggest_layer_labels(trace, str(query))
+
+
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """Build a short suggestion suffix for lookup failures.
 
@@ -405,7 +415,7 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         # condition; a "not found" would hide it.
         raise
     except (KeyError, ValueError) as exc:
-        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
+        suggestions = _suggest_layer_labels(trace, layer)
         refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     import torch
@@ -630,7 +640,7 @@ def _extract_layers_with_trace(
     for pattern in layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = trace.find_layers(pattern)
+            suggestions = _suggest_layer_labels(trace, pattern)
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
