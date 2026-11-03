@@ -41,13 +41,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	120
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	63
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	132
-<<<<<<< HEAD
 torchlens/_capture/projections.py	1509
-||||||| 8800e2ab5
-torchlens/_capture/projections.py	1591
-=======
-torchlens/_capture/projections.py	1574
->>>>>>> origin/wip/mp-record-overhead
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	103
@@ -910,14 +904,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	63
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	75
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	136
-<<<<<<< HEAD
 torchlens/backends/torch/_tl.py	1749
-||||||| 8800e2ab5
-torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	144
-torchlens/backends/torch/_tl.py	1784
-=======
-torchlens/backends/torch/_tl.py	1784
->>>>>>> origin/wip/mp-record-overhead
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
