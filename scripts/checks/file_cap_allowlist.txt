@@ -504,12 +504,11 @@ torchlens/_trace_selector_helpers.py	834
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	245
-torchlens/_user_public_impls.py	1984
+torchlens/_user_public_impls.py	1731
 torchlens/_user_public_impls.py::_validate_forward_pass_torch	523
 torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	138
 torchlens/_user_public_impls.py::draw_backward	79
 torchlens/_user_public_impls.py::draw_combined	68
-torchlens/_user_public_impls.py::show_bundle_graph	92
 torchlens/_user_public_impls.py::show_model_graph	121
 torchlens/_user_public_impls.py::summary	151
 torchlens/_user_public_impls.py::validate_backward_pass	71
@@ -1031,7 +1030,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1502
+torchlens/bundle/__init__.py	1429
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
