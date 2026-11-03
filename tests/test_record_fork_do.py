@@ -46,7 +46,7 @@ def test_recording_fork_returns_a_fresh_trace(
     assert isinstance(fork, tl.Trace)
     cooked = recording.to_trace()
     assert fork is not cooked
-    assert fork.num_ops == cooked.num_ops
+    assert len(fork.ops) == len(cooked.ops)
     named = recording.fork("edited")
     assert isinstance(named, tl.Trace)
 
@@ -60,7 +60,7 @@ def test_recording_do_edits_and_replays(
     relu_label = next(label for label in recording.to_trace().layer_labels if "relu" in label)
     edited = recording.do(relu_label, tl.zero_ablate(), model=model, inputs=x)
     assert isinstance(edited, tl.Trace)
-    assert edited.num_ops == recording.to_trace().num_ops
+    assert len(edited.ops) == len(recording.to_trace().ops)
 
 
 def test_record_episode_keyword_refuses_typed() -> None:

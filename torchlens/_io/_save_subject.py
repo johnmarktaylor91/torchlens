@@ -69,5 +69,10 @@ def resolve_save_subject(trace: Any) -> Any:
         )
     recording_types = sys.modules.get("torchlens.recording.types")
     if recording_types is not None and isinstance(trace, recording_types.Recording):
+        # A failed recording has no trace to cook; hand it on unchanged so the
+        # N1 capture-outcome gate below refuses it under its own settled
+        # outcome instead of a cook-time CaptureNotActiveError.
+        if trace.is_failed:
+            return trace
         return trace.to_trace()
     return trace
