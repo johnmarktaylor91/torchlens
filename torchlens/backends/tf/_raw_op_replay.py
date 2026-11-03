@@ -65,6 +65,7 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "Minimum": lambda item, args: _raw(item).Minimum(x=args[0], y=args[1]),
         "Pow": lambda item, args: _raw(item).Pow(x=args[0], y=args[1]),
         "Prod": lambda item, args: _replay_reduction(item, args, "Prod"),
+        "SelectV2": lambda item, args: _raw(item).SelectV2(condition=args[0], t=args[1], e=args[2]),
         "Sigmoid": lambda item, args: _raw(item).Sigmoid(x=args[0]),
         "Sin": lambda item, args: _raw(item).Sin(x=args[0]),
         "Sum": lambda item, args: _replay_reduction(item, args, "Sum"),

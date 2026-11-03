@@ -175,6 +175,24 @@ def test_tf_keras_gelu_erfc_is_classified_and_replayed() -> None:
     assert set(status.unverified_reason_counts) <= VALIDATION_REASONS
 
 
+def test_tf_where_selectv2_is_classified_and_replayed() -> None:
+    """``tf.where`` runs ``SelectV2`` (attention masks); validation replays it.
+
+    Every parent perturbation is tried, the boolean condition included, so a
+    replay that ignored any input would fail the tripwire.
+    """
+
+    def fn(v: Any) -> Any:
+        return tf.where(v > 0.0, v * 2.0, tf.zeros_like(v) - 1.0)
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    assert any(op.func_name == "SelectV2" for op in trace._layer_list)
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    select = [r for r in status.decisions if r["func_name"] == "SelectV2"]
+    assert select and select[0]["decision"] == "validated", select
+
+
 def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     """A11: a tampered payload yields ``failed`` naming the op in message and decisions."""
 

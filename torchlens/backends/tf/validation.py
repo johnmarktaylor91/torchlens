@@ -60,6 +60,7 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Relu6",
         "Reshape",
         "Rsqrt",
+        "SelectV2",
         "Sigmoid",
         "Sin",
         "Softmax",
@@ -94,31 +95,7 @@ _REASON_UNCLASSIFIED = "op_unclassified"
 _REASON_INCONSISTENT = "capture_inconsistent"
 _REASON_CONSTANT_LEAF = CONSTANT_PRODUCER_LEAF_REASON
 _REASON_CONSTANT_PERTURB = CONSTANT_PARENT_PAYLOAD_REASON
-_VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
-    {
-        "Elu",
-        "Erf",
-        "Exp",
-        "ExpandDims",
-        "GatherV2",
-        "Gelu",
-        "Greater",
-        "Less",
-        "Log",
-        "Maximum",
-        "Minimum",
-        "Pack",
-        "Pad",
-        "Pow",
-        "Prod",
-        "Sigmoid",
-        "Sin",
-        "Slice",
-        "Squeeze",
-        "Sum",
-        "Tile",
-    }
-)
+_VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset({"GatherV2", "Gelu", "Pack", "Slice"})
 _STRUCTURAL_VALUE_OPS = frozenset({"Shape", "Size", "Rank", "StridedSlice"})
 _ANNOTATION_OPS = frozenset({"Identity", "StopGradient"})
 _PURE_RESOURCE_READ_OPS = frozenset({"ReadVariableOp"})
