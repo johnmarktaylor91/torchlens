@@ -7,6 +7,8 @@ tier: kit
 doors: [neuroai, vision]
 related: []
 tags: [extraction, reproducibility]
+prompt: 'Pick a random subset of 64 of the stimuli with a fixed seed and save the layer3 and layer4 activations for just those images to disk, so the saved file records which original images it holds.'
+fixture: vision
 ---
 
 # Seeded subsampling for `extract_dataset`

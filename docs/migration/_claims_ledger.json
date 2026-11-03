@@ -929,6 +929,48 @@
       "date": "2026-11-03",
       "status": "train-only",
       "registry_ids": []
+    },
+    {
+      "id": "readme-composition-matrix-pointer",
+      "category": "capability",
+      "wording": "Which feature pairings are verified together, refused on purpose, or not yet verified",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "none (a pointer to the composition matrix page)",
+      "evidence": [
+        "docs/reference/composition_matrix.md"
+      ],
+      "evidence_note": "A README docs-table row pointing at the composition matrix; each matrix row names its own test or says not yet verified.",
+      "exclusions": "No count of verified pairings is claimed.",
+      "date": "2026-11-03",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-artifact-window-pointer",
+      "category": "capability",
+      "wording": "Artifact compatibility: the 2.x floor and the conditional five-year window",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "none (a pointer to the migration policy)",
+      "evidence": [
+        "MIGRATIONS.md"
+      ],
+      "evidence_note": "A README docs-table row pointing at MIGRATIONS.md, which states the 2.x floor and the conditions under which the five-year window becomes a promise.",
+      "exclusions": "The five-year window is conditional, not a current guarantee.",
+      "date": "2026-11-03",
+      "status": "train-only",
+      "registry_ids": []
     }
   ]
 }
