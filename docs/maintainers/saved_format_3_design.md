@@ -55,6 +55,7 @@ the current components; `__init__` provides their thin package entry.
 | `_carriers.py` | the opaque carrier values (sections 5 and 8): `UnencodableValue` and `CallablePlaceholder`, shared by both halves of the codec so a decoded carrier re-encodes exactly; below `decode.py` and `values.py` | 46 | reader |
 | `_record_refs.py` | the closed record-reference resolver: canonical row identities and container rebuilding, including repeated and cyclic references, before record allocation | 250 | reader |
 | `_payload_headers.py` | validate referenced safetensors chunks and declared keys before allocating records, without materializing tensor contents | 150 | reader |
+| `restore.py` | Declared record-state restoration, saved-cell true-up and capture-time provenance stamping through trusted caller-supplied parsers | 200 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
@@ -65,10 +66,8 @@ the current components; `__init__` provides their thin package entry.
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
 | `codec_policy.py` | Tensor carrier roles and backend agreement checked before codec lookup | 100 | reader |
-| `restore.py` | Declared record-state restoration while retaining saved cell values | 200 | reader |
 | `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
 | `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
-| `restore.py` | record restore: the state hook on one decoded row, then the true-up that puts back saved nulls and level-omitted columns so load then save is lossless | 150 | reader |
 | `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |
 
 Public doors do not move: `tl.load`, `Trace.save`, `Bundle.save`, `tl.io`

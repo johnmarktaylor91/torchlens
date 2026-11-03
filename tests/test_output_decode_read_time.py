@@ -62,9 +62,31 @@ def test_capture_options_have_no_decode_fields() -> None:
     """The two removed fields are unknown to ``CaptureOptions`` (no alias)."""
 
     for field in ("output_style", "output_head"):
-        with pytest.raises(TypeError):
+        assert field not in inspect.signature(tl.options.CaptureOptions).parameters
+        with pytest.raises(tl.errors.FacadeTeachingError) as excinfo:
             tl.options.CaptureOptions(**{field: "classification"})
-        assert not hasattr(tl.options.CaptureOptions(), field)
+        assert excinfo.value.fields["code"] == "facade_redirect"
+        assert "trace.decode_output(" in str(excinfo.value)
+        with pytest.raises(tl.errors.FacadeTeachingError) as excinfo:
+            getattr(tl.options.CaptureOptions(), field)
+        assert "trace.decode_output(" in str(excinfo.value)
+    with pytest.raises(TypeError):  # an unknown keyword still fails the ordinary way
+        tl.options.CaptureOptions(no_such_option=1)
+
+
+def test_trace_door_names_the_read_time_call_for_removed_decode_keywords() -> None:
+    """A removed decode keyword at the trace door is never routed to the model: it names the new call."""
+
+    model = _Fixed(torch.zeros(1, 3)).eval()
+    with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
+        tl.trace(model, torch.ones(1, 2), output_style="hf_text")
+    assert excinfo.value.fields["code"] == "trace_forward_kwargs_unrouted"
+    assert "trace.decode_output(" in str(excinfo.value)
+    assert "input_kwargs" not in str(excinfo.value)
+    with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
+        tl.trace(model, torch.ones(1, 2), output_head="logits", input_ids=torch.ones(1, 2))
+    assert "output_head" in str(excinfo.value)
+    assert "input_ids" in str(excinfo.value)
 
 
 @pytest.mark.smoke
@@ -165,6 +187,17 @@ def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
     assert trace._decoded_output is None  # no tokenizer attached: no automatic text decode
     decoded = trace.decode_output(style="hf_text", tokenizer=_Tokenizer())
     assert decoded == [{"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}]
+    # Captured without a tokenizer and none passed: the ids are the decode, and the
+    # row says so with ``text`` None.
+    assert trace.decode_output(style="hf_text") == [
+        {"batch_item": 0, "rank": 1, "text": None, "token_ids": [1, 0]}
+    ]
+
+
+def test_hf_text_style_refuses_when_no_logits_shape_qualifies() -> None:
+    """Rank-1 output under ``style="hf_text"`` is a typed refusal, not a silent empty decode."""
+
+    trace = tl.trace(_Fixed(torch.zeros(1, 1, 1, 2)).eval(), torch.ones(1, 2))
     with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
         trace.decode_output(style="hf_text")
     assert excinfo.value.fields["code"] == "decode_style_unknown"

@@ -106,6 +106,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_state": "L2",
     "_kernel_telemetry": "L2",
     "_options_validation": "L2",
+    "_options_removed": "L2",
     "_option_receipt": "L2",
     "_save_budget": "L2",
     "_distributed": "L2",

@@ -47,6 +47,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_render_regions.py` | Nested module-cluster (region) subgraph emission and empty-subtree pruning |
 | `_svg_compose.py` | SVG post-processing (image inlining, viewBox normalization) and code-panel composition |
 | `_render_utils.py` | Internal Graphviz helpers shared across rendering paths (subprocess execution, HTML escaping) |
+| `_render_names.py` | Leaf names the renderer shares with the lens and surgery layers (rendered-node slot, bare-draw stem, optimizer ceiling) |
 | `_label_format.py` | Node label formatting helpers |
 | `_typography.py` | The one typography record (vizmech D29): pinned font family + semantic size roles consumed by every label builder |
 | `_legend.py` | The one compact HTML-table legend node in a dedicated rank (role legend, channel disclosures, backward key as sections; vizmech D28/D30) |

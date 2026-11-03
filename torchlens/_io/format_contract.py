@@ -13,8 +13,9 @@ re-export FACADE over this module; no public spelling changed in the split
 from __future__ import annotations
 
 import copy
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from ._field_policy import FieldPolicy as FieldPolicy
@@ -231,6 +232,25 @@ def below_floor_error(
         path=path,
         remedy=remedy,
     )
+
+
+def _guard_pre3_format(
+    tlspec_format: str, path: Path, observed_marker: Callable[[], str | None]
+) -> None:
+    """Refuse an identified legacy directory without probing current-format extras."""
+
+    if tlspec_format == "pre_3":
+        observed = observed_marker() or "2.x artifact markers"
+        raise below_floor_error(
+            observed=observed,
+            path=str(path),
+            remedy_note=(
+                _MODELLOG_216_NOTE
+                if observed.startswith("io_format_version=2, n_activation_blobs=")
+                else ""
+            ),
+            code="artifact_version_below_floor",
+        )
 
 
 def modellog_216_error(
