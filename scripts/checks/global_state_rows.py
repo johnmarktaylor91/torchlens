@@ -1171,6 +1171,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_tl.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_transparency.py", "__all__"),
+        ("torchlens/backends/torch/_fused_norm_writes.py", "__all__"),
+        ("torchlens/backends/torch/_same_object_handoff.py", "__all__"),
         ("torchlens/backends/torch/backend.py", "__all__"),
         ("torchlens/backends/torch/belt.py", "__all__"),
         ("torchlens/backends/torch/collectives.py", "__all__"),

@@ -91,7 +91,7 @@ def test_single_pass_buffer_write_threads_scaled_value(buffered) -> None:
 
 
 class _EvalNorm(nn.Module):
-    """Conv -> eval-mode BatchNorm: a DECLARED fused buffer write whose bytes never change."""
+    """Conv -> BatchNorm; in eval mode the norm reads its running statistics only."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -102,23 +102,51 @@ class _EvalNorm(nn.Module):
         return torch.relu(self.bn(self.conv(x)))
 
 
-def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
-    """Eval-mode norm buffers inside the cone keep their value with NO gap warning.
+class _UnchangedNormWrite(nn.Module):
+    """Conv -> a training-mode ``batch_norm`` with momentum 0.
 
-    Fused norm mutators are journaled unconditionally, so every eval-mode
-    BatchNorm buffer carries ``buffer_write_kind='fused'`` with
-    ``buffer_value_changed=False`` (bytes provably unchanged). With the
-    single-pass producer lookup fixed (2.8), those records now resolve
-    their producer inside the cone; a proven-unchanged write is capture
-    truth, not a threading gap, and the replayed output must match an eager
-    rerun of the ablated model bit-exactly.
+    The call DECLARES a fused write of its running statistics (``training`` is
+    true), and momentum 0 keeps their bytes exactly unchanged.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(2, 3, 1)
+        self.register_buffer("running_mean", torch.zeros(3))
+        self.register_buffer("running_var", torch.ones(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self._norm(self.conv(x)))
+
+    def _norm(self, h: torch.Tensor) -> torch.Tensor:
+        return nn.functional.batch_norm(
+            h, self.running_mean, self.running_var, training=True, momentum=0.0
+        )
+
+
+def test_eval_mode_norm_journals_no_buffer_write() -> None:
+    """An eval-mode BatchNorm reads its running statistics and writes no buffer version."""
+
+    model = _EvalNorm().eval()
+    trace = tl.trace(model, torch.randn(2, 2, 4, 4))
+    assert not [op.label for op in trace._layer_list if getattr(op, "buffer_write_kind", None)]
+    assert all(not op.parents for op in trace._layer_list if getattr(op, "is_buffer", False))
+
+
+def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
+    """A fused norm write whose bytes never change stays silent inside the cone.
+
+    A declared fused write with ``buffer_value_changed=False`` (bytes provably
+    unchanged) resolves its single-pass producer inside the cone (2.8); a
+    proven-unchanged write is capture truth, not a threading gap, and the
+    replayed output must match an eager rerun of the ablated model bit-exactly.
     """
 
     torch.manual_seed(0)
-    model = _EvalNorm().eval()
+    model = _UnchangedNormWrite().eval()
     with torch.no_grad():
-        model.bn.running_mean.uniform_(-1, 1)
-        model.bn.running_var.uniform_(0.5, 2)
+        model.running_mean.uniform_(-1, 1)
+        model.running_var.uniform_(0.5, 2)
     x = torch.randn(2, 2, 4, 4)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
@@ -131,7 +159,7 @@ def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
             fork.do(tl.label("conv2d_1_1"), tl.zero_ablate())
         assert not [w for w in caught if issubclass(w.category, BufferThreadGapWarning)]
         with torch.no_grad():
-            expected = torch.relu(model.bn(torch.zeros_like(model.conv(x))))
+            expected = torch.relu(model._norm(torch.zeros_like(model.conv(x))))
         assert torch.equal(fork["output_1"].out, expected)
         assert torch.equal(fork[written.label].out, trace[written.label].out)
     finally:
@@ -147,7 +175,7 @@ def test_unproven_fused_buffer_write_in_cone_still_discloses(value_changed) -> N
     """
 
     torch.manual_seed(0)
-    model = _EvalNorm().eval()
+    model = _UnchangedNormWrite().eval()
     x = torch.randn(2, 2, 4, 4)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:

@@ -31,10 +31,10 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
+from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
-    pop_same_object_mutation,
 )
 from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
 from .tensor_tracking import (
@@ -577,7 +577,7 @@ def _save_activation_fields(
             # materializes directly on the retention device (one copy); the
             # other save modes ignore the target and keep the follow-up move.
             raw_out = safe_copy(
-                t,
+                reference_payload_source(t, save_mode),
                 fields_dict["detach_saved_activations"],
                 save_mode=save_mode,
                 target_device=fields_dict["output_device"],

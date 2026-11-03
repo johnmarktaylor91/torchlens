@@ -46,6 +46,24 @@ class _BatchNormModel(nn.Module):
         return self.head(torch.relu(self.bn(self.inp(x))))
 
 
+class _DeclaredNormWrite(_BatchNormModel):
+    """The same stack with a training-mode ``batch_norm`` call at momentum 0.
+
+    The call declares a fused write of the running statistics, so the capture
+    logs buffer version nodes; momentum 0 keeps their bytes unchanged. An
+    eval-mode BatchNorm writes nothing and logs no version node.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stack with the declared-write norm."""
+
+        bn = self.bn
+        normed = nn.functional.batch_norm(
+            self.inp(x), bn.running_mean, bn.running_var, bn.weight, bn.bias, True, 0.0, bn.eps
+        )
+        return self.head(torch.relu(normed))
+
+
 def _validate_rf(model: nn.Module) -> object:
     """Run receptive-field validation with warnings silenced."""
 
@@ -90,13 +108,13 @@ def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(op_save_module, "_WARNED_REFERENCE_SAVE_MODE", True)
     torch.manual_seed(3)
     trace = tl.trace(
-        _BatchNormModel().eval(),
+        _DeclaredNormWrite().eval(),
         _X,
         capture=CaptureOptions(save_mode="reference"),
         save="all",
     )
     version_nodes = [op for op in trace._layer_list if op._slot("buffer_write_kind") == "fused"]
-    assert version_nodes, "eval BatchNorm logged no buffer version node"
+    assert version_nodes, "a declared norm write logged no buffer version node"
     for node in version_nodes:
         assert isinstance(node.out, torch.Tensor)
 
