@@ -54,6 +54,7 @@ PAGES: dict[str, str] = {
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
     "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
