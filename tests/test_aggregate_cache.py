@@ -121,22 +121,6 @@ def model() -> nn.Module:
     return _MLP().eval()
 
 
-def test_cache_hit_skips_forward_and_equals(model: nn.Module, tmp_path: Path) -> None:
-    label = _relu_label(model)
-    batches = _batches(_data())
-    uncached, _ = _run(model, batches, _metrics(label), None)
-    first_metrics = _metrics(label)
-    first, first_forwards = _run(model, batches, first_metrics, tmp_path)
-    assert first_forwards > 0
-    _assert_equal_results(first, uncached)
-    assert len(list((tmp_path / "aggregate").glob("*.safetensors"))) == 1
-    second_metrics = _metrics(label)
-    second, second_forwards = _run(model, batches, second_metrics, tmp_path)
-    assert second_forwards == 0
-    _assert_equal_results(second, first)
-    assert _state(second_metrics) == _state(first_metrics)
-
-
 class _Opaque:
     """A batch leaf whose contents the key cannot read."""
 

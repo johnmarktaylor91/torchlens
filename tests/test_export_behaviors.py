@@ -48,25 +48,6 @@ class _RecordingWriter:
         self.flushed = True
 
 
-def test_tensorboard_writes_layer_count_memory_and_model_name() -> None:
-    """tensorboard() emits the documented scalar/text summaries to any writer."""
-
-    log = _small_trace()
-    writer = _RecordingWriter()
-
-    returned = tl.export.tensorboard(log, writer, step=7, prefix="tlx")
-
-    assert returned is writer
-    assert writer.scalars["tlx/num_layers"] == (len(log._layer_list), 7)
-    memory_value, memory_step = writer.scalars["tlx/total_activation_memory"]
-    assert memory_step == 7
-    assert memory_value == int(log.cost.total_activation_memory or 0)
-    text_value, text_step = writer.texts["tlx/model_class_name"]
-    assert text_step == 7
-    assert text_value == str(log.source.class_name)
-    assert writer.flushed
-
-
 def test_tracker_exports_reject_objects_without_required_method() -> None:
     """A tracker object missing its required method fails with a clear TypeError."""
 

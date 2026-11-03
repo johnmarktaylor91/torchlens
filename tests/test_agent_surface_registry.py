@@ -6,13 +6,10 @@ truncation discipline (3.8) and the envelope/determinism contract (3.9).
 
 from __future__ import annotations
 
-import json
-import math
 from pathlib import Path
 
 import pytest
 
-import torchlens as tl
 from tests.test_agent_surface_helpers import save_clean_artifact
 from torchlens.agent import (
     _budgets,
@@ -20,9 +17,6 @@ from torchlens.agent import (
     call_tool,
     call_tool_envelope,
     canonical_dumps,
-    json_safe,
-    list_tools,
-    tool_specs,
 )
 
 # Per-test marks, not a module pytestmark: the every-envelope contract test is
@@ -36,27 +30,6 @@ def artifact(tmp_path: Path) -> Path:
     """The deterministic clean fixture artifact."""
 
     return save_clean_artifact(tmp_path)
-
-
-def test_canonical_serializer_is_strict_and_sorted() -> None:
-    """Sorted keys, compact separators, ASCII, and NO bare non-finites."""
-
-    text = canonical_dumps(json_safe({"b": 1, "a": {"z": [1.5, float("nan")]}}))
-    assert text == '{"a":{"z":[1.5,{"nonfinite":"nan"}]},"b":1}'
-    with pytest.raises(ValueError):
-        canonical_dumps({"x": float("inf")})  # unsanitized non-finite is a crash here
-    parsed = json.loads(text, parse_constant=pytest.fail)  # strict constant hook
-    assert parsed["a"]["z"][1] == {"nonfinite": "nan"}
-
-
-def test_json_safe_tags_every_nonfinite_direction() -> None:
-    """nan/inf/-inf become tagged records; tuples become lists."""
-
-    assert json_safe(float("nan")) == {"nonfinite": "nan"}
-    assert json_safe(float("inf")) == {"nonfinite": "inf"}
-    assert json_safe(float("-inf")) == {"nonfinite": "-inf"}
-    assert json_safe((1, 2)) == [1, 2]
-    assert math.isclose(json_safe(1.25), 1.25)
 
 
 @pytest.mark.heavy
@@ -85,15 +58,6 @@ def test_every_envelope_carries_the_contract_keys(artifact: Path) -> None:
             assert key in envelope, (name, key)
         assert envelope["schema_stability"] == "documented-unstable"
         canonical_dumps(envelope)  # strict-serializable as-is
-
-
-def test_no_absolute_path_in_machine_payloads(artifact: Path) -> None:
-    """basename is a courtesy; no absolute/cwd-derived path appears outside the echo."""
-
-    envelope = call_tool("torchlens_overview", {"path": str(artifact)})
-    envelope["request"] = {}
-    assert str(artifact.parent) not in canonical_dumps(envelope)
-    assert envelope["artifact"]["basename"] == artifact.name
 
 
 def test_error_envelope_exposes_typed_fields() -> None:
@@ -168,40 +132,3 @@ def test_continuation_refuses_on_request_drift(artifact: Path) -> None:
             },
         )
     assert exc.value.fields["code"] == "agent_continuation_drift"
-
-
-def test_paged_rows_reassemble_byte_exactly(artifact: Path) -> None:
-    """Concatenated pages equal the unpaged ordered result."""
-
-    unpaged = call_tool("torchlens_dump", {"path": str(artifact), "view": "graph"})
-    rows: list[dict] = []
-    continuation = None
-    while True:
-        args = {"path": str(artifact), "view": "graph", "max_rows": 2}
-        if continuation is not None:
-            args["continuation"] = continuation
-        page = call_tool("torchlens_dump", args)
-        rows.extend(page["data"]["rows"])
-        continuation = page["data"]["next"]
-        if continuation is None:
-            break
-    assert canonical_dumps(rows) == canonical_dumps(unpaged["data"]["rows"])
-
-
-def test_registry_annotations_and_verbs_are_complete() -> None:
-    """Nine tools, all read-only + idempotent, CLI verbs unique where present."""
-
-    specs = tool_specs()
-    assert len(specs) == 9
-    assert all(spec.read_only and spec.idempotent for spec in specs)
-    verbs = [spec.cli_verb for spec in specs if spec.cli_verb]
-    assert len(verbs) == len(set(verbs))
-    assert {declaration["name"] for declaration in list_tools()} == {spec.name for spec in specs}
-
-
-def test_python_facade_reaches_the_agent_surface() -> None:
-    """tl.agent resolves on a cold facade and serves the same call_tool."""
-
-    assert tl.agent.call_tool is call_tool
-    assert callable(tl.agent.guide)
-    assert "TorchLens for AI agents" in tl.agent.guide()

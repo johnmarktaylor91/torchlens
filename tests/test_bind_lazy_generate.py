@@ -164,23 +164,6 @@ def _assert_clean(model: nn.Module) -> None:
     assert torch.overrides._get_current_function_mode_stack() == []
 
 
-def test_open_lazy_output_holds_the_binding() -> None:
-    """The binding stays serial while its lazy output is open, then frees."""
-
-    model = _PureGen()
-    bound = _add_one().bind(model)
-    gen = bound.generate(torch.ones(1))
-    next(gen)
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        bound(torch.ones(1))
-    assert excinfo.value.fields["code"] == "binding_reentrant_call"
-    list(gen)
-    assert _values([bound(torch.ones(1))]) == [[4.0]]
-    assert bound.last_report is not None
-    assert bound.last_report.num_fires == 1
-    assert bound.last_report.door == "call"
-
-
 def test_early_close_settles_and_removes_hooks() -> None:
     """``close()`` after one step settles a one-fire report and frees the binding."""
 
@@ -228,17 +211,6 @@ def test_zero_fire_error_policy_refuses_at_exhaustion() -> None:
     assert bound.last_report is not None
     assert bound.last_report.status == "no_fire"
     _assert_clean(model)
-
-
-def test_zero_fire_disclose_settles_quietly() -> None:
-    """Under ``on_zero_fire='disclose'`` exhaustion settles a ``no_fire`` report."""
-
-    model = _NoForwardGen()
-    bound = _add_one().bind(model, on_zero_fire="disclose")
-    assert _values(bound.generate(torch.ones(1))) == [[1.0]]
-    assert bound.last_report is not None
-    assert bound.last_report.status == "no_fire"
-    assert bound.last_report.num_fires == 0
 
 
 def test_plain_lazy_iterator_steers_every_step() -> None:

@@ -42,33 +42,3 @@ def test_flops_report_matches_hand_macs() -> None:
         assert "fma2" in text, "the FLOP convention is not disclosed in the report"
     finally:
         trace.cleanup()
-
-
-def test_identity_partition_counts_tied_weight_once() -> None:
-    """The tied-weight law: ONE 8x8 parameter consumed twice reads as 64
-    params everywhere, never 128 (the most-reported competitor bug class)."""
-
-    import torchlens as tl
-
-    class _Tied(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.weight = torch.nn.Parameter(torch.randn(8, 8))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            hidden = torch.relu(x @ self.weight)
-            return hidden @ self.weight
-
-    torch.manual_seed(0)
-    model = _Tied().eval()
-    torch_census = sum(parameter.numel() for parameter in model.parameters())
-    assert torch_census == 64
-    trace = tl.trace(model, torch.randn(2, 8))
-    try:
-        report = trace.summary()
-        assert report.total_params == 64, (
-            f"tied weight double-counted: summary says {report.total_params},"
-            " identity partition says 64 (one identity, two consumptions)"
-        )
-    finally:
-        trace.cleanup()

@@ -7070,7 +7070,6 @@ test-docstrings	tests/composition_expectations/conftest.py	14
 test-docstrings	tests/composition_expectations/conftest.py	75
 test-docstrings	tests/composition_expectations/ledger.py	11
 test-docstrings	tests/composition_expectations/ledger.py	3.1
-test-docstrings	tests/composition_expectations/test_backend_operation_rows.py	10
 test-docstrings	tests/composition_expectations/test_contract_lockstep.py	3.1
 test-docstrings	tests/composition_expectations/test_diagnostic_site_contract.py	3.5
 test-docstrings	tests/composition_expectations/test_galleries.py	12
@@ -7127,9 +7126,6 @@ test-docstrings	tests/example_models.py	43
 test-docstrings	tests/example_models.py	48
 test-docstrings	tests/example_models.py	58
 test-docstrings	tests/godobject_oracle/test_aliases.py	10
-test-docstrings	tests/godobject_oracle/test_aliases.py	12
-test-docstrings	tests/godobject_oracle/test_aliases.py	2026
-test-docstrings	tests/godobject_oracle/test_aliases.py	3.2.
 test-docstrings	tests/godobject_oracle/test_aliases.py	52
 test-docstrings	tests/godobject_oracle/test_viz_identity.py	10
 test-docstrings	tests/godobject_oracle/test_viz_identity.py	78
@@ -7157,14 +7153,11 @@ test-docstrings	tests/oracles/test_legacy_quantity_doors.py	32
 test-docstrings	tests/oracles/test_legacy_quantity_doors.py	64
 test-docstrings	tests/oracles/test_oracle_w0_surface.py	25
 test-docstrings	tests/oracles/test_proofnet_purity.py	022
-test-docstrings	tests/oracles/test_proofnet_quantities.py	128
-test-docstrings	tests/oracles/test_proofnet_quantities.py	64
 test-docstrings	tests/producer_parity/_journal_probe.py	15
 test-docstrings	tests/producer_parity/test_ledger.py	10
 test-docstrings	tests/producer_parity/test_ledger.py	14
 test-docstrings	tests/producer_parity/test_ledger.py	54.
 test-docstrings	tests/producer_parity/test_ledger.py	78
-test-docstrings	tests/producer_parity/test_oracle_adapter.py	15.
 test-docstrings	tests/producer_parity/test_p1_record_types.py	15
 test-docstrings	tests/producer_parity/test_p1_record_types.py	53
 test-docstrings	tests/producer_parity/test_p1_record_types.py	6.2
@@ -7296,8 +7289,6 @@ test-docstrings	tests/test_attrib_methods_text_real.py	0.097
 test-docstrings	tests/test_attrib_methods_text_real.py	0.643
 test-docstrings	tests/test_attrib_methods_text_real.py	1024
 test-docstrings	tests/test_attrib_methods_text_real.py	128
-test-docstrings	tests/test_attrib_methods_text_real.py	2.5
-test-docstrings	tests/test_attrib_methods_text_real.py	32
 test-docstrings	tests/test_attrib_methods_wrapping.py	10
 test-docstrings	tests/test_attribution_cam_choice.py	18
 test-docstrings	tests/test_attribution_eval_causal_audit.py	1.0.
@@ -7754,9 +7745,7 @@ test-docstrings	tests/test_fastlog_recover_bounded.py	60
 test-docstrings	tests/test_field_view_of.py	16
 test-docstrings	tests/test_field_view_of_convnext.py	224
 test-docstrings	tests/test_field_view_of_resnet.py	18,
-test-docstrings	tests/test_field_view_of_resnet.py	2.1
 test-docstrings	tests/test_field_view_of_resnet.py	224
-test-docstrings	tests/test_field_view_of_resnet.py	3.0.
 test-docstrings	tests/test_fixa_escrow_spill.py	10
 test-docstrings	tests/test_fixa_escrow_spill.py	12
 test-docstrings	tests/test_fixa_escrow_spill.py	13
@@ -7797,7 +7786,6 @@ test-docstrings	tests/test_gc.py	25
 test-docstrings	tests/test_gc.py	33
 test-docstrings	tests/test_gc.py	37
 test-docstrings	tests/test_gc.py	54
-test-docstrings	tests/test_generate_api_map.py	10
 test-docstrings	tests/test_generative_properties_r73.py	120
 test-docstrings	tests/test_generative_properties_r73.py	256
 test-docstrings	tests/test_generative_properties_r73.py	400
@@ -8144,6 +8132,7 @@ test-docstrings	tests/test_marker_lint.py	76
 test-docstrings	tests/test_marker_lint.py	77
 test-docstrings	tests/test_marker_lint.py	94
 test-docstrings	tests/test_marker_lint.py	953
+test-docstrings	tests/test_mcp_bridge.py	2.0
 test-docstrings	tests/test_measure_host_peak_opt_in.py	64
 test-docstrings	tests/test_mechanical_belt.py	26
 test-docstrings	tests/test_mechanical_belt.py	56
@@ -8177,7 +8166,6 @@ test-docstrings	tests/test_metadata.py	2.5
 test-docstrings	tests/test_metadata.py	36
 test-docstrings	tests/test_metadata.py	50
 test-docstrings	tests/test_metadata.py	88
-test-docstrings	tests/test_migrations.py	15
 test-docstrings	tests/test_mikit_core.py	10
 test-docstrings	tests/test_mikit_core.py	15
 test-docstrings	tests/test_mikit_core.py	16
@@ -8245,6 +8233,7 @@ test-docstrings	tests/test_netron_export_density.py	10
 test-docstrings	tests/test_netron_export_module.py	12
 test-docstrings	tests/test_netron_export_module.py	27
 test-docstrings	tests/test_netron_export_module.py	40
+test-docstrings	tests/test_netron_export_packet.py	18,
 test-docstrings	tests/test_netron_export_rolled.py	10,000
 test-docstrings	tests/test_netron_export_rolled.py	13
 test-docstrings	tests/test_netron_export_serve.py	10
@@ -8257,16 +8246,10 @@ test-docstrings	tests/test_neuro_pkg_datasets.py	16
 test-docstrings	tests/test_neuro_pkg_datasets.py	32
 test-docstrings	tests/test_neuro_pkg_datasets.py	4.1
 test-docstrings	tests/test_neuro_pkg_geometry.py	100.
-test-docstrings	tests/test_neuro_pkg_geometry.py	12
 test-docstrings	tests/test_neuro_pkg_geometry.py	13
-test-docstrings	tests/test_neuro_pkg_geometry.py	14
-test-docstrings	tests/test_neuro_pkg_geometry.py	2019
 test-docstrings	tests/test_neuro_pkg_geometry.py	2022
-test-docstrings	tests/test_neuro_pkg_geometry.py	28
 test-docstrings	tests/test_neuro_pkg_geometry.py	31
-test-docstrings	tests/test_neuro_pkg_geometry.py	56.3
 test-docstrings	tests/test_neuro_pkg_geometry.py	64
-test-docstrings	tests/test_neuro_pkg_geometry.py	64.
 test-docstrings	tests/test_neuro_pkg_matrix.py	10
 test-docstrings	tests/test_neuro_pkg_matrix.py	11
 test-docstrings	tests/test_neuro_pkg_rdms.py	15
@@ -8278,9 +8261,6 @@ test-docstrings	tests/test_no_string_private_getattr.py	96
 test-docstrings	tests/test_node_label_dtype.py	16.
 test-docstrings	tests/test_node_label_dtype.py	32
 test-docstrings	tests/test_nonfinite_record.py	18
-test-docstrings	tests/test_normalize_sdist.py	10
-test-docstrings	tests/test_normalize_sdist.py	83
-test-docstrings	tests/test_normalize_sdist.py	84
 test-docstrings	tests/test_numbers_truth_compute.py	1,019,805,696
 test-docstrings	tests/test_numbers_truth_compute.py	1,020,303,744
 test-docstrings	tests/test_numbers_truth_compute.py	12.
@@ -8428,8 +8408,6 @@ test-docstrings	tests/test_perf_method.py	33
 test-docstrings	tests/test_perf_ownership.py	28
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	18
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	20
-test-docstrings	tests/test_pinned_autograd_memory.py	32
-test-docstrings	tests/test_pinned_autograd_memory.py	56
 test-docstrings	tests/test_postprocess_executor.py	21
 test-docstrings	tests/test_postprocess_executor.py	5.5
 test-docstrings	tests/test_postprocess_r14a_regressions.py	52
@@ -8829,7 +8807,6 @@ test-docstrings	tests/test_snoop_core.py	554
 test-docstrings	tests/test_snoop_failure.py	2,8
 test-docstrings	tests/test_snoop_failure.py	768
 test-docstrings	tests/test_snoop_format.py	12
-test-docstrings	tests/test_snoop_real_model.py	1000,
 test-docstrings	tests/test_snoop_real_model.py	18
 test-docstrings	tests/test_snoop_refusals.py	101
 test-docstrings	tests/test_snoop_stats.py	13
@@ -8852,7 +8829,6 @@ test-docstrings	tests/test_stoch_edits_population.py	32
 test-docstrings	tests/test_stoch_edits_verbs.py	12
 test-docstrings	tests/test_stoch_edits_verbs.py	15
 test-docstrings	tests/test_stoch_edits_verbs.py	34
-test-docstrings	tests/test_streaming_finalization_arming.py	18
 test-docstrings	tests/test_streaming_stats.py	64
 test-docstrings	tests/test_strict_accessors.py	2.33
 test-docstrings	tests/test_structure_only_discharge.py	10
@@ -9211,11 +9187,7 @@ test-docstrings	tests/test_torchnative_backward.py	18
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	17
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	2.7
 test-docstrings	tests/test_torchnative_flops_crosscheck.py	2026
-test-docstrings	tests/test_torchnative_join.py	10
-test-docstrings	tests/test_torchnative_join.py	10,000
 test-docstrings	tests/test_torchnative_join.py	19
-test-docstrings	tests/test_torchnative_join.py	200
-test-docstrings	tests/test_torchnative_join.py	4.5
 test-docstrings	tests/test_torchnative_markers.py	11
 test-docstrings	tests/test_torchnative_markers.py	13
 test-docstrings	tests/test_torchnative_memory_parity.py	2.13
@@ -9238,6 +9210,7 @@ test-docstrings	tests/test_trace_core_substrate.py	2002
 test-docstrings	tests/test_trace_core_substrate.py	32
 test-docstrings	tests/test_trace_core_substrate.py	52
 test-docstrings	tests/test_trace_field_invariant.py	10
+test-docstrings	tests/test_track_callback_env_config.py	34.2
 test-docstrings	tests/test_track_collector_embedding_budget.py	21
 test-docstrings	tests/test_track_explorer_gate_rows.py	124
 test-docstrings	tests/test_track_explorer_gate_rows.py	128,
@@ -9270,6 +9243,8 @@ test-docstrings	tests/test_transforms_lib_projection.py	12
 test-docstrings	tests/test_transforms_lib_projection.py	64,
 test-docstrings	tests/test_transforms_lib_real_models.py	10
 test-docstrings	tests/test_transforms_lib_real_models.py	11
+test-docstrings	tests/test_transforms_lib_real_models.py	50
+test-docstrings	tests/test_transforms_lib_real_models.py	64
 test-docstrings	tests/test_transforms_lib_srp.py	10
 test-docstrings	tests/test_transforms_lib_srp.py	13
 test-docstrings	tests/test_transforms_lib_srp.py	32
@@ -9281,9 +9256,7 @@ test-docstrings	tests/test_treescope_cards_truncation.py	16
 test-docstrings	tests/test_treescope_cards_truncation.py	32
 test-docstrings	tests/test_tuple_subclass_ctor_guard.py	11.7
 test-docstrings	tests/test_tuple_subclass_ctor_guard.py	12
-test-docstrings	tests/test_tviz_bridge.py	14
 test-docstrings	tests/test_tviz_realmodel.py	14
-test-docstrings	tests/test_tviz_receipt_effects.py	32
 test-docstrings	tests/test_tviz_records.py	12
 test-docstrings	tests/test_tviz_records.py	15
 test-docstrings	tests/test_tviz_records.py	16
@@ -9557,7 +9530,6 @@ test-names	tests/real_model/r1/test_circ3_induction_real.py	32_
 test-names	tests/real_model/r1/test_circ3_induction_real.py	64_
 test-names	tests/real_model/r1/test_realism_moe_ssm_video.py	130
 test-names	tests/real_model/r1/test_realism_pretrained_core.py	18_
-test-names	tests/test_ag1_attribution_graph.py	32_
 test-names	tests/test_attrib_methods_captum_ledger.py	121_
 test-names	tests/test_attrib_methods_captum_ledger.py	18_
 test-names	tests/test_attrib_methods_realmodel.py	121_
@@ -9719,6 +9691,7 @@ test-names	tests/test_migration_pages_executed.py	216_
 test-names	tests/test_modelexplorer_real.py	18_
 test-names	tests/test_modelexplorer_real.py	50_
 test-names	tests/test_module_held_tensor_sources.py	200
+test-names	tests/test_netron_export_packet.py	18_
 test-names	tests/test_netron_export_serve.py	10_
 test-names	tests/test_neuro_pkg_datasets.py	16_
 test-names	tests/test_neuro_pkg_datasets.py	32_
@@ -9728,9 +9701,9 @@ test-names	tests/test_neuro_pkg_rdms.py	15_
 test-names	tests/test_neuro_pkg_rdms.py	24_2_
 test-names	tests/test_neuro_pkg_rdms.py	56_3_
 test-names	tests/test_numbers_truth_execution.py	18
+test-names	tests/test_numbers_truth_external_pins.py	18_
 test-names	tests/test_obs_substrate_kernels.py	16_
 test-names	tests/test_obs_substrate_kernels.py	32_
-test-names	tests/test_obs_substrate_kernels.py	64
 test-names	tests/test_onebackward_core.py	15
 test-names	tests/test_onebackward_edgeplumbing.py	10_
 test-names	tests/test_onebackward_realmodel.py	18
@@ -9817,7 +9790,6 @@ test-names	tests/test_snoop_real_model.py	18_
 test-names	tests/test_stats_trajectory.py	64
 test-names	tests/test_stoch_edits_population.py	32
 test-names	tests/test_subspace_spec_portable.py	32_
-test-names	tests/test_summary.py	18
 test-names	tests/test_surgery_live_bind.py	68
 test-names	tests/test_surgery_live_regions.py	50_
 test-names	tests/test_surgery_visuals_realism.py	50_
@@ -9874,6 +9846,7 @@ test-names	tests/test_trackers_sinks_callbacks.py	100_
 test-names	tests/test_transforms_lib_fidelity.py	14_
 test-names	tests/test_transforms_lib_projection.py	11_
 test-names	tests/test_transforms_lib_projection.py	64_
+test-names	tests/test_transforms_lib_real_models.py	50_
 test-names	tests/test_transforms_lib_srp.py	10_
 test-names	tests/test_transforms_lib_srp.py	32
 test-names	tests/test_transforms_lib_srp.py	64_

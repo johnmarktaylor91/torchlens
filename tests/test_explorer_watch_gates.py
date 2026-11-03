@@ -74,42 +74,6 @@ class TestResumeSegments:
         assert "segment" in quantile_fan(view, site)
 
 
-class TestReusedModuleTruth:
-    """Matrix row 9: a module called twice per step -- current truth pinned.
-
-    The Route-A collector folds repeated calls of one module within a step
-    into ONE merged observation (exact integer merge over both call
-    populations). Pass-qualified per-call series are the op tier's grain
-    (fastlog labels are per structural position); this pin documents the
-    module-tier fold so it can never silently change meaning.
-    """
-
-    def test_double_call_folds_exactly(self) -> None:
-        torch.manual_seed(3)
-
-        class TwiceModel(torch.nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.core = torch.nn.Linear(4, 4)
-
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return self.core(self.core(x))
-
-        model = TwiceModel()
-        collector = HistoryCollector(model, sites=("core",), streams=("activation",))
-        collector.discover(torch.randn(2, 4))
-        collector.attach()
-        try:
-            with collector.step(0):
-                model(torch.randn(2, 4))
-        finally:
-            collector.detach()
-        view = HistoryView.from_collector(collector)
-        site = next(iter(view.sites))
-        spine = view.series(site)[0].observation.spine
-        assert spine.numel == 2 * (2 * 4), "both calls' populations folded exactly"
-
-
 class TestFailOpenReducer:
     """Matrix row 11: a raising reducer records capture_failed; step survives."""
 

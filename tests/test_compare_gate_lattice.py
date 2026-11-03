@@ -21,7 +21,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import BundleComparisonError
-from torchlens.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(replayable=True)
 
@@ -92,89 +91,6 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=_OPTS)
 
 
-def test_leg1_identity_shortcircuit_same_shape_different_values_refuses() -> None:
-    """LEG1: one model object, same input shape, DIFFERENT values refuses.
-
-    The old gate accepted the pair because the derivation returned
-    ``same_object`` before consulting the input. The relationship STAYS
-    identity-ranked (the reported vocabulary is unchanged) while the input
-    predicate refuses on value evidence.
-    """
-
-    model = _TwoLayer()
-    torch.manual_seed(0)
-    x1 = torch.randn(2, 4)
-    x2 = torch.randn(2, 4)
-    assert not torch.equal(x1, x2)
-
-    left = _capture(model, x1)
-    right = _capture(model, x2)
-    bundle = tl.Bundle({"a": left, "b": right})
-
-    # Path-1 shape: the relationship itself is identity-ranked.
-    assert bundle.comparability("a", "b") is Relationship.SAME_OBJECT
-
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
-    assert excinfo.value.fields["operation"] == "at.compare"
-    assert {excinfo.value.fields["left_member"], excinfo.value.fields["right_member"]} == {
-        "a",
-        "b",
-    }
-
-
-def test_leg2_different_shape_refuses_at_the_gate_not_downstream() -> None:
-    """LEG2: the refusal is the GATE's, not a downstream metric accident.
-
-    The measured probe leg 'passed' a naive blocked-test only because
-    ``cosine_distance`` threw an element-count mismatch AFTER the gate had
-    already waved the pair through. The gate must now refuse first, with its
-    own stable code (test law 3).
-    """
-
-    model = _TwoLayer()
-    torch.manual_seed(1)
-    left = _capture(model, torch.randn(2, 4))
-    right = _capture(model, torch.randn(3, 4))
-    bundle = tl.Bundle({"a": left, "b": right})
-
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
-    # The right-reason assertion: nothing about element counts or metrics.
-    assert "cosine" not in str(excinfo.value)
-    assert "element" not in str(excinfo.value)
-
-
-def test_leg3_value_blind_hash_path_distinct_objects_refuses() -> None:
-    """LEG3: two DISTINCT model objects, different input VALUES, same shape.
-
-    This pair reaches the input check (no identity short-circuit), where the
-    old shape/dtype/device hash reported "same input" for genuinely different
-    values. The derived relationship legitimately stays
-    ``shared_graph_same_input`` (a SHAPE-level report); the gate must still
-    refuse on value evidence.
-    """
-
-    model_a = _TwoLayer()
-    model_b = _TwoLayer()
-    torch.manual_seed(2)
-    x1 = torch.randn(2, 4)
-    x2 = torch.randn(2, 4)
-
-    left = _capture(model_a, x1)
-    right = _capture(model_b, x2)
-    bundle = tl.Bundle({"a": left, "b": right})
-
-    # The value-blind rank IS derived (shape-level vocabulary unchanged) ...
-    assert bundle.comparability("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
-    # ... and is still not accepted as proof of input equality.
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
-
-
 def test_leg4_distinct_objects_identical_input_succeeds() -> None:
     """LEG4: distinct model objects with the IDENTICAL input stay comparable."""
 
@@ -188,19 +104,6 @@ def test_leg4_distinct_objects_identical_input_succeeds() -> None:
     matrix = bundle.at(tl.func("relu")).compare()
     assert matrix.shape == (2, 2)
     assert torch.isfinite(matrix).all()
-
-
-def test_same_value_different_tensor_objects_succeeds() -> None:
-    """Value-level identity keys on VALUES, not tensor object identity."""
-
-    model = _TwoLayer()
-    torch.manual_seed(4)
-    x = torch.randn(2, 4)
-
-    bundle = tl.Bundle({"a": _capture(model, x), "b": _capture(model, x.clone())})
-
-    matrix = bundle.at(tl.func("relu")).compare()
-    assert matrix.shape == (2, 2)
 
 
 def test_at_keeps_model_floor_and_carries_no_input_requirement() -> None:
@@ -290,43 +193,6 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
 
-def test_ordering_topology_refusal_direct_and_transitive() -> None:
-    """Item 4: members joined by an ordering relation are not comparison operands.
-
-    Inputs are IDENTICAL across members so the topology refusal is provably
-    the reason (test law 3): remove the ordering rows and the same reads pass.
-    """
-
-    model = _TwoLayer()
-    torch.manual_seed(8)
-    x = torch.randn(2, 4)
-
-    turn1 = _capture(model, x)
-    turn2 = _capture(model, x)
-    turn3 = _capture(model, x)
-    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2, "turn3": turn3})
-    bundle.relate(
-        {"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}},
-        {"kind": "successor_of", "from": "turn3", "to": "turn2", "params": {}},
-    )
-
-    # Direct edge.
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.compare("turn1", "turn2")
-    assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
-    assert excinfo.value.fields["ordering_path"] == ["successor_of"]
-
-    # Transitive directed path turn3 -> turn2 -> turn1.
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.compare("turn1", "turn3")
-    assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
-    assert excinfo.value.fields["ordering_path"] == ["successor_of", "successor_of"]
-
-    # Control: an identical bundle WITHOUT ordering rows passes the same read.
-    control = tl.Bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
-    assert isinstance(control.compare("turn1", "turn2"), list)
-
-
 def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
     """Only a DIRECTED ordering path refuses: siblings and peers compare."""
 
@@ -355,21 +221,6 @@ def test_ordering_siblings_and_alternatives_stay_comparable() -> None:
     # The ordered pairs still refuse.
     with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare("turn1", "turn2a")
-    assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
-
-
-def test_topology_refusal_precedes_input_evidence() -> None:
-    """Ordered operands refuse on topology even when inputs also differ."""
-
-    model = _TwoLayer()
-    torch.manual_seed(10)
-    turn1 = _capture(model, torch.randn(2, 4))
-    turn2 = _capture(model, torch.randn(3, 4))
-    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2})
-    bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
-
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.compare("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
 

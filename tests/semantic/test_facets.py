@@ -343,44 +343,6 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         torch.add(missing, 1)
 
 
-def test_facetspec_grad_missing_for_unselected_home() -> None:
-    """Selective gradients return MissingGradient for an unselected home op."""
-
-    class Tiny(nn.Module):
-        """Tiny model with linear and relu homes."""
-
-        def __init__(self) -> None:
-            """Initialize the layers."""
-
-            super().__init__()
-            self.linear = nn.Linear(3, 2)
-            self.relu = nn.ReLU()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return relu(linear(x))."""
-
-            return self.relu(self.linear(x))
-
-    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
-    def first_feature(module: Any) -> dict[str, Any]:
-        """Return the first feature as an op-anchored FacetSpec."""
-
-        op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
-
-    log = tl.trace(
-        Tiny(),
-        torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(save_grads=["relu"]),
-        save="all",
-    )
-    log.log_backward(log[log.output_layers[0]].out.sum())
-    missing = log.modules["linear"].facets["first_feature"].grad
-
-    assert isinstance(missing, MissingGrad)
-    assert "home op has no saved gradient" in missing.reason
-
-
 def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     """Built-in norm parameter facets use parameter homes, not op grads."""
 

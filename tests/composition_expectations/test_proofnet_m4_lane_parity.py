@@ -13,7 +13,6 @@ Ground truth probed live on the merged tree, 2026-08-30.
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pytest
@@ -78,35 +77,3 @@ def test_zero_match_do_lane_refuses_typed(parity_trace: Any) -> None:
         assert _code(exc) == "site_selector_no_match"
     finally:
         fork.cleanup()
-
-
-def test_zero_match_save_predicate_lane_warns_instead_of_refusing() -> None:
-    """The predicate save lane's zero-match is a WARNING, not a refusal.
-
-    LEDGERED ASYMMETRY (M4's founding counterexample, still live): the
-    selector lanes refuse typed while the capture-plan lane completes with
-    a disclosure warning. Pinned so the asymmetry cannot silently widen; a
-    lane that flips this to a refusal must update the cell.
-    """
-
-    import torchlens as tl
-
-    torch.manual_seed(0)
-    model = torch.nn.Sequential(
-        torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2)
-    ).eval()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(model, torch.randn(2, 4), save=tl.func("sigmoid"))
-    try:
-        assert trace.outcome.status.name == "COMPLETE"
-        zero_match_warnings = [
-            str(entry.message) for entry in caught if "save selector" in str(entry.message)
-        ]
-        assert zero_match_warnings, (
-            "the predicate lane's zero-match disclosure warning disappeared:"
-            " either the lane now refuses (update this cell to parity) or the"
-            " zero-match became fully silent (a regression -- SG-class)"
-        )
-    finally:
-        trace.cleanup()

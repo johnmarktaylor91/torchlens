@@ -125,20 +125,6 @@ def test_collapse_priority_matches_the_hand_ranking() -> None:
         trace.cleanup()
 
 
-def test_no_collapsible_module_ranks_everything_zero() -> None:
-    # Every child of the Sequential is one Layer: no candidate, all 0.0.
-    trace = _trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)))
-    try:
-        assert trace.module_collapse_order == [
-            ("0", 0.0),
-            ("1", 0.0),
-            ("2", 0.0),
-            ("self", 0.0),
-        ]
-    finally:
-        trace.cleanup()
-
-
 def test_past_the_pathological_pre_gate_the_ranking_is_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

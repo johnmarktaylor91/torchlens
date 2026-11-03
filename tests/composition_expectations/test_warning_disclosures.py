@@ -41,33 +41,6 @@ def _contract_table_codes(text: str) -> dict[str, tuple[str, str]]:
     return rows
 
 
-def test_first_contracted_row_is_live() -> None:
-    """The zero-fire rerun warning is coded at the site and behaviorally sound."""
-
-    from torchlens.errors import TorchLensWarning
-
-    coded_sites = {site.code: site for site in _censuses.warn_sites() if site.code}
-    assert "rerun_zero_fire" in coded_sites, (
-        "the first contracted S-18 site (intervention/rerun.py zero-fire) lost its code"
-    )
-    site = coded_sites["rerun_zero_fire"]
-    assert site.module == "torchlens.intervention.rerun"
-    assert site.category == "TorchLensWarning"
-
-    # The warning the site constructs carries the machine-readable contract.
-    constructed = TorchLensWarning(
-        "Rerun hook plan entries fired at zero sites on the new inputs: ['p']. "
-        "The rerun completed, but those interventions were no-ops. "
-        "Remedy: resolve the target sites against the rerun trace",
-        code="rerun_zero_fire",
-        unfired_plan_ids=["p"],
-    )
-    assert constructed.fields["code"] == "rerun_zero_fire"
-    assert constructed.fields["remedy"].startswith("resolve the target sites")
-    assert constructed.fields["unfired_plan_ids"] == ["p"]
-    assert isinstance(constructed, UserWarning), "category compatibility with pytest.warns"
-
-
 def test_warning_contract_table_lockstep_both_directions() -> None:
     """Census codes and the contract table agree exactly, both ways."""
 

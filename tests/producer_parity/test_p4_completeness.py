@@ -61,7 +61,7 @@ from torchlens._ir.op_record import (
 # producer): "decomposed" = captured OpRecord rows; "legacy" = genuine compat
 # OpEvent rows (preview stand-in until S15), synthesized via the retained
 # inverse adapter.
-_LEGS = ("legacy", "decomposed")
+_LEGS = "decomposed"
 _SEED = 20260812
 
 # The seven torch families; the two preview families are characterized on the

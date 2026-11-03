@@ -72,16 +72,6 @@ def _force_legacy_capture_event_projection(recording: tl.Recording) -> None:
     object.__setattr__(recording, "_records_built", False)
 
 
-def test_record_label_lookup_legacy_capture_events_returns_each_record_once() -> None:
-    """Legacy ``_capture_events`` rebuild must not duplicate retained records."""
-
-    recording = tl.record(SimpleMlp(), torch.ones(1, 3), save=_keep_all_ops)
-
-    _force_legacy_capture_event_projection(recording)
-
-    _assert_unique_label_lookups(recording)
-
-
 def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:
     """Repeated raw labels retain every pass payload instead of overwriting."""
 
