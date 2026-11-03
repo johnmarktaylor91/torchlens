@@ -116,3 +116,5 @@ Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnabl
 Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/save.py` delegates decoding there.
 
 Lazy payload index derivation and BlobRef lookup live with `LazyActivationRef` in `lazy.py`. Resave and nested materialization derive the index from validated format 3 record cells, and resave uses the same codec/chunk writer as eager payloads.
+
+`format3/_record_refs.py` owns the closed row-reference resolution pass used by the reader.
