@@ -393,6 +393,7 @@ def test_transform_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
+@pytest.mark.smoke
 def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> None:
     """``Recording.options`` returns the live transform; a bundle keeps a scrubbed repr.
 

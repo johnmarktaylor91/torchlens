@@ -141,7 +141,6 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
     assert diverged.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> None:
     """A subtree under an OPAQUE enum key REFUSES the runnable save typed, never skips.
 
@@ -254,6 +253,7 @@ def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> Non
         tl.load(path).run(inputs={"args": [x], "kwargs": {"add": False}})
 
 
+@pytest.mark.smoke
 def test_live_mixed_positional_keyword_inputs_bind_and_diverge() -> None:
     """Live ``run`` accepts the same mixed-input spelling as loaded runnable traces."""
 

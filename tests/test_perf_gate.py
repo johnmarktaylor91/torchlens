@@ -360,7 +360,6 @@ def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
     assert refreshed["shared:replacement"] is replacement
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("dtype", "shape"),
     [

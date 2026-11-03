@@ -155,7 +155,6 @@ def test_callable_digest_folds_nested_code_structurally() -> None:
     assert base["digest"] != edited["digest"]
 
 
-@pytest.mark.smoke
 def test_resume_with_a_comprehension_transform_completes(tmp_path: Path) -> None:
     """End to end (p4c): the once-refused ordinary transform now resumes."""
 

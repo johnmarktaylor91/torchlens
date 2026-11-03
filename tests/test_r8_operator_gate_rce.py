@@ -226,7 +226,6 @@ def test_decode_literal_admits_torch_device() -> None:
     assert _decode_literal(LiteralTorchSymbol("torch.device(cpu)")) == torch.device("cpu")
 
 
-@pytest.mark.smoke_cells("test_decode_literal_device_malformed_payload_typed[torch.device()]")
 @pytest.mark.parametrize(
     "qualname",
     [

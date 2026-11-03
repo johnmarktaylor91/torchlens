@@ -170,7 +170,6 @@ class TestSiteMatrixRoutes:
 class TestAdapters:
     """Stub-tested adapter wiring (optional libraries absent by design)."""
 
-    @pytest.mark.smoke
     def test_rsatoolbox_per_site_descriptors(self, artifact, monkeypatch) -> None:
         """The Dataset carries site, shaping, ids, and the verdict."""
 
@@ -205,7 +204,6 @@ class TestAdapters:
         ]
         assert file_side.descriptors["input_preprocessing_verdict"] == "unknown"
 
-    @pytest.mark.smoke
     def test_xarray_data_array_routes_identical(self, artifact, monkeypatch) -> None:
         """DataArray wiring: dims, coords, attrs, route equality."""
 

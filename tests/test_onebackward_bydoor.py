@@ -65,7 +65,6 @@ class TestSiteGrainRanking:
                 "a site-grain win must select the complete site mask"
             )
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_top_fraction_and_largest_false(self) -> None:
         trace = _trace()
@@ -77,7 +76,6 @@ class TestSiteGrainRanking:
         (winner,) = [entry for entry in bottom if entry.num_selected]
         assert winner.key == lowest[1]
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_threshold_site_grain(self) -> None:
         trace = _trace()
@@ -109,7 +107,6 @@ class TestSiteGrainRanking:
 class TestElementGrainRanking:
     """Element-grain: dense values rank globally; k counts elements."""
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_top_k_elements(self) -> None:
         trace = _trace()
@@ -117,7 +114,6 @@ class TestElementGrainRanking:
         resolved = trace[tl.top_k(k=3, by=table)]
         assert sum(entry.num_selected for entry in resolved) == 3
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_element_threshold(self) -> None:
         trace = _trace()
@@ -149,7 +145,6 @@ class TestByDoorContract:
         with pytest.raises(TraceCleanedUpError):
             trace[selection]
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_multi_target_requires_explicit_fold(self) -> None:
         trace = _trace()
@@ -171,7 +166,6 @@ class TestByDoorContract:
         folded = trace[tl.top_k(k=1, by=folded_table)]
         assert any(entry.num_selected for entry in folded)
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_explicit_population_not_covered(self) -> None:
         trace = _trace()
@@ -188,7 +182,6 @@ class TestByDoorContract:
             trace[tl.top_k(k=1, by=table, within="linear_2_3")]
         assert excinfo.value.fields["code"] == "population_not_covered"
 
-    @pytest.mark.smoke
     def test_string_by_still_works(self) -> None:
         """The existing by='value'/'abs' door is untouched."""
 
@@ -202,7 +195,6 @@ class TestByDoorContract:
 class TestCompositionRows:
     """M(reads) section 6 composition rows at toy scale."""
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_table_selection_composes_with_algebra(self) -> None:
         trace = _trace()
@@ -213,7 +205,6 @@ class TestCompositionRows:
         narrowed = tl.top_k(k=2, by=table) - tl.units("gelu_1_2", [(0, 0)])
         assert trace[narrowed] is not None
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_closed_loop_read_select_intervene_reread(self) -> None:
         """read -> top-k -> zero_ablate -> re-score: the R16 flagship loop."""
@@ -234,7 +225,6 @@ class TestCompositionRows:
         assert len(rescored) > 0
         assert rescored.trace is fork
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_within_and_frozen_on_one_call(self) -> None:
         """Composition row: within= x frozen= on one read."""
