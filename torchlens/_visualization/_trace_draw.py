@@ -249,6 +249,12 @@ def animate(
     return drawing
 
 
+def partial_drawing(dot: str) -> Drawing:
+    """Body of ``PartialTrace.draw``'s return: the failed-capture DOT as a ``Drawing``."""
+
+    return Drawing(dot=dot)
+
+
 def preview_fastlog(
     trace: Trace,
     predicate: Callable[..., Any] | None = None,
@@ -317,6 +323,7 @@ __all__ = [
     "animate",
     "draw",
     "last_run_records",
+    "partial_drawing",
     "preview_fastlog",
     "show",
     "to_dagua_graph",

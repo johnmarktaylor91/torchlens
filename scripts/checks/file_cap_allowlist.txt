@@ -69,7 +69,7 @@ torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	109
 torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
-torchlens/_constants.py	1385
+torchlens/_constants.py	1445
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	63
 torchlens/_data_classes/_lookup_keys.py::_get_lookup_help_str	63
@@ -1337,10 +1337,10 @@ torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1299
+torchlens/recording/types.py	1297
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	72
-torchlens/recording/types.py::Recording.to_trace	172
+torchlens/recording/types.py::Recording.to_trace	171
 torchlens/repgeom/_annotation_gate.py::_commit_annotation_tensors	66
 torchlens/repgeom/_geometry.py	1208
 torchlens/repgeom/_geometry.py::classical_mds	117
