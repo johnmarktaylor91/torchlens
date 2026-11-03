@@ -198,18 +198,17 @@ class AtenOp:
 
     @property
     def gpu_kernels(self) -> tuple[KernelLaunch, ...]:
-        """Return device events correlated to one primitive row.
+        """The GPU kernel launches this ATen call made, matched by the profiler's correlation id.
 
-        Parameters
-        ----------
-        row
-            Primitive ATen row.
+        Each ``KernelLaunch`` row is a kernel the profiler saw launched while this
+        ATen call ran on the device. When kernel telemetry was off for the trace,
+        the value is one row with ``attribution_status="unavailable"``, never an
+        empty tuple. Reading it needs the optional kernel-telemetry adapter.
 
         Returns
         -------
         tuple[KernelLaunch, ...]
-            Correlated rows, or one typed ``unavailable`` disclosure when no
-            telemetry session has been bound.
+            The matched kernel launches, or one ``unavailable`` row.
         """
 
         telemetry = importlib.import_module(_KERNEL_TELEMETRY_MODULE)
