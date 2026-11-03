@@ -842,7 +842,7 @@ def test_computed_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="computed facets are read-only"):
-        log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
+        log.fork("computed_refuse")._attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
 
 
 def test_in_place_or_view_version_facet_write_refuses() -> None:
@@ -878,7 +878,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
-        log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+        log.fork("unsafe_refuse")._attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
 
 
 def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
