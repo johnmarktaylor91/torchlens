@@ -770,6 +770,62 @@
 
 <!-- version list -->
 
+## v2.36.3 (2026-10-31)
+
+### Bug Fixes
+
+- **io**: Write metadata tensors through a TorchLens-owned reduction
+  ([`0370e28`](https://github.com/johnmarktaylor91/torchlens/commit/0370e2869d67ff19e9e1b71e4043c7393806b7ef))
+
+Plain tensors stored in saved metadata (annotation values, such as those logged with
+  tl.observers.log_value, and small raw inputs and outputs under the default
+  save_raw_input="small") are now written as raw bytes with dtype, shape, requires_grad and device,
+  and rebuilt on load with strict checks. A file saved by 2.36.2 or earlier whose metadata embeds
+  such a tensor no longer loads and refuses with a typed error naming the remedy: re-run the capture
+  with this release and save again, or load the file with the release that wrote it, replace the
+  tensors in trace.annotations with plain values, set trace.save_raw_input = False and
+  trace.save_raw_output = False, and save. Files without a metadata tensor are unaffected.
+
+- **io**: Give the embedded-tensor load refusal a remedy this release can follow
+  ([`503d63a`](https://github.com/johnmarktaylor91/torchlens/commit/503d63a8dd96161fd37405eb1adb018d803867b0))
+
+The refusal for such a file names the file shape and the two remedies above, instead of asking
+  for a re-save with the release that cannot read the file.
+
+- **io**: Build the inline-tensor dtype table on first load, without probe warnings
+  ([`e195733`](https://github.com/johnmarktaylor91/torchlens/commit/e195733e5dbbd818d51137d670c53bd072007930))
+
+The table was built at import by allocating one element of each torch dtype, and torch warns for
+  some of them, so the first capture of a session showed two UserWarnings. It is now built on the
+  first load that needs it, with those warnings kept to the probe.
+
+- **streaming**: Number save-time blobs past the capture stream's ids
+  ([`ae83806`](https://github.com/johnmarktaylor91/torchlens/commit/ae838062d7b868be8d59d33d0016399f3f186e45))
+
+With storage=tl.to_disk, an op streamed during capture and then pruned as an orphan shifted the
+  save-time blob numbering, so the model output could silently read another op's tensor, live and
+  after tl.load. Save-time ids now start past the stream's ids, and a colliding id is refused
+  instead of skipped.
+
+- **capture**: Identify TorchLens frames by normalised filename so code context does not depend on the import path
+  ([`647ff3b`](https://github.com/johnmarktaylor91/torchlens/commit/647ff3b83164eeaefc3318b90040d8310dd3abdb))
+
+When torchlens was imported through a relative sys.path entry such as PYTHONPATH=., TorchLens's
+  own frames leaked into every op's code context. Frame filters now compare normalised filenames.
+
+- **capture**: Key the package-frame memo by filename, since equal code objects can come from different files
+  ([`a96dac2`](https://github.com/johnmarktaylor91/torchlens/commit/a96dac21fc56881c3efd2cc202122fe46c63c4e5))
+
+
+## v2.36.2 (2026-10-31)
+
+### Bug Fixes
+
+- **accessor**: `trace.ops` resolves final op labels before raw spellings, so a raw spelling that equals another op's final label no longer returns the wrong op once loop grouping folds a reused module's calls into one multi-pass layer. ([`31da4f0`](https://github.com/johnmarktaylor91/torchlens/commit/31da4f0f0e2fa18920ff84da6c8bc8a6429cf0ee))
+- **layer**: `Layer.do`, `set` and `attach_hooks` address every pass of a multi-pass layer instead of refusing with `SiteAmbiguityError` on a module reused in a loop. ([`274d283`](https://github.com/johnmarktaylor91/torchlens/commit/274d2837711b6645685e9b54a661e55a56e008b7))
+- **backward**: Each `GradFn` resolves to its own pass on a multi-pass layer, so live backward hooks, forward selectors against a `GradFn` site and raw-index, module-address and checkpoint-witness lookups read the right pass. ([`8f7fb1d`](https://github.com/johnmarktaylor91/torchlens/commit/8f7fb1db32a459dfeb769a851009823848ae8452))
+
+
 ## v2.36.1 (2026-10-13)
 
 ### Bug Fixes

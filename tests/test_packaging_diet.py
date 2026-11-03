@@ -401,10 +401,10 @@ def test_release_job_python_stack_is_hash_locked() -> None:
 
 #: Security floors for the token-bearing release lock: package -> (first fixed
 #: release, advisory). A regeneration that drops one fails here, not only in the
-#: pip-audit job, which runs on pull requests.
+#: pip-audit job, which runs on pull requests. The lock holds only the builder
+#: (build and setuptools) since the release workflow stopped computing versions,
+#: so the certifi and GitPython floors left with the tool that pulled them in.
 _RELEASE_LOCK_SECURITY_FLOORS = {
-    "certifi": ("2026.10.18", "GHSA-6q48-6c7w-9gw2"),
-    "gitpython": ("3.2.1", "GHSA-83vg-56qc-22m7"),
     "setuptools": ("84.1.0", "GHSA-xmj3-9gf7-h52w"),
 }
 
