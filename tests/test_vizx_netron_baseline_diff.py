@@ -245,3 +245,19 @@ def test_self_baseline_refuses(pair: tuple[tl.Trace, tl.Trace], tmp_path: Path) 
     with pytest.raises(tl.errors.InvalidArgumentError) as excinfo:
         tl.export.netron(subject, tmp_path / "self.json", baseline=subject)
     assert excinfo.value.fields["code"] == "differential_subject_is_reference"
+
+
+def test_diffed_artifact_passes_the_onnx_checker(
+    deep_pair: tuple[tl.Trace, tl.Trace], tmp_path: Path
+) -> None:
+    """Node metadataProps keep the artifact strict-parseable and checker-green."""
+
+    onnx = pytest.importorskip("onnx", reason="the netron contract needs onnx (test extra)")
+    json_format = pytest.importorskip("google.protobuf.json_format")
+    subject, reference = deep_pair
+    for granularity in ("module", "op", "rolled"):
+        path = tl.export.netron(
+            subject, tmp_path / f"{granularity}.json", granularity=granularity, baseline=reference
+        )
+        model = json_format.Parse(path.read_text(encoding="utf-8"), onnx.ModelProto())
+        onnx.checker.check_model(model, full_check=True)

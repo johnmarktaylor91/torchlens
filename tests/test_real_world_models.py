@@ -1781,3 +1781,1467 @@ def test_electra_small():
         ),
     )
     assert validate_forward_pass(model, [], model_inputs)
+
+
+@pytest.mark.slow
+def test_timm_volo():
+    """VOLO: outlooker attention — a distinct attention variant (not self-attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("volo_d1_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm-models", "volo_d1")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_tag_pyg():
+    """TAGConv: Topology Adaptive Graph Convolution (fixed polynomial)."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import TAGConv
+
+    class _TAGNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = TAGConv(8, 16, K=3)
+            self.conv2 = TAGConv(16, 4, K=3)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _TAGNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "tag_pyg")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_sgc_pyg():
+    """SGConv: Simple Graph Convolution (remove nonlinearities between layers)."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import SGConv
+
+    class _SGCNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = SGConv(8, 4, K=3)
+
+        def forward(self, x, edge_index):
+            return self.conv(x, edge_index)
+
+    model = _SGCNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "sgc_pyg")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_chebconv_pyg():
+    """ChebConv: Chebyshev spectral graph convolution."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import ChebConv
+
+    class _ChebNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = ChebConv(8, 16, K=3)
+            self.conv2 = ChebConv(16, 4, K=3)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _ChebNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "chebconv_pyg"),
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_tresnet():
+    """TResNet: training tricks for ResNet (anti-alias, SpaceToBatch)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("tresnet_m", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "tresnet_m")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_sequencer():
+    """Sequencer2D: LSTM-based token mixing for vision."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("sequencer2d_s", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "sequencer2d_s")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_nest():
+    """NesT: Nested Hierarchical Transformer (aggregation within blocks)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("nest_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "nest_tiny")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_fastvit():
+    """FastViT: reparameterizable hybrid CNN-transformer."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("fastvit_t8", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 256, 256)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "fastvit_t8")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_gcvit():
+    """GC-ViT: Global Context Vision Transformer."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("gcvit_xxtiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "gcvit_xxtiny")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_visformer():
+    """Visformer: vision-friendly transformer (spatial conv in early stages)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("visformer_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "visformer_tiny")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_pit():
+    """PiT: Pooling-based ViT (spatial token reduction via pooling)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("pit_ti_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "pit_ti_224")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_rexnet():
+    """ReXNet: rank expansion network (learned channel expansion ratios)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("rexnet_100", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "rexnet_100")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_repvgg_a0():
+    """RepVGG: reparameterizable VGG-style (multi-branch train, single inference)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("repvgg_a0", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "repvgg_a0")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_coatnet():
+    """CoAtNet: CNN + Transformer hybrid (conv early, attention late)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("coatnet_0_rw_224", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "coatnet_0")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_davit_tiny():
+    """DaViT: dual attention ViT (spatial + channel attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("davit_tiny", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "davit_tiny")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_nfnet_l0():
+    """NFNet: normalizer-free network (no batch norm)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("nfnet_l0", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "nfnet_l0")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_timm_convnextv2_atto():
+    """ConvNeXt v2: Global Response Normalization (GRN)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("convnextv2_atto", pretrained=False, num_classes=10).eval()
+    x = torch.rand(2, 3, 224, 224)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "convnextv2_atto")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.slow
+def test_rgcn_pyg():
+    """R-GCN: relational GCN with per-relation-type weights."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import RGCNConv
+
+    class _RGCNNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = RGCNConv(8, 16, num_relations=3)
+            self.conv2 = RGCNConv(16, 4, num_relations=3)
+
+        def forward(self, x, edge_index, edge_type):
+            x = torch.relu(self.conv1(x, edge_index, edge_type))
+            return self.conv2(x, edge_index, edge_type)
+
+    model = _RGCNNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    edge_type = torch.randint(0, 3, (10,))
+    model_input = (x, edge_index, edge_type)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "rgcn_pyg")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_eva02_small():
+    """EVA-02: scaled ViT with rotary position embeddings."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("eva02_small_patch14_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "eva02_small")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_resmlp_12():
+    """ResMLP: residual MLP with cross-token affine transforms."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("resmlp_12_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "resmlp_12")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_gmlp_s16():
+    """gMLP: gated MLP with spatial gating (no attention)."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("gmlp_s16_224", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "gmlp_s16")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_res2net50():
+    """Res2Net: hierarchical residual-like connections within a single block."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("res2net50_26w_4s", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "res2net50")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_graph_transformer_pyg():
+    """Graph Transformer via PyG TransformerConv: attention on graph."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import TransformerConv
+
+    class _GraphTransformerNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = TransformerConv(8, 4, heads=2, concat=True)
+            self.conv2 = TransformerConv(8, 4, heads=1, concat=False)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _GraphTransformerNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graph_transformer_pyg"),
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_gin_pyg():
+    """GIN via PyG GINConv: maximally powerful under WL test."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import GINConv
+
+    class _GINNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            mlp1 = torch.nn.Sequential(
+                torch.nn.Linear(8, 16),
+                torch.nn.ReLU(),
+                torch.nn.Linear(16, 16),
+            )
+            self.conv1 = GINConv(mlp1)
+            mlp2 = torch.nn.Sequential(
+                torch.nn.Linear(16, 16),
+                torch.nn.ReLU(),
+                torch.nn.Linear(16, 4),
+            )
+            self.conv2 = GINConv(mlp2)
+
+        def forward(self, x, edge_index):
+            x = self.conv1(x, edge_index)
+            return self.conv2(x, edge_index)
+
+    model = _GINNet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "gin_pyg")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_graphsage_pyg():
+    """GraphSAGE via PyG SAGEConv: neighborhood sampling + mean aggregation."""
+    pytest.importorskip("torch_geometric")
+    from torch_geometric.nn import SAGEConv
+
+    class _SAGENet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = SAGEConv(8, 16)
+            self.conv2 = SAGEConv(16, 4)
+
+        def forward(self, x, edge_index):
+            x = torch.relu(self.conv1(x, edge_index))
+            return self.conv2(x, edge_index)
+
+    model = _SAGENet().eval()
+    x = torch.rand(10, 8)
+    edge_index = torch.tensor(
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 0], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]],
+        dtype=torch.long,
+    )
+    model_input = (x, edge_index)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "graph-neural-networks", "graphsage_pyg"),
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_focalnet_tiny_srf():
+    """FocalNet: focal modulation replaces attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("focalnet_tiny_srf", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "focalnet_tiny_srf")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_twins_svt_small():
+    """Twins SVT: spatially alternating local-global attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("twins_svt_small", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "twins_svt_small")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_pvt_v2_b0():
+    """PVT v2: Pyramid Vision Transformer with spatial-reduction attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("pvt_v2_b0", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "pvt_v2_b0")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_crossvit_tiny_240():
+    """CrossViT: dual-branch multi-scale patches with cross-attention."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("crossvit_tiny_240", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 240, 240)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "crossvit_tiny_240")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_efficientnetv2_s():
+    """EfficientNet V2: fused MBConv in early stages."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("efficientnetv2_s", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "efficientnetv2_s")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_hrnet_w18():
+    """HRNet: parallel multi-resolution branches maintained throughout."""
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("hrnet_w18", pretrained=False).eval()
+    model_input = torch.rand(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "hrnet_w18")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_taskonomy(default_input1):
+    visualpriors = pytest.importorskip("visualpriors")
+    model = visualpriors.taskonomy_network.TaskonomyNetwork()
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "taskonomy", "taskonomy")
+        ),
+    )
+    assert validate_forward_pass(model, default_input1)
+
+
+def test_lightning():
+    L = pytest.importorskip("lightning")
+    import torch.nn as nn
+
+    class OneHotAutoEncoder(L.LightningModule):
+        def __init__(self):
+            super().__init__()
+            self.model = nn.Sequential(
+                nn.Linear(16, 4),
+                nn.ReLU(),
+                nn.Linear(4, 16),
+            )
+
+        def forward(self, x):
+            x_hat = self.model(x)
+            return nn.functional.mse_loss(x_hat, x)
+
+    model = OneHotAutoEncoder()
+    model_inputs = [torch.randn(2, 16)]
+
+    show_model_graph(
+        model,
+        model_inputs,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "lightning", "one-hot-autoencoder")
+        ),
+    )
+    assert validate_forward_pass(model, model_inputs)
+
+
+def test_qml():
+    qml = pytest.importorskip("pennylane")
+    n_qubits = 2
+    dev = qml.device("default.qubit", wires=n_qubits)
+
+    @qml.qnode(dev, diff_method="backprop")
+    def qnode(inputs, weights):
+        qml.RX(inputs[0][0], wires=0)
+        qml.RY(weights, wires=0)
+        return [qml.expval(qml.PauliZ(0)), qml.expval(qml.PauliZ(1))]
+
+    weight_shapes = {"weights": 1}
+    qlayer = qml.qnn.TorchLayer(qnode, weight_shapes)
+
+    clayer_1 = torch.nn.Linear(2, 2)
+    clayer_2 = torch.nn.Linear(2, 2)
+    softmax = torch.nn.Softmax(dim=1)
+    layers = [clayer_1, qlayer, clayer_2, softmax]
+    model = torch.nn.Sequential(*layers)
+    model_inputs = torch.rand(1, 2, requires_grad=False)
+
+    show_model_graph(
+        model,
+        model_inputs,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "quantum", "qml")
+        ),
+    )
+    assert validate_forward_pass(model, model_inputs)
+
+
+def test_styletts():
+    try:
+        from StyleTTS.models import TextEncoder
+    except ModuleNotFoundError:
+        pytest.skip("StyleTTS not available")
+
+    model = TextEncoder(3, 3, 3, 100)
+    model.eval()
+    tokens = torch.tensor([[3, 0, 1, 2, 0, 2, 2, 3, 1, 4]])
+    input_lengths = torch.ones(1, dtype=torch.long) * 10
+    m = torch.ones(1, 10, dtype=torch.bool)
+    model_inputs = (tokens, input_lengths, m)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        show_model_graph(
+            model,
+            model_inputs,
+            seed=1,
+            rolled=False,
+            visualization=tl.options.VisualizationOptions(
+                container_path=opj(VIS_OUTPUT_DIR, "text-to-speech", "styletts_text_encoder"),
+            ),
+        )
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        assert validate_forward_pass(model, model_inputs, seed=1)
+
+
+@pytest.mark.slow
+def test_sentence_transformer():
+    sentence_transformers = pytest.importorskip("sentence_transformers")
+    model = sentence_transformers.SentenceTransformer("all-MiniLM-L6-v2")
+    transformer_model = model[0].auto_model
+    tokenizer = model.tokenizer
+    inputs = tokenizer("Hello world", return_tensors="pt", padding=True, truncation=True)
+    show_model_graph(
+        transformer_model,
+        [],
+        inputs,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "nlp-models", "sentence_transformer")
+        ),
+    )
+    assert validate_forward_pass(transformer_model, [], inputs)
+
+
+@pytest.mark.slow
+def test_conformer():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.Conformer(
+        input_dim=80,
+        num_heads=4,
+        ffn_dim=128,
+        num_layers=2,
+        depthwise_conv_kernel_size=31,
+    )
+    lengths = torch.tensor([50, 40])
+    model_input = torch.randn(2, 50, 80)
+    model_inputs = (model_input, lengths)
+    show_model_graph(
+        model,
+        model_inputs,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "conformer")
+        ),
+    )
+    assert validate_forward_pass(model, model_inputs)
+
+
+@pytest.mark.slow
+def test_deepspeech():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.DeepSpeech(3)
+    model_input = torch.randn(12, 2000, 3)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_deepspeech")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_audio_wav2vec2_base():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.wav2vec2_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wave2vec2_base")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_audio_hubert_base():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.hubert_base()
+    model_input = torch.randn(12, 2000)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        seed=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_hubert_base")
+        ),
+    )
+    assert validate_forward_pass(model, model_input, seed=1)
+
+
+@pytest.mark.heavy
+def test_audio_wav2letter():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.Wav2Letter()
+    model_input = torch.randn(1, 1, 2000)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_wav2letter")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_audio_conv_tasnet_base():
+    torchaudio = pytest.importorskip("torchaudio")
+    model = torchaudio.models.conv_tasnet_base()
+    model_input = torch.randn(6, 1, 3)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_conv_tasnet_base"),
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_seresnet152():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("seresnet152", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "seresnet152")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_xcit_tiny_24_p8_224():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("xcit_tiny_24_p8_224", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "xcit_tiny_24_p8_224")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_semnasnet_100():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("semnasnet_100", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "semnasnet_100")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_hardcorenas_f():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("hardcorenas_f", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "hardcorenas_f")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_edgenext_small():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("edgenext_small", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_edgenext_small")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_resnest14d():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("resnest14d", pretrained=False)
+    model_input = torch.randn(6, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_resnest14d")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_poolformer_s24():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("poolformer_s24", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_poolformer_s24")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_mixnet_m():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("mixnet_m", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_mixnet_m")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_ghostnet_100():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("ghostnet_100", pretrained=True)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_ghostnet_100")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_darknet21():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("darknet21", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_darknet21")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
+def test_timm_convit_base(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("convit_base", pretrained=True)
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_convit_base")
+        ),
+    )
+    assert validate_forward_pass(model, default_input1)
+
+
+@pytest.mark.slow
+@pytest.mark.big_memory  # SaveBudgetExceededError on the 16 GB GitHub runner (round 2, lane-L8-ci-fix)
+def test_timm_coat_mini(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.coat_mini()
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_coat_mini")
+        ),
+    )
+    assert validate_forward_pass(model, default_input1)
+
+
+@pytest.mark.slow
+# SaveBudgetExceededError on the 16 GB GitHub runner (5.25 GB retained against a 5.25 GB auto
+# budget; Weekly 37176706721, 2026-10-04); passes alone on a 125 GB worker.
+@pytest.mark.big_memory
+def test_timm_cait_s24_224(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.cait_s24_224()
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_cait_s24_224")
+        ),
+    )
+    assert validate_forward_pass(model, default_input1)
+
+
+@pytest.mark.slow
+def test_timm_adv_inception_v3(default_input1):
+    timm = pytest.importorskip("timm")
+    model = timm.models.adv_inception_v3(pretrained=True)
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "timm_adv_inception_v3")
+        ),
+    )
+    assert validate_forward_pass(model, default_input1)
+
+
+@pytest.mark.slow
+def test_mobilevit_xxs():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("mobilevitv2_050", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "mobilevitv2_050")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_ecaresnet101d():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("ecaresnet101d", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "ecaresnet101d")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_timm_gluon_resnext101_32x4d():
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("gluon_resnext101_32x4d", pretrained=False)
+    model_input = torch.randn(1, 3, 224, 224)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "timm", "gluon_resnext101_32x4d")
+        ),
+    )
+    assert validate_forward_pass(model, model_input)
+
+
+@pytest.mark.slow
+def test_cornet_rt():
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_rt()
+    model_input = torch.rand((6, 3, 224, 224)).to("cuda")
+    assert validate_forward_pass(model, model_input)
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=True,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth1"),
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=True,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth2"),
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=True,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=False,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth3"),
+        ),
+    )
+    show_model_graph(
+        model,
+        model_input,
+        rolled=True,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth3")
+        ),
+    )
+
+
+@pytest.mark.slow
+def test_cornet_r(default_input1):
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_r()
+    assert validate_forward_pass(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth3")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth3")
+        ),
+    )
+
+
+@pytest.mark.slow
+def test_cornet_s(default_input1):
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_s()
+    assert validate_forward_pass(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth3")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth3")
+        ),
+    )
+
+
+def test_cornet_z(default_input1):
+    cornet = pytest.importorskip("cornet")
+    model = cornet.cornet_z()
+    assert validate_forward_pass(model, default_input1)
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=1,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth1")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=2,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth2")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=False,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth3")
+        ),
+    )
+    show_model_graph(
+        model,
+        default_input1,
+        rolled=True,
+        depth=3,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth3")
+        ),
+    )

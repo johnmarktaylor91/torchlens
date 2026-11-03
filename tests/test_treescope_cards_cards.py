@@ -225,3 +225,21 @@ def test_sdpa_hint_fires_only_without_softmax() -> None:
 
     eager_log = tl.trace(EagerAttention(), torch.randn(2, 4, 8))
     assert sdpa_attention_hint(eager_log) is None
+
+
+def test_namespace_scan_excludes_history_names() -> None:
+    """F-G repair: the identity scan never picks `_`/history slots."""
+
+    ipython = pytest.importorskip("IPython")
+    shell = ipython.core.interactiveshell.InteractiveShell.instance()
+    target = object()
+    shell.user_ns.update(
+        {"_": target, "_3": target, "_i7": target, "_ih": [target], "mylog": target, "zz": target}
+    )
+    try:
+        resolved = resolve_copy_root(target)
+        # shortest-then-lexicographic among the SURVIVING names: "zz".
+        assert resolved.source == "namespace" and resolved.expression == "zz"
+    finally:
+        for name in ("_", "_3", "_i7", "mylog", "zz"):
+            shell.user_ns.pop(name, None)

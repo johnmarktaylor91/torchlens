@@ -184,3 +184,20 @@ def test_pil_import_failure_returns_false(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
     assert hf_bridge._is_hf_image_input(object()) is False
+
+
+@pytest.mark.slow
+def test_timm_model_uses_default_cfg_transform() -> None:
+    """timm models with ``default_cfg`` should use the timm resolver tier."""
+
+    import PIL.Image  # noqa: F401
+
+    pytest.importorskip("torchvision.transforms")
+    timm = pytest.importorskip("timm")
+    model = timm.create_model("resnet18", pretrained=False)
+
+    log = tl.trace(model, _pil_image(), save="none")
+
+    assert log.provenance.input_preprocessor is not None
+    assert log.provenance.input_preprocessor.source == "timm"
+    assert log.provenance.input_preprocessor.verified is True

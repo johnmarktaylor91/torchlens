@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.experimental import dagua
 
 
 class DictOutputModel(nn.Module):
@@ -250,3 +251,16 @@ def test_dagua_container_semantics_survive_multipass_layers() -> None:
         "container_kind": None,
         "container_role": None,
     }
+
+
+def test_dagua_graph_carries_container_semantic_attrs() -> None:
+    """Dagua bridge carries portable semantic container metadata."""
+    pytest.importorskip("dagua")
+
+    trace = _trace(DictOutputModel())
+    graph = dagua.trace_to_dagua_graph(trace)
+
+    assert "final_output:0:dict" in graph.container_group
+    assert "dict" in graph.container_kind
+    assert "a" in graph.container_role
+    assert "b" in graph.edge_container_role

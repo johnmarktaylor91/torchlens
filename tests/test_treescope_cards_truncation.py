@@ -11,10 +11,17 @@ payload.
 
 from __future__ import annotations
 
+import numpy as np
+import pytest
+import torch
+
 from torchlens.report._notebook._truncation import (
     CELL_BUDGET_DEFAULT,
     EDGE_ITEMS_DEFAULT,
     PER_AXIS_BUDGET_DEFAULT,
+    compute_truncated_shape,
+    infer_balanced_truncation,
+    truncate_tensor_with_mask,
 )
 
 #: The memo's measured fixture shapes plus edge shapes.
@@ -32,3 +39,43 @@ def test_budget_constants_are_the_autovisualizer_numbers() -> None:
     """Provenance pin: our budgets are ArrayAutovisualizer's, NOT render_array's."""
 
     assert (CELL_BUDGET_DEFAULT, PER_AXIS_BUDGET_DEFAULT, EDGE_ITEMS_DEFAULT) == (4_000, 128, 5)
+
+
+def test_bf16_widens_like_upstream() -> None:
+    """16-bit floats widen to float32 numpy exactly like the upstream adapter."""
+
+    torch_support = pytest.importorskip("treescope.external.torch_support")
+    adapter = torch_support.TorchTensorAdapter()
+    tensor = torch.randn(300, 300, dtype=torch.bfloat16)
+    edges = infer_balanced_truncation((300, 300), 4_000, 128, 5)
+    theirs_values, theirs_mask = adapter.get_array_data_with_truncation(tensor, None, edges)
+    ours_values, ours_mask = truncate_tensor_with_mask(tensor, edges)
+    assert ours_values.dtype == theirs_values.dtype == np.float32
+    assert np.array_equal(theirs_values, ours_values)
+    assert np.array_equal(theirs_mask, ours_mask)
+
+
+@pytest.mark.parametrize("shape", [(128, 768), (8, 12, 16, 16), (7,), (33,)])
+def test_port_matches_upstream_cells_and_mask(shape: tuple[int, ...]) -> None:
+    """Slice-then-convert fetch: identical visible cells AND validity mask."""
+
+    torch_support = pytest.importorskip("treescope.external.torch_support")
+    adapter = torch_support.TorchTensorAdapter()
+    tensor = torch.randn(*shape)
+    edges = infer_balanced_truncation(shape, 4_000, 128, 5)
+    theirs_values, theirs_mask = adapter.get_array_data_with_truncation(tensor, None, edges)
+    ours_values, ours_mask = truncate_tensor_with_mask(tensor, edges)
+    assert np.array_equal(theirs_values, ours_values)
+    assert np.array_equal(theirs_mask, ours_mask)
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+@pytest.mark.parametrize("bonus", [10.0, 3.0])
+def test_port_matches_upstream_arithmetic(shape: tuple[int, ...], bonus: float) -> None:
+    """The ported arithmetic equals upstream cell-for-cell, incl. non-default bonus."""
+
+    upstream = pytest.importorskip("treescope._internal.arrayviz_impl")
+    ours = infer_balanced_truncation(shape, 4_000, 128, 5, doubling_bonus=bonus)
+    theirs = upstream.infer_balanced_truncation(shape, 4_000, 128, 5, doubling_bonus=bonus)
+    assert ours == theirs
+    assert compute_truncated_shape(shape, ours) == upstream.compute_truncated_shape(shape, ours)

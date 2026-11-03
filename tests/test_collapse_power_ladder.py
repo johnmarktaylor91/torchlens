@@ -12,8 +12,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization import collapse_optimizer
 from torchlens._visualization.collapse_ladder import (
     auto_from_ladder,
+    collapse_schedule,
 )
 from torchlens._visualization.collapse_plan import RenderContext
 
@@ -80,3 +82,16 @@ def test_band_miss_serves_disclosed_strongest_point() -> None:
     from torchlens._visualization.collapse_plan import count
 
     assert result.strongest_plan_count == count(result.plan)
+
+
+def test_interior_float_levels_apply_ladder_folds(stack_trace) -> None:
+    """Float selection reads the same ladder steps as the schedule."""
+
+    context = RenderContext()
+    schedule = collapse_schedule(stack_trace, context)
+    if len(schedule.steps) < 3:
+        pytest.skip("no interior steps on this fixture")
+    interior = schedule.steps[1]
+    result = collapse_optimizer.select_collapse_level(stack_trace, context, interior.t)
+    assert result.visible_count == interior.visible_count
+    assert tuple(result.plan.nodes) == tuple(interior.plan.nodes)

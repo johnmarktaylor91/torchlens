@@ -67,3 +67,47 @@ def test_neuro_import_stays_inert() -> None:
     # module, the numpy-only ones included.
     for implementation in ("_compare", "_datasets", "_rdms"):
         assert f"torchlens.neuro.{implementation}" not in sys.modules
+
+
+def test_neuro_attribute_access_reports_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Known-name access with the dependency absent names the missing package."""
+    pytest.importorskip("rsatoolbox")
+    _drop_module("torchlens.neuro")
+
+    module = importlib.import_module("torchlens.neuro")
+
+    from torchlens._errors import MissingDependencyError
+
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "rsatoolbox", None)
+        # F22 teaching refusal: a KNOWN name whose optional dependency cannot
+        # import refuses typed, naming the package (AttributeError never masks
+        # a real missing dependency; ImportError-shaped masking is the old
+        # pre-F22 contract).
+        with pytest.raises(MissingDependencyError, match="rsatoolbox"):
+            module.datasets
+
+
+@pytest.mark.parametrize(
+    ("first_dep", "second_dep", "module_name"),
+    [
+        ("IPython", "jupyter_client", "torchlens.report._notebook"),
+        ("rsatoolbox", "brainscore_core", "torchlens.neuro"),
+    ],
+    ids=[
+        "notebook_attribute_access_when_deps_present",
+        "neuro_attribute_access_when_deps_present",
+    ],
+)
+def test_attribute_access_when_deps_present(
+    first_dep: str, second_dep: str, module_name: str
+) -> None:
+    """When deps are installed, attribute access raises AttributeError, not ImportError."""
+    pytest.importorskip(first_dep)
+    pytest.importorskip(second_dep)
+    _drop_module(module_name)
+
+    module = importlib.import_module(module_name)
+
+    with pytest.raises(AttributeError):
+        module.anything

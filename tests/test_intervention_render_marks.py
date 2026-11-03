@@ -274,3 +274,29 @@ def test_building_the_edit_callback_imports_no_render_module() -> None:
     if outcome == "PRELOADED":
         pytest.skip("importing node_spec already loads the render modules")
     assert outcome == "BOUND_REAL"
+
+
+def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
+    """PDF and PNG carry the highlighter: they are written from the processed SVG."""
+
+    pytest.importorskip("cairosvg")
+    trace = _traced()
+    try:
+        for fileformat in ("pdf", "png"):
+            trace.draw(
+                file_format=fileformat,
+                path=str(tmp_path / "cone"),
+                show_cone=True,
+            )
+    finally:
+        trace.cleanup()
+    assert (tmp_path / "cone.pdf").read_bytes().startswith(b"%PDF")
+    png = (tmp_path / "cone.png").read_bytes()
+    assert png.startswith(b"\x89PNG")
+    from PIL import Image
+
+    with Image.open(tmp_path / "cone.png") as image:
+        pixels = image.convert("RGB").getdata()
+        # The translucent purple over white is a pale violet no other mark uses.
+        assert any(r > g + 20 and b > g + 20 and r > 180 and b > 180 for r, g, b in pixels)
+    assert not list(tmp_path.glob("*.highlight.svg"))
