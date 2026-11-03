@@ -174,7 +174,8 @@ def _no_grad(model: Any, x: Any) -> Any:
 
 def _no_grad_record(tl: Any, model: Any, x: Any, site: str) -> Any:
     with torch.no_grad():
-        return tl.record(model, x, save=tl.module(site), return_output=True)
+        rec = tl.record(model, x, save=tl.module(site))
+        return rec.output, rec
 
 
 def _backward(tl: Any, subject: Subject) -> Callable[[], Any]:
