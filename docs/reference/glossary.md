@@ -2217,11 +2217,7 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
   inexactness rides the closed `provenance.relation` lattice
-  (`exact | upper_bound | lower_bound | unknown`). A producer may also state
-  `provenance.basis` (`geometric | gradient`) and `provenance.field_status`
-  (`exact | whole_input | upper_bound | empirical | none`); both are `None`
-  when unstated, survive `~`, and survive `| & -` only when both operands
-  agree. `tl.Selection` is
+  (`exact | upper_bound | lower_bound | unknown`). `tl.Selection` is
   session-time only, never persisted. Selection kinds `ACT | PARAM | EDGE`
   are a closed vocabulary; mixed kinds refuse `selection_kind_incompatible`.
 
