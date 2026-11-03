@@ -204,8 +204,9 @@ def test_results_compose_with_the_selection_algebra(stack) -> None:
 
     conv3 = _out(stack, "conv3")
     view = stack["conv1"].projective_field
-    left = view.of(_full([(2, 2)]), within="conv3")
-    right = view.of(_full([(9, 9)]), within="conv3")
+    # conv1 (6, 6) reaches conv3 rows/cols 1..3 and (8, 8) reaches 2..4: overlapping, not equal.
+    left = view.of(_full([(6, 6)]), within="conv3")
+    right = view.of(_full([(8, 8)]), within="conv3")
     a, b = _row(left, conv3).mask, _row(right, conv3).mask
     assert bool((a & b).any()) and not torch.equal(a, b)
     assert torch.equal(_row(left & right, conv3).mask, a & b)
@@ -255,12 +256,17 @@ def test_subgraph_of_a_region(stack) -> None:
 
 
 def test_gradient_method_is_contained_in_the_geometric_answer(stack) -> None:
-    """``method="gradient"`` passes through; its support sits inside the geometry."""
+    """``method="gradient"`` passes through; its support sits inside the geometry.
+
+    The seed is conv2, whose path to conv3 is linear: a seed before the ReLU can
+    have an empty empirical field wherever its pre-activation is negative.
+    """
 
     conv3 = _out(stack, "conv3")
-    view = stack["conv1"].projective_field
-    geometric = _row(view.of(_full(_UNITS), within="conv3"), conv3)
-    probed = _row(view.of(_full(_UNITS), within="conv3", method="gradient"), conv3)
+    view = stack["conv2"].projective_field
+    units = _full([(3, 3), (3, 4)])
+    geometric = _row(view.of(units, within="conv3"), conv3)
+    probed = _row(view.of(units, within="conv3", method="gradient"), conv3)
     assert probed.provenance.basis == "gradient"
     assert probed.provenance.field_status == "empirical"
     assert probed.num_selected > 0
