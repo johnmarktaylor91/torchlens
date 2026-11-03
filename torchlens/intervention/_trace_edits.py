@@ -750,7 +750,7 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
         return
     # A staged edit runs as a live hook on the rerun, so a selector kind that can
     # never be a live hook site (tl.model_input) refuses by its condition, as
-    # attach_hooks does, instead of reporting "matched 0 sites".
+    # a hook do does, instead of reporting "matched 0 sites".
     if isinstance(site, BaseSelector):
         _validate_live_site_target(site, allow_replay_only=True)
     max_fanout = max(1, len(trace._layer_list))

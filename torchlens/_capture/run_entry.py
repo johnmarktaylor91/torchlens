@@ -303,7 +303,7 @@ def _run_model_and_save_specified_outs(
         capture_container_structure: If True, persist input and output container
             structure without enabling intervention replay metadata.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``Trace.attach_hooks`` and executes during this capture when supplied.
+            a hook ``Trace.do`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
             When ``intervention_spec`` is also supplied they must be its normalization:

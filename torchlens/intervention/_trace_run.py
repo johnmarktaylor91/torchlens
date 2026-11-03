@@ -1,4 +1,4 @@
-"""Trace run and push functions reached from the records through ``_data_classes._doors.intervention``.
+"""Trace run functions reached from the records through ``_data_classes._doors.intervention``.
 
 ``Trace.run`` and ``Trace.disarm_triggers`` are the thin methods;
 the ``_runnable`` / ``_fast_run`` / ``_fast_live_steer`` dispatch lives here.

@@ -89,7 +89,7 @@ DOCS: dict[str, str] = {
             Optional selector-like target. When provided, all sticky hooks for
             that target are removed.
         handle:
-            Optional hook handle returned by ``attach_hooks``.
+            Optional hook handle returned by a hook ``do``.
         strict:
             Whether no-op detach requests should raise.
         confirm_mutation:

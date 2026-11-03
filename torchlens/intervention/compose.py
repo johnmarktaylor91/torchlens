@@ -82,7 +82,7 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "seed posture are undeclarable)",
                 code="compose_leaf_invalid",
                 remedy="wrap the transform as a helper (or attach the callable "
-                "separately through attach_hooks)",
+                "separately through a hook do)",
                 argument="edits",
             )
         if leaf.factory is None:

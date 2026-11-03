@@ -444,7 +444,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # Push/rerun fallback: the journal is a run-scoped stream on the
     # capture-time trace object, and the intervention rerun engine rebuilds a
     # fresh trace off to the side then swaps its FIELD-ORDER state into the
-    # original object -- the stream does not survive the swap, and push()
+    # original object -- the stream does not survive the swap, and do()
     # stamps sites without a capture at all. Both are explicit user
     # interventions, so accept the conjunction of two signals a plain-capture
     # placeholder can never carry together: (1) this op holds a hook-minted
@@ -452,7 +452,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # the placeholder synthesizer writes ``interventions=[]``), AND (2) the
     # trace itself owns an ARMED intervention spec -- one with actual
     # targets/hooks/values, populated only by ``trace(intervene=...)`` /
-    # ``attach_hooks`` / ``set``. Plain captures carry an EMPTY spec object,
+    # ``do`` / ``set``. Plain captures carry an EMPTY spec object,
     # so a stale ``_tl_live_fire_results`` leak into a plain capture carries
     # records but no armed spec and stays refused.
     if _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):

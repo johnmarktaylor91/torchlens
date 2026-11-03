@@ -4,7 +4,7 @@ The selection-batch door (D33), the cross-kind batch transaction, the
 single-selection plan, and the EDGE, PARAM and leaf-site edit paths, moved
 verbatim from the trace intervention mixin as functions taking the trace
 first. ``_trace_edits.apply_do_mutation`` dispatches here; hooks attach
-through the record's ``attach_hooks`` and ``clear_edits`` verbs.
+through the record's ``do`` and ``clear_edits`` verbs.
 """
 
 from __future__ import annotations

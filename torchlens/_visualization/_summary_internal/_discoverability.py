@@ -573,7 +573,7 @@ def _next_operation_hint(trace: Trace) -> str:
         return "spec stale; call replay() or rerun() to propagate"
     if not getattr(trace, "is_replayable", False):
         return "not intervention-ready; recapture with replayable=True for replay templates"
-    return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
+    return "ready for set(), do(), run(), or fork()"
 
 
 def _rng_note_summary(trace: Trace) -> str:

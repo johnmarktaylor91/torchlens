@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 #: HookSpec metadata naming the attach batch that armed a gradient rule.
 _ARMING_GROUP_KEY = "arming_group"
-#: HookSpec metadata naming the ``do`` arming row (``None`` for attach_hooks).
+#: HookSpec metadata naming the ``do`` arming row (``None`` for a hook do).
 _ARMING_EVENT_KEY = "arming_event_id"
 #: Arming group of the sticky backward hooks a capture-time ``intervene=``
 #: staged (marked ``created_by`` by the capture door); their arming row is the
@@ -85,7 +85,7 @@ def sticky_hook_entry(entry: Any, arming_group: str) -> tuple[dict[str, Any], An
     Parameters
     ----------
     entry:
-        One normalized hook entry of an ``attach_hooks`` batch.
+        One normalized hook entry of a hook ``do`` batch.
     arming_group:
         The arming group id of that batch.
 

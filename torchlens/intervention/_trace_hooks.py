@@ -1,6 +1,6 @@
 """Trace hook functions reached from the records through ``_data_classes._doors.intervention``.
 
-``attach_hooks`` and ``clear_hooks`` of ``Trace``, moved verbatim as functions
+the sticky-hook attach behind a hook ``do`` and ``clear_hooks`` of ``Trace``, as functions
 taking the trace first (sticky hook registration on the mutable intervention
 spec and its clearing).
 """

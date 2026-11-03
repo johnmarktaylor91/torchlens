@@ -163,7 +163,7 @@ def save_intervention(
         # riders: since B7 predicate-door hooks may ALSO carry the rule's
         # expression provenance (spec_where_repr / spec_rule_id), but that
         # rider never re-resolves — the addressing is still derived labels.
-        # attach_hooks/do spec-door entries are authored (NOT derived).
+        # do spec-door entries are authored (NOT derived).
         spec_derived = bool(spec.hook_specs) and all(
             dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
             for hook_spec in spec.hook_specs

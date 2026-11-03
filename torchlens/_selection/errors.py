@@ -65,7 +65,7 @@ class LiveModeLabelError(SiteResolutionError):
 
     Every instance carries a stable ``fields["code"]``. The default,
     ``label_selector_not_live``, names the one condition the class exists
-    for: a live selector (``intervene=``, ``attach_hooks``, a rerun's staged
+    for: a live selector (``intervene=``, a hook ``do``, a rerun's staged
     edit) named a finalized postprocess label, which live selectors evaluated
     during the forward can never match. Rerun refusals pass their own codes
     (``rerun_staged_label_unmatchable``, ``rerun_selector_unmatchable_live``).

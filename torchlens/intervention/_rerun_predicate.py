@@ -8,7 +8,7 @@ them. A rerun therefore re-arms the trace's own retained predicate through the
 same capture door, hands the capture a copy of the staged spec without those
 entries, and then checks that the door re-staged exactly the entries the trace
 carries. The staged spec itself is never mutated. Entries a user staged on a
-final label (``Trace.set``, ``attach_hooks(tl.label(...))``) are translated to
+final label (``Trace.set``, ``do(tl.label(...), hook)``) are translated to
 the raw capture labels of the ops they name (:func:`translate_staged_final_labels`),
 the same translation a mixed gradient plan's activation half uses.
 """
@@ -212,7 +212,7 @@ def settle_predicate_rerun(plan: RerunSpecPlan, staged_spec: Any, new_log: Any) 
             "intervention exactly, so the rerun is refused and the trace is unchanged. "
             "Remedy: capture fresh with tl.trace(model, x, intervene=...) for this "
             "input, or re-stage the intervention with a module or function selector "
-            "through attach_hooks()",
+            "through a hook do()",
             code="rerun_predicate_restage_mismatch",
             staged_sites=tuple(staged_labels),
             rerun_sites=tuple(rerun_labels),
@@ -257,7 +257,7 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     """Return ``capture_spec`` with its finalized exact labels readdressed for a live rerun.
 
     Staged entries addressed by a finalized label (``Trace.set(label, ...)``,
-    ``attach_hooks(tl.label(...), ...)``) are translated to the raw capture
+    ``do(tl.label(...), ...)``) are translated to the raw capture
     labels of the ops they name, the same translation a mixed gradient plan's
     activation half already uses, so the edit fires on the rerun instead of
     being refused. An exact label that names several ops, a substring or regex

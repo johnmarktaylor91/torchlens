@@ -305,7 +305,7 @@ def _resolve_facet_sites(
 ) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
-    The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
+    The facets are the ones the write doors (``Trace.set``, ``do``,
     ``do``) resolve for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
     those doors receives (a head's slice, an SAE latent's encoder activation).

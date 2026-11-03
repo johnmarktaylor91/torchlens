@@ -409,7 +409,7 @@ class SteerPlan:
     def follows(self, trace: Any) -> bool:
         """Return whether ``trace`` still stages exactly the entries this plan lowered.
 
-        The staged spec is mutable (``attach_hooks``, ``clear_hooks``), so a
+        The staged spec is mutable (a hook ``do``, ``clear_hooks``), so a
         cached session compares the entry objects themselves; the plan holds
         them, so an identity match cannot be a reused address.
         """
