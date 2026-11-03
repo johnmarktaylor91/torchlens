@@ -18,10 +18,13 @@ The allowed rows pin the legitimate surface so a fault that denies everything is
 
 from __future__ import annotations
 
+import importlib
 import io
 import operator
 import pickle
-from collections.abc import Callable
+import sys
+from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -31,6 +34,7 @@ from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import (
     _is_callable_invoker_name,
     _is_side_effecting_callable_name,
+    is_denied_operator_gadget,
     is_denied_stdlib_or_builtin_module,
     is_pure_forward_callable,
 )
@@ -39,7 +43,7 @@ from torchlens.intervention._resolver_registry import (
     resolve_function_registry_key,
     resolve_import_ref,
 )
-from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
 from torchlens.intervention.types import FunctionRegistryKey
 
 
@@ -56,6 +60,8 @@ def _torch_wrapped() -> None:
 
 _R31 = "test_r31_stdlib_deny: stdlib/builtin module denied even under trust"
 _R39 = "test_r39_callable_invoke_denylist"
+_R33 = "test_r33_operator_gadget_carveout"
+_R36 = "test_r36_tensor_method_smuggling"
 
 REFUSED_REFS: tuple[tuple[str, str, str], ...] = (
     # r31: the stdlib/builtin refs the r30 and earlier audits proved resolvable under trust.
@@ -83,10 +89,76 @@ REFUSED_REFS: tuple[tuple[str, str, str], ...] = (
     ("torch.Tensor:resize", "RP", _R39 + ": storage reallocator (r6 resize_ class)"),
     ("torch.Tensor:resize_as", "RP", _R39 + ": storage reallocator (r6 resize_ class)"),
     ("torch:_register_device_module", "RPE", _R39 + ": global-state mutator (r6 set_ class)"),
+    # r33: operator gadgets that enable the attrgetter(__globals__) chain, at both operator roots.
+    (
+        "operator:attrgetter",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:attrgetter", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:methodcaller",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    (
+        "_operator:methodcaller",
+        "RLU",
+        _R33 + ": _operator routes to the name-allowlisted fixed root",
+    ),
+    (
+        "operator:itemgetter",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:itemgetter", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:call",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:call", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:setitem",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:setitem", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:delitem",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:delitem", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:iadd",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:iadd", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    (
+        "operator:imul",
+        "RLU",
+        _R33 + ": generic operator gadget or mutator denied under operator trust",
+    ),
+    ("_operator:imul", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
 )
 
 ALLOWED_REFS: tuple[tuple[str, str, str], ...] = (
     ("operator:neg", "RLU", "test_r31_stdlib_deny: the operator carve-out still resolves"),
+    ("_operator:neg", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:add", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:add", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:mul", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:mul", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:getitem", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:getitem", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:eq", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:eq", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:and_", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:and_", "R", _R33 + ": _operator pure name routes to the operator root"),
+    ("operator:invert", "RU", _R33 + ": pure forward operator still resolves"),
+    ("_operator:invert", "R", _R33 + ": _operator pure name routes to the operator root"),
     ("torch:relu", "R", "test_r31_stdlib_deny, test_r39: pure torch ops resolve without trust"),
     ("torch.nn.functional:relu", "R", "test_r31_stdlib_deny: pure torch ops resolve without trust"),
     (
@@ -207,18 +279,32 @@ def _rows(table: tuple[tuple[str, str, str], ...], letter: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 
 
+def _refusal(ref: str) -> type[Exception]:
+    """The typed refusal for a fixed-root ref: a name this Python lacks refuses as a precondition."""
+
+    module_name, _, qualname = ref.partition(":")
+    try:
+        obj: Any = importlib.import_module(module_name)
+        for part in qualname.split("."):
+            obj = getattr(obj, part)
+    except (ImportError, AttributeError):
+        return ReplayPreconditionError
+    return UntrustedCallableError
+
+
+@pytest.mark.smoke_cells("test_refused_at_resolver_default_and_trusted[operator:delitem]")
 @pytest.mark.parametrize("ref", _rows(REFUSED_REFS, "R"))
 def test_refused_at_resolver_default_and_trusted(ref: str) -> None:
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(_refusal(ref)):
         resolve_import_ref(ref)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(_refusal(ref)):
         resolve_import_ref(ref, trust_custom_callables=True)
 
 
 @pytest.mark.parametrize("ref", _rows(REFUSED_REFS, "L"))
 def test_refused_at_resolver_under_own_module_allowlist(ref: str) -> None:
     module_name = ref.split(":", 1)[0]
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(_refusal(ref)):
         resolve_import_ref(ref, allowed_custom_callable_modules={module_name})
 
 
@@ -318,6 +404,7 @@ def test_allowed_resolves_through_custom_key_under_trust_and_allowlist(ref: str)
     )
 
 
+@pytest.mark.smoke_cells("test_allowed_unpickles_under_trust[operator:neg]")
 @pytest.mark.parametrize("ref", _rows(ALLOWED_REFS, "U"))
 def test_allowed_unpickles_under_trust(ref: str) -> None:
     expected = _live_operator(ref.split(":", 1)[1])
@@ -375,3 +462,208 @@ def test_module_load_stays_pure_when_present() -> None:
 
     if hasattr(torch.Tensor, "module_load"):
         assert is_pure_forward_callable(torch.Tensor.module_load)
+
+
+# --------------------------------------------------------------------------- #
+# Dotted walks off a trusted foreign module (it imports torch, operator and io, as
+# countless real recipe modules do). Checks: ``R`` the resolver refuses under an
+# allowlist naming the module and under broad trust; ``U`` the unpickler refuses the
+# STACK_GLOBAL walk under that allowlist and under trust; ``K`` the custom registry key
+# walk refuses under trust and under the allowlist. Torch is capture-wrapped for the
+# whole module, the live state whose wrapper ``__module__`` spoofs a raw string check.
+# --------------------------------------------------------------------------- #
+
+WALK_REFUSED: tuple[tuple[str, str, str], ...] = (
+    ("torch.Tensor.resize_", "RU", _R36 + ": module-less C method exposes uninitialized memory"),
+    ("torch.Tensor.set_", "RU", _R36 + ": module-less C method repoints storage"),
+    ("torch.Tensor.apply_", "RU", _R36 + ": module-less C method invokes a callable per element"),
+    ("torch.Tensor.map_", "RU", _R36 + ": module-less C method invokes a callable per element"),
+    ("torch.from_file", "RU", _R36 + ": control, real __module__ torch stays denied"),
+    ("operator.attrgetter", "K", _R33 + ": gadget reached by a walk off a trusted module"),
+    ("operator.methodcaller", "K", _R33 + ": gadget reached by a walk off a trusted module"),
+    ("operator.itemgetter", "K", _R33 + ": gadget reached by a walk off a trusted module"),
+    ("operator.call", "K", _R33 + ": gadget reached by a walk off a trusted module"),
+    ("operator.setitem", "K", _R33 + ": mutator reached by a walk off a trusted module"),
+    ("operator.delitem", "K", _R33 + ": mutator reached by a walk off a trusted module"),
+    ("operator.iadd", "K", _R33 + ": in-place mutator reached by a walk off a trusted module"),
+    ("operator.imul", "K", _R33 + ": in-place mutator reached by a walk off a trusted module"),
+    ("io", "U", _R33 + " (A-R32-2): a resolved bare module object is refused"),
+)
+
+WALK_ALLOWED: tuple[tuple[str, str, str], ...] = (
+    ("recipe", "R", _R36 + ": a trusted user recipe with a real __module__ resolves"),
+    ("torch.relu", "RU", _R36 + ": a pure torch op walked off the module resolves"),
+    ("torch.Tensor.add_", "R", _R36 + ": a module-less pure in-place elementwise method resolves"),
+    ("operator.neg", "K", _R33 + ": a pure operator reached by the walk resolves"),
+)
+
+# (operator name, denied) for the operator-gadget detector; a name this Python lacks is skipped.
+OPERATOR_GADGET_ROWS: tuple[tuple[str, bool, str], ...] = tuple(
+    [
+        (g, True, _R33 + ": gadget or mutator")
+        for g in (
+            "attrgetter",
+            "methodcaller",
+            "itemgetter",
+            "call",
+            "setitem",
+            "delitem",
+            "iadd",
+            "imul",
+        )
+    ]
+    + [
+        (p, False, _R33 + ": pure forward operator")
+        for p in ("neg", "add", "mul", "getitem", "eq", "and_", "invert")
+    ]
+)
+
+
+@pytest.fixture
+def trusted_module(tmp_path: Path) -> Iterator[str]:
+    """A foreign module that imports torch, operator and io and exports a benign recipe."""
+
+    mod_name = "rows_trusted_mod"
+    (tmp_path / f"{mod_name}.py").write_text(
+        "import io\nimport operator\nimport torch\n\n\ndef recipe(t):\n    return t + 1\n"
+    )
+    sys.path.insert(0, str(tmp_path))
+    importlib.import_module(mod_name)
+    try:
+        yield mod_name
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop(mod_name, None)
+
+
+def _walk_refusal(qualname: str) -> type[Exception]:
+    obj: Any = {"torch": torch, "operator": operator, "io": io}[qualname.split(".", 1)[0]]
+    try:
+        for part in qualname.split(".")[1:]:
+            obj = getattr(obj, part)
+    except AttributeError:
+        return ReplayPreconditionError
+    return UntrustedCallableError
+
+
+def _walk_key(module: str, qualname: str) -> FunctionRegistryKey:
+    return FunctionRegistryKey(
+        namespace="custom",
+        qualname=qualname,
+        dispatch_kind="function",
+        import_path=f"{module}:{qualname}",
+    )
+
+
+@pytest.mark.parametrize("qualname", _rows(WALK_REFUSED, "R"))
+def test_walk_refused_at_resolver(trusted_module: str, qualname: str) -> None:
+    ref = f"{trusted_module}:{qualname}"
+    with pytest.raises(UntrustedCallableError):
+        resolve_import_ref(ref, allowed_custom_callable_modules={trusted_module})
+    with pytest.raises(UntrustedCallableError):
+        resolve_import_ref(ref, trust_custom_callables=True)
+
+
+@pytest.mark.smoke_cells("test_walk_refused_at_unpickler[io]")
+@pytest.mark.parametrize("qualname", _rows(WALK_REFUSED, "U"))
+def test_walk_refused_at_unpickler(trusted_module: str, qualname: str) -> None:
+    blob = _stack_global_ref_pickle(trusted_module, qualname)
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(
+            io.BytesIO(blob), allowed_custom_callable_modules={trusted_module}
+        ).load()
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(blob), trust_custom_callables=True).load()
+
+
+@pytest.mark.parametrize("qualname", _rows(WALK_REFUSED, "K"))
+def test_walk_refused_at_registry_key(trusted_module: str, qualname: str) -> None:
+    key = _walk_key(trusted_module, qualname)
+    with pytest.raises(_walk_refusal(qualname)):
+        resolve_function_registry_key(key, trust_custom_callables=True)
+    with pytest.raises(_walk_refusal(qualname)):
+        resolve_function_registry_key(key, allowed_custom_callable_modules={trusted_module})
+
+
+def test_walk_default_victim_never_resolves_live_method(trusted_module: str) -> None:
+    """test_r36_tensor_method_smuggling: the untrusting default never yields the live method."""
+
+    blob = _stack_global_ref_pickle(trusted_module, "torch.Tensor.resize_")
+    resolved = SafeBundleUnpickler(io.BytesIO(blob)).load()
+    assert resolved is not torch.Tensor.resize_
+
+
+def _walk_expected(trusted_module: str, qualname: str) -> Any:
+    if qualname == "recipe":
+        return sys.modules[trusted_module].recipe
+    obj: Any = {"torch": torch, "operator": operator}[qualname.split(".", 1)[0]]
+    for part in qualname.split(".")[1:]:
+        obj = getattr(obj, part)
+    return obj
+
+
+@pytest.mark.parametrize("qualname", _rows(WALK_ALLOWED, "R"))
+def test_walk_allowed_at_resolver(trusted_module: str, qualname: str) -> None:
+    resolved = resolve_import_ref(
+        f"{trusted_module}:{qualname}", allowed_custom_callable_modules={trusted_module}
+    )
+    assert resolved is _walk_expected(trusted_module, qualname)
+    if qualname == "recipe":
+        assert resolved(torch.zeros(1)).item() == 1.0
+
+
+@pytest.mark.parametrize("qualname", _rows(WALK_ALLOWED, "U"))
+def test_walk_allowed_at_unpickler(trusted_module: str, qualname: str) -> None:
+    blob = _stack_global_ref_pickle(trusted_module, qualname)
+    resolved = SafeBundleUnpickler(
+        io.BytesIO(blob), allowed_custom_callable_modules={trusted_module}
+    ).load()
+    assert resolved is _walk_expected(trusted_module, qualname)
+
+
+@pytest.mark.parametrize("qualname", _rows(WALK_ALLOWED, "K"))
+def test_walk_allowed_at_registry_key(trusted_module: str, qualname: str) -> None:
+    key = _walk_key(trusted_module, qualname)
+    assert resolve_function_registry_key(key, trust_custom_callables=True) is _walk_expected(
+        trusted_module, qualname
+    )
+
+
+@pytest.mark.parametrize(("name", "denied"), [(n, d) for n, d, _ in OPERATOR_GADGET_ROWS])
+def test_operator_gadget_detector_rows(name: str, denied: bool) -> None:
+    gadget = getattr(operator, name, None)
+    if gadget is None:
+        assert name == "call", f"operator.{name} missing in this Python"
+        return
+    assert is_denied_operator_gadget(gadget) is denied
+
+
+def test_operator_gadget_detector_ignores_non_operator_callables() -> None:
+    """test_r33_operator_gadget_carveout: non-operator callables are not this gate's concern."""
+
+    assert is_denied_operator_gadget(torch.relu) is False
+    assert is_denied_operator_gadget(len) is False
+
+
+@pytest.mark.smoke
+def test_unpickler_attrgetter_globals_rce_chain_blocked() -> None:
+    """test_r33_operator_gadget_carveout: a REDUCE chain driving attrgetter('__globals__') raises."""
+
+    class _Evil:
+        def __reduce__(self):
+            return (operator.attrgetter, ("__globals__",))
+
+    blob = pickle.dumps(_Evil(), protocol=4)
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(blob), trust_custom_callables=True).load()
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={"operator"}).load()
+
+
+def test_purity_gate_storage_unsafe_methods_denied_elementwise_admitted() -> None:
+    """test_r36_tensor_method_smuggling: the purity gate denies the module-less storage-unsafe family only."""
+
+    for name in ("resize_", "set_", "apply_", "map_"):
+        assert not is_pure_forward_callable(getattr(torch.Tensor, name))
+    for name in ("add_", "mul_"):
+        assert is_pure_forward_callable(getattr(torch.Tensor, name))
