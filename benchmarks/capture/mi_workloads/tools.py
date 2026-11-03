@@ -220,7 +220,7 @@ def _logits_from_trace(t: Any, tl: Any) -> torch.Tensor:
 
 
 class TLRecord:
-    """tl.record: the sparse event recorder, with return_output for logits."""
+    """tl.record: the sparse event recorder; the Recording's output holds the logits."""
 
     name = "tl_record"
 
@@ -233,7 +233,8 @@ class TLRecord:
     def _rec(self, ids: torch.Tensor, sites: list[str], **kw: Any) -> Any:
         tl = self.tl
         with torch.no_grad():
-            return tl.record(self.model, ids, save=_union(tl, sites), return_output=True, **kw)
+            recording = tl.record(self.model, ids, save=_union(tl, sites), **kw)
+        return recording.output, recording
 
     def _get(self, rec: Any, site: str) -> torch.Tensor:
         r = rec[1] if isinstance(rec, tuple) else rec
@@ -259,9 +260,7 @@ class TLRecord:
         tl = self.tl
         spec = tl.when(tl.module(site), tl.add(delta))
         with torch.no_grad():
-            out, _rec = tl.record(
-                self.model, ids, save=tl.module(site), intervene=spec, return_output=True
-            )
+            out = tl.record(self.model, ids, save=tl.module(site), intervene=spec).output
         return first_tensor(out.logits if hasattr(out, "logits") else out)
 
     def grads(self, ids, sites, metric):
@@ -276,9 +275,7 @@ class TLRecord:
         cur = ids
         for _ in range(n_new):
             with torch.no_grad():
-                out, _rec = tl.record(
-                    self.model, cur, save=tl.module(site), intervene=spec, return_output=True
-                )
+                out = tl.record(self.model, cur, save=tl.module(site), intervene=spec).output
             logits = (out.logits if hasattr(out, "logits") else first_tensor(out))[:, -1, :]
             nxt = (
                 torch.multinomial(torch.softmax(logits, -1), 1)
