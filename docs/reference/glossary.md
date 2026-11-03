@@ -561,8 +561,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   because a run would re-capture every payload into RAM while the bundle kept the first
   capture; capture again with `to_disk` to a new path, or without `to_disk`, and run that trace
   (a trace loaded from the bundle runs through its loaded providers). A `path` that already
-  exists refuses with `bundle_save_failed`, as does `Trace.save` or `Bundle.save` to an existing
-  path without `overwrite=True`.
+  exists refuses with `bundle_path_exists`, as does `Trace.save` or `Bundle.save` to an existing
+  path without `overwrite=True`. A `path` whose final component is a symlink refuses (the same
+  final-component rule `Trace.save` and `tl.load` apply; a symlinked parent passes).
 
 **Capture cache**
 : The opt-in `cache=True` content-hash store of finished captures. A hit requires the model's
@@ -1361,10 +1362,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicate through the capture door instead, and refuses
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
-  (a staged steer edited since capture). A staged edit addressed by a finalized label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
-  forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
-  unchanged). A staged edit whose selector matches sites on the trace but fires at none
+  (a staged steer edited since capture). A staged edit addressed by a finalized exact label
+  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) is translated before the forward to
+  the raw capture labels of the ops it names, the translation a mixed gradient plan's
+  activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
+  its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
+  A substring or regex selector on a finalized label still refuses through the live matcher
+  (`LiveModeLabelError`, with its authoring remedy). A staged edit whose selector matches sites on the trace but fires at none
   during a rerun of the same graph on the same inputs refuses with
   `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
   `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
@@ -1396,7 +1400,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
   `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
   `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
-  it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
+  it is an edited forward, and no hook-aware check exists yet. On a live trace the
+  `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
+  Trace untouched (JMT, Sun 1 Nov 2026); the legacy rerun door (`run(model, inputs)` with
+  `engine="rerun"`) still refreshes the source in place. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
   fast; a changed leaf count or an unmatched path still refuses
@@ -1510,6 +1517,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
+  at load, on its manifest, metadata and blobs entries): a symlink there refuses
+  (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
+  and save and load use the same rule; `storage=tl.to_disk(...)` and `save_intervention`
+  apply it to their own targets (documented as is, JMT, Sun 1 Nov 2026).
   The staged intervention spec is session-only: `Trace.save` keeps the intervened
   values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
@@ -2453,7 +2465,9 @@ deprecation shim owed*
   tensor sidecar), the bound `axis`, the rows' `basis_sha256` and the basis
   provenance (`origin`, `method`, `origin_sha256`, `source_dtype`), so
   `tl.io.save_intervention(trace, path, level="portable")` reloads it as the
-  same projection, never as the plain verb over the whole site. A rotation
+  same projection, never as the plain verb over the whole site (the target path
+  follows the save/load symlink rule: its final component may not be a
+  symlink, a symlinked parent passes). A rotation
   learned elsewhere (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
   origin=...)`; TorchLens applies it and does not fit it. At load a malformed
   field refuses `subspace_spec_invalid`, rows changed after saving refuse
@@ -3004,8 +3018,9 @@ deprecation shim owed*
   the default save, the regime is `live_stop_after`, the output and the later saved
   sites read `None` for that run (the next full run refreshes them), and the verdict
   is `unverifiable` because the whole-forward call fingerprint cannot be compared.
-  The fast run refreshes the live trace in place, so that verdict marks the trace as
-  every truncated run product is marked (monotonic: save, export or validate it before
+  The fast run refreshes its result trace (`trace.run(..., fast=True)` on a live trace
+  returns a new Trace and leaves the source untouched; JMT, Sun 1 Nov 2026), so that
+  verdict marks the result trace as every truncated run product is marked (monotonic: save, export or validate it before
   training through `until=`).
   A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
   contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
@@ -3927,6 +3942,7 @@ The sections above describe each surface in depth.
 | `tl.grad` | Address the gradient of a site's output: `tl.grad("relu_3")`; builds a `GradSelector` |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
 | `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
+| `tl.intervention.SamplingRecord` | One realized draw of a stochastic edit, exported beside `FireRecord` (a `FireRecord.sampling` entry): a frozen record with `verb`, `base_seed`, `derived_seed`, `share_draw`, `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`, `donor_group_id`, `draw_indices` and `realized_draw_digest`; the field rows below define each |
 | `tl.intervention.label_contains` | Create a label-substring selector |
 | `tl.intervention.label_matches` | Create a label regex-pattern selector |
 | `tl.intervention.model_input` | Create a nested model-input path selector |
@@ -4040,8 +4056,8 @@ The sections above describe each surface in depth.
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
 | `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
-| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
-| `Bundle.rank_changes` | Rank sites by their distance from a baseline member |
+| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
+| `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `BundleComparisonError.severity` | The error's severity class |
 | `CapabilityRow.is_available` | Whether the capability is available in this environment |
 | `CaptureFacts.is_structure_only` | Whether the capture kept structure only, without payloads |

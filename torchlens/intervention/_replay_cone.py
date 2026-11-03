@@ -1,18 +1,21 @@
 """Cone-of-effect membership and site labelling for saved-DAG replay.
 
 Split from :mod:`torchlens.intervention.replay`: the cone walk, the label-to-replay-key
-map every replay step resolves through, origin validation and the user-facing
-disclosure spelling of a site. Nothing here executes a callable or mutates a trace.
+map every replay step resolves through, origin validation, the user-facing
+disclosure spelling of a site and the dependency-ordered call-cone scheduler that
+replay and sparse runnable execution share. Nothing here mutates a trace; the
+scheduler only calls the per-call callback its caller passes.
 """
 
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from .._errors import InvalidArgumentError
 from ._replay_context import _func_call_groups, _replay_site_key
+from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -215,3 +218,71 @@ def _resolve_single_origin(
     if hasattr(site, "layer_label") and hasattr(site, "out"):
         return cast("Op", site)
     return cast("Op", log._resolve_sites(site, strict=strict, max_fanout=1).first())
+
+
+class _CallConeNode(Protocol):
+    """Dependency fields required by the shared call-cone scheduler."""
+
+    @property
+    def call_id(self) -> str:
+        """Return the stable call identifier."""
+
+        ...
+
+    @property
+    def parent_call_ids(self) -> tuple[str, ...]:
+        """Return stable identifiers for dependency-parent calls."""
+
+        ...
+
+
+def _walk_call_cone(
+    calls: Sequence[_CallConeNode],
+    execute_call: Callable[[_CallConeNode], None],
+) -> None:
+    """Execute a dependency-complete call cone in stable recorded order.
+
+    Parameters
+    ----------
+    calls:
+        Recorded call nodes whose parent IDs define the runnable cone.
+    execute_call:
+        Transaction-local callback that executes and stages one ready node.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        If the recorded cone has a missing parent or cyclic dependency.
+
+    Notes
+    -----
+    The caller owns transaction commit. Sparse runnable execution uses an
+    unexposed Trace fork, while intervention replay uses pending update maps.
+    """
+
+    call_ids = {call.call_id for call in calls}
+    missing = {
+        parent_id
+        for call in calls
+        for parent_id in call.parent_call_ids
+        if parent_id not in call_ids
+    }
+    if missing:
+        raise ReplayPreconditionError(
+            "Recorded call cone references missing parents: " + ", ".join(sorted(missing))
+        )
+    pending = list(calls)
+    completed: set[str] = set()
+    while pending:
+        ready_index = next(
+            (index for index, call in enumerate(pending) if set(call.parent_call_ids) <= completed),
+            None,
+        )
+        if ready_index is None:
+            blocked = ", ".join(call.call_id for call in pending)
+            raise ReplayPreconditionError(
+                f"Recorded call cone contains a dependency cycle among: {blocked}."
+            )
+        call = pending.pop(ready_index)
+        execute_call(call)
+        completed.add(call.call_id)

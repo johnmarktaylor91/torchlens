@@ -1580,7 +1580,7 @@ def to_disk(
     Parameters
     ----------
     path:
-        Destination bundle directory; it must not exist yet (``bundle_save_failed``).
+        Destination bundle directory; it must not exist yet (``bundle_path_exists``).
     retain_in_memory:
         Whether streamed payloads also remain as RAM copies. The model output the forward
         returns stays in memory either way (the output op's payload may alias it). A streamed

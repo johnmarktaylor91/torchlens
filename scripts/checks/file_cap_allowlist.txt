@@ -161,8 +161,8 @@ torchlens/_extraction/trace_safetensors.py::write_trace_safetensors	90
 torchlens/_extraction/views.py::shuffled_batches	64
 torchlens/_extraction_provenance.py::coerce_input_preprocessing	128
 torchlens/_fast_live_plans.py::build_function_plans	66
-torchlens/_fast_run.py	1529
-torchlens/_fast_run.py::_FastLiveSession.__init__	74
+torchlens/_fast_run.py	1524
+torchlens/_fast_run.py::_FastLiveSession.__init__	73
 torchlens/_fast_run.py::_FastLiveSession._finalize_run	61
 torchlens/_fast_run.py::_FastLiveSession._refresh_boundary_payloads	79
 torchlens/_fast_run.py::_FastSparseSession.__init__	67
@@ -1030,7 +1030,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1502
+torchlens/bundle/__init__.py	1429
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
@@ -1193,7 +1193,7 @@ torchlens/intervention/regions.py	1052
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1805
+torchlens/intervention/replay.py	1753
 torchlens/intervention/replay.py::_commit_replay_updates	72
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	125

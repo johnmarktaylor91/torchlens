@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -97,74 +97,6 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from .._selection.selectors import SelectorLike
-
-
-class _CallConeNode(Protocol):
-    """Dependency fields required by the shared call-cone scheduler."""
-
-    @property
-    def call_id(self) -> str:
-        """Return the stable call identifier."""
-
-        ...
-
-    @property
-    def parent_call_ids(self) -> tuple[str, ...]:
-        """Return stable identifiers for dependency-parent calls."""
-
-        ...
-
-
-def _walk_call_cone(
-    calls: Sequence[_CallConeNode],
-    execute_call: Callable[[_CallConeNode], None],
-) -> None:
-    """Execute a dependency-complete call cone in stable recorded order.
-
-    Parameters
-    ----------
-    calls:
-        Recorded call nodes whose parent IDs define the runnable cone.
-    execute_call:
-        Transaction-local callback that executes and stages one ready node.
-
-    Raises
-    ------
-    ReplayPreconditionError
-        If the recorded cone has a missing parent or cyclic dependency.
-
-    Notes
-    -----
-    The caller owns transaction commit. Sparse runnable execution uses an
-    unexposed Trace fork, while intervention replay uses pending update maps.
-    """
-
-    call_ids = {call.call_id for call in calls}
-    missing = {
-        parent_id
-        for call in calls
-        for parent_id in call.parent_call_ids
-        if parent_id not in call_ids
-    }
-    if missing:
-        raise ReplayPreconditionError(
-            "Recorded call cone references missing parents: " + ", ".join(sorted(missing))
-        )
-    pending = list(calls)
-    completed: set[str] = set()
-    while pending:
-        ready_index = next(
-            (index for index, call in enumerate(pending) if set(call.parent_call_ids) <= completed),
-            None,
-        )
-        if ready_index is None:
-            blocked = ", ".join(call.call_id for call in pending)
-            raise ReplayPreconditionError(
-                f"Recorded call cone contains a dependency cycle among: {blocked}."
-            )
-        call = pending.pop(ready_index)
-        execute_call(call)
-        completed.add(call.call_id)
 
 
 def push(
@@ -1203,7 +1135,13 @@ def _execute_group_call(
             "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
             "committed. Choose an edit that keeps the edited site inside the range the "
             "downstream ops accept, or rerun the model with the edit staged: "
-            "trace.run(model, inputs)"
+            "trace.run(model, inputs)",
+            code="replay_downstream_op_raised",
+            remedy=(
+                "Choose an edit that keeps the edited site inside the range the downstream "
+                "ops accept, or rerun the model with the edit staged: trace.run(model, inputs)"
+            ),
+            raised_type=type(exc).__name__,
         ) from exc
 
 
@@ -1450,8 +1388,18 @@ def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
     for site in group:
         if _is_source_record(site):
             continue
+        if site.func is None and loaded:
+            raise ReplayPreconditionError(
+                _no_func_message(site, loaded=True),
+                code="replay_loaded_trace_has_no_callables",
+                remedy=(
+                    "Edit a trace captured in this process with "
+                    "CaptureOptions(replayable=True), or rerun the model with the edit "
+                    "staged: trace.run(model, inputs)"
+                ),
+            )
         if site.func is None:
-            raise ReplayPreconditionError(_no_func_message(site, loaded=loaded))
+            raise ReplayPreconditionError(_no_func_message(site, loaded=False))
         _template_for_site(site)
 
 

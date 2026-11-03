@@ -22,6 +22,11 @@
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
   population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
   `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
+  Each realized draw of a stochastic edit is a `tl.intervention.SamplingRecord` (exported
+  beside `FireRecord`; fields `verb`, `base_seed`, `derived_seed`, `share_draw`,
+  `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`,
+  `donor_group_id`, `draw_indices`, `realized_draw_digest`), carried on
+  `FireRecord.sampling`.
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
   gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
   ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
@@ -646,7 +651,7 @@
   every payload into RAM while the bundle kept the first capture (behaviour-net IO-8). Capture
   again with `to_disk` to a new path or without `to_disk` and run that trace; a trace loaded from
   the bundle keeps its loaded providers. `Trace.save` / `Bundle.save` to an existing path refuse
-  `bundle_save_failed` without `overwrite=True` (no builtin `FileExistsError`).
+  `bundle_path_exists` without `overwrite=True` (no builtin `FileExistsError`).
 - `torch.compile` coexists with capture as a boundary UPGRADE on torch >= 2.6 and a graceful
   boundary below. Behind the feature-detected `HAS_SET_STANCE` flag, every capture holds the public
   `torch.compiler.set_stance("force_eager")` scoped to the forward (skipped when Dynamo was never

@@ -8020,7 +8020,7 @@
   "field": "capture_spec",
   "file": "torchlens/intervention/rerun.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 2,
   "via_getattr": false
  },
  {
