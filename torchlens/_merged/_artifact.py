@@ -32,13 +32,16 @@ from typing import Any
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_tree
 from .._utils.hashing import update_hasher_from_file
-from ._engine import derive_merge
+from ._engine import _STRUCTURAL_KINDS, PerRankRef, derive_merge
 from ._enums import (
     MERGED_BUNDLE_FORMAT,
     MERGED_DESCRIPTOR_KIND,
     MERGED_DESCRIPTOR_SCHEMA_VERSION,
     MERGED_TLSPEC_VERSION,
+    BoundaryConsistency,
+    MergeAlignment,
     MergedErrorCode,
+    MergeValueStatus,
 )
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
@@ -530,8 +533,6 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
     never a raw KeyError/TypeError).
     """
 
-    from ._engine import PerRankRef
-
     def refuse(detail: str) -> MergedArtifactError:
         """Build the typed schema refusal for this join row, naming its index."""
 
@@ -633,9 +634,6 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
        appear in the cache with byte-equal per-rank rows for the surviving
        ranks (references to lost ranks stay unprovable and untouched).
     """
-
-    from ._engine import _STRUCTURAL_KINDS
-    from ._enums import BoundaryConsistency, MergeAlignment, MergeValueStatus
 
     cached_joins = cached.get("joins")
     if not isinstance(cached_joins, list):

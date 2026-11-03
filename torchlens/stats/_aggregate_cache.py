@@ -45,8 +45,26 @@ from typing import Any, NoReturn
 import torch
 from torch import nn
 
+from .._capture.prepare.cache import _harden_capture_cache_dir
+from .._capture_fingerprint import _hash_code_object_into, _hash_tensor_content
+from .._capture_state_helpers import (
+    _capture_cache_dir,
+    _fingerprint_model_content,
+    _fingerprint_model_implementation,
+)
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
+from ._aggregate import Aggregator, _rng_restore, _rng_snapshot
+from ._per_unit import Quantile
+from ._state_io import (
+    can_merge_state,
+    encode_state,
+    is_saveable_state,
+    merge_state_into,
+    read_state,
+    state_digest,
+    write_state,
+)
 from ._streaming import StreamingStat
 
 __tl_layer__ = "L5"
@@ -86,8 +104,6 @@ _NOT_A_LEAF = object()
 
 def _leaf_key(value: Any, where: str) -> object:
     """Key a scalar, tensor or array by value; ``_NOT_A_LEAF`` for anything else."""
-
-    from .._capture_fingerprint import _hash_tensor_content
 
     if value is None or isinstance(value, (bool, int, float, complex, str, bytes)):
         return (type(value).__name__, value)
@@ -158,11 +174,6 @@ _REMEDY_CALLABLE = (
 def _module_key(module: nn.Module) -> object:
     """Key a module by content and implementation (the trace cache's fingerprints)."""
 
-    from .._capture_state_helpers import (
-        _fingerprint_model_content,
-        _fingerprint_model_implementation,
-    )
-
     return (
         "module",
         _fingerprint_model_content(module),
@@ -182,8 +193,6 @@ def _code_names(code: types.CodeType) -> set[str]:
 
 def _function_key(func: types.FunctionType, where: str, depth: int) -> object:
     """Key a plain function: its code, defaults, closure cells and referenced globals."""
-
-    from .._capture_fingerprint import _hash_code_object_into
 
     hasher = hashlib.sha256()
     _hash_code_object_into(hasher, func.__code__)
@@ -265,8 +274,6 @@ def _member_key(value: Any, where: str, depth: int) -> object:
 def _accumulators(stat: Any) -> Iterator[Any]:
     """Yield ``stat`` and, for an ``Aggregator``, every child accumulator."""
 
-    from ._aggregate import Aggregator
-
     yield stat
     if isinstance(stat, Aggregator):
         for child in stat.stats:
@@ -275,9 +282,6 @@ def _accumulators(stat: Any) -> Iterator[Any]:
 
 def _metrics_key(metrics: Mapping[str, StreamingStat]) -> object:
     """Key every metric's name, starting state and encoder."""
-
-    from ._per_unit import Quantile
-    from ._state_io import encode_state, is_saveable_state, state_digest
 
     encoders: list[object] = []
     for name, stat in metrics.items():
@@ -325,8 +329,6 @@ class _HashingLoader:
 
 def _data_key(dataloader: Iterable[Any]) -> str:
     """Digest every batch the dataloader yields, restoring the global random state after."""
-
-    from ._aggregate import _rng_restore, _rng_snapshot
 
     if isinstance(dataloader, Iterator):
         raise _Unkeyable(
@@ -387,9 +389,6 @@ def _run_key(
 def _cache_root(cache_dir: str | Path | None) -> Path:
     """Create (private to this user) and return the aggregate cache directory."""
 
-    from .._capture.prepare.cache import _harden_capture_cache_dir
-    from .._capture_state_helpers import _capture_cache_dir
-
     base = _capture_cache_dir(cache_dir)
     created = not base.exists()
     root = base / "aggregate"
@@ -404,8 +403,6 @@ def _restore_hit(entry: Path, metrics: Mapping[str, StreamingStat]) -> bool:
     """Restore a cache entry into ``metrics`` in place; ``False`` when it is unusable."""
 
     from safetensors import safe_open
-
-    from ._state_io import can_merge_state, merge_state_into, read_state
 
     if not entry.is_file():
         return False
@@ -462,8 +459,6 @@ def run_cached(  # noqa: PLR0913 -- aggregate's subject arguments plus its keywo
     loop: Callable[[Iterable[Any]], dict[str, Any]],
 ) -> dict[str, Any]:
     """Return the cached results for this run, or run ``loop`` and cache them."""
-
-    from ._state_io import write_state
 
     try:
         data_digest = _data_key(dataloader)

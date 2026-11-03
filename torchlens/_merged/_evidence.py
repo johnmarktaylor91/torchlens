@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .._capture.outcome import CaptureStatus, outcome_for
 from .._data_classes._trace_missing_attrs import is_live_trace
 from ..distributed._ledger import GroupLifecycleLedger
 
@@ -470,8 +471,6 @@ def _require_mergeable_outcome(trace: Any, source: str) -> None:
     makes no outcome claim and is not refused here -- the boundary-journal
     parse remains its gate.
     """
-
-    from .._capture.outcome import CaptureStatus, outcome_for
 
     outcome = outcome_for(trace)
     if outcome is None:

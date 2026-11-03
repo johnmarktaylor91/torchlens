@@ -16,6 +16,7 @@ from torch import nn
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..intervention.errors import MultiMatchWarning
 from ..intervention.spec import is_gradient_site
+from ..recording import _record_one_shot
 
 __tl_layer__ = "L5"
 
@@ -413,7 +414,6 @@ def _run_compiled_aggregate_batch(
     # data_classes -> stats import edge puts this module inside an import
     # SCC where mypy degrades facade names to implicit-Any and refuses the
     # call ("_Any? not callable").
-    from ..recording import _record_one_shot
 
     record: Any = _record_one_shot.record
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .._capture.outcome import outcome_for
 from ._engine import JoinKey, JoinRecord, MergeDerivation, derive_merge
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import (
@@ -312,8 +313,6 @@ class MergedTrace:
         lazy member load. Members whose object carries no settled outcome
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
-
-        from .._capture.outcome import outcome_for
 
         statuses: dict[int, str] = {}
         for rank, handle in sorted(handles.items()):

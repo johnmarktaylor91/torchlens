@@ -25,6 +25,7 @@ from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._observability._kernels import RunningStats, RunningStatsResult
+from ..options import CaptureOptions
 
 __all__ = ["TRAJECTORY_STATISTICS", "TrajectoryStats", "measure_trajectory"]
 
@@ -263,7 +264,6 @@ class _TrajectoryFolder:
 
         from .._semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
         from .._user_public_impls import trace
-        from ..options import CaptureOptions
 
         model_input, targets = batch
         names = self._resolve_names(targets is not None)

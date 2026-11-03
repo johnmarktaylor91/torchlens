@@ -34,7 +34,11 @@ from typing import Any
 import torch
 
 from .._io._json import loads_bounded
+from .._observability._kernels import Histogram, HistogramDescriptor, RunningStats
+from ._aggregate import Aggregator
 from ._fitted import FittedArtifactError
+from ._per_unit import Quantile, TopK, _UnitLayout
+from ._streaming import CKA, PCA, Covariance, CrossCovariance, Mean, Norm
 
 __tl_layer__ = "L5"
 
@@ -83,11 +87,6 @@ _FLOAT_LIST_TENSOR_MIN = 16
 
 def _classes() -> dict[str, type]:
     """Return the allow-list of classes a state file may rebuild, by name."""
-
-    from .._observability._kernels import Histogram, HistogramDescriptor, RunningStats
-    from ._aggregate import Aggregator
-    from ._per_unit import Quantile, TopK, _UnitLayout
-    from ._streaming import CKA, PCA, Covariance, CrossCovariance, Mean, Norm
 
     allowed: tuple[type, ...] = (
         Aggregator,
@@ -463,8 +462,6 @@ def refuse_encoder_mismatch(
 def can_merge_state(target: Any, loaded: Any) -> bool:
     """Return whether ``loaded`` has ``target``'s class and child structure."""
 
-    from ._aggregate import Aggregator
-
     if type(target) is not type(loaded):
         return False
     if isinstance(target, Aggregator):
@@ -480,8 +477,6 @@ def merge_state_into(target: Any, loaded: Any) -> None:
 
     Callers check :func:`can_merge_state` first.
     """
-
-    from ._aggregate import Aggregator
 
     if isinstance(target, Aggregator):
         for child, loaded_child in zip(target.stats, loaded.stats, strict=True):

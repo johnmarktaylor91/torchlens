@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils._torch_compat import get_jit_all_schemas
 from ..errors._base import CompatibilityError
 
 __all__ = [
@@ -233,8 +234,6 @@ def _all_dispatcher_schemas() -> list[Any]:
     dispatcher now raises the contract's typed ``uncaptured_collective_op``
     refusal -- the census cannot be vetted, so arming must not proceed.
     """
-
-    from .._utils._torch_compat import get_jit_all_schemas
 
     schemas = get_jit_all_schemas()
     if schemas is None:
