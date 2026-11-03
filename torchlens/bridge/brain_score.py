@@ -356,7 +356,7 @@ def get_activations_fn(
             Requested layer names to CPU numpy activations, batch axis first.
         """
 
-        import torchlens as tl
+        from .._extraction._front_door import extract
 
         names = [str(name) for name in layer_names]
         plan = {
@@ -365,7 +365,7 @@ def get_activations_fn(
         batch = _stack_images(images, resolved_device, model_dtype)
         model.eval()
         with torch.no_grad():
-            outputs = tl.extract(model, batch, plan)
+            outputs = extract(model, batch, plan)
         return OrderedDict((name, outputs[name].detach().cpu().numpy()) for name in names)
 
     return get_activations

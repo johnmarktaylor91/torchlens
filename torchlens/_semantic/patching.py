@@ -14,7 +14,7 @@ from torch import nn
 
 from .._record_type import record_type
 from .._selection.selectors import facet
-from .._user_funcs import trace
+from .._user_public_impls import trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import CaptureOptions
 from .facets import Facet, MissingGrad

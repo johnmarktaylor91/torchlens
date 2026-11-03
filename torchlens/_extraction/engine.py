@@ -692,7 +692,9 @@ def _capture_outputs(
         the selector path, whose plan entries carry site identity).
     """
 
-    import torchlens as _tl
+    from .._user_public_impls import trace as _capture_trace
+    from ..options import CaptureOptions
+    from ._front_door import _extract_layers_with_trace
 
     if plan.layers_kind == "selector":
         frozen: SelectorPlan | None = run_state.get("selector_plan")
@@ -715,11 +717,11 @@ def _capture_outputs(
     if plan.intervention is not None:
         # the intervened capture runs the live intervention door and
         # ledgers its fire receipt; batch zero freezes the fired sites.
-        trace = _tl.trace(
+        trace = _capture_trace(
             plan.model,
             envelope.args,
             dict(envelope.kwargs),
-            capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            capture=CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
             intervene=plan.intervention.spec,
         )
         receipt = batch_receipt(trace)
@@ -727,14 +729,14 @@ def _capture_outputs(
         run_state["current_receipt"] = receipt
         return _resolve_trace_outputs(plan, trace)
     if envelope.kwargs:
-        trace = _tl.trace(
+        trace = _capture_trace(
             plan.model,
             envelope.args,
             dict(envelope.kwargs),
-            capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            capture=CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
         )
         return _resolve_trace_outputs(plan, trace)
-    _trace, outputs, views = _tl._extract_layers_with_trace(
+    _trace, outputs, views = _extract_layers_with_trace(
         plan.model, envelope.first_input(), plan.layers
     )
     return outputs, views
@@ -763,7 +765,7 @@ def _resolve_trace_outputs(
         If a sequence lookup resolves to no saved layer.
     """
 
-    import torchlens as _tl
+    from ._front_door import _matching_saved_layer_labels
 
     outputs: dict[str, torch.Tensor] = {}
     views: dict[str, Any] = {}
@@ -774,7 +776,7 @@ def _resolve_trace_outputs(
             views[label] = view
         return outputs, views
     for pattern in plan.layer_plan.values():
-        matches = _tl._matching_saved_layer_labels(trace, pattern)
+        matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
         for match in matches:

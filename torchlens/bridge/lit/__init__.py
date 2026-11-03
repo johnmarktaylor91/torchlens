@@ -210,7 +210,7 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
         A composed selector, or None for the save-everything default.
     """
 
-    from torchlens import in_module
+    from ..._selection.selectors import in_module
 
     label_map: dict[str, Any] = {}
     for op in probe._layer_list:

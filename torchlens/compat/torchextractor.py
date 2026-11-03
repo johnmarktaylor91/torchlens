@@ -48,7 +48,7 @@ class Extractor:
             Mapping from layer names to outs.
         """
 
-        from torchlens import extract
+        from .._extraction._front_door import extract
 
         return extract(self.model, x, self.layers)
 

@@ -509,9 +509,9 @@ def logged_splice_trace(
         when that module returns a non-tensor.
     """
 
-    import torchlens as tl
-
+    from .._user_public_impls import release_model, trace as _capture_trace
     from .._utils.tensor_utils import get_tensor_label
+    from ..options import CaptureOptions
 
     module = module_for_site(clean, site_label, bridge="splice(..., log_latents=True)")
     raw: dict[str, str | None] = {}
@@ -543,15 +543,15 @@ def logged_splice_trace(
     # scratch, so the temporary child (and any submodules the SAE calls) carry
     # TorchLens metadata; releasing again after removing it leaves the model
     # as a plain module whose next capture prepares the tree it really has.
-    tl.release_model(model)
+    release_model(model)
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(replayable=True))
+        logged = _capture_trace(model, inputs, capture=CaptureOptions(replayable=True))
     finally:
         handle.remove()
         del model._modules[child]
-        tl.release_model(model)
+        release_model(model)
     return logged, str(_record_label(logged[raw["latents"]]))
 
 

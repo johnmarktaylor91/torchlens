@@ -271,7 +271,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     concatenation happened).
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     if isinstance(prompt, str):
         if tokenizer is None:
@@ -289,7 +289,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
 
     forced = prompt_ids + answer_ids[:-1]
     ids = torch.tensor([forced], dtype=torch.long)
-    trace = tl.trace(model, ids)
+    trace = _capture_trace(model, ids)
     base = inspect_prompt(
         trace,
         answer=answer_ids[0],

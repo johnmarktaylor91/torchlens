@@ -685,11 +685,11 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
 
     import torch
 
-    import torchlens
+    from .._version import __version__
 
     manifest: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
-        "torchlens_version": getattr(torchlens, "__version__", "unknown"),
+        "torchlens_version": __version__,
         # getattr spelling: the layer lint's torch-privates text scan would
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),

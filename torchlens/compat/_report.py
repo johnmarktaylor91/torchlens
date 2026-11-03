@@ -1399,9 +1399,10 @@ def _mechanical_belt_row() -> DoctorCheck:
         while the capture still reports ``capture_verified=True``.
     """
 
-    from torchlens import _state
     from torchlens.backends.torch.belt import belt_report
     from torchlens.report._doctor import DoctorCheck
+
+    from .. import _state
 
     if not _state._is_decorated:
         return DoctorCheck(

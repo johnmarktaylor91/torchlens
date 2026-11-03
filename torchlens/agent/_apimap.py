@@ -13,6 +13,11 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+# FACADE by role: the API map resolves root names reflectively through the
+# live facade (``getattr(torchlens, name)``), the one way to read what the
+# facade serves, so it is a surface walker like ``_surface``, not a layer.
+__tl_layer__ = "FACADE"
+
 #: Result schema id (v2: compact rows + capabilities + detail mode).
 API_MAP_SCHEMA = "torchlens.agent.api_map.v2"
 

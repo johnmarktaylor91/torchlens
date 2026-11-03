@@ -477,12 +477,13 @@ def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
     if isinstance(model_or_log, nn.Module):
         if inputs is None:
             raise TypeError("SAE splice from a live model requires `inputs`.")
-        import torchlens as tl
+        from .._user_public_impls import trace as _capture_trace
+        from ..options import CaptureOptions
 
-        return tl.trace(
+        return _capture_trace(
             model_or_log,
             inputs,
-            capture=tl.options.CaptureOptions(replayable=True),
+            capture=CaptureOptions(replayable=True),
         )
     if inputs is not None:
         raise TypeError(

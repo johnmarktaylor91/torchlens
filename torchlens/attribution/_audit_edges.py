@@ -193,15 +193,16 @@ def _written(fork: Any, receiver: Any) -> Tensor:
 def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
     """Trace the model on ``inputs`` with every op saved, intervention-ready, in eval mode."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
+    from ..options import CaptureOptions
 
     positional = [inputs] if isinstance(inputs, Tensor) else list(inputs)
     with _temporarily_eval(request.model), torch.no_grad():
-        return tl.trace(
+        return _capture_trace(
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=tl.options.CaptureOptions(layers_to_save="all", replayable=True),
+            capture=CaptureOptions(layers_to_save="all", replayable=True),
         )
 
 

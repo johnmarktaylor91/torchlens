@@ -303,12 +303,13 @@ def _grid_candidates(graph: _TraceGraph, layer_label: str) -> set[tuple[int, int
 def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
     """Capture a metadata-only trace of the attributed forward call."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
+    from ..options import CaptureOptions
 
-    options = tl.options.CaptureOptions(layers_to_save=None)
+    options = CaptureOptions(layers_to_save=None)
     args = inputs if inputs is not None else ()
     with _temporarily_eval(model):
-        return tl.trace(model, args, input_kwargs, capture=options)
+        return _capture_trace(model, args, input_kwargs, capture=options)
 
 
 def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:

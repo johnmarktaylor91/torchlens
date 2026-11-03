@@ -422,7 +422,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
         First live non-finite output, or a clean result.
     """
 
-    from .._user_funcs import trace
+    from .._user_public_impls import trace
     from ..options import CaptureOptions
 
     capture = trace_kwargs.pop("capture", None)

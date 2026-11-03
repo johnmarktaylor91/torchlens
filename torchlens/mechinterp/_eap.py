@@ -109,7 +109,7 @@ def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
     ids has none otherwise); a plain ``tl.trace`` never changes those flags.
     """
 
-    from .._user_funcs import trace as capture_trace
+    from .._user_public_impls import trace as capture_trace
 
     with torch.enable_grad(), frozen_parameter_gradients():
         return capture_trace(model, inputs, intervene=intervene)

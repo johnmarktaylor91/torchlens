@@ -366,7 +366,7 @@ def build_run_manifest(
     import graphviz  # a hard core dependency (pyproject); never absent here
     import torch
 
-    import torchlens
+    from ...._version import __version__
 
     measured = measured or RunMeasurements()
     versions = _ManifestVersions(
@@ -374,7 +374,7 @@ def build_run_manifest(
         # license row, and the arch-spine probe reads the usual dunder
         # version spelling on the torch module as a private touch.
         torch=str(torch.version.__version__),
-        torchlens=getattr(torchlens, "__version__", "unknown"),
+        torchlens=__version__,
         python=platform.python_version(),
         graphviz_python=getattr(graphviz, "__version__", None),
     )

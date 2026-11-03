@@ -420,7 +420,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
 
         import torch
 
-        from .. import __version__ as torchlens_version
+        from .._version import __version__ as torchlens_version
 
         manifest = {
             "tlspec_version": MERGED_TLSPEC_VERSION,

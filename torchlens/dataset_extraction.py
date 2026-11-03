@@ -513,13 +513,13 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         if isinstance(layers, Mapping):
             validate_output_keys(layers.keys())
     else:
-        import torchlens as _tl
+        from ._extraction._front_door import _normalize_extract_layers
 
         if isinstance(layers, Mapping):
             # RAW keys, before normalization stringifies them: a non-string
             # key must refuse, never silently coerce into a manifest entry.
             validate_output_keys(layers.keys())
-        layer_plan = _tl._normalize_extract_layers(layers)
+        layer_plan = _normalize_extract_layers(layers)
         layers_kind = "mapping" if isinstance(layers, Mapping) else "sequence"
         pipelines, transform_record = _coerce_transform_slot(output_transform, layer_plan)
 

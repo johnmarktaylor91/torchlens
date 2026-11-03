@@ -27,7 +27,7 @@ __tl_layer__ = "L8"
 def _site_matrix(source: Any, site: str) -> Any:
     """Shape one site through the shared operation (B7)."""
 
-    from torchlens import features as _features
+    from .. import features as _features
 
     return _features.site_matrix(source, site)
 

@@ -297,7 +297,7 @@ def _intervention_report(
         false until real intervention-specific checks exist.
     """
 
-    from .._user_funcs import validate_forward_pass
+    from .._user_public_impls import validate_forward_pass
 
     forward_ok = validate_forward_pass(
         model,
@@ -389,7 +389,7 @@ def _validate_receptive_field_scope(
         Sampled receptive and projective tri-state results.
     """
 
-    from .._user_funcs import trace
+    from .._user_public_impls import trace
     from ..receptive_field._validation import validate_receptive_field_trace
     from .invariants import check_metadata_invariants
 
@@ -569,7 +569,7 @@ def validate(
             backend=backend,
         )
 
-    from .._user_funcs import validate_forward_pass
+    from .._user_public_impls import validate_forward_pass
 
     if normalized_scope in {"forward", "saved"}:
         # R33-2: validation is the product's largest transient peak and had no

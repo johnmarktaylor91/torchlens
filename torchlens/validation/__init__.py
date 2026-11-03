@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._io import _json
-from .._user_funcs import (
+from .._user_public_impls import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
@@ -58,6 +58,7 @@ def validate_tlspec(
         If the artifact is a portable ModelLog bundle of torchlens 2.16.
     """
 
+    # deferred: cycle io (the format detectors live in the io facade; the format chain owns their move)
     from ..io import detect_tlspec_format, inspect_tlspec
 
     tlspec_path = Path(path)

@@ -39,7 +39,7 @@ def _preprocessing_versions() -> dict[str, str | None]:
 
     import importlib.metadata as _metadata
 
-    from torchlens import __version__
+    from ._version import __version__
 
     versions: dict[str, str | None] = {"torchlens": __version__}
     for library in ("torch", "torchvision", "timm", "transformers"):

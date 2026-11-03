@@ -220,16 +220,17 @@ def _validate_settings(request: _AuditRequest) -> None:
 def _trace_once(request: _AuditRequest) -> Any:
     """Trace the model once, eval mode, no grad, intervention-ready."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
+    from ..options import CaptureOptions
 
     inputs = request.inputs
     positional = [inputs] if isinstance(inputs, Tensor) else list(inputs)
     with _temporarily_eval(request.model), torch.no_grad():
-        return tl.trace(
+        return _capture_trace(
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=tl.options.CaptureOptions(replayable=True),
+            capture=CaptureOptions(replayable=True),
         )
 
 

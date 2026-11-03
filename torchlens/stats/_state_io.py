@@ -339,14 +339,14 @@ def write_state(root: Any, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
-    import torchlens
+    from .._version import __version__
 
     state_json, tensors, _paths = encode_state(root)
     metadata = {
         "schema": STATE_SCHEMA,
         "state": state_json,
         "digest": state_digest(state_json, tensors),
-        "torchlens": str(torchlens.__version__),
+        "torchlens": __version__,
     }
     destination = Path(path)
     handle, scratch = tempfile.mkstemp(

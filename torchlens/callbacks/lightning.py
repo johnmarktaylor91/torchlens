@@ -301,8 +301,9 @@ class _LayerProfilerCallbackMixin:
             The trace, or ``None`` when the batch was skipped.
         """
 
-        from torchlens import trace
         from torchlens.options import CaptureOptions
+
+        from .._user_public_impls import trace
 
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
@@ -473,7 +474,7 @@ class _SummaryCallbackMixin:
             Which sample was used, named in the printed header.
         """
 
-        import torchlens as tl
+        from .._user_public_impls import summary
 
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):
@@ -483,7 +484,7 @@ class _SummaryCallbackMixin:
         if isinstance(model_input, dict):
             input_args, input_kwargs = None, dict(model_input)
         try:
-            report = tl.summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
+            report = summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
         # A fit must never die for a summary (disclosed below). These are what a
         # forward fed a guessed sample raises (wrong arity or keys, shape or dtype
         # mismatch, missing attribute) plus every TorchLens refusal.

@@ -16,7 +16,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from .._user_funcs import trace
+from .._user_public_impls import trace
 from ..intervention.spec import is_gradient_site
 from ..options import CaptureOptions
 from ._aggregate import (

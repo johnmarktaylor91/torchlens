@@ -746,8 +746,7 @@ def _build_matrix_rdms(
     if not patterns:
         patterns = {"tl_pattern_index": np.arange(n_patterns)}
 
-    import torchlens
-
+    from .._version import __version__
     from ._handoff import rsatoolbox_version
 
     result = rsatoolbox.rdm.RDMs(
@@ -762,7 +761,7 @@ def _build_matrix_rdms(
                 "torchlens did not compute these values"
             ),
             "pattern_identity": pattern_identity,
-            "tl_version": str(getattr(torchlens, "__version__", "unknown")),
+            "tl_version": __version__,
             "rsatoolbox_version": rsatoolbox_version(),
         },
         rdm_descriptors={"site": np.asarray(keys)},

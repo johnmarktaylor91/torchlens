@@ -849,8 +849,7 @@ def base_descriptors(
         Descriptor mapping: identity story first, provenance facts after.
     """
 
-    import torchlens
-
+    from .._version import __version__
     from ..features import SHAPING_OP
 
     descriptors: dict[str, Any] = {
@@ -870,7 +869,7 @@ def base_descriptors(
         # Datasets (measured at 0.3.2).
         "per_stimulus_shape": str(tuple(payload.per_stimulus_shape)),
         "source_dtype": payload.source_dtype,
-        "tl_version": str(getattr(torchlens, "__version__", "unknown")),
+        "tl_version": __version__,
         "rsatoolbox_version": rsatoolbox_version(),
     }
     if payload.pass_index is not None:

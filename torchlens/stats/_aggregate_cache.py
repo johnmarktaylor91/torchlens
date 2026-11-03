@@ -361,7 +361,7 @@ def _run_key(
 ) -> str:
     """Combine every keyed part into the cache key."""
 
-    import torchlens
+    from .._version import __version__
 
     if any(module.training for module in model.modules()):
         raise _Unkeyable(
@@ -372,7 +372,7 @@ def _run_key(
         )
     payload = {
         "schema": CACHE_KEY_SCHEMA,
-        "torchlens": str(torchlens.__version__),
+        "torchlens": __version__,
         "torch": str(torch.version.__version__),
         "model": repr(_module_key(model)),
         "metrics": repr(_metrics_key(metrics)),

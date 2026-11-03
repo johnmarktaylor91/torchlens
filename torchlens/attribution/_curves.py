@@ -383,12 +383,12 @@ def _match_input_labels(plan: _CurvePlan) -> tuple[str, ...]:
         If a leaf matches no input layer.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     inputs, kwargs = _rebuild_inputs(plan.prepared, plan.leaves)
     positional = (inputs,) if plan.prepared.is_single_tensor else tuple(inputs)
     with _temporarily_eval(plan.model), torch.no_grad():
-        trace = tl.trace(plan.model, list(positional), input_kwargs=kwargs or None)
+        trace = _capture_trace(plan.model, list(positional), input_kwargs=kwargs or None)
     candidates = [(name, trace[name].out) for name in trace.input_layers]
     used: set[str] = set()
     labels: list[str] = []

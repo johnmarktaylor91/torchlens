@@ -62,7 +62,7 @@ def load(name: str, *, cache_dir: str | Path | None = None) -> Any:
     if normalized not in {"name", "tiny_linear", "linear"}:
         raise KeyError(f"Unknown TorchLens example {name!r}.")
 
-    from torchlens import trace
+    from .._user_public_impls import trace
 
     torch.manual_seed(0)
     model = _TinyLinear()

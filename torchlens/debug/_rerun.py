@@ -187,7 +187,7 @@ def isolated_capture(
         runs.
     """
 
-    from .._user_funcs import release_model, trace
+    from .._user_public_impls import release_model, trace
     from ..options import CaptureOptions
 
     run_model = copy.deepcopy(model)

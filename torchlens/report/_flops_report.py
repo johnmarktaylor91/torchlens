@@ -396,7 +396,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     import torch
 
-    from .._user_funcs import trace as _trace
+    from .._user_public_impls import trace as _trace
     from .._utils._torch_compat import force_mha_slow_path
     from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
 

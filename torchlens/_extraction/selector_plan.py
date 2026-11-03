@@ -229,9 +229,9 @@ def _resolve_one_selector(
         Ordered ``(pass_qualified_label, site_key, out)`` saved-site rows.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
-    trace = tl.trace(model, envelope_args, envelope_kwargs or None, save=selector)
+    trace = _capture_trace(model, envelope_args, envelope_kwargs or None, save=selector)
     return _saved_sites(trace)
 
 
@@ -360,7 +360,7 @@ def _resolve_mapping_sites(
         Per-key ordered site rows.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     selectors = {str(key): value for key, value in layers.items()}
     if len(selectors) == 1:
@@ -373,7 +373,7 @@ def _resolve_mapping_sites(
     except Exception:  # noqa: BLE001 - OR-refusing selectors fall back to per-key captures
         union = None
     if union is not None:
-        trace = tl.trace(model, envelope_args, envelope_kwargs or None, save=union)
+        trace = _capture_trace(model, envelope_args, envelope_kwargs or None, save=union)
         return {key: _saved_sites(trace, selector) for key, selector in selectors.items()}
     return {
         key: _resolve_one_selector(model, envelope_args, envelope_kwargs, selector)

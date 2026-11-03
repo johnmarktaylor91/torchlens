@@ -22,17 +22,19 @@ def tlens_agreement_demo() -> dict[str, Any]:
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    import torchlens as tl
     import torchlens.mechinterp as mi
+
+    from .._user_public_impls import trace as _capture_trace
+    from ..options import CaptureOptions
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     prompt = "The Eiffel Tower is located in the city of"
     ids = torch.tensor([tokenizer(prompt)["input_ids"]])
-    log = tl.trace(
+    log = _capture_trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     dec = mi.residual_decomposition(log)
@@ -72,7 +74,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     tlens.eval()
     tokens = tlens.to_tokens(prompt)
     _, cache = tlens.run_with_cache(tokens)
-    log2 = tl.trace(tlens, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log2 = _capture_trace(tlens, tokens, capture=CaptureOptions(layers_to_save="all"))
     dec2 = mi.residual_decomposition(log2)
     stack, _labels = cache.decompose_resid(layer=-1, return_labels=True)
     exact = sum(

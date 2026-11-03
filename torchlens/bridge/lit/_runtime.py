@@ -208,7 +208,7 @@ def traced_forward(net: nn.Module, input_kwargs: dict[str, Any], save: Any) -> A
         Code ``lit_capture_incomplete`` when the capture settles non-COMPLETE.
     """
 
-    from torchlens import trace as tl_trace
+    from ..._user_public_impls import trace as tl_trace
 
     log = tl_trace(net, [], input_kwargs=input_kwargs, save=save)
     status = getattr(log.outcome, "status", None)

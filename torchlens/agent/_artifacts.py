@@ -461,10 +461,11 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
             ),
             declared_payload_count=plan["declared_payload_count"],
         )
-    import torchlens as tl
+    from .._data_classes.trace import Trace
+    from .._io.bundle import load
 
-    loaded = tl.load(str(path), lazy=plan["mode"] == "lazy")
-    if not isinstance(loaded, tl.Trace):
+    loaded = load(str(path), lazy=plan["mode"] == "lazy")
+    if not isinstance(loaded, Trace):
         raise InvalidArgumentError(
             f"{path.name!r} loaded as {type(loaded).__name__}, not a Trace",
             code="agent_artifact_kind_unsupported",

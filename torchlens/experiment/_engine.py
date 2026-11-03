@@ -348,7 +348,7 @@ def _run_live_candidate(
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"
     except SelectorCapabilityError:
-        from .._user_funcs import trace as _trace
+        from .._user_public_impls import trace as _trace
 
         member = _trace(
             model,

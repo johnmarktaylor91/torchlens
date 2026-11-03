@@ -604,7 +604,8 @@ def validate_backward_pass(
     bool
         True when captured grads match stock autograd.
     """
-    from .._user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
+    from .._capture_state_helpers import _reject_opaque_wrappers, _unwrap_data_parallel
+    from .._user_public_impls import trace as trace_fn
     from .invariants import check_metadata_invariants
 
     reset_validation_failure(None)

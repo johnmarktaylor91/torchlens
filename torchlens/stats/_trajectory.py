@@ -262,7 +262,7 @@ class _TrajectoryFolder:
         """Trace one ``(model_input, targets)`` batch, project layer by layer, reduce and fold."""
 
         from .._semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
-        from .._user_funcs import trace
+        from .._user_public_impls import trace
         from ..options import CaptureOptions
 
         model_input, targets = batch

@@ -16,9 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import torchlens as tl
 from torchlens._io._json import read_bounded
 
+from .._io.bundle import load
 from ..backends.registry import BackendUnsupportedError, get_backend_spec
 from ..backends.torch import _torch_ops_calls
 from ..errors import ConfigurationError
@@ -170,7 +170,7 @@ class TorchReferenceAdapter:
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
 
-        return tl.load(str(path))
+        return load(str(path))
 
 
 class PlantedProtocol:

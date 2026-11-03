@@ -26,8 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import torchlens as tl
-
+from .._io.bundle import load
+from .._user_public_impls import trace as _capture_trace
 from ..backends.registry import get_backend_spec
 from ._adapters import RosterModel
 from ._rosters.jax import roster as _jax_roster
@@ -438,7 +438,7 @@ class PreviewBackendAdapter:
     def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
         """Capture through the public entry with explicit trace options (refusal cells)."""
 
-        return tl.trace(model, example_input, backend=self.name, **options)
+        return _capture_trace(model, example_input, backend=self.name, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
         """Run the model directly (the parity oracle's independent arm).
@@ -480,7 +480,7 @@ class PreviewBackendAdapter:
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
 
-        return tl.load(str(path))
+        return load(str(path))
 
 
 def _mlx_rng_state() -> Any:

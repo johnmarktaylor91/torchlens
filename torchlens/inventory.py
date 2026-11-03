@@ -436,10 +436,13 @@ def list_sites(
 
     if inputs is None and input_kwargs is None:
         return _module_rung(model)
-    import torchlens as tl
+    from ._user_public_impls import trace as _capture_trace
+    from .options import CaptureOptions
 
-    options = capture if capture is not None else tl.options.CaptureOptions(layers_to_save=None)
-    trace = tl.trace(model, inputs if inputs is not None else (), input_kwargs, capture=options)
+    options = capture if capture is not None else CaptureOptions(layers_to_save=None)
+    trace = _capture_trace(
+        model, inputs if inputs is not None else (), input_kwargs, capture=options
+    )
     return sites_of_trace(trace)
 
 
