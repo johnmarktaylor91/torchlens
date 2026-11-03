@@ -481,7 +481,9 @@ class CollapsePlanReapply:
     graph_shape_match: bool
 
 
-def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
+def export_collapse_plan(
+    trace: Any, mode: Literal["auto", "max"] | float = "auto"
+) -> dict[str, Any]:
     """Export one capture's collapse plan as a JSON-safe persistable payload.
 
     The payload carries the plan's collapsed/visible addresses AND the source

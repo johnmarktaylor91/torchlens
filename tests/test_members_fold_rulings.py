@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 import torch
-from example_models import TinyReluAdd as ReluAdd
+from example_models import TinyLinearRelu as LinearRelu, TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError
@@ -62,8 +62,8 @@ def test_forward_drawing_carries_the_plan_it_rendered_from(log: Any, tmp_path: A
     drawing = log.draw(path=str(tmp_path / "g"), collapse="auto", file_format="dot")
     plan = drawing.collapse_plan
     direct = _collapse_plan(log, "auto", drawing._collapse_context)
-    assert plan.visible_count == direct.visible_count
-    assert plan.collapsed_addresses == direct.collapsed_addresses
+    assert plan.total == direct.total
+    assert len(plan) == len(direct)
     assert drawing._collapse_context.collapse == "auto"
     assert drawing._collapse_context.vis_mode == "unrolled"
 
@@ -87,8 +87,7 @@ def test_rolled_drawing_context_follows_the_draw_call(log: Any, tmp_path: Any) -
     drawing = log.draw(path=str(tmp_path / "g"), rolled=True, collapse="max", file_format="dot")
     assert drawing._collapse_context.vis_mode == "rolled"
     assert (
-        drawing.collapse_plan.collapsed_addresses
-        == _collapse_plan(log, "max", drawing._collapse_context).collapsed_addresses
+        drawing.collapse_plan.nodes == _collapse_plan(log, "max", drawing._collapse_context).nodes
     )
 
 
@@ -108,8 +107,8 @@ def test_collapse_none_drawing_refuses_a_plan_but_keeps_the_schedule(
 def test_backward_drawing_refuses_collapse_diagnostics(tmp_path: Any) -> None:
     """Only a forward drawing carries the collapse members."""
 
-    model = ReluAdd()
-    trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(save_grads="all"))
+    model = LinearRelu()
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_grads="all"))
     try:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
         drawing = trace.draw(path=str(tmp_path / "g"), graph="backward", file_format="dot")
