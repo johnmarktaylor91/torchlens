@@ -108,9 +108,19 @@ from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
+from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
+    _census_container_cells,
+    _count_container_ids,
+)
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
+)
+from ._op_row_release import (  # noqa: F401  (re-exported for cleanup and backend importers)
+    _ROW_RELEASE_PROPERTIES,
+    bind_op_facade,
+    register_row_release_property,
+    release_op_row,
 )
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
@@ -593,50 +603,6 @@ def _container_member_key(
     return None
 
 
-def _count_container_ids(
-    value: Any,
-    id_counts: dict[int, int],
-    expanded_ids: set[int],
-    depth: int,
-) -> None:
-    """Count every exact builtin MUTABLE container id reachable from one cell.
-
-    The alias census behind the pooling guard: a container whose id is seen
-    more than once across ALL swept cells is aliased in-store, and replacing
-    any of its cell appearances would break the alias for later in-place
-    mutation, so such cells never pool.
-
-    Only ``dict``/``defaultdict``/``list``/``set`` ids matter (the pool key
-    visits exactly those). Hashability bounds the walk: dict KEYS and
-    ``set``/``frozenset`` members must be hashable, so no exact builtin
-    mutable container can hide below them — dict values, list members, and
-    tuple members are the only recursion edges.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is defaultdict:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value.values():
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is list:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value:
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is set:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-    elif cls is tuple and depth < 6 and id(value) not in expanded_ids:
-        expanded_ids.add(id(value))
-        for member in value:
-            _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-
-
 def _pool_container_cells(
     stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
 ) -> None:
@@ -654,47 +620,25 @@ def _pool_container_cells(
         so equal content pools trace-wide.
     """
 
-    # ONE scan over every cell: the alias census recurses only into cells
-    # whose class can hold a container (everything else is skipped by an
-    # inline class test — the vast majority of cells are scalars/None), and
-    # the same scan collects the pool candidates (container-classed cells at
-    # sanctioned fids) and the singleton-compaction sites (kind-table list
-    # cells), so neither later pass re-walks rows x fields.
-    id_counts: dict[int, int] = {}
-    expanded_ids: set[int] = set()
-    cell_sites: list[tuple[Any, int, Any]] = []
-    singleton_sites: list[tuple[Any, int, int, Any, Any]] = []
-    any_swept = False
-    for store, fids in stores:
-        rows = store.rows_building()
-        if rows is None:
-            continue
-        any_swept = True
-        fid_set = None if fids is None else frozenset(fids)
-        for row_idx, row_cells in enumerate(rows):
-            for fid, value in enumerate(row_cells):
-                cls = value.__class__
-                if cls is tuple:
-                    _count_container_ids(value, id_counts, expanded_ids, 0)
-                    continue
-                if not (cls is dict or cls is list or cls is set or cls is defaultdict):
-                    continue
-                _count_container_ids(value, id_counts, expanded_ids, 0)
-                if fid_set is None or fid in fid_set:
-                    cell_sites.append((row_cells, fid, value))
-                if fid_set is None and cls is list:
-                    singleton_sites.append((store, row_idx, fid, row_cells, value))
-    if not any_swept:
+    census = _census_container_cells(stores)
+    if census is None:
         return
+    id_counts, cell_sites, singleton_sites = census
+    # A cell whose own id is aliased is skipped before its key is built: that
+    # id is the first one the key walk visits, so the alias guard would refuse
+    # it anyway. Empty exact dict/list/set cells arrive with their key.
     candidates: list[tuple[Any, int, Any, Any]] = []
     key_counts: dict[Any, int] = {}
-    for row_cells, fid, value in cell_sites:
-        visited_ids: list[int] = []
-        key = _container_pool_key(value, 0, visited_ids)
+    for row_cells, fid, value, key in cell_sites:
+        if id_counts[id(value)] > 1:
+            continue
         if key is None:
-            continue
-        if any(id_counts[oid] > 1 for oid in visited_ids):
-            continue
+            visited_ids: list[int] = []
+            key = _container_pool_key(value, 0, visited_ids)
+            if key is None:
+                continue
+            if any(id_counts[oid] > 1 for oid in visited_ids):
+                continue
         candidates.append((row_cells, fid, value, key))
         key_counts[key] = key_counts.get(key, 0) + 1
     for row_cells, fid, value, key in candidates:
@@ -3588,6 +3532,13 @@ def _install_op_field_descriptors() -> None:
 
 
 _install_op_field_descriptors()
+
+#: The generated field descriptor classes, for :func:`release_op_row`'s facade
+#: check. No descriptor class overrides ``_OpField.__delete__``.
+_ROW_RELEASE_FIELD_CLASSES = frozenset(
+    {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
+)
+bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:

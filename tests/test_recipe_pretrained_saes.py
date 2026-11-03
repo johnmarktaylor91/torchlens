@@ -1,7 +1,7 @@
 """Page-content checks for the pretrained-SAE recipe page (SAELens loads, TorchLens runs).
 
 The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
-registry lists ``docs/recipes/pretrained_saes.md``; this module keeps the page-content
+registry lists ``docs/field-guide/pretrained_saes.md``; this module keeps the page-content
 checks.
 """
 
@@ -19,7 +19,7 @@ assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
 recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
-PAGE = "docs/recipes/pretrained_saes.md"
+PAGE = "docs/field-guide/pretrained_saes.md"
 
 
 def test_pretrained_sae_recipe_names_gemma_scope_one_and_two() -> None:

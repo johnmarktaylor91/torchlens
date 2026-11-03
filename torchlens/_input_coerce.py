@@ -184,9 +184,9 @@ def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
     Parameters
     ----------
     extra_positional:
-        Positional values ``trace()`` received after ``input_args``. Only
+        Positional values ``trace()`` received after ``inputs``. Only
         ``model`` and the inputs are positional; a value here is almost always
-        an extra positional model input that overflowed past ``input_args``, or
+        an extra positional model input that overflowed past ``inputs``, or
         an ``input_kwargs`` mapping passed by position.
 
     Raises

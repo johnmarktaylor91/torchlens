@@ -87,7 +87,6 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_options_backward_ready": StorageBinding(StorageKind.RUNTIME),
     "_options_inference_only": StorageBinding(StorageKind.SCALAR),
     "_options_chunk_size": StorageBinding(StorageKind.SCALAR),
-    "_module_filter": StorageBinding(StorageKind.RUNTIME),
     "_options_emit_nvtx": StorageBinding(StorageKind.SCALAR),
     "_options_on_nonfinite": StorageBinding(StorageKind.SCALAR),
     "annotations": StorageBinding(StorageKind.SCALAR, annotation='dict[str, typing.Any]'),

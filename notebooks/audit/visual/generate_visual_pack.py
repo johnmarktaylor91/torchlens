@@ -86,7 +86,7 @@ def get_trace(model_key: str, variant: str = "plain", trace_builder=None):
         trace = trace_builder()
     else:
         m, x = MODELS[model_key]()
-        # Multi-input models supply a tuple; tl.trace takes input_args as a list.
+        # Multi-input models supply a tuple; tl.trace takes inputs as a list.
         xs = list(x) if isinstance(x, tuple) else x
         if variant == "plain":
             trace = tl.trace(m, xs)

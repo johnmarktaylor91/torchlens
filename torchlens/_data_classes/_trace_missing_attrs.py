@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils.facade import refuse_removed_member
 from ._familiar_names import familiar_name_hint
 
 if TYPE_CHECKING:
@@ -97,8 +98,6 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",
             attribute=name,
         )
-    from .._utils.facade import refuse_removed_member
-
     refuse_removed_member(type(trace).__name__, name, _REMOVED_TRACE_MEMBERS)
     hint = _MISSING_ATTR_HINTS.get(name)
     if hint is not None:

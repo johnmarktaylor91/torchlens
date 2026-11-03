@@ -1,0 +1,41 @@
+# TorchLens
+
+> A package for extracting activations from PyTorch models and saving portable bundles
+
+## Tasks
+
+- [Capture a forward pass and read an activation](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/see_and_inspect.md): One call records every operation, its shapes and its activations, checked by replay.
+- [Keep only the activations you need](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/see_and_inspect.md): A selector passed to save= keeps chosen sites and records the rest as structure only.
+- [Get named layers' outputs as tensors](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md): Returns a dict of the named modules' outputs for one input.
+- [Extract features over a whole dataset](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md): Streams chosen layers' activations for every stimulus, in order, with a manifest of what produced them.
+- [Steer a language model during generation](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/fast_paths.md): Binds one edit to the model so every forward, including generate(), applies it at about hook cost.
+- [Ablate a component and measure the effect](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/intervene.md): Fork a captured trace and replay it with the site zeroed, leaving the model untouched.
+- [Draw the computational graph](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/quickstart.md): One call renders the graph with modules collapsed for readability.
+- [Reopen a saved trace](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/internal/agent-reference/package/key-concepts.md): Loads a .tlspec artifact back into a Trace with its activations and provenance.
+- [Add a direction to one site and capture the result](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/intervene.md): A capture-time edit steers one site and records the steered run.
+- [Patch activations from one input into another](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/intervene.md): Replay the corrupted run with one site's activation taken from the clean run.
+- [Sweep edits over one site](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/intervention_api.md): Captures one intervened trace per value and returns them as a Bundle.
+- [Compare two runs site by site](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/intervention_api.md): A Bundle holds named traces and compares them at any site against a baseline.
+- [Print a summary of the model](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/summary.md): A module table with operation counts, shapes and parameter totals.
+- [Stream a large capture to disk](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/intervention_api.md): storage= writes payloads to a directory during capture instead of holding them in memory.
+- [Get gradients of intermediate activations](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/backward.md): Capture with gradient saving on, then run the backward pass through the trace.
+- [Check that a capture is faithful](https://github.com/johnmarktaylor91/torchlens/blob/main/README.md): Replays the captured graph and compares every value with the real forward.
+- [Record a few sites over many forwards cheaply](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/performance.md): A sparse recording keeps chosen sites without building the full graph.
+- [Compute an input attribution map](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/attribution.md): Saliency, integrated gradients and Grad-CAM run as one call each.
+- [Collect features to train a linear probe](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md): Extract one layer over labelled stimuli, then fit any classifier on the saved features.
+- [Open an interactive viewer of a trace](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/export.md): Writes a self-contained HTML page of the graph and its operations.
+- [Diagnose a capture problem](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/internal/agent-reference/common-patterns.md): Checks the environment and the model wrapper and reports versioned rows.
+- [Inspect an untrusted artifact](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/for-ai-agents.md): The read-only tools read the manifest first and never unpickle until asked.
+- [Draw a reproducible subsample before extracting features](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/seeded_subsample.md): Draw the subsample yourself with a seeded generator and pass the original ids, so the artifact names the items it holds.
+- [Record activations across a whole generation](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/internal/agent-reference/common-patterns.md): One recording spans every step of generate(), with the KV cache on.
+- [Gather activations to train a sparse autoencoder](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/sae_trainers.md): Write one layer's activations over a dataset, then hand them to an SAE trainer.
+- [Build a representational dissimilarity matrix](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/semantic_io.md): One call turns stimulus-by-feature activations into an RDM.
+- [Compare model features with brain data](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/neuro.md): Runs RSA, ridge encoding and CKA between a trace and neural recordings.
+- [Stream summary statistics over a dataset](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/stats.md): Aggregates means, norms or quantiles at chosen sites without keeping activations.
+- [Fail a test when the architecture changes](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/hash.md): Hashes the traced structure and raises when it no longer matches the pinned value.
+- [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/non_goals.md): TorchLens captures research forwards in one process; it is not a serving-time monitor.
+
+## Optional
+
+- [Agent index](https://github.com/johnmarktaylor91/torchlens/blob/main/torchlens/_docs/AGENT_INDEX.md): the compact task-to-call index
+- [Capabilities](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/agent_capabilities.md): capability names mapped to calls

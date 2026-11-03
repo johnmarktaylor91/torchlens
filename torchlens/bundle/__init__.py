@@ -18,12 +18,7 @@ from ..intervention._super.super_logs import (
     SuperModuleCallAccessor,
     SuperParamAccessor,
 )
-from ..intervention._super.super_op import (
-    SuperAtenOp,
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-)
+from ..intervention._super.super_op import SuperAtenOp, SuperLayerAccessor, SuperOp, SuperOpAccessor
 from ..intervention._topology.topology import Supergraph
 from ..intervention.types import Relationship
 from . import (
@@ -77,6 +72,10 @@ from ._relation_carriage import (
     _bundle_downstream,
     _bundle_relate,
     _bundle_upstream,
+)
+from ._relation_grades import (
+    RelationGrade as RelationGrade,  # re-export: torchlens.bundle.RelationGrade
+    _bundle_relation_grades,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._token_divergence import (
@@ -502,6 +501,7 @@ class Bundle:
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
+    relation_grades = _bundle_relation_grades  # derived row grades, never stored
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
@@ -900,14 +900,14 @@ class Bundle:
 
         return _operations.bundle_fork(self, name)
 
-    def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
+    def run(self, model: nn.Module, inputs: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
         model:
             Model forwarded to each member.
-        x:
+        inputs:
             Forward input.
 
         Returns
@@ -916,7 +916,7 @@ class Bundle:
             This bundle.
         """
 
-        return _operations.bundle_run(self, model, x, **kwargs)
+        return _operations.bundle_run(self, model, inputs, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member; released members read ``"unmeasured"``.
@@ -924,10 +924,15 @@ class Bundle:
         Parameters
         ----------
         fn:
-            Callable receiving one member log. A callable that accepts a
-            second positional parameter additionally receives the member's
-            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
-            callables keep the historical contract unchanged.
+            Callable receiving one member log. A callable whose second
+            positional parameter is required (or that takes ``*args``)
+            additionally receives the member's NAME there
+            (``bundle.map(lambda log, name: ...)``); a callable declaring a
+            parameter called ``name`` receives it by keyword
+            (``lambda log, k=3, name=None: ...``). A defaulted second
+            parameter with another name keeps its default
+            (``lambda log, k=3: ...`` is called as ``fn(log)``), and
+            single-parameter callables keep the historical contract.
 
         Returns
         -------
@@ -939,17 +944,6 @@ class Bundle:
         """
 
         return _operations.bundle_map(self, fn)
-
-    @staticmethod
-    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
-        """Whether ``fn`` can take (member, name) rather than (member,) only.
-
-        Signature inspection failures (builtins, C callables) fall back to
-        the historical single-argument call, never a guessed two-argument
-        call that would raise mid-iteration.
-        """
-
-        return _operations.accepts_member_name(fn)
 
     def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
         """Render each bundle member graph as a member-keyed strip.
