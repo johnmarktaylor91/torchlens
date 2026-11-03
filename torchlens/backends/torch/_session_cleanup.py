@@ -10,7 +10,7 @@ not preparation). ``model_prep`` re-exports the three ``_clear_*`` walkers
 under their original names.
 """
 
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable
 from types import ModuleType
 from typing import Any
@@ -23,8 +23,14 @@ from ._tl import clear_meta, is_forward_call_decorated
 __all__ = [
     "_clear_callable_session_tensor_metadata",
     "_clear_container_tree_tensor_metadata",
+    "_clear_module_attribute_tensor_metadata",
     "_clear_session_tensor_metadata",
 ]
+
+#: Exact leaf types that can never carry TorchLens tensor metadata.
+_SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
+#: Exact plain container types whose emptiness is a sound inline skip.
+_PLAIN_CONTAINER_TYPES = frozenset({dict, OrderedDict, list, tuple, set, frozenset, deque})
 
 
 def _is_isinstance_hostile_deprecation_shim(value: Any) -> bool:
@@ -45,6 +51,51 @@ def _is_isinstance_hostile_deprecation_shim(value: Any) -> bool:
         value_type.__name__ == "_reduce_op"
         and value_type.__module__ == "torch.distributed.distributed_c10d"
     )
+
+
+def _clear_module_attribute_tensor_metadata(
+    module: nn.Module,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None = None,
+) -> None:
+    """Walk one module's own ``__dict__`` values through the session walker.
+
+    The shared entry of the pre-forward ownership snapshot
+    (:func:`_module_boundary_adoption.collect_pre_forward_tensor_ids`) and the
+    session-end clear (``model_prep._undecorate_model_tensors``), so both sweep
+    the same surfaces. Leaves that cannot carry a stamp are skipped INLINE:
+    exact scalar types, and EMPTY plain containers (the hook ``OrderedDict``
+    slots every ``nn.Module`` owns are the bulk of a module namespace, and a
+    full walker call per empty slot cost a one-module ``tl.record`` more than
+    the sweep found). An empty container is also never memoised in ``seen``:
+    revisiting it is the same no-op. EXACT ``type()`` membership on purpose,
+    as in the walker (the reduce_op shim answers ``isinstance`` with a
+    FutureWarning, SF-45); subclasses take the guarded walker call.
+
+    Parameters
+    ----------
+    module
+        One module of the prepared model tree.
+    seen
+        Object ids already visited during this sweep.
+    visit
+        Optional per-tensor action replacing the default ``clear_meta``.
+
+    Returns
+    -------
+    None
+        Mutates reachable tensors in place (or applies ``visit``).
+    """
+
+    for attr_val in module.__dict__.values():
+        if attr_val is None:
+            continue
+        value_type = type(attr_val)
+        if value_type in _SCALAR_LEAF_TYPES:
+            continue
+        if value_type in _PLAIN_CONTAINER_TYPES and not attr_val:
+            continue
+        _clear_session_tensor_metadata(attr_val, seen, visit=visit)
 
 
 def _clear_session_tensor_metadata(
