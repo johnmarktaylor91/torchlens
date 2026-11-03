@@ -106,18 +106,13 @@ class BufferThreadGapWarning(InterventionWarning):
 
 
 class ReplayPreconditionError(TorchLensInterventionError):
-    """Raised when replay cannot satisfy its future execution preconditions."""
+    """Raised when replay cannot satisfy its future execution preconditions.
 
-
-class UntrustedCallableError(ReplayPreconditionError):
-    """Raised when a loaded spec requests an untrusted custom callable import.
-
-    Unlike catalog errors that derive their message from fields, this security
-    refusal carries BOTH long-form prose and structured ``fields`` (stable
-    ``code`` plus the denied ``module`` / ``import_path`` subject), so callers
-    on this boundary can build the recommended
-    ``allowed_custom_callable_modules`` allowlist without parsing message
-    text (R65).
+    A coded replay refusal (``replay_loaded_trace_has_no_callables``,
+    ``replay_downstream_op_raised``) carries BOTH its long-form prose and
+    structured ``fields`` (``code``, ``remedy`` and the subject), so callers
+    branch on ``exc.fields["code"]`` without parsing message text. Bare
+    precondition failures keep the prose-only form.
     """
 
     def __init__(self, *args: object, **fields: object) -> None:
@@ -138,6 +133,19 @@ class UntrustedCallableError(ReplayPreconditionError):
             InterventionError.__init__(self, message, **fields)  # type: ignore[arg-type]
             return
         super().__init__(*args, **fields)
+
+
+class UntrustedCallableError(ReplayPreconditionError):
+    """Raised when a loaded spec requests an untrusted custom callable import.
+
+    Unlike catalog errors that derive their message from fields, this security
+    refusal carries BOTH long-form prose and structured ``fields`` (stable
+    ``code`` plus the denied ``module`` / ``import_path`` subject), so callers
+    on this boundary can build the recommended
+    ``allowed_custom_callable_modules`` allowlist without parsing message
+    text (R65). The prose-plus-fields constructor is inherited from
+    :class:`ReplayPreconditionError`.
+    """
 
 
 SpecPortabilityError = OpaqueCallableError

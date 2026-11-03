@@ -363,11 +363,23 @@ def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
         if address not in fired:
             missing.append(f"{_hook_plan_identifier(entry)}@{address}")
     if missing:
+        from .intervention._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
+
+        reason_fields = non_tensor_reason_fields(
+            recorded_non_tensor_details(trace, [item.rsplit("@", 1)[1] for item in missing])
+        )
+        because = (
+            f". Reason ({reason_fields['reason']}): {reason_fields['reason_detail']}; a rerun "
+            "fires there no more than the capture did."
+            if reason_fields
+            else "; the capture engine reruns once to record them."
+        )
         raise RunCapabilityUnavailableError(
             "Staged intervention entries have not fired in this trace's recorded graph "
-            f"({', '.join(missing)}); the capture engine reruns once to record them.",
+            f"({', '.join(missing)}){because}",
             code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             detection_stage="fast_rerun_graph_unsteered",
+            **reason_fields,
         )
 
 
@@ -618,9 +630,9 @@ def output_dtype_and_rank(value: Any) -> tuple[str | None, int | None]:
 def refuse_unfired_fast_run(trace: Any) -> None:
     """Refuse a recorded fast run whose staged entries fired nowhere, under ``"error"``.
 
-    The fast engine refreshes the live trace in place, so the refusal comes after
-    the run and its ``last_run`` record (``hooks_unfired``) are settled: the
-    refusal carries the fact, and the trace holds the run that happened.
+    The refusal comes after the run and its ``last_run`` record (``hooks_unfired``)
+    on the result trace are settled: the refusal carries the fact, and the result
+    trace holds the run that happened.
 
     Raises
     ------

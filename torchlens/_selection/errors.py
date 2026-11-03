@@ -61,7 +61,37 @@ class SiteResolutionError(ConfigurationError, ValueError):
 
 
 class LiveModeLabelError(SiteResolutionError):
-    """Raised when live capture cannot resolve a finalized-label selector."""
+    """Raised when live capture cannot resolve a finalized-label selector.
+
+    Every instance carries a stable ``fields["code"]``. The default,
+    ``label_selector_not_live``, names the one condition the class exists
+    for: a live selector (``intervene=``, ``attach_hooks``, a rerun's staged
+    edit) named a finalized postprocess label, which live selectors evaluated
+    during the forward can never match. Rerun refusals pass their own codes
+    (``rerun_staged_label_unmatchable``, ``rerun_selector_unmatchable_live``).
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        code: str = "label_selector_not_live",
+        **fields: Any,
+    ) -> None:
+        """Initialize a live-label refusal with its stable code.
+
+        Parameters
+        ----------
+        message:
+            Human-readable refusal text.
+        code:
+            Stable machine-readable refusal code (the documented default
+            covers the finalized-label condition).
+        **fields:
+            Structured diagnostic payload.
+        """
+
+        super().__init__(message, code=code, **fields)
 
 
 class SelectorCompositionError(SiteResolutionError):
@@ -78,7 +108,7 @@ class SelectorCompositionError(SiteResolutionError):
         *args: object,
         code: str | None = None,
         remedy: str | None = None,
-        **fields: object,
+        **fields: Any,
     ) -> None:
         """Initialize a selector composition refusal.
 
