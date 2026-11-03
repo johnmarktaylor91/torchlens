@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1440 modules, 647579 lines, 0 modules without a docstring.
+83 packages, 1440 modules, 647592 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 40 | 16283 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44659 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44672 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2303 |
@@ -863,7 +863,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (77 modules, 44659 lines)
+Computational graph visualization via Graphviz. (77 modules, 44672 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -881,7 +881,7 @@ Computational graph visualization via Graphviz. (77 modules, 44659 lines)
 | `_color_sources` | Resolve the non-string ''color_by='' sources of ''Trace.draw''. | 96 |
 | `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 814 |
 | `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 158 |
-| `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 331 |
+| `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 333 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 351 |
 | `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 523 |
 | `_encoding` | Encoding-channel core (/L5): declarative value -> visual channels for draw. | 1834 |
@@ -895,11 +895,11 @@ Computational graph visualization via Graphviz. (77 modules, 44659 lines)
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 974 |
 | `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 689 |
 | `_highlight` | ''Trace.draw(highlight=...)'': named highlights routed through the lens doors. | 113 |
-| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 544 |
+| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 547 |
 | `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 326 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 69 |
-| `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 110 |
+| `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 111 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse , the ''__segment__'' half). | 168 |
 | `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 966 |
 | `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1917 |
@@ -909,7 +909,7 @@ Computational graph visualization via Graphviz. (77 modules, 44659 lines)
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2364 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2079 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2086 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 514 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 675 |
