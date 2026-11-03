@@ -11,8 +11,12 @@ need no maintainer action to stay armed:
   exists.
 
 The approval file ``.github/MAJOR_RELEASE_APPROVED`` must never exist in the
-tree outside a test's temporary directory. The end-to-end test runs the
-workflow step's own shell text against a scratch repository with a
+tree outside a test's temporary directory. This file is not smoke-marked (the
+smoke tier sits at its size ceiling); the smoke job of ``.github/workflows/pr.yml``
+runs it by name, so every pull request and every release tag (the release
+workflow re-runs ``pr.yml``) runs it, and the wiring test pins that line. The
+end-to-end test runs the workflow step's own shell text against a scratch
+repository with a
 breaking-change commit range. No network (the PyPI lookup is replaced by an
 explicit published version), well under 5 s.
 """
@@ -25,10 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 import yaml
-
-pytestmark = pytest.mark.smoke
 
 _ROOT = Path(__file__).resolve().parents[1]
 _APPROVAL_REL = Path(".github") / "MAJOR_RELEASE_APPROVED"
@@ -85,6 +86,14 @@ def test_release_guard_is_wired_and_cannot_be_skipped() -> None:
     }
     assert entries.get("scripts/check_no_breaking_markers.py --commit-msg") == ["commit-msg"]
     assert entries.get("scripts/check_no_breaking_markers.py --pre-push") == ["pre-push"]
+
+    pr = yaml.safe_load((_ROOT / ".github" / "workflows" / "pr.yml").read_text())
+    smoke_runs = "\n".join(step.get("run", "") for step in pr["jobs"]["smoke"]["steps"])
+    assert "pytest tests/test_major_version_guard.py tests/test_no_breaking_markers_arming.py" in (
+        smoke_runs
+    ), "pr.yml's smoke job must run the release guard tests by name"
+    assert "workflow_call" in (pr.get(True) or pr["on"]), "release.yml re-runs pr.yml on a tag"
+    assert jobs["gates"]["uses"] == "./.github/workflows/pr.yml"
 
 
 def _commit_msg(tmp_path: Path, message: str) -> subprocess.CompletedProcess[str]:

@@ -17,7 +17,7 @@
 
 ## Release Safety
 A major version ships only on the maintainer's explicit command. Three stops, each failing
-closed, with the tripwire `tests/test_major_version_guard.py` (smoke) pinning their wiring:
+closed, with the tripwire `tests/test_major_version_guard.py` (run by name in the `pr.yml` smoke job) pinning their wiring:
 - `release.yml` runs `check_release_major.py` before every build (pull requests and tags); `publish`
   needs that job, so an unapproved major tag or version never uploads,
 - the commit-msg hook rejects major-bump markers,
