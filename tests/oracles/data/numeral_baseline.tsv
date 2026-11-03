@@ -5231,6 +5231,7 @@ package-docstrings	torchlens/_utils/tensor_utils.py	512
 package-docstrings	torchlens/_utils/tensor_utils.py	64
 package-docstrings	torchlens/_utils/tensor_utils.py	754
 package-docstrings	torchlens/_utils/tensor_utils.py	9.8
+package-docstrings	torchlens/_utils/torchvision_weights.py	50
 package-docstrings	torchlens/_visualization/_arg_suppression.py	8.7
 package-docstrings	torchlens/_visualization/_backward_inventory.py	17
 package-docstrings	torchlens/_visualization/_backward_inventory.py	36
@@ -6487,8 +6488,11 @@ package-docstrings	torchlens/options.py	256
 package-docstrings	torchlens/options.py	33
 package-docstrings	torchlens/options.py	44
 package-docstrings	torchlens/options.py	62
+package-docstrings	torchlens/postprocessing/__init__.py	1.0,
 package-docstrings	torchlens/preprocessing/_attached.py	18
 package-docstrings	torchlens/preprocessing/_authorities.py	0.17
+package-docstrings	torchlens/preprocessing/_declared_transform.py	224,
+package-docstrings	torchlens/preprocessing/_declared_transform.py	256,
 package-docstrings	torchlens/preprocessing/_diagnostics.py	16
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	224
 package-docstrings	torchlens/preprocessing/_imagenet_default.py	224,
@@ -9348,6 +9352,7 @@ test-docstrings	tests/test_torchnative_markers.py	11
 test-docstrings	tests/test_torchnative_markers.py	13
 test-docstrings	tests/test_torchnative_memory_parity.py	2.13
 test-docstrings	tests/test_torchnative_memory_parity.py	6.3
+test-docstrings	tests/test_torchvision_weights_state_match.py	18
 test-docstrings	tests/test_toy_models.py	12
 test-docstrings	tests/test_toy_models.py	18
 test-docstrings	tests/test_toy_models.py	43
@@ -10038,6 +10043,7 @@ test-names	tests/test_tlspec_runnable_r79_seed_typing.py	79_
 test-names	tests/test_tlspec_runnable_r79_session_leak.py	79_
 test-names	tests/test_tlspec_runnable_slice_literal.py	71
 test-names	tests/test_tlspec_unified.py	18_
+test-names	tests/test_torchvision_weights_state_match.py	18_
 test-names	tests/test_track_collector_embedding_budget.py	256_
 test-names	tests/test_trackers_sinks_callbacks.py	100_
 test-names	tests/test_transforms_lib_fidelity.py	14_
