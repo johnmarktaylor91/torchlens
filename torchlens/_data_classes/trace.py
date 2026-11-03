@@ -2340,6 +2340,14 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.module_collapse_order(self)
 
+    def _collapse_schedule(self, context: Any = None) -> Any:
+        """Private door for ``lenses._budget``: the collapse schedule under ``context``.
+
+        Reached through ``_doors.visualization()`` so the lens modules import no collapse code.
+        """
+
+        return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
+
     def _suggest_layer_labels(self, selector: str, *, limit: int = 10) -> list[str]:
         """Did-you-mean layer labels for a failed lookup (the refusal text's candidates)."""
 

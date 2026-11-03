@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ...errors._base import TorchLensWarning
-from .._trace_collapse import collapse_schedule as _collapse_schedule
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -74,6 +73,12 @@ class BudgetResolution:
     coverage: float | None
     in_band: bool
     disclosure: tuple[str, ...]
+
+
+def _collapse_schedule(trace: Trace, context: Any) -> Any:
+    """Return the trace's collapse schedule through the private ``Trace._collapse_schedule`` door."""
+
+    return trace._collapse_schedule(context)
 
 
 def _coverage_for_step(
