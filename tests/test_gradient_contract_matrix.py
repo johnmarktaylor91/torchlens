@@ -493,7 +493,7 @@ _EVIDENCE_CELLS: tuple[tuple[str, str, bool], ...] = (
     ("do(model=, inputs=) (rerun)", "scramble_elements", False),
     # Sole reachers of a library branch the rest of the sample misses.
     ("capture intervene=", "compose", False),
-    ("attach_hooks + run", "permute_batch", False),
+    ("do(set_only) + run", "permute_batch", False),
     ("capture intervene=", "hook callable", True),
     ("do(tl.units(...))", "hook callable", True),
     ("spec.bind(model)", "hook callable", True),
