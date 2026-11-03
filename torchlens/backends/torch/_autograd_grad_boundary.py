@@ -30,19 +30,14 @@ import torch
 
 from ... import _state
 from ..._state import pause_logging
+from ._autograd_grad_marker import AUTOGRAD_BACKWARD_RECORDER_ATTR, AUTOGRAD_GRAD_RECORDER_ATTR
 from ._backward_roots import _is_accumulate_grad
-
-AUTOGRAD_GRAD_RECORDER_ATTR = "__tl_autograd_grad_recorder__"
-"""Marker set on the TorchLens callable that records an in-forward autograd.grad."""
 
 AUTOGRAD_GRAD_FUNC_NAME = "autogradgrad"
 """Op type / func name of the boundary op."""
 
 AUTOGRAD_GRAD_TRANSFORM_KIND = "autograd.grad"
 """``Op.transform_kind`` of the boundary op."""
-
-AUTOGRAD_BACKWARD_RECORDER_ATTR = "__tl_autograd_backward_recorder__"
-"""Marker set on the TorchLens callable that records an in-forward autograd.backward."""
 
 AUTOGRAD_BACKWARD_FUNC_NAME = "autogradbackward"
 """Op type / func name of the backward boundary op."""
@@ -101,23 +96,6 @@ def _logging_trace() -> Any:
 
     active_trace, logging_enabled = _state.active_capture()
     return active_trace if logging_enabled else None
-
-
-def is_autograd_grad_recorder(func: Any) -> bool:
-    """Return whether ``func`` is TorchLens's in-forward autograd.grad recorder.
-
-    Parameters
-    ----------
-    func:
-        An op's recorded callable.
-
-    Returns
-    -------
-    bool
-        ``True`` only for the recorder callable built at capture time.
-    """
-
-    return getattr(func, AUTOGRAD_GRAD_RECORDER_ATTR, False) is True
 
 
 def grad_signature(grad_callable: Callable[..., Any]) -> inspect.Signature:
@@ -235,23 +213,6 @@ def record_autograd_grad_boundary(
         inner_fn=autogradgrad,
     )
     return torch_func_decorator(autogradgrad, AUTOGRAD_GRAD_FUNC_NAME)(*args, **kwargs)
-
-
-def is_autograd_backward_recorder(func: Any) -> bool:
-    """Return whether ``func`` is TorchLens's in-forward autograd.backward recorder.
-
-    Parameters
-    ----------
-    func:
-        An op's recorded callable.
-
-    Returns
-    -------
-    bool
-        ``True`` only for a recorder callable built at capture time.
-    """
-
-    return getattr(func, AUTOGRAD_BACKWARD_RECORDER_ATTR, False) is True
 
 
 def recorder_signature() -> inspect.Signature:

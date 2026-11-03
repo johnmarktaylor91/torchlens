@@ -40,6 +40,7 @@ from ._utils._torch_compat import (
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
@@ -2090,10 +2091,8 @@ def _move_tensors_to_device_inner(
         Subtree to move.
     device:
         Target device.
-    _depth:
-        Internal recursion depth (callers must not supply this).
-    _in_progress:
-        Internal path-scoped ancestor-id set (callers must not supply this).
+    _depth, _in_progress:
+        Internal recursion depth and path-scoped ancestor-id set (callers must not supply these).
     """
 
     import dataclasses as _dataclasses
@@ -2113,7 +2112,7 @@ def _move_tensors_to_device_inner(
         target = torch.device(device) if not isinstance(device, torch.device) else device
         if obj.device == target:
             return _UNMOVED
-        return obj.to(device)
+        return move_input_tensor(obj, device)
 
     registration = None if isinstance(obj, type) else get_registered_container(type(obj))
     is_dataclass_instance = _dataclasses.is_dataclass(obj) and not isinstance(obj, type)

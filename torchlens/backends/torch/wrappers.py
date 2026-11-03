@@ -90,10 +90,6 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
-from ._storage_overlap import (
-    _storage_overlap_byte_interval,
-    _strided_views_share_storage_elements,
-)
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
@@ -120,6 +116,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
+from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
@@ -744,7 +741,6 @@ def _propagate_mutation_label_to_storage_aliases(
     """
 
     from ._ops_capture_records import _record_label_version_snapshot
-    from ._tl import session_storage_alias_candidates, storage_alias_index_key
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER
@@ -758,11 +754,7 @@ def _propagate_mutation_label_to_storage_aliases(
     # (receptive fields, influence geometry, collapse -- the W3-F1 impact
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
-    if (
-        getattr(trace, "is_replayable", False)
-        or trace._options_backward_ready
-        or trace._options_save_grads not in (None, False)
-    ):
+    if not view_mutation_propagation_enabled(trace):
         return
 
     # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
@@ -773,46 +765,10 @@ def _propagate_mutation_label_to_storage_aliases(
     # (kept off the escape census / metadata patches) -- the same sanctioned
     # pattern as ``completeness_witness``'s storage-site indexers.
     with _state.pause_logging(), internal_scalar_read():
-        try:
-            # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
-            storage_ptr = storage_alias_index_key(mutated.untyped_storage())
-        except Exception:
-            return
-        if storage_ptr is None:
-            return
-        candidates = session_storage_alias_candidates(storage_ptr)
-        if not candidates or (len(candidates) == 1 and candidates[0] is mutated):
-            return
-        mutated_lo, mutated_hi = _storage_overlap_byte_interval(mutated)
-        if mutated_hi <= mutated_lo:
-            return
-        for alias in candidates:
-            if (
-                alias is mutated
-                or not isinstance(alias, torch.Tensor)
-                or isinstance(alias, torch.nn.Parameter)
-            ):
-                continue
-            # Gated read: rejects foreign-session stamps and storage-rebound
-            # objects, so a stale index entry can never act as a live alias.
-            alias_label = get_tensor_label(alias)
-            if alias_label is None or alias_label == out_label:
-                continue
-            try:
-                if (
-                    storage_alias_index_key(alias.untyped_storage()) != storage_ptr
-                    or alias.device != mutated.device
-                ):
-                    continue
-                # Element-exact where provable (round-31 M4): interleaved
-                # element-disjoint views must not inherit the mutation edge.
-                shares_elements = _strided_views_share_storage_elements(mutated, alias)
-            except Exception:
-                continue
-            if shares_elements:
-                set_tensor_label(alias, out_label)
-                _register_inplace_live_grad_hook(trace, alias, out_label)
-                _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
+        for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
+            set_tensor_label(alias, out_label)
+            _register_inplace_live_grad_hook(trace, alias, out_label)
+            _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
 
 
 # Positional index of the target Tensor subclass ``cls`` argument for each
@@ -1358,7 +1314,7 @@ def torch_func_decorator(
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        # R16-5: ``as_subclass`` is barcode-TRANSPARENT. Torch's default
+        # R16-5: ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
         # ``__torch_function__`` return conversion calls ``ret.as_subclass(cls)``
         # INSIDE the enclosing wrapped call (``torch.tanh(subclass_tensor)``),
         # which used to steal the enclosing call's bottom-level barcode: the
@@ -1427,25 +1383,21 @@ def torch_func_decorator(
         )
 
         # ---- Deferred-clone interception (clone-on-write) ----
-        # Any wrapped call that can WRITE through a tensor argument must first
-        # copy out pending deferred payload aliases sharing those storages —
-        # this runs BEFORE the mutation, so saved bytes stay capture-time
-        # exact. Triggers cover every wrapped mutation surface: in-place
+        # Any wrapped call that can WRITE through a tensor argument must first copy out pending
+        # deferred payload aliases sharing those storages — this runs BEFORE the mutation, so saved
+        # bytes stay capture-time exact. Triggers cover every wrapped mutation surface: in-place
         # methods and augmented-assignment dunders (``mutates_receiver``),
-        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters,
-        # ``out=`` destinations, and ``inplace=True`` conveniences (``F.relu``
-        # / ``F.dropout``) whose actual underscore mutation may run below this
-        # wrapper — including POSITIONALLY-passed ``inplace`` (torch's
+        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters, ``out=`` destinations,
+        # and ``inplace=True`` conveniences (``F.relu`` / ``F.dropout``) whose actual underscore
+        # mutation may run below this wrapper — including POSITIONALLY-passed ``inplace`` (torch's
         # ``Hardswish.forward`` runs ``F.hardswish(input, self.inplace)``, and
-        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so
-        # this wrapper is the ONLY interception point; missing it left stale
-        # pending aliases that tripped the belt at the next mutating call —
-        # the mobilenet_v3_small failure). NOT ``has_inplace_signature`` —
-        # that flag is true for EVERY dunder (``"__add__".endswith("_")``)
-        # and is only ever meaningful gated behind a same-object return.
-        # Storage-rebinding ``.data=`` writes no bytes but rides along via its
-        # property-setter signature — a spurious materialization is merely a
-        # wasted clone, never a correctness risk.
+        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so this wrapper is the ONLY
+        # interception point; missing it left stale pending aliases that tripped the belt at the next
+        # mutating call — the mobilenet_v3_small failure). NOT ``has_inplace_signature`` — that flag
+        # is true for EVERY dunder (``"__add__".endswith("_")``) and is only ever meaningful gated
+        # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
+        # via its property-setter signature — a spurious materialization is merely a wasted clone,
+        # never a correctness risk.
         if _COW_PENDING and (
             mutates_receiver
             or is_mutating_property_setter
