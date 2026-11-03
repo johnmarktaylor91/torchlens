@@ -171,9 +171,13 @@ def test_root_reachability_rows_resolve() -> None:
 
 
 def test_root_underscore_rows_are_gone() -> None:
-    """No underscore name resolves through the root facade (``_trace`` removed)."""
+    """The existing public version is the sole lazy dunder; private names still refuse."""
 
-    assert not any(name.startswith("_") for name in tl._LAZY_ATTRS)
+    assert {name for name in tl._LAZY_ATTRS if name.startswith("_")} == {"__version__"}
+    assert "__version__" in dir(tl)
+    from torchlens import __version__
+
+    assert __version__ == tl.__version__ == "2.36.3"
     with pytest.raises(AttributeError):
         tl._trace  # noqa: B018 - attribute access IS the assertion.
 
