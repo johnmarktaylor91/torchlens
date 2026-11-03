@@ -58,7 +58,7 @@ tl.trace(model, x)                       __init__.py -> user_funcs.trace
     each torch call hits its wrapper     backends/torch/wrappers.py -> backends/torch/ops.py, _ops_*.py
     barcode nesting keeps bottom ops     backends/torch/_ops_*.py
     op records land on the live Trace    _data_classes/ (Op), _trace_core/ (columns), _ir/ (events)
-  postprocess the raw log                _data_classes/_trace_validation.py::_postprocess -> _postprocess/
+  postprocess the raw log                _data_classes/trace.py::Trace._postprocess -> _postprocess/
     graph cleanup, conditional
     attribution, loop grouping,
     labeling, finalization               _postprocess/graph_traversal.py, control_flow.py,
@@ -141,9 +141,10 @@ import their split modules at the bottom of the file, after their own definition
 patches a private name on the module that defines it and on every module that binds it
 (`docs/agent-reference/known-gotchas.md`).
 
-**The god objects.** `Trace` is `_data_classes/trace.py` (about 4,000 lines) plus 15
-`_data_classes/_trace_*.py` mixin modules; its behaviour for validation, visualization,
-replay and selection is spread across them and across `_runnable/seam.py`. The torch
+**The god objects.** `Trace` is `_data_classes/trace.py` (about 3,700 lines of thin methods and
+the dataclass) over the `_data_classes/_trace_*.py` function modules and the destination
+packages behind `_doors.py`; its behaviour for validation, visualization, replay and
+selection lives in those destinations and in `_runnable/seam.py`. The torch
 capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 1,300
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner

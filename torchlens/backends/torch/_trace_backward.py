@@ -109,3 +109,25 @@ def capture_backward(trace: Trace) -> Any:
     spec = get_backend_spec(trace._provenance_backend)
     refuse_backward_capture_unsupported(spec)
     return _recording_backward_impl(trace)
+
+
+def sync_backward_projection_if_needed(trace: Trace) -> None:
+    """Synchronize lazy backward projections from runtime sidecar events."""
+
+    if trace.__dict__.get("_tl_active_backward_bracket", False):
+        return
+    if not getattr(trace, "backward_events", ()):
+        return
+    from .backward import (
+        _backward_finalize_pending,
+        _close_implicit_backward_pass_if_open,
+        _materialize_backward_projections,
+    )
+
+    _close_implicit_backward_pass_if_open(trace)
+    # A read from INSIDE an engine invocation journals but must not
+    # materialize while the close's FINALIZE step is still pending:
+    # materializing there would publish records ahead of the R36-1 D2H
+    # fence (L9 memo 1.2). The first post-pass read finalizes fully.
+    if not _backward_finalize_pending(trace):
+        _materialize_backward_projections(trace)
