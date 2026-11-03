@@ -98,7 +98,7 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
 
     if kind == "ACT":
         first = tl.units("relu_1_2", [(0, 0, 0, 0)])
-        second = trace["conv2d_1_1"].__selection__()
+        second = trace.layers["conv2d_1_1"].__selection__()
     elif kind == "PARAM":
         first = tl.param("c1.weight")
         second = tl.param("c2.weight")
@@ -204,11 +204,11 @@ def test_edge_substitution_storage_fork_honesty(capture):
     baseline_parent = trace["relu_1_2"].out.clone()
     baseline_child_args = [
         a.clone() if isinstance(a, torch.Tensor) else a
-        for a in trace["conv2d_2_3"].ops[0].saved_args
+        for a in trace.layers["conv2d_2_3"].ops[0].saved_args
     ]
     fork.do(edge.__selection__(), tl.zero_ablate())
 
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     # only the child's consumption changed; producer truth intact
     assert torch.equal(fork["relu_1_2"].out, baseline_parent)
     assert torch.allclose(child.out, model.c2(torch.zeros_like(baseline_parent)))
@@ -225,7 +225,7 @@ def test_edge_substitution_storage_fork_honesty(capture):
     for saved, baseline in zip(child.saved_args, baseline_child_args, strict=True):
         if isinstance(saved, torch.Tensor):
             assert torch.equal(saved, baseline)
-    parent_op = fork["relu_1_2"].ops[0]
+    parent_op = fork.layers["relu_1_2"].ops[0]
     assert not (parent_op.out_versions_by_child or {})
 
     # per-edge intervened marker; node-level key correctly never fires
@@ -276,7 +276,7 @@ def _identity_edge_fork(trace):
 def test_validation_boundary_accepts_corroborated_identity(capture):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None
     assert verdict.decision == "edge_intervention_boundary"  # DISTINCT term, not "exempted"
@@ -289,7 +289,7 @@ def test_validation_boundary_accepts_corroborated_identity(capture):
 def test_validation_positive_invariant_strip_fire_record(capture):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     child._internal_set("edits", [r for r in child.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
@@ -302,7 +302,7 @@ def test_validation_positive_invariant_strip_fire_record(capture):
 def test_validation_positive_invariant_forge_without_stamp(capture):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     child._internal_set("edge_replacement_stamps", {})
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
@@ -316,8 +316,8 @@ def test_validation_captured_native_via_capture_surface_fails(capture: Any) -> N
     fork = trace.fork()
     edge = _edge(trace)
     fork.do(edge.__selection__(), tl.zero_ablate())
-    child = fork["conv2d_2_3"].ops[0]
-    parent = fork["relu_1_2"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
+    parent = fork.layers["relu_1_2"].ops[0]
     child._internal_set("edge_substitutions", {})
     child._internal_set("edge_replacement_stamps", {})
     child._internal_set("edits", [record for record in child.edits if not record.edge_address])
@@ -335,7 +335,7 @@ def test_validation_skip_shaped_acceptance_meta_test(capture):
 
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     child._internal_set("out", child.out + 5.0)
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
@@ -384,9 +384,9 @@ def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
     path = tmp_path / "edge_plain.tlspec"
     fork.save(path, level="portable")
     loaded = tl.load(path)
-    child = loaded["conv2d_2_3"].ops[0]
+    child = loaded.layers["conv2d_2_3"].ops[0]
     assert child.edge_substitutions and child.edge_replacement_stamps
-    live_child = fork["conv2d_2_3"].ops[0]
+    live_child = fork.layers["conv2d_2_3"].ops[0]
     for key, entry in child.edge_substitutions.items():
         assert isinstance(entry["value"], torch.Tensor)
         assert torch.equal(entry["value"], live_child.edge_substitutions[key]["value"])
@@ -429,14 +429,14 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
         warnings.simplefilter("ignore")
         fork.save(path, level="executable_with_callables")
     loaded = tl.load(path)
-    loaded_child = loaded["conv2d_2_3"].ops[0]
+    loaded_child = loaded.layers["conv2d_2_3"].ops[0]
     assert not loaded_child.edge_substitutions
     assert not loaded_child.edge_replacement_stamps
 
     # Trace func callables are DROP at this schema level. Reattach only the
     # source callables so the forced artifact reaches the divergence oracle.
     for loaded_op in loaded._layer_list:
-        source_op = fork[loaded_op.layer_label].ops[0]
+        source_op = fork.layers[loaded_op.layer_label].ops[0]
         loaded_op._internal_set("func", source_op.func)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

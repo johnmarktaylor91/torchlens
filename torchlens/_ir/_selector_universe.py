@@ -23,6 +23,7 @@ import re
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 #: String-label attribute universes per lifecycle, in match order.
@@ -39,7 +40,7 @@ _SUBSTRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
     "site": ("layer_label",),
 }
 
-_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
+_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::(?:\d+|last|all))?$|:(?:\d+|last|all)$)")
 
 
 def sanitize_transform_kind(kind: object) -> str:
@@ -187,6 +188,11 @@ def _string_labels(
         if text not in seen:
             seen.add(text)
             labels.append(text)
+    if lifecycle == "site" and attrs is _STRING_LABEL_ATTRS:
+        # Pass tokens are post-hoc spellings: the pass count is known only
+        # once the trace has settled, so the live and capture lanes never
+        # answer to them.
+        labels.extend(token for token in pass_token_labels(subject) if token not in seen)
     return tuple(labels)
 
 
