@@ -21,6 +21,7 @@ from ..._data_classes._schema_bindings import STORAGE_BINDINGS
 from ..._data_classes.field_policy import StorageKind
 from ..field_registry import RECORD_CONTRACT_CLASSES, persisted_field_names
 from .contract import JSON_TYPE_BY_STORAGE_KIND, RECORD_INDEX
+from .values import _replace_record_copies
 
 #: Reusable grammar leaves. All nodes are data; decoding never calls a validator
 #: named by an artifact. ``optional`` lists keys that may be absent, ``open``
@@ -776,17 +777,9 @@ class LiveCells:
         return self._to_copies(_edge_members(value))
 
     def _to_copies(self, value: Any) -> Any:
-        """Replace live records inside ``value`` by their scrubbed copies."""
+        """Replace live record references without flattening the value containers."""
 
-        if id(value) in self._copy:
-            return self._copy[id(value)]
-        if isinstance(value, list):
-            return [self._to_copies(item) for item in value]
-        if isinstance(value, tuple) and not hasattr(value, "_fields"):
-            return tuple(self._to_copies(item) for item in value)
-        if isinstance(value, dict):
-            return {key: self._to_copies(item) for key, item in value.items()}
-        return value
+        return _replace_record_copies(value, self._copy)
 
 
 def _edge_members(value: Any) -> Any:

@@ -83,6 +83,26 @@ def tuple_subtypes() -> dict[str, type]:
     return result
 
 
+def _replace_record_copies(value: Any, copies: Mapping[int, Any]) -> Any:
+    """Replace live record references while retaining declared value-container identities."""
+
+    if id(value) in copies:
+        return copies[id(value)]
+    if isinstance(value, list):
+        return [_replace_record_copies(item, copies) for item in value]
+    if isinstance(value, tuple) and not hasattr(value, "_fields"):
+        items = tuple(_replace_record_copies(item, copies) for item in value)
+        return type(value)(items) if type(value) in tuple_subtypes().values() else items
+    if isinstance(value, defaultdict):
+        return defaultdict(
+            value.default_factory,
+            {key: _replace_record_copies(item, copies) for key, item in value.items()},
+        )
+    if isinstance(value, dict):
+        return {key: _replace_record_copies(item, copies) for key, item in value.items()}
+    return value
+
+
 def class_path(cls: type) -> str:
     """Return the dotted ``module.qualname`` spelling the format uses for a class."""
 
