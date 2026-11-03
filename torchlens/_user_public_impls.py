@@ -27,7 +27,7 @@ from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
 from ._errors import CaptureNotActiveError, InvalidArgumentError
-from ._input_coerce import _coerce_input_args
+from ._input_coerce import _coerce_inputs
 from ._literals import (
     CollapseLiteral,
     FoldRepeatsLiteral,
@@ -258,7 +258,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         inputs = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     check_model_and_input_variants(model, inputs, input_kwargs)
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
@@ -603,7 +603,7 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
-    input_args = _coerce_input_args(model, input_args)
+    input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
     if recurrence_detection is MISSING:
@@ -1159,7 +1159,7 @@ def _validate_forward_pass_torch(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    input_args = _coerce_input_args(model, input_args)
+    input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).

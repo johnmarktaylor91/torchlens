@@ -1004,7 +1004,6 @@ torchlens/bridge/pytorch_grad_cam.py::cam	81
 torchlens/bridge/sae.py::_next_token_metrics	68
 torchlens/bridge/sae.py::splice	125
 torchlens/bridge/shap.py::explain	67
-torchlens/bridge/transformers.py	801
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	61
 torchlens/bridge/transformers.py::trace_text	66
 torchlens/bundle/__init__.py	1410
