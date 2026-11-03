@@ -442,7 +442,7 @@ def _check_aten_values_consistent(trace: Trace) -> None:
         If any kept ATen value breaks the contract.
     """
 
-    profile = getattr(trace, "_primitive_op_profile", None)
+    profile = trace._primitive_op_profile
     if profile is None:
         return
     ops = list(trace._layer_list)
@@ -451,7 +451,7 @@ def _check_aten_values_consistent(trace: Trace) -> None:
         _check_row_values(row, ops)
         if row.capture_phase == "forward" and row.owner_status == "forward_op":
             partitions[row.owner_func_call_id].append(row)
-    if getattr(trace, "_options_save_mode", "copy") != "copy":
+    if trace._options_save_mode != "copy":
         return
     gap_owners = {
         gap.owner_func_call_id

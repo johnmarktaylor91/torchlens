@@ -609,7 +609,7 @@ def _settle_aten_values_for_candidate(trace: Trace, candidate: Any, verdict: str
         ``keep`` when a successor saved it, ``drop`` when the window evicted it.
     """
 
-    if getattr(trace, "_options_aten_ops", False) != "values":
+    if trace._options_aten_ops != "values":
         return
 
     _note_aten_owner_verdict(trace, getattr(candidate, "owner_call_id", None), verdict)

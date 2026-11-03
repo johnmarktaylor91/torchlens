@@ -404,7 +404,7 @@ def _build_witness_state(
         record_escapes=record_escapes,
         ledger=record_escapes,
         record_aten=record_aten,
-        record_aten_values=getattr(trace, "_options_aten_ops", False) == "values",
+        record_aten_values=trace._options_aten_ops == "values",
         plane_p=plane_p,
         aten_events=event_stream,
         capture_phase="forward",

@@ -540,9 +540,7 @@ def _retain_aten_values(
     """
 
     trace = state.trace
-    if getattr(trace, "_out_sink", None) is not None or not getattr(
-        trace, "_keep_outs_in_memory", True
-    ):
+    if trace._out_sink is not None or not trace._keep_outs_in_memory:
         return None
     # Logging is paused here (``_recorder_paused`` on the finish hook): the
     # reads and the clone below never reach the op log or the call fingerprint.
@@ -583,9 +581,9 @@ def _copy_aten_leaves(
     save_mode = _effective_activation_save_mode(
         trace, func_name=pending.operator, is_inplace=pending.mutation_kind != "none"
     )
-    detach = bool(getattr(trace, "_options_detach_saved_activations", True))
-    output_device = getattr(trace, "_options_output_device", "same")
-    accountant = getattr(trace, "_save_budget_accountant", None)
+    detach = bool(trace._options_detach_saved_activations)
+    output_device = trace._options_output_device
+    accountant = trace._save_budget_accountant
     label = f"aten:{pending.operator}.{pending.overload}"
     copies: list[torch.Tensor] = []
     for leaf in leaves:
@@ -740,7 +738,7 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
         record_escapes=False,
         ledger=False,
         record_aten=True,
-        record_aten_values=getattr(trace, "_options_aten_ops", False) == "values",
+        record_aten_values=trace._options_aten_ops == "values",
         aten_events=stream,
         capture_phase="backward",
         backward_epoch_index=pass_index,

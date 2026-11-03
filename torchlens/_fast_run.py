@@ -690,7 +690,7 @@ def _refuse_fast_aten_values(trace: Any) -> None:
         When the trace was captured with ``CaptureOptions(aten_ops="values")``.
     """
 
-    if getattr(trace, "_options_aten_ops", False) != "values":
+    if trace._options_aten_ops != "values":
         return
     raise RunCapabilityUnavailableError(
         "The fast live run does not re-record ATen values "
