@@ -41,7 +41,7 @@ class SiteDeltas:
     node_for_label: Mapping[str, str]
 
     def key(self, op: Any) -> str:
-        """Return the site key of one drawn op (``relu_1_2:2`` for a pass of a multi-pass layer)."""
+        """Return the site key of one drawn op (``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer)."""
 
         layer_label = str(getattr(op, "layer_label", ""))
         node = self.node_for_label.get(layer_label, layer_label)

@@ -664,7 +664,7 @@ def _node_id(side: str, layer: Any) -> str:
 
 
 def _site_label(layer: Any) -> str:
-    """Return a drawn op's label: ``relu_1_2:2`` for a pass of a multi-pass layer."""
+    """Return a drawn op's label: ``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer."""
 
     from ..bundle._aligned_sites import site_row_key
 
