@@ -5551,7 +5551,8 @@ drops a newly listed record from the keyword rows.
 ### Keywords
 Every parameter a caller can pass by name to a public callable has a row here (or in the
 keyword table above) naming that callable after "keyword of", with its kind, default and
-meaning; `tests/test_glossary_params.py` fails on a public parameter no row names.
+meaning; `tests/test_glossary_params.py` fails on a public parameter no row names. Constructor
+keywords of the records built by TorchLens (the table above) are not public and have no row.
 
 | Spelling | Meaning |
 | --- | --- |
