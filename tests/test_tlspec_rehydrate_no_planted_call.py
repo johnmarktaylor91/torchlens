@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import pickle
+import shutil
 from pathlib import Path
 
 import numpy
@@ -200,26 +201,116 @@ def test_untampered_runnable_load_and_run_succeeds(tmp_path: Path) -> None:
     assert result.report.path_faithfulness.value == "verified"
 
 
+# 88 tracked ``.py`` files under ``torchlens/_data_classes`` on 2026-11-03
+# (``git ls-files 'torchlens/_data_classes/*.py'``). The floor sits a little below
+# that so a consolidation does not trip it, but far above zero: a wrong directory
+# (the scan once pointed at a ``data_classes`` folder that does not exist and passed
+# on zero files) fails here instead of passing vacuously.
+_MIN_SCANNED_DATA_CLASS_FILES = 75
+# Restore paths that update ``__dict__`` from state today: ``_accessor_base``,
+# ``layer`` and ``_trace_state_io.trace_setstate`` (the path ``Trace.__setstate__``
+# delegates to).
+_MIN_GUARDED_RESTORE_SITES = 3
+_DATA_CLASSES_DIR = Path(tl.__file__).parent / "_data_classes"
+
+
+def _is_state_restore(node: ast.AST) -> bool:
+    """Return whether ``node`` is a ``__setstate__`` or a ``*_setstate`` helper."""
+
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return False
+    return node.name == "__setstate__" or node.name.endswith("_setstate")
+
+
+def _scan_state_restores(directory: Path) -> tuple[int, int, list[str]]:
+    """Scan every module under ``directory`` for unguarded ``__dict__`` updates.
+
+    Returns the number of files scanned, the number of restore functions that
+    update ``__dict__`` from state, and the offenders: restore functions whose
+    ``__dict__.update(state)`` is not preceded by
+    ``refuse_callable_shadowing_state_keys``.
+    """
+
+    files_scanned = 0
+    guarded_sites = 0
+    offenders: list[str] = []
+    for source_path in sorted(directory.rglob("*.py")):
+        files_scanned += 1
+        source = source_path.read_text()
+        for node in ast.walk(ast.parse(source)):
+            if not _is_state_restore(node):
+                continue
+            body_src = ast.get_source_segment(source, node) or ""
+            update_at = body_src.find("__dict__.update(state)")
+            if update_at < 0:
+                continue
+            guard_at = body_src.find("refuse_callable_shadowing_state_keys(")
+            if 0 <= guard_at < update_at:
+                guarded_sites += 1
+            else:
+                name = getattr(node, "name", "?")
+                offenders.append(f"{source_path.relative_to(directory)}::{name}")
+    return files_scanned, guarded_sites, offenders
+
+
 def test_every_portable_setstate_guards_dict_update() -> None:
     """No portable ``__setstate__`` updates ``__dict__`` without the shadow filter.
 
-    AST source-scan tripwire: a NEW portable ``__setstate__`` that calls
-    ``self.__dict__.update(state)`` without first calling
-    ``refuse_callable_shadowing_state_keys`` re-opens the sec_3 enabler class.
+    AST source-scan tripwire: a NEW portable ``__setstate__`` (or ``*_setstate``
+    helper it delegates to) that calls ``__dict__.update(state)`` without first
+    calling ``refuse_callable_shadowing_state_keys`` re-opens the sec_3 enabler
+    class. The file and site floors keep the scan from passing on an empty or
+    wrong directory.
     """
 
-    data_classes_dir = Path(tl.__file__).parent / "data_classes"
-    offenders: list[str] = []
-    for source_path in sorted(data_classes_dir.glob("*.py")):
-        tree = ast.parse(source_path.read_text())
-        for node in ast.walk(tree):
-            if not (isinstance(node, ast.FunctionDef) and node.name == "__setstate__"):
-                continue
-            body_src = ast.get_source_segment(source_path.read_text(), node) or ""
-            if "__dict__.update(state)" not in body_src:
-                continue
-            if "refuse_callable_shadowing_state_keys" not in body_src:
-                offenders.append(f"{source_path.name}::{node.name}")
+    assert _DATA_CLASSES_DIR.is_dir(), f"data classes package not found: {_DATA_CLASSES_DIR}"
+    files_scanned, guarded_sites, offenders = _scan_state_restores(_DATA_CLASSES_DIR)
+    assert files_scanned >= _MIN_SCANNED_DATA_CLASS_FILES, (
+        f"tripwire scanned {files_scanned} files under {_DATA_CLASSES_DIR}; "
+        f"expected at least {_MIN_SCANNED_DATA_CLASS_FILES}"
+    )
+    assert guarded_sites >= _MIN_GUARDED_RESTORE_SITES, (
+        f"tripwire found {guarded_sites} guarded state restores; "
+        f"expected at least {_MIN_GUARDED_RESTORE_SITES}"
+    )
     assert not offenders, (
         f"portable __setstate__ updates __dict__ without the callable-shadow filter: {offenders}"
     )
+
+
+_PLANTED_UNGUARDED_SETSTATE = """
+
+class _PlantedState:
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+"""
+
+
+def test_setstate_tripwire_catches_planted_unguarded_update(tmp_path: Path) -> None:
+    """The tripwire reads the real files: a planted unguarded restore fails it."""
+
+    copy_dir = tmp_path / "_data_classes"
+    shutil.copytree(_DATA_CLASSES_DIR, copy_dir)
+    planted = copy_dir / "_accessor_base.py"
+    planted.write_text(planted.read_text() + _PLANTED_UNGUARDED_SETSTATE)
+
+    files_scanned, _guarded, offenders = _scan_state_restores(copy_dir)
+
+    assert files_scanned >= _MIN_SCANNED_DATA_CLASS_FILES
+    assert offenders == ["_accessor_base.py::__setstate__"]
+
+
+def test_setstate_tripwire_catches_removed_guard(tmp_path: Path) -> None:
+    """Dropping the filter from the real ``Trace`` restore path fails the tripwire."""
+
+    copy_dir = tmp_path / "_data_classes"
+    shutil.copytree(_DATA_CLASSES_DIR, copy_dir)
+    trace_io = copy_dir / "_trace_state_io.py"
+    source = trace_io.read_text()
+    guard_call = "refuse_callable_shadowing_state_keys(type(trace), state)"
+    assert guard_call in source
+    trace_io.write_text(source.replace(guard_call, "pass", 1))
+
+    _files, _guarded, offenders = _scan_state_restores(copy_dir)
+
+    assert offenders == ["_trace_state_io.py::trace_setstate"]

@@ -113,6 +113,8 @@ def test_record_followed_by_carries_followed_by_unsupported() -> None:
     with pytest.raises(PredicateError) as exc_info:
         tl.record(_model(), _x(), save=tl.func("linear") & tl.followed_by(tl.func("relu")))
     assert exc_info.value.fields["code"] == "followed_by_unsupported"
+    # The remedy names the real door: tl.trace with the lookback knobs on CaptureOptions.
+    assert "tl.trace(save=..., capture=tl.options.CaptureOptions(lookback=" in str(exc_info.value)
 
 
 def test_followed_by_metadata_only_carries_lookback_payload_policy_conflict() -> None:

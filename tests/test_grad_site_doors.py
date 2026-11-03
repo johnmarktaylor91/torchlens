@@ -171,7 +171,7 @@ def test_gradient_plan_without_model_refuses_replay_before_any_mutation() -> Non
         trace.do(tl.grad_fn("ReluBackward0"), lambda g, *, ctx: g)
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     message = str(excinfo.value)
-    assert "model= and x=" in message
+    assert "model= and inputs=" in message
     assert "engine='set_only'" in message
     assert _snapshot(trace) == before
 

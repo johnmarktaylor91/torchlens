@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1424 modules, 633464 lines, 0 modules without a docstring.
+83 packages, 1424 modules, 633497 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,13 +15,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25072 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1493 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4588 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 37841 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10578 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 54 | 35756 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11508 |
@@ -47,7 +47,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 271 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 176 |
-| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5172 |
+| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5174 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14632 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2445 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
-| `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3008 |
+| `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3011 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 73 | 35073 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1912 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
@@ -209,7 +209,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25071 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25072 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -246,7 +246,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 752 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe ). | 402 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
-| `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 555 |
+| `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 556 |
 | `preflight` | Address preflight: price a selective-save spelling BEFORE the forward (leverage B9). | 296 |
 | `projections` | Fastlog projections over unified capture events. | 1591 |
 | `projectors` | Sibling projections over a sealed capture run core. | 1018 |
@@ -404,12 +404,12 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 594 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10578 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Extraction v2 runtime (extract memo items 4-19). | 104 |
-| `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 98 |
+| `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 125 |
 | `callable_identity` | Callable identity for extraction resume (extract + item 15). | 710 |
 | `context` | Batch context, row validation, and user-key validation (extract item 4). | 250 |
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 211 |
@@ -1007,7 +1007,7 @@ Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 
 
 ### `torchlens.agent`
 
-torchlens.agent -- the read-only agent inspection surface (agent ). (15 modules, 5172 lines)
+torchlens.agent -- the read-only agent inspection surface (agent ). (15 modules, 5174 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1018,7 +1018,7 @@ torchlens.agent -- the read-only agent inspection surface (agent ). (15 modules,
 | `_compare` | compare: two-artifact structural + value diff with coverage honesty. | 252 |
 | `_envelope` | Canonical serializer and the one agent-surface envelope (agent ). | 188 |
 | `_fold` | The recurrence fold: the agent surface's default structural view. | 341 |
-| `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 99 |
+| `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 101 |
 | `_init_block` | ''torchlens agent init'': point a project's agent instruction file at the agent index. | 262 |
 | `_overview` | Structured overview records and dump views (agent -3.4). | 366 |
 | `_query` | query_sites: structured site discovery over persisted facts. | 539 |
@@ -1588,7 +1588,7 @@ Static export helpers for TorchLens logs. (14 modules, 5227 lines)
 
 ### `torchlens.export._model_explorer`
 
-Google Model Explorer export family (modelexplorer -B12). (16 modules, 3008 lines)
+Google Model Explorer export family (modelexplorer -B12). (16 modules, 3011 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1599,7 +1599,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3008 line
 | `_diff` | Bundle value diff for Model Explorer's split pane. | 265 |
 | `_edges` | Occurrence-preserving ported edges through an explicit label map. | 155 |
 | `_episode` | EPISODE capture export: one collection, full graph + per-step graphs. | 428 |
-| `_errors` | Typed refusals for the Model Explorer export family. | 54 |
+| `_errors` | Typed refusals for the Model Explorer export family. | 57 |
 | `_files` | File-target writer for the Model Explorer export family. | 97 |
 | `_grouprows` | ''groupNodeAttributes'' rows and the ''""'' provenance block. | 136 |
 | `_ids` | Node-id minting and component escaping ( escaping, id rule). | 98 |
