@@ -1603,7 +1603,7 @@ jobs:
             extras: "dev,brainscore"
             pkgs: ""
             files: "tests/test_docstring_examples.py::test_optional_examples_run"
-            # brainscore_vision and brainio.
+            # brainscore_vision and brainscore_core (which bundles brainio).
             floor: "2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -184,7 +184,7 @@ GATE_ENV_EXAMPLE_MODULES: frozenset[str] = frozenset(
 #: legs that install the module (nightly ``bridges-real`` and ``lit-bridge``); a leg's
 #: PASSED floor counts the cells it installs, so a skip there fails the leg.
 OPTIONAL_EXAMPLE_MODULES: tuple[str, ...] = (
-    "brainio",
+    "brainscore_core",
     "brainscore_vision",
     "captum",
     "dagua",
