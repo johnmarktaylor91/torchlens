@@ -461,7 +461,7 @@ def test_frozen_parameter_mutation_op_records_its_gradient(spelling: str) -> Non
     eager_out.sum().backward()
 
     trace = tl.trace(copy.deepcopy(model), x, capture=CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     mutation = _ops_by_type(trace, _GRAD_OPERAND_OP[spelling])[0]
     assert mutation.grad is not None
     assert torch.allclose(mutation.grad, eager_temp.grad)
@@ -529,7 +529,7 @@ def test_backward_validation_still_fails_when_the_frozen_mutation_is_dropped(
 
 
 def _backward_through_own_output(trace: Any) -> None:
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/backward.py, backends/torch/tensor_tracking.py and a sole campaign mutation kill.

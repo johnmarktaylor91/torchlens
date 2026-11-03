@@ -61,7 +61,7 @@ def test_backward_call_context_survives_tlspec_round_trip(tmp_path: Path) -> Non
     bundle_path = tmp_path / "backward_context.tlspec"
     try:
         expected_line = inspect.currentframe().f_lineno + 1
-        trace.log_backward(loss)
+        trace.backward(loss)
         trace.save(bundle_path, overwrite=True)
         loaded = tl.load(bundle_path)
 

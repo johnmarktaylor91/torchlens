@@ -248,7 +248,7 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
             capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
     loss = trace[trace.ops.keys()[-1]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
 
     first = trace.draw(
         graph="backward",

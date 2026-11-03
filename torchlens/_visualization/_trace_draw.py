@@ -124,6 +124,18 @@ def _draw_policy(
     }
 
 
+def _require_graph_kind(graph: str) -> None:
+    """Refuse a ``graph=`` value other than forward, backward or combined."""
+
+    if graph not in ("forward", "backward", "combined"):
+        raise InvalidArgumentError(
+            f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
+            code="visualization_mode_invalid",
+            remedy="pass graph='forward', 'backward', or 'combined'",
+            argument="graph",
+        )
+
+
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
     trace: Trace,
     path: str | None = None,
@@ -185,13 +197,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         # locals() is read before any parameter below is reassigned.
         return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
 
-    if graph not in ("forward", "backward", "combined"):
-        raise InvalidArgumentError(
-            f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
-            code="visualization_mode_invalid",
-            remedy="pass graph='forward', 'backward', or 'combined'",
-            argument="graph",
-        )
+    _require_graph_kind(graph)
     num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     target = resolve_draw_target(path, file_format, _KNOWN_EXTS)

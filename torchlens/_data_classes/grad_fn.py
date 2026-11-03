@@ -83,7 +83,7 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
         matches = [
             call
             for call in self._dict.values()
-            if getattr(call, "backward_pass_index", None) == pass_index
+            if getattr(call, "backward_pass_number", None) == pass_index
         ]
         if len(matches) == 1:
             return matches[0]
@@ -97,9 +97,9 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
                 pass_index=pass_index,
             )
         available = [
-            getattr(call, "backward_pass_index", None)
+            getattr(call, "backward_pass_number", None)
             for call in self._dict.values()
-            if getattr(call, "backward_pass_index", None) is not None
+            if getattr(call, "backward_pass_number", None) is not None
         ]
         raise KeyError(
             f"GradFn '{self._label}' did not participate in backward pass {pass_index}; "

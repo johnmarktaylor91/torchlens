@@ -28,7 +28,7 @@ def _observed(case: str) -> tuple[Any, Any]:
     trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(backward_ready=True))
     before = cost_tree(trace, fold_repeats=False)
     out = trace[trace.output_layers[0]].out
-    trace.log_backward(out.sum())
+    trace.backward(out.sum())
     return trace, before
 
 

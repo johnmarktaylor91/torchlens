@@ -358,7 +358,7 @@ def test_backward_rows_keep_values_when_the_profile_records_them() -> None:
     """Backward ATen rows carry values with the same per-fact shape contract."""
 
     _, _, trace = _block_trace(backward_ready=True)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     backward = [row for row in trace.aten_ops if row.capture_phase == "backward"]
     assert backward
     valued = [row for row in backward if row.out is not None]

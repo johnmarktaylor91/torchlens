@@ -308,13 +308,18 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports units whose maximum
-activation is at most `max_activation` or whose value has zero variance in this trace. One
-trace is only one sample; aggregate runs before making a dataset-level claim. With
-`dim=None` the unit axis is picked per op: the last axis of a 2-D or 3-D activation
-(a linear layer's `(batch, features)`, a transformer block's `(batch, tokens, features)`),
-the channel axis of a convolution, pooling or per-channel norm and of the same-shaped
-ops it feeds, and axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
+`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports, for every layer, the
+units whose output is identically zero at every position in the batch: every element of
+the unit's slice has a magnitude at or below `max_activation` (absolute, on the layer's output;
+`0.0` means exactly zero). The units are a layer's output units, so there is one row per
+op a module call returned or the model's `forward` returned; the ops inside a composite
+activation (the `tanh` of a tanh-approximated GELU, the `sigmoid` of SiLU) get no row,
+because a saturated intermediate is not a dead output unit. One trace is only one sample;
+aggregate runs before making a dataset-level claim. With `dim=None` the unit axis is
+picked per op: the last axis of a 2-D or 3-D activation (a linear layer's
+`(batch, features)`, a transformer block's `(batch, tokens, features)`), the channel axis
+of a convolution, pooling or per-channel norm and of the same-shaped ops it feeds, and
+axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
 Related: [`grad_health`](#grad_health).
 
 ```python
@@ -364,7 +369,7 @@ Output:
 `tl.debug.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
 exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
-with `save_grads=True`, then call `trace.log_backward(...)` first.
+with `save_grads=True`, then call `trace.backward(...)` first.
 
 The F23 fix pack added (all additive): `module` + `is_frontier` columns (a
 dead layer zeroes the gradient of everything upstream, so the frontier — a
@@ -387,7 +392,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 report = tl.debug.grad_health(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```

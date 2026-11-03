@@ -8,7 +8,7 @@ them. A rerun therefore re-arms the trace's own retained predicate through the
 same capture door, hands the capture a copy of the staged spec without those
 entries, and then checks that the door re-staged exactly the entries the trace
 carries. The staged spec itself is never mutated. Entries a user staged on a
-final label (``Trace.set``, ``attach_hooks(tl.label(...))``) are translated to
+final label (set_only ``do``, ``attach_hooks(tl.label(...))``) are translated to
 the raw capture labels of the ops they name (:func:`translate_staged_final_labels`),
 the same translation a mixed gradient plan's activation half uses. A rerun of a
 capture that saved a static raw-index subset re-selects it through
@@ -259,7 +259,7 @@ def raw_live_labels(trace: Any, label_value: str) -> tuple[str, ...] | None:
 def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     """Return ``capture_spec`` with its finalized exact labels readdressed for a live rerun.
 
-    Staged entries addressed by a finalized label (``Trace.set(label, ...)``,
+    Staged entries addressed by a finalized label (set_only ``do(label, ...)``,
     ``attach_hooks(tl.label(...), ...)``) are translated to the raw capture
     labels of the ops they name, the same translation a mixed gradient plan's
     activation half already uses, so the edit fires on the rerun instead of

@@ -39,7 +39,7 @@ def _backward_trace() -> tl.Trace:
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -87,7 +87,7 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
 
     try:
         backward_mod._register_fire_timing_prehook = failing
-        trace.log_backward(trace.output_ops[0].out.sum())
+        trace.backward(trace.output_ops[0].out.sum())
     finally:
         backward_mod._register_fire_timing_prehook = original
     fired = _fired_events(trace)

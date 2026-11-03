@@ -502,7 +502,7 @@ class Param:
     def _append_gradient_record(
         self,
         *,
-        backward_pass_index: int,
+        backward_pass_number: int,
         grad: Any | None,
         shape: tuple[int, ...] | None,
         dtype: str | None,
@@ -517,7 +517,7 @@ class Param:
 
         Parameters
         ----------
-        backward_pass_index:
+        backward_pass_number:
             One-based global backward pass number.
         grad:
             Retained gradient payload from the event, already detached.
@@ -539,7 +539,7 @@ class Param:
         record = GradientRecord(
             owner=self,
             ordinal=len(self._grad_records) + 1,
-            backward_pass_index=backward_pass_index,
+            backward_pass_number=backward_pass_number,
             grad=grad,
             transformed_grad=None,
             shape=shape,

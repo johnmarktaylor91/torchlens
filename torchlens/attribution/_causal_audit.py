@@ -123,8 +123,8 @@ class CausalAuditUnit:
     def build_interventions(self) -> tuple[tuple[Any, Any], ...]:
         """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``.
 
-        Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace
-        captured with ``capture=tl.options.CaptureOptions(replayable=True)``.
+        Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace of
+        the same inputs (``tl.trace(model, x)``).
         """
 
         assert self._plan is not None  # noqa: S101 - every audit row carries its plan

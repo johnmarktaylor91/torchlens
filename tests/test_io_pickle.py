@@ -155,7 +155,7 @@ def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
     assert restored._backward_gradfn_refs == []
 
     out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
+    restored.backward(out.sum())
 
     assert isinstance(restored._backward_gradfn_refs, list)
 
