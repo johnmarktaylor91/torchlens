@@ -227,6 +227,19 @@ is one of `contract.TYPED_VALUE_TAGS`:
 | `unencodable` | below | a disclosure |
 | `callable_placeholder` | section 5 | an audit-only edit |
 
+The `tuple` tag may carry optional `subtype`. `torch.Size` restores its known constructor;
+`torch.return_types` structseq names select only the closed code-owned constructor table
+(`values.tuple_subtypes`), never an import or attribute lookup driven by artifact text.
+An unknown subtype refuses typed. Without `subtype`, the tuple keeps its ordinary meaning.
+
+The `dict` tag may carry `subtype: "collections.defaultdict"` and `default_factory`.
+The factory is one of the closed builtin names `list`, `dict`, `set`, `int`, `float`,
+`str`, or `tuple`. Any other factory is encoded at `default_factory` as the existing
+`unencodable` disclosure; the contents reload as a plain dict and that value reloads as
+`UnencodableValue`, with the usual load advisory. No factory is executed while loading.
+An absent subtype keeps the ordinary mapping meaning. Set and frozenset tensor members
+are materialized before hashing; no unresolved blob reference enters a hash operation.
+
 A user object no rule covers is stringified with a disclosure, never pickled:
 
 ```json
@@ -447,3 +460,9 @@ A trace loaded from a 3.0 artifact equals the live trace it was saved from, at e
 
 The proof is `tests/test_format3_loaded_equals_live.py`, written with the writer: a tiny CNN
 traced once, saved at each of the four levels, loaded, and compared record by record.
+
+Payload rule clarification (2026-11-02): an unsupported sparse payload refuses
+`metadata_value_unportable` regardless of `strict`. Complex64 and complex128 use their real
+views in chunks and round-trip exactly; neither is skipped. Raw inputs and transformed
+outputs retain numeric arrays and dense tensors through the same payload codecs. Values
+without a portable encoding retain the typed `UnencodableValue` disclosure.

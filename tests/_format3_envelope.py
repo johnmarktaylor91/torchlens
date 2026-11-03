@@ -179,3 +179,24 @@ def tensor_columns(root: Path, kind: str) -> list[str]:
                     names.append(name)
                 break
     return names
+
+
+def tensor_references(root: Path) -> dict[str, dict[str, Any]]:
+    """Return every materialized tensor reference in the authoritative record cells."""
+
+    found: dict[str, dict[str, Any]] = {}
+    for entry in read_manifest(root)["records"].values():
+        stack = [json.loads((root / entry["path"]).read_text(encoding="utf-8"))]
+        while stack:
+            value = stack.pop()
+            if isinstance(value, dict):
+                if (
+                    value.get("$tl") == "tensor"
+                    and isinstance(value.get("blob"), str)
+                    and isinstance(value.get("key"), str)
+                ):
+                    found[f"{value['blob']}#{value['key']}"] = value
+                stack.extend(value.values())
+            elif isinstance(value, list):
+                stack.extend(value)
+    return found

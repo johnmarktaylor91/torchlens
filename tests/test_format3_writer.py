@@ -559,9 +559,10 @@ def test_runnable_example_envelope(saved: dict[str, Path]) -> None:
     op_columns = _records(root)["op"]["columns"]
     assert "out" not in op_columns
     assert "grad" not in op_columns
-    if "runnable" not in manifest:
-        pytest.skip("the runnable component is written by the runnable lane's runnable.py")
-    assert manifest["runnable"]["descriptor"].startswith("runnable/")
+    assert (root / "runnable/descriptor.json").is_file()
+    assert "runnable/descriptor.json" in manifest["files"]
+    assert "run" not in manifest
+    assert "tensors" not in manifest
 
 
 def test_intervened_example_envelope(tmp_path: Path) -> None:

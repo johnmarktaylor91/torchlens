@@ -28,7 +28,7 @@ from typing import Any, Final, NamedTuple
 import torch
 
 from .. import _json
-from ..format_errors import ArtifactError
+from ..format_errors import ArtifactError, OpaqueCallableError
 from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
 from .decode import decode_value
 from .payloads import PayloadStore, host_tensor, read_tensor, tensor_reference
@@ -388,7 +388,7 @@ def build_recipe(
         "function_registry_keys": [dict(entry) for entry in header.function_registry_keys],
     }
     if header.save_level == "portable" and not executable:
-        raise ArtifactError(
+        raise OpaqueCallableError(
             "A portable intervention recipe requires built-in edits and portable values.",
             code="intervention_spec_not_portable",
             remedy="use built-in edits or save at level='audit' for a non-executable record",
@@ -636,7 +636,7 @@ def trace_capture_rules(trace: Any) -> list[tuple[Any, Any]]:
     if not rules or any(
         not callable(getattr(rule.target, "to_target_spec", None)) for rule in rules
     ):
-        raise ArtifactError(
+        raise OpaqueCallableError(
             "A callable intervention predicate cannot be saved portably.",
             code="intervention_spec_not_portable",
             remedy="address the rule with a built-in selector such as tl.func or tl.in_module",
