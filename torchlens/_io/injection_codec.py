@@ -29,6 +29,7 @@ from __future__ import annotations
 __tl_layer__ = "L3"
 
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import torch
@@ -313,6 +314,26 @@ def split_restored_injected_rows(trace: Any) -> None:
 
     state = injection_state(trace)
     state["pending_loaded_rows"] = injected
+
+
+def check_injected_row_cells(provenance: Any, annotations: Any, label: str) -> None:
+    """Check one decoded injected-row candidate before any record is built.
+
+    Runs the load split's row checks in their order on table cells: the
+    provenance grammar, then the ``injection_codec_v1`` envelope.
+
+    Parameters
+    ----------
+    provenance, annotations:
+        The row's ``injection_provenance`` and ``annotations`` cells.
+    label:
+        Row label used in the refusal message.
+    """
+
+    from .forgery_validation import check_injection_provenance_row
+
+    check_injection_provenance_row(provenance, label)
+    _validate_envelope(SimpleNamespace(annotations=annotations), label)
 
 
 def _refuse_codec(message: str, reason: str) -> NoReturn:

@@ -549,6 +549,33 @@ def _injected_op_ids(
     return {id(obj) for obj, row in pairs if row.get("injection_provenance") is not None}
 
 
+def _check_stamped_model_ops(
+    tables: Mapping[str, list[dict[str, Any]]],
+    objects: Mapping[str, Sequence[Any]],
+    main_keys: list[Any],
+    injected: set[int],
+) -> None:
+    """A main-key (model) op row carrying ``injection_provenance`` is a forged injected row.
+
+    It refuses with the injected-row codes the load split uses, in its order: the
+    provenance grammar (``artifact_injection_provenance_invalid``), then the codec
+    envelope (``artifact_injection_codec_invalid``); one that passes both still fails
+    the coverage invariant below.
+    """
+
+    stamped = {id(op) for op in main_keys} & injected
+    if not stamped:
+        return
+    from ..injection_codec import check_injected_row_cells
+
+    for index, (obj, row) in enumerate(
+        zip(objects.get("op", ()), tables.get("op", ()), strict=True)
+    ):
+        if id(obj) in stamped:
+            label = str(row.get("layer_label") or row.get("label") or f"op[{index}]")
+            check_injected_row_cells(row["injection_provenance"], row.get("annotations"), label)
+
+
 def _check_op_coverage(
     tables: Mapping[str, list[dict[str, Any]]],
     objects: Mapping[str, Sequence[Any]],
@@ -569,6 +596,7 @@ def _check_op_coverage(
     entries = _entries(trace[field])
     if field == "_layer_dict_main_keys":
         injected = _injected_op_ids(tables, objects)
+        _check_stamped_model_ops(tables, objects, entries, injected)
         rows = {id(op) for op in _entries(trace.get("_layer_list") or ()) if id(op) not in injected}
     else:
         rows = {id(op) for op in objects.get("op", ())}

@@ -307,7 +307,8 @@ class TensorRefSink:
             "requires_grad": ref["requires_grad"],
             "logical_backend": backend,
             "codec": codec_id,
-            "codec_metadata": codec_metadata,
+            # A backend payload's hints are the 2.x tensor-entry fields the codec reads.
+            **_backend_hint_fields(codec_metadata),
         }
         return BlobRef(blob_id, kind)
 
@@ -373,6 +374,22 @@ def _tensor_geometry(ref: Mapping[str, Any], at: str) -> tuple[list[int], int, s
     if dtype_name not in STORABLE_DTYPES:
         raise cell_error(at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE)
     return shape, numel, device, is_complex, dtype_name
+
+
+_BACKEND_HINT_FIELDS: Final = (
+    "logical_dtype",
+    "logical_device",
+    "transport_backend",
+    "transport_dtype",
+    "codec_metadata",
+)
+
+
+def _backend_hint_fields(hints: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return the payload codec's entry fields from a tensor cell's codec hints."""
+
+    hints = hints or {}
+    return {name: hints.get(name) for name in _BACKEND_HINT_FIELDS}
 
 
 def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:
