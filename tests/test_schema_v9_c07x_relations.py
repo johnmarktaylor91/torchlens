@@ -221,7 +221,7 @@ def test_evidence_over_budget_refuses_typed() -> None:
             {
                 "grade": "disclosed",
                 "basis": "bulk",
-                "class": "harness_record",
+                "class": "member_state",
                 "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES,
             }
         ]
