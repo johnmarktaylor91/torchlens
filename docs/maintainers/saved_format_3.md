@@ -216,6 +216,19 @@ is one of `contract.TYPED_VALUE_TAGS`:
 | `unencodable` | below | a disclosure |
 | `callable_placeholder` | section 5 | an audit-only edit |
 
+The `tuple` tag may carry optional `subtype`. `torch.Size` restores its known constructor;
+`torch.return_types` structseq names select only the closed code-owned constructor table
+(`values.tuple_subtypes`), never an import or attribute lookup driven by artifact text.
+An unknown subtype refuses typed. Without `subtype`, the tuple keeps its ordinary meaning.
+
+The `dict` tag may carry `subtype: "collections.defaultdict"` and `default_factory`.
+The factory is one of the closed builtin names `list`, `dict`, `set`, `int`, `float`,
+`str`, or `tuple`. Any other factory is encoded at `default_factory` as the existing
+`unencodable` disclosure; the contents reload as a plain dict and that value reloads as
+`UnencodableValue`, with the usual load advisory. No factory is executed while loading.
+An absent subtype keeps the ordinary mapping meaning. Set and frozenset tensor members
+are materialized before hashing; no unresolved blob reference enters a hash operation.
+
 A user object no rule covers is stringified with a disclosure, never pickled:
 
 ```json

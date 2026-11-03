@@ -137,12 +137,19 @@ class _ScrubOptions:
     structure_only: bool = False
     backend_name: str = "torch"
     payload_materialization: bool = True
+    typed_values: bool = False
     payload_codec: PayloadCodec = field(default_factory=lambda: get_payload_codec("torch"))
     unsupported_tensor_records: list[dict[str, str]] = field(default_factory=list)
     # Once-per-type ledger of save-side container downgrades (foreign tuple
     # subclasses flattened, foreign defaultdict factories dropped), keyed by
     # qualified type name so a metadata tree full of one type warns once.
     container_portability_disclosures: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Derive the selected backend codec while preserving an explicitly matching one."""
+
+        if self.payload_codec.backend_name != self.backend_name:
+            self.payload_codec = get_payload_codec(self.backend_name)
 
 
 def scrub_for_save(
@@ -230,8 +237,8 @@ def scrub_for_save(
         structure_only=bool(isinstance(trace, Trace) and trace._options_structure_only),
         backend_name=str(backend_name or trace._provenance_backend),
         payload_materialization=payload_materialization,
+        typed_values=record_pairs is not None,
     )
-    options.payload_codec = get_payload_codec(options.backend_name)
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
     blob_counter = [blob_id_floor]
@@ -1049,7 +1056,11 @@ def _empty_mapping_like(
     """
 
     if isinstance(value, defaultdict):
-        return defaultdict(_portable_default_factory(value, options))
+        return defaultdict(
+            value.default_factory
+            if options.typed_values
+            else _portable_default_factory(value, options)
+        )
     if isinstance(value, OrderedDict):
         return OrderedDict()
     return {}
