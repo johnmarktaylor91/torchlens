@@ -77,8 +77,8 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
 
     ops = _pass_ops(layer)
     if len(ops) > 1:
-        parts = [getattr(op, field, None) for op in ops]
-        if not all(isinstance(part, torch.Tensor) for part in parts):
+        parts = [part for op in ops if isinstance(part := getattr(op, field, None), torch.Tensor)]
+        if len(parts) != len(ops):
             return None
         device = parts[0].device
         return torch.cat([part.reshape(-1).to(device) for part in parts])
