@@ -1233,7 +1233,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   that previous grad as its in-place receiver, so a later `param.grad` read has a producer;
   `autogradfunction`, a custom `autograd.Function`
   whose forward left torch through a numpy or dlpack round trip, with
-  `transform_kind="autograd.Function"`, and `jitscript`, one call to a
+  `transform_kind="autograd.Function"`, `foreigndata`, a host constructor (`from_numpy`,
+  `from_dlpack`, `frombuffer`, or a tensorless `tensor` / `as_tensor` / `asarray`) that brings
+  data back into torch after a plain-code `numpy` / `__array__` / `__dlpack__` / `to_dlpack` /
+  `tolist` export outside any Function, with `transform_kind="foreign_data"` and
+  `transform_config["resolution"]` of `view`, `copy`, `constant` or `unresolved`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
   `tl.model_output` selects model outputs, and
   `tl.model_input` selects a nested model-input path.
@@ -3182,7 +3186,9 @@ deprecation shim owed*
   `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`,
   `passes`, `evidence`. `input` lists the shapes of the distinct tensors
   entering a row; `output` lists every member shape of the row's output in
-  return order; `kernel_size` / `groups` read the row's own conv or
+  return order (past 60 characters a run of identical shapes prints once as
+  `shape ×N`, and a list still too long ends in `... +K more`; `input` cells
+  compact the same way); `kernel_size` / `groups` read the row's own conv or
   pooling op; `params_trainable` is the per-path trainable count (`train`
   stays the yes/no/partial `requires_grad` tri-state); `mode` is
   `module.training` as captured (`train` / `eval` / `mixed`); `flops_pct`
@@ -4187,7 +4193,7 @@ The sections above describe each surface in depth.
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
 | `GradReceptiveField.cross_batch_influence` | Whether the influence crosses batch elements |
-| `GradReceptiveField.io_role` | The input role (model input name or op label) the gradient was taken with respect to |
+| `GradReceptiveField.io_role` | The far end of the probe, the space `support_mask` covers: the source (model input name or op label) for a receptive probe, the target op label for a projective probe; `source_key` / `target_key` read it direction-stably |
 | `GradReceptiveField.nonfinite_count` | Number of NaN or Inf gradient entries; nonzero makes validation indeterminate |
 | `GradReceptiveField.rtol` | Relative tolerance for the support threshold |
 | `GradReceptiveField.signed_grad` | The signed gradient, kept so a sign-disagreeing adjoint can be checked |
