@@ -129,7 +129,7 @@ def _assert_forward(trace: Any, case: str, expected: int) -> None:
 def _traced_backward(model: nn.Module, inputs: list[torch.Tensor]) -> Any:
     trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(backward_ready=True))
     out = trace[trace.output_layers[0]].out
-    trace.log_backward(out if out.dim() == 0 else out.sum())
+    trace.backward(out if out.dim() == 0 else out.sum())
     return trace
 
 

@@ -63,7 +63,7 @@ class TestHistogramReference:
         data = torch.randn(50_000) * 40.0
         h = Histogram()
         h.update(data)
-        assert h.result().numel == 50_000
+        assert h.compute().numel == 50_000
 
     def test_bucket_edges_are_the_manifest_descriptor_values(self) -> None:
         d = HistogramDescriptor(bins_per_octave=1, lo_exp=-2, hi_exp=2)
@@ -79,10 +79,10 @@ class TestHistogramMerge:
         a, b = Histogram(), Histogram()
         a.update(torch.tensor([1.0, -2.0]))
         b.update(torch.tensor([4.0, 0.0]))
-        merged = merge_histogram_results(a.result(), b.result())
+        merged = merge_histogram_results(a.compute(), b.compute())
         direct = Histogram()
         direct.update(torch.tensor([1.0, -2.0, 4.0, 0.0]))
-        assert merged == direct.result()
+        assert merged == direct.compute()
 
     def test_descriptor_mismatch_refuses_typed(self) -> None:
         a = Histogram()
@@ -91,7 +91,7 @@ class TestHistogramMerge:
             a.merge(b)
         assert excinfo.value.fields["code"] == "sketch_descriptor_mismatch"
         with pytest.raises(StatKernelError) as excinfo2:
-            merge_histogram_results(a.result(), b.result())
+            merge_histogram_results(a.compute(), b.compute())
         assert excinfo2.value.fields["code"] == "sketch_descriptor_mismatch"
 
     def test_descriptor_geometry_refusals(self) -> None:
@@ -111,7 +111,7 @@ class TestDtypes:
         # 2^-24 is subnormal in fp16 but well inside the [2^-48, 2^16) window.
         h = Histogram()
         h.update(torch.tensor([2.0**-24], dtype=torch.float16))
-        result = h.result()
+        result = h.compute()
         assert result.specials["zero"] == 0
         assert sum(result.pos_counts) == 1
 
@@ -124,7 +124,7 @@ class TestDtypes:
         assert bool_spine.compute().num_zero == 1
         h = Histogram()
         h.update(torch.tensor([4, -16], dtype=torch.int32))
-        hist = h.result()
+        hist = h.compute()
         assert sum(hist.pos_counts) == 1
         assert sum(hist.neg_counts) == 1
 
@@ -148,7 +148,7 @@ class TestCountWidth:
     def test_int32_fit_helper(self) -> None:
         h = Histogram()
         h.update(torch.ones(10))
-        result = h.result()
+        result = h.compute()
         assert result.counts_fit_int32()
         oversized = result.specials.copy()
         oversized["zero"] = INT32_COUNT_MAX + 1
@@ -171,7 +171,7 @@ class TestRngIsolation:
         h = Histogram()
         h.update(data)
         h.merge(Histogram())
-        h.result()
+        h.compute()
         spine_vector(data)
         sketch_vector(data, DEFAULT_DESCRIPTOR)
         after = torch.get_rng_state()

@@ -336,12 +336,16 @@ def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/hooks.py.
 def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
-    """F5: a callable ``set`` replacement applies once per rerun, never compounds."""
+    """F5: a callable staged by a ``set_only`` ``do`` applies once per rerun, never compounds."""
 
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    # set() only stages the replacement; each run applies it.
-    trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+    # set_only only stages the hook; each run applies it.
+    trace.do(
+        tl.module("fc1"),
+        lambda out, *, ctx: out * 2.0,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     for _ in range(3):
         trace.run(model, x)
@@ -504,14 +508,18 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/resolver.py, intervention/_rerun_predicate.py, intervention/hooks.py.
-def test_set_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
-    """``set(label, value)`` + rerun applies the value on new inputs and leaves the spec staged."""
+def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
+    """A ``set_only`` ``do(label, value)`` + rerun applies the value and leaves the spec staged."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
     label = trace.find_sites(tl.module("fc2"))[0].layer_label
     value = torch.full_like(trace[label].out, 0.3)
-    trace.set(label, value, confirm_mutation=True)
+    trace.do(
+        label,
+        value,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     result = trace.run(model, x2)
     assert result is trace
@@ -616,7 +624,11 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace.do(tl.module("fc1"), tl.scale(2.0))
     elif door == "set":
         trace = tl.trace(model, x, capture=ready)
-        trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+        trace.do(
+            tl.module("fc1"),
+            lambda out, *, ctx: out * 2.0,
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     else:
         trace = tl.trace(model, x)
         handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)

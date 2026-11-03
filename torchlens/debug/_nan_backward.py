@@ -74,7 +74,7 @@ class BackwardTransition:
     ...         return torch.sqrt(torch.relu(t)).sum()
     >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
     >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
-    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> _ = run.backward(run.output_ops[0].out)
     >>> step = tl.debug.bisect_nan_backward(run).birth
     >>> isinstance(step, BackwardTransition), step.verdict
     (True, 'birth')
@@ -142,7 +142,7 @@ class BackwardNanReport(FoundReport):
     ...         return torch.sqrt(torch.relu(t)).sum()
     >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
     >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
-    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> _ = run.backward(run.output_ops[0].out)
     >>> report = tl.debug.bisect_nan_backward(run)
     >>> isinstance(report, BackwardNanReport), report.found, len(report.transitions) > 0
     (True, True, True)
@@ -332,7 +332,7 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
             code="backward_capture_required",
             remedy=(
                 "re-trace with CaptureOptions(backward_ready=True, save_grads=...) "
-                "and run trace.log_backward(loss) before bisecting"
+                "and run trace.backward(loss) before bisecting"
             ),
         )
     if bwd is None:
@@ -568,7 +568,7 @@ def bisect_nan_backward(
     ...         return torch.sqrt(torch.relu(t)).sum()
     >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
     >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
-    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> _ = run.backward(run.output_ops[0].out)
     >>> report = bisect_nan_backward(run)
     >>> report.found, report.birth.verdict, report.birth.emitted
     (True, 'birth', 'inf')

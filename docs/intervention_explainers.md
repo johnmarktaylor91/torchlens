@@ -82,7 +82,7 @@ The older `replay()` and `rerun()` spellings are removed; `push()` and `run()` r
 
 ## Mutate In Place and Fork First
 
-`set` and `do` mutate the `Trace` they are called on. A root trace warns once
+`do` (including `do` with the `set_only` engine) mutates the `Trace` it is called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -112,7 +112,7 @@ captured evidence where safe.
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
 push overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set` or `do` when the edit should be part of the recipe.
+intervention. Use `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 
@@ -384,7 +384,9 @@ A `.tlspec/` directory contains:
 - `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
   metadata.
 - `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON.
+- `tensors/`: tensor payloads stored separately from JSON, one blob per tensor object however
+  many places the spec references it (a sticky hook's `hook` and `helper` entries and its fire
+  records share one blob).
 - `README.md`: a generated human-readable summary.
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with

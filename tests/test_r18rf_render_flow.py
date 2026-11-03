@@ -68,7 +68,7 @@ class FeedForward(nn.Module):
 def _combined_trace(model: nn.Module) -> tl.Trace:
     log = tl.trace(model, torch.randn(2, 8, requires_grad=True))
     loss = log[log.output_layers[0]].out.sum()
-    log.log_backward(loss)
+    log.backward(loss)
     return log
 
 

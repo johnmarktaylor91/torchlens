@@ -171,7 +171,7 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
 
     value = torch.ones(1, 2, requires_grad=True)
     trace = tl.trace(_LinearModel(), value, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     path = tmp_path / "backward.tlspec"
     trace.save(path)
 

@@ -136,7 +136,7 @@ class SealedJournalAppendError(SealedJournalWriteError):
     (``_copy_for_replay``).
 
     The backward lane is deliberately NOT fenced: backward capture runs after
-    the forward seal by design (``Trace.log_backward`` /
+    the forward seal by design (``Trace.backward`` /
     ``Recording.backward`` both append to the sealed journal), and
     ``backward_events`` is not part of the sealed core. Measured: across the
     smoke tier plus the fastlog/producer suites, ``append_backward`` is the ONLY
