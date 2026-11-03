@@ -56,13 +56,13 @@ def bundle_draw(
     with ``nodes="members"`` the member relation graph.
     """
 
+    from .._visualization._bundle_graph import resolve_bundle_draw_target
     from .._visualization._render_utils import (
         _KNOWN_EXTS,
         announce_written_graph,
         collision_safe_outpath,
         direction_to_rankdir,
     )
-    from ..viz._drawing import resolve_draw_target
 
     if unsupported:
         raise ArgumentTypeError(
@@ -80,7 +80,7 @@ def bundle_draw(
             argument="graph",
         )
     default_format = "svg" if graph == "diff" else "pdf"
-    target = resolve_draw_target(path, options["file_format"], _KNOWN_EXTS, default_format)
+    target = resolve_bundle_draw_target(path, options["file_format"], _KNOWN_EXTS, default_format)
     outpath = target.path
     if outpath is None:
         outpath = collision_safe_outpath(

@@ -12,7 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ..viz._drawing import resolve_draw_target
+
 if TYPE_CHECKING:
+    import os
+
+    from ..viz._drawing import DrawTarget
     from .themes import VisualizationTheme
 
 
@@ -526,3 +531,14 @@ def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str:
 
         _inline_svg_file_local_images(f"{outpath}.svg")
     return source
+
+
+def resolve_bundle_draw_target(
+    path: str | os.PathLike[str] | None,
+    file_format: str | None,
+    known_extensions: tuple[str, ...],
+    default_format: str,
+) -> DrawTarget:
+    """Resolve ``Bundle.draw``'s path and format (``torchlens.bundle`` may not import ``torchlens.viz``)."""
+
+    return resolve_draw_target(path, file_format, known_extensions, default_format)
