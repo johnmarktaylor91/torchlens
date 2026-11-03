@@ -92,6 +92,17 @@ class AttributionMetric:
         cross-result comparison to mean anything.
     extra
         Additional disclosure (distributions, probes, qualifications).
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> metric = tl.attribution.infidelity(
+    ...     model, x, target=0, attribution=attr, num_samples=2, seed=0
+    ... )
+    >>> type(metric).__name__
+    'AttributionMetric'
+    >>> metric.metric
+    'infidelity'
     """
 
     metric: str
@@ -394,6 +405,17 @@ def infidelity(
     AttributionError
         On shape misalignment, invalid perturbation policy, or a callable
         escape returning mismatched trees.
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> metric = tl.attribution.infidelity(
+    ...     model, x, target=0, attribution=attr, num_samples=2, seed=0
+    ... )
+    >>> metric.metric
+    'infidelity'
+    >>> metric.settings["num_samples"]
+    2
     """
 
     if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples <= 0:
@@ -679,6 +701,16 @@ def sensitivity(
     ------
     AttributionError
         On ladder refusals or invalid sampling parameters.
+
+    Examples
+    --------
+    >>> metric = tl.attribution.sensitivity(
+    ...     x, method=tl.attribution.saliency, model=model, target=0, num_samples=2, seed=0
+    ... )
+    >>> metric.metric
+    'sensitivity_max'
+    >>> metric.settings["n_samples"]
+    2
     """
 
     if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples <= 0:

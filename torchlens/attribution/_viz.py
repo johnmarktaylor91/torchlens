@@ -292,6 +292,16 @@ def overlay(
         for a ``graph_value`` that is unknown or given with a non-graph
         source; ``attribution_overlay_graph_mismatch`` for a graph whose
         sites are not on ``trace``.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_attribution(model, x, target=0, layer="0")
+    >>> trace = tl.trace(model, x)
+    >>> color_by = tl.attribution.overlay(trace, result)
+    >>> callable(color_by)
+    True
+    >>> color_by.__name__
+    'attribution_overlay'
     """
 
     if reduce not in _REDUCERS:

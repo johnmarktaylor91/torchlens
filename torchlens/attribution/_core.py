@@ -1008,6 +1008,14 @@ def saliency(
     -------
     AttributionResult
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
+
+    Examples
+    --------
+    >>> result = tl.attribution.saliency(model, x, target=0)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> bool((result.values >= 0).all())
+    True
     """
 
     prepared_inputs = _normalize_model_inputs(
@@ -1061,6 +1069,14 @@ def input_x_grad(
     -------
     AttributionResult
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
+
+    Examples
+    --------
+    >>> result = tl.attribution.input_x_grad(model, x, target=0)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.method
+    'input_x_grad'
     """
 
     prepared_inputs = _normalize_model_inputs(
@@ -1296,6 +1312,14 @@ def integrated_gradients(
         ``extra`` carries the completeness fields, ``|target_delta|``, the
         logical path-evaluation count, the physical forward-call count, and
         the audit disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.integrated_gradients(model, x, target=0, num_steps=4)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> "baseline" in result.extra
+    True
     """
 
     from torchlens.attribution._steps import (
@@ -1445,6 +1469,14 @@ def smoothgrad(
     -------
     AttributionResult
         Bare tensor for one attributed leaf, otherwise a mirrored value tree.
+
+    Examples
+    --------
+    >>> result = tl.attribution.smoothgrad(model, x, target=0, num_samples=2, seed=0)
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.extra["n_samples"]
+    2
     """
 
     _validate_positive_int("n_samples", num_samples)
