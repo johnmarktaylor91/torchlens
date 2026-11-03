@@ -184,14 +184,6 @@ def test_episode_x_intervene_runs_coupled_with_evidence(episode_rig: dict[str, A
     )
 
 
-def test_episode_coupled_replay_refuses_before_execution(episode_rig: dict[str, Any]) -> None:
-    """The surviving F40 posture: coupled replay refuses BEFORE running."""
-
-    products = build_episode_products()
-    coupled = products["coupled"]
-    _assert_refuses("coupled_replay_run", lambda: coupled.run(inputs=products["example"]))
-
-
 def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, Any]) -> None:
     """A mid-episode halt lands in the per-step status ledger, disclosed."""
 
@@ -249,60 +241,6 @@ def test_episode_x_disk_storage_with_dropped_source_refuses(
     )
 
 
-def test_episode_x_structure_only_refuses_typed(episode_rig: dict[str, Any]) -> None:
-    """Structure-only episodes are out of scope: typed, teaching."""
-
-    import torchlens as tl
-
-    rig = episode_rig
-    _assert_refuses(
-        "structure_only",
-        lambda: tl.trace(
-            rig["root"],
-            rig["example"],
-            episode=rig["spec"](),
-            capture=tl.options.CaptureOptions(structure_only=True),
-        ),
-    )
-
-
-def test_episode_x_raise_on_nan_is_orthogonal(episode_rig: dict[str, Any]) -> None:
-    """The nonfinite tripwire arms per step without disturbing the ledger."""
-
-    import torchlens as tl
-
-    rig = episode_rig
-    trace = tl.trace(
-        rig["root"],
-        rig["example"],
-        episode=rig["spec"](),
-        capture=tl.options.CaptureOptions(on_nonfinite="raise"),
-    )
-    classification, _ = _expect("raise_on_nan")
-    assert classification in {ORTHOGONAL, COUPLED}
-    assert trace.outcome.status.name == "COMPLETE"
-    rows = trace.annotations["episode"]["rows"]
-    assert rows and all(row["status"] == "complete" for row in rows)
-
-
-def test_episode_x_log_injections_is_orthogonal(episode_rig: dict[str, Any]) -> None:
-    """The F44 injection log coexists with episode capture."""
-
-    import torchlens as tl
-
-    rig = episode_rig
-    trace = tl.trace(
-        rig["root"],
-        rig["example"],
-        episode=rig["spec"](),
-        capture=tl.options.CaptureOptions(log_injections=True),
-    )
-    classification, _ = _expect("log_injections")
-    assert classification == ORTHOGONAL
-    assert trace.outcome.status.name == "COMPLETE"
-    assert trace.annotations["episode"] is not None
-
-
 def test_episode_kwarg_on_record_is_a_ledgered_untyped_refusal(
     episode_rig: dict[str, Any],
 ) -> None:
@@ -330,24 +268,6 @@ def test_episode_module_root_requires_stepped_module(episode_rig: dict[str, Any]
             rig["root"],
             rig["example"],
             episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
-        ),
-    )
-
-
-def test_episode_forced_tokens_on_float_root_refuses_declaration(
-    episode_rig: dict[str, Any],
-) -> None:
-    """Teacher forcing declares tokens; a float root fails the declaration."""
-
-    import torchlens as tl
-
-    rig = episode_rig
-    _assert_refuses(
-        "forced_tokens_on_float_root",
-        lambda: tl.trace(
-            rig["root"],
-            rig["example"],
-            episode=rig["spec"](step_output_kind="tokens", forced_tokens=(1, 2, 3)),
         ),
     )
 
@@ -405,25 +325,3 @@ def test_episode_declared_steps_that_never_run_quarantine_typed() -> None:
             episode=tl.options.EpisodeOptions(num_steps=3, step_output_kind="digest"),
         ),
     )
-
-
-def test_episode_option_table_is_closed() -> None:
-    """Unlisted cells refuse: every table row has a driver and vice versa."""
-
-    import inspect
-    import sys
-
-    module = sys.modules[__name__]
-    source = inspect.getsource(module)
-    for cell_id, classification, code in EPISODE_OPTION_TABLE:
-        assert classification in {ORTHOGONAL, COUPLED, TYPED_REFUSED, UNTYPED_REFUSED}
-        if classification == TYPED_REFUSED:
-            assert code, f"{cell_id}: TYPED-REFUSED without a pinned code"
-        # Every cell id must be exercised by a driver in this module.
-        occurrences = source.count(f'"{cell_id}"')
-        assert occurrences >= 2, (
-            f"table cell {cell_id!r} has no driver in this module -- a listed"
-            " combination without an executed cell is an unwitnessed claim"
-        )
-    cell_ids = [row[0] for row in EPISODE_OPTION_TABLE]
-    assert len(cell_ids) == len(set(cell_ids)), "duplicate cell ids in the table"

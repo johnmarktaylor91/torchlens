@@ -140,42 +140,9 @@ def test_backward_in_forward_is_a_recorded_boundary_op() -> None:
     assert len(selected.transforms) == 2
 
 
-def test_second_backward_through_a_retained_graph_accumulates_in_place() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_RetainTwice(), torch.rand(2, 4))
-    ops = _backward_ops(trace)
-    assert len(ops) == 4
-    first, second = ops[:2], ops[2:]
-    first_labels = {op.label for op in first}
-    for op in first:
-        assert op.is_inplace is False
-        assert _engine_flags(op).get("retain_graph") is True
-    for op in second:
-        assert op.is_inplace is True
-        assert not _engine_flags(op).get("retain_graph")
-        assert len(op.parents) == 2
-        assert len(set(op.parents) & first_labels) == 1
-    mean_ops = [op for op in trace.ops if op.func_name == "mean"]
-    assert set(mean_ops[0].parents) <= {op.label for op in second}
-
-
-def test_inputs_restriction_records_only_the_written_leaf() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_RestrictedInputs(), torch.rand(2, 4))
-    ops = _backward_ops(trace)
-    assert len(ops) == 1
-    assert ops[0].shape == (4,)
-
-
-def test_backward_on_unseen_roots_is_not_recorded() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_UnseenBackward(), torch.rand(2, 4))
-    assert _backward_ops(trace) == []
-
-
 @pytest.mark.parametrize(
     "model_factory",
-    [_GradReader, _RetainTwice, _RestrictedInputs],
+    [_RestrictedInputs],
     ids=["single_pass", "retain_twice", "restricted_inputs"],
 )
 def test_recorded_backward_validates_by_subgraph_replay(

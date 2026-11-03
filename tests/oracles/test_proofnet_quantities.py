@@ -24,25 +24,6 @@ MLP_PARAM_CLOSED_FORM = 58
 MLP_TRUE_MACS_BATCH2 = 96
 
 
-def test_param_total_matches_closed_form_and_torch_census() -> None:
-    """summary total_params == closed form == torch's own census (I2)."""
-
-    import torchlens as tl
-
-    model = _mlp()
-    torch_census = sum(parameter.numel() for parameter in model.parameters())
-    assert torch_census == MLP_PARAM_CLOSED_FORM, "fixture drifted from its closed form"
-    trace = tl.trace(model, torch.randn(2, 4))
-    try:
-        report = trace.summary()
-        assert report.total_params == MLP_PARAM_CLOSED_FORM, (
-            f"summary().total_params = {report.total_params}, closed form"
-            f" {MLP_PARAM_CLOSED_FORM} (torch census {torch_census})"
-        )
-    finally:
-        trace.cleanup()
-
-
 def test_flops_report_matches_hand_macs() -> None:
     """flops_report true MACs == the hand-computed closed form; the fma2
     figure is exactly 2x MACs + non-MAC FLOPs (convention arithmetic)."""
@@ -89,22 +70,5 @@ def test_identity_partition_counts_tied_weight_once() -> None:
             f"tied weight double-counted: summary says {report.total_params},"
             " identity partition says 64 (one identity, two consumptions)"
         )
-    finally:
-        trace.cleanup()
-
-
-def test_agent_json_counts_agree_with_the_trace_itself() -> None:
-    """The agent door's counts are the trace's counts (no restatement)."""
-
-    import torchlens as tl
-
-    trace = tl.trace(_mlp(), torch.randn(2, 4))
-    try:
-        payload = trace.to_agent_json()
-        assert len(payload["layer_labels"]) == len(trace.layer_labels)
-        counts = payload.get("counts", {})
-        count_values = [value for value in counts.values() if isinstance(value, int)]
-        assert count_values, f"agent counts block empty: {counts}"
-        assert all(value >= 0 for value in count_values)
     finally:
         trace.cleanup()

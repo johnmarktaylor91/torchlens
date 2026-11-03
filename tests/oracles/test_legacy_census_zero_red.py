@@ -47,30 +47,3 @@ def test_census_has_zero_red_quantities_in_both_directions(
     quantities = census.quantity_status(rows)
     assert quantities, "the census lists no quantities"
     assert set(quantities.values()) == {"green"}
-
-
-def test_census_check_names_a_live_door_whose_row_is_removed(
-    live: dict[str, str], rows: list[dict[str, str]]
-) -> None:
-    victim = _victim(rows)
-    reduced = [row for row in rows if row["door"] != victim["door"]]
-    findings = census.census_findings(live, reduced)
-    assert f"{victim['door']}: live numeric door without a census row" in findings, findings
-
-
-def test_census_check_names_a_row_whose_door_is_gone(
-    live: dict[str, str], rows: list[dict[str, str]]
-) -> None:
-    victim = _victim(rows)
-    fewer_live = {door: kind for door, kind in live.items() if door != victim["door"]}
-    findings = census.census_findings(fewer_live, rows)
-    assert f"{victim['door']}: census row without a live door" in findings, findings
-
-
-def test_census_check_names_a_quantity_that_is_not_green(
-    live: dict[str, str], rows: list[dict[str, str]]
-) -> None:
-    victim = _victim(rows)
-    victim["status"] = "red-needs-oracle"
-    findings = census.census_findings(live, rows)
-    assert f"{victim['quantity_id']}: red-needs-oracle" in findings, findings

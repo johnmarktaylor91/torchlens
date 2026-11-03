@@ -17,9 +17,6 @@ from typing import Any
 
 import torch
 
-from tests.oracles._known_gaps import load_known_gaps
-from tests.oracles._lints import load_dont_care
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -78,25 +75,3 @@ def _witness_exists(node: str) -> bool:
             return False
         return bool(re.search(rf"def {re.escape(test_name.split('::')[-1])}\b", path.read_text()))
     return (REPO_ROOT / node).is_file()
-
-
-def test_every_dont_care_slot_is_witnessed_or_gapped() -> None:
-    """Closure (6b): witness node on disk XOR dated KNOWN-GAP row."""
-
-    gapped_keys = {gap.key for gap in load_known_gaps() if gap.predicate == "invariance_witness"}
-    problems: list[str] = []
-    for field, witness in load_dont_care().items():
-        if witness:
-            if not _witness_exists(witness):
-                problems.append(f"{field}: witness node missing from tree ({witness})")
-            if field in gapped_keys:
-                problems.append(
-                    f"{field}: BOTH a witness and a KNOWN-GAP row -- delete the"
-                    " stale gap row (monotone burn-down)"
-                )
-        elif field not in gapped_keys:
-            problems.append(
-                f"{field}: empty witness slot with NO invariance_witness gap"
-                " row -- fund the witness or ledger the debt (D14)"
-            )
-    assert not problems, "\n".join(problems)

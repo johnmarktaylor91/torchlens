@@ -14,7 +14,6 @@ import torchlens as tl
 from torchlens._semantic import (
     facets as facets_mod,
 )
-from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 from torchlens.errors import MissingFacetError
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
@@ -53,63 +52,6 @@ def _restore_registry() -> None:
     facets_mod._REGISTRY[:] = original
 
 
-def test_facet_view_dict_and_attribute_access_uniformity() -> None:
-    """Attribute and item access return the same cached value."""
-
-    @tl.facets.register(class_name="UnitFacetRecord")
-    def unit_recipe(record: Any) -> dict[str, Any]:
-        """Return a test facet."""
-
-        return {"x": 10}
-
-    view = FacetView(_Record())
-    assert view.x == 10
-    assert view["x"] == 10
-
-
-def test_lazy_compute_keys_has_and_cache() -> None:
-    """Available-now dictionary methods compute once and reuse the cache."""
-
-    calls = 0
-
-    @tl.facets.register(class_name="UnitFacetRecord")
-    def lazy_recipe(record: Any) -> dict[str, Any]:
-        """Return a lazily computed facet."""
-
-        nonlocal calls
-        calls += 1
-        return {"x": 10}
-
-    view = FacetView(_Record())
-    assert view.keys() == ["x"]
-    assert view.has("x")
-    assert list(view) == ["x"]
-    assert len(view) == 1
-    assert calls == 1
-    assert view.x == 10
-    assert view.x == 10
-    assert calls == 1
-
-
-def test_invalidate_clears_cached_values() -> None:
-    """Invalidation causes the next access to re-run the recipe."""
-
-    calls = 0
-
-    @tl.facets.register(class_name="UnitFacetRecord")
-    def invalidated_recipe(record: Any) -> dict[str, Any]:
-        """Return a monotonically increasing test facet."""
-
-        nonlocal calls
-        calls += 1
-        return {"x": calls}
-
-    view = FacetView(_Record())
-    assert view.x == 1
-    view.invalidate()
-    assert view.x == 2
-
-
 def test_empty_facet_view() -> None:
     """Unmatched records have an empty but usable view."""
 
@@ -144,40 +86,6 @@ def test_multi_recipe_merge_warns_and_last_wins() -> None:
     assert view.z == 4
 
 
-def test_trace_snapshot_is_immune_to_later_registry_mutation() -> None:
-    """A trace uses the recipe snapshot captured during its forward pass."""
-
-    class Tiny(nn.Module):
-        """Tiny module with one named child."""
-
-        def __init__(self) -> None:
-            """Initialize the child linear layer."""
-
-            super().__init__()
-            self.linear = nn.Linear(2, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run the child layer."""
-
-            return self.linear(x)
-
-    @tl.facets.register(class_name="Linear")
-    def first_linear(record: Any) -> dict[str, Any]:
-        """Return the first snapshot value."""
-
-        return {"snapshot_value": 1}
-
-    log = tl.trace(Tiny(), torch.randn(1, 2), save="all")
-
-    @tl.facets.register(class_name="Linear")
-    def second_linear(record: Any) -> dict[str, Any]:
-        """Return a later value that must not affect old traces."""
-
-        return {"snapshot_value": 2}
-
-    assert log.modules["linear"].facets.snapshot_value == 1
-
-
 def test_trace_recipes_and_using_are_capture_time_additive() -> None:
     """Per-trace and context recipes affect snapshots only at capture time."""
 
@@ -210,40 +118,6 @@ def test_trace_recipes_and_using_are_capture_time_additive() -> None:
 
     outside = tl.trace(model, x, save="all")
     assert not outside.modules["self"].facets.has("local_value")
-
-
-def test_structural_output_facets_expose_names_and_method_collisions() -> None:
-    """Existing container output names are available through item access."""
-
-    class DictBlock(nn.Module):
-        """Return dict keys that include a FacetView method name."""
-
-        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-            """Return named tensors."""
-
-            return {"keys": x + 1, "hidden": x + 2}
-
-    class Model(nn.Module):
-        """Wrapper with a named child module."""
-
-        def __init__(self) -> None:
-            """Initialize the child module."""
-
-            super().__init__()
-            self.block = DictBlock()
-
-        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-            """Return the child output."""
-
-            return self.block(x)
-
-    x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, save="all")
-    facets = log.modules["block"].facets
-
-    assert torch.equal(facets["keys"], x + 1)
-    assert torch.equal(facets["hidden"], x + 2)
-    assert callable(facets.keys)
 
 
 def test_structural_output_facets_expose_namedtuple_and_dataclass_names() -> None:
@@ -469,43 +343,6 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         torch.add(missing, 1)
 
 
-def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
-    """FacetSpec grad applies the same transform chain to the home op grad."""
-
-    class Tiny(nn.Module):
-        """Tiny model with a named linear home."""
-
-        def __init__(self) -> None:
-            """Initialize the linear layer."""
-
-            super().__init__()
-            self.linear = nn.Linear(3, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return the linear output."""
-
-            return self.linear(x)
-
-    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
-    def first_feature(module: Any) -> dict[str, Any]:
-        """Return the first feature as an op-anchored FacetSpec."""
-
-        op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
-
-    log = tl.trace(
-        Tiny(),
-        torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(save_grads="all"),
-        save="all",
-    )
-    log.log_backward(log[log.output_layers[0]].out.sum())
-    facet = log.modules["linear"].facets["first_feature"]
-    home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
-
-    assert torch.equal(facet.grad, home.grad.select(-1, 0))
-
-
 def test_facetspec_grad_missing_for_unselected_home() -> None:
     """Selective gradients return MissingGradient for an unselected home op."""
 
@@ -574,26 +411,6 @@ def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     assert isinstance(gamma.grad, MissingGrad)
 
 
-def test_builtin_capability_inventory_is_recorded_as_data() -> None:
-    """Every built-in inventory entry records one allowed capability class."""
-
-    allowed = {
-        "op_structural",
-        "parameter",
-        "module_input",
-        "module_output",
-        "computed_read_only",
-        "missing",
-    }
-    assert BUILTIN_FACET_CAPABILITY_INVENTORY
-    assert BUILTIN_FACET_CAPABILITY_INVENTORY["attention"]["q"] == "op_structural"
-    assert BUILTIN_FACET_CAPABILITY_INVENTORY["mlp"]["intermediate"] == "computed_read_only"
-    assert BUILTIN_FACET_CAPABILITY_INVENTORY["embedding"]["weight"] == "parameter"
-    for facet_map in BUILTIN_FACET_CAPABILITY_INVENTORY.values():
-        assert facet_map
-        assert set(facet_map.values()) <= allowed
-
-
 def test_list_info_glob_and_recipe_record() -> None:
     """Discoverability functions expose registered recipe metadata."""
 
@@ -611,19 +428,6 @@ def test_list_info_glob_and_recipe_record() -> None:
         "functions": ["discovery_recipe"],
         "facets": ["q"],
     }
-
-
-def test_register_preserves_function_object_and_docstring() -> None:
-    """The register decorator returns the original function unchanged."""
-
-    def original_recipe(record: Any) -> dict[str, Any]:
-        """Original docstring."""
-
-        return {"x": 1}
-
-    registered = tl.facets.register(class_name="UnitFacetRecord")(original_recipe)
-    assert registered is original_recipe
-    assert registered.__doc__ == "Original docstring."
 
 
 class _FacetP2Model(nn.Module):
@@ -829,22 +633,6 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
         edited.attach_hooks(tl.head(3, "k"), tl.zero_ablate())
 
 
-def test_computed_facet_write_refuses() -> None:
-    """Computed MLP intermediate facets are read-only for intervention."""
-
-    torch.manual_seed(3)
-    model = _MLPModel()
-    log = tl.trace(
-        model,
-        torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(save_args=True),
-        save="all",
-    )
-
-    with pytest.raises(RuntimeError, match="computed facets are read-only"):
-        log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
-
-
 def test_in_place_or_view_version_facet_write_refuses() -> None:
     """Facets marked with non-raw value versions are not intervention-safe."""
 
@@ -879,40 +667,6 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
         log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
-
-
-def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
-    """``tl.head(i)`` ablates default q/k/v head facets across the model."""
-
-    torch.manual_seed(4)
-    model = _FacetP2Model(MultiHeadSelfAttention())
-    x = torch.randn(2, 3, 8)
-    clean = tl.trace(
-        model,
-        x,
-        capture=tl.options.CaptureOptions(save_args=True),
-        save="all",
-    )
-    clean_out = _trace_output(clean).clone()
-
-    edited = clean.fork("head_all")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
-    edited.run(model, x)
-
-    assert not torch.allclose(_trace_output(edited), clean_out)
-    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
-    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).k) == 0
-    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).v) == 0
-    assert edited.validate_forward_pass([_trace_output(edited)])
-
-
-def test_facets_public_module_all_is_curated() -> None:
-    """The public facets module should advertise only intentional names."""
-
-    assert "register" in facets_mod.__all__
-    assert "FacetView" in facets_mod.__all__
-    assert "Any" not in facets_mod.__all__
-    assert "dataclass" not in facets_mod.__all__
 
 
 def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:

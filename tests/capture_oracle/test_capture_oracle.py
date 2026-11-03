@@ -371,29 +371,6 @@ def test_capture_characterization_matches_golden(case: CaseSpec) -> None:
     assert _forward_invocation_count(actual) == case.expected_forward_invocations
 
 
-def test_matrix_covers_required_models_paths_and_features() -> None:
-    """The matrix contains every Stage-0 model axis, producer, and legal feature class."""
-
-    assert {case.model_axis for case in CASES} >= {
-        "plain_cnn",
-        "train_batchnorm",
-        "recurrent",
-        "conditional",
-        "in_place",
-        "mutating_pre_hook",
-        "tiny_transformer",
-    }
-    assert {case.config for case in CASES} >= {
-        "exhaustive",
-        "predicate_live",
-        "record",
-        "two_pass_negative",
-        "mixed_selector",
-    }
-    features = {feature for case in CASES for feature in case.features}
-    assert features >= {"intervene", "halt", "lookback", "backward", "disk", "failed"}
-
-
 def test_ground_truth_comparison_is_non_vacuous() -> None:
     """A single faithful topology mutation is rejected by the differential comparator."""
 

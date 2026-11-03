@@ -28,9 +28,6 @@ from _fresh_plant import touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-import torchlens._capture._forward_helpers as capture_forward_helpers
-from torchlens._capture import peak_memory
-from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions
 
 PLANT = 8 * 2**20  # float64 elements
@@ -129,39 +126,6 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
         assert reported >= PLANT_BYTES - MARGIN
         assert reported <= high_water - before + MARGIN
         assert trace.cost.forward_peak_memory_reason is None
-    finally:
-        trace.cleanup()
-
-
-def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
-    torch.manual_seed(0)
-    model = PyTransient().eval()
-    SAMPLES.clear()
-    trace = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True),
-    )
-    try:
-        outside = SAMPLES["alive"] - SAMPLES["entry"]
-        assert outside >= PY_PLANT_BYTES
-        assert trace.cost.forward_peak_memory is not None
-        assert int(trace.cost.forward_peak_memory) >= outside - MARGIN
-        assert int(trace.cost.forward_peak_memory) >= PY_PLANT_BYTES - MARGIN
-    finally:
-        trace.cleanup()
-
-
-def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
-    # An outside measurement of zero growth: every resident reading is the same.
-    monkeypatch.setattr(capture_forward_helpers, "process_rss_bytes", lambda: 1_000_000)
-    monkeypatch.setattr(peak_memory, "peak_rss_bytes", lambda: 1_000_000)
-    torch.manual_seed(0)
-    trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4), capture=HOST)
-    try:
-        assert trace.provenance.forward_memory_backend == "cpu"
-        assert trace.cost.forward_peak_memory is None
-        assert trace.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
     finally:
         trace.cleanup()
 

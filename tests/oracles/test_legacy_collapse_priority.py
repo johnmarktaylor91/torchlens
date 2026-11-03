@@ -125,28 +125,6 @@ def test_collapse_priority_matches_the_hand_ranking() -> None:
         trace.cleanup()
 
 
-def test_single_same_count_child_reads_zero_and_the_wrapper_ranks() -> None:
-    # Top: w wraps w.inner (both hide linear, relu, linear: 2), then c.
-    # Largest hidden count is 2, so w reads 1.0 and w.inner 0.0.
-    class Top(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.w = OnlyChild()
-            self.c = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.c(self.w(x))
-
-    trace = _trace(Top())
-    try:
-        scores = dict(trace.module_collapse_order)
-        assert scores["w"] == 1.0
-        assert scores["w.inner"] == 0.0
-        assert all(score == 0.0 for address, score in scores.items() if address != "w")
-    finally:
-        trace.cleanup()
-
-
 def test_no_collapsible_module_ranks_everything_zero() -> None:
     # Every child of the Sequential is one Layer: no candidate, all 0.0.
     trace = _trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)))

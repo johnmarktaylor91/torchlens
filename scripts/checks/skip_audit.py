@@ -220,8 +220,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "undeclared viz-test dependency; extras-gap candidate reported 2026-08-15",
     ),
-    "mcp": (OPTIONAL_PREVIEW, "mcp extra (mcp>=2.0); gates the stdio server only"),
-    "mcp.server": (OPTIONAL_PREVIEW, "mcp extra (mcp>=2.0); gates the stdio server only"),
     "mlx": (OPTIONAL_PREVIEW, "mlx extra"),
     "mlx.core": (OPTIONAL_PREVIEW, "mlx extra"),
     "mlx.nn": (OPTIONAL_PREVIEW, "mlx extra"),

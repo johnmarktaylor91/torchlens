@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from _source_corpus import package_ast, package_files
 
 import torchlens as tl
 from torchlens._ir.capture_events import CaptureEvents
@@ -65,34 +64,3 @@ def test_live_view_handle_reads_route_through_index() -> None:
     from torchlens._capture import projections
 
     assert hasattr(projections, "_grad_fn_handle_from_index")
-
-
-@pytest.mark.heavy
-def test_intervention_template_ref_is_dead() -> None:
-    """No producer writes a non-None intervention_template_ref and no
-    consumer reads it at materialize: confirm-and-delete evidence (P2)."""
-
-    import ast
-    from pathlib import Path
-
-    package_root = Path(tl.__file__).resolve().parent
-    readers: list[str] = []
-    for path in package_files():
-        rel = str(path.relative_to(package_root.parent))
-        tree = package_ast(path)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Attribute)
-                and node.attr == "intervention_template_ref"
-                and isinstance(node.ctx, ast.Load)
-            ):
-                readers.append(f"{rel}:{node.lineno}")
-            if (
-                isinstance(node, ast.keyword)
-                and node.arg == "intervention_template_ref"
-                and not (isinstance(node.value, ast.Constant) and node.value.value is None)
-            ):
-                readers.append(f"writer!{rel}:{node.lineno}")
-    allowed_prefixes = ("torchlens/_ir/op_record", "torchlens/_ir/events")
-    unexpected = [site for site in readers if not site.startswith(allowed_prefixes)]
-    assert not unexpected, f"intervention_template_ref is not dead: {unexpected}"

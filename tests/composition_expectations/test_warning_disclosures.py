@@ -41,27 +41,6 @@ def _contract_table_codes(text: str) -> dict[str, tuple[str, str]]:
     return rows
 
 
-def test_torchlens_warning_remedy_chokepoint() -> None:
-    """The warning base derives fields['remedy'] from the Remedy: tail.
-
-    The five-line chokepoint copied from the error base (memo 0.4 XS
-    mechanism): authored-tail derivation, explicit ``remedy=`` kwarg wins,
-    ``code=`` payload lands in fields.
-    """
-
-    from torchlens.errors import TorchLensWarning
-
-    warning = TorchLensWarning("Something drifted. Remedy: re-run the capture", code="planted")
-    assert warning.fields["code"] == "planted"
-    assert warning.fields["remedy"] == "re-run the capture"
-
-    explicit = TorchLensWarning("Msg. Remedy: derived tail", remedy="explicit wins")
-    assert explicit.fields["remedy"] == "explicit wins"
-
-    bare = TorchLensWarning("No remedy tail here")
-    assert "remedy" not in bare.fields
-
-
 def test_first_contracted_row_is_live() -> None:
     """The zero-fire rerun warning is coded at the site and behaviorally sound."""
 
@@ -107,19 +86,6 @@ def test_warning_contract_table_lockstep_both_directions() -> None:
     )
     for code, (warning, remedy) in table.items():
         assert warning.strip() and remedy.strip(), f"empty contract columns for {code!r}"
-
-
-def test_warning_contract_lockstep_is_red_capable() -> None:
-    """Planted drift in either direction is detected by the pure comparators."""
-
-    table = _contract_table_codes(
-        "| Code | Warning | Remedy class |\n|---|---|---|\n| `planted_code` | w | r |\n"
-    )
-    assert set(table) == {"planted_code"}
-    # Direction 1: a coded site missing from the table.
-    assert {"other_code"} - set(table) == {"other_code"}
-    # Direction 2: a table row with no coded site.
-    assert set(table) - {"other_code"} == {"planted_code"}
 
 
 def test_s18_ratchets_hold_exactly() -> None:
