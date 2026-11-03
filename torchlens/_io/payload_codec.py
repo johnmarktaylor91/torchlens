@@ -19,7 +19,15 @@ import torch
 
 from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
+from ._numpy_payload_codec import (
+    NumpyPayloadCodec,
+    _dtype_string_is_object_like,
+    _raise_for_unsupported_array_dtype,
+    _unsupported_array_dtype_reason,
+    numpy_to_transport_tensor,
+)
 from ._payload_codec_paddle import _resolve_paddle_place
+from .format_errors import ArtifactError
 from .manifest import _json_ready_codec_metadata_value
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
 
@@ -981,13 +989,17 @@ def register_payload_codec(backend_name: str, codec: PayloadCodec) -> None:
     _CODECS[backend_name] = codec
 
 
-def numpy_to_transport_tensor(array: np.ndarray) -> torch.Tensor:
-    """Convert an encoded NumPy array to the CPU torch transport tensor."""
+def _resolve_materialization_codec(backend_name: str) -> PayloadCodec:
+    """Keep registry failures inside the typed bundle-load boundary."""
 
-    _raise_for_unsupported_array_dtype(array, backend_name="transport")
-    # np.array(copy=True, order="C") already yields a C-contiguous buffer, so
-    # from_numpy's zero-copy wrap is contiguous by construction.
-    return torch.from_numpy(np.array(array, copy=True, order="C"))
+    try:
+        return get_payload_codec(backend_name)
+    except Exception as exc:
+        raise ArtifactError(
+            f"Failed to resolve the payload codec for backend {backend_name!r} during load.",
+            code="bundle_load_failed",
+            remedy="restore the payload runtime or re-save the artifact in a compatible environment",
+        ) from exc
 
 
 def materialize_transport_tensor(
@@ -1035,7 +1047,7 @@ def materialize_transport_tensor(
             return tensor
         return tensor.to(map_location)
 
-    codec = get_payload_codec(logical_backend)
+    codec = _resolve_materialization_codec(logical_backend)
     if codec.codec_name == "none" or codec_name != codec.codec_name:
         raise BackendPayloadUnsupportedError(
             f"Manifest declares unsupported payload codec {codec_name!r} for "
@@ -1902,34 +1914,5 @@ def _jax_sharding_addressable_device_count(sharding: Any) -> int:
         return 0
 
 
-def _unsupported_array_dtype_reason(array: np.ndarray) -> str | None:
-    """Return an unsupported dtype reason for a host array, if any."""
-
-    if array.dtype.kind in {"O", "S", "U", "V"}:
-        return f"dtype {array.dtype} is not supported by the payload codec"
-    # ``complex128`` (16-byte complex) mirrors the torch-native gap in
-    # ``tensor_policy._SUPPORTED_DTYPES``: the shared transport eventually
-    # reaches ``safetensors.torch.save_file()``, whose dtype-size table has
-    # no entry for ``torch.complex128``, even though a non-torch backend's
-    # ``complex128`` array converts cleanly via ``torch.from_numpy`` and
-    # would otherwise sail straight through this codec-agnostic gate to the
-    # same unwrapped ``KeyError`` (cert round 8 BLOCKER). ``complex64``
-    # (8-byte complex) genuinely round-trips and stays allowed.
-    if array.dtype.kind == "c" and array.dtype.itemsize > 8:
-        return f"dtype {array.dtype} is not supported by the payload codec"
-    return None
-
-
-def _dtype_string_is_object_like(dtype: str) -> bool:
-    """Return whether a dtype string describes object or string data."""
-
-    lowered = dtype.lower()
-    return any(token in lowered for token in ("object", "str", "string", "bytes", "void"))
-
-
-def _raise_for_unsupported_array_dtype(array: np.ndarray, *, backend_name: str) -> None:
-    """Raise ``TypeError`` if ``array`` has a non-transportable dtype."""
-
-    reason = _unsupported_array_dtype_reason(array)
-    if reason is not None:
-        raise TypeError(f"{backend_name} payload {reason}.")
+# NumPy is a value carrier, not an additional model backend.
+_CODECS["numpy"] = NumpyPayloadCodec(EncodedArray, _manifest_fields)

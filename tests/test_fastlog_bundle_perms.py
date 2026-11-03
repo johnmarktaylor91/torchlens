@@ -72,7 +72,7 @@ def test_bundle_tlspec_tree_is_private_under_permissive_umask(tmp_path) -> None:
     ``_TlSpecWriter.write_bundle`` created its directory and wrote its
     sidecars under the ambient umask, leaving them group/world-readable while
     the core bundle writer tightens its outputs to 0o700/0o600. The same
-    tightening now applies to the whole 3.0 container: bundle.json, the
+    tightening now applies to the whole 3.0 container: relations.json, the
     manifest and every member artifact under ``members/``.
     """
 
@@ -86,7 +86,7 @@ def test_bundle_tlspec_tree_is_private_under_permissive_umask(tmp_path) -> None:
         os.umask(old_umask)
 
     assert _mode(target) == 0o700
-    for sidecar in ("bundle.json", "manifest.json"):
+    for sidecar in ("relations.json", "manifest.json"):
         path = target / sidecar
         assert path.exists(), sidecar
         assert _mode(path) == 0o600, (sidecar, oct(_mode(path)))

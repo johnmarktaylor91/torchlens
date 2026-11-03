@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import tensor_references
 from safetensors.torch import load_file
 from torch import nn
 
@@ -164,9 +165,11 @@ def test_async_and_sync_bundles_are_byte_identical(tmp_path: Path) -> None:
     tl.trace(_model(), x, storage=tl.to_disk(tmp_path / "sync.tlspec", async_writes=False))
     async_manifest = _manifest(tmp_path / "async.tlspec")
     sync_manifest = _manifest(tmp_path / "sync.tlspec")
-    assert async_manifest["tensors"], "expected streamed payloads"
-    assert async_manifest["tensors"] == sync_manifest["tensors"]
-    chunks = {ref["blob"] for ref in async_manifest["tensors"].values()}
+    async_refs = tensor_references(tmp_path / "async.tlspec")
+    sync_refs = tensor_references(tmp_path / "sync.tlspec")
+    assert async_refs, "expected streamed payloads"
+    assert async_refs == sync_refs
+    chunks = {ref["blob"] for ref in async_refs.values()}
     assert {chunk: async_manifest["files"][chunk] for chunk in chunks} == {
         chunk: sync_manifest["files"][chunk] for chunk in chunks
     }
@@ -225,7 +228,7 @@ def _count_sync_blobs(tmp_path: Path) -> int:
 
     reference = tmp_path / "reference.tlspec"
     tl.trace(_model(), torch.randn(4, 8), storage=tl.to_disk(reference, async_writes=False))
-    return len(_manifest(reference)["tensors"])
+    return len(tensor_references(reference))
 
 
 @pytest.mark.parametrize("fail_position", ["second", "last"])
@@ -304,10 +307,10 @@ def test_finalize_waits_for_every_slow_pending_write(
     tl.trace(_model(), x, storage=tl.to_disk(bundle))
 
     manifest = _manifest(bundle)
-    assert manifest["tensors"], "expected streamed blobs"
+    assert tensor_references(bundle), "expected streamed blobs"
     from torchlens._utils.hashing import sha256_file
 
-    for ref in manifest["tensors"].values():
+    for ref in tensor_references(bundle).values():
         blob_path = bundle / ref["blob"]
         assert blob_path.exists()
         assert sha256_file(blob_path) == manifest["files"][ref["blob"]]["sha256"]
@@ -348,4 +351,4 @@ def test_streamed_capture_backpressure_peak_respects_budget(
     assert len(engines) == 1
     # Every payload here is <= budget, so the bound must hold exactly.
     assert engines[0].peak_pending_bytes <= budget
-    assert _manifest(bundle)["tensors"]
+    assert tensor_references(bundle)
