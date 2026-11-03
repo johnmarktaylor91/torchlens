@@ -81,7 +81,6 @@ torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
-torchlens/_data_classes/_schema_bindings.py	1028
 torchlens/_data_classes/_trace_fork.py	846
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
 torchlens/_data_classes/_trace_fork.py::build_fork	178

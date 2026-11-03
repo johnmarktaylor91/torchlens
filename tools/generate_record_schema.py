@@ -15,6 +15,7 @@ Run: python tools/generate_record_schema.py [--check]
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import types
 import typing
@@ -36,7 +37,7 @@ generation, so hand edits cannot survive. The declared axes live in
 
 from __future__ import annotations
 
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 '''
 
@@ -319,12 +320,21 @@ def collect_primitive_candidate_bindings() -> dict[str, str]:
     return candidate
 
 
-def _render(schema: dict[str, list[tuple[str, str, str | None, str]]]) -> str:
+def _render(
+    schema: dict[str, list[tuple[str, str, str | None, str]]], *, split_trace: bool = True
+) -> str:
     """Render the bindings module source deterministically."""
 
     lines = [_HEADER]
+    if split_trace:
+        lines.append(
+            "from ._schema_bindings_trace import STORAGE_BINDINGS as _TRACE_STORAGE_BINDINGS\n\n"
+        )
     lines.append("STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {\n")
     for key, rows in schema.items():
+        if split_trace and key == "trace":
+            lines.append('    "trace": _TRACE_STORAGE_BINDINGS["trace"],\n')
+            continue
         lines.append(f'    "{key}": {{\n')
         for name, kind, annotation, mutability in rows:
             parts = [f"StorageKind.{kind}"]
@@ -338,19 +348,51 @@ def _render(schema: dict[str, list[tuple[str, str, str | None, str]]]) -> str:
     return "".join(lines)
 
 
+def _format_trace_bindings(source: str) -> str:
+    """Use the existing development formatter for the unexcluded generated sibling."""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "format",
+            "--stdin-filename",
+            "_schema_bindings_trace.py",
+            "-",
+        ],
+        input=source,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout
+
+
 def main() -> int:
     """Generate (or with --check, verify) the bindings module."""
 
-    rendered = _render(_collect())
+    schema = _collect()
+    rendered = {
+        _OUT_PATH: _render(schema),
+        _OUT_PATH.with_name("_schema_bindings_trace.py"): _format_trace_bindings(
+            _render({"trace": schema["trace"]}, split_trace=False)
+        ),
+    }
     if "--check" in sys.argv:
-        current = _OUT_PATH.read_text() if _OUT_PATH.exists() else ""
-        if current != rendered:
-            print("stale: _schema_bindings.py differs from a fresh generation")
+        stale = [
+            path.name
+            for path, source in rendered.items()
+            if not path.exists() or path.read_text() != source
+        ]
+        if stale:
+            print(f"stale: {', '.join(stale)} differs from a fresh generation")
             return 1
-        print("ok: _schema_bindings.py is current")
+        print("ok: generated storage bindings are current")
         return 0
-    _OUT_PATH.write_text(rendered)
-    print(f"wrote {_OUT_PATH}")
+    for path, source in rendered.items():
+        path.write_text(source)
+        print(f"wrote {path}")
     return 0
 
 
