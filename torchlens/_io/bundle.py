@@ -101,7 +101,11 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.restore import loaded_persistent_buffer_universe, true_up_record
+from .format3.restore import (
+    _stamp_loaded_context,
+    loaded_persistent_buffer_universe,
+    true_up_record,
+)
 from .format3.route import Format3LoadRequest, is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
@@ -1025,16 +1029,7 @@ def _finish_format3_trace(
     true_up_record(trace, artifact.tables["trace"][0], "trace")
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, root)
-    trace._loaded_from_bundle = True
-    trace._source_bundle_manifest_sha256 = sha256_file(root / format3_contract.MANIFEST_FILE)
-    trace._source_bundle_path = root
-    trace._source_bundle_created_at = manifest["created_at"]
-    # The certificate rides as a ``Provenance`` so a plain resave carries the capture-time
-    # facts (default dtype, RNG digests) forward instead of re-deriving them weaker.
-    raw_provenance = manifest.get("provenance")
-    trace._source_bundle_provenance = (
-        Provenance.from_dict(raw_provenance) if isinstance(raw_provenance, dict) else None
-    )
+    _stamp_loaded_context(trace, manifest, root, Provenance.from_dict, sha256_file)
     # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
     # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
     runnable_bind.attach_runnable(
@@ -1273,21 +1268,10 @@ def load(
         if routed is not NOT_ROUTED:
             return routed
         from ..io import _pre3_observed, detect_tlspec_format
-        from .format_contract import _MODELLOG_216_NOTE, below_floor_error
+        from .format_contract import _guard_pre3_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
-        if tlspec_format == "pre_3":
-            observed = _pre3_observed(bundle_path) or "2.x artifact markers"
-            raise below_floor_error(
-                observed=observed,
-                path=str(bundle_path),
-                remedy_note=(
-                    _MODELLOG_216_NOTE
-                    if observed.startswith("io_format_version=2, n_activation_blobs=")
-                    else ""
-                ),
-                code="artifact_version_below_floor",
-            )
+        _guard_pre3_format(tlspec_format, bundle_path, lambda: _pre3_observed(bundle_path))
         if is_format3_root(bundle_path, tlspec_format):
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
             return load_format3(

@@ -163,9 +163,7 @@ def cast_for_store(
     """
 
     target = _target_for_key(policy, key)
-    if target is None:
-        return tensor, None
-    if tensor.dtype == target:
+    if target is None or tensor.dtype == target:
         _check_store_dtype(key, tensor, shard_format)
         return tensor, None
     try:
@@ -210,7 +208,7 @@ def _check_store_dtype(key: str, cast: torch.Tensor, shard_format: str) -> None:
         verdict = tensor_policy.is_supported_for_save(cast, _real_view_codec=False)
         if not isinstance(verdict, tensor_policy.Ok):
             raise InvalidArgumentError(
-                f"Output key {key!r} cast to {cast.dtype} cannot be stored by "
+                f"Output key {key!r} with dtype {cast.dtype} cannot be stored by "
                 f"the safetensors shard codec: "
                 f"{getattr(verdict, 'text', 'unsupported tensor')}.",
                 code="extraction_dtype_unsupported",
