@@ -94,6 +94,13 @@ instead. An agent that can run a model already has Python:
 
 
 def guide() -> str:
-    """Return the agent guide text (the same text served as an MCP resource)."""
+    """Return the agent guide text (the same text served as an MCP resource).
+
+    Examples
+    --------
+    >>> text = guide()
+    >>> text.splitlines()[0]
+    '# TorchLens for AI agents'
+    """
 
     return AGENT_GUIDE
