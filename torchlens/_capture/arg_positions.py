@@ -786,7 +786,7 @@ _UNARY_FUNCS = [
     "refinenames",
     "hasnames",
     # Sparse / quantization
-    "tosparse",
+    *(f"tosparse{layout}" for layout in ("", "csr", "csc", "bsr", "bsc")),
     "todense",
     "tomkldnn",
     "coalesce",
