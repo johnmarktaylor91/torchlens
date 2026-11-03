@@ -156,10 +156,10 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_distributed_census_topologies.py:109",
         "test_distributed_honesty.py:741",
         "test_distributed_honesty.py:757",
-        "test_input_coercion.py:378",
+        "test_input_coercion.py:299",
         "test_layer_log.py:435",
         "test_lit_bridge_real.py:53",
-        "test_mlp_recipes.py:126",
+        "test_mlp_recipes.py:83",
         "test_output_aesthetics.py:1642",
         "test_output_aesthetics.py:1690",
         "test_real_world_models.py:1467",
@@ -168,9 +168,9 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_tlspec_runnable_r69_input_contract.py:779",
         "test_transforms_lib_real_models.py:290",
         "test_weightsfree_hf.py:52",
-        "test_weightsfree_hf.py:134",
-        "test_weightsfree_hf.py:172",
-        "test_weightsfree_hf.py:210",
+        "test_weightsfree_hf.py:66",
+        "test_weightsfree_hf.py:104",
+        "test_weightsfree_hf.py:142",
     }
 )
 
