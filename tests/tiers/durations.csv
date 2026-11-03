@@ -518,7 +518,7 @@ tests/test_fastlog/test_public_api_smoke.py,10,1.05,0.28,unmarked
 tests/test_fastlog/test_storage_modes.py,12,1.06,0.18,unmarked
 tests/test_fastlog/test_storage_resolution.py,3,0.06,0.02,unmarked
 tests/test_fastlog/test_storage_smoke.py,9,1.04,0.30,unmarked
-tests/test_fastbackward.py,7,0.90,0.21,unmarked
+tests/test_fastlog_backward.py,7,0.90,0.21,unmarked
 tests/test_fastlog_bundle_perms.py,2,0.59,0.49,unmarked
 tests/test_fastlog_exception_in_predicate.py,2,0.16,0.09,unmarked
 tests/test_fastlog_halt.py,20,1.16,0.09,unmarked
