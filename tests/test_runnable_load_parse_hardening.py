@@ -242,6 +242,12 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     without_weights = tmp_path / "no-weights.tlspec"
     recaptured.save(without_weights, level="runnable")
     loaded_bare = tl.load(without_weights)
+    bare_resaved = tmp_path / "bare-resaved.tlspec"
+    loaded_bare.save(bare_resaved, level="runnable")
+    assert read_runnable(without_weights) == read_runnable(bare_resaved)
+    # Preserve the missing-producer refusal witness after a validated descriptor
+    # became sufficient for a resave: remove that descriptor deliberately.
+    loaded_bare._runnable.descriptor = None
     with pytest.raises(ArtifactError) as refusal:
         loaded_bare.save(tmp_path / "resave2.tlspec", level="runnable")
     assert refusal.value.fields["code"] == "run_capability_unavailable"
