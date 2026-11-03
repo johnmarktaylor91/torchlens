@@ -20,6 +20,8 @@ so an absolute / ``..`` member path escaped the bundle root. The fix
 
 from __future__ import annotations
 
+import copy
+import json
 import pickle
 import sys
 from collections import OrderedDict
@@ -28,10 +30,12 @@ from typing import Any, NamedTuple
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io.format3.values import ValueEncoder
 from torchlens._ir.container import (
     ContainerReconstructionError,
     ContainerSpec,
@@ -82,45 +86,13 @@ class _OrderedDictModel(nn.Module):
         return OrderedDict([("value", x + 1), ("meta", 3)])
 
 
-def _find_container_specs(obj: Any) -> list[ContainerSpec]:
-    """Return every ``ContainerSpec`` reachable from a pickled metadata object."""
-
-    seen: set[int] = set()
-    specs: list[ContainerSpec] = []
-
-    def walk(node: Any, depth: int = 0) -> None:
-        if id(node) in seen or depth > 16:
-            return
-        seen.add(id(node))
-        if isinstance(node, ContainerSpec):
-            specs.append(node)
-            return
-        if isinstance(node, dict):
-            for value in node.values():
-                walk(value, depth + 1)
-        elif isinstance(node, (list, tuple, set, frozenset)):
-            for value in node:
-                walk(value, depth + 1)
-        else:
-            for value in (getattr(node, "__dict__", None) or {}).values():
-                walk(value, depth + 1)
-            for slot in getattr(type(node), "__slots__", ()) or ():
-                try:
-                    walk(getattr(node, slot, None), depth + 1)
-                except Exception:
-                    pass
-
-    walk(obj)
-    return specs
+_CONTAINER_SPEC_TYPE = "torchlens._ir.container.ContainerSpec"
 
 
-def _tamper_output_container_type(
-    bundle: Path, *, type_module: str, type_qualname: str, sentinel: Path
-) -> None:
-    """Overwrite the shared output ``ContainerSpec`` to name an arbitrary constructor."""
+def _tampered_spec_cell(*, type_module: str, type_qualname: str, sentinel: Path) -> Any:
+    """Return the typed-JSON cell of a ``ContainerSpec`` that names an arbitrary constructor."""
 
-    with open(bundle / "metadata.pkl", "rb") as handle:
-        obj = pickle.load(handle)
+    spec = ContainerSpec(kind="tuple")
     child = ContainerSpec(kind="literal", literal_value=["/bin/sh", "-c", f"touch {sentinel}"])
     tampered = {
         "kind": "namedtuple",
@@ -131,11 +103,60 @@ def _tamper_output_container_type(
         "keys": (),
         "child_specs": ((NamedField("args"), child),),
     }
-    for spec in _find_container_specs(obj):
-        for key, value in tampered.items():
-            object.__setattr__(spec, key, value)
-    with open(bundle / "metadata.pkl", "wb") as handle:
-        pickle.dump(obj, handle)
+    for key, value in tampered.items():
+        object.__setattr__(spec, key, value)
+    return ValueEncoder().encode(spec, "r10-tamper")
+
+
+def _replace_container_specs(node: Any, cell: Any) -> int:
+    """Replace every ``ContainerSpec`` record cell under ``node`` in place; return the count."""
+
+    replaced = 0
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(value, dict) and value.get("type") == _CONTAINER_SPEC_TYPE:
+                node[key] = copy.deepcopy(cell)
+                replaced += 1
+            else:
+                replaced += _replace_container_specs(value, cell)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            if isinstance(value, dict) and value.get("type") == _CONTAINER_SPEC_TYPE:
+                node[index] = copy.deepcopy(cell)
+                replaced += 1
+            else:
+                replaced += _replace_container_specs(value, cell)
+    return replaced
+
+
+def _tamper_output_container_type(
+    bundle: Path, *, type_module: str, type_qualname: str, sentinel: Path
+) -> None:
+    """Overwrite every saved ``ContainerSpec`` to name an arbitrary constructor.
+
+    The saved format keeps container specs as typed-JSON records in the record
+    tables (and the runnable descriptor when it carries one). Each rewritten file
+    is re-listed in the manifest with its new digest, so the tampered spec reaches
+    reconstruction instead of stopping at the file-table check.
+    """
+
+    cell = _tampered_spec_cell(
+        type_module=type_module, type_qualname=type_qualname, sentinel=sentinel
+    )
+    total = 0
+    for path in sorted(bundle.rglob("*.json")):
+        relpath = path.relative_to(bundle).as_posix()
+        if relpath == "manifest.json":
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        replaced = _replace_container_specs(payload, cell)
+        if replaced:
+            path.write_text(
+                json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+            )
+            redigest(bundle, relpath)
+            total += replaced
+    assert total, "the saved bundle carries no ContainerSpec to tamper"
 
 
 # --------------------------------------------------------------------------- #
@@ -183,8 +204,6 @@ def test_container_tripwire_is_a_registered_typed_refusal() -> None:
     deepcopy round-trips keep the structured payload (the R64 pickle-family
     defect class).
     """
-
-    import copy
 
     from torchlens import errors as tl_errors
 
