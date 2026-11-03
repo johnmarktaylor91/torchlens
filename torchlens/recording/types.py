@@ -17,6 +17,7 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
 from .._utils.tensor_utils import SaveMode
+from ._cooked_ancestry import _backfill_cooked_ancestry, _distinct_label_index_keys
 
 __all__ = [
     "ActivationRecord",
@@ -32,97 +33,6 @@ __all__ = [
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
     from .._data_classes.trace import Trace
-
-
-def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
-    """Return the distinct label keys (primary, then raw alias) that index one record."""
-    if raw_label is None or raw_label == label:
-        return (label,)
-    return (label, raw_label)
-
-
-def _backfill_cooked_ancestry(events: Any) -> None:
-    """Derive the per-op ancestry closures the sparse recorder never tracked.
-
-    Predicate-mode capture appends journal records without ancestry facts
-    (the live exhaustive path computes them incrementally per op at capture
-    time). A cooked Trace materializes its Op rows straight from these
-    records, so without a backfill every cooked row carries empty
-    ``root_ancestors`` / ``internal_source_ancestors`` and the
-    ``ancestry_closure`` metadata invariant correctly fails on the first
-    input layer. Recompute the exact closure the invariant checks, in journal
-    order (parents precede children within one sealed pass), over the AMENDED
-    view (graph-edge-insertion amendments contribute parents):
-
-    * ``input_ancestors``           = own label for input rows, else parent union;
-    * ``internal_source_ancestors`` = ``{self}`` for parentless non-input rows
-      (matching the live source-minting convention), else parent union;
-    * ``root_ancestors``            = ``input_ancestors | internal_source_ancestors``.
-
-    Mutates ``events`` in place: this runs only on the ``_copy_for_replay``
-    projection a cook owns (the sanctioned mutation surface -- postprocess
-    graph traversal replaces events on the same projection), never on the
-    sealed Recording stream. The fold cache keys on lane lengths, so it is
-    explicitly invalidated after the in-place replacement.
-
-    Parameters
-    ----------
-    events
-        Replay-projection ``CaptureEvents`` whose op lane should be
-        ancestry-backfilled before Trace postprocessing.
-    """
-    from dataclasses import replace as _dc_replace
-
-    from .._ir.op_record import AncestryFacet, OpRecord
-
-    folded = events.amended_op_records()
-    closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
-    by_raw_label = events.live_index.by_raw_label
-    mutated = False
-    for index, record in enumerate(folded):
-        # Journal op records (OpRecord / compat events) carry layer_type; never an Op.
-        layer_type = getattr(record, "layer_type", None)
-        if layer_type in (None, "module_enter", "module_exit"):
-            continue
-        label_raw = record.label_raw
-        parent_labels = [edge.parent_label_raw for edge in record.parents]
-        if layer_type == "input":
-            input_ancestors = frozenset((label_raw,))
-            internal_source_ancestors: frozenset[str] = frozenset()
-        elif not parent_labels:
-            input_ancestors = frozenset()
-            internal_source_ancestors = frozenset((label_raw,))
-        else:
-            input_ancestors = frozenset().union(
-                *(closures[parent][0] for parent in parent_labels if parent in closures)
-            )
-            internal_source_ancestors = frozenset().union(
-                *(closures[parent][1] for parent in parent_labels if parent in closures)
-            )
-        closures[label_raw] = (input_ancestors, internal_source_ancestors)
-        ancestry = AncestryFacet(
-            input_ancestors=input_ancestors,
-            internal_source_ancestors=internal_source_ancestors,
-            root_ancestors=input_ancestors | internal_source_ancestors,
-            has_internal_source_ancestor=bool(internal_source_ancestors),
-        )
-        raw_record = events.op_events[index]
-        if isinstance(raw_record, OpRecord):
-            updated = _dc_replace(raw_record, ancestry=ancestry)
-        else:
-            updated = _dc_replace(
-                raw_record,
-                input_ancestors=input_ancestors,
-                internal_source_ancestors=internal_source_ancestors,
-                root_ancestors=ancestry.root_ancestors,
-                has_internal_source_ancestor=ancestry.has_internal_source_ancestor,
-            )
-        events.op_events[index] = updated
-        mutated = True
-        if by_raw_label.get(label_raw) is raw_record:
-            by_raw_label[label_raw] = updated
-    if mutated:
-        events._amended_fold_cache = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1250,6 +1160,93 @@ class Recording(TraceLike):
             frontier_label=cooked_frontier,
         )
         return trace
+
+    # -- Trace-parity verbs: each cooks through ``to_trace()`` and delegates, so
+    # the typed ``to_trace`` refusals (failed, events not retained, multi-pass)
+    # propagate unchanged and the Trace signature is the one contract.
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the machine-readable dump of this recording cooked into a Trace.
+
+        Parameters
+        ----------
+        max_ops:
+            Optional cap on emitted op rows, as for ``Trace.to_agent_json``.
+
+        Returns
+        -------
+        dict[str, Any]
+            The ``torchlens.agent_trace.v1`` dump of ``self.to_trace()``.
+        """
+
+        from ..report._agent_json import build_agent_json
+
+        return build_agent_json(self.to_trace(), max_ops=max_ops)
+
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+        include_outs: bool | None = None,
+        include_weights: bool = False,
+        include_grads: bool | None = None,
+        include_saved_args: bool | None = None,
+        include_rng_states: bool | None = None,
+        include_activations: bool = False,
+        include_source: bool = True,
+        include_custom_attributes: bool = True,
+        include_buffer_values: bool | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Cook this recording into a Trace and save it as a ``.tlspec`` directory.
+
+        The parameters are ``Trace.save``'s; ``tl.load(path)`` reads the artifact
+        back as a Trace.
+        """
+
+        self.to_trace().save(
+            path,
+            level=level,
+            overwrite=overwrite,
+            include_outs=include_outs,
+            include_weights=include_weights,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
+            include_rng_states=include_rng_states,
+            include_activations=include_activations,
+            include_source=include_source,
+            include_custom_attributes=include_custom_attributes,
+            include_buffer_values=include_buffer_values,
+            strict=strict,
+        )
+
+    def fork(self, name: str | None = None) -> Trace:
+        """Cook this recording and return a copy-on-write intervention fork of it."""
+
+        return self.to_trace().fork(name)
+
+    def do(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any = None,
+        *,
+        model: torch.nn.Module | None = None,
+        inputs: Any = None,
+        intervention: Any = None,
+        loss: Callable[[Trace], torch.Tensor] | None = None,
+    ) -> Trace:
+        """Cook this recording and apply an intervention as ``Trace.do`` does."""
+
+        return self.to_trace().do(
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            inputs=inputs,
+            intervention=intervention,
+            loss=loss,
+        )
 
     def _recover_halt_frontier(self) -> tuple[str, torch.Tensor]:
         """Recover the frontier (output-parent label, tensor) for a halted recording.

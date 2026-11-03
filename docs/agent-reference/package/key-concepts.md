@@ -33,7 +33,7 @@ facets, strict protocol with legacy flat-name properties) through the ONE commit
 the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the single
 writer) and every amended-state read folds through the capture-event journal's amended-op fold.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
-(`recording/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
+(`recording/_cooked_ancestry.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
 `_copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
 `_amended_fold_cache` afterwards. Every in-place op-lane writer (this one included) is
 pinned by the closed reason-bearing ledger in

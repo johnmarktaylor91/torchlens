@@ -28,7 +28,7 @@ from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
+from .._errors import CaptureNotActiveError, original_exception
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
@@ -36,7 +36,11 @@ from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
 from ._recorder_streaming import _rank_prefixed_streaming_options
-from ._validation import validate_recording_options
+from ._validation import (
+    refuse_episode_on_record,
+    refuse_storage_streaming_conflict,
+    validate_recording_options,
+)
 from .exceptions import RecorderStateError
 from .options import (
     ForwardErrorMode,
@@ -223,6 +227,7 @@ class Recorder:
         backward_ready: bool = False,
         narrate: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
+        episode: Any | None = None,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -281,14 +286,9 @@ class Recorder:
                 detach_saved_activations if isinstance(detach_saved_activations, bool) else None
             ),
         )
+        refuse_storage_streaming_conflict(storage, streaming)
+        refuse_episode_on_record(episode)
         storage_supplied = storage is not MISSING and storage is not None
-        streaming_supplied = streaming is not MISSING and streaming is not None
-        if storage_supplied and streaming_supplied:
-            raise KeywordConflictError(
-                "Do not pass both `storage` and `streaming`",
-                code="storage_argument_conflict",
-                remedy="prefer storage=, or remove one of the two arguments",
-            )
         resolved_streaming = storage if storage_supplied else streaming
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, resolved_streaming)
         default_op = _resolve_train_mode_default(

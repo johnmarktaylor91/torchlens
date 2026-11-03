@@ -79,6 +79,7 @@ from ._relation_carriage import (
     _bundle_upstream,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._removed import _REMOVED_BUNDLE_MEMBERS
 from ._token_divergence import (
     TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
     _bundle_token_divergence,
@@ -94,30 +95,6 @@ if TYPE_CHECKING:
     from .._literals import VisDirectionLiteral
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
-
-
-#: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
-
-
-_REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
-    "replay": "use bundle.do(site, edit) -- do replays every member",
-    "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
-    "push": "use bundle.do(site, edit) -- do applies and replays the edit on every member",
-    "attach_hooks": "use bundle.do(site, hook) -- do is the one editing verb on a bundle",
-    "node": "use bundle.at(site)",
-    "compare_at": "use bundle.at(site).compare()",
-    "joint_metric": "call fn(bundle) directly",
-    "set_capacity": "assign bundle.capacity = n",
-    "traces": "use bundle.members or bundle[name]",
-    "help": "print(bundle) shows the bundle card",
-    "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
-    "member_construction": "read bundle.history for how members entered the bundle",
-    "show_diff": "use bundle.draw(graph='diff', members=(a, b), metric=...)",
-    "delta_map": "use bundle.compare(a, b, metric=..., on=...) per pair, bundle.rank_changes() across members",
-    "norm_delta": "use bundle.compare(baseline, member, metric='relative_l2')",
-    "output_delta": "use bundle.compare(member, target, metric=...) and read the output sites",
-    "aligned_pairs": "use bundle.supergraph, the structural alignment across members",
-}
 
 
 class Bundle:
@@ -247,6 +224,21 @@ class Bundle:
         """Count member capture outcomes by settled status (F10)."""
 
         return _card.outcome_distribution(self)
+
+    def summary(self) -> str:
+        """Return the bundle card as text: members, outcomes, baseline, relations."""
+
+        return _card.bundle_summary(self)
+
+    def to_pandas(self) -> Any:
+        """Return one member-keyed table: a ``member`` column, then each member's rows."""
+
+        return _card.bundle_table(self)
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the ``torchlens.agent_bundle.v1`` dump: card facts plus each member's dump."""
+
+        return _card.bundle_agent_json(self, max_ops=max_ops)
 
     def __repr__(self) -> str:
         """One-line bundle card: members, baseline, outcome distribution.
