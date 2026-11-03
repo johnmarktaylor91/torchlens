@@ -129,7 +129,7 @@ def _is_target(value: Any) -> bool:
 
 
 def _is_target_sequence(value: Any) -> bool:
-    """Return whether a value is the member tuple of an ``and`` / ``or`` target spec (nested objects)."""
+    """Return whether a value is the member tuple of an ``and`` / ``or`` target spec."""
 
     return isinstance(value, (tuple, list)) and bool(value) and all(map(_is_target, value))
 
