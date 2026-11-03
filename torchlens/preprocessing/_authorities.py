@@ -32,6 +32,7 @@ from ._attached import (
     discover_open_clip,
     probe_torchvision_preset,
 )
+from ._declared_transform import transform_from_declared
 from ._records import DeclaredPreprocessing, Resolution, unknown_resolution
 
 __tl_layer__ = "L5"
@@ -420,8 +421,10 @@ def _adapt_timm_config(authority: Mapping[str, Any]) -> Resolution:
     """Normalize an explicit timm data-config mapping.
 
     The transform is built through ``timm.data.create_transform`` when timm is
-    importable; declaration-only resolution otherwise (the fields, not the
-    callable, are the authority).
+    importable; otherwise the declared fields themselves are executed
+    (resize from ``crop_pct``, center crop, normalize) when they can be, and
+    the resolution stays declaration-only when they cannot (the fields, not
+    the callable, are the authority).
     """
 
     declared = _declared_from_timm_config(authority)
@@ -430,6 +433,8 @@ def _adapt_timm_config(authority: Mapping[str, Any]) -> Resolution:
         import timm
 
         transform = timm.data.create_transform(**dict(authority))
+    if transform is None:
+        transform = transform_from_declared(declared)
     identifier = str(authority.get("architecture", "timm-data-config"))
     return _record(
         "timm",
@@ -535,7 +540,9 @@ def _adapt_explicit_mapping(authority: Mapping[str, Any]) -> Resolution:
     """Normalize an explicit user declaration mapping.
 
     Unrecognized keys are DISCLOSED in extras, never silently dropped and
-    never compared.
+    never compared. The declared fields are executed as a torchvision
+    pipeline when they can be (see :mod:`._declared_transform`), so an
+    attached declaration also carries a PIL input through ``tl.trace``.
     """
 
     fields: dict[str, Any] = {}
@@ -561,7 +568,7 @@ def _adapt_explicit_mapping(authority: Mapping[str, Any]) -> Resolution:
         "caller-declared",
         declared=declared,
         description="explicit caller-declared preprocessing constants",
-        transform=None,
+        transform=transform_from_declared(declared),
     )
 
 
