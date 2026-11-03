@@ -30,10 +30,15 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._selection.resolver import _resolve_sites
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
+from ..intervention._edit_repr import _is_signature_default, render_edit_repr
+from ..intervention.helpers import builtin_helper_constructor
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
+from .node_spec import _forward_site
+from .themes import _relative_luminance
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -136,7 +141,6 @@ def edit_ink(theme: VisualizationTheme | None) -> str:
 
     if theme is None:
         return INTERVENTION_SITE_COLOR
-    from .themes import _relative_luminance
 
     page = str(theme.graph.get("bgcolor", "white"))
     luminance = _relative_luminance(page) if page.startswith("#") else None
@@ -199,8 +203,6 @@ def _callable_name(value: Any) -> str:
 def _shown_kwargs(edit: Edit, constructor: Callable[..., Any] | None) -> list[str]:
     """Return ``key=value`` parts for the edit's keyword arguments that are not defaults."""
 
-    from ..intervention._edit_repr import _is_signature_default
-
     order = _parameter_order(constructor)
     parts: list[str] = []
     for key, value in sorted(edit.kwargs, key=lambda item: order.get(item[0], len(order))):
@@ -227,8 +229,6 @@ def _parameter_order(constructor: Callable[..., Any] | None) -> dict[str, int]:
 def short_edit_text(edit: Edit) -> str:
     """Return the edit text after the delta, for example ``zero_ablate`` or ``scale(0.5)``."""
 
-    from ..intervention.helpers import builtin_helper_constructor
-
     constructor = builtin_helper_constructor(edit.name)
     parts = [_stand_in(value) for value in edit.args]
     parts.extend(_shown_kwargs(edit, constructor))
@@ -249,8 +249,6 @@ def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
 
 def _helper_mark(edit: Edit, *, detail: str) -> EditMark:
     """Return the mark for a helper-built edit."""
-
-    from ..intervention._edit_repr import render_edit_repr
 
     return EditMark(short=short_edit_text(edit), full=render_edit_repr(edit), detail=detail)
 
@@ -332,8 +330,6 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     spec = trace._intervention_spec
     if spec is None:
         return {}
-    from .._selection.resolver import _resolve_sites
-    from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}
     fanout = max(1, len(trace._layer_list or ()))

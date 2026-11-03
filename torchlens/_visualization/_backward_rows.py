@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._draw_validation import _validate_draw_flag_options
 from ._render_leaf import _first_tensor_in_obj, _module_key_for_forward_op
 
 if TYPE_CHECKING:
@@ -57,8 +58,6 @@ def backward_rows_for(
     BackwardRowOptions | None
         The requested rows, or ``None`` when neither row was requested.
     """
-
-    from ._draw_validation import _validate_draw_flag_options
 
     _validate_draw_flag_options(
         False, show_module_paths=show_module_paths, show_grad_values=show_grad_values

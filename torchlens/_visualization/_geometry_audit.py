@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from typing import cast
 
 from .._io._json import loads_bounded
+from ._fonts import graphviz_font_env
 
 __all__ = [
     "ASCENT",
@@ -305,7 +306,6 @@ def run_layout_json(dot_source: str, engine: str = "dot", timeout: int = 300) ->
         cmd = ["neato", "-n", "-Tjson"]
     else:
         raise ValueError(f"unknown layout engine {engine!r}; pass 'dot' or 'rank'")
-    from ._fonts import graphviz_font_env
 
     # Measure with the same bundled font the renders draw with (FK3).
     proc = subprocess.run(

@@ -23,6 +23,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from .._ir.container import TupleIndex
+from ._render_leaf import _collapse_address_for_node, _container_component_role, _render_node_name
+from .node_spec import render_lines_to_html
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -111,8 +115,6 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
     outputs = tuple(getattr(trace, "output_layers", ()) or ())
     if len(outputs) < MIN_BUNDLE_LEAVES or not bundles_enabled(context):
         return {}
-    from .._ir.container import TupleIndex
-    from ._render_leaf import _container_component_role
 
     grouped: dict[tuple[Any, ...], list[str]] = defaultdict(list)
     for label in outputs:
@@ -207,7 +209,6 @@ def bundle_member_nodes(
     groups = bundle_groups(trace, context)
     if not groups:
         return {}
-    from ._render_leaf import _collapse_address_for_node, _render_node_name
 
     by_label: dict[str, Any] = {}
     for node in entries_to_plot.values():
@@ -255,8 +256,6 @@ def bundle_labels(
     hidden = bundle_member_nodes(trace, entries_to_plot, context, collapse_fn)
     if not hidden:
         return {}
-    from ._render_leaf import _render_node_name
-    from .node_spec import render_lines_to_html
 
     counts: dict[str, int] = defaultdict(lambda: 1)
     for representative in hidden.values():

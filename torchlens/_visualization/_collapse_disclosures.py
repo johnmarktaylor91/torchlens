@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
+from .collapse_estimator import QUALITY_PLANNER_BUDGET_MS
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -85,8 +86,6 @@ def _warn_undisclosed_floor(
 
 def _quality_budget_ms() -> float:
     """Return the admission budget (runtime import: no module cycle)."""
-
-    from .collapse_estimator import QUALITY_PLANNER_BUDGET_MS
 
     return QUALITY_PLANNER_BUDGET_MS
 

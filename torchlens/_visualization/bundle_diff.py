@@ -11,6 +11,7 @@ import graphviz
 import torch
 
 from .._errors import InvalidArgumentError
+from ..bundle._deltas import _delta_map_values
 from ._render_utils import html_escape, render_dot_to_file, strip_known_extension
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
@@ -90,7 +91,6 @@ def bundle_diff(
     baseline_ref = baseline if baseline is not None else left_name
     # Gate only the pairs this view renders (baseline against each side), so an
     # unrelated third member does not refuse a two-member diff.
-    from ..bundle._deltas import _delta_map_values
 
     baseline_name = bundle._baseline_or_raise(baseline_ref)
     sides = sorted({left_name, right_name} - {baseline_name})

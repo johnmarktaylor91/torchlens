@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from ._backward_rows import backward_rows_for
+from ._legend import add_legend_table_to_graphviz, backward_key_sections
 from ._render_common import *
 from ._render_dot import *
 from ._render_edges import *
@@ -14,10 +15,18 @@ from ._render_leaf import *
 from ._render_nodes import *
 from ._render_utils import html_escape
 from ._typography import DEFAULT_TYPOGRAPHY
+from .node_universe import build_node_universe
 from .render_ir import build_backward_render_ir, build_combined_render_ir
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderContext, RenderTarget
 from .source_graph import build_source_graph
+from .themes import (
+    THEME_PRESETS,
+    resolve_theme,
+    theme_edge_attrs,
+    theme_graph_attrs,
+    theme_node_attrs,
+)
 
 #: The default skin's font family. Forward ``draw`` and ``draw_backward`` reach it
 #: through the theme attribute helpers; the combined entrypoint takes no theme, so
@@ -37,9 +46,6 @@ def _emit_backward_key(
     painted -- shared by the backward and combined entrypoints. Tri-state
     ``show_legend``: only explicit ``False`` suppresses the key.
     """
-
-    from ._legend import add_legend_table_to_graphviz, backward_key_sections
-    from .themes import THEME_PRESETS
 
     if show_legend is False:
         return
@@ -158,7 +164,6 @@ def render_backward_graph(
             argument="vis_mode",
         )
     pass_filter = _normalize_backward_pass_filter(bwd)
-    from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
     skin = resolve_theme(theme)
 
@@ -464,7 +469,6 @@ def render_combined_graph(
         direction=direction,
     )
     source_graph = build_source_graph(self, context)
-    from .node_universe import build_node_universe
 
     universe = build_node_universe(source_graph, None, {})
     forward_ir = build_render_ir(

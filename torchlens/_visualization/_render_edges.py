@@ -17,6 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
+from ._edit_marks import DELTA, EDIT_RING_PENWIDTH, EDITED_NODE_CLASS, EditRow, edit_ink
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
@@ -399,8 +400,6 @@ def _add_intervention_hook_nodes(
     None
         The graph is mutated in place.
     """
-
-    from ._edit_marks import DELTA, EDIT_RING_PENWIDTH, EDITED_NODE_CLASS, EditRow, edit_ink
 
     ink = edit_ink(theme)
     fillcolor = str(

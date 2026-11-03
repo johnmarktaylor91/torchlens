@@ -11,6 +11,7 @@ import torch
 
 from .._capture.flops import append_attention_note
 from .._errors import InvalidArgumentError
+from .._selection.selection import Selection, Selector
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import format_flops, human_readable_size
 from ..errors._base import TorchLensWarning
@@ -39,8 +40,6 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     2.7x overpaint. Touched sites with zero selected elements stay in the
     mapping as an honest ``0``.
     """
-
-    from .._selection.selection import Selection, Selector
 
     if isinstance(overlay, Selector):
         overlay = overlay._resolve(trace)

@@ -6,6 +6,8 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from .._utils.display import ensure_trace_visualizer_dir
+from ..viz import batch_summary
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
 from ._render_common import *
 from ._render_edges import *
@@ -17,6 +19,7 @@ from .modes import CollapsedModeScope
 # The spec-slot context lives there too, so the intervention callback reads it
 # without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
+from .themes import THEME_PRESETS, collapse_tokens
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
 
@@ -721,7 +724,6 @@ def _queue_segment_node(
     vis_mode, theme = presentation if isinstance(presentation, tuple) else (presentation, None)
     # K4 capsule colors derive from the active theme (F11 memo item 10:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
-    from .themes import THEME_PRESETS, collapse_tokens
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
     node_args = {
@@ -989,7 +991,6 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     # Lazy for the same package-cycle reason as the text-table branch above.
-    from ..viz import batch_summary
 
     try:
         montage = batch_summary.montage(images, max_items)
@@ -1030,8 +1031,6 @@ def _raw_input_visualizer_dir(trace: "Trace") -> Path:
     Path
         Directory where image artifacts can be written.
     """
-
-    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)

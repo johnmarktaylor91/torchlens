@@ -16,6 +16,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
+from ._render_common import _RenderIRDecisionBuilder
+from ._render_edges import _segment_for_node
+from ._render_nodes import _queue_segment_node
 from .render_ir import RenderIR, RenderIRDotStatement, RenderIRNode
 
 
@@ -23,9 +26,6 @@ def _segment_node(segment: Any, vis_mode: str, theme: Any) -> tuple[str | None, 
     """Return the segment's owner cluster key and the node args the dot path queues."""
 
     from collections import defaultdict
-
-    from ._render_common import _RenderIRDecisionBuilder
-    from ._render_nodes import _queue_segment_node
 
     recorder = _RenderIRDecisionBuilder()
     module_nodes: dict[str, Any] = defaultdict(dict)
@@ -39,8 +39,6 @@ def _segment_node(segment: Any, vis_mode: str, theme: Any) -> tuple[str | None, 
 
 def _member_segments(universe: Any, segment_lookup: Any) -> dict[str, Any]:
     """Return IR unit names mapped to the segment that absorbs them."""
-
-    from ._render_edges import _segment_for_node
 
     members: dict[str, Any] = {}
     for unit in universe.units:

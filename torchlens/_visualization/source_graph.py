@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.module import Module
 from .._errors import InvalidArgumentError
 from .request import ResolvedRenderRequest
 
@@ -122,8 +123,6 @@ def _resolve_focus_module(trace: Trace, module: Any) -> Any:
     ValueError
         If the module cannot be found or belongs to a different trace.
     """
-
-    from .._data_classes.module import Module
 
     if isinstance(module, str):
         if module not in trace.modules:

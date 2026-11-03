@@ -62,8 +62,12 @@ from ._condensed_flow import (  # noqa: F401
     _op_func_name,
     _output_junctions,
 )
-from ._render_common import strict_collapse_checks_enabled
+from ._render_common import BoundaryNode, strict_collapse_checks_enabled
+from ._render_edges import _is_buffer_visible
+from ._render_flow import _entries_to_plot_for_context
+from ._render_nodes import _normalize_buffer_visibility
 from .collapse_plan import RenderContext, collapse_plan_for_trace, count
+from .node_universe import build_node_universe
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -1982,11 +1986,6 @@ def _rendered_module_hidden_counts(trace: Trace, context: RenderContext) -> dict
         rendered nodes with one box contributes ``n - 1``.
     """
 
-    from ._render_common import BoundaryNode
-    from ._render_edges import _is_buffer_visible
-    from ._render_flow import _entries_to_plot_for_context
-    from ._render_nodes import _normalize_buffer_visibility
-
     absorbed_counts: dict[str, int] = defaultdict(int)
     show_buffer_layers = _normalize_buffer_visibility(context.show_buffer_layers)
     entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
@@ -2091,7 +2090,6 @@ def _run_fold_hidden_member_contributions(
         module address. Boundary nodes with no module ancestry are excluded.
     """
 
-    from .node_universe import build_node_universe
     from .source_graph import build_source_graph
 
     contributions: dict[str, int] = defaultdict(int)

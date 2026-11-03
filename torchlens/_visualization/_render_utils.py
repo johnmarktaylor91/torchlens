@@ -28,6 +28,7 @@ import graphviz
 
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from ._fonts import graphviz_font_env
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
@@ -192,8 +193,6 @@ def run_bounded_subprocess(
     simulate Graphviz outcomes. Every Graphviz child renders with the bundled
     font (:func:`torchlens._visualization._fonts.graphviz_font_env`).
     """
-
-    from ._fonts import graphviz_font_env
 
     try:
         return _run_bounded_subprocess_shared(

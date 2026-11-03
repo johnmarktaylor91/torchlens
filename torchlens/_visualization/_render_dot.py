@@ -20,6 +20,18 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
+from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
+from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
+from ._header_block import (
+    caption_from_label,
+    drawn_count_line,
+    drawn_module_marks,
+    graph_caption_body,
+    header_block_label,
+    key_swatches,
+)
+from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
+from ._mutated_params import add_mutated_parameter_nodes
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -50,7 +62,9 @@ from ._render_utils import (
     DEFAULT_DRAW_STEM,
     announce_written_graph,
     collision_safe_outpath,
+    strip_known_extension,
 )
+from ._stacking import resolve_stack_by
 from ._svg_compose import (
     _inline_svg_file_local_images,
     _inline_svg_local_images,
@@ -59,6 +73,8 @@ from ._svg_compose import (
     _write_composed_code_panel,
 )
 from ._typography import DEFAULT_TYPOGRAPHY
+from .collapse_patterns import resolve_pattern_request
+from .node_universe import build_node_universe
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -66,6 +82,7 @@ from .render_execution import (
     surface_layout_stderr,
     warn_oversize_vector,
 )
+from .renderer_registry import renderer_info, renderer_names
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
 from .source_graph import _resolve_focus_module, build_source_graph
@@ -143,8 +160,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
     str
         Path without a recognized render extension.
     """
-
-    from ._render_utils import strip_known_extension
 
     return strip_known_extension(vis_outpath)
 
@@ -409,7 +424,6 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
 
     if not fold_patterns:
         return ()
-    from .collapse_patterns import resolve_pattern_request
 
     return resolve_pattern_request(fold_patterns)
 
@@ -428,8 +442,6 @@ def _build_graphviz_shell(
     tuple
         Graph caption and configured empty Graphviz graph.
     """
-
-    from ._header_block import drawn_count_line, graph_caption_body
 
     count_line = drawn_count_line(trace, node_universe, request.vis_mode)
     caption_body = graph_caption_body(trace, count_line, request)
@@ -495,7 +507,6 @@ def _resolve_forward_context(
     """
 
     source_graph = build_source_graph(trace, request)
-    from .node_universe import build_node_universe
 
     node_universe = build_node_universe(
         source_graph,
@@ -702,7 +713,6 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
-    from ._mutated_params import add_mutated_parameter_nodes
 
     mutated_parameter_nodes = add_mutated_parameter_nodes(
         trace, context, forward_ir_builder, module_cluster_dict
@@ -856,14 +866,6 @@ def _forward_header_label(
     together in the top-left corner on every engine. A label set through
     ``vis_graph_overrides`` (or a lens caption) stays the header.
     """
-
-    from ._header_block import (
-        caption_from_label,
-        drawn_module_marks,
-        header_block_label,
-        key_swatches,
-    )
-    from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 
     request = context.request
     swatches: tuple[Any, ...] = ()
@@ -1354,7 +1356,6 @@ def draw(
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
     )
-    from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 
     # Option validation for the encoding channels: an unknown source refuses
     # HERE, before any render work (encoding_source_invalid), and scale=
@@ -1362,7 +1363,6 @@ def draw(
     encoding_channel_spec = resolve_color_by(color_by)
     size_channel_spec = resolve_size_by(size_by)
     size_scale = resolve_size_scale(scale, size_by_active=size_channel_spec is not None)
-    from ._stacking import resolve_stack_by
 
     stack_channel_spec = resolve_stack_by(stack_by, vis_mode)
     request = ResolvedRenderRequest(
@@ -1423,8 +1423,6 @@ def draw(
             size_scale=size_scale,
         )
     show_buffer_layers = request.show_buffer_layers
-
-    from .renderer_registry import renderer_info, renderer_names
 
     if vis_renderer not in renderer_names():
         raise InvalidArgumentError(
@@ -1516,7 +1514,6 @@ def _write_overview_expansion_manifest(
         Render target (the manifest rides beside ``target.outpath``).
     """
 
-    from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
     from .auto_collapse import _readable_band_high
     from .collapse_plan import collapse_plan_for_trace, count
 

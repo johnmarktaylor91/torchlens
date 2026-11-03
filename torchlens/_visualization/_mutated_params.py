@@ -25,10 +25,21 @@ from urllib.parse import quote as _percent_quote
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 
+from ..backends.torch.wrappers import _func_mutates_receiver
+from ._label_format import _shape_with_trainability
 from ._render_common import (
     FROZEN_PARAMS_BG_COLOR,
     TRAINABLE_PARAMS_BG_COLOR,
+    BoundaryNode,
+    FocusNode,
+    _render_node_label,
 )
+from ._render_edges import _get_lowest_module_for_two_nodes
+from ._render_leaf import _base_node_for_metadata, _node_spec_to_graphviz_args
+from ._typography import DEFAULT_TYPOGRAPHY
+from .node_spec import NodeSpec
+from .source_graph import _resolve_focus_module
+from .themes import apply_theme_to_spec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -98,7 +109,6 @@ def _is_inplace_func_name(func_name: object) -> bool:
 
     if not isinstance(func_name, str) or not func_name:
         return False
-    from ..backends.torch.wrappers import _func_mutates_receiver
 
     return _func_mutates_receiver(func_name)
 
@@ -252,8 +262,6 @@ def _render_label_index(entries_to_plot: Mapping[str, Any], vis_mode: str) -> di
         Natural label to render label; focus boundary nodes are omitted.
     """
 
-    from ._render_common import BoundaryNode, FocusNode, _render_node_label
-
     index: dict[str, str] = {}
     for node in entries_to_plot.values():
         if isinstance(node, BoundaryNode):
@@ -315,11 +323,6 @@ def _param_node_args(param: Any, theme: VisualizationTheme | None) -> dict[str, 
     dict[str, str]
         Node arguments, name included.
     """
-
-    from ._label_format import _shape_with_trainability
-    from ._render_leaf import _node_spec_to_graphviz_args
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
 
     trainable = getattr(param, "is_trainable", None)
     spec = NodeSpec(
@@ -543,8 +546,6 @@ def _edge_args(node_name: str, head: str) -> dict[str, Any]:
         Edge arguments.
     """
 
-    from ._typography import DEFAULT_TYPOGRAPHY
-
     return {
         "tail_name": node_name,
         "head_name": head,
@@ -574,9 +575,6 @@ def _emission_for(
         The emission, or ``None`` when the first mutation is not drawn as its
         own node or the owner lies outside the module focus.
     """
-
-    from ._render_edges import _get_lowest_module_for_two_nodes
-    from ._render_leaf import _base_node_for_metadata
 
     if not _owner_in_focus(source.param, scope.focus_address):
         return None
@@ -625,7 +623,6 @@ def _focus_address(trace: Trace, context: _ForwardRenderContext) -> str | None:
 
     if context.request.module is None:
         return None
-    from .source_graph import _resolve_focus_module
 
     return str(_resolve_focus_module(trace, context.request.module).address)
 
@@ -664,7 +661,6 @@ def add_mutated_parameter_nodes(
     sources = find_mutated_parameter_sources(trace)
     if not sources:
         return ()
-    from ._render_common import _render_node_label
 
     universe = context.node_universe
     vis_mode = context.request.vis_mode

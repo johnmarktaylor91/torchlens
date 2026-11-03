@@ -31,8 +31,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import honesty_banner_lines
+from ._edit_highlighter import highlighter_rgba
+from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
+from ._fonts import _FONT_DIR
 from ._label_format import format_memory
-from ._render_utils import html_escape
+from ._render_common import (
+    BOOL_NODE_COLOR,
+    BUFFER_NODE_COLOR,
+    DEFAULT_BG_COLOR,
+    FROZEN_PARAMS_BG_COLOR,
+    INPUT_COLOR,
+    OUTPUT_COLOR,
+    TRAINABLE_PARAMS_BG_COLOR,
+)
+from ._render_utils import html_escape, strip_path_directories
+from .node_spec import NodeSpec, intervention_sites_for_log
+from .themes import _theme_cluster_attrs, apply_theme_to_spec, resolve_theme
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -166,9 +181,6 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         HTML-like caption body without the outer FONT wrapper.
     """
 
-    from .._capture_honesty import honesty_banner_lines
-    from ._render_utils import strip_path_directories
-
     caption_body = (
         f"<B>{html_escape(trace._source_class_name)}</B>"
         f"<br align='left'/>{html_escape(count_line)}"
@@ -216,10 +228,6 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
 
 def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | None:
     """Return the header's edit line (``1 edit: Δ zero_ablate on linear_1_1``), if any."""
-
-    from ._edit_marks import edit_ink, header_edit_line
-    from .node_spec import intervention_sites_for_log
-    from .themes import resolve_theme
 
     sites = intervention_sites_for_log(trace)
     if not sites:
@@ -301,18 +309,6 @@ def key_swatches(
     translucent purple bar).
     """
 
-    from ._render_common import (
-        BOOL_NODE_COLOR,
-        BUFFER_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        FROZEN_PARAMS_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
-
     has_weights = "parameterized" in drawn
     entries = (
         ("input", "oval", INPUT_COLOR, "input" in drawn),
@@ -351,8 +347,6 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
     the key matches the expanded modules in the picture (Lead, 29 Oct 2026).
     """
 
-    from .themes import _theme_cluster_attrs
-
     cluster = _theme_cluster_attrs(theme)
     return KeySwatch(
         text="module",
@@ -365,9 +359,6 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
 
 def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[KeySwatch]:
     """Return the edit entries: a ringed oval ``edited`` and the highlighted arrow."""
-
-    from ._edit_highlighter import highlighter_rgba
-    from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink
 
     ink = edit_ink(theme)
     swatches = []
@@ -494,8 +485,6 @@ def _text_width(text: str, size: float, bold: bool = False) -> float:
     """Return ``text``'s width in points in the bundled face Graphviz draws with."""
 
     from PIL import ImageFont
-
-    from ._fonts import _FONT_DIR
 
     name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
     try:

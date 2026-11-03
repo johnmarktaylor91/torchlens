@@ -18,6 +18,8 @@ from typing import Any
 from ..._errors import InvalidArgumentError
 from ..._utils.display import atomic_write_text, user_stacklevel
 from .. import _render_utils
+from .._edit_highlighter import HighlightJob, render_highlighted
+from .._edit_marks import EDIT_GAP_ROW
 from .._render_common import GraphvizRenderError, GraphvizUnavailableError
 from .._render_utils import _open_file_quietly, cluster_caption_attrs, compute_module_penwidth
 from .._typography import DEFAULT_TYPOGRAPHY
@@ -409,8 +411,6 @@ def _without_edit_rows(label: str) -> str:
     or a module frame. The size estimate sums every row's characters into one
     line, so an edit row would otherwise widen the node and every frame around it.
     """
-
-    from .._edit_marks import EDIT_GAP_ROW
 
     head, gap, tail = label.partition(EDIT_GAP_ROW)
     if not gap:
@@ -957,8 +957,6 @@ def _run_rank_layout(
     if style is None:
         return run(vis_fileformat, rendered_path)
     from pathlib import Path
-
-    from .._edit_highlighter import HighlightJob, render_highlighted
 
     job = HighlightJob(vis_fileformat, style, dot_source, Path(image_root) if image_root else None)
     return render_highlighted(lambda path: run("svg", path), rendered_path, job)

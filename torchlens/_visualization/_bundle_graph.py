@@ -12,6 +12,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ..bundle._compare_gate import _ORDERING_RELATION_KINDS
+from ..bundle._relations import MemberRelationRow
+from ._header_block import header_block_label, key_swatches
+from ._legend import LegendRow, LegendSection, drawn_legend_roles
+from ._render_nodes import _get_node_bg_color
+from ._render_utils import (
+    compute_module_penwidth,
+    html_escape,
+    make_module_cluster_attrs,
+    merge_edge_style,
+    merge_node_style,
+    render_dot_to_file,
+    strip_known_extension,
+)
+from .node_spec import NodeSpec
+from .themes import (
+    THEME_PRESETS,
+    _theme_cluster_attrs,
+    apply_theme_to_spec,
+    resolve_theme,
+    theme_edge_attrs,
+    theme_graph_attrs,
+    theme_node_attrs,
+)
+
 if TYPE_CHECKING:
     from .themes import VisualizationTheme
 
@@ -36,10 +61,6 @@ def _bundle_node_style(node: Any, theme: VisualizationTheme) -> dict[str, str]:
     included; box: a leaf module; cylinder: a buffer); fill says its role
     (input, output, weights, buffer), from the first member that ran it.
     """
-
-    from ._render_nodes import _get_node_bg_color
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
 
     layer = next(iter(getattr(node, "layer_refs", {}).values()), None)
     shape, fill = "oval", "white"
@@ -151,13 +172,6 @@ def _add_bundle_forward_nodes(
         ``dot`` is mutated in place.
     """
 
-    from ._render_utils import (
-        compute_module_penwidth,
-        make_module_cluster_attrs,
-        merge_node_style,
-    )
-    from .themes import THEME_PRESETS, _theme_cluster_attrs
-
     theme = theme if theme is not None else THEME_PRESETS["torchlens"]
     rankdir = dot.graph_attr.get("rankdir")
     all_members = frozenset(str(name) for name in bundle.names)
@@ -227,9 +241,6 @@ def _add_bundle_forward_edges(
 
     An edge every member runs carries no label; the others name their members.
     """
-
-    from ._render_utils import merge_edge_style
-    from .themes import THEME_PRESETS
 
     theme = theme if theme is not None else THEME_PRESETS["torchlens"]
     all_members = frozenset(str(name) for name in bundle.names)
@@ -301,8 +312,6 @@ def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
 def _member_row_notes(bundle: Any) -> dict[str, list[str]]:
     """Return per-member label lines from MEMBER-kind rows (``episode_member``)."""
 
-    from ..bundle._relations import MemberRelationRow
-
     notes: dict[str, list[str]] = {}
     for row in bundle.relations:
         if isinstance(row, MemberRelationRow) and row.member is not None:
@@ -357,11 +366,6 @@ def _add_bundle_member_graph(
         their endpoints are unreadable without their kind's schema.
     """
 
-    from ..bundle._compare_gate import _ORDERING_RELATION_KINDS
-    from ..bundle._relations import MemberRelationRow
-    from ._render_utils import merge_edge_style, merge_node_style
-    from .themes import THEME_PRESETS
-
     theme = theme if theme is not None else THEME_PRESETS["torchlens"]
     ink = theme.edge.get("color", theme.default_border)
     base_node = {
@@ -412,10 +416,6 @@ def bundle_header_label(
     the marks the op picture draws (from the same styles the nodes were given)
     and says that unlabelled nodes and arrows run in every member.
     """
-
-    from ._header_block import header_block_label, key_swatches
-    from ._legend import LegendRow, LegendSection, drawn_legend_roles
-    from ._render_utils import html_escape
 
     body = "".join(f"{html_escape(line)}<br align='left'/>" for line in header_lines)
     caption = f"<<FONT COLOR='{theme.default_font}'>{body}</FONT>>"
@@ -469,14 +469,6 @@ def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | Non
     """
 
     import graphviz
-
-    from ._render_utils import render_dot_to_file, strip_known_extension
-    from .themes import (
-        resolve_theme,
-        theme_edge_attrs,
-        theme_graph_attrs,
-        theme_node_attrs,
-    )
 
     dot = graphviz.Digraph(
         name="TorchLens_Bundle",

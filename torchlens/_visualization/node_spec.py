@@ -14,6 +14,9 @@ from contextvars import ContextVar
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
+from .._data_classes.grad_fn import GradFn
+from .._ir.selector_eval import _grad_fn_forward_op
+from .._selection.resolver import _resolve_sites
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_CONE_COLOR,
@@ -26,6 +29,7 @@ from .._vocab.node_spec import (  # noqa: F401
     NodeSpec,
     NodeSpecFn,
 )
+from ..intervention.replay import cone_of_effect
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
@@ -216,8 +220,6 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
     if not targets:
         return []
 
-    from .._selection.resolver import _resolve_sites
-
     by_label: dict[str, Op] = {}
     for target in targets:
         table = _resolve_sites(trace, target, max_fanout=max(1, len(trace._layer_list)))
@@ -243,9 +245,6 @@ def _forward_site(site: Any) -> Any:
     Layer its layer-label ``op`` names. Other sites mark their ``op`` (a hook
     site) or themselves.
     """
-
-    from .._data_classes.grad_fn import GradFn
-    from .._ir.selector_eval import _grad_fn_forward_op
 
     if isinstance(site, GradFn):
         return _grad_fn_forward_op(site)
@@ -286,8 +285,6 @@ def intervention_site_and_cone_labels(
     if not sites or not show_cone:
         return site_labels, set()
 
-    from ..intervention.replay import cone_of_effect
-
     cone = cone_of_effect(trace, sites)
     cone_labels = {site.layer_label for site in cone}
     return site_labels, cone_labels - site_labels
@@ -295,8 +292,6 @@ def intervention_site_and_cone_labels(
 
 def _cone_pass_labels(trace: Trace, sites: list[Op], site_pass_labels: set[str]) -> set[str]:
     """Return the pass-qualified labels downstream of ``sites``, sites excluded."""
-
-    from ..intervention.replay import cone_of_effect
 
     return {_site_sort_key(op) for op in cone_of_effect(trace, sites)} - site_pass_labels
 

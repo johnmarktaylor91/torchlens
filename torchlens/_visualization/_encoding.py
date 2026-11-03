@@ -50,7 +50,15 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._layer_spec import _LAYER_MIRROR_SPEC
+from .._data_classes.layer import Layer
 from .._errors import InvalidArgumentError
+from .._observability._join import require_availability
+from .._observability._native_profile import join_result_for
+from .._utils._multipass_access import get_multipass_attr
+from ._render_nodes import _annotation_image_path_for_node
+from .node_spec import NodeSpec
+from .overlays import builtin_overlay_value
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -852,13 +860,10 @@ def _node_key(node: Any) -> str:
     record object, so the keying is consistent within one draw.
     """
 
-    from .._data_classes.layer import Layer
-
     if isinstance(node, Layer):
         layer_label = getattr(node, "layer_label", None)
         if isinstance(layer_label, str):
             return layer_label
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(node, "label", None, multipass=None)
     if isinstance(label, str):
@@ -869,8 +874,6 @@ def _node_key(node: Any) -> str:
 
 def _is_rolled_multipass(node: Any) -> bool:
     """Return whether ``node`` is a rolled multi-pass aggregate Layer."""
-
-    from .._data_classes.layer import Layer
 
     return isinstance(node, Layer) and len(node.ops) > 1
 
@@ -890,7 +893,6 @@ def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
         return True
-    from ._render_nodes import _annotation_image_path_for_node
 
     if _annotation_image_path_for_node(trace, node) is not None:
         return True
@@ -992,8 +994,6 @@ def _varying_marker(node: Any) -> dict[str, Any]:
 def _mirror_backed_op_field(field_name: str) -> str | None:
     """Return the Op field backing a mirrored Layer name, if any."""
 
-    from .._data_classes._layer_spec import _LAYER_MIRROR_SPEC
-
     entry = _LAYER_MIRROR_SPEC.get(field_name)
     return entry[0] if entry is not None else None
 
@@ -1076,8 +1076,6 @@ def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float 
 def _rolled_wrong_type_read(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Shape / non-numeric rows: read and let the wrong-type rule speak."""
 
-    from .._utils._multipass_access import get_multipass_attr
-
     return _coerce_scalar(state, node, get_multipass_attr(node, field_name, None, multipass=None))
 
 
@@ -1130,9 +1128,6 @@ def _resolve_device_time(
     cross-pass total and lands the mandatory aggregation legend line. A node
     the join attributed no kernels to reads honest n/a, never zero.
     """
-
-    from .._observability._join import require_availability
-    from .._observability._native_profile import join_result_for
 
     result = join_result_for(trace)
     if result is None:
@@ -1189,8 +1184,6 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
 def _resolve_payload_builtin(state: EncodingState, node: Any, token: str) -> float | None:
     """Resolve one payload-builtin (magnitude/grad_norm) color value."""
 
-    from .overlays import builtin_overlay_value
-
     value = builtin_overlay_value(node, token)
     if value is None:
         state.note(NOTE_NA_UNENCODED)
@@ -1233,7 +1226,6 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
     if _is_rolled_multipass(node):
         return _resolve_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1334,7 +1326,6 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
         )
     # ROW_SHAPE / ROW_NON_NUMERIC: read and let the wrong-type rule speak
     # (a shape field names its own remedy: size_by="dims").
-    from .._utils._multipass_access import get_multipass_attr
 
     return coerce(node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1463,7 +1454,6 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
     field_name = spec.source
     if _is_rolled_multipass(node):
         return _resolve_size_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1645,8 +1635,6 @@ def _format_domain_value(state: EncodingState, value: float) -> str:
 def _color_legend_rows(state: EncodingState) -> list[Any]:
     """Return color-channel title and ramp rows for the disclosure legend."""
 
-    from .node_spec import NodeSpec
-
     if state.spec is None:
         return []
     transform_wording = {
@@ -1683,8 +1671,6 @@ def _color_legend_rows(state: EncodingState) -> list[Any]:
 
 def _non_color_legend_rows(state: EncodingState) -> list[Any]:
     """Return active size and stack disclosure rows."""
-
-    from .node_spec import NodeSpec
 
     rows: list[NodeSpec] = []
     if state.size_spec is not None:

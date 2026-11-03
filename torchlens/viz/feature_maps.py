@@ -15,6 +15,7 @@ from .._plots.node_plots import _apply_colormap, _normalize_finite
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
+from ..repgeom import _commit_annotation_tensors, _matching_pil_image_batch, _selected_mds_sites
 
 FeatureMapEvolution: TypeAlias = "OrderedDict[str, torch.Tensor]"
 FeatureMapChannels: TypeAlias = Sequence[int] | Literal["top"] | None
@@ -88,8 +89,6 @@ def feature_maps(
         max_stimuli=max_stimuli,
         max_channels=max_channels,
     )
-
-    from ..repgeom import _commit_annotation_tensors, _selected_mds_sites
 
     # ``_selected_mds_sites`` is shared with ``mds_evolution`` and raises
     # diagnostics phrased for that feature (they name ``mds_evolution`` and
@@ -255,8 +254,6 @@ def feature_map_node_spec(
         if mode_id != _MODE_AGGREGATE and shown_cols < total_channels:
             cap_parts.append(f"{shown_cols}/{total_channels} ch")
         cap_text = ", ".join(cap_parts) if cap_parts else None
-
-        from ..repgeom import _matching_pil_image_batch
 
         raw_images = _matching_pil_image_batch(getattr(trace, "input", None), total_stimuli)
         overlay_available = overlay and raw_images is not None

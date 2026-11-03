@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
+from ._render_nodes import _SPEC_SLOT_RENDERED_NODE
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
 if TYPE_CHECKING:
@@ -539,8 +540,6 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
     penwidth 2.25 in the same hue. Each mark appends its citation row to the
     node label (capped, with an honest "+N more" fold).
     """
-
-    from ._render_nodes import _SPEC_SLOT_RENDERED_NODE
 
     resolved = surgery_facts(trace) if facts is None else facts
     by_call: dict[str, list[SurgeryMark]] = {}

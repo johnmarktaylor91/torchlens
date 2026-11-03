@@ -7,7 +7,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils.display import user_stacklevel
+from ..errors._base import TorchLensWarning
+from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
 from .request import RenderContext
+from .themes import _theme_cluster_attrs, resolve_theme
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -417,9 +421,6 @@ def _warn_if_render_exceeds_disclosure_ceiling(num_nodes: int, num_edges: int) -
     if num_nodes <= RENDER_DISCLOSURE_NODE_CEILING and num_edges <= RENDER_DISCLOSURE_EDGE_CEILING:
         return
     import warnings
-
-    from .._utils.display import user_stacklevel
-    from ..errors._base import TorchLensWarning
 
     warnings.warn(
         f"TorchLens is rendering {num_nodes} nodes / {num_edges} edges; Graphviz "
@@ -856,7 +857,6 @@ def _resolve_node_decision(
         _build_layer_node,
         _normalize_buffer_visibility,
     )
-    from .themes import resolve_theme
 
     node = emission.node
     if node is None:
@@ -1082,8 +1082,6 @@ def finalize_forward_regions(
     """
 
     from ._render_flow import _get_max_call_depth
-    from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
-    from .themes import _theme_cluster_attrs
 
     cluster_ink = _theme_cluster_attrs(theme) if theme is not None else {}
 

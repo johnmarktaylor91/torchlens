@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import graphviz
 
+from .._capture_honesty import attach_dataframe_honesty
 from ..recording.types import DryRun, RecordContext
 from . import _render_utils
 from ._render_common import GraphvizRenderError
@@ -115,7 +116,6 @@ def to_pandas(trace: DryRun) -> Any:
         }
         for ctx in trace.events
     ]
-    from .._capture_honesty import attach_dataframe_honesty
 
     return attach_dataframe_honesty(
         pd.DataFrame(

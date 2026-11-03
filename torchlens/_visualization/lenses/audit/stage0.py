@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...._io import _json
+from ..._fonts import graphviz_font_env
+from ...themes import THEME_PRESETS
 
 __all__ = [
     "AuditFinding",
@@ -243,8 +245,6 @@ def palette_distinguishability(
 
 def _dot_json(dot_source: str, *, timeout: int = 120) -> dict[str, Any]:
     """Run ``dot -Tjson`` on a DOT source and parse the layout."""
-
-    from ..._fonts import graphviz_font_env
 
     # Measure with the same bundled font the renders draw with (FK3).
     completed = subprocess.run(
@@ -494,8 +494,6 @@ def _encoded_fills(dot_source: str) -> list[str]:
     and default grounds are excluded: the colour-spread gates govern the
     encoded ramp, not the role colours.
     """
-
-    from ...themes import THEME_PRESETS
 
     excluded: set[str] = set()
     for theme in THEME_PRESETS.values():

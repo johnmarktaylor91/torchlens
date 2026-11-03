@@ -31,6 +31,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from torchlens._selection.selection import Selection, Selector
+
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
 
@@ -165,8 +167,6 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     A ResolvedSelection bound to a foreign trace refuses typed -- alignment
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
-
-    from torchlens._selection.selection import Selection, Selector
 
     if isinstance(selection, Selection):
         resolved: Any = selection
