@@ -44,7 +44,7 @@ def _preserve_disclosure_flags() -> Any:
     cross-file failure. Snapshot and restore both flags around every test here.
     """
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     before = (
         bundle_module._NONPERSISTENT_DISCLOSURE_WARNED,
@@ -269,7 +269,7 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     UNCHANGED -- only the disclosure is added.
     """
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     model = StateModel().eval()
     inputs = torch.ones(2, 3)
@@ -304,7 +304,7 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
 def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) -> None:
     """The disclosure is NARROW: a full capture still records inputs and attests."""
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     model = StateModel().eval()
     inputs = torch.ones(2, 3)

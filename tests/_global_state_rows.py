@@ -321,8 +321,8 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/_capture_state_helpers.py", "_COMPILED_FORCED_EAGER_WARNED"),
         ("torchlens/_capture_state_helpers.py", "_COMPILED_MODEL_UNWRAP_WARNED"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
-        ("torchlens/_io/bundle.py", "_NONPERSISTENT_DISCLOSURE_WARNED"),
-        ("torchlens/_io/bundle.py", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED"),
+        ("torchlens/_io/_save_gates.py", "_NONPERSISTENT_DISCLOSURE_WARNED"),
+        ("torchlens/_io/_save_gates.py", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED"),
         ("torchlens/backends/tf/_tf_compat.py", "_warned_missing_capabilities"),
         # TorchScript/DLPack advisory, once per session per code; reset row in tests/conftest.py.
         ("torchlens/backends/torch/_opaque_call_advisory.py", "_WARNED_CODES"),
