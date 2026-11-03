@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use TorchLens, please cite the paper below."
+title: TorchLens
+type: software
+authors:
+  - family-names: Taylor
+    given-names: JohnMark
+repository-code: "https://github.com/johnmarktaylor91/torchlens"
+url: "https://johnmarktaylor91.github.io/torchlens/"
+license: Apache-2.0
+keywords:
+  - interpretability
+  - mechanistic interpretability
+  - activations
+  - feature extraction
+  - interventions
+  - computational graph
+  - visualization
+  - neuroscience
+  - pytorch
+preferred-citation:
+  type: article
+  title: "Extracting and visualizing hidden activations and computational graphs of PyTorch models with TorchLens"
+  authors:
+    - family-names: Taylor
+      given-names: JohnMark
+    - family-names: Kriegeskorte
+      given-names: Nikolaus
+  journal: Scientific Reports
+  volume: 13
+  issue: 1
+  start: 14375
+  year: 2023
+  month: 9
+  doi: 10.1038/s41598-023-40807-0
+  url: "https://www.nature.com/articles/s41598-023-40807-0"
+  issn: 2045-2322
+  publisher:
+    name: Springer Science and Business Media LLC

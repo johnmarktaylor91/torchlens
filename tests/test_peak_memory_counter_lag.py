@@ -34,7 +34,8 @@ from torchlens.options import CaptureOptions
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 MARGIN = 2**20
 #: Lag needed before the measurement: the margin plus room for the pinned
-#: CPU's own counter moving during the plant (under 64 pages per counter).
+#: CPU's anonymous-page share, which the plant's release folds into the total
+#: (``_fresh_plant.FreshPlant.close``; under 64 pages here).
 MIN_LAG = MARGIN + 2**19
 #: Pages left in each per-CPU counter after it folds (fault-around maps up to
 #: 16 file pages per fault, so stopping at 44 stays below the 64-page batch).

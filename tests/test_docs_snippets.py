@@ -8,8 +8,8 @@ Two gates live here:
   (``CLAUDE.md`` only imports AGENTS.md) top to bottom, statement by statement, in one
   shared namespace per page. The 2026-10-01 docs move ("docs: move agent reference
   material out of startup instructions") relocated those two fences out of AGENTS.md
-  into ``docs/agent-reference/common-patterns.md`` and
-  ``docs/agent-reference/architecture.md``, which this gate now reads directly;
+  into ``docs/internal/agent-reference/common-patterns.md`` and
+  ``docs/internal/agent-reference/architecture.md``, which this gate now reads directly;
   AGENTS.md itself carries no fences any more (just "Required reading" pointers).
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
@@ -50,10 +50,8 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         # FW2 closure sweep: the 2026-08-28 pages whose fences are
         # self-contained programs (spelling-only sketches on them are tagged
         # ```text).
-        "migration/coming_from_torchsnooper.md",
-        "migration/from_hooks.md",
         "native-torch.md",
-        "recipes/lrp_epsilon_litmus.md",
+        "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
@@ -245,8 +243,8 @@ def test_doc_python_blocks_run_reference_views(
 #: docstring); these two pages carry the content "AGENTS.md" used to name here.
 CANONICAL_PAGES = (
     "README.md",
-    "docs/agent-reference/common-patterns.md",
-    "docs/agent-reference/architecture.md",
+    "docs/internal/agent-reference/common-patterns.md",
+    "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
@@ -427,6 +425,11 @@ _MIGRATION_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
     "fences always; a third-party fence where that package is installed)"
 )
+#: Reason shared by the coming-from pages run by tests/test_migrations.py.
+_MIGRATIONS_TEST_EXECUTED = (
+    "executed fence by fence by tests/test_migrations.py (the TorchLens fences always; a "
+    "third-party fence where that package is installed)"
+)
 #: Reason shared by the teaching pages whose every fence is headed and run.
 _TEACHING_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
@@ -438,6 +441,12 @@ _RECIPE_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_recipe_pages_executed.py (a TorchLens-only "
     "page always; a third-party page where that package is installed, and always in "
     "the peer-recipe leg)"
+)
+
+#: Reason shared by the launch docs pages (Field guide, strip, comparison).
+_LAUNCH_PAGES_EXECUTED = (
+    "executed by tests/test_launch_docs_pages.py (a Field guide page as one session in "
+    "order; each strip fence alone, skipped where its declared package is absent)"
 )
 
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
@@ -452,11 +461,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # instructions"): these two pages carry the fences the canonical AGENTS.md gate
     # used to execute directly; CANONICAL_PAGES now reads them by this path, so they
     # are covered there, not by the per-block DOC_FILES mechanism.
-    "agent-reference/common-patterns.md": (
+    "internal/agent-reference/common-patterns.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Common Patterns section)"
     ),
-    "agent-reference/architecture.md": (
+    "internal/agent-reference/architecture.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Architecture section's "
         "'Common unified capture patterns' fence)"
@@ -466,11 +475,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # docs/, where this lint sees it for the first time. The fences are illustrative
     # sketches over backends/inputs the canonical ambient does not provide
     # (paddle_model/paddle_x, raw_text/text_to_tensor, block1/block2 submodules).
-    "agent-reference/package/public-surface.md": (
+    "internal/agent-reference/package/public-surface.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
-    "agent-reference/package/architecture-overview.md": (
+    "internal/agent-reference/package/architecture-overview.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
@@ -512,19 +521,19 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
-    "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
-    "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
-        "side where nnsight is installed)"
-    ),
-    "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
+    "migration/from_captum.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_fx.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_hooks.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_torchinfo.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/coming_from_torchsnooper.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_nnsight.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_thingsvision.md": _MIGRATIONS_TEST_EXECUTED,
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
         "executed by tests/test_neuro_pkg_* at BOTH rsatoolbox versions"
     ),
-    "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
-    "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
+    "migration/from_torchextractor.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_transformerlens.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
     "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
     "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
@@ -538,25 +547,31 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
     "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
     "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
-    "recipes/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/dissection.md": _RECIPE_PAGES_EXECUTED,
+    "migration/saelens.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/lovely_stats_line.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/inseq.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/repe.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/autocircuit.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/baukit.md": _MIGRATION_PAGES_EXECUTED,
+    "field-guide/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/torchcam.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/dissection.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
@@ -676,11 +691,13 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
     "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
     "gradient_contract.md": _TEACHING_PAGES_EXECUTED,
-    "migration/from_pyvene.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
-        "comparison fence is collected and skipped)"
-    ),
-    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_pyvene.md": _MIGRATIONS_TEST_EXECUTED,
+    "field-guide/running_examples.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/see_and_inspect.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/extract_features.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/intervene.md": _LAUNCH_PAGES_EXECUTED,
+    "gallery/any_architecture.md": _LAUNCH_PAGES_EXECUTED,
+    "migration/comparison.md": _LAUNCH_PAGES_EXECUTED,
 }
 
 

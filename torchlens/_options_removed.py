@@ -30,6 +30,16 @@ REMOVED_CAPTURE_MEMBERS: dict[str, str] = {
         "select what to save with tl.trace(model, x, save=...) -- the selection is not a "
         "capture option"
     ),
+    "module_filter": (
+        "select the modules to keep with tl.trace(model, x, save=tl.in_module(...)) or a "
+        "save= predicate -- save= is the one site selection"
+    ),
+    "raise_on_nan": (
+        'use CaptureOptions(on_nonfinite="raise") -- the non-finite policy is one field'
+    ),
+    "track_nonfinite": (
+        'use CaptureOptions(on_nonfinite="track") (or "warn") -- the non-finite policy is one field'
+    ),
 }
 
 #: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
