@@ -122,7 +122,7 @@ def test_paddle_tensor_ordering_comparisons_are_captured() -> None:
 
     trace = tl.trace(fn, x, backend="paddle")
     names = [str(op.func_name) for op in trace._layer_list]
-    assert {"__lt__", "__ge__"} <= set(names), names
+    assert {"tensor.__lt__", "tensor.__ge__"} <= set(names), names
     assert PaddleBackend().validate_trace(trace) is True, trace.validation_replay_status
     assert trace.validation_replay_status.state == "passed"
 
