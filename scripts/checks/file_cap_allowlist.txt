@@ -547,10 +547,10 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1865
-torchlens/_utils/tensor_utils.py::_clone_tensor_payload	74
+torchlens/_utils/tensor_utils.py	1863
+torchlens/_utils/tensor_utils.py::_clone_tensor_payload	72
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
-torchlens/_utils/tensor_utils.py::tensor_nanequal	181
+torchlens/_utils/tensor_utils.py::tensor_nanequal	179
 torchlens/_visualization/_bundle_graph.py::_add_bundle_forward_nodes	78
 torchlens/_visualization/_bundle_graph.py::_add_bundle_member_graph	64
 torchlens/_visualization/_bundle_graph.py::render_bundle_graph	70
