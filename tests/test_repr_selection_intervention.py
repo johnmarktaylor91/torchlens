@@ -117,6 +117,8 @@ def test_selection_and_site_table_bound_before_rendering() -> None:
     trace = tl.trace(nn.Sequential(*[nn.ReLU() for _ in range(8)]), torch.ones(2, 4))
     selection = trace[tl.func("relu")]
     assert repr(selection) == "Selection ACT: 8 sites, 64 values, from tl.func('relu')"
+    assert "  values    64" in str(selection)
+    assert str(selection).splitlines()[0] == repr(selection)
     assert "... and 3 more" in str(selection)
     assert repr(selection[0]).startswith("Site ACT relu_1:")
     table = _SiteTable(tuple(trace._layer_list))

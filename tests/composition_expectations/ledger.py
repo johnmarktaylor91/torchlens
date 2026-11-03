@@ -373,7 +373,7 @@ LEDGER: tuple[CompositionRow, ...] = (
         evidence_node="tests/test_replay_pass_qualified.py",
         refusal_code="multipass_bare_label_ambiguous",
         source_gap="M(compo) 4 (the shipping-today positive: proof R0-shape fixtures exercise real machinery)",
-        notes=("teaching message names every pass-qualified spelling",),
+        notes=("teaching message names up to five pass-qualified display keys",),
     ),
     CompositionRow(
         row_id="CELL-FORK-RAW-WRITE-SHARED-STORAGE",

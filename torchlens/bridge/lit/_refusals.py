@@ -229,12 +229,16 @@ def refuse_site_ambiguous(site: str, passes: tuple[int, ...]) -> NoReturn:
         Always; code ``lit_site_ambiguous``.
     """
 
-    spellings = ", ".join(f"'{site}:{p}'" for p in passes)
+    remedy = "Pass one pass-qualified spelling."
     raise InvalidArgumentError(
-        f"sites entry {site!r} is pass-ambiguous: the module fires {len(passes)} times "
-        "per forward and an unqualified spelling would silently pick one.",
+        lookup_message(
+            f"sites entry {site!r} is pass-ambiguous: the module fires {len(passes)} times "
+            "per forward and an unqualified spelling would silently pick one.",
+            [f"{site}:{p}" for p in passes],
+            remedy,
+        ),
         code="lit_site_ambiguous",
-        remedy=f"Pass one pass-qualified spelling: {spellings}.",
+        remedy=remedy,
         site=site,
         passes=passes,
     )

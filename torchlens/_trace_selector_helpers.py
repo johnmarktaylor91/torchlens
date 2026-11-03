@@ -14,6 +14,7 @@ from ._deprecations import MISSING
 from ._errors import AmbiguousOpLookupError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from ._trace_selection_shape import _selector_component_is_final_only
+from ._utils._display_errors import lookup_message
 from .backends import registry as _backend_registry
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
@@ -631,10 +632,11 @@ def _unique_module_for_name(name: str, base: str, addresses: list[str]) -> str |
     if not candidates and flattened != base and flattened in addresses:
         candidates = [flattened]
     if len(candidates) > 1:
-        listed = ", ".join(repr(address) for address in candidates[:10])
-        more = f" (and {len(candidates) - 10} more)" if len(candidates) > 10 else ""
         raise AmbiguousOpLookupError(
-            f"Module name {name!r} ends {len(candidates)} module addresses: {listed}{more}. "
-            "Use the full module address."
+            lookup_message(
+                f"Module name {name!r} ends {len(candidates)} module addresses.",
+                candidates,
+                "Use the full module address.",
+            )
         )
     return candidates[0] if candidates else None

@@ -103,9 +103,9 @@ def test_trace_getitem_never_returns_a_layer() -> None:
         trace["linear_1_1"]
     assert info.value.fields["code"] == "multipass_bare_label_ambiguous"
     message = str(info.value)
-    assert "trace.layers['linear_1_1']" in message
-    assert "'linear_1_1:last'" in message and "'linear_1_1:all'" in message
-    assert "'linear_1_1:1'" in message and "'linear_1_1:2'" in message
+    assert "trace.layers['linear_1']" in message
+    assert "'linear_1:last'" in message and "'linear_1:all'" in message
+    assert "'linear_1:1'" in message and "'linear_1:2'" in message
     assert isinstance(trace.layers["linear_1_1"], Layer)
 
 

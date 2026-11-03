@@ -1245,7 +1245,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
 def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
-    layer_label = getattr(matches[0], "layer_label", None) or site
+    layer_label = getattr(matches[0], "short_layer_label", None) or site
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
     return _unresolvable(
         "multipass_bare_label",

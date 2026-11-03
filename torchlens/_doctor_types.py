@@ -205,7 +205,7 @@ class DoctorReport:
             min(width, _SHOW_CELL_WIDTH_CAP) for width in _column_widths([headers, *body])
         )
         lines = [
-            f"TorchLens doctor report: {self.model_type or 'environment'}",
+            repr(self),
             f"PyTorch: {self.torch_version}",
             "",
             _format_table_line(headers, widths),

@@ -8,6 +8,8 @@ from typing import Any
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from ._nonfinite import nonfinite_op_labels
@@ -561,13 +563,13 @@ class TraceOpAccessor(Accessor[Op]):
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label
-            qualified = ", ".join(op.label for op in parent_matches[:10])
-            suffix = "..." if len(parent_matches) > 10 else ""
+            parent_label = parent_matches[0].short_layer_label
             raise AmbiguousOpLookupError(
-                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified Op label such as "
-                f"{qualified}{suffix}."
+                lookup_message(
+                    f"Layer {parent_label!r} has {len(parent_matches)} ops.",
+                    [display_key(op) for op in parent_matches],
+                    "Use a 0-based integer position or a pass-qualified label.",
+                )
             )
         return None
 

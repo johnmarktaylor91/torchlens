@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1449 modules, 648174 lines, 0 modules without a docstring.
+83 packages, 1449 modules, 648195 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14908 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10442 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10463 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7083 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
@@ -692,12 +692,12 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (21 modules, 10442 lines)
+Selection: naming sites and resolving them on a trace. (21 modules, 10463 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Selection: naming sites and resolving them on a trace. | 17 |
-| `_display` | Metadata-only cards for selections and their resolved sites. | 123 |
+| `_display` | Metadata-only cards for selections and their resolved sites. | 144 |
 | `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector. | 50 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
 | `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |

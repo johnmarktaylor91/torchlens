@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._utils._display_card import LIST_LIMIT, bounded_lines, more_row, one_line, render_card
+from .._utils._display_card import (
+    LIST_LIMIT,
+    bounded_lines,
+    card_row,
+    more_row,
+    one_line,
+    render_card,
+)
 from .._utils._display_constructor import clipped, display_guard
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import format_count, format_exact_count, plural
@@ -39,6 +46,9 @@ def _site_key(site: Site) -> str:
             record = index.get(label)
         if record is not None:
             return display_key(record)
+        return "unresolved"
+    if site.kind == "EDGE":
+        return "edge occurrence"
     return ":".join(str(part) for part in site.key)
 
 
@@ -78,12 +88,18 @@ def site_card(site: Site) -> str:
 def selection_repr(selection: Selection) -> str:
     """Display the concrete selection's kind, size and producing selector."""
 
-    counts = [_safe_selected(entry) for entry in selection._entries]
-    total = None if None in counts else sum(count for count in counts if count is not None)
+    total = _total_selected(selection)
     n = len(selection)
     values = "values not computed" if total is None else _value_count(total)
     source = () if selection.selector is None else (f"from {selection.selector!r}",)
     return one_line(f"Selection {selection.kind}", [plural(n, "site"), values], source)
+
+
+def _total_selected(selection: Selection) -> int | None:
+    """Sum structural mask metadata without reading any dense mask."""
+
+    counts = [_safe_selected(entry) for entry in selection._entries]
+    return None if None in counts else sum(count for count in counts if count is not None)
 
 
 def _value_count(count: int) -> str:
@@ -96,7 +112,12 @@ def _value_count(count: int) -> str:
 def selection_card(selection: Selection) -> str:
     """List at most five sites, with an exact remainder and detail exits."""
 
-    lines = [selection_repr(selection)]
+    total = _total_selected(selection)
+    lines = [
+        selection_repr(selection),
+        card_row("sites", format_exact_count(len(selection))),
+        card_row("values", "not computed" if total is None else format_exact_count(total)),
+    ]
     lines.extend(bounded_lines(selection._entries, site_repr, limit=LIST_LIMIT))
     lines.append(more_row((".labels", ".selector", ".to_pandas()")))
     return "\n".join(lines)

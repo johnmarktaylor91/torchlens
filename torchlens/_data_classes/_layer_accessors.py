@@ -17,6 +17,8 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
 
@@ -164,13 +166,13 @@ class OpAccessor(Accessor["Op"]):
             if key in {op_log.layer_label, op_log.short_layer_label}
         ]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label
-            qualified = ", ".join(op_log.label for op_log in parent_matches[:10])
-            suffix = "..." if len(parent_matches) > 10 else ""
+            parent_label = parent_matches[0].short_layer_label
             raise AmbiguousOpLookupError(
-                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified label like "
-                f"'{parent_label}:1'. Available Op labels: {qualified}{suffix}."
+                lookup_message(
+                    f"Layer {parent_label!r} has {len(parent_matches)} ops.",
+                    [display_key(op) for op in parent_matches],
+                    "Use a 0-based integer position or a pass-qualified label.",
+                )
             )
         for op_log in self._dict.values():
             if key in {

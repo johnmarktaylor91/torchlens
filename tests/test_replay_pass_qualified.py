@@ -185,7 +185,7 @@ def test_bare_multipass_label_refuses_in_units(recurrent):
     assert excinfo.value.fields["reason"] == "multipass_bare_label"
     message = str(excinfo.value)
     assert "3 passes" in message
-    for spelling in ("'relu_1_2:1'", "'relu_1_2:2'", "'relu_1_2:3'"):
+    for spelling in ("'relu_1:1'", "'relu_1:2'", "'relu_1:3'"):
         assert spelling in message
 
 
@@ -199,7 +199,7 @@ def test_bare_multipass_label_refuses_in_do_and_the_trace_door(recurrent):
     assert excinfo.value.fields["pass_indices"] == (1, 2, 3)
     message = str(excinfo.value)
     assert "3 passes" in message
-    for spelling in ("'relu_1_2:1'", "'relu_1_2:2'", "'relu_1_2:3'"):
+    for spelling in ("'relu_1:1'", "'relu_1:2'", "'relu_1:3'"):
         assert spelling in message
 
     fork = trace.fork()

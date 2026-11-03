@@ -121,6 +121,10 @@ column names (`name`, `state`, `n`, `mean`, `sd`, `min`, `max`, `zero_count`, `n
 
 ## Columns
 
+Percentage cells use numbers without glyph bars. A single footer explains any
+markers present: `*` for tied weights, `^` for SDPA full-square FLOPs, and `×N`
+for repeated modules, passes, or output shapes.
+
 `columns=` takes a bundle name (`"overview"`, `"compute"`, `"stats"`), an exact
 ordered list, or `+name` / `-name` deltas on the view's bundle. A `+name`
 lands at its registry position (`+input` before `output`, `+flops_pct`

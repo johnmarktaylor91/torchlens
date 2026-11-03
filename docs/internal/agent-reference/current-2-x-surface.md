@@ -1108,7 +1108,7 @@
   (`AmbiguousSiteError`) on string/`tl.label` addressing
   (do/push_from/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
-  every pass-qualified spelling; bare labels on single-pass layers stay
+  up to five pass-qualified display keys and an exact remainder; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
   selection (`log[label].__selection__()`) is the all-passes spelling.
   Post-hoc `contains`/string addressing accepts pass-qualified needles

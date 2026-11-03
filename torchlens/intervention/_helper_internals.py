@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils._display_errors import lookup_message
 from ._facet_writes import _active_facet_fire, _facet_home_label
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext, _resolve_facet_specs
@@ -514,14 +515,14 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     if isinstance(site_label, str) and ":" not in site_label:
         num_passes = int(getattr(source_site, "num_passes", 1) or 1)
         if num_passes > 1:
-            layer_label = getattr(source_site, "layer_label", site_label)
-            spellings = ", ".join(f"'{layer_label}:{index}'" for index in range(1, num_passes + 1))
+            layer_label = getattr(source_site, "short_layer_label", site_label)
             raise HookValueError(
-                f"patch_from donor site {site_label!r} is multi-pass "
-                f"({num_passes} passes) and the fire context carries no pass: "
-                "a donor pass is never guessed (the bare lookup historically "
-                "returned the LAST pass silently). Remedy: address one donor "
-                f"pass explicitly: {spellings}.",
+                lookup_message(
+                    f"patch_from donor site {site_label!r} is multi-pass "
+                    f"({num_passes} passes) and the fire context carries no pass.",
+                    [f"{layer_label}:{index}" for index in range(1, num_passes + 1)],
+                    "Address one donor pass explicitly; a donor pass is never guessed.",
+                ),
                 code="patch_donor_pass_ambiguous",
                 site=site_label,
                 num_passes=num_passes,
