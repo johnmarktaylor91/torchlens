@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, table_report, trace_subject
-from ._common import _compute_ops, _op_label, _require_pandas
+from ._common import _compute_ops, _op_label, _require_pandas, _source_line
 
 
 def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Report:
@@ -26,7 +26,8 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
     Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
-        Candidate rows with exclusion counts in ``df.attrs``.
+        Candidate rows with exclusion counts in ``df.attrs``; ``source_line``
+        is the ``"file:line"`` of the user code that ran the op.
     """
 
     pd = _require_pandas()
@@ -57,6 +58,7 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
                 "flops_forward": flops_value,
                 "mem_per_flop": memory_value / flops_value,
                 "suggested": False,
+                "source_line": _source_line(op),
             }
         )
 
@@ -73,7 +75,14 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
 
     frame = pd.DataFrame(
         rows,
-        columns=["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"],
+        columns=[
+            "op",
+            "activation_memory",
+            "flops_forward",
+            "mem_per_flop",
+            "suggested",
+            "source_line",
+        ],
     )
     frame.attrs["total_freeable"] = total_freeable
     frame.attrs["budget_gb"] = budget_gb
@@ -85,5 +94,5 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
         "recompute_candidates",
         attach_dataframe_honesty(frame, trace),
         subject=trace_subject(trace),
-        finding_columns=("op", "activation_memory", "mem_per_flop", "suggested"),
+        finding_columns=("op", "activation_memory", "mem_per_flop", "suggested", "source_line"),
     )

@@ -1902,7 +1902,7 @@ def test_documented_false_negatives_do_not_materialise_branch_events(
 def test_save_code_context_off_model_keeps_branch_classification_without_loading_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Disabled source loading keeps branch attribution and the canonical no-source state."""
+    """Without a source snapshot, branch attribution holds and no text is stored at capture."""
     trace = _log_model(
         SaveSourceContextOffModel(),
         torch.ones(2, 2),
@@ -1935,17 +1935,14 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
                 assert frame.source_loading_enabled is False
                 assert frame._source_loaded is True
                 assert frame._frame_func_obj is None
-                assert frame.code_context is None
-                assert frame.source_context == "None"
-                assert frame.code_context_labeled == ""
-                assert frame.call_line == ""
-                assert frame.num_context_lines == 0
+                # Stored state is the canonical no-source state (lazy reads: test_source_text_lazy).
+                assert frame._code_context is None
+                assert frame._source_context == "None"
+                assert frame._code_context_labeled == ""
+                assert frame._call_line == ""
+                assert frame._num_context_lines == 0
                 assert frame.func_signature is None
                 assert frame.func_docstring is None
-                assert len(frame) == 0
-                with pytest.raises(IndexError):
-                    _ = frame[0]
-                assert repr(frame).endswith("code: source unavailable")
         assert accessed_files == []
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
@@ -1954,7 +1951,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
-    assert roundtrip_stack[0].source_context == "None"
+    assert roundtrip_stack[0]._source_context == "None"
 
 
 def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> None:

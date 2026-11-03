@@ -1338,6 +1338,7 @@ def test_repr_source_unavailable():
 
 
 def test_func_call_location_no_source_state_with_save_code_context_off(small_input, monkeypatch):
+    """Without save_source_context, frames store no text and read it lazily on access."""
     stack, mh = _get_code_context_with_flag(small_input, save_source_context=False)
     assert isinstance(stack, list)
     assert len(stack) > 0
@@ -1351,14 +1352,15 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
             assert frame.line_number is not None
             assert frame.code_firstlineno is not None
             assert frame.source_loading_enabled is False
+            # Stored state: no text kept at capture.
+            assert frame._code_context is None
+            assert frame._call_line == ""
 
-    loc = stack[0]
-    assert loc.file is not None
-    assert loc.line_number is not None
-    assert loc.code_firstlineno is not None
-    assert loc.source_loading_enabled is False
+    loc = stack[-1]
     assert loc._source_loaded is True
     assert loc._frame_func_obj is None
+    assert loc.func_signature is None
+    assert loc.func_docstring is None
 
     accessed_files = []
     original_getlines = linecache.getlines
@@ -1369,27 +1371,23 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
 
     with monkeypatch.context() as local_patch:
         local_patch.setattr(linecache, "getlines", _tracking_getlines)
+        expected = original_getlines(loc.file)[loc.line_number - 1].strip()
+        assert loc.call_line == expected != ""
+        assert loc.code_context is not None
+        assert len(loc) == len(loc.code_context) == loc.num_context_lines == 15
+        assert loc[0] == loc.code_context[0]
+        assert "  --->  " in loc.code_context_labeled
+        assert "code: source unavailable" not in repr(loc)
+        assert loc.file in accessed_files
 
-        assert loc.source_context == "None"
-        assert loc.code_context is None
-        assert loc.code_context_labeled == ""
-        assert loc.call_line == ""
-        assert loc.num_context_lines == 0
-        assert loc.func_signature is None
-        assert loc.func_docstring is None
-        assert len(loc) == 0
-        with pytest.raises(IndexError):
-            _ = loc[0]
-        assert repr(loc).endswith("code: source unavailable")
-        assert accessed_files == []
-
+    # Never persisted: the stored no-source state is what a pickle carries.
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
         entry.code_context for entry in mh_roundtrip._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
-    assert roundtrip_stack[0].source_context == "None"
+    assert roundtrip_stack[0]._source_context == "None"
 
 
 def test_getitem_returns_context_line(small_input):

@@ -168,8 +168,16 @@ def test_hot_path_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = _dead_neurons_rows(trace, dim=1, threshold=0.0)
-    columns = ["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"]
+    rows, attrs = _dead_neurons_rows(trace, dim=None, threshold=0.0)
+    columns = [
+        "op",
+        "total_units",
+        "dead_count",
+        "dead_frac",
+        "sample_dead_idx",
+        "reason",
+        "source_line",
+    ]
     _assert_same(tl.debug.dead_neurons(trace), _frame(rows, columns, attrs))
 
 
@@ -184,6 +192,7 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "mean_abs",
         "allclose",
         "reason",
+        "source_line",
     ]
     _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
 
@@ -197,7 +206,7 @@ def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
 
 
 def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
-    from torchlens.debug._common import _compute_ops, _op_label
+    from torchlens.debug._common import _compute_ops, _op_label, _source_line
 
     rows = []
     for op in _compute_ops(trace):
@@ -211,10 +220,18 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
                 "flops_forward": float(flops),
                 "mem_per_flop": int(memory) / float(flops),
                 "suggested": False,
+                "source_line": _source_line(op),
             }
         )
     rows.sort(key=lambda row: float(row["mem_per_flop"]), reverse=True)
-    columns = ["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"]
+    columns = [
+        "op",
+        "activation_memory",
+        "flops_forward",
+        "mem_per_flop",
+        "suggested",
+        "source_line",
+    ]
     expected = _frame(rows, columns, {"total_freeable": sum(r["activation_memory"] for r in rows)})
     assert rows, "the fixture must yield candidates"
     _assert_same(tl.debug.recompute_candidates(trace), expected)
