@@ -364,7 +364,7 @@ Output:
 `tl.debug.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
 exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
-with `save_grads=True`, then call `trace.log_backward(...)` first.
+with `save_grads=True`, then call `trace.backward(...)` first.
 
 The F23 fix pack added (all additive): `module` + `is_frontier` columns (a
 dead layer zeroes the gradient of everything upstream, so the frontier — a
@@ -387,7 +387,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 report = tl.debug.grad_health(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```

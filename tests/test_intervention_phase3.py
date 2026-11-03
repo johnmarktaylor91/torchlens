@@ -18,7 +18,6 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
 from torchlens.intervention.runtime import _execute_hook
-from torchlens.intervention.sites import sites
 from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
@@ -144,35 +143,6 @@ def test_activation_only_edit_on_gradient_site_raises() -> None:
         normalize_hook_plan(tl.grad(tl.func("relu")), tl.splice_module(torch.nn.Identity()))
     fields = getattr(excinfo.value, "fields", None) or {}
     assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
-
-
-def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
-    """Callable site predicates remain part of composed ``sites(..., ops=...)`` selectors."""
-
-    class _Relu(torch.nn.Module):
-        """Small model with a relu op."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Apply a relu.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                ReLU output.
-            """
-
-            return torch.relu(x)
-
-    log = tl.trace(_Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(replayable=True))
-
-    selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
-
-    assert selected.labels() == ()
 
 
 def test_normalizer_rejects_missing_site_and_bad_signature() -> None:

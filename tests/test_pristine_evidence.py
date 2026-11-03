@@ -106,7 +106,11 @@ def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
     fork = plain.fork("f")
     assert fork.is_pristine is True and plain.is_pristine is True
-    fork.set(tl.module("block"), _double, confirm_mutation=True)
+    fork.do(
+        tl.module("block"),
+        _double,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     assert fork.is_pristine is False
     assert plain.is_pristine is True
     assert fork.fork("g").is_pristine is False

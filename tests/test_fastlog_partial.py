@@ -225,7 +225,7 @@ def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
     _assert_subsequent_record_works()
 
 
-def test_failed_recording_rejects_to_trace_and_log_backward() -> None:
+def test_failed_recording_rejects_to_trace_and_backward() -> None:
     """Failed partials cannot be cooked into traces or backward recordings."""
 
     recording = tl.record(

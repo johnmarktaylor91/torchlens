@@ -79,7 +79,7 @@ def test_grad_health_resolves_verdicts_for_cross_entropy_without_grad_scale() ->
     model = _Mlp()
     trace = tl.trace(model, torch.randn(6, 4), capture=tl.options.CaptureOptions(save_grads=True))
     logits = trace[trace.output_layers[0]].out
-    trace.log_backward(F.cross_entropy(logits, torch.tensor([0, 1, 2, 0, 1, 2])))
+    trace.backward(F.cross_entropy(logits, torch.tensor([0, 1, 2, 0, 1, 2])))
 
     frame = tl.debug.grad_health(trace).to_pandas()
     graded = frame[frame["verdict"] != "unavailable"]

@@ -16,7 +16,7 @@ __all__ = (
     "_check_backward_layer_backpointers",
     "_check_backward_saved_grad_records",
     "_check_backward_pass_record_consistency",
-    "_check_backward_pass_index_density",
+    "_check_backward_pass_number_density",
     "_check_grad_fn_topology_invariants",
     "_check_grad_fn_relation_list",
 )
@@ -66,7 +66,7 @@ def _check_backward_graph_invariants(trace: Trace) -> None:
     _check_backward_grad_fn_handle_records(trace, name, valid_pass_indices)
     _check_backward_layer_backpointers(trace, name)
     _check_backward_saved_grad_records(trace, name)
-    _check_backward_pass_index_density(trace, name)
+    _check_backward_pass_number_density(trace, name)
     _check_grad_fn_topology_invariants(trace, name)
     _check_backward_pass_domain_invariants(trace, name, valid_pass_indices)
     _check_backward_pass_record_consistency(trace, name, valid_pass_indices)
@@ -240,7 +240,7 @@ def _check_backward_grad_fn_handle_records(
             )
         # Domain check for EVERY handle, not only higher-order ones. This used to
         # live under ``creator_object_id is not None``, which is populated only by
-        # ``create_graph=True`` autograd, so an ordinary ``log_backward`` never
+        # ``create_graph=True`` autograd, so an ordinary ``backward`` never
         # reached it. ``origin_backward_pass`` is declared ``int | None`` and is
         # legitimately None on handles built outside a backward pass, so None is
         # explicitly allowed here; the stricter creator-branch form below is
@@ -285,10 +285,10 @@ def _check_backward_grad_fn_handle_records(
                     name,
                     f"{grad_fn_handle.label}:{ordinal} has inconsistent local ordinal fields",
                 )
-            if call.backward_pass_index is None:
+            if call.backward_pass_number is None:
                 raise MetadataInvariantError(
                     name,
-                    f"{grad_fn_handle.label}:{ordinal} is missing backward_pass_index",
+                    f"{grad_fn_handle.label}:{ordinal} is missing backward_pass_number",
                 )
 
 
@@ -397,22 +397,22 @@ def _check_backward_pass_record_consistency(
                 f"BackwardPass stored index {backward_pass.pass_number!r} under {pass_index!r}",
             )
         for call in backward_pass.grad_fn_calls:
-            if call.backward_pass_index != pass_index:
+            if call.backward_pass_number != pass_index:
                 raise MetadataInvariantError(
                     name,
                     f"{call.label} is attached to pass {pass_index} but records "
-                    f"pass {call.backward_pass_index}",
+                    f"pass {call.backward_pass_number}",
                 )
     for grad_fn_handle in trace._grad_fn_logs.values():
         for call in grad_fn_handle.calls.values():
-            if call.backward_pass_index not in valid_pass_indices:
+            if call.backward_pass_number not in valid_pass_indices:
                 raise MetadataInvariantError(
                     name,
-                    f"{call.grad_fn_label} references missing backward pass {call.backward_pass_index}",
+                    f"{call.grad_fn_label} references missing backward pass {call.backward_pass_number}",
                 )
 
 
-def _check_backward_pass_index_density(trace: Trace, name: str) -> None:
+def _check_backward_pass_number_density(trace: Trace, name: str) -> None:
     """Check backward pass log keys are dense.
 
     Parameters

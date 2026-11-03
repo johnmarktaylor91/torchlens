@@ -110,7 +110,7 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
         ),
     )
     forward_count = len(trace.aten_ops)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
 
     rows = trace.aten_ops
     assert len(rows) > forward_count

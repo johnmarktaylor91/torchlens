@@ -609,7 +609,7 @@ torchlens/_visualization/_render_utils.py::_open_file_quietly	66
 torchlens/_visualization/_stacking.py::resolve_stack_by	84
 torchlens/_visualization/_summary_internal/_discoverability.py::format_discoverability_summary	64
 torchlens/_visualization/_surgery_diff.py::surgery_diff	97
-torchlens/_visualization/_trace_draw.py::draw	115
+torchlens/_visualization/_trace_draw.py::draw	114
 torchlens/_visualization/auto_collapse.py	2150
 torchlens/_visualization/auto_collapse.py::_compute_signal_skeleton	92
 torchlens/_visualization/auto_collapse.py::_iter_collapsible_child_path_runs	78
@@ -1121,7 +1121,7 @@ torchlens/intervention/_topology/topology.py::build_supergraph	108
 torchlens/intervention/_trace_edits.py::apply_do_mutation	102
 torchlens/intervention/_trace_edits.py::do_with_options	110
 torchlens/intervention/_trace_edits.py::record_do_intervention_event	78
-torchlens/intervention/_trace_edits.py::set_site	88
+torchlens/intervention/_trace_edits.py::set_site	69
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	78
 torchlens/intervention/_trace_hooks.py::attach_hooks	80
 torchlens/intervention/_trace_run.py::run	377

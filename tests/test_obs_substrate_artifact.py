@@ -37,7 +37,7 @@ def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> Commi
     if with_sketch:
         histogram = Histogram()
         histogram.update(torch.tensor([value, -value, 0.0]))
-        sketch = histogram.result()
+        sketch = histogram.compute()
     observation = ObservationRecord(
         global_step=step,
         site_id="module:enc.0",

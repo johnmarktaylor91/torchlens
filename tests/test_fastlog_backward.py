@@ -34,7 +34,7 @@ def _input() -> torch.Tensor:
     return torch.randn(3, 4, requires_grad=True)
 
 
-def test_recording_log_backward_intervening_grad_fn() -> None:
+def test_recording_backward_intervening_grad_fn() -> None:
     """Callable save_grads can capture an intervening grad_fn_handle as metadata."""
 
     recording = tl.record(
@@ -57,7 +57,7 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
     assert any(not record.ctx.has_op for record in recording.grad_records)
 
 
-def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
+def test_recording_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
     """Static save_grads=True rejects disk-only storage before backward runs."""
 
     recording = tl.record(
@@ -75,7 +75,7 @@ def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> 
     assert not recording.grad_records
 
 
-def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
+def test_recording_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
     """Dynamic save_grads predicates hit the late storage resolver gate."""
 
     recording = tl.record(
@@ -92,7 +92,7 @@ def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: 
         recording.backward(out.sum(), save_grads=lambda _ctx: CaptureSpec(save_grad=True))
 
 
-def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
+def test_recording_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     """Sequential Recorder rollouts do not join a grad_fn_handle to a stale forward."""
 
     model = TinyRelu()

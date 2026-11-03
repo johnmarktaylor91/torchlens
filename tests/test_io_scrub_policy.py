@@ -327,13 +327,10 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
     "clear_edits": "mutates the live model's hook registry",
-    "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
-    "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
@@ -356,7 +353,6 @@ _OP_METHOD_EXCLUSIONS: dict[str, str] = {
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}

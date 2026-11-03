@@ -113,7 +113,7 @@ gradient during one backward pass.
 def tcav_score(direction, x, target=1):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
     logits = trace[trace.output_layers[0]].out
-    trace.log_backward(logits[:, target].sum())  # rows are independent: per-example grads
+    trace.backward(logits[:, target].sum())  # rows are independent: per-example grads
     grads = trace[SITE].grad
     return (grads @ direction > 0).float().mean().item()
 

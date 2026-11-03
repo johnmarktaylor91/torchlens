@@ -218,7 +218,7 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     """The shared observer attributes engine dispatches to active GradFn calls."""
 
     trace = _armed_trace(backward_ready=True)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
 
     backward_rows = [
         row for row in trace._primitive_op_profile.primitive_ops if row.capture_phase == "backward"
@@ -244,7 +244,7 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
 
     capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True, save_mode="reference")
     trace = tl.trace(model, torch.ones(2, 3, requires_grad=True), capture=capture)
-    trace.log_backward(trace.output_ops[0].out)
+    trace.backward(trace.output_ops[0].out)
 
     rows = trace._primitive_op_profile.primitive_ops
     assert any(row.operator == expected_operator for row in rows)
