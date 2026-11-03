@@ -678,8 +678,7 @@ def _resolve_cache_key(state: _DoorState) -> _DoorState:
 def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
     """Hand-curated cache-key rows; ``_resolve_cache_key`` sweeps the remaining fields in."""
     opts = state.capture_options
-    args = state.args
-    return {
+    cache_config = {
         "layers_to_save": state.requested_layers_to_save,
         "keep_orphans": opts.keep_orphans,
         "output_device": opts.output_device,
@@ -702,7 +701,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "semantic_output_cache_key": semantic_output_cache_key(state.model),
         "facets": _facet_recipe_cache_key(state.facet_recipes),
         "save_predicate": _predicate_cache_key(state.save_predicate),
-        "intervene": _predicate_cache_key(args.intervene),
+        "intervene": _predicate_cache_key(state.args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
         # Former door kwargs, now CaptureOptions fields: named for the static coverage lint.
@@ -728,10 +727,11 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "save_visualizations": _stable_cache_fragment(opts.save_visualizations),
         "optimizer": repr(opts.optimizer),
         "hooks": _stable_cache_fragment(opts.hooks),
-        "lookback": args.lookback,
-        "lookback_payload_policy": args.lookback_payload_policy,
+        "lookback": state.args.lookback,
+        "lookback_payload_policy": state.args.lookback_payload_policy,
         "jax_control_flow": opts.jax_control_flow,
         "jax_max_control_flow_unroll": opts.jax_max_control_flow_unroll,
         "module_identity_mode": opts.module_identity_mode,
         "payload_policy": opts.payload_policy,
     }
+    return cache_config
