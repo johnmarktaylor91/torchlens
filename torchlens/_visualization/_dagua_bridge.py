@@ -763,7 +763,7 @@ def trace_to_dagua_graph(
     g.container_kind = []
     g.container_role = []
     g.edge_container_role = []
-    g.has_direct_writes = bool(getattr(trace, "_has_direct_writes", False))
+    g.has_direct_writes = bool(trace._has_direct_writes if is_live_trace(trace) else False)
 
     module_shape = dagua.NodeStyle(shape="roundrect", corner_radius=8.0)
     op_shape = dagua.NodeStyle(shape="ellipse")

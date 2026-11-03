@@ -1624,6 +1624,9 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_trace_summary.py", "__all__"),
         ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
+        ("torchlens/_json_safe.py", "__all__"),
+        ("torchlens/experimental/dagua/_bridge.py", "__all__"),
+        ("torchlens/viz/node_plots.py", "__all__"),
     }
 )
 
