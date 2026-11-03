@@ -8,13 +8,14 @@ separate legend node before, placed wherever the layout had room).
 
 The key draws each mark with its real shape and fill: ovals for single
 function calls (input and output are function calls too), boxes for leaf
-modules, cylinders for buffers; grey fill means weights on any shape, light
-for trainable and dark for frozen. Graphviz HTML labels can only draw
+modules, cylinders for buffers; the weight fills mark weights on any shape,
+light for trainable and dark for frozen. Graphviz HTML labels can only draw
 rectangles, so the swatches are small drawn PNG images in a shared,
 content-addressed folder under the system temp directory, referenced by
 absolute path so the DOT source renders from any working directory. Rows
 appear only for marks the picture contains; the key is opt-in
-(``show_legend=True``).
+(``show_legend=True``), except that a ``module=`` focused draw shows it by
+default with a reading key (``show_legend=False`` turns both off).
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -31,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ._focus_scope import scope_caption_head
 from ._label_format import format_memory
 from ._render_utils import html_escape
 
@@ -46,6 +48,7 @@ __all__ = [
     "KeySwatch",
     "caption_from_label",
     "drawn_module_marks",
+    "render_module_marks",
     "drawn_count_line",
     "graph_caption_body",
     "header_block_label",
@@ -67,8 +70,9 @@ _KEY_SPACING = 3
 _SWATCHES_PER_ROW = 3
 #: Stroke of the key's module frame, in points (module frames run 2 to 5 pt by depth).
 _MODULE_FRAME_LINE = 3.0
-#: Node unit kinds the header counts: each draws one node with a tensor size.
-_COUNTED_UNIT_KINDS = frozenset({"raw_op", "boundary", "module_box"})
+#: Node unit kinds the header counts: each draws one node that shows a tensor size
+#: (a ``module=`` focus stub, kind ``boundary``, shows none).
+_COUNTED_UNIT_KINDS = frozenset({"raw_op", "module_box"})
 
 
 @dataclass(frozen=True)
@@ -99,19 +103,22 @@ class KeySwatch:
 
 
 def params_caption_detail(trace: Trace) -> str:
-    """Return the header's parameter line, for example ``12 params (48 B, all trainable)``."""
+    """Return the header's parameter line, for example ``1,024 params (4.0 KiB, all trainable)``.
 
-    if trace.num_params == 0:
+    Counts take thousands separators so a large model reads at a glance
+    (``124,439,808 params``), and the memory uses the binary unit its 1024
+    divisor implies.
+    """
+
+    total = int(trace.num_params)
+    if total == 0:
         return "0 params"
-    memory = trace._cost_total_param_memory
+    memory = format_memory(trace._cost_total_param_memory)
     if trace.num_params_frozen == 0:
-        return f"{trace.num_params} params ({memory}, all trainable)"
+        return f"{total:,} params ({memory}, all trainable)"
     if trace.num_params_trainable == 0:
-        return f"{trace.num_params} params ({memory}, all frozen)"
-    return (
-        f"{trace.num_params} params "
-        f"({memory}, {trace.num_params_trainable}/{trace.num_params} trainable)"
-    )
+        return f"{total:,} params ({memory}, all frozen)"
+    return f"{total:,} params ({memory}, {int(trace.num_params_trainable):,}/{total:,} trainable)"
 
 
 def _unit_memory(trace: Trace, unit: Any) -> int | None:
@@ -136,25 +143,31 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
 def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str:
     """Return the header's count line, for example ``4 ops (48 B)``.
 
-    Every drawn node counts, input and output included, and the size sums
-    the sizes their labels show, so the line matches the picture. The unit
-    is ``layers`` in the rolled view and ``ops`` in the unrolled view.
-    Repeat-fold ellipses, segment capsules and container summaries carry no
-    tensor size of their own and are not counted.
+    The count and the size cover the same nodes: every drawn node whose label
+    shows a tensor size (operations, input and output tensors, collapsed
+    module boxes). The input and output stubs of a ``module=`` focus show no
+    size and are not counted; nor are repeat-fold ellipses, segment capsules
+    and container summaries. The noun names what is counted: ``ops`` in the
+    unrolled view and ``layers`` in the rolled one when every counted node is
+    an operation, ``nodes`` when collapsed module boxes are among them.
     """
 
     count = 0
     total = 0
+    has_module_box = False
     for unit in universe.units:
         if unit.kind not in _COUNTED_UNIT_KINDS:
             continue
         count += 1
+        has_module_box = has_module_box or unit.kind == "module_box"
         total += _unit_memory(trace, unit) or 0
-    if vis_mode == "rolled":
+    if has_module_box:
+        noun = "node" if count == 1 else "nodes"
+    elif vis_mode == "rolled":
         noun = "layer" if count == 1 else "layers"
     else:
         noun = "op" if count == 1 else "ops"
-    return f"{count} {noun} ({format_memory(total)})"
+    return f"{count:,} {noun} ({format_memory(total)})"
 
 
 def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderRequest) -> str:
@@ -169,11 +182,7 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     from .._capture_honesty import honesty_banner_lines
     from ._render_utils import strip_path_directories
 
-    caption_body = (
-        f"<B>{html_escape(trace._source_class_name)}</B>"
-        f"<br align='left'/>{html_escape(count_line)}"
-        f"<br align='left'/>{params_caption_detail(trace)}<br align='left'/>"
-    )
+    caption_body = _caption_head(trace, count_line, getattr(request, "module", None))
     edit_line = _header_edit_line(trace, request)
     if edit_line is not None:
         caption_body += f"{edit_line}<br align='left'/>"
@@ -212,6 +221,12 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     if reuse_note is not None:
         caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
     return caption_body
+
+
+def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
+    """Return the header's first lines: model (or focus scope), drawn count, parameters."""
+
+    return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
 
 
 def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | None:
@@ -271,17 +286,55 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     )
 
 
-def drawn_module_marks(node_attrs: Iterable[Mapping[str, Any]], has_regions: bool) -> bool:
-    """Return whether the picture draws a module: a module box node or a nested-module box."""
+def drawn_module_marks(
+    node_attrs: Iterable[Mapping[str, Any]], has_regions: bool
+) -> frozenset[str]:
+    """Return the module marks the picture draws, each with its own key entry.
 
-    if has_regions:
-        return True
+    ``frame`` is an expanded module's frame (a drawn region); ``box`` a module
+    drawn as one solid box (an atomic module, ``@address`` label); ``box3d`` a
+    collapsed module; ``double`` the double outline of an op whose module
+    holds buffers that are not drawn. Dashed boxes (segments, container
+    summaries) are not modules. The set is empty, so falsy, when no module
+    mark is drawn.
+    """
+
+    marks: set[str] = {"frame"} if has_regions else set()
     for attrs in node_attrs:
-        if "invis" in str(attrs.get("style", "")):
+        style = str(attrs.get("style", "")).lower()
+        if "invis" in style:
             continue
-        if str(attrs.get("shape", "")).lower() in {"box", "box3d"}:
-            return True
-    return False
+        shape = str(attrs.get("shape", "")).lower()
+        if shape == "box3d":
+            marks.add("box3d")
+        elif shape == "box" and "dashed" not in style:
+            marks.add("box")
+        if str(attrs.get("peripheries", "")) == "2":
+            marks.add("double")
+    return frozenset(marks)
+
+
+def render_module_marks(node_attrs: Iterable[Mapping[str, Any]], render_ir: Any) -> frozenset[str]:
+    """Return :func:`drawn_module_marks` for a finished forward IR.
+
+    A module region is a frame only when its cluster was emitted: atomic
+    modules drawn as one box and empty module subtrees keep an IR region
+    but draw no frame.
+    """
+
+    frames = {
+        f"cluster_{region.key.replace(':', '_pass')}"
+        for region in render_ir.regions
+        if region.kind == "module"
+    }
+    pending = list(render_ir.dot_statements)
+    while pending:
+        statement = pending.pop()
+        if statement.kind == "subgraph":
+            if dict(statement.attrs).get("name") in frames:
+                return drawn_module_marks(node_attrs, True)
+            pending.extend(statement.children)
+    return drawn_module_marks(node_attrs, False)
 
 
 def key_swatches(
@@ -290,15 +343,16 @@ def key_swatches(
     *,
     has_module: bool,
     mutated_parameter: bool = False,
+    module_marks: frozenset[str] = frozenset(),
 ) -> tuple[KeySwatch, ...]:
     """Return the key entries for the marks this picture draws, in display order.
 
     Both weight greys are listed whenever any weighted node is drawn, so a
     reader can tell trainable from frozen weights. Plain operations get no
-    entry (they are the page colour). A drawn module gets a module frame
-    swatch; an edited node adds ``edited`` (the ringed oval) and, with the
-    downstream highlighter drawn, ``changed by the edit`` (an arrow over the
-    translucent purple bar).
+    entry. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
+    an entry drawn like it; ``has_module=True`` alone means a module frame.
+    An edited node adds ``edited`` (the ringed oval) and, with the downstream
+    highlighter drawn, ``changed by the edit``.
     """
 
     from ._render_common import (
@@ -310,38 +364,44 @@ def key_swatches(
         OUTPUT_COLOR,
         TRAINABLE_PARAMS_BG_COLOR,
     )
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
 
     has_weights = "parameterized" in drawn
+    marks = module_marks | ({"frame"} if has_module else set())
     entries = (
         ("input", "oval", INPUT_COLOR, "input" in drawn),
         ("output", "oval", OUTPUT_COLOR, "output" in drawn),
         ("trainable weights", "box", TRAINABLE_PARAMS_BG_COLOR, has_weights),
         ("frozen weights", "box", FROZEN_PARAMS_BG_COLOR, has_weights),
-        ("module", "frame", DEFAULT_BG_COLOR, has_module),
+        ("module", "frame", DEFAULT_BG_COLOR, "frame" in marks),
+        ("module run as one op", "box", DEFAULT_BG_COLOR, "box" in marks),
+        ("collapsed module", "box3d", DEFAULT_BG_COLOR, "box3d" in marks),
+        ("hidden buffers", "double", DEFAULT_BG_COLOR, "double" in marks),
         ("buffer", "cylinder", BUFFER_NODE_COLOR, "buffer" in drawn),
         ("mutated parameter", "cylinder", TRAINABLE_PARAMS_BG_COLOR, mutated_parameter),
         ("true/false test", "oval", BOOL_NODE_COLOR, "boolean" in drawn),
     )
-    swatches = []
-    for text, shape, fill, shown in entries:
-        if not shown:
-            continue
-        if shape == "frame":
-            swatches.append(_module_frame_swatch(theme))
-            continue
-        themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
-        swatches.append(
-            KeySwatch(
-                text=text,
-                shape=shape,
-                fill=str(themed.fillcolor),
-                border=str(themed.color or theme.default_border),
-            )
-        )
+    swatches = [
+        _entry_swatch(theme, text, shape, fill) for text, shape, fill, shown in entries if shown
+    ]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
+
+
+def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch:
+    """Return one key entry with the skin's fill and border for its mark."""
+
+    from .node_spec import NodeSpec
+    from .themes import apply_theme_to_spec
+
+    if shape == "frame":
+        return _module_frame_swatch(theme)
+    themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
+    return KeySwatch(
+        text=text,
+        shape=shape,
+        fill=str(themed.fillcolor),
+        border=str(themed.color or theme.default_border),
+    )
 
 
 def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
@@ -458,6 +518,20 @@ def _swatch_image(swatch: KeySwatch) -> str:
         draw.line((left, top + cap // 2, left, bottom - cap // 2), fill=border, width=line)
         draw.line((right, top + cap // 2, right, bottom - cap // 2), fill=border, width=line)
         draw.ellipse((left, top, right, top + cap), fill=fill, outline=border, width=line)
+    elif swatch.shape == "box3d":
+        depth = 3 * _SWATCH_SCALE
+        draw.rectangle(
+            (left + depth, top, right, bottom - depth), fill=fill, outline=border, width=line
+        )
+        draw.rectangle(
+            (left, top + depth, right - depth, bottom), fill=fill, outline=border, width=line
+        )
+    elif swatch.shape == "double":
+        gap = 2 * _SWATCH_SCALE
+        draw.rectangle((left, top, right, bottom), fill=fill, outline=border, width=line)
+        draw.rectangle(
+            (left + gap, top + gap, right - gap, bottom - gap), outline=border, width=line
+        )
     else:
         draw.rectangle((left, top, right, bottom), fill=fill, outline=border, width=line)
     # Write then rename, so a concurrent draw never reads a half-written file.
@@ -556,6 +630,7 @@ def header_block_label(
     swatches: tuple[KeySwatch, ...],
     sections: tuple[LegendSection, ...],
     theme: VisualizationTheme,
+    notes: tuple[str, ...] = (),
 ) -> str:
     """Return the graph label: the header, then the key, as one top-left block.
 
@@ -569,6 +644,9 @@ def header_block_label(
         Further key sections (the channel disclosure), drawn under the swatches.
     theme:
         Resolved skin (text colour, size, border).
+    notes:
+        Plain-text reading rows (a focused draw's notation key), drawn under
+        the swatches in the key's text size.
 
     Returns
     -------
@@ -576,12 +654,19 @@ def header_block_label(
         The header label unchanged when there is no key, else the block.
     """
 
-    if not swatches and not sections:
+    if not swatches and not sections and not notes:
         return graph_caption
     header = graph_caption[1:-1]
     rows = f'<TR><TD ALIGN="LEFT" BALIGN="LEFT">{header}</TD></TR>'
     if swatches:
         rows += _key_rows_html(swatches, theme)
+    if notes:
+        body = "".join(f"{html_escape(note)}<br align='left'/>" for note in notes)
+        size = theme.typography.secondary_size
+        rows += (
+            f'<TR><TD ALIGN="LEFT" BALIGN="LEFT"><FONT POINT-SIZE="{size:g}" '
+            f"COLOR='{theme.default_font}'>{body}</FONT></TD></TR>"
+        )
     if sections:
         from ._legend import build_legend_table_label
 

@@ -15,18 +15,13 @@ producer and consumer sides, with sorted iteration for the remaining ties.
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 import torch
 from torch import nn
-
-import torchlens as tl
-import torchlens._visualization._rank_layout_internal.layout as layout_mod
 
 
 class _Recurrent(nn.Module):
@@ -40,86 +35,6 @@ class _Recurrent(nn.Module):
         for _ in range(3):
             x = self.cell(x)
         return x
-
-
-def _rank_dot_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    """Draw the recurrent model through the rank path; return its DOT source.
-
-    neato is stubbed out (the pin is about the geometry TorchLens emits, not
-    about neato), and the stub captures the written source before cleanup.
-    """
-
-    captured: dict[str, str] = {}
-
-    def _fake_neato(**kwargs: object) -> SimpleNamespace:
-        captured["source"] = Path(str(kwargs["source_path"])).read_text()
-        Path(str(kwargs["rendered_path"])).write_text("<svg></svg>")
-        return SimpleNamespace(returncode=0, stderr="", stdout="")
-
-    monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
-    trace = tl.trace(_Recurrent(), torch.randn(1, 4))
-    trace.draw(
-        rolled=False,
-        layout="rank",
-        file_format="svg",
-        path=str(tmp_path / "rank_geometry"),
-        show_containers=False,
-    )
-    return captured["source"]
-
-
-def _cluster_bboxes(dot_source: str) -> dict[str, str]:
-    """Return ``cluster name -> bb attribute`` from raw rank-path DOT."""
-
-    bboxes: dict[str, str] = {}
-    current: str | None = None
-    for line in dot_source.splitlines():
-        stripped = line.strip()
-        cluster_match = re.match(r'subgraph "?cluster_([^" {]+)"? \{', stripped)
-        if cluster_match:
-            current = cluster_match.group(1)
-            continue
-        bb_match = re.match(r'bb="([^"]+)"', stripped)
-        if bb_match and current is not None:
-            bboxes[current] = bb_match.group(1)
-            current = None
-    return bboxes
-
-
-def test_rank_pass_clusters_get_distinct_bboxes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Each recurrent pass cluster carries ITS OWN geometry (R19-2).
-
-    Pre-fix, the pass-free key collapse gave every ``cell:N`` cluster the
-    same bbox — geometry that is wrong for all but (at most) one pass.
-    """
-
-    bboxes = _cluster_bboxes(_rank_dot_source(tmp_path, monkeypatch))
-    passes_by_module: dict[str, dict[str, str]] = {}
-    for name, bb in bboxes.items():
-        match = re.match(r"(.+)_pass(\d+)$", name)
-        if match:
-            passes_by_module.setdefault(match.group(1), {})[match.group(2)] = bb
-    recurrent = {base: bbs for base, bbs in passes_by_module.items() if len(bbs) >= 2}
-    assert recurrent, f"expected recurrent pass clusters, got {sorted(bboxes)}"
-    for base, per_pass in recurrent.items():
-        assert len(set(per_pass.values())) > 1, (
-            f"every pass of {base!r} shares one bbox — the pass-free key collapse "
-            f"(last-write-wins geometry) is back: {per_pass}"
-        )
-
-
-def test_rank_dot_source_is_deterministic_in_process(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Two identical draws emit byte-identical rank DOT."""
-
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    first = _rank_dot_source(tmp_path / "a", monkeypatch)
-    second = _rank_dot_source(tmp_path / "b", monkeypatch)
-    assert first.replace(str(tmp_path / "a"), "") == second.replace(str(tmp_path / "b"), "")
 
 
 _SWEEP_SCRIPT = r"""

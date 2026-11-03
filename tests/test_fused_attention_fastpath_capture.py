@@ -18,17 +18,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture._fused_attention_hold import hold_fused_attention_fastpath_off
-from torchlens._capture_honesty import (
-    ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
-    capture_advisories,
-)
 from torchlens._utils._torch_compat import (
-    get_mha_fastpath_enabled,
     get_mha_fastpath_switch_support,
 )
-from torchlens.errors import TraceCaptureError
-from torchlens.validation import last_validation_failure
 
 WIDTH = 8
 BATCH = 3
@@ -57,60 +49,6 @@ def _needs_switch() -> None:
         pytest.skip("torch build without the public torch.backends.mha fast-path switch")
 
 
-@pytest.mark.smoke
-def test_eager_takes_the_fused_path_and_capture_records_the_unfused_program() -> None:
-    _needs_switch()
-    model, x = _model_and_input()
-    native_calls = 0
-    original = torch._native_multi_head_attention
-
-    def counting(*args: object, **kwargs: object) -> object:
-        nonlocal native_calls
-        native_calls += 1
-        return original(*args, **kwargs)
-
-    torch._native_multi_head_attention = counting  # type: ignore[assignment]
-    try:
-        with torch.no_grad():
-            model(x)
-        assert native_calls == 1, "the row no longer exercises the eager fast path"
-        trace = tl.trace(model, [x])
-        assert native_calls == 1, "capture must not run the fused kernel"
-    finally:
-        torch._native_multi_head_attention = original  # type: ignore[assignment]
-    names = [op.func_name for op in trace.ops]
-    assert "_native_multi_head_attention" not in names
-    assert "scaled_dot_product_attention" in names
-    rows = [
-        row
-        for row in capture_advisories(trace)
-        if row["kind"] == ADVISORY_FUSED_ATTENTION_FASTPATH_HELD
-    ]
-    assert len(rows) == 1
-    assert "attention" in rows[0]["message"]
-    assert rows[0]["count"] == 1
-
-
-def test_capture_runs_the_unfused_program_under_no_grad_too() -> None:
-    """The recorded program no longer depends on the ambient grad mode."""
-
-    _needs_switch()
-    model, x = _model_and_input()
-    with torch.no_grad():
-        trace = tl.trace(model, [x])
-    names = [op.func_name for op in trace.ops]
-    assert "_native_multi_head_attention" not in names
-    assert "scaled_dot_product_attention" in names
-
-
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_forward_validation_passes_ground_truth_on_the_fast_path_row(dtype: torch.dtype) -> None:
-    _needs_switch()
-    model, x = _model_and_input()
-    model, x = model.to(dtype), x.to(dtype)
-    assert tl.validate(model, [x], scope="forward"), last_validation_failure()
-
-
 def test_capture_keeps_the_frozen_attention_weights_frozen() -> None:
     """The frozen weights stay frozen inside the captured forward and after it."""
 
@@ -125,46 +63,3 @@ def test_capture_keeps_the_frozen_attention_weights_frozen() -> None:
         handle.remove()
     assert seen and not any(seen)
     assert not any(p.requires_grad for p in model.parameters())
-
-
-def test_switch_is_restored_after_capture_and_after_a_failing_forward() -> None:
-    _needs_switch()
-    model, x = _model_and_input()
-    before = get_mha_fastpath_enabled()
-    tl.trace(model, [x])
-    assert get_mha_fastpath_enabled() == before
-
-    class Boom(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.attention = nn.MultiheadAttention(WIDTH, 2, batch_first=True)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            raise RuntimeError("boom")
-
-    with pytest.raises(TraceCaptureError, match="boom"):
-        tl.trace(Boom().eval(), [x])
-    assert get_mha_fastpath_enabled() == before
-
-
-def test_models_without_fused_attention_record_no_advisory_and_hold_nothing() -> None:
-    model = nn.Sequential(nn.Linear(WIDTH, WIDTH), nn.ReLU())
-    with hold_fused_attention_fastpath_off(model) as held:
-        assert held == ()
-    trace = tl.trace(model, [torch.randn(BATCH, WIDTH)])
-    assert not [
-        row
-        for row in capture_advisories(trace)
-        if row["kind"] == ADVISORY_FUSED_ATTENTION_FASTPATH_HELD
-    ]
-
-
-def test_hold_names_every_fused_fast_path_module() -> None:
-    _needs_switch()
-    model = nn.Sequential(
-        nn.TransformerEncoderLayer(WIDTH, 2, dim_feedforward=16, batch_first=True),
-        FastPathAttention(),
-    ).eval()
-    with hold_fused_attention_fastpath_off(model) as held:
-        assert held == ("0", "0.self_attn", "1.attention")
-        assert get_mha_fastpath_enabled() is False

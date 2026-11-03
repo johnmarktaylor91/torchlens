@@ -1133,6 +1133,15 @@ class Op(OpAtenMixin, _SelectionOperand):
       ``trace[label]`` does not accept it.  Combine
       ``fx_qualpath.replace(".", "_")`` with ``fx_call_index`` when an
       FX-style name form is needed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> op = trace.ops[1]
+    >>> type(op).__name__, op.func_name
+    ('Op', 'relu')
+    >>> tuple(op.out.shape)
+    (1, 4, 8, 8)
     """
 
     __slots__ = ("_core", "_row")
@@ -2545,25 +2554,6 @@ class Op(OpAtenMixin, _SelectionOperand):
             self, value, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this op through the owning Trace."""
-
-        return _doors.intervention()._op_edits.attach_hooks(
-            self,
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
-        )
-
     def materialize_out(
         self,
         *,
@@ -2691,6 +2681,12 @@ class Op(OpAtenMixin, _SelectionOperand):
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = dict(state_items(self))
+        # Argument templates hold the model's live parameters. A pickled op has no
+        # func, so its templates cannot drive replay; only a replayable capture keeps
+        # them (its pickle form is unchanged), so a default trace pickles at its old size.
+        if not getattr(self._source_trace_or_none(), "is_replayable", False):
+            state["args_template"] = None
+            state["kwargs_template"] = None
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
         state.pop("_receptive_field_cache", None)
@@ -2916,7 +2912,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         return _op_save._copy_with_shallow_fields(self, extra_shallow_fields, _store=_store)
 
-    def save_activation(
+    def _save_activation(
         self,
         t: torch.Tensor,
         t_args: list[Any] | tuple[Any, ...],
@@ -3522,54 +3518,6 @@ _ROW_RELEASE_FIELD_CLASSES = frozenset(
     {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
 )
 bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
-
-
-def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
-    """Pool repeated immutable metadata across a whole building-phase store.
-
-    Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
-    same ``_UNPOOLED_SLOTS`` skips, same container-member handling) operating
-    directly on the row cells, so a core-backed trace pools without paying
-    the per-attribute descriptor protocol.
-
-    Parameters
-    ----------
-    store:
-        Building-phase ``OpRowStore`` (frozen stores are left untouched --
-        pooling always precedes the physical freeze).
-    pool:
-        Pass-local ``pool key -> canonical instance`` table shared with any
-        remaining per-op walks of the same trace.
-    """
-
-    rows = store.rows_building()
-    if rows is None:
-        return
-    pooled_classes = _POOLED_CLASSES
-    pool_get = pool.get
-    for fid, name in enumerate(store.layout.names):
-        if name in _UNPOOLED_SLOTS:
-            continue
-        for row_cells in rows:
-            value = row_cells[fid]
-            if value is None or value is _MISSING:
-                continue
-            cls = value.__class__
-            if cls in pooled_classes:
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
-                pooled = pool_get(key)
-                if pooled is None:
-                    pool[key] = value
-                elif pooled is not value:
-                    row_cells[fid] = pooled
-            elif cls is list or cls is set or cls is dict:
-                _pool_container_members(value, pool, 0)
-            elif cls is tuple or cls is frozenset:
-                pooled = _pool_value(value, pool)
-                if pooled is not value:
-                    row_cells[fid] = pooled
-            elif isinstance(value, dict):
-                _pool_container_members(value, pool, 0)
 
 
 # The tlspec v8 coordinated bump retired this class's S3 pre-release

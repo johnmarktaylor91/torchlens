@@ -94,8 +94,8 @@ class RelationGrade:
     unchecked_reasons: tuple[str, ...] = ()
     seam_local_divergences: int = 0
     exogenous_items: int = 0
-    items_by_class: Mapping[str, int] = field(default=_EMPTY_COUNTS)
-    items_by_grade: Mapping[str, int] = field(default=_EMPTY_COUNTS)
+    items_by_class: Mapping[str, int] = field(default_factory=lambda: _EMPTY_COUNTS)
+    items_by_grade: Mapping[str, int] = field(default_factory=lambda: _EMPTY_COUNTS)
 
 
 def grade_relation_row(row: MemberRelationRow | OpaqueRelationRow) -> RelationGrade:

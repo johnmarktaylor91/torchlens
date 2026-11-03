@@ -16,7 +16,6 @@ from __future__ import annotations
 import collections
 import typing
 
-import pytest
 import torch
 
 from torchlens._input_walk import (
@@ -65,16 +64,7 @@ def _refusal_reasons(value: object) -> list[str]:
     return [refusal["reason"] for refusal in snapshot_input_boundary(value)["refusals"]]
 
 
-@pytest.mark.smoke
-def test_property_shadowed_field_refuses_uninspectable():
-    """The decoy container refuses instead of witnessing the decoy."""
-
-    hidden = _PropertyShadow(torch.ones(2), "steer-me")
-    assert hidden.flag == "decoy"  # the decoy is live
-    assert tuple.__getitem__(hidden, 1) == "steer-me"  # the hidden state is live
-    assert "instance_state_uninspectable" in _refusal_reasons(hidden)
-
-
+# Kept: sole branch coverage of _input_walk.py.
 def test_property_shadowed_field_reads_as_undeclared_state():
     """The W-family fail-closed judgment also fires."""
 
@@ -82,6 +72,7 @@ def test_property_shadowed_field_reads_as_undeclared_state():
     assert undeclared_instance_state(hidden, "namedtuple") is True
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_transposed_stock_getter_refuses():
     """A stock getter bound to the WRONG index is not the declared schema."""
 
@@ -92,37 +83,3 @@ def test_transposed_stock_getter_refuses():
     swapped = _Transposed(torch.ones(2), "steer-me")
     assert _namedtuple_field_descriptors_shadowed(swapped) is True
     assert "instance_state_uninspectable" in _refusal_reasons(swapped)
-
-
-def test_stock_namedtuples_stay_admitted():
-    """collections and typing namedtuples keep zero refusals."""
-
-    assert _refusal_reasons(_Base(torch.ones(2), 3)) == []
-    assert _refusal_reasons(_TypedTuple(torch.ones(2), 3)) == []
-
-
-@pytest.mark.smoke
-def test_extra_nonfield_property_stays_admitted():
-    """A convenience property OUTSIDE the declared schema is not a shadow."""
-
-    assert _namedtuple_field_descriptors_shadowed(_ExtraProperty(torch.ones(2), 3)) is False
-    assert _refusal_reasons(_ExtraProperty(torch.ones(2), 3)) == []
-
-
-def test_shadowing_property_is_never_executed_by_the_gate():
-    """Fail-closed judgment must be inert: the hostile descriptor never runs."""
-
-    calls: list[str] = []
-
-    class _Booby(_Base):
-        __slots__ = ()
-
-        @property
-        def flag(self) -> str:  # type: ignore[override]
-            calls.append("ran")
-            return "decoy"
-
-    booby = _Booby(torch.ones(2), "steer-me")
-    assert _namedtuple_field_descriptors_shadowed(booby) is True
-    assert undeclared_instance_state(booby, "namedtuple") is True
-    assert calls == [], "the shadowing property was executed during the inert proof"

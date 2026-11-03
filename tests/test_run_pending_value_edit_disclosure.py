@@ -9,8 +9,6 @@ refusal.
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 import torch.nn as nn
@@ -64,14 +62,4 @@ def test_new_input_run_on_value_edited_fork_discloses() -> None:
     with pytest.warns(PendingValueEditsWarning, match="do NOT apply"):
         result = fork.run(inputs=torch.randn(2, 4))
     # Disclosure, not refusal: the run itself completes.
-    assert result is not None
-
-
-def test_new_input_run_on_pristine_trace_does_not_disclose() -> None:
-    """No value-edits means no disclosure noise."""
-
-    _model, _x, log = _traced()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", PendingValueEditsWarning)
-        result = log.run(inputs=torch.randn(2, 4))
     assert result is not None

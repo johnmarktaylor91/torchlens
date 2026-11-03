@@ -19,6 +19,32 @@ their ORIGINAL identifiers as `stimulus_ids=`. The artifact then names exactly
 which items were used, in row order, and a later reader never has to trust a
 seed it cannot see.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). A subsample is a seeded
+choice of stimuli handed to `tl.extract_dataset`; here four of eight images go through the
+running CNN. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+stimuli = torch.rand(8, 3, 224, 224, generator=torch.Generator().manual_seed(1))
+chosen = torch.randperm(8, generator=torch.Generator().manual_seed(0))[:4]
+features = tl.extract_dataset(model, stimuli[chosen], ["avgpool"], batch_size=4, progress=False)
+RESULT = tuple(features["avgpool"].shape) == (4, 512, 1, 1)
+```
+
 ## Requirements
 
 <!-- Page contract: what to install and what the model needs (step 9). -->

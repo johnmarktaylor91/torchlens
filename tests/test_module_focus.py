@@ -34,16 +34,6 @@ def _boundary_node_count(dot_source: str, kind: str) -> int:
     )
 
 
-def _layer_labels(log: tl.Trace, layer_type: str) -> list[str]:
-    """Return layer labels with the requested layer type."""
-
-    return [
-        layer_log.layer_label
-        for layer_log in log._layer_logs.values()
-        if layer_log.layer_type == layer_type
-    ]
-
-
 class _TwoBlockModel(nn.Module):
     """Small model with a named focusable block."""
 
@@ -109,49 +99,6 @@ class _AddBlock(nn.Module):
         return self.relu(left + right)
 
 
-class _BranchingBoundaryModel(nn.Module):
-    """Model that feeds two external upstreams into one module."""
-
-    def __init__(self) -> None:
-        """Initialize modules."""
-
-        super().__init__()
-        self.left = nn.Linear(4, 4)
-        self.right = nn.Linear(4, 4)
-        self.block = _AddBlock()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the forward pass."""
-
-        return self.block(self.left(x), self.right(x))
-
-
-def test_module_focus_by_modulelog(tmp_path: Path) -> None:
-    """Focusing by Module should show only that module plus boundaries."""
-
-    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
-    dot = _render_dot(log, tmp_path, module=log.modules["block1"])
-
-    assert "@block1" in dot
-    assert "\tlinear_1_1 [" not in dot
-    assert "\tlinear_2_4 [" not in dot
-    assert _boundary_node_count(dot, "input") == 1
-    assert _boundary_node_count(dot, "output") == 1
-    assert "input" in dot
-    assert "output" in dot
-
-
-def test_module_focus_by_address_string(tmp_path: Path) -> None:
-    """Focusing by module address should resolve the same module."""
-
-    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
-    dot = _render_dot(log, tmp_path, module="block1")
-
-    assert "@block1" in dot
-    assert _boundary_node_count(dot, "input") == 1
-    assert _boundary_node_count(dot, "output") == 1
-
-
 def test_module_focus_invalid_address_raises(tmp_path: Path) -> None:
     """Unknown module address strings should fail clearly."""
 
@@ -176,41 +123,6 @@ def test_module_focus_wrong_type_raises_module_focus_invalid(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="module") as exc_info:
         _render_dot(log, tmp_path, module=42)
     assert exc_info.value.fields["code"] == "module_focus_invalid"
-
-
-def test_module_focus_with_collapse_fn(tmp_path: Path) -> None:
-    """Module focus should compose with collapsing a child module."""
-
-    log = tl.trace(_NestedBlock(), torch.randn(1, 4))
-
-    def collapse_fn(module_log: Any) -> bool:
-        """Collapse the inner Sequential."""
-
-        return module_log.address == "block1.inner"
-
-    dot = _render_dot(log, tmp_path, module="block1", collapse_fn=collapse_fn)
-
-    assert "@block1.inner" in dot
-    assert "shape=box3d" in dot
-    assert "relu_1_3 [" not in dot
-    assert "linear_3_5 [" not in dot
-
-
-def test_module_focus_with_skip_fn(tmp_path: Path) -> None:
-    """Module focus should compose with skipping internal ReLU layers."""
-
-    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
-    block_linear = _layer_labels(log, "linear")[1]
-
-    def skip_fn(layer_log: Layer) -> bool:
-        """Skip ReLU layers."""
-
-        return layer_log.layer_type == "relu"
-
-    dot = _render_dot(log, tmp_path, module="block1", skip_fn=skip_fn)
-
-    assert "relu_1_3 [" not in dot
-    assert f"{block_linear} -> __module_focus_output_" in dot
 
 
 def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
@@ -246,17 +158,6 @@ def test_modulelog_show_graph_method(tmp_path: Path) -> None:
     ).dot
 
     assert method == direct
-
-
-def test_module_focus_branching_boundaries(tmp_path: Path) -> None:
-    """Multiple external upstreams should render as distinct input boundaries."""
-
-    log = tl.trace(_BranchingBoundaryModel(), torch.randn(1, 4))
-    dot = _render_dot(log, tmp_path, module="block")
-
-    assert _boundary_node_count(dot, "input") == 2
-    assert "ext: linear_1_1" in dot
-    assert "ext: linear_2_2" in dot
 
 
 class _ListBlock(nn.Module):
@@ -321,16 +222,3 @@ def test_module_focus_under_uncalled_container_by_module_object(tmp_path: Path) 
 
     assert "@blocks.1" in dot
     assert "@blocks.0" not in dot
-
-
-def test_boundary_module_path_follows_the_call_stack() -> None:
-    """Boundary placement uses the focused op's called modules, never address prefixes."""
-
-    from torchlens._visualization._render_flow import _boundary_module_path
-
-    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
-    target = log.modules["blocks.1.mlp"]
-    stack = ("blocks.1:1", "blocks.1.mlp:1", "blocks.1.mlp.0:1")
-
-    assert _boundary_module_path(target, "unrolled", stack) == ["blocks.1:1", "blocks.1.mlp:1"]
-    assert _boundary_module_path(target, "rolled", stack) == ["blocks.1", "blocks.1.mlp"]

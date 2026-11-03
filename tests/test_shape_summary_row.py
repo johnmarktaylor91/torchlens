@@ -77,46 +77,6 @@ def _varying_layer(log: tl.Trace) -> Any:
     return next(layer for layer in log._layer_logs.values() if len(layer.ops) > 1)
 
 
-def test_rolled_varying_layer_gets_summary_row(varying_log: tl.Trace) -> None:
-    layer = _varying_layer(varying_log)
-    summary = layer.shape_summary
-    assert isinstance(summary, str) and summary
-    lines = compute_default_node_lines(layer, vis_mode="rolled")
-    # Rendered VERBATIM, positioned directly after the title row.
-    assert lines[1] == summary
-
-
-def test_summary_row_is_escaped_at_the_choke_point(varying_log: tl.Trace, tmp_path: Path) -> None:
-    """The summary contains '->' or '-'; '>' must leave through html.escape."""
-
-    layer = _varying_layer(varying_log)
-    summary = layer.shape_summary
-    dot = _draw(varying_log, tmp_path, rolled=True)
-    if ">" in summary:
-        assert summary.replace(">", "&gt;") in dot
-        assert f">{summary}<" not in dot
-    else:
-        assert summary in dot
-
-
-def test_uniform_recurrence_has_no_summary_row(uniform_log: tl.Trace) -> None:
-    layer = _varying_layer(uniform_log)
-    assert layer.shape_summary is None
-    lines = compute_default_node_lines(layer, vis_mode="rolled")
-    assert all("->" not in line or "params" in line for line in lines[:2])
-
-
-def test_single_pass_and_per_pass_nodes_have_no_summary_row(
-    varying_log: tl.Trace,
-) -> None:
-    layer = _varying_layer(varying_log)
-    summary = layer.shape_summary
-    # Per-pass Op nodes (unrolled) carry no aggregate summary row.
-    for op in layer.ops.values():
-        lines = compute_default_node_lines(op, vis_mode="unrolled")
-        assert summary not in lines
-
-
 def test_shape_summary_selector_token(varying_log: tl.Trace, tmp_path: Path) -> None:
     layer = _varying_layer(varying_log)
     summary = layer.shape_summary

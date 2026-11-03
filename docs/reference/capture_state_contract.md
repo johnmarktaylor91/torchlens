@@ -5,7 +5,7 @@ model and process, what it restores, and what it discloses. This is the
 A06 deliverable of M(oracles) item 8 ("instance-forward cleanup +
 entry-surface state restoration"): every cell is implemented and pinned by
 tests. The success-path default state relation (FORK-A) is ruled
-PURE_OBSERVER (U40.1, 2026-10-11).
+PURE_OBSERVER (2026-10-11).
 
 ## Vocabulary
 
@@ -31,7 +31,7 @@ PURE_OBSERVER (U40.1, 2026-10-11).
 | Successful `tl.trace` instrumentation | Persistent by design until `tl.release_model(model)` (re-capture speed; the release door restores pickling and is the documented workflow). Dissolve-on-teardown is List-B feature work, not part of this contract. | `model_prep.release_model` |
 | Observational surfaces (summary, render/read/validate/export) | PURE under either FORK-A branch (3/3 panel agreement). The summary eval/no_grad default with full state restoration is A07's implementation (summary A4); extraction's no_grad/eval wrap with exact restore is A11's. Both consume the same inventory below. | A07 / A11 |
 
-## FORK-A (ruled: PURE_OBSERVER, U40.1)
+## FORK-A (ruled: PURE_OBSERVER)
 
 - **PURE_OBSERVER (the default)**: trace snapshots and restores
   buffers/RNG/modes/plain attributes and records the forward's attribute

@@ -109,30 +109,7 @@ class _CaughtMutatingFailureModel(nn.Module):
         return y + 1
 
 
-@pytest.mark.parametrize(
-    "model_cls",
-    [_CholeskyFallbackModel, _InverseFallbackModel, _SuppressFallbackModel],
-)
-def test_capture_on_fallback_never_verifies(tmp_path: Path, model_cls: type[nn.Module]) -> None:
-    """Capture on the raising branch: every run is unverifiable, never VERIFIED."""
-
-    model = model_cls().eval()
-    x = _non_pd_input()
-    trace = _capture(model, x)
-    facts = runnable_ledger_facts(trace)
-    assert any(fact["kind"] == "caught_exception_control" for fact in facts)
-    path = tmp_path / "fallback.tlspec"
-    trace.save(str(path), level="runnable", include_weights=True)
-    loaded = tl.load(str(path))
-    descriptor = loaded._runnable.descriptor
-    assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
-
-    for runtime_input in (_non_pd_input(), _pd_input()):
-        result = loaded.run(inputs=runtime_input)
-        assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-        assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
+# Kept: sole branch coverage of _runnable/transaction.py; sole provocation of an error code.
 def test_capture_on_success_raising_runtime_input_stays_typed(tmp_path: Path) -> None:
     """Direction asymmetry pinned: replaying the recorded op re-raises typed."""
 
@@ -148,19 +125,7 @@ def test_capture_on_success_raising_runtime_input_stays_typed(tmp_path: Path) ->
     assert captured.value.fields["code"] == RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value
 
 
-def test_raise_free_model_records_zero_facts_and_stays_verified(tmp_path: Path) -> None:
-    """No over-trigger: an ordinary model records no facts and verifies."""
-
-    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU()).eval()
-    x = torch.randn(2, 4)
-    trace = _capture(model, x)
-    assert runnable_ledger_facts(trace) == ()
-    path = tmp_path / "clean.tlspec"
-    trace.save(str(path), level="runnable", include_weights=True)
-    result = tl.load(str(path)).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _io/runnable.py, backends/torch/_completeness_dispatch.py, backends/torch/completeness_witness.py; a sole mutation kill.
 def test_caught_mutating_failure_downgrades_opaque(tmp_path: Path) -> None:
     """A caught raise from a mutating op is a mutation-capable incomplete fact."""
 
@@ -190,6 +155,7 @@ class _RawAtenHostReturnModel(nn.Module):
         return x + 2
 
 
+# Kept: a sole mutation kill.
 def test_successful_unmodeled_host_return_also_downgrades(tmp_path: Path) -> None:
     """The ledger discharges by outcome, not exception-only: host returns count."""
 

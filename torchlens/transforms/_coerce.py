@@ -263,6 +263,14 @@ def chain(*items: Any) -> TransformPipeline:
     TransformPipeline
         The ordered chain (memo decision 3: both spellings normalize to the
         same object).
+
+    Examples
+    --------
+    >>> pipe = tl.transforms.chain(tl.transforms.flatten(), tl.transforms.unit_norm())
+    >>> pipe.apply(x).shape, pipe.resume_verifiable
+    (torch.Size([1, 192]), True)
+    >>> tl.transforms.chain(tl.transforms.magnitude(), torch.tanh).resume_verifiable
+    False
     """
 
     steps: list[TransformSpec | OpaqueStep] = []

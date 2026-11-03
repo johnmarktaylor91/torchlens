@@ -75,12 +75,11 @@ def _events(trace: Any, **match: Any) -> list[dict[str, Any]]:
     "door",
     [
         lambda: tl.Trace.do,
-        lambda: tl.Trace.attach_hooks,
         lambda: tl.when,
         lambda: tl.observers.tap,
         lambda: tl.stats.narrate,
     ],
-    ids=["do", "attach_hooks", "when", "tap", "narrate"],
+    ids=["do", "when", "tap", "narrate"],
 )
 def test_site_doors_take_no_direction_keyword(door: Any) -> None:
     assert "direction" not in inspect.signature(door()).parameters
@@ -171,7 +170,7 @@ def test_gradient_plan_without_model_refuses_replay_before_any_mutation() -> Non
         trace.do(tl.grad_fn("ReluBackward0"), lambda g, *, ctx: g)
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     message = str(excinfo.value)
-    assert "model= and x=" in message
+    assert "model= and inputs=" in message
     assert "engine='set_only'" in message
     assert _snapshot(trace) == before
 
@@ -536,10 +535,10 @@ def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
     events_before = len(_events(trace))
-    handle = trace.attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
+    handle = trace._attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
     assert len(_events(trace)) == events_before
     assert len(trace.armed_edits) == 1
-    handle.remove()
+    trace.clear_edits(handle=handle, confirm_mutation=True)
     assert trace.armed_edits == ()
 
 

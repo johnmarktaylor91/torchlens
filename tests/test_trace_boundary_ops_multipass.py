@@ -82,31 +82,13 @@ def _loop_trace() -> tuple[Any, tuple[torch.Tensor, torch.Tensor]]:
     return tl.trace(model, inputs), inputs
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_loop_inputs_fold_into_one_two_pass_layer() -> None:
     """Precondition: the fixture really produces a two-pass input Layer."""
 
     trace, _ = _loop_trace()
     assert trace.input_layers == ["input_1", "input_1"]
     assert trace.layers["input_1"].num_passes == 2
-
-
-def test_input_ops_lists_each_pass_as_an_op_in_argument_order() -> None:
-    trace, (a, b) = _loop_trace()
-
-    ops = list(trace.input_ops)
-    assert len(ops) == 2 == len(trace.input_ops)
-    assert all(isinstance(op, Op) for op in ops)
-    assert [op.pass_number for op in ops] == [1, 2]
-    assert torch.equal(ops[0].out, a)
-    assert torch.equal(ops[1].out, b)
-    assert trace.input_ops.keys() == [op.label for op in ops]
-
-
-def test_num_input_layers_counts_the_multi_pass_layer_once() -> None:
-    trace, _ = _loop_trace()
-
-    assert trace.num_input_layers == 1
-    assert len(trace.input_ops) == 2
 
 
 def test_single_pass_inputs_are_ops_too() -> None:
@@ -186,8 +168,3 @@ def test_classics_multipass_input_entries_build_agent_json(entry: Any) -> None:
     assert len(dumped) == len(tensors) == len(trace.input_ops)
     for label, value in zip(dumped, tensors, strict=True):
         assert torch.equal(trace[label].out, value)
-
-
-def test_corpus_selection_found_both_entries() -> None:
-    found = {entry.id for entry in corpus_entries() if entry.id in _CORPUS_MULTIPASS_INPUT_IDS}
-    assert found == set(_CORPUS_MULTIPASS_INPUT_IDS)

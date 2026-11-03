@@ -13,7 +13,6 @@ from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from .._utils.display import human_readable_size
 
 PARAM_SEPARATOR: Final[str] = " · "
 
@@ -267,12 +266,38 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156.0 KB"``.
+        Human-readable memory such as ``"156.0 KiB"``. The divisor is 1024,
+        so the unit names are the binary ones (KiB, MiB, GiB, TiB): a picture
+        never prints a binary value under a decimal unit name.
     """
 
-    if isinstance(bytes_or_quantity, int | float):
-        return human_readable_size(float(bytes_or_quantity))
-    return str(bytes_or_quantity)
+    if isinstance(bytes_or_quantity, bool) or not isinstance(bytes_or_quantity, int | float):
+        return str(bytes_or_quantity)
+    return binary_size(float(bytes_or_quantity))
+
+
+#: Binary unit names for the drawing's sizes, each 1024 times the one before.
+_BINARY_UNITS: Final = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
+
+
+def binary_size(size: float) -> str:
+    """Return a byte count with its binary unit, for example ``"60.0 KiB"``.
+
+    Whole bytes print without a decimal (``"48 B"``); larger values print
+    one decimal under the largest unit the value reaches.
+    """
+
+    if size < 0:
+        raise ValueError("size must be non-negative.")
+    if size < 1024:
+        return f"{int(size)} B"
+    value = size
+    unit = _BINARY_UNITS[0]
+    for unit in _BINARY_UNITS[1:]:
+        value /= 1024.0
+        if value < 1024 or unit == _BINARY_UNITS[-1]:
+            break
+    return f"{round(value, 1)} {unit}"
 
 
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:

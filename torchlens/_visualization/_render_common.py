@@ -411,6 +411,13 @@ class GraphvizRenderError(_ActionableErrorMixin, CompatibilityError, RuntimeErro
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     stay valid.
+
+    Examples
+    --------
+    >>> issubclass(GraphvizRenderError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(GraphvizRenderError, RuntimeError)
+    True
     """
 
     code: str = "graphviz_render_failed"
@@ -455,6 +462,13 @@ class GraphvizUnavailableError(GraphvizRenderError):
     spawn seam's ``exec`` fails. Distinct from ``graphviz_render_failed``
     (a present binary producing no usable artifact) because the remedy is
     installation, not render tuning.
+
+    Examples
+    --------
+    >>> issubclass(GraphvizUnavailableError, tl.errors.GraphvizRenderError)
+    True
+    >>> issubclass(GraphvizUnavailableError, RuntimeError)
+    True
     """
 
     code: str = "graphviz_binary_unavailable"

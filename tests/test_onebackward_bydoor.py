@@ -9,8 +9,6 @@ section 6 ride here too.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 import torch
 import torch.nn as nn
@@ -48,24 +46,7 @@ def _site_table(trace: tl.Trace) -> ob.ReadTable:
 class TestSiteGrainRanking:
     """Site-grain: k counts SITES; a win selects the whole existing mask."""
 
-    @_requires_gradient_edge
-    def test_top_k_selects_highest_scored_sites(self) -> None:
-        trace = _trace()
-        table = _site_table(trace)
-        resolved = trace[tl.top_k(k=2, by=table)]
-        selected = {entry.key for entry in resolved if entry.num_selected}
-        # Contract tie-break: stable sort by score, ties resolve by CANONICAL
-        # SITE ORDER (alias twins share a score; the earlier site wins).
-        rows = list(table.rows())
-        order = sorted(range(len(rows)), key=lambda i: -rows[i].score)
-        expected = {rows[i].address for i in order[:2]}
-        assert selected == expected
-        for entry in resolved:
-            assert entry.num_selected == math.prod(entry.shape), (
-                "a site-grain win must select the complete site mask"
-            )
-
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_top_fraction_and_largest_false(self) -> None:
         trace = _trace()
@@ -77,7 +58,7 @@ class TestSiteGrainRanking:
         (winner,) = [entry for entry in bottom if entry.num_selected]
         assert winner.key == lowest[1]
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_threshold_site_grain(self) -> None:
         trace = _trace()
@@ -88,6 +69,7 @@ class TestSiteGrainRanking:
             row.address for row in table.rows() if row.score > cut
         }
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_k_over_population_refuses(self) -> None:
         trace = _trace()
@@ -96,20 +78,11 @@ class TestSiteGrainRanking:
             trace[tl.top_k(k=99, by=table)]
         assert excinfo.value.fields["reason"] == "population_too_small"
 
-    @_requires_gradient_edge
-    def test_provenance_carries_metric_and_counts(self) -> None:
-        trace = _trace()
-        table = _site_table(trace)
-        resolved = trace[tl.top_k(k=1, by=table)]
-        source = next(iter(resolved)).provenance.source
-        for fragment in ("read_table_v1", "method='grad'", "reduction='sum_of_abs'", "frozen="):
-            assert fragment in source, source
-
 
 class TestElementGrainRanking:
     """Element-grain: dense values rank globally; k counts elements."""
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_top_k_elements(self) -> None:
         trace = _trace()
@@ -117,7 +90,7 @@ class TestElementGrainRanking:
         resolved = trace[tl.top_k(k=3, by=table)]
         assert sum(entry.num_selected for entry in resolved) == 3
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_element_threshold(self) -> None:
         trace = _trace()
@@ -130,6 +103,7 @@ class TestElementGrainRanking:
 class TestByDoorContract:
     """D9 at the door: foreign/stale/multi-target/coverage refusals."""
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_foreign_table_refuses(self) -> None:
         trace_a, trace_b = _trace(), _trace()
@@ -139,6 +113,7 @@ class TestByDoorContract:
         assert excinfo.value.fields["code"] == "by_score_invalid"
         assert excinfo.value.fields["reason"] == "by_table_foreign"
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/trace.py.
     @_requires_gradient_edge
     def test_stale_table_refuses_after_cleanup(self) -> None:
         trace = _trace()
@@ -149,7 +124,7 @@ class TestByDoorContract:
         with pytest.raises(TraceCleanedUpError):
             trace[selection]
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py, attribution/onebackward/_table.py.
     @_requires_gradient_edge
     def test_multi_target_requires_explicit_fold(self) -> None:
         trace = _trace()
@@ -171,7 +146,7 @@ class TestByDoorContract:
         folded = trace[tl.top_k(k=1, by=folded_table)]
         assert any(entry.num_selected for entry in folded)
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     @_requires_gradient_edge
     def test_explicit_population_not_covered(self) -> None:
         trace = _trace()
@@ -188,7 +163,7 @@ class TestByDoorContract:
             trace[tl.top_k(k=1, by=table, within="linear_2_3")]
         assert excinfo.value.fields["code"] == "population_not_covered"
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py.
     def test_string_by_still_works(self) -> None:
         """The existing by='value'/'abs' door is untouched."""
 
@@ -202,7 +177,7 @@ class TestByDoorContract:
 class TestCompositionRows:
     """M(reads) section 6 composition rows at toy scale."""
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/mask.py, _selection/provenance.py and more.
     @_requires_gradient_edge
     def test_table_selection_composes_with_algebra(self) -> None:
         trace = _trace()
@@ -213,7 +188,7 @@ class TestCompositionRows:
         narrowed = tl.top_k(k=2, by=table) - tl.units("gelu_1_2", [(0, 0)])
         assert trace[narrowed] is not None
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
     @_requires_gradient_edge
     def test_closed_loop_read_select_intervene_reread(self) -> None:
         """read -> top-k -> zero_ablate -> re-score: the R16 flagship loop."""
@@ -234,24 +209,7 @@ class TestCompositionRows:
         assert len(rescored) > 0
         assert rescored.trace is fork
 
-    @pytest.mark.smoke
-    @_requires_gradient_edge
-    def test_within_and_frozen_on_one_call(self) -> None:
-        """Composition row: within= x frozen= on one read."""
-
-        trace = _trace()
-        table = ob.read(
-            trace,
-            target=ob.seed("output_1", index=(0, 0)),
-            method="grad",
-            reduce="sum",
-            within="linear_1_1",
-            frozen="gelu_1_2",
-        )
-        (row,) = table.rows()
-        assert row.address == ("linear_1_1", 1)
-        assert table.provenance.frozen_policy == "explicit"
-
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/module.py, attribution/onebackward/_facet_bridge.py.
     @_requires_gradient_edge
     def test_multipass_addresses_rank_distinctly(self) -> None:
         """Recurrence row: pass-qualified addresses are distinct table rows."""

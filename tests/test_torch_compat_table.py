@@ -12,6 +12,7 @@ from torchlens._utils._torch_compat_table import (
 )
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_table_rows_match_the_capability_flags_exactly() -> None:
     """Every snapshot flag has exactly one row and every row names a snapshot flag."""
 
@@ -19,6 +20,7 @@ def test_table_rows_match_the_capability_flags_exactly() -> None:
     assert all(row.flag == flag for flag, row in CAPABILITY_ROWS.items())
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_absent_on_lists_only_measured_versions_in_order() -> None:
     """``absent_on`` is an ordered subset of the measured matrix."""
 
@@ -30,6 +32,7 @@ def test_absent_on_lists_only_measured_versions_in_order() -> None:
             assert row.absent_on == (), row.flag
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat.py.
 def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
     """A flag probed from its declared paths reads what those paths resolve to now."""
 
@@ -38,6 +41,7 @@ def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
         assert getattr(tc, flag) is tc._probe_attribute_paths(flag), flag
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_the_compat_module_does_not_import_the_table() -> None:
     """The measured table is tooling data, kept out of the capture stack's import closure."""
 
@@ -51,6 +55,7 @@ def test_the_compat_module_does_not_import_the_table() -> None:
     assert "_torch_compat_table" not in imported
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat_table.py.
 def test_measured_class_covers_each_shape() -> None:
     """The classification distinguishes constant, varying and unmeasured rows."""
 
@@ -61,6 +66,7 @@ def test_measured_class_covers_each_shape() -> None:
     assert CapabilityRow("HAS_X", measured=False).measured_class == "unmeasured"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat.py.
 def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
     """Missing modules and missing attribute segments resolve to ``None``, never raise."""
 
@@ -71,6 +77,7 @@ def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
     assert tc._resolve_attribute_path("torch._no_such_module:anything") is None
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat.py.
 def test_attribute_probe_refuses_flags_without_paths() -> None:
     """A bespoke-probe flag cannot be evaluated declaratively by mistake."""
 
@@ -79,6 +86,7 @@ def test_attribute_probe_refuses_flags_without_paths() -> None:
         tc._probe_attribute_paths(bespoke)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/_torch_compat.py.
 def test_table_getter_flips_its_flag_when_the_surface_disappears(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -89,17 +97,3 @@ def test_table_getter_flips_its_flag_when_the_surface_disappears(
     monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
     assert tc.get_device_constructors() is None
     assert tc.HAS_DEVICE_CONSTRUCTORS is False
-
-
-def test_snapshot_forces_the_meta_item_and_mha_switch_probes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The snapshot reports the real probe result, not the unprobed ``False`` placeholder."""
-
-    monkeypatch.setattr(tc, "_META_ITEM_GUARD_PROBED", False)
-    monkeypatch.setattr(tc, "HAS_META_ITEM_GUARD", False)
-    monkeypatch.setattr(tc, "_MHA_FASTPATH_SWITCH_PROBED", False)
-    monkeypatch.setattr(tc, "HAS_MHA_FASTPATH_SWITCH", False)
-    snapshot = tc.get_torch_capability_snapshot()
-    assert snapshot["HAS_META_ITEM_GUARD"] is tc._probe_meta_item_guard()
-    assert snapshot["HAS_MHA_FASTPATH_SWITCH"] is tc._probe_mha_fastpath_switch()

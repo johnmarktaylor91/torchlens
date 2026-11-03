@@ -211,8 +211,7 @@
         "tests/test_themes_stage0.py",
         "tests/test_trace_boundary_ops_multipass.py",
         "tests/test_conditional_branches.py",
-        "tests/test_validation_exemption_tightening.py",
-        "tests/test_misc_capture.py"
+        "tests/test_validation_exemption_tightening.py"
       ],
       "why": "capture: per-test line coverage; these files execute 250 body lines between them, the static list executed 179"
     },
@@ -467,10 +466,8 @@
       "tests": [
         "tests/test_unpickle_c_path.py",
         "tests/test_r27_dotted_walk_rce.py",
-        "tests/test_r33_operator_gadget_carveout.py",
         "tests/test_tlspec_unpickler_first_party_rce.py",
         "tests/test_unpickle_c_security.py",
-        "tests/test_r36_tensor_method_smuggling.py",
         "tests/test_r28_rebuild_dotted_walk_rce.py",
         "tests/test_safe_unpickle_stream_bounds.py"
       ],
@@ -673,7 +670,6 @@
         "tests/test_prebump_roundtrip_acceptance.py",
         "tests/test_scrub_foreign_container_portability.py",
         "tests/test_io_scrub_policy.py",
-        "tests/test_persist_honesty_real_model.py",
         "tests/test_io_bundle.py",
         "tests/test_r18o_scrub.py",
         "tests/test_prerelease_registrar.py",
@@ -872,7 +868,6 @@
         "tests/test_viz_render_identity_oracle.py",
         "tests/visualization/test_sibling_order_clusters.py",
         "tests/test_render_bugs.py",
-        "tests/test_skip_fn.py",
         "tests/test_io_scrub_policy.py",
         "tests/test_loop_module_rolling.py"
       ],
@@ -1082,8 +1077,7 @@
       "tests": [
         "tests/test_intervention_render_marks.py",
         "tests/test_surgery_visuals_marks.py",
-        "tests/test_encoding_channels.py",
-        "tests/test_node_spec_api.py"
+        "tests/test_encoding_channels.py"
       ],
       "why": "visualization: per-test line coverage; these files execute 150 body lines between them, the static list executed 143"
     },
@@ -1376,7 +1370,6 @@
         "tests/test_valmem3_saved_arg_offload.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_tlspec_runnable_r79_session_leak.py",
-        "tests/test_storage_context_replay.py",
         "tests/test_validation.py",
         "tests/behaviour/test_cell_tmp.py"
       ],

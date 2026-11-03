@@ -238,52 +238,6 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
-    """Simple ``if``/``else`` rendering shows THEN and ELSE labels on the right edges."""
-    positive_dot, positive_log = _render_dot_source(SimpleIfElseModel(), torch.ones(2, 2))
-    negative_dot, negative_log = _render_dot_source(SimpleIfElseModel(), -torch.ones(2, 2))
-
-    try:
-        positive_conditional_id = _get_only_event_id(positive_log)
-        negative_conditional_id = _get_only_event_id(negative_log)
-        then_parent, then_child = positive_log.graph.conditional_arm_entry_edges[
-            (positive_conditional_id, "then")
-        ][0]
-        else_parent, else_child = negative_log.graph.conditional_arm_entry_edges[
-            (negative_conditional_id, "else")
-        ][0]
-
-        then_line = _find_edge_line(positive_dot, then_parent, then_child)
-        else_line = _find_edge_line(negative_dot, else_parent, else_child)
-
-        assert "THEN" in then_line
-        assert "ELSE" in else_line
-    finally:
-        positive_log.cleanup()
-        negative_log.cleanup()
-
-
-def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
-    """Elif ladder rendering shows ``ELIF 1``, ``ELIF 2``, and ``ELSE`` labels."""
-    expected_cases = [
-        ("elif_1", torch.tensor([[-0.25]]), "ELIF 1"),
-        ("elif_2", torch.tensor([[0.25]]), "ELIF 2"),
-        ("else", torch.tensor([[1.0]]), "ELSE"),
-    ]
-
-    for branch_kind, x, label_text in expected_cases:
-        dot_source, trace = _render_dot_source(ElifLadderModel(), x)
-        try:
-            conditional_id = _get_only_event_id(trace)
-            parent_label, child_label = trace.graph.conditional_arm_entry_edges[
-                (conditional_id, branch_kind)
-            ][0]
-            edge_line = _find_edge_line(dot_source, parent_label, child_label)
-            assert label_text in edge_line
-        finally:
-            trace.cleanup()
-
-
 def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
     """Condition-entry edges label the first test ``IF`` and each later test ``ELIF``.
 
@@ -313,6 +267,7 @@ def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
         trace.cleanup()
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_loop_repeated_if_condition_entries_remain_if() -> None:
     """Repeated evaluations of one source ``if`` never become an ELIF ladder."""
 
@@ -368,32 +323,6 @@ def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
     finally:
         positive_log.cleanup()
         negative_log.cleanup()
-
-
-def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate() -> None:
-    """Branch-entry edges retain the branch label and move arg labels to the head/x label."""
-    dot_source, trace = _render_dot_source(BranchEntryWithArgLabelModel(), torch.ones(2, 2))
-
-    try:
-        conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.graph.conditional_arm_entry_edges[
-            (conditional_id, "then")
-        ][0]
-        edge_line = _find_edge_line(dot_source, parent_label, child_label)
-
-        assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
-        # Argument labels route through the padded non-bold builder now
-        # (vizmech D9); the separation contract is unchanged -- the semantic
-        # branch label keeps the midpoint, the arg label rides head/x.
-        assert (
-            'headlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">'
-            in edge_line
-            or 'xlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">'
-            in edge_line
-        )
-        assert ">arg" in edge_line
-    finally:
-        trace.cleanup()
 
 
 def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:

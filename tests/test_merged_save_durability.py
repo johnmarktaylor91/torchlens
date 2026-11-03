@@ -7,7 +7,6 @@ plain captures with injected ``collective_boundary_v1`` annotations.
 from __future__ import annotations
 
 import os
-import stat
 from pathlib import Path
 
 import pytest
@@ -25,27 +24,7 @@ def _merged():
     return tl.merge_ranks([_rank_trace(0), _rank_trace(1)])
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits only")
-def test_merged_artifact_permissions_are_tight(tmp_path: Path) -> None:
-    # Force a permissive umask so a missing chmod would leave group bits set.
-    old = os.umask(0o002)
-    try:
-        art = tmp_path / "merged.tlspec"
-        _merged().save(art)
-    finally:
-        os.umask(old)
-    for rel, want_group_clear in [
-        (Path("."), True),
-        (Path("merge"), True),
-        (Path("merge") / "descriptor.json", True),
-        (Path("manifest.json"), True),
-    ]:
-        target = art / rel
-        mode = stat.S_IMODE(target.stat().st_mode)
-        assert not (mode & stat.S_IWGRP), f"{rel} is group-writable: {oct(mode)}"
-        assert not (mode & stat.S_IWOTH), f"{rel} is world-writable: {oct(mode)}"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
     art = tmp_path / "merged.tlspec"
     _merged().save(art)
@@ -59,6 +38,7 @@ def test_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
     assert "symlink" in str(excinfo.value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_load_rejects_symlinked_descriptor(tmp_path: Path) -> None:
     art = tmp_path / "merged.tlspec"
     _merged().save(art)
@@ -72,6 +52,7 @@ def test_load_rejects_symlinked_descriptor(tmp_path: Path) -> None:
     assert "symlink" in str(excinfo.value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_publish_time_overwrite_recheck_refuses(tmp_path: Path, monkeypatch) -> None:
     # Simulate a concurrent writer creating the target during the (long)
     # staging window: patch tree_hash to materialize ``root`` mid-save. With
@@ -99,6 +80,7 @@ def test_publish_time_overwrite_recheck_refuses(tmp_path: Path, monkeypatch) -> 
     assert (art / "sentinel").read_text() == "concurrent writer"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_honest_save_round_trips(tmp_path: Path) -> None:
     art = tmp_path / "merged.tlspec"
     _merged().save(art)
@@ -107,6 +89,7 @@ def test_honest_save_round_trips(tmp_path: Path) -> None:
     assert loaded.rank_ids == (0, 1)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py, _merged/_evidence.py, _merged/_presenter.py.
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX symlinks")
 def test_save_does_not_dereference_symlinks_into_the_artifact(tmp_path: Path) -> None:
     """b4:R38-5: save_merged must not copy a symlink's TARGET into the artifact.

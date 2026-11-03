@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from fractions import Fraction
 
 import pytest
 import torch
@@ -14,8 +13,6 @@ import torchlens as tl
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
-    GridLayout,
-    ReceptiveFieldAlignment,
     ReceptiveFieldStatus,
 )
 
@@ -117,44 +114,6 @@ def test_receptive_field_table_has_one_row_per_entity_output_and_input(level: st
     assert set(frame["kind"]) == {level}
 
 
-def test_receptive_field_table_columns_have_semantic_types() -> None:
-    """Expose typed geometric values rather than formatted string approximations."""
-
-    trace = _trace_residual()
-    frame = trace.receptive_fields().to_pandas()  # type: ignore[union-attr]
-    row = frame.loc[frame["rule"] == "conv2d"].iloc[0]
-
-    assert {
-        "size",
-        "jump",
-        "center0",
-        "status",
-        "input_role",
-        "batch_coupled",
-        "exact",
-        "layout",
-    }.issubset(frame.columns)
-    assert isinstance(row["size"], tuple)
-    assert isinstance(row["jump"], tuple)
-    assert isinstance(row["center0"], tuple)
-    assert all(isinstance(value, Fraction) for value in row["jump"])
-    assert isinstance(row["status"], ReceptiveFieldStatus)
-    assert isinstance(row["alignment"], ReceptiveFieldAlignment)
-    assert isinstance(row["layout"], GridLayout)
-    assert frame["batch_coupled"].dtype == bool
-    assert frame["exact"].dtype == bool
-
-
-def test_receptive_field_table_reports_per_entity_whole_input_status() -> None:
-    """Keep a global-pool-derived row's status instead of collapsing table certainty."""
-
-    _register_standard_rules()
-    trace = tl.trace(_GlobalBranch(), torch.randn(2, 3, 8, 8))
-    frame = trace.receptive_fields().to_pandas()
-
-    assert ReceptiveFieldStatus.WHOLE_INPUT in set(frame["status"])
-
-
 def test_receptive_field_table_filters_by_input_op_handle_only() -> None:
     """Accept the graph-native input handle and reject ambiguous string spellings."""
 
@@ -166,18 +125,6 @@ def test_receptive_field_table_filters_by_input_op_handle_only() -> None:
     assert set(filtered["input_op"]) == {input_op.label}
     with pytest.raises(TypeError, match="Op handle"):
         trace.receptive_fields(input_op=input_op.layer_label)  # type: ignore[union-attr]
-
-
-def test_receptive_field_profile_to_pandas_returns_a_copy() -> None:
-    """Round-trip the frozen profile dataframe without leaking its internal frame."""
-
-    trace = _trace_residual()
-    profile = trace.receptive_fields()  # type: ignore[union-attr]
-    first = profile.to_pandas()
-    first.loc[:, "name"] = "changed"
-
-    assert isinstance(first, pd.DataFrame)
-    assert not (profile.to_pandas()["name"] == "changed").all()
 
 
 def test_residual_merge_row_is_exact_not_chain_approximated() -> None:

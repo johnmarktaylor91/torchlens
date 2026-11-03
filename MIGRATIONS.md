@@ -54,6 +54,22 @@ artifact refuses, typed, in an older reader. The five-year window becomes a prom
 section drops its conditions, when prerequisites 2 and 3 land. Files written by torchlens 2.x
 are outside the window entirely (see above).
 
+## Member moves of the 3.0 surface review (hard changes, no shims)
+
+- `Trace.attach_hooks`, `Layer.attach_hooks`, `Op.attach_hooks`, `Trace.clear_hooks`,
+  `tl.intervention.HookHandle` and `prepend=` are REMOVED. `do(site, hook, ...)` attaches
+  the sticky hook and propagates at once; `do(tl.when(site, hook),
+  intervention=InterventionOptions(engine="set_only"))` stages without running; `do`
+  returns the trace, and `clear_edits(site)` or `clear_edits(handle=ids)` removes hooks.
+- `Trace.collapse_plan`, `Trace.collapse_schedule` and `Trace.collapse_order` are REMOVED.
+  Read `collapse_plan` and `collapse_schedule` on the `Drawing` a forward
+  `trace.draw(collapse=...)` returns; the mode and render context follow the draw call,
+  and the plan carries the ranking. `Trace.module_collapse_order` stays.
+- `Trace.save_new_outs` (use `trace.run(model, x)`), `Trace.find_layers`, `Op.save_activation`,
+  `tl.validation.validate_batch_of_models_and_inputs`, `InterventionOptions.from_values`,
+  `InterventionOptions.is_field_explicit`, `CaptureBackend.fetch_label_move_input_tensors`
+  and `CaptureBackend.copy_replacement_metadata` are REMOVED from the public surface.
+
 ## Visualization Collapse Engine
 
 `Trace.draw(collapse=...)` is one v2 smart-collapse surface: `"none"`, `"auto"`, `"max"`,

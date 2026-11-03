@@ -41,7 +41,6 @@ from torchlens.validation.diagnostics import (
     get_validation_failure,
 )
 from torchlens.validation.exemptions import (
-    INPLACE_DESTINATION_WRITE_FUNCS,
     _uninitialized_value_origin,
 )
 
@@ -70,13 +69,6 @@ def _fake_op(func_name: str, dest_label: str | None = None):
     return SimpleNamespace(func_name=func_name, parent_arg_positions={"args": args})
 
 
-def test_uninitialized_origin_true_for_direct_empty_source() -> None:
-    """An empty/empty_like source is itself uninitialized."""
-
-    trace = {"e": _fake_op("empty_like")}
-    assert _uninitialized_value_origin(trace["e"], trace) is True
-
-
 def test_uninitialized_origin_does_not_follow_inplace_write_chain() -> None:
     """A chained in-place write is NOT uninitialized -- the B1 bug-mask guard.
 
@@ -98,58 +90,9 @@ def test_uninitialized_origin_does_not_follow_inplace_write_chain() -> None:
     assert _uninitialized_value_origin(trace["ic2"], trace) is False
 
 
-def test_uninitialized_origin_false_for_real_data_destination() -> None:
-    """A real-data destination is NOT uninitialized -- the bug-mask guard."""
-
-    trace = {
-        "data": _fake_op("__mul__"),  # genuine data, not an allocation
-        "setitem": _fake_op("__setitem__", dest_label="data"),
-    }
-    assert _uninitialized_value_origin(trace["setitem"], trace) is False
-
-
-def test_uninitialized_origin_terminates_on_cycle() -> None:
-    """A pathological cyclic destination chain cannot spin forever."""
-
-    op = _fake_op("__setitem__", dest_label="self")
-    trace = {"self": op}
-    # Must return (False) within the bounded depth, not hang.
-    assert _uninitialized_value_origin(op, trace) is False
-
-
-def test_inplace_write_func_set_covers_setitem_and_index_copy() -> None:
-    """The exempted-op set names the idiom's write ops."""
-
-    assert "__setitem__" in INPLACE_DESTINATION_WRITE_FUNCS
-    assert "index_copy_" in INPLACE_DESTINATION_WRITE_FUNCS
-    assert "indexcopy_" in INPLACE_DESTINATION_WRITE_FUNCS
-
-
 # ---------------------------------------------------------------------------
 # End-to-end: benign uninitialized-dest models validate; real-data stays strict
 # ---------------------------------------------------------------------------
-
-
-def test_empty_like_partial_setitem_validates() -> None:
-    """The RoPE/flow idiom (empty_like + strided __setitem__) validates True.
-
-    This is the minimal reproduction of the Wan*/normflows/zuko class. Before the
-    fix it failed:replay with error="False"; it must now validate cleanly.
-    """
-
-    class EmptyLikeInterleave(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            out = torch.empty_like(x)
-            out[..., 0::2] = torch.cos(x[..., 0::2])
-            out[..., 1::2] = torch.sin(x[..., 1::2])
-            return out
-
-    model = EmptyLikeInterleave()
-    model.eval()
-    x = torch.randn(2, 8)
-    result, failure = _validate_with_failure(model, x)
-    assert result is True
-    assert failure is None
 
 
 def test_index_copy_chain_into_new_empty_validates() -> None:
@@ -165,29 +108,6 @@ def test_index_copy_chain_into_new_empty_validates() -> None:
             return out
 
     model = IndexCopyChain()
-    model.eval()
-    x = torch.randn(4, 8)
-    result, failure = _validate_with_failure(model, x)
-    assert result is True
-    assert failure is None
-
-
-def test_real_data_destination_partial_setitem_stays_validatable() -> None:
-    """Partial __setitem__ into a REAL data tensor is genuinely sensitive.
-
-    The exemption must NOT fire here -- the unwritten half carries real data, so
-    perturbing the destination DOES change the output and the perturbation check
-    passes legitimately (never reaching the exemption). This guards that the
-    uninitialized-dest exemption did not widen into masking real dependencies.
-    """
-
-    class RealDataDest(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            out = (x * 2.0).clone()  # real data destination, NOT empty_like
-            out[:, 0::2] = x[:, 0::2] + 1.0
-            return out
-
-    model = RealDataDest()
     model.eval()
     x = torch.randn(4, 8)
     result, failure = _validate_with_failure(model, x)

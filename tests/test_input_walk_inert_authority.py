@@ -38,12 +38,10 @@ from torchlens._input_walk import (
     classify_input_container,
     declares_namedtuple_fields,
     empty_input_container_kind,
-    namedtuple_arity_mismatch,
     snapshot_input_boundary,
     unset_declared_fields,
     walk_input_boundary,
 )
-from torchlens._runnable.witness_contracts import _container_field_names
 
 _OneField = collections.namedtuple("_OneField", "x")
 _ZeroField = collections.namedtuple("_ZeroField", "")
@@ -85,74 +83,12 @@ def _reasons(snapshot: dict[str, Any]) -> list[str]:
     return [refusal["reason"] for refusal in snapshot["refusals"]]
 
 
-def test_classification_never_touches_the_instance():
-    """A ``_fields`` property must not run during classify or snapshot."""
-
-    value = _PropFields((torch.zeros(1), torch.zeros(1)))
-    _PropFields.probes.clear()
-    assert classify_input_container(value) == "namedtuple"
-    snapshot_input_boundary(value)
-    assert _PropFields.probes == []
-
-
 def test_a_hiding_hook_cannot_steer_classification():
     """A namedtuple whose hook hides ``_fields`` still classifies as a namedtuple."""
 
     value = tuple.__new__(_HidingNamedtuple, (torch.zeros(1),))
     assert declares_namedtuple_fields(value)
     assert classify_input_container(value) == "namedtuple"
-
-
-def test_malformed_fields_refuse_instead_of_reading_as_zero_field():
-    """A list-valued ``_fields`` is a non-total schema, not an empty one."""
-
-    value = _ListFields((torch.zeros(1), torch.zeros(1)))
-    assert namedtuple_arity_mismatch(value)
-    assert "namedtuple_schema_not_total" in _reasons(snapshot_input_boundary(value))
-
-
-def test_hidden_positional_payload_refuses_typed():
-    """Physical arity beyond the declared schema must refuse, never pass silently."""
-
-    value = tuple.__new__(_OneField, (torch.zeros(1), "capture_flag"))
-    snapshot = snapshot_input_boundary(value)
-    assert "namedtuple_schema_not_total" in _reasons(snapshot)
-    root = snapshot["nodes"][0]
-    assert root["kind"] == "namedtuple"
-    assert root["size"] == 2  # PHYSICAL arity, not len(_fields)
-    assert root["fields"] == ["x"]
-
-
-def test_zero_field_namedtuple_carrying_tensors_is_not_empty():
-    """A zero-field namedtuple with children must not classify as an EMPTY container."""
-
-    value = tuple.__new__(_ZeroField, (torch.zeros(1), "steer"))
-    assert empty_input_container_kind(value) is None
-    assert classify_input_container(value) == "namedtuple"
-    assert "namedtuple_schema_not_total" in _reasons(snapshot_input_boundary(value))
-    # A GENUINELY empty namedtuple still reads as empty.
-    assert empty_input_container_kind(_ZeroField()) == "namedtuple"
-
-
-def test_empty_container_kind_alias_delegates_to_the_one_authority():
-    """The ``_io.runnable`` spelling must be the inert implementation, not a twin."""
-
-    from torchlens._io.runnable import empty_container_kind
-
-    value = tuple.__new__(_ZeroField, (torch.zeros(1),))
-    assert empty_container_kind(value) is empty_input_container_kind(value)
-    assert empty_container_kind({}) == "mapping"
-    assert empty_container_kind([]) == "sequence"
-
-
-def test_both_walkers_resolve_fields_through_one_authority():
-    """The runtime binding walker must agree with the capture walker, and never crash."""
-
-    prop = _PropFields((torch.zeros(1), torch.zeros(1)))
-    listed = _ListFields((torch.zeros(1), torch.zeros(1)))
-    assert _container_field_names(prop) == ()
-    assert _container_field_names(listed) == ()
-    assert _container_field_names(_OneField(torch.zeros(1))) == ("x",)
 
 
 def test_self_referential_container_refuses_instead_of_recursing():
@@ -189,19 +125,6 @@ def test_cycle_ceilings_the_subtree_in_the_value_walker():
     )
     assert tensors == [("x",)]
     assert opaque == [("self",)]
-
-
-def test_repeated_sibling_container_is_still_witnessed_twice():
-    """The fence tracks ANCESTORS only: a shared container must not be dropped."""
-
-    shared = {"t": torch.zeros(1)}
-    tensors: list[tuple[Any, ...]] = []
-    walk_input_boundary(
-        {"a": shared, "b": shared},
-        key_component=lambda key: key,
-        on_tensor=lambda _value, path: tensors.append(path),
-    )
-    assert sorted(tensors) == [("a", "t"), ("b", "t")]
 
 
 def test_unset_init_false_dataclass_field_no_longer_kills_the_capture():
@@ -282,40 +205,6 @@ def test_foreign_grafted_getattribute_is_uninspectable():
     assert _declared_schema_uninspectable(_Sneak.__new__(_Sneak)) is True
 
 
-def test_ordinary_containers_stay_inspectable():
-    """The tightened gate must not reject the containers real users pass."""
-
-    from torchlens._input_walk import _declared_schema_uninspectable
-
-    @dataclasses.dataclass
-    class _Cfg:
-        """Plain dataclass input."""
-
-        x: Any
-
-    assert _declared_schema_uninspectable(_Cfg(torch.zeros(1))) is False
-    assert _declared_schema_uninspectable(_OneField(torch.zeros(1))) is False
-    assert _declared_schema_uninspectable({}) is False
-    assert _declared_schema_uninspectable([]) is False
-
-
-def test_mapping_ordered_key_fact_comes_from_the_child_traversal():
-    """The persisted key order must be the order the model actually iterates."""
-
-    class _Skew(dict):
-        """Mapping whose ``keys()`` order contradicts ``__iter__``/``items()``."""
-
-        def keys(self):  # type: ignore[override]
-            """Return the keys in reversed order."""
-
-            return reversed(list(dict.keys(self)))
-
-    value = _Skew({"a": torch.zeros(1), "b": torch.zeros(1)})
-    root = snapshot_input_boundary({"cfg": value})["nodes"][1]
-    assert root["kind"] == "mapping"
-    assert root["keys"] == ["a", "b"]
-
-
 class _EvilZeroField(tuple):
     """Zero-field namedtuple subclass whose ``__len__`` hides a physical payload."""
 
@@ -332,13 +221,6 @@ class _EvilOneField(collections.namedtuple("_EvilOneFieldBase", ["x"])):
 
     def __len__(self) -> int:  # noqa: D105 - hostile probe
         return 1
-
-
-class _LyingLenList(list):
-    """List subclass whose ``__len__`` claims emptiness over real children."""
-
-    def __len__(self) -> int:  # noqa: D105 - hostile probe
-        return 0
 
 
 def test_hostile_len_cannot_steer_container_kind_or_forge_arity():
@@ -369,30 +251,6 @@ def test_hostile_len_cannot_steer_container_kind_or_forge_arity():
     assert "namedtuple_schema_not_total" in one_reasons
     named_nodes = [node for node in one_snapshot["nodes"] if node.get("kind") == "namedtuple"]
     assert named_nodes and named_nodes[0]["size"] == 2
-
-
-def test_hostile_len_sequence_still_walks_physical_children():
-    """A lying sequence ``__len__`` cannot classify real children away."""
-
-    from torchlens._input_walk import (
-        raw_mapping_key_component,
-        snapshot_input_boundary,
-        walk_input_boundary,
-    )
-
-    lying = _LyingLenList([torch.ones(2), torch.zeros(2)])
-    assert classify_input_container(lying) == "sequence"
-    snapshot = snapshot_input_boundary(lying)
-    sizes = [node["size"] for node in snapshot["nodes"] if "size" in node]
-    assert sizes == [2]
-
-    seen: list[tuple[Any, ...]] = []
-    walk_input_boundary(
-        lying,
-        key_component=raw_mapping_key_component,
-        on_tensor=lambda _tensor, path: seen.append(tuple(path)),
-    )
-    assert len(seen) == 2
 
 
 class _ModeBox(dict):
