@@ -1731,7 +1731,7 @@
   `op.address` and `layer.address` are renamed `op.buffer_address` and `layer.buffer_address`; the
   removed flat members refuse the same way and name their remedy: `activation_transform`,
   `detach_saved_activations` and `output_device` are capture settings read from `trace.options`,
-  `op.out_ref` and `op.grad_ref` give way to `op.out` / `op.payload.materialize_out()` and
+  the `out_ref` and `grad_ref` refs give way to `op.out` / `op.payload.materialize_out()` and
   `op.grad` / `op.payload.materialize_grad()`, and `grad_fn_object_id` to `op.autograd.grad_fn`. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
