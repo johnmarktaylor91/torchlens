@@ -58,6 +58,24 @@ def _canary_bytes() -> bytes:
     return struct.pack("<f", _CANARY_A)
 
 
+def _buffer_value_refs(bundle_path: Path) -> list[dict]:
+    """Return the tensor references the trace record's buffer-value field holds."""
+
+    fields = json.loads((bundle_path / "records" / "trace.json").read_text())["fields"]
+    found: list[dict] = []
+    stack = [fields.get("_buffer_initial_values")]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            if item.get("$tl") == "tensor":
+                found.append(item)
+                continue
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return found
+
+
 def _manifest_disclosure(bundle_path: Path) -> dict:
     manifest = json.loads((bundle_path / "manifest.json").read_text())
     assert "buffer_values_disclosure" in manifest, (
@@ -77,8 +95,10 @@ def test_default_save_ships_values_warns_and_discloses(tmp_path: Path) -> None:
 
     assert _canary_bytes() in _bundle_bytes(bundle)
     manifest = json.loads((bundle / "manifest.json").read_text())
-    kinds = {entry["kind"] for entry in manifest["tensors"]}
-    assert "buffer_initial_value" in kinds
+    assert manifest["payload_policy"]["include_buffer_values"] is True
+    refs = _buffer_value_refs(bundle)
+    assert len(refs) == 1, "the buffer value must ship as one listed tensor reference"
+    assert refs[0]["blob"] in manifest["files"]
 
     disclosure = _manifest_disclosure(bundle)
     assert disclosure["included"] is True
@@ -99,7 +119,7 @@ def test_audit_level_is_gated_too(tmp_path: Path) -> None:
 
     assert _canary_bytes() not in _bundle_bytes(bundle)
     manifest = json.loads((bundle / "manifest.json").read_text())
-    kinds = {entry["kind"] for entry in manifest["tensors"]}
-    assert "buffer_initial_value" not in kinds
+    assert manifest["payload_policy"]["include_buffer_values"] is False
+    assert _buffer_value_refs(bundle) == []
     disclosure = _manifest_disclosure(bundle)
     assert disclosure["included"] is False
