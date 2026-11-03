@@ -107,11 +107,8 @@ def _selector(target: Any, encoder: _RecipeEncoder, at: str) -> dict[str, Any]:
     if _is_target(selector_value):
         selector_value = _selector(selector_value, encoder, f"{at}.selector_value")
     elif _is_target_sequence(selector_value):
-        # An ``and`` / ``or`` composite: each member is a nested selector object.
-        selector_value = [
-            _selector(member, encoder, f"{at}.selector_value[{i}]")
-            for i, member in enumerate(selector_value)
-        ]
+        members = enumerate(selector_value)
+        selector_value = [_selector(m, encoder, f"{at}.selector_value[{i}]") for i, m in members]
     else:
         selector_value = encoder.encode(selector_value, f"{at}.selector_value")
     return {
@@ -132,7 +129,7 @@ def _is_target(value: Any) -> bool:
 
 
 def _is_target_sequence(value: Any) -> bool:
-    """Return whether a value is the non-empty member tuple of a composite target spec."""
+    """Return whether a value is the member tuple of an ``and`` / ``or`` target spec (nested objects)."""
 
     return isinstance(value, (tuple, list)) and bool(value) and all(map(_is_target, value))
 
