@@ -199,8 +199,9 @@ def test_multi_input_passthrough_names_roles_and_explicit_selection_works() -> N
 
     assert len(roles) == 2
     with pytest.raises(AmbiguousInputError) as caught:
-        _ = view.status
+        _ = view.size
     assert all(role in str(caught.value) for role in roles)
+    assert dict(view.status) == {role: view[role].status for role in roles}
     assert view[roles[0]].io_role == roles[0]
 
 

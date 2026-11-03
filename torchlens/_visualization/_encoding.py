@@ -52,7 +52,15 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
+from ._encoding_aggregate import AggregateTargets, collect_aggregate, encoding_aggregate_targets
 from ._encoding_request import EncodingChannelRequest
+from ._encoding_size_layout import (
+    DEFAULT_NODE_HEIGHT_IN,
+    DEFAULT_NODE_WIDTH_IN,
+    SIZE_BY_MAX_AREA_MULT,
+    SIZE_SCALE_VOCABULARY,
+    non_batch_numel,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -410,24 +418,6 @@ DARK_RAMP = ("#1F2937", "#56B4E9")
 # SIZE channel constants (wave 1; D4 DEFAULT-APPLIED -- memo 3.1/3.2 C2).
 # ---------------------------------------------------------------------------
 
-#: Closed ``scale=`` vocabulary (slate 3.2). Log is REJECTED by design: it
-#: flattens 512-vs-4096 and defeats the size motif.
-SIZE_SCALE_VOCABULARY = ("sqrt", "linear")
-
-#: Max clamp in value space: encoded node area never exceeds this multiple of
-#: the default node area. PROVISIONAL value per the design memo (4.0), to be
-#: tuned once at the D4 rendered-candidates session; the min clamp is free
-#: (fixedsize=false -- the box only ever GROWS from the label's natural size).
-SIZE_BY_MAX_AREA_MULT = 4.0
-
-#: Graphviz's own default node geometry in inches (dot default width=0.75,
-#: height=0.5). Emitted sizes are MINIMUMS scaled from this baseline with the
-#: default aspect ratio preserved (D4 default mapping C2: area-only,
-#: conservative -- no per-rank axis rules that could mislead about which axis
-#: is which).
-DEFAULT_NODE_WIDTH_IN = 0.75
-DEFAULT_NODE_HEIGHT_IN = 0.5
-
 #: The one shape-valued builtin source token, legal for ``size_by`` only
 #: (memo 2.2): user callables must return scalars.
 SIZE_DIMS_TOKEN = "dims"
@@ -526,6 +516,14 @@ class EncodingState:
     size_domain: tuple[float, float] | None = None
     size_notes: list[str] = field(default_factory=list)
     size_aggregation_lines: list[str] = field(default_factory=list)
+    # Label-aware final geometry (set by the render-IR size layout pass):
+    # per-key [0, 1] fractions and the (width, height) the pass emitted.
+    size_fractions: dict[str, float] = field(default_factory=dict)
+    final_sizes: dict[str, tuple[float, float]] = field(default_factory=dict)
+    # Visible unit id -> encoding key (op/layer key or aggregate-node key),
+    # and the draw's collapsed boxes / segments (exact member-op aggregates).
+    unit_keys: dict[str, str] = field(default_factory=dict)
+    aggregates: AggregateTargets | None = None
     # STACK (rank) channel (wave 1). ``stack_groups`` holds
     # (rank_key_repr, member node names) rows resolved at the prepass and
     # emitted as rank=same subgraphs under newrank=true.
@@ -723,8 +721,9 @@ def resolve_size_by(size_by: Any) -> EncodingChannelSpec | None:
     Parameters
     ----------
     size_by:
-        ``None``, a field-name string, the closed ``"dims"`` shape token, or
-        a callable ``node -> scalar``.
+        ``None``, a field-name string, a scalar builtin token (the same set
+        ``color_by`` accepts), the closed ``"dims"`` shape token, or a
+        callable ``node -> scalar``.
 
     Returns
     -------
@@ -750,7 +749,7 @@ def resolve_size_by(size_by: Any) -> EncodingChannelSpec | None:
         )
     if isinstance(size_by, str):
         normalized = size_by.strip().lower().replace("-", "_").replace(" ", "_")
-        if normalized in _BUILTIN_JOIN_SOURCES:
+        if normalized in SCALAR_BUILTIN_SOURCES:  # same tokens and meaning as color_by
             return EncodingChannelSpec(
                 channel="size",
                 source_kind="builtin",
@@ -774,13 +773,11 @@ def resolve_size_by(size_by: Any) -> EncodingChannelSpec | None:
                 display_name=size_by,
             )
         raise _encoding_error(
-            f"size_by source {size_by!r} is not a known record field, the "
-            '"dims" builtin, or a callable',
+            f"size_by source {size_by!r} is not a known record field, scalar "
+            'builtin, the "dims" builtin, or a callable',
             code="encoding_source_invalid",
-            remedy=(
-                'pass a Layer/Op field name, "dims" for shape-driven sizing, '
-                "or a callable node -> scalar"
-            ),
+            remedy=f"pass a Layer/Op field name, one of {sorted(SCALAR_BUILTIN_SOURCES)}, "
+            '"dims" for shape-driven sizing, or a callable node -> scalar',
             argument="size_by",
         )
     raise _encoding_error(
@@ -1123,24 +1120,9 @@ def _resolve_device_time(
     the join attributed no kernels to reads honest n/a, never zero.
     """
 
-    from .._observability._join import require_availability
-    from .._observability._native_profile import join_result_for
+    from .._observability._native_profile import require_join_result
 
-    result = join_result_for(trace)
-    if result is None:
-        from .._observability._errors import ProfilerSessionError
-
-        raise ProfilerSessionError(
-            f"{argument}='device_time' is unavailable: this trace carries no "
-            "Kineto join (device time exists only for captures run under an "
-            "owned profiler session).",
-            code="device_time_unavailable",
-            remedy=(
-                "capture through torchlens.report.kernel_profile on a "
-                "CUDA host, then draw the returned result.trace"
-            ),
-        )
-    require_availability(result, needs=f"{argument}='device_time'")
+    result = require_join_result(trace, argument)
     total, found = _sum_node_device_ns(result, node)
     if not found:
         if argument == "size_by":
@@ -1178,16 +1160,18 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
     return _ROLLED_ROW_HANDLERS[row](state, node, field_name)
 
 
-def _resolve_payload_builtin(state: EncodingState, node: Any, token: str) -> float | None:
-    """Resolve one payload-builtin (magnitude/grad_norm) color value."""
+def _resolve_payload_builtin(
+    state: EncodingState, node: Any, token: str, argument: str = "color_by"
+) -> float | None:
+    """Resolve one payload-builtin (magnitude/grad_norm) channel value."""
 
     from .overlays import builtin_overlay_value
 
     value = builtin_overlay_value(node, token)
     if value is None:
-        state.note(NOTE_NA_UNENCODED)
+        (state.size_note if argument == "size_by" else state.note)(NOTE_NA_UNENCODED)
         return None
-    return _coerce_scalar(state, node, value)
+    return _coerce_scalar(state, node, value, argument=argument)
 
 
 def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> float | None:
@@ -1407,22 +1391,6 @@ def _resolve_node_shape(state: EncodingState, node: Any) -> tuple[int, ...] | No
     return entries
 
 
-def _non_batch_numel(shape: tuple[int, ...]) -> float:
-    """D4 default mapping C2: numel of the non-batch shape (batch = dim 0).
-
-    Rank <= 1 resolves to 1 (default box) -- conservative: a rank-1 dim may
-    or may not be a batch axis, and C2 never misleads about which axis is
-    which.
-    """
-
-    if len(shape) <= 1:
-        return 1.0
-    numel = 1.0
-    for dim in shape[1:]:
-        numel *= max(1, dim)
-    return numel
-
-
 def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) -> float | None:
     """Resolve one node's raw size value (Phase A, exactly once per node)."""
 
@@ -1444,15 +1412,19 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
         state.size_note(NOTE_CALLABLE)
         return _size_coerce(state)(node, value)
 
-    if spec.source_kind == "builtin":
-        value = _resolve_device_time(state, trace, node, argument="size_by")
-        return None if value is None else _size_coerce(state)(node, value)
-
     if spec.source_kind == "dims":
         shape = _resolve_node_shape(state, node)
-        return None if shape is None else _non_batch_numel(shape)
-
+        return None if shape is None else non_batch_numel(shape)
     field_name = spec.source
+    if spec.source_kind == "builtin":
+        if spec.source in _BUILTIN_JOIN_SOURCES:
+            value = _resolve_device_time(state, trace, node, argument="size_by")
+            return None if value is None else _size_coerce(state)(node, value)
+        if spec.source in _BUILTIN_PAYLOAD_SOURCES:
+            return _resolve_payload_builtin(state, node, spec.source, argument="size_by")
+        # Field-backed builtins resolve through the FIELD path, so the
+        # rolled-aggregate allowlist governs them exactly as for the field.
+        field_name = _BUILTIN_FIELD_SOURCES[spec.source]
     if _is_rolled_multipass(node):
         return _resolve_size_field_on_rolled(state, node, field_name)
     from .._utils._multipass_access import get_multipass_attr
@@ -1501,6 +1473,7 @@ def _compute_size_geometry(state: EncodingState) -> None:
     aspect = DEFAULT_NODE_WIDTH_IN / DEFAULT_NODE_HEIGHT_IN
     span = high - low
     fractions = {key: (value - low) / span for key, value in transformed.items()}
+    state.size_fractions = fractions
     for key, fraction in fractions.items():
         area = default_area * (1.0 + fraction * (SIZE_BY_MAX_AREA_MULT - 1.0))
         width = math.sqrt(area * aspect)
@@ -1508,18 +1481,33 @@ def _compute_size_geometry(state: EncodingState) -> None:
         state.sizes[key] = (round(width, 3), round(height, 3))
 
 
-def _collect_encoding_values(state: EncodingState, trace: Trace, universe: Any) -> dict[str, float]:
-    """Collect color and size values over the visible eligible node universe."""
+def _collect_encoding_values(
+    state: EncodingState, trace: Trace, universe: Any, aggregates: AggregateTargets | None
+) -> dict[str, float]:
+    """Collect color and size values over the visible eligible node universe.
+
+    Op units resolve per node; collapsed module boxes and segment capsules
+    (``aggregates``) resolve as exact sums over their member ops, and ops
+    hidden inside a segment stay out of the domain.
+    """
+    from .._observability._native_profile import require_join_result
 
     raw_values: dict[str, float] = {}
+    targets = aggregates or AggregateTargets(by_unit={})
     for unit in universe.units:
         emission = unit.emission
+        target = targets.by_unit.get(unit.unit_id)
+        if target is not None:
+            state.unit_keys[unit.unit_id] = target.key
+            collect_aggregate(state, trace, target, raw_values, require_join_result)
+            continue
         if emission.kind != "raw_op" or emission.node is None:
             continue
         node = emission.node
-        if is_record_derived_image_node(trace, node):
+        if unit.unit_id in targets.hidden_unit_ids or is_record_derived_image_node(trace, node):
             continue
         state.eligible_count += 1
+        state.unit_keys[unit.unit_id] = _node_key(node)
         if state.spec is not None:
             value = _resolve_source_value(state, trace, node)
             if value is not None:
@@ -1528,6 +1516,8 @@ def _collect_encoding_values(state: EncodingState, trace: Trace, universe: Any) 
             size_value = _resolve_size_source_value(state, trace, node)
             if size_value is not None:
                 state.size_values[_node_key(node)] = size_value
+    for target in targets.segments:
+        collect_aggregate(state, trace, target, raw_values, require_join_result)
     return raw_values
 
 
@@ -1595,18 +1585,27 @@ def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) 
     state.colors = {key: state.ramp_color(fraction) for key, fraction in fractions.items()}
 
 
-def populate_encoding_state(state: EncodingState, trace: Trace, universe: Any) -> None:
+def populate_encoding_state(
+    state: EncodingState | None, trace: Trace, universe: Any, scope: tuple[Any, ...] | None = None
+) -> None:
     """PHASE A: collect values over the visible-node universe and normalize.
 
-    Runs exactly once per draw (``build_render_ir`` calls it before any
-    per-node spec resolution). User callables are invoked exactly once per
-    visible eligible node here; Phase B only reads the precomputed map.
+    A data prepass over the already-chosen visible-node universe, before any
+    per-node spec resolution: collect values once, validate, compute the
+    domain. Runs exactly once per draw (``build_render_ir`` calls it before any
+    per-node spec resolution; a draw with no channel passes ``state=None``).
+    User callables are invoked exactly once per visible eligible node here;
+    Phase B only reads the precomputed map.
     """
 
-    if state.populated:
+    if state is None or state.populated:
         return
     state.populated = True
-    raw_values = _collect_encoding_values(state, trace, universe)
+    if scope is not None:
+        # (context, repeat_folds, segment_lookup, box-scope helpers): boxes
+        # and segments join the domain as exact member-op aggregates.
+        state.aggregates = encoding_aggregate_targets(trace, universe, scope)
+    raw_values = _collect_encoding_values(state, trace, universe, state.aggregates)
 
     if state.size_spec is not None:
         _compute_size_geometry(state)
@@ -1621,13 +1620,13 @@ def populate_encoding_state(state: EncodingState, trace: Trace, universe: Any) -
     _normalize_color_values(state, raw_values)
 
 
-def _format_domain_value(state: EncodingState, value: float) -> str:
-    """Format a domain endpoint for the legend (builtin-aware)."""
+def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
+    """Format a domain endpoint for the legend (builtin-aware, with units)."""
 
-    if state.spec is not None and state.spec.source_kind == "builtin":
+    if spec is not None and spec.source_kind == "builtin":
         from .overlays import format_overlay_value
 
-        formatted = format_overlay_value(state.spec.source, value)
+        formatted = format_overlay_value(spec.source, value)
         return formatted.split(": ", 1)[-1]
     if value == int(value) and abs(value) < 1e15:
         return str(int(value))
@@ -1665,7 +1664,7 @@ def _color_legend_rows(state: EncodingState) -> list[Any]:
     for tag, fraction, value in (("min", 0.0, low), ("mid", 0.5, mid), ("max", 1.0, high)):
         rows.append(
             NodeSpec(
-                lines=[f"{tag}: {_format_domain_value(state, value)}"],
+                lines=[f"{tag}: {_format_domain_value(state.spec, value)}"],
                 shape="box",
                 fillcolor=state.ramp_color(fraction),
             )
@@ -1689,7 +1688,8 @@ def _non_color_legend_rows(state: EncodingState) -> list[Any]:
         if state.size_domain is not None:
             low, high = state.size_domain
             size_lines.append(
-                f"min {_format_size_domain_value(low)} .. max {_format_size_domain_value(high)}"
+                f"min {_format_domain_value(state.size_spec, low)} .. "
+                f"max {_format_domain_value(state.size_spec, high)}"
             )
         rows.append(NodeSpec(lines=size_lines, shape="box", style="filled,rounded"))
     if state.stack_spec is not None:
@@ -1700,14 +1700,6 @@ def _non_color_legend_rows(state: EncodingState) -> list[Any]:
         ]
         rows.append(NodeSpec(lines=stack_lines, shape="box", style="filled,rounded"))
     return rows
-
-
-def _format_size_domain_value(value: float) -> str:
-    """Format a size-domain endpoint for the legend."""
-
-    if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
-    return f"{value:.4g}"
 
 
 #: Notice emitted when an active channel forces the dot engine where AUTO

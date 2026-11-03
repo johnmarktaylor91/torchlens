@@ -1219,7 +1219,6 @@ def new_preview_function_trace(
         recurrence_detection=recurrence_detection,
         verbose=verbose,
         backward_ready=False,
-        module_filter=None,
         emit_nvtx=False,
         input_transform=None,
         input=raw_input,

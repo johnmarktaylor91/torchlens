@@ -433,5 +433,5 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
         label for i, label in enumerate(layers) if i % 2 == 0
     ]
     for i, label in enumerate(layers):
-        assert layers[label].is_internal_sink is True
+        assert layers[label].graph.is_internal_sink is True
         assert layers[label].control_flow.is_terminal_bool is (i % 2 == 0)

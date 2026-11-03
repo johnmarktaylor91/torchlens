@@ -184,7 +184,6 @@ def _run_model_and_save_specified_outs(
     inference_only: bool = False,
     inference_only_implied: bool = False,
     name: str | None = None,
-    module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     measure_python_peak_memory: bool = False,
     distributed_witness: str = "none",

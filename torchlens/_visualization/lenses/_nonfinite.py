@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import PayloadUnavailableError
+from .._render_names import _SPEC_SLOT_RENDERED_NODE
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -200,8 +201,6 @@ def _op_labels_for_layer(layer: Any) -> tuple[str, ...]:
 
 def _layer_state(channel: NonfiniteChannel, layer: Any) -> str | None:
     """Return the layer's classified state, or ``None`` when unclassified."""
-
-    from .._render_nodes import _SPEC_SLOT_RENDERED_NODE
 
     # The slot hands unrolled nodes their aggregate Layer, whose bare label
     # keys the last pass's state; read the rendered per-pass node instead.

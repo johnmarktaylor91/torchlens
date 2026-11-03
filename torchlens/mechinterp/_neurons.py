@@ -141,7 +141,7 @@ def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
         refuse(
             code="mi_payload_missing",
             message=f"The MLP output at {address!r} is not readable.",
-            remedy="capture with the MLP output saved (layers_to_save='all' or a "
+            remedy="capture with the MLP output saved (save='all' or a "
             "retention_plan covering the MLP)",
             analysis="mlp_neuron_contributions",
             missing=[f"{address}.output"],
@@ -176,7 +176,7 @@ def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
             code="mi_payload_missing",
             message=f"The input of the output projection {use_label!r} in {address!r} "
             "was not saved, and no intermediate facet of the right shape is readable.",
-            remedy="capture with the MLP interior saved (layers_to_save='all' or a "
+            remedy="capture with the MLP interior saved (save='all' or a "
             "retention_plan covering the MLP)",
             analysis="mlp_neuron_contributions",
             missing=[use_label],

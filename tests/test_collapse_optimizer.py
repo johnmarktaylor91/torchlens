@@ -1801,7 +1801,7 @@ def test_collapse_ceiling_documented_lockstep() -> None:
         # "docs: move agent reference material out of startup instructions"); it
         # lives in this pointer target now (same precedent as the __all__ count
         # claim repoint in test_docs_lockstep_names.py).
-        repo_root / "docs" / "agent-reference" / "current-2-x-surface.md",
+        repo_root / "docs" / "internal" / "agent-reference" / "current-2-x-surface.md",
     ]
     for page in doc_pages:
         text = page.read_text(encoding="utf-8")

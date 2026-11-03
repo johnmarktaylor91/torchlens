@@ -130,7 +130,7 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
             pass
     # A render node delegates to its record; read through the group, which
     # both an Op and a Layer serve.
-    value = getattr(getattr(node, "cost", None), "activation_memory", None)
+    value = record_member(getattr(node, "cost", None), "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)

@@ -42885,7 +42885,6 @@
     "8": 9,
     "9": 10
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 6,
    "_num_ops": 35,
@@ -86874,7 +86873,6 @@
     "8": 9,
     "9": 10
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 6,
    "_num_ops": 35,
@@ -130926,7 +130924,6 @@
     "8": 9,
     "9": 10
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 6,
    "_num_ops": 35,
@@ -173600,7 +173597,6 @@
     "8": 9,
     "9": 10
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 6,
    "_num_ops": 35,

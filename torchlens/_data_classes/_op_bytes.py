@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._quantities import Bytes
+from .._utils.tensor_utils import get_memory_amount_from_metadata
 
 if TYPE_CHECKING:
     from .op import Op
@@ -188,3 +189,9 @@ def theoretical_op_bytes(op: Op) -> tuple[Bytes | None, Bytes | None]:
 
 
 __all__ = ["theoretical_op_bytes"]
+
+
+def activation_bytes(payload: torch.Tensor, shape: Any, dtype: Any) -> Bytes:
+    """Return the size in bytes of a saved activation, read from its shape and dtype."""
+
+    return Bytes(get_memory_amount_from_metadata(payload, shape, dtype))

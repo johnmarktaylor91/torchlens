@@ -898,13 +898,12 @@ def _add_lookup_keys_for_layer_entry(
 
     # Relabel the module ops if this pass built module metadata:
     if self._options_mode in {"exhaustive", "predicate"}:
+        context = layer_entry.module_context
         layer_entry._module_context_output_of_module_calls = [
-            _module_call_label(module_call)
-            for module_call in layer_entry.module_context.output_of_module_calls
+            _module_call_label(module_call) for module_call in context.output_of_module_calls
         ]
         layer_entry._module_context_input_to_module_calls = [
-            _module_call_label(module_call)
-            for module_call in layer_entry.module_context.input_to_module_calls
+            _module_call_label(module_call) for module_call in context.input_to_module_calls
         ]
         if layer_entry.module is not None:
             layer_entry.module = _module_call_label(layer_entry.module)
@@ -939,9 +938,10 @@ def _add_lookup_keys_for_layer_entry(
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.graph.is_buffer:
-        if self._buffer_num_calls.get(layer_entry.buffer_address, 1) == 1:
-            lookup_keys_for_tensor.append(layer_entry.buffer_address)
-        lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{layer_entry.buffer_pass}")
+        address, buffer_pass = layer_entry.buffer_address, layer_entry.graph.buffer_pass
+        if self._buffer_num_calls.get(address, 1) == 1:
+            lookup_keys_for_tensor.append(address)
+        lookup_keys_for_tensor.append(f"{address}:{buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.graph.io_role)
 

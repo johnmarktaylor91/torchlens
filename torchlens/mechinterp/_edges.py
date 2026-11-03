@@ -509,7 +509,7 @@ def component_graph(trace: Any) -> ComponentGraph:
     ----------
     trace:
         A finished trace of a pre-norm additive-residual language model,
-        captured with every op saved (``layers_to_save='all'``) and the
+        captured with every op saved (``save='all'``) and the
         builtin attention recipes' head views (eager attention).
 
     Returns

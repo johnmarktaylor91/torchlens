@@ -27,6 +27,7 @@ import torch
 
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
+from .._trace_core.op_store import mark_op_row_released
 from .._utils._cuda_probe import _is_cuda_available
 from .._utils._record_group_table import op_attr, record_member, record_storage_attr
 from .._utils.collections import remove_entry_from_list
@@ -34,7 +35,7 @@ from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
 from ..intervention._types import ParentRef, Unsupported
 from ._state_adapter import state_items
-from .op import Op, _detach_op_husk
+from .op import Op, _detach_op_husk, release_op_row
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -207,8 +208,6 @@ def _trim_host_allocator() -> None:
 
 def _clear_entry_attributes(log_entry: Op) -> None:
     """Clear all instance attributes from a Op entry."""
-    from .._trace_core.op_store import mark_op_row_released
-
     # Whole-row release: tell any active step audit the per-cell reads and
     # deletes below are the op's removal husking (a row-lifecycle event
     # checked against the step's 'deletes' row_effects sanction), not
@@ -220,8 +219,9 @@ def _clear_entry_attributes(log_entry: Op) -> None:
         row_store = None
     if row_store is not None:
         mark_op_row_released(row_store, row)
-    for attr, _ in list(state_items(log_entry)):
-        delattr(log_entry, record_storage_attr(log_entry, attr))
+    if row_store is None or not release_op_row(log_entry, row_store, row):
+        for attr, _ in list(state_items(log_entry)):
+            delattr(log_entry, record_storage_attr(log_entry, attr))
     # Rebind the emptied facade to a detached row so a user-held husk cannot
     # pin the trace's shared columnar store (slot-era husks pinned nothing).
     _detach_op_husk(log_entry)

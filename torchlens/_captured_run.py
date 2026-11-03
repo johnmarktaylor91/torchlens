@@ -8,6 +8,8 @@ from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
 
+from ._utils._record_group_table import record_member
+
 ActivationT = TypeVar("ActivationT")
 
 #: Addresses listed in an ``activation_address_unmatched`` refusal before eliding.
@@ -266,17 +268,17 @@ class TraceLike:
 
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
-            return getattr(ctx, "address", None)
+            return record_member(ctx, "address", None)
         # Op and Layer keep ``is_buffer`` in their graph group and name the buffer
         # ``buffer_address``; other activations carry both flat. Read them directly
         # so this vocabulary module stays free of record-table imports.
         graph = getattr(activation, "graph", None)
         if graph is not None:
-            is_buffer = getattr(graph, "is_buffer", False)
+            is_buffer = record_member(graph, "is_buffer", False)
             buffer_address = getattr(activation, "buffer_address", None)
         else:
-            is_buffer = getattr(activation, "is_buffer", False)
-            buffer_address = getattr(activation, "address", None)
+            is_buffer = record_member(activation, "is_buffer", False)
+            buffer_address = record_member(activation, "address", None)
         if is_buffer and isinstance(buffer_address, str):
             return buffer_address
         module = getattr(activation, "module", None)

@@ -1,6 +1,6 @@
 """Generate the checked-in per-class StorageBinding tables.
 
-One declared schema, generated artifacts (docs/reference/trace_core_design.md
+One declared schema, generated artifacts (docs/internal/reference/trace_core_design.md
 section 3.4): this tool derives one ``StorageBinding`` per declared field for
 all 12 record classes and writes ``torchlens/_data_classes/_schema_bindings.py``
 (the ``trace`` table goes to its sibling ``_schema_bindings_trace.py``) as

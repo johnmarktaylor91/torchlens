@@ -10,10 +10,17 @@ gate refused in NONE of four probe legs, on two independent code paths.
 The gate now checks, per operand pair and in order: ORDERING TOPOLOGY
 (comparison operands joined by a directed path of ordering relations refuse
 regardless of rank), the MODEL-AXIS floor (a projection of the reported
-``Relationship`` vocabulary onto model evidence only), and VALUE-LEVEL INPUT
-IDENTITY (proven only by positive payload evidence; unproven refuses
-fail-closed). The persisted digest carrier is the A-GATE/digest slice (after
-C07-X); :func:`_input_value_digest` is that carrier's live derivation.
+``Relationship`` vocabulary onto model evidence only), and SITE LINE-UP.
+Site line-up holds when the pair captured the same input VALUES (proven only
+by positive payload evidence) or, for runs on different or unproven inputs,
+when both captured graphs have the same graph-shape hash, so every site pairs
+with its counterpart one to one. Different inputs are comparable by design
+(clean vs. patched, different prompts, different checkpoints); what the
+input digest still guards is graph divergence: with the same model object
+the model-axis floor passes even when data-dependent control flow took
+different branches, and only same-input pairs may differ by edits alone.
+The persisted digest carrier is the A-GATE/digest slice (after C07-X);
+:func:`_input_value_digest` is that carrier's live derivation.
 """
 
 from __future__ import annotations
@@ -38,8 +45,8 @@ if TYPE_CHECKING:
 # MODEL-AXIS projection of the reported ``Relationship`` vocabulary (A-GATE,
 # foldB D6): this table ranks the MODEL axis only; input identity is a
 # separate, value-level predicate (``_input_value_digest``) that no identity
-# relationship ever satisfies. ``shared_graph_same_input`` and
-# ``shared_graph_diff_input`` carry identical model-axis evidence: their
+# relationship ever satisfies, and it feeds the site line-up check only.
+# ``shared_graph_same_input`` and ``shared_graph_diff_input`` carry identical model-axis evidence: their
 # input-axis difference is deliberately invisible here.
 _MODEL_AXIS_RANK: dict[Relationship, int] = {
     Relationship.UNKNOWN: 0,
@@ -64,45 +71,47 @@ class _GateRequirement:
         relationship must reach.
     model_floor_label:
         Human-readable name of the floor for refusal messages.
-    same_input:
-        Whether the operand pair must additionally prove VALUE-LEVEL input
-        identity. This predicate is independent of the relationship: an
-        identity relationship (``same_object`` / ``same_model_at_capture``)
-        is never accepted as proof of input equality (foldB D6 path 1), and
-        the shape-level ``input_signature_hash`` is never consulted
-        (foldB D6 path 2 — it is value-blind).
+    comparison_grade:
+        Whether the operation reads per-site values across the pair, so the
+        pair must also pass the ordering-topology check and the SITE LINE-UP
+        check: proven-equal input values, or, when the inputs differ or are
+        unproven, equal graph-shape hashes. An identity relationship
+        (``same_object`` / ``same_model_at_capture``) is never accepted as
+        proof of input equality or of line-up (foldB D6 path 1), and the
+        shape-level ``input_signature_hash`` is never consulted
+        (foldB D6 path 2: it is value-blind).
     """
 
     model_floor_rank: int
     model_floor_label: str
-    same_input: bool
+    comparison_grade: bool
 
 
-#: Same-input, shared-graph claim: at.compare (``bundle.at(site).compare()``),
+#: Shared-graph, lined-up-sites claim: at.compare (``bundle.at(site).compare()``),
 #: most_changed, diff and the
 #: delta family (compare, rank_changes and the private per-node reads behind
 #: them and the diff picture), which reads
 #: per-node distances from a baseline member and so gates its (baseline,
 #: member) operand pairs with the same two predicates.
-_SHARED_GRAPH_SAME_INPUT = _GateRequirement(
+_SHARED_GRAPH_LINED_UP = _GateRequirement(
     model_floor_rank=_MODEL_AXIS_RANK[Relationship.SHARED_GRAPH_SAME_INPUT],
     model_floor_label="shared_graph",
-    same_input=True,
+    comparison_grade=True,
 )
 
 _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
     "at": _GateRequirement(
         model_floor_rank=_MODEL_AXIS_RANK[Relationship.SAME_PARAM_SHAPES],
         model_floor_label="same_param_shapes",
-        same_input=False,
+        comparison_grade=False,
     ),
-    "at.compare": _SHARED_GRAPH_SAME_INPUT,
-    "most_changed": _SHARED_GRAPH_SAME_INPUT,
-    "diff": _SHARED_GRAPH_SAME_INPUT,
-    "delta_map": _SHARED_GRAPH_SAME_INPUT,
-    "norm_delta": _SHARED_GRAPH_SAME_INPUT,
-    "output_delta": _SHARED_GRAPH_SAME_INPUT,
-    "compare": _SHARED_GRAPH_SAME_INPUT,
+    "at.compare": _SHARED_GRAPH_LINED_UP,
+    "most_changed": _SHARED_GRAPH_LINED_UP,
+    "diff": _SHARED_GRAPH_LINED_UP,
+    "delta_map": _SHARED_GRAPH_LINED_UP,
+    "norm_delta": _SHARED_GRAPH_LINED_UP,
+    "output_delta": _SHARED_GRAPH_LINED_UP,
+    "compare": _SHARED_GRAPH_LINED_UP,
 }
 
 #: S6 PAIR-row kinds that order members in time/causality. Members joined by
@@ -254,10 +263,11 @@ def require_comparable(
        regardless of relationship rank.
     2. MODEL FLOOR: the derived relationship's model-axis rank must reach
        the operation's floor.
-    3. INPUT IDENTITY (comparison-grade operations only): value-level input
-       equality proven from retained input payloads. An identity
-       relationship never satisfies this predicate, and absent evidence
-       refuses fail-closed (unproven is not proven-same).
+    3. SITE LINE-UP (comparison-grade operations only): value-level input
+       equality proven from retained input payloads, or, for a pair on
+       different or unproven inputs, equal graph-shape hashes (see
+       :func:`_require_lined_up`). An identity relationship never satisfies
+       this predicate.
 
     Parameters
     ----------
@@ -295,7 +305,7 @@ def require_comparable(
     for left_name, right_name in pairs:
         left = members[left_name]
         right = members[right_name]
-        if requirement.same_input:
+        if requirement.comparison_grade:
             path = ordering_path(relations, left_name, right_name) or ordering_path(
                 relations, right_name, left_name
             )
@@ -333,50 +343,113 @@ def require_comparable(
                 relationship=relationship.value,
                 required_floor=requirement.model_floor_label,
             )
-        if requirement.same_input and left is not right:
-            left_digest = _input_value_digest(left)
-            right_digest = _input_value_digest(right)
-            if left_digest is not None and right_digest is not None:
-                if left_digest != right_digest:
-                    raise BundleComparisonError(
-                        f"Bundle operation {operation!r} requires "
-                        "value-level input identity; member pair "
-                        f"{left_name}/{right_name} captured DIFFERENT "
-                        "input values (retained input payload digests "
-                        "disagree). An identity or shared-graph "
-                        "relationship is never accepted as proof of "
-                        "input equality. Remedy: compare captures of "
-                        "the same input, or use per-member reads such "
-                        "as Bundle.map for cross-input analysis.",
-                        code="bundle_gate_input_values_differ",
-                        operation=operation,
-                        left_member=left_name,
-                        right_member=right_name,
-                    )
-            else:
-                unproven = [
-                    name
-                    for name, digest in (
-                        (left_name, left_digest),
-                        (right_name, right_digest),
-                    )
-                    if digest is None
-                ]
-                raise BundleComparisonError(
-                    f"Bundle operation {operation!r} requires value-level "
-                    f"input identity, and member(s) {unproven!r} retain "
-                    "no input payloads to prove it (inputs not saved, or "
-                    "a loaded artifact without input activations). "
-                    "Refusing unproven input identity is deliberate: an "
-                    "identity relationship or a shape-level input hash is "
-                    "never accepted as proof of input equality. Remedy: "
-                    "capture with input payloads retained (the default "
-                    "save policy) or save the artifact with activations "
-                    "included; a persisted input digest lands with the "
-                    "input_digest carrier.",
-                    code="bundle_gate_input_identity_unproven",
-                    operation=operation,
-                    left_member=left_name,
-                    right_member=right_name,
-                    unproven_members=unproven,
-                )
+        if requirement.comparison_grade and left is not right:
+            _require_lined_up(operation, left_name, left, right_name, right)
+
+
+def _require_lined_up(
+    operation: str,
+    left_name: str,
+    left: Trace,
+    right_name: str,
+    right: Trace,
+) -> None:
+    """Refuse a comparison pair whose sites do not line up one to one.
+
+    Proven-equal input values line a pair up; pairs on different or unproven
+    inputs line up when both graph-shape hashes are equal. Otherwise control
+    flow may have taken another path, which the model-axis floor cannot see
+    for one model object, so the pair refuses with
+    ``bundle_gate_input_values_differ`` (inputs differ) or
+    ``bundle_gate_input_identity_unproven`` (no input payloads). Per-site
+    shapes are checked by the metric (``metric_shape_mismatch``).
+    """
+
+    left_digest = _input_value_digest(left)
+    right_digest = _input_value_digest(right)
+    if left_digest is not None and left_digest == right_digest:
+        return
+    left_graph = left._provenance_fingerprint
+    if left_graph is not None and left_graph == right._provenance_fingerprint:
+        return
+    graph_note = _line_up_note(left_name, left, right_name, right)
+    if left_digest is not None and right_digest is not None:
+        raise BundleComparisonError(
+            f"Bundle operation {operation!r} refuses: member pair "
+            f"{left_name}/{right_name} captured DIFFERENT input values and "
+            f"{graph_note}. Runs on different inputs compare site by site "
+            "only when their graphs have the same structure. Remedy: compare "
+            "runs whose graphs line up (same model structure and the same "
+            "control-flow path), compare a shared site with "
+            "Bundle.at(site), or use per-member reads such as Bundle.map.",
+            code="bundle_gate_input_values_differ",
+            operation=operation,
+            left_member=left_name,
+            right_member=right_name,
+        )
+    unproven = [
+        name
+        for name, digest in ((left_name, left_digest), (right_name, right_digest))
+        if digest is None
+    ]
+    raise BundleComparisonError(
+        f"Bundle operation {operation!r} refuses: member(s) {unproven!r} "
+        "retain no input payloads to prove the pair ran on the same input "
+        "(inputs not saved, or a loaded artifact without input activations), "
+        f"and {graph_note}. An identity relationship or a shape-level input "
+        "hash is never accepted as proof of input equality. Remedy: capture "
+        "with input payloads retained (the default save policy) or save the "
+        "artifact with activations included, or compare runs whose graphs "
+        "line up.",
+        code="bundle_gate_input_identity_unproven",
+        operation=operation,
+        left_member=left_name,
+        right_member=right_name,
+        unproven_members=unproven,
+    )
+
+
+def _line_up_note(left_name: str, left: Trace, right_name: str, right: Trace) -> str:
+    """Explain why a pair's graphs do not line up, for the refusal message.
+
+    Names both input shapes when they differ: inputs of different shapes
+    (prompts with different token counts) usually run different graphs, and
+    the message should say so rather than blame control flow alone.
+    """
+
+    if left._provenance_fingerprint is None or right._provenance_fingerprint is None:
+        return "a graph-shape hash is missing, so line-up cannot be checked"
+    note = (
+        "their captured graphs differ (graph-shape hashes disagree: "
+        "data-dependent control flow or a structural edit), so their sites "
+        "do not line up one to one"
+    )
+    left_shapes = _input_shapes(left)
+    right_shapes = _input_shapes(right)
+    if left_shapes is not None and right_shapes is not None and left_shapes != right_shapes:
+        note += (
+            f"; their inputs also differ in shape ({left_name}: {list(left_shapes)}, "
+            f"{right_name}: {list(right_shapes)}), and inputs of different shapes "
+            "(such as prompts with different token counts) usually run different graphs"
+        )
+    return note
+
+
+def _input_shapes(trace: Trace) -> tuple[tuple[int, ...] | None, ...] | None:
+    """Return the recorded input-op shapes for a refusal message, if readable.
+
+    Shapes come from op metadata, so they survive payload-free artifacts.
+    ``None`` means the trace exposes no input ops; the message then omits
+    the shape note rather than guessing.
+    """
+
+    try:
+        input_ops = list(trace.input_ops)
+    except (KeyError, ValueError):  # the documented lookup failures; a message detail only
+        return None
+    if not input_ops:
+        return None
+    return tuple(
+        tuple(shape) if (shape := getattr(op, "shape", None)) is not None else None
+        for op in input_ops
+    )

@@ -344,7 +344,7 @@ def _check_op_log_fields(ml: Trace) -> None:
             or is_functionless_internal_source
             or is_functionless_replacement
         ):
-            if bool(getattr(ml, "_loaded_from_bundle", False)):
+            if ml.__dict__.get("_loaded_from_bundle", False):  # no Trace miss path per op
                 # Loaded-artifact arm (R10-3): ``Op.func`` is FieldPolicy.DROP
                 # and ``__getstate__`` hard-nulls it, so ``callable(func)``
                 # false-fired on EVERY loaded torch trace. The loaded arm

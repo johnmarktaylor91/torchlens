@@ -508,7 +508,7 @@ def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) 
         Public positional input tuple.
     **kwargs
         Additional public trace keyword arguments. Any name that is a
-        ``CaptureOptions`` field (``layers_to_save``, ``jax_control_flow``,
+        ``CaptureOptions`` field (``jax_control_flow``,
         ``jax_max_control_flow_unroll``, ...) is routed through
         ``capture=CaptureOptions(...)`` -- the sprint removed every such flat
         kwarg from ``trace()``'s own signature, so passing one directly lands
@@ -1382,13 +1382,6 @@ def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
 
         assert expected_primitives <= primitive_names, name
         assert trace.validate_forward_pass([]), name
-
-
-def test_jax_trace_rejects_save_shaping_kwargs() -> None:
-    """JAX preview should reject selective-save shaping."""
-
-    with pytest.raises(BackendUnsupportedError, match="full-save only"):
-        _trace_jax(_mlp, (_params(), jnp.ones((2, 3))), layers_to_save=["tanh"])
 
 
 def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:

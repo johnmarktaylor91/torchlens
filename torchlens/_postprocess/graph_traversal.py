@@ -461,7 +461,7 @@ def _add_output_layers(
                 else output_node.payload.transformed_out
             )
             _detach_payload = not (
-                torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
+                torch.is_tensor(_parent_payload) and _parent_payload.autograd.grad_fn is not None
             )
             if output_payload_aliases_parent(output_tensor, output_node.out):
                 # HONESTY 13-R1: the producer already retains this exact value,
@@ -960,7 +960,7 @@ def _log_internally_terminated_tensor(
     (hunt-6 R52-2).
     """
     layer_entry = self[tensor_label]
-    layer_entry.is_internal_sink = True
+    layer_entry._graph_is_internal_sink = True
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         self.internal_sink_ops.append(tensor_label)

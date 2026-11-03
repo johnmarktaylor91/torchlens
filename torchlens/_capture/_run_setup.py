@@ -255,7 +255,6 @@ def _construct_trace(r: SimpleNamespace) -> Trace:
         verbose=r.verbose,
         backward_ready=r.backward_ready,
         inference_only=r.inference_only,
-        module_filter=r.module_filter,
         emit_nvtx=r.emit_nvtx,
         measure_python_peak_memory=r.measure_python_peak_memory,
         distributed_witness=r.distributed_witness,

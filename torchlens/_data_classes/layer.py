@@ -1221,7 +1221,7 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when the aggregate ``siblings`` view is non-empty.
         """
-        return len(self.siblings) > 0
+        return len(self.graph.siblings) > 0
 
     @property
     def co_parents(self) -> list[str]:
@@ -1241,7 +1241,7 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when the aggregate ``co_parents`` view is non-empty.
         """
-        return len(self.co_parents) > 0
+        return len(self.graph.co_parents) > 0
 
     @property
     def _control_flow_is_in_conditional_body(self) -> bool:

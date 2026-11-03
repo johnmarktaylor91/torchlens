@@ -1,7 +1,7 @@
 """aliases-v1: the identity and mutation-effect matrix for public records.
 
 Each test is one row of the converged-design alias matrix
-(docs/reference/trace_core_design.md section 6). These are direct behavioral
+(docs/internal/reference/trace_core_design.md section 6). These are direct behavioral
 assertions rather than goldens because identity relations (``is``, weakref
 liveness, mutation visibility) cannot be value-snapshotted.
 """

@@ -3490,6 +3490,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/_semantic/_input_patching.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/_semantic/coverage.py",
   "has_default": false,
   "sites": 1,
@@ -3532,7 +3540,7 @@
   "field": "modules",
   "file": "torchlens/_semantic/patching.py",
   "has_default": false,
-  "sites": 14,
+  "sites": 15,
   "via_getattr": false
  },
  {
@@ -4107,6 +4115,30 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_encoding.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/_encoding_aggregate.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_encoding_aggregate.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/_encoding_size_layout.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6836,7 +6868,7 @@
   "field": "kind",
   "file": "torchlens/bundle/_operations.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6861,6 +6893,22 @@
   "file": "torchlens/bundle/_relation_carriage.py",
   "has_default": false,
   "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7281,6 +7329,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_facet_writes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/intervention/_hooks_support.py",
   "has_default": false,
@@ -7628,7 +7684,7 @@
   "field": "modules",
   "file": "torchlens/intervention/hooks.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -8100,7 +8156,7 @@
   "field": "source_trace",
   "file": "torchlens/receptive_field/_gradient_forward.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 4,
   "via_getattr": false
  },
  {

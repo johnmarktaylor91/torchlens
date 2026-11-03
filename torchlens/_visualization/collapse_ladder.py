@@ -43,15 +43,20 @@ from .auto_collapse import (
 )
 from .collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
 from .collapse_plan import (
+    ChildSegment,
     CollapsePlan,
     CollapseSchedule,
     CollapseScheduleStep,
+    ModuleBox,
     PlanNode,
+    RawOp,
     collapse_plan_for_source_graph,
     count,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
     from .source_graph import SourceGraph
@@ -190,6 +195,14 @@ def _event_costs(trace: Trace, context: RenderContext, max_result: Any) -> dict[
     return costs
 
 
+def _source_graph(trace: Trace, context: RenderContext) -> SourceGraph:
+    """Build the normalized source graph (the one deferred import site)."""
+
+    from .source_graph import build_source_graph
+
+    return build_source_graph(trace, context)
+
+
 def build_event_ladder(
     trace: Trace,
     context: RenderContext,
@@ -282,9 +295,7 @@ def collapse_schedule(
         # when the optimizer will decline. Over-budget but non-pathological
         # traces proceed: select_collapse_plan serves the deterministic
         # fallback endpoint, so the schedule stays a real ladder.
-        from .source_graph import build_source_graph
-
-        over_source_graph = build_source_graph(trace, context)
+        over_source_graph = _source_graph(trace, context)
         over_full_plan = collapse_plan_for_source_graph(over_source_graph, None, None)
         over_full_count = count(over_full_plan)
         optimizer.select_collapse_plan(trace, context, mode="max", source_graph=over_source_graph)
@@ -311,9 +322,7 @@ def collapse_schedule(
     cached = cached_by_context.get(context)
     if cached is not None:
         return cached
-    from .source_graph import build_source_graph
-
-    source_graph = build_source_graph(trace, context)
+    source_graph = _source_graph(trace, context)
     node_pool: dict[PlanNode, PlanNode] = {}
     full_plan = collapse_plan_for_source_graph(source_graph, None, None, node_pool=node_pool)
     full_count = count(full_plan)
@@ -455,14 +464,13 @@ def auto_from_ladder(
     context: RenderContext,
     source_graph: SourceGraph | None,
 ) -> Any:
-    """Return the auto-mode result: the first in-band ladder point (D8).
+    """Return the auto-mode result: the first in-band ladder point, evened.
 
     ``auto`` is the first schedule step whose realized count meets the
-    readable-band cap -- the documented contract, now the implementation.
-    When no step reaches the band, the DISCLOSED strongest point is served:
-    the max endpoint with ``band_missed=True`` and ``strongest_plan_count``
-    read from the REALIZED plan (memo D7; the reason never says "floor" --
-    the beam proves no bound).
+    readable-band cap, evened by :func:`_even_auto_plan`. When no step
+    reaches the band, the DISCLOSED strongest point is served: the max
+    endpoint with ``band_missed=True`` and ``strongest_plan_count`` from the
+    REALIZED plan (the reason never says "floor").
     """
 
     optimizer = _optimizer()
@@ -473,11 +481,7 @@ def auto_from_ladder(
     if max_result.declined:
         return max_result
     band_high = _readable_band_high(trace)
-    chosen: CollapseScheduleStep | None = None
-    for step in schedule.steps:
-        if step.visible_count <= band_high:
-            chosen = step
-            break
+    chosen = next((step for step in schedule.steps if step.visible_count <= band_high), None)
     if chosen is None:
         strongest = schedule.steps[-1]
         band_note = (
@@ -497,16 +501,204 @@ def auto_from_ladder(
         )
     if chosen is schedule.steps[-1]:
         return max_result
-    selected, folds = _ladder_state_through(schedule.steps, chosen)
+    ladder_state = _ladder_state_through(schedule.steps, chosen)
+    folds = ladder_state[1]
+    plan, segments, selected = _even_auto_plan(trace, context, source_graph, chosen, ladder_state)
     return optimizer.OptimizerResult(
         selected=selected,
         repeat_folds=folds,
-        plan=chosen.plan,
-        visible_count=chosen.visible_count,
+        plan=plan,
+        visible_count=count(plan),
         analyze_ms=analyze_collapse(trace).elapsed_ms,
         select_ms=0.0,
         g_star=max_result.g_star,
-        segments={},
+        segments=segments,
         planner="ladder",
-        scored_k=chosen.visible_count,
+        scored_k=count(plan),
     )
+
+
+#: ``auto`` folds a run of at least this many structurally identical,
+#: consecutive sibling boxes into one segment (two read fine side by side).
+EVEN_FOLD_MIN_RUN = 3
+
+
+def _within(address: str, ancestor: str) -> bool:
+    """Return whether ``address`` is ``ancestor`` or inside it."""
+
+    return address == ancestor or address.startswith(ancestor + ".")
+
+
+def _parent_address(address: str) -> str:
+    """Return the module parent address (``"self"`` for top-level modules)."""
+
+    return address.rsplit(".", 1)[0] if "." in address else "self"
+
+
+def _even_auto_plan(
+    trace: Trace,
+    context: RenderContext,
+    source_graph: SourceGraph | None,
+    chosen: CollapseScheduleStep,
+    ladder_state: tuple[frozenset[str], dict[str, ModuleRepeatFold]],
+) -> tuple[CollapsePlan, dict[str, Any], frozenset[str]]:
+    """Even out the chosen ladder point: box stray small modules, fold runs.
+
+    The ladder orders boxes by cost, so its first in-band point can leave a
+    small module expanded between boxed siblings (convnext's stem and
+    stage-2 downsample) and a run of identical blocks as one box each
+    (convnext's nine stage-2 blocks). Both passes only condense: the evened
+    plan never has more visible nodes than the ladder point. ``ladder_state``
+    is the ``(selected, folds)`` pair accumulated through ``chosen``.
+    """
+
+    selected, folds = ladder_state
+    plan = chosen.plan
+    boxes = _even_auto_boxes(trace, analyze_collapse(trace).signals, selected)
+    if boxes != selected:
+        evened = collapse_plan_for_source_graph(
+            source_graph or _source_graph(trace, context),
+            _optimizer()._collapse_fn_from_selected(boxes),
+            dict(folds),
+        )
+        if count(evened) <= count(plan):
+            plan, selected = evened, boxes
+    plan, segments = _fold_identical_runs(trace, context, plan)
+    return plan, segments, selected
+
+
+def _even_auto_boxes(
+    trace: Trace, signals: Mapping[str, Any], selected: frozenset[str]
+) -> frozenset[str]:
+    """Box fully expanded small modules that sit beside condensed siblings.
+
+    A module qualifies when it may render as a box, runs once, contains no
+    box, is inside no box, and hides no more ops than the smallest box that
+    is a sibling or a sibling's child: left expanded it reads as stray raw
+    ops between boxes. It must also be the only expanded sibling of its
+    structure: when identical siblings are still expanded, the ladder is part
+    way through that family and its in-band point stays as the ladder left it
+    (a stack of identical blocks keeps "just enough" boxed). Outermost first,
+    so the parent the user wrote wins over its child.
+    """
+
+    boxes = set(selected)
+    children: dict[str, list[str]] = {}
+    for address in signals:
+        children.setdefault(_parent_address(address), []).append(address)
+    for address in sorted(signals, key=lambda item: (item.count("."), item)):
+        signal = signals[address]
+        if not _may_box_expanded(trace, address, signal, boxes):
+            continue
+        siblings = [item for item in children[_parent_address(address)] if item != address]
+        if _has_expanded_twin(trace, signal, siblings, boxes, signals):
+            continue
+        sibling_box_ops = _subtree_box_ops(siblings, boxes, signals)
+        if sibling_box_ops and signal.hidden_ops <= min(sibling_box_ops):
+            boxes.add(address)
+    return frozenset(boxes)
+
+
+def _may_box_expanded(trace: Trace, address: str, signal: Any, boxes: set[str]) -> bool:
+    """Return whether a single-call, box-eligible module is fully expanded."""
+
+    if signal.num_calls > 1 or not _optimizer()._eligible_box(trace, address, signal):
+        return False
+    return not any(_within(address, box) or _within(box, address) for box in boxes)
+
+
+def _has_expanded_twin(
+    trace: Trace, signal: Any, siblings: list[str], boxes: set[str], signals: Mapping[str, Any]
+) -> bool:
+    """Return whether a sibling with the same structure is also fully expanded."""
+
+    return any(
+        signals[sibling].structural_digest == signal.structural_digest
+        and _may_box_expanded(trace, sibling, signals[sibling], boxes)
+        for sibling in siblings
+    )
+
+
+def _subtree_box_ops(roots: list[str], boxes: set[str], signals: Mapping[str, Any]) -> list[int]:
+    """Return the hidden-op counts of boxes that are a root or a root's child.
+
+    Only boxes one level down count: a box nested deeper (BERT's
+    ``encoder.layer.0`` beside ``embeddings``) sits in its own cluster and
+    does not make the module beside its ancestor read as stray.
+    """
+
+    return [
+        signals[box].hidden_ops
+        for box in boxes
+        if box in signals and any(root in (box, _parent_address(box)) for root in roots)
+    ]
+
+
+def _fold_identical_runs(
+    trace: Trace, context: RenderContext, plan: CollapsePlan
+) -> tuple[CollapsePlan, dict[str, Any]]:
+    """Replace runs of identical consecutive sibling boxes with segments.
+
+    A run is a legal child segment (the max planner's own legality, at the
+    auto dominance limit) whose members share one structural digest and
+    number at least :data:`EVEN_FOLD_MIN_RUN`.
+    """
+
+    optimizer = _optimizer()
+    analysis = analyze_collapse(trace)
+    legality = (
+        analysis,
+        optimizer._rendered_module_hidden_counts(trace, context),
+        optimizer._optimizer_total_units(trace, context),
+    )
+    nodes: list[PlanNode] = []
+    segments: dict[str, Any] = {}
+    covered: set[str] = set()
+    index = 0
+    while index < len(plan.nodes):
+        node = plan.nodes[index]
+        run = _identical_run(trace, context, legality, plan.nodes, index)
+        if len(run) >= EVEN_FOLD_MIN_RUN:
+            ops = optimizer._child_segment_covered_ops(analysis, run)
+            descriptor = optimizer._make_child_segment_descriptor(trace, context, run, ops)
+            segments[descriptor.name] = descriptor
+            covered.update(str(label).rsplit(":", 1)[0] for label in ops)
+            nodes.append(ChildSegment(run))
+            index += len(run)
+            continue
+        if not (isinstance(node, RawOp) and isinstance(node.op, str) and node.op in covered):
+            nodes.append(node)
+        index += 1
+    if not segments:
+        return plan, segments
+    optimizer._assert_segment_descriptor_parity(nodes, segments)
+    return CollapsePlan(nodes=tuple(nodes), context=plan.context), segments
+
+
+def _identical_run(
+    trace: Trace,
+    context: RenderContext,
+    legality: tuple[Any, Any, int],
+    nodes: tuple[PlanNode, ...],
+    start: int,
+) -> tuple[str, ...]:
+    """Return the identical-digest prefix of the legal segment run at ``start``.
+
+    ``legality`` is ``(analysis, rendered hidden counts, total units)``, the
+    inputs of the max planner's segment legality.
+    """
+
+    if not isinstance(nodes[start], ModuleBox):
+        return ()
+    analysis, hidden_counts, total_units = legality
+    run = _optimizer()._legal_plan_child_segment_run(
+        trace, context, analysis, nodes, start, hidden_counts, total_units, dominance_limit=0.75
+    )
+    if not run:
+        return ()
+    signals = analysis.signals
+    digest = signals[run[0]].structural_digest
+    length = 0
+    while length < len(run) and signals[run[length]].structural_digest == digest:
+        length += 1
+    return tuple(run[:length])

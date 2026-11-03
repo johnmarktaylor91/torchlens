@@ -196,7 +196,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     ----------
     trace:
         The clean trace the edges' graph was built from, captured with
-        ``layers_to_save='all'`` and ``replayable=True``.
+        ``save='all'`` and ``replayable=True``.
     edges:
         :class:`ComponentEdge` objects, into one receiver or several. A
         circuit runs as one call: pass every edge outside it,

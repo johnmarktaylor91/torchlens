@@ -8,7 +8,9 @@ notebook experience; the treescope bridge is an **opt-in upgrade** that adds
 interactive array visualization. This ordering is not a preference but a
 mechanical fact: a live IPython kernel calls `_repr_html_` before treescope's
 machinery ever runs, so the card IS the top-level experience whether or not
-treescope is installed.
+treescope is installed. Upstream treescope is idle (last release v0.1.10 on
+2025-08-08, last push 2026-06-18, checked 2026-11-03); the bridge keeps working against
+that release and the cards do not depend on it.
 
 ## The four cards
 

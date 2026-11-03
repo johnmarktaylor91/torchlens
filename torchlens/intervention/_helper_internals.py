@@ -17,9 +17,10 @@ import torch
 from torch import nn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from ._facet_writes import _active_facet_fire, _facet_home_label
 from ._types import Edit, HelperPortability, Signal
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
-from .hooks import HookContext
+from .hooks import HookContext, _resolve_facet_specs
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
 
 
@@ -471,3 +472,89 @@ def _patch_source_identity(
         identity["positions"] = repr(pairs)
         identity["position_axis"] = str(int(position_axis))
     return identity
+
+
+def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
+    """Resolve one PASS-QUALIFIED donor op on the patch source trace.
+
+    Prefers the fire context's pass-qualified ``label`` spelling, then
+    derives ``layer_label:pass_index``; a bare label reaching a multi-pass
+    donor site refuses typed (never guess a pass -- the historical bare
+    lookup silently returned the LAST pass). Returns ``(site_label, op)``.
+    """
+
+    context = layer_log if layer_log else {}
+    qualified = context.get("label")
+    bare = context.get("layer_label")
+    pass_index = context.get("pass_number")
+
+    site_label: Any = None
+    if isinstance(qualified, str) and ":" in qualified:
+        site_label = qualified
+    elif isinstance(bare, str) and isinstance(pass_index, int) and pass_index >= 1:
+        site_label = f"{bare}:{pass_index}"
+    elif bare is not None:
+        site_label = bare
+
+    source_site = None
+    if site_label is not None:
+        source_site = source._layer_dict_all_keys.get(site_label)
+    if source_site is None:
+        live_label, source_site = _live_capture_donor(source, context)
+        if source_site is not None:
+            site_label = live_label
+    if source_site is None:
+        raise HookValueError(
+            f"patch_from source trace has no site {site_label!r}; patch "
+            "selections must resolve on sites the source captured "
+            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
+            "rerun or bound firing resolves to the source op captured at the "
+            "same position, only when that op has the same type and shape)."
+        )
+    if isinstance(site_label, str) and ":" not in site_label:
+        num_passes = int(getattr(source_site, "num_passes", 1) or 1)
+        if num_passes > 1:
+            layer_label = getattr(source_site, "layer_label", site_label)
+            spellings = ", ".join(f"'{layer_label}:{index}'" for index in range(1, num_passes + 1))
+            raise HookValueError(
+                f"patch_from donor site {site_label!r} is multi-pass "
+                f"({num_passes} passes) and the fire context carries no pass: "
+                "a donor pass is never guessed (the bare lookup historically "
+                "returned the LAST pass silently). Remedy: address one donor "
+                f"pass explicitly: {spellings}.",
+                code="patch_donor_pass_ambiguous",
+                site=site_label,
+                num_passes=num_passes,
+            )
+    return site_label, source_site
+
+
+def _donor_facet_slice(source: Any, donor_op: Any, value: torch.Tensor) -> torch.Tensor:
+    """Return the facet slice of a donor value when a facet write is firing.
+
+    Outside a facet scatter wrapper the donor value is returned unchanged. Inside
+    one, the wrapper's facet selector is resolved on the SOURCE trace and the
+    view whose home is the donor op is applied to the donor value; when the
+    source trace serves no such facet view (its module facets were not kept),
+    the target's own facet transform chain (the portable view definition) is
+    applied to the donor value instead.
+    """
+
+    fire = _active_facet_fire()
+    if fire is None:
+        return value
+    donor_labels = {
+        str(label)
+        for label in (
+            getattr(donor_op, "_layer_label_raw", None),
+            getattr(donor_op, "layer_label", None),
+            getattr(donor_op, "label", None),
+        )
+        if label is not None
+    }
+    view_spec = fire.spec
+    for _facet_name, source_spec in _resolve_facet_specs(source, fire.selector):
+        if source_spec.home is donor_op or _facet_home_label(source_spec) in donor_labels:
+            view_spec = source_spec
+            break
+    return cast(torch.Tensor, view_spec.apply_transforms(value))

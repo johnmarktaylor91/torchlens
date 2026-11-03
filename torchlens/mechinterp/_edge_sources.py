@@ -102,7 +102,7 @@ def pre_norm_input(trace: Any, module: Any, *, receiver: str) -> tuple[Any, Any]
             code="mi_edge_graph_nonadditive",
             message=f"The input of receiver {receiver!r} ({address}) could not be resolved: "
             f"{externals.detail}.",
-            remedy="capture with default options (layers_to_save='all') so every op inside "
+            remedy="capture with default options (save='all') so every op inside "
             "the receiver module is recorded",
             receiver=receiver,
             module_address=address,
@@ -134,7 +134,7 @@ def pre_norm_input(trace: Any, module: Any, *, receiver: str) -> tuple[Any, Any]
             code="mi_edge_graph_nonadditive",
             message=f"The input entering norm {distinct[0]!r} of receiver {receiver!r} could "
             f"not be resolved: {spec.detail}.",
-            remedy="capture with default options (layers_to_save='all')",
+            remedy="capture with default options (save='all')",
             receiver=receiver,
             module_address=address,
         )
@@ -225,7 +225,7 @@ def classify_leaf(trace: Any, label: str, attention_addresses: frozenset[str]) -
                 "exposes no per-head result view, so its heads cannot be graph nodes.",
                 remedy="load the model with attn_implementation='eager' (or capture fused SDPA "
                 "with capture=tl.options.CaptureOptions(save_args=True)) and capture "
-                "with layers_to_save='all'",
+                "with save='all'",
                 module_address=address,
             )
     _refuse_nonadditive_writer(label, stack[-1] if stack else "<top level>", func_name)

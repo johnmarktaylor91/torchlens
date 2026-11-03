@@ -41,7 +41,7 @@ def _run_cli(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def test_tier0_verbs_stay_torch_free(clean: Path) -> None:
-    """info/schema/guide/version/ls never import torch (the purity gate)."""
+    """info/schema/guide/version/ls/agent init never import torch (the purity gate)."""
 
     probe = (
         "import sys\n"
@@ -56,6 +56,7 @@ def test_tier0_verbs_stay_torch_free(clean: Path) -> None:
         ["schema", "--json"],
         ["info", str(clean), "--json"],
         ["ls", str(clean.parent), "--json"],
+        ["agent", "init", "--json", "--file", str(clean.parent / "AGENTS.md")],
     ):
         result = subprocess.run(
             [sys.executable, "-c", probe.format(args=args)],

@@ -73,6 +73,20 @@ class _CounterfactualStateGuard:
         self._restore_model()
         _restore_rng(self._rng)
 
+    def parameters_drifted(self) -> bool:
+        """Return whether any parameter's value differs from the snapshot.
+
+        Used after a capture that kept parameter arguments by reference: a
+        forward that wrote a parameter (through ``param.data`` too, which no
+        version counter on the parameter records) leaves aliases that no
+        longer hold the call-time value.
+        """
+
+        return any(
+            isinstance(tensor, nn.Parameter) and not torch.equal(tensor, saved)
+            for tensor, saved in self._tensors
+        )
+
     def _restore_model(self) -> None:
         """Restore every DRIFTED parameter/buffer value and grad in place.
 

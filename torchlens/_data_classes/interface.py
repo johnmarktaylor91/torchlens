@@ -90,7 +90,10 @@ def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
     Returns:
         Tensor log entry object with info about specified layer.
     """
-    capture_events = getattr(self, "capture_events", None)
+    # Instance-dict read: ``capture_events`` is a session field that is absent on
+    # most torch captures, and ``getattr`` with a default paid the Trace miss
+    # path (a formatted AttributeError) about eleven times per layer.
+    capture_events = self.__dict__.get("capture_events")
     if capture_events is not None and ix in capture_events.live_index.by_raw_label:
         return LiveOpView(self, capture_events.live_index.require_event(ix))
     if (capture_events is None or not getattr(capture_events, "op_events", ())) and (

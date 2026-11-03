@@ -15,6 +15,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -61,26 +62,6 @@ def show(trace: Trace, kind: str | None = None, **kwargs: Any) -> Any:
     return trace.draw(**kwargs)
 
 
-def _draw_policy(  # noqa: PLR0913 - one entry per policy key the Drawing records
-    graph: GraphLiteral,
-    rolled: bool,
-    theme: str,
-    collapse: CollapseLiteral,
-    module: Module | str | None,
-    depth: int,
-) -> dict[str, Any]:
-    """Return the resolved render policy a draw door's ``Drawing`` records."""
-
-    return {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
-
-
 def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw door
     trace: Trace,
     *,
@@ -120,6 +101,54 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
         theme=theme,
         show_module_paths=show_module_paths,
         show_grad_values=show_grad_values,
+    )
+
+
+def _draw_policy(
+    graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
+) -> dict[str, Any]:
+    """Return the policy a :class:`Drawing` records: the options that shaped it."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
+def _check_graph(graph: str) -> None:
+    """Refuse a ``graph=`` value outside the three graphs ``draw`` renders."""
+
+    if graph not in ("forward", "backward", "combined"):
+        raise InvalidArgumentError(
+            f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
+            code="visualization_mode_invalid",
+            remedy="pass graph='forward', 'backward', or 'combined'",
+            argument="graph",
+        )
+
+
+def _finish_drawing(  # noqa: PLR0913 - one argument per Drawing field the door fills
+    rendered: Any,
+    outpath: str,
+    file_format: str,
+    num_ops: int | None,
+    policy: dict[str, Any],
+    trace: Trace,
+) -> Drawing:
+    """Return the ``Drawing`` for a rendered graph, with its written path when one exists."""
+
+    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
+    return Drawing(
+        dot=str(rendered),
+        file_format=file_format,
+        path=written if written.exists() else None,
+        num_ops=num_ops,
+        policy=policy,
+        trace=trace,
     )
 
 
@@ -174,16 +203,17 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
     file_format: str = "pdf",
     open_viewer: bool = False,
+    highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
 
-    if graph not in ("forward", "backward", "combined"):
-        raise InvalidArgumentError(
-            f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
-            code="visualization_mode_invalid",
-            remedy="pass graph='forward', 'backward', or 'combined'",
-            argument="graph",
-        )
+    if highlight is not None:
+        from ._highlight import draw_highlighted, explicit_draw_kwargs
+
+        # locals() is read before any parameter below is reassigned.
+        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
+
+    _check_graph(graph)
     num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
@@ -229,15 +259,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
         rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
-    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
-    return Drawing(
-        dot=str(rendered),
-        file_format=file_format,
-        path=written if written.exists() else None,
-        num_ops=num_ops,
-        policy=policy,
-        trace=trace,
-    )
+    return _finish_drawing(rendered, outpath, file_format, num_ops, policy, trace)
 
 
 def animate(

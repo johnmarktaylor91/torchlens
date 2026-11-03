@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 pydot = pytest.importorskip("pydot")
 
@@ -253,7 +254,7 @@ def _collapse_small_modules(module: Any) -> bool:
         Whether the module should collapse.
     """
 
-    return str(getattr(module, "address", "")).startswith("blocks.")
+    return str(record_member(module, "address", "")).startswith("blocks.")
 
 
 def _collapse_encoder_modules(module: Any) -> bool:
@@ -270,7 +271,7 @@ def _collapse_encoder_modules(module: Any) -> bool:
         Whether the module belongs to the focused encoder's children.
     """
 
-    return str(getattr(module, "address", "")).startswith("encoder.")
+    return str(record_member(module, "address", "")).startswith("encoder.")
 
 
 def _skip_relu(layer: Any) -> bool:

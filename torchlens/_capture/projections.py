@@ -795,7 +795,6 @@ def _record_from_record_context(
 COMMIT_STAGE_MATRIX: dict[str, tuple[str, ...]] = {
     "exhaustive": (
         "fire_results_park",
-        "module_filter",
         "selector",
         "escrow_candidate",
         "payload_disposition",
