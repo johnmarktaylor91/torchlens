@@ -443,9 +443,7 @@ def _bind(data: Any, root: Path, at: str) -> Any:
         return {key: _bind(item, root, f"{at}[{key!r}]") for key, item in data.items()}
     if tag == "callable_placeholder":
         fields = decode_value(data, at=at)
-        return CallablePlaceholder(
-            fields["position"], str(fields["qualname"]), int(fields["repr_length"])
-        )
+        return CallablePlaceholder(fields.position, fields.qualname, fields.repr_length)
     if tag == "tensor":
         tensor = read_tensor(root, blob=str(data["blob"]), key=str(data["key"]))
         return torch.view_as_complex(tensor) if data.get("complex") else tensor

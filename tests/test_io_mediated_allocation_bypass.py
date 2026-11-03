@@ -68,6 +68,7 @@ import struct
 import warnings
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -76,6 +77,7 @@ from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io._inline_tensor import rebuild_inline_tensor
 from torchlens._io._safe_unpickle import (
@@ -294,11 +296,15 @@ def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -
     (path / "records/trace.json").write_bytes(_reconstruct_pickle("numpy.core.multiarray", _N))
     redigest(path, "records/trace.json")
 
-    with pytest.raises(Exception) as caught:
-        tl.load(path)
-    assert "mediated allocation" in str(caught.value) or "mediated allocation" in str(
-        caught.value.__cause__
-    )
+    with (
+        patch.object(SafeBundleUnpickler, "load") as native_load,
+        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
+    ):
+        with pytest.raises(ArtifactError) as caught:
+            tl.load(path)
+        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+        native_load.assert_not_called()
+        python_load.assert_not_called()
 
 
 # --------------------------------------------------------------------------- #
@@ -532,9 +538,15 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
         _rebuild_amplification_pickle(_embedded_blob(_uint8_typed_storage(), legacy=True), _N)
     )
     redigest(path, "records/trace.json")
-    with pytest.raises(Exception) as caught:
-        tl.load(path)
-    assert "_load_from_bytes" in str(caught.value) + str(caught.value.__cause__)
+    with (
+        patch.object(SafeBundleUnpickler, "load") as native_load,
+        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
+    ):
+        with pytest.raises(ArtifactError) as caught:
+            tl.load(path)
+        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+        native_load.assert_not_called()
+        python_load.assert_not_called()
 
 
 @pytest.mark.smoke
