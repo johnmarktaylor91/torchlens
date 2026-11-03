@@ -36,6 +36,7 @@ from torchlens._visualization._render_leaf import (
     _format_branch_kind_text,
 )
 from torchlens.options import CaptureOptions
+from torchlens.validation import last_validation_failure
 from torchlens.validation.invariants import MetadataInvariantError
 
 _POS = torch.ones(2, 3)
@@ -149,7 +150,7 @@ class AlternatingLoopIf(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for _ in range(2):
-            if x.sum() > 0:
+            if x.sum() > 0:  # noqa: SIM108 (the statement form is under test)
                 x = -x
             else:
                 x = x * 2
@@ -180,7 +181,7 @@ class ElseWithoutTensorOp(nn.Module):
     """``if``/``else`` whose else arm runs no tensor op."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.sum() > 0:
+        if x.sum() > 0:  # noqa: SIM108 (the statement form is under test)
             y = x * 2
         else:
             y = x
@@ -209,7 +210,7 @@ class WhileModel(nn.Module):
 def _validated_trace(model: nn.Module, x: torch.Tensor) -> Trace:
     """Validate the capture of ``model`` on ``x`` and return its trace."""
 
-    assert tl.validate(model, (x,), scope="forward") is True
+    assert tl.validate(model, (x,), scope="forward") is True, last_validation_failure()
     return tl.trace(model, (x,))
 
 
