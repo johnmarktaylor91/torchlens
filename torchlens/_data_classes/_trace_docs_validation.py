@@ -40,7 +40,9 @@ DOCS: dict[str, str] = {
         Returns
         -------
         bool or ValidationStatus
-            ``True`` if validation succeeds. Loaded non-torch traces whose
+            ``True`` if validation succeeds. A torch replay that passes on final
+            outputs whose every element is non-finite returns ``False`` with a
+            ``degenerate_forward`` failure recorded. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
 
