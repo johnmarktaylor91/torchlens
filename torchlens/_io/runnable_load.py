@@ -96,10 +96,10 @@ from .._utils._callable_safety import (
     unsafe_callable_reason,
 )
 from .._utils._torch_compat import resolve_runnable_torch_alias
-from .._utils.display import identity as _module_boundary_identity
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
 from ..intervention.types import FunctionRegistryKey
+from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr
 from .runnable_coherence import _callable_registry_contradiction
 
@@ -134,18 +134,10 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
     }
 )
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
-# TorchLens-owned synthetic ops that capture records as computational calls. The module
-# boundary mint (``_state._decorated_identity``: ``nn.Identity`` and pass-through module
-# outputs) records ``torchlens._utils.display.identity``, a pure pass-through. This is a
-# closed table keyed on the exact persisted registry key and resolved by in-memory
-# reference: no artifact-selected module is ever imported.
+# TorchLens-owned synthetic ops: a closed table resolved by in-memory reference.
 _TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable[..., Any]]] = {
-    FunctionRegistryKey(
-        "custom",
-        "identity",
-        "function",
-        import_path="torchlens._utils.display:identity",
-    ): ("torchlens._utils.display.identity", _module_boundary_identity),
+    FunctionRegistryKey(space, name, kind, import_path=path): entry
+    for (space, name, kind, path), entry in TORCHLENS_SYNTHETIC_CALLABLES.items()
 }
 # Canonical copy lives in ``torchlens._utils._callable_safety`` so the capture-side
 # keyer, this resolver, and the security gate's recognized-operator predicate can

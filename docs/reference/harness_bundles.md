@@ -247,6 +247,10 @@ it where you report the number and call the result a descriptive comparison.
   comparison operands, and `compare`, `rank_changes`, `store_comparison` and `draw(graph="diff")` run the same
   comparison gate as `b.at(site).compare()`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
+- Row keys of `compare` and `rank_changes`: a multi-pass op (a layer that ran more than once, as in
+  an unrolled recurrence) gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`),
+  the spelling `trace["tanh_1_1:2"]` already reads; a single-pass op keeps its bare layer label.
+  Members pair by layer through the structural alignment and the pass suffix carries over.
 - `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk
   until read); `map_location` and `materialize_nested` reach the members too.
 

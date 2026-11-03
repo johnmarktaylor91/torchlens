@@ -56,7 +56,7 @@ def _refuse_chunk_option_conflict(message: str, alternative: str) -> NoReturn:
 
     raise ChunkedForwardConfigError(
         message,
-        code="trace_option_unsupported",
+        code="chunked_capture_option_conflict",
         remedy=f"{alternative}, or run without chunk_size",
     )
 
@@ -130,7 +130,7 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
     ``AppendMismatchError`` from chunk assembly means an activation is not row-wise over the
     batch; any other error (the capture's ``TraceCaptureError`` unwrapped to the forward's own
     exception) is the forward failing on a partial batch. Both become
-    ``ChunkedForwardConfigError`` (``trace_option_unsupported``) pointing at a plain capture.
+    ``ChunkedForwardConfigError`` (``chunked_forward_batch_coupled``) pointing at a plain capture.
     """
 
     total_rows = int(plan.total_size)
@@ -144,7 +144,7 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
             f"chunk_size: assembling {where} found an activation that is not row-wise "
             f"over the batch ({exc}); this forward is batch-coupled, so a chunked capture "
             "cannot stand for the whole batch.",
-            code="trace_option_unsupported",
+            code="chunked_forward_batch_coupled",
             remedy="run without chunk_size",
             chunk_index=chunk_index,
         ) from exc
@@ -158,7 +158,7 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
     raise ChunkedForwardConfigError(
         f"chunk_size: the forward failed on {where} with {type(forward_exc).__name__}: "
         f"{forward_exc}; a forward that needs the whole batch cannot run in chunks.",
-        code="trace_option_unsupported",
+        code="chunked_forward_batch_coupled",
         remedy=(
             "run without chunk_size (a forward that also fails on the whole batch "
             "is failing on its own)"

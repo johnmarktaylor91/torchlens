@@ -131,8 +131,51 @@ def tensor_content_digest(value: torch.Tensor) -> str:
     shape or dtype, so callers compare digests only within one site.
     """
 
-    payload = value.detach().cpu().contiguous()
+    payload = value.detach().cpu()
     if payload.numel() == 0:
         return hashlib.sha256(b"").hexdigest()
-    raw = payload.view(-1).view(torch.uint8)
+    flat = payload.reshape(-1)
+    if flat.stride() != (1,):
+        # ``contiguous()`` and ``reshape`` leave a one-element payload's stride
+        # alone (``x[:, 0]`` of a ``(1, 4)`` tensor is ``(1,)`` with stride 4,
+        # and still "contiguous"), and the byte reinterpretation below needs
+        # a unit stride. Materialize a dense copy only in that case.
+        flat = flat.clone(memory_format=torch.contiguous_format)
+    raw = flat.view(torch.uint8)
     return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
+
+
+def rollback_snapshot(site: Op) -> dict[str, Any]:
+    """Return the site fields a replay commit writes, under their live names.
+
+    Every field ``_apply_out_update`` (through ``_set_saved_out_metadata``) or
+    the fire-record replacement writes is listed here by its live attribute
+    name: a failed commit sets them back verbatim, so a stale key would turn
+    the error it unwinds into a bare ``AttributeError``.
+
+    Parameters
+    ----------
+    site:
+        Op record about to be updated.
+
+    Returns
+    -------
+    dict[str, Any]
+        Field name to the value held before the update.
+    """
+
+    return {
+        "out": site.out,
+        "transformed_out": site.transformed_out,
+        "shape": site.shape,
+        "transformed_out_shape": site.transformed_out_shape,
+        "dtype": site.dtype,
+        "dtype_ref": site.dtype_ref,
+        "device_ref": site.device_ref,
+        "transformed_out_dtype": site.transformed_out_dtype,
+        "activation_memory": site.activation_memory,
+        "transformed_activation_memory": site.transformed_activation_memory,
+        "has_saved_activation": site.has_saved_activation,
+        "edits": list(site.edits),
+        "is_edited": site.is_edited,
+    }

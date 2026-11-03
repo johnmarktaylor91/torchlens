@@ -28,6 +28,7 @@ from ._tl import (
     get_tensor_label,
     set_tensor_label,
 )
+from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -201,11 +202,7 @@ def _emit_exhaustive_operation_events(
             # minted copy's ``CloneBackward`` is bookkeeping, not op metadata.
             live_member_grad_fn = out_tensor.grad_fn
             out_tensor = safe_copy(out_tensor)
-            if live_member_grad_fn is not None:
-                try:
-                    setattr(out_tensor, "tl_user_grad_fn", live_member_grad_fn)
-                except AttributeError:
-                    pass
+            stamp_user_grad_fn(out_tensor, live_member_grad_fn)
 
         # M7: per-output isolation is a plain dict copy. Every per-output
         # writer REASSIGNS its fields (``_log_output_tensor_info``,
