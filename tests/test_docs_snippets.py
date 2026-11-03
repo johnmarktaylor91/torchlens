@@ -581,6 +581,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "gallery/neuro_rdms.md": _RECIPE_PAGES_EXECUTED,
     "gallery/ioi_circuit.md": _RECIPE_PAGES_EXECUTED,
     "gallery/bundles_harness.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "

@@ -66,6 +66,7 @@ PAGES: dict[str, str] = {
     "docs/gallery/neuro_rdms.md": "torchvision",
     "docs/gallery/ioi_circuit.md": "transformers",
     "docs/gallery/bundles_harness.md": "torchlens",
+    "docs/gallery/jacobian_lens.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
