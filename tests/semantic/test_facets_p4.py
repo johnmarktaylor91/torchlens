@@ -12,6 +12,9 @@ from torch import nn
 import torchlens as tl
 from torchlens.facets import FacetSpec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class HeadResult(nn.Module):
     """Return two explicit head-result tensors."""
@@ -185,7 +188,9 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
         return clean_head
 
     manual = corrupted_log.fork("manual_head_patch")
-    manual.attach_hooks(tl.facet("result").head(0).in_module("block.attn"), _manual_patch)
+    manual.do(
+        {tl.facet("result").head(0).in_module("block.attn"): _manual_patch}, intervention=_STAGE
+    )
     manual.run(model, corrupted)
 
     assert torch.equal(scores[0, 0], _metric(manual).detach())

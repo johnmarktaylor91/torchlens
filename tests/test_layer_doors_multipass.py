@@ -1,6 +1,6 @@
-"""``Layer.do``, ``Layer.set`` and ``Layer.attach_hooks`` address every pass of a multi-pass layer.
+"""``Layer.do`` (edit or value) and ``Layer.set`` address every pass of a multi-pass layer.
 
-A bare layer label addresses only a single-pass layer, so the three Layer doors
+A bare layer label addresses only a single-pass layer, so the Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
 loop would otherwise refuse with ``SiteAmbiguityError`` on every door. A Layer
 spans all its passes, so each door discloses the two-site fan-out. Each edit
@@ -86,7 +86,7 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("do", "set", "attach_hooks"))
+@pytest.mark.parametrize("door", ("do", "do_value", "set"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
     """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
 
@@ -97,14 +97,13 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         if door == "do":
             layer.do(tl.scale(2.0))
-        elif door == "set":
-            layer.set(torch.zeros(2, 3), confirm_mutation=True)
+        elif door == "do_value":
+            layer.do(torch.zeros(2, 3))
         else:
-            layer.attach_hooks(tl.scale(2.0), confirm_mutation=True)
-        # The recipe doors apply on push, which re-resolves the same two sites.
-        if door != "do":
-            fork.push()
-    want = _oracle(model, x, shared_edit=_zero if door == "set" else _double)
+            layer.set(torch.zeros(2, 3), confirm_mutation=True)
+            # The staged recipe applies on a rerun, which re-resolves the same two sites.
+            fork.run(model, x)
+    want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
         assert fork[f"{shared}:{pass_index}"].edits

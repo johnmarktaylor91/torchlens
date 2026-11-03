@@ -17,6 +17,9 @@ from torchlens.errors import MissingFacetError
 from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class LlamaSdpaAttention(nn.Module):
     """Tiny RoPE-like SDPA attention module."""
@@ -202,7 +205,7 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
-        log.attach_hooks(tl.facet("pattern"), tl.zero_ablate())
+        log.do({tl.facet("pattern"): tl.zero_ablate()}, intervention=_STAGE)
 
 
 def test_residual_facets_read_and_grad() -> None:

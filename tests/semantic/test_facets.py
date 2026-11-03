@@ -19,6 +19,9 @@ from torchlens.errors import MissingFacetError
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _Record:
     """Simple record-like object for facet tests."""
@@ -757,7 +760,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     zeroed = clean.fork("zero_q_head")
-    zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    zeroed.do({tl.head(0, "q"): tl.zero_ablate()}, intervention=_STAGE)
     zeroed.run(model, x)
 
     assert not torch.allclose(_trace_output(zeroed), clean_out)
@@ -788,11 +791,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("fused_qk")
-    edited.attach_hooks(
+    edited.do(
         [
             (tl.head(0, "q"), tl.zero_ablate()),
             (tl.head(1, "k"), tl.zero_ablate()),
-        ]
+        ],
+        intervention=_STAGE,
     )
     edited.run(model, x)
 
@@ -803,11 +807,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
 
     conflict = clean.fork("fused_conflict")
     with pytest.raises(SiteResolutionError, match="Facet intervention conflict"):
-        conflict.attach_hooks(
+        conflict.do(
             [
                 (tl.head(0, "q"), tl.zero_ablate()),
                 (tl.facet("q").head(0), tl.zero_ablate()),
-            ]
+            ],
+            intervention=_STAGE,
         )
 
 
@@ -831,7 +836,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
 
     edited = log.fork("gqa_refuse")
     with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):
-        edited.attach_hooks(tl.head(3, "k"), tl.zero_ablate())
+        edited.do({tl.head(3, "k"): tl.zero_ablate()}, intervention=_STAGE)
 
 
 def test_computed_facet_write_refuses() -> None:
@@ -846,7 +851,9 @@ def test_computed_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="computed facets are read-only"):
-        log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
+        log.fork("computed_refuse").do(
+            {tl.facet("intermediate"): tl.zero_ablate()}, intervention=_STAGE
+        )
 
 
 def test_in_place_or_view_version_facet_write_refuses() -> None:
@@ -881,7 +888,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
-        log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+        log.fork("unsafe_refuse").do({tl.facet("unsafe"): tl.zero_ablate()}, intervention=_STAGE)
 
 
 def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
@@ -898,7 +905,7 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("head_all")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
     edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)
