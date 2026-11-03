@@ -936,12 +936,11 @@ def _add_lookup_keys_for_layer_entry(
                 continue
             lookup_keys_for_tensor.append(module_key)
 
-    # Allow using buffer/input/output address as key, too:
-    if layer_entry.graph.is_buffer:
-        address, buffer_pass = layer_entry.buffer_address, layer_entry.buffer_pass
-        if self._buffer_num_calls.get(address, 1) == 1:
-            lookup_keys_for_tensor.append(address)
-        lookup_keys_for_tensor.append(f"{address}:{buffer_pass}")
+    if layer_entry.graph.is_buffer:  # buffer, input and output addresses are keys too
+        if self._buffer_num_calls.get(layer_entry.buffer_address, 1) == 1:
+            lookup_keys_for_tensor.append(layer_entry.buffer_address)
+        buffer_pass = layer_entry.buffer_pass  # record-groups: flat
+        lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.graph.io_role)
 

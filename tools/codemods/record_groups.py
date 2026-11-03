@@ -27,8 +27,10 @@ Usage::
 the flat renames and removals). ``--check`` exits 1 when a rewrite is
 pending (idempotence check); ``--report`` prints skipped sites. A file that
 contains the line ``# record-groups: keep-flat`` is left alone (tests that
-exercise the refusal of the former spellings), and names bound by an import
-(``from . import _op_cost``) are never treated as records.
+exercise the refusal of the former spellings), a line ending in
+``# record-groups: flat`` keeps its spellings (an Op row reading a member that
+moved on Layer only), and names bound by an import (``from . import _op_cost``)
+are never treated as records.
 """
 
 from __future__ import annotations
@@ -54,6 +56,9 @@ RECORD_TOKENS = frozenset(
 )
 #: Subscripted containers whose items are Op or Layer records.
 KEEP_FLAT = "# record-groups: keep-flat"
+#: Line marker: a site whose receiver is an Op row reading a member that moved on
+#: Layer only (``buffer_pass``, ``is_internal_sink``) keeps its flat spelling.
+LINE_FLAT = "# record-groups: flat"
 RECORD_CONTAINERS = re.compile(
     r"(^|\.)(trace|log|model_log|tl_log|tlog|ops|layers|layer_list|_layer_list|ops_list)$"
 )
@@ -280,6 +285,9 @@ def rewrite_python(
         lines.insert(at, _helper_import(path))
         finder.edits = [(ln + (ln > at), col, old, new) for ln, col, old, new in finder.edits]
     for lineno, end_col, old, new in sorted(finder.edits, reverse=True):
+        if LINE_FLAT in lines[lineno - 1]:
+            finder.skipped.append((lineno, f"flat by marker: {old}"))
+            continue
         raw = lines[lineno - 1].encode()
         start = end_col - len(old.encode())
         if raw[start:end_col].decode() != old:
