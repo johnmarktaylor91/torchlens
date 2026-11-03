@@ -31,7 +31,7 @@ trace.output_table(k=5, style="classification", head="0")
 trace.decode_output(style="hf_text", tokenizer=tok)
 ```
 
-The read-time decode returns rows in the same shape as `trace.decoded_output`
+The read-time decode returns rows in the same shape as `trace.decode_output()`
 and never rewrites the captured record. It needs the output activations
 retained (the default save policy); a structure-only or output-excluding
 capture refuses with `decoded_output_unavailable`. A `style` that no
