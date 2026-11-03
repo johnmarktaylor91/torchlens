@@ -20,7 +20,7 @@ and 6 moved to the next batch, so their verb cells still come from their specifi
 | 3. Neuro feature extraction to per-layer RDMs, with an order-error control | used | used | used |  | used |  | 252 TorchLens, 56 plain hooks | ResNet-18, ViT-B/16 |
 | 4. Jacobian lens, also on an architecture its reference repo cannot run | planned | planned | planned | | planned | planned | next batch | next batch |
 | 5. IOI circuit by edge attribution (Wang et al. 2022) | used |  | used |  |  |  | 55 TorchLens, 19 plain (scoring, not a reimplementation) | GPT-2 small |
-| 6. Bundles plus a two-model harness | planned | planned | planned | planned | planned | planned | next batch | next batch |
+| 6. Bundles plus a two-model harness | used | used | used | used | used |  | 44 TorchLens, 41 plain hooks | GPT-2 small, ResNet-18, DistilGPT2 |
 
 ## The verbs
 
