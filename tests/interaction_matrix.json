@@ -2237,10 +2237,9 @@
   {
    "a": "multipass",
    "b": "record",
-   "status": "asymmetry",
-   "asymmetry": "A31",
-   "confidence": "medium",
-   "note": "tl.record captures repeated calls, but Recording.to_trace() refuses a multi-pass Recording (recording_multipass_not_convertible)."
+   "status": "composes",
+   "evidence": "tests/test_record_to_trace_multipass.py::test_three_pass_recording_cooks_like_trace",
+   "confidence": "high"
   },
   {
    "a": "multipass",
@@ -2823,10 +2822,10 @@
     "multipass",
     "record"
    ],
-   "summary": "tl.record captures repeated calls, but Recording.to_trace() refuses a multi-pass Recording (recording_multipass_not_convertible), so recurrent models cannot be cooked into a Trace.",
-   "evidence": "docs/reference/error_refusal_contract.md",
+   "summary": "tl.record captures repeated calls and Recording.to_trace() now folds a completed multi-pass Recording into a multi-pass Trace; only a halted multi-pass Recording keeps the recording_multipass_not_convertible refusal.",
+   "evidence": "tests/test_record_to_trace_multipass.py::test_three_pass_recording_cooks_like_trace",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "close"
   },
   {
    "id": "A32",

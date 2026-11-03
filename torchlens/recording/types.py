@@ -17,6 +17,7 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
+from ._cook_settle import _settle_cooked_trace
 
 __all__ = [
     "ActivationRecord",
@@ -993,9 +994,15 @@ class Recording(TraceLike):
         ------
         RuntimeError
             If the recording is a failed partial capture, if it does not retain
-            the topology-complete event stream (e.g. disk-recovered), if it
-            spans multiple recorded passes, or if it is halted but retained no
+            the topology-complete event stream (e.g. disk-recovered), if it is
+            a halted multi-pass recording, or if it is halted but retained no
             raw activation payload to bind as the output frontier.
+
+        A multi-pass recording (several ``Recorder(...)`` passes) cooks into
+        one multi-pass Trace: the passes are numbered the way ``tl.trace``
+        numbers repeated calls of the same module, so ``trace["linear_1_1:2"]``
+        is the second pass's op and ``trace.layers["linear_1_1"].num_passes``
+        is the pass count.
         """
 
         if self.is_failed:
@@ -1013,11 +1020,11 @@ class Recording(TraceLike):
                 code="recording_events_not_retained",
                 remedy="convert the in-session Recording rather than a disk-recovered one",
             )
-        if self.num_passes > 1:
+        if self.num_passes > 1 and self.is_stopped:
             raise CaptureNotActiveError(
-                "Recording.to_trace() does not support multi-pass Recordings because "
-                "replaying multiple Recorder(...) passes into one Trace is not yet "
-                "structurally defined",
+                "Recording.to_trace() cannot convert this multi-pass Recording: it was "
+                "halted, and a halt frontier is defined for one forward pass; every "
+                "completed multi-pass Recording converts",
                 code="recording_multipass_not_convertible",
                 remedy="record one pass per Recording before converting",
             )
@@ -1085,43 +1092,7 @@ class Recording(TraceLike):
             halt_output_addresses,
         )
 
-        # Settle at the cook seam (settlement authority path 9): the cooked
-        # Trace is a real product and must carry an attested outcome; a halted
-        # cooked trace is HALTED (so the runnable/live-replay gates see it),
-        # never a silently-blessed complete. The frontier label is read back
-        # post-postprocess so it is the FINAL remapped label.
-        from .._capture.outcome import stamp_cooked
-
-        cooked_frontier = None
-        cooked_reason = None
-        cooked_boundary = None
-        cooked_boundary_kind = None
-        if self.is_stopped:
-            output_labels = list(getattr(trace, "output_layers", ()))
-            cooked_frontier = str(output_labels[0]) if output_labels else None
-            # R06: the halted postprocess remapped the persisted halt fields to
-            # FINAL labels; the settled record mirrors them (settle_halted
-            # parity) instead of stamping the Recording-space raw label into an
-            # outcome whose frontier is final. boundary_kind rides the
-            # Recording's own settled outcome; the raw stop_reason stays the
-            # fallback when the remap did not run.
-            remapped_reason = getattr(trace, "stop_reason", None)
-            cooked_reason = (
-                remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
-            )
-            remapped_frontier = trace._graph_stop_frontier
-            cooked_boundary = (
-                remapped_frontier if isinstance(remapped_frontier, str) else cooked_reason
-            )
-            cooked_boundary_kind = getattr(self.outcome, "boundary_kind", None)
-        stamp_cooked(
-            trace,
-            halted=self.is_stopped,
-            reason=cooked_reason,
-            boundary_kind=cooked_boundary_kind,
-            boundary_label=cooked_boundary,
-            frontier_label=cooked_frontier,
-        )
+        _settle_cooked_trace(self, trace)
         return trace
 
     def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:

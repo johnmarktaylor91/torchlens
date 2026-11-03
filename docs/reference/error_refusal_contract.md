@@ -934,7 +934,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `region_target_invalid` | ``region()`` received something other than a ``TraceSlice`` (spelling DOCUMENTED-UNSTABLE) | Build the member set with ``trace.between(...)`` or ``trace.subgraph(...)`` first |
 | `region_trace_mismatch` | ``do(region, edit)`` on a trace other than the one the region was derived on (spelling DOCUMENTED-UNSTABLE) | Derive the region on the trace you edit: ``region(fork.between(...))`` |
 | `recording_intervention_predicate_type_invalid` | `tl.record` `intervene` is not callable (`InvalidArgumentError`, `ValueError` lineage; the `tl.trace` twin is `intervention_predicate_type_invalid`) | Pass `tl.when(...)`, another predicate, or `None` |
-| `recording_multipass_not_convertible` | `to_trace()` on a multi-pass Recording | Record one pass per Recording |
+| `recording_multipass_not_convertible` | `to_trace()` on a halted multi-pass Recording (a completed multi-pass Recording converts) | Record one pass per Recording |
 | `reentrant_trace` | `tl.trace` was started while another capture was active (`ReentrantTraceError`, `RuntimeError` lineage) | Finish the outer capture before starting another |
 | `release_during_active_capture` | `tl.release_model()` while a capture is still active | Let the capture finish before releasing the model |
 | `recording_option_type_invalid` | Recording option has an unsupported type | Pass the documented type for that option |

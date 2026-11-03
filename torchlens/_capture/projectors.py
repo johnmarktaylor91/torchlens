@@ -15,12 +15,23 @@ from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
+from .._ir.predicate import _distinct_label_index_keys
 from .._record_type import record_type
+from ._cook_facts import _cook_facts, _replay_capture_events
 from ._cooked_inventory import install_cooked_inventory, install_run_facts
+from ._multipass_cook import fold_pass_cores
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
     from ..recording.types import ActivationRecord
+
+__all__ = (
+    "RecordingProjection",
+    "RecordingProjector",
+    "RefreshProjector",
+    "train_mode_norm_writers_eligible",
+)
+
 
 _REFRESH_SOURCES: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
 
@@ -42,27 +53,6 @@ _GRAPH_CHANGE_MESSAGE = (
     "otherwise save_new_outs failed. Please "
     "re-run trace with the desired inputs."
 )
-
-
-def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
-    """Return the distinct label keys that should index one activation record.
-
-    Parameters
-    ----------
-    label
-        Primary public label for the retained record.
-    raw_label
-        Optional raw label alias for the same retained record.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Unique label keys that should reference the record exactly once.
-    """
-
-    if raw_label is None or raw_label == label:
-        return (label,)
-    return (label, raw_label)
 
 
 def _signature_sort_key(value: Any) -> tuple[str, str]:
@@ -883,6 +873,10 @@ class RecordingProjection:
     trace_facts: dict[str, object]
     buffer_layers: tuple[str, ...]
     internal_source_ops: tuple[str, ...]
+    #: Raw output-parent labels in output order when the projection already
+    #: knows every one (a folded multi-pass Recording); ``None`` leaves output
+    #: attribution to the labels stamped on the output tensors at capture.
+    preset_output_layers: tuple[str, ...] | None = None
 
     def prepare_trace(self, trace: Any) -> None:
         """Apply sealed run facts required before Trace postprocessing.
@@ -895,8 +889,12 @@ class RecordingProjection:
 
         trace.buffer_layers = list(self.buffer_layers)
         trace.internal_source_ops = list(self.internal_source_ops)
+
         install_run_facts(trace, self.trace_facts)
         install_cooked_inventory(trace, self.trace_facts, param_accessor=ParamAccessor)
+        if self.preset_output_layers is not None:
+            trace.output_layers = list(self.preset_output_layers)
+            return
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
@@ -921,6 +919,37 @@ class RecordingProjection:
             set_tensor_label(tensor, label)
 
 
+class _RecordIndexes:
+    """The Recording's public lookup indexes, built core by core."""
+
+    def __init__(self) -> None:
+        self.records: list[ActivationRecord] = []
+        self.by_pass: dict[int, list[int]] = {}
+        self.by_label: dict[str, list[tuple[int, int]]] = {}
+        self.by_address: dict[str, list[int]] = {}
+
+    def add_core(self, core: CapturedRunCore, core_events: tuple[OpEvent, ...]) -> None:
+        from .projections import activation_record_from_event
+
+        stored_records = core.projection_facts.get("records", ())
+        if stored_records:
+            projected_records: Iterable[ActivationRecord] = stored_records
+        else:
+            projected_records = tuple(
+                record
+                for event in core_events
+                if (record := activation_record_from_event(event)) is not None
+            )
+        for record in projected_records:
+            index = len(self.records)
+            self.records.append(record)
+            self.by_pass.setdefault(record.ctx.pass_number, []).append(index)
+            for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
+                self.by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
+            if record.ctx.address is not None:
+                self.by_address.setdefault(record.ctx.address, []).append(index)
+
+
 class RecordingProjector:
     """Build Recording activation indexes directly from sealed run cores."""
 
@@ -935,79 +964,46 @@ class RecordingProjector:
         Returns
         -------
         RecordingProjection
-            Retained records and the current public lookup indexes.
+            Retained records and the current public lookup indexes. For more
+            than one core the event stream and run facts are folded into one
+            label space (``_multipass_cook``); the records keep their own
+            pass-local labels, which is what the Recording itself shows.
         """
 
-        from .projections import activation_record_from_event
-
-        records: list[ActivationRecord] = []
-        by_pass: dict[int, list[int]] = {}
-        by_label: dict[str, list[tuple[int, int]]] = {}
-        by_address: dict[str, list[int]] = {}
-        all_events: list[OpEvent] = []
         captured_cores = tuple(cores)
+        indexes = _RecordIndexes()
+        cloned: list[tuple[OpEvent, ...]] = []
         for core in captured_cores:
             core_events = _cloned_core_events(core)
-            all_events.extend(core_events)
-            stored_records = core.projection_facts.get("records", ())
-            if stored_records:
-                projected_records = stored_records
-            else:
-                projected_records = tuple(
-                    record
-                    for event in core_events
-                    if (record := activation_record_from_event(event)) is not None
-                )
-            for record in projected_records:
-                index = len(records)
-                records.append(record)
-                by_pass.setdefault(record.ctx.pass_number, []).append(index)
-                for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                    by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
-                if record.ctx.address is not None:
-                    by_address.setdefault(record.ctx.address, []).append(index)
-        last_facts = captured_cores[-1].projection_facts if captured_cores else {}
-        selected = next(
-            (
-                (core, core.projection_facts.get("capture_events"))
-                for core in captured_cores
-                if core.projection_facts.get("capture_events") is not None
-            ),
-            None,
+            cloned.append(core_events)
+            indexes.add_core(core, core_events)
+        folded = fold_pass_cores(captured_cores, cloned) if len(captured_cores) > 1 else None
+        all_events: list[Any] = (
+            list(folded.events) if folded is not None else [e for events in cloned for e in events]
         )
-        capture_events: Any = None
-        if selected is not None and selected[1] is not None:
-            source_core, capture_events = selected
-            # The projection clone was made BEFORE the capture-end seal, so
-            # its watermark normally arrives via the seal's dual-stamp; the
-            # sealed core's own watermark is the authoritative fallback
-            # (reviewer note S-N2 — either transport alone suffices, both are
-            # kept so a future re-ordering of snapshot/seal cannot silently
-            # strand the filter anchor).
-            if (
-                getattr(capture_events, "core_seal_watermark", None) is None
-                and source_core.amendment_watermark is not None
-            ):
-                capture_events.core_seal_watermark = source_core.amendment_watermark
-            capture_events = capture_events._copy_for_replay(projected_op_events=all_events)
-            capture_events.raw_layer_counter = max(
-                (event.raw_index for event in all_events), default=0
-            )
+        trace_facts, output_tensors, output_addresses, output_labels = _cook_facts(
+            captured_cores, folded
+        )
         return RecordingProjection(
-            tuple(records),
-            by_pass,
-            by_label,
-            by_address,
+            tuple(indexes.records),
+            indexes.by_pass,
+            indexes.by_label,
+            indexes.by_address,
             tuple(all_events),
-            capture_events,
-            tuple(last_facts.get("output_tensors", ())),
-            tuple(last_facts.get("output_tensor_addresses", ())),
-            tuple(last_facts.get("output_labels", ())),
-            dict(last_facts),
+            _replay_capture_events(captured_cores, all_events),
+            output_tensors,
+            output_addresses,
+            output_labels,
+            trace_facts,
             tuple(event.label_raw for event in all_events if event.layer_type == "buffer"),
             tuple(
                 event.label_raw
                 for event in all_events
                 if event.layer_type != "input" and not event.parents
+            ),
+            preset_output_layers=(
+                tuple(label for label in output_labels if label is not None)
+                if folded is not None
+                else None
             ),
         )
