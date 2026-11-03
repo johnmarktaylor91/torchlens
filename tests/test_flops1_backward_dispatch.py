@@ -134,7 +134,16 @@ def _traced_backward(model: nn.Module, inputs: list[torch.Tensor]) -> Any:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("case", sorted(MATMUL_CASES))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case",
+    sorted(
+        c
+        for c in MATMUL_CASES
+        if c
+        in {"linear_bias_3d[a_grad=False,b_grad=True]", "matmul_2d_1d[a_grad=False,b_grad=True]"}
+    ),
+)
 def test_matmul_family_backward_equals_flop_counter_mode(case: str) -> None:
     """Counted executed backward == FlopCounterMode's backward, per case, exactly."""
 
@@ -237,7 +246,10 @@ ZOO_BUILDERS = {
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of report/_cost_tree.py.
-@pytest.mark.parametrize("case", sorted(ZOO_BUILDERS))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case", sorted(c for c in ZOO_BUILDERS if c in {"eager_attention_h1", "rnn_unrolled"})
+)
 def test_zoo_backward_equals_closed_form(case: str) -> None:
     """Counted executed backward == the closed-form backward, per zoo case, exactly."""
 

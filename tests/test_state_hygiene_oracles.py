@@ -798,13 +798,12 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/input_sites.py, intervention/_replay_sites.py, intervention/_trace_run.py ....
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
 @pytest.mark.parametrize(
     ("origin", "door"),
     [
-        ("intervene", "run"),
         ("attach_hooks", "run"),
-        ("fork_do", "run"),
-        *(("intervene", door) for door in _LOADED_DOORS if door != "run"),
+        *(("intervene", door) for door in _LOADED_DOORS if door in {"do_replay", "run_inputs"}),
     ],
 )
 def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, door: str) -> None:

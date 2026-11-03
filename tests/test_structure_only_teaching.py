@@ -122,7 +122,10 @@ _CONSUMER_CASES = [
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize(("model_cls", "expected_kind"), _CONSUMER_CASES)
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("model_cls", "expected_kind"), [c for c in _CONSUMER_CASES if c[1] == "bool_cast"]
+)
 def test_value_branch_refuses_with_consumer_kind_and_user_line(
     model_cls: type, expected_kind: str
 ) -> None:

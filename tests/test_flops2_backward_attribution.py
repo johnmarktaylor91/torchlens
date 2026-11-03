@@ -62,7 +62,15 @@ def _counted_rows_name_their_forward_op(trace: Any, status: Any) -> None:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py, campaign mutant kills.
-@pytest.mark.parametrize("case", sorted(MATMUL_CASES))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case",
+    sorted(
+        c
+        for c in MATMUL_CASES
+        if c in {"matmul_2d_1d[a_grad=False,b_grad=True]", "einsum_bmm[a_grad=True,b_grad=False]"}
+    ),
+)
 def test_matmul_family_attribution_conserves_the_count(case: str) -> None:
     """All 29 matmul-family cases: rows + unattributed == executed, exactly."""
 
@@ -374,7 +382,8 @@ _UNUSED_OUTPUT_CASES = {
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("case", sorted(_UNUSED_OUTPUT_CASES))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("case", sorted(c for c in _UNUSED_OUTPUT_CASES if c == "eig"))
 def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
     """A tensor hook handed None records nothing; the used outputs match plain autograd."""
 

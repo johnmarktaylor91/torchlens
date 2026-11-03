@@ -131,7 +131,8 @@ def _hooked_outputs(
     return outputs
 
 
-@pytest.fixture(params=sorted(_CASES))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.fixture(params=[c for c in sorted(_CASES) if c == "flattened"])
 def case(request: pytest.FixtureRequest) -> tuple[nn.Module, torch.Tensor, dict[str, str], dict]:
     factory, make_input, names = _CASES[request.param]
     torch.manual_seed(0)

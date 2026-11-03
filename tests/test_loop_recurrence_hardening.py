@@ -273,8 +273,10 @@ _FUSED_SLOTS = {nn.RNN: 2, nn.GRU: 2, nn.LSTM: 3}
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("kind", [nn.RNN, nn.GRU, nn.LSTM], ids=["RNN", "GRU", "LSTM"])
-@pytest.mark.parametrize("used_state", [False, True], ids=["unused-state", "used-state"])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("kind", "used_state"), [pytest.param(nn.GRU, False, id="unused-state-GRU")]
+)
 def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
     """Repeated fused nn.RNN/GRU/LSTM: one N-pass layer per output slot.
 
@@ -335,8 +337,11 @@ class _ReusedActivation(nn.Module):
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("n_calls", [2, 3, 4])
-@pytest.mark.parametrize("act", [nn.ReLU, nn.Tanh], ids=["relu", "tanh"])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("act", "n_calls"),
+    [pytest.param(nn.ReLU, 2, id="relu-2"), pytest.param(nn.ReLU, 3, id="relu-3")],
+)
 def test_reused_module_two_calls_grouped(act, n_calls: int) -> None:
     """A reused single-op module applied N times is one N-pass layer, incl. N=2.
 

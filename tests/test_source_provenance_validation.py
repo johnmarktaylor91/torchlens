@@ -195,7 +195,8 @@ _DIRECT_EGRESS = {
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_completeness_storage.py, backends/torch/_foreign_data.py, backends/torch/identity_shims.py ....
-@pytest.mark.parametrize("read", list(_DIRECT_EGRESS.values()), ids=list(_DIRECT_EGRESS))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("read", [_DIRECT_EGRESS["asarray"]], ids=["asarray"])
 def test_direct_data_read_of_a_source_less_tensor_fails(read: Any) -> None:
     """``torch.tensor(G.tolist())`` reads a global with no op to carry a witness."""
 

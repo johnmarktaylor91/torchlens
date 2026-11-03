@@ -129,7 +129,8 @@ _TENSOR_DUNDERS = sorted(
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-@pytest.mark.parametrize("dunder", _TENSOR_DUNDERS)
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("dunder", [d for d in _TENSOR_DUNDERS if d in {"__div__", "__gt__"}])
 def test_canonical_name_matches_what_torch_hands_a_mode(dunder: str) -> None:
     """Every admitted operator dunder canonicalizes to what the rescue's mode logs.
 

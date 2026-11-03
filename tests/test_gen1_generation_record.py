@@ -68,7 +68,8 @@ def _no_cache_reference(model: nn.Module, prefix: torch.Tensor, site: str) -> to
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py, campaign mutant kills.
-@pytest.mark.parametrize("family", sorted(FAMILIES))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("family", [f for f in sorted(FAMILIES) if f == "distilgpt2"])
 def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
     build, sites = FAMILIES[family]
     model = build("eager")

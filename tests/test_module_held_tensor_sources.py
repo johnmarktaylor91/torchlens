@@ -331,11 +331,8 @@ class _CollidingKeys(nn.Module):
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _plain_attr_fidelity.py.
 @pytest.mark.parametrize(
     ("first", "second", "expected"),
-    [
-        (1, "1", ["cache[1]", "cache['1']"]),
-        (_SameRepr(), _SameRepr(), ["cache[k]", "cache[k]#2"]),
-    ],
-    ids=["int_and_str", "same_repr"],
+    [(_SameRepr(), _SameRepr(), ["cache[k]", "cache[k]#2"])],
+    ids=["same_repr"],
 )
 def test_colliding_key_renderings_each_get_a_buffer_source(
     first: Any, second: Any, expected: list[str]

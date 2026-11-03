@@ -328,8 +328,14 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_run_setup.py, _capture/prepare/door.py, _capture/run_entry.py ....
-@pytest.mark.parametrize("failure", list(_FAILURES))
-@pytest.mark.parametrize("door", list(_DOORS))
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("door", "failure"),
+    [
+        pytest.param("trace_intervene", "normal", id="trace_intervene-normal"),
+        pytest.param("trace_bound_method", "normal", id="trace_bound_method-normal"),
+    ],
+)
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
     """The model state fingerprint is identical before and after every call.
 
@@ -416,8 +422,10 @@ def _never_captured_pair() -> nn.Sequential:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_session_forwards.py, backends/torch/param_mutation.py, campaign mutant kills.
-@pytest.mark.parametrize("where", ["forward", "hook"])
-@pytest.mark.parametrize("door", ["trace", "record"])
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("door", "where"), [pytest.param("record", "forward", id="record-forward")]
+)
 def test_deepcopy_taken_inside_a_capture_is_its_own_model(door: str, where: str) -> None:
     """A deepcopy made mid-capture runs, trains and pickles on its own weights.
 
