@@ -44,8 +44,7 @@ from ._call_fingerprint import module_fingerprint_address
 from ._fast_live_steer import apply_steer_paused, session_is_active
 from ._runnable import RunnableErrorCode
 from ._utils._module_call_dispatch import forward_entered_through_module_call
-from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
-from .backends.torch._tl import get_module_meta
+from .backends.torch import _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -653,7 +652,7 @@ def _direct_call(
 def _was_called_directly(module: nn.Module) -> bool:
     """Return whether a capture marked ``module`` as entered by a direct call."""
 
-    meta = get_module_meta(module)
+    meta = _tl_meta.get_module_meta(module)
     return meta is not None and meta.direct_forward_called
 
 
@@ -693,7 +692,7 @@ def build_direct_forward_routes(
     return tuple(routes)
 
 
-class _RoutedForward(_SessionForward):
+class _RoutedForward(_session_forwards._SessionForward):
     """A per-run ``forward`` that runs the session hook work on a direct call only."""
 
     __wrapped__: Callable[..., Any]  # the base's record of the module's own forward
@@ -722,7 +721,7 @@ def direct_forward_routes_installed(
             module = route.module_ref()
             if module is None:
                 continue
-            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
+            prior = module.__dict__.get("forward", _session_forwards._NO_INSTANCE_FORWARD)
             original = module.forward
             wrapper = _RoutedForward(
                 _direct_call(route, module, original, session_ref), module, original, prior
@@ -734,7 +733,7 @@ def direct_forward_routes_installed(
         for module, prior, wrapper in reversed(installed):
             if module.__dict__.get("forward") is not wrapper:
                 continue
-            if prior is _NO_INSTANCE_FORWARD:
+            if prior is _session_forwards._NO_INSTANCE_FORWARD:
                 module.__dict__.pop("forward", None)
             else:
                 module.__dict__["forward"] = prior

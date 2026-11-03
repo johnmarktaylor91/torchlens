@@ -130,9 +130,13 @@ def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str |
             return value
         source = imported[value.id]
         for item in ast.parse(source.read_text(encoding="utf-8"), filename=str(source)).body:
-            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                if item.target.id == value.id and item.value is not None:
-                    return item.value
+            if (
+                isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and item.target.id == value.id
+                and item.value is not None
+            ):
+                return item.value
         raise SystemExit(f"{source}: no {value.id} table found")
 
     for node in tree.body:
