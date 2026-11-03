@@ -7016,7 +7016,6 @@ test-docstrings	tests/composition_expectations/_censuses.py	159
 test-docstrings	tests/composition_expectations/_censuses.py	17
 test-docstrings	tests/composition_expectations/_censuses.py	18
 test-docstrings	tests/composition_expectations/_censuses.py	3.2
-test-docstrings	tests/composition_expectations/_censuses.py	49
 test-docstrings	tests/composition_expectations/conftest.py	12
 test-docstrings	tests/composition_expectations/conftest.py	14
 test-docstrings	tests/composition_expectations/conftest.py	75
