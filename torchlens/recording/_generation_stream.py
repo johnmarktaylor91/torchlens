@@ -24,6 +24,7 @@ import torch
 from .._capture.projections import activation_record_from_event
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import module_union_matches, selector_from_spec
+from .._utils.tensor_utils import safe_copy
 from ._generation_options import GenerationOptions
 from .types import ActivationRecord
 
@@ -101,7 +102,8 @@ def _cache_layer_kv(cache: Any, layer: int) -> tuple[torch.Tensor, torch.Tensor]
 def _kv_slice(tensor: torch.Tensor, window: range) -> torch.Tensor:
     """Return the ``[positions, heads, head_dim]`` slice of one cache tensor."""
 
-    return torch.movedim(tensor[0, :, window.start : window.stop, :], 1, 0).detach().clone()
+    window_slice = torch.movedim(tensor[0, :, window.start : window.stop, :], 1, 0)
+    return safe_copy(window_slice, detach_tensor=True, save_mode="reference").clone()
 
 
 #: Projection facts of a pass whose outputs were released (the newest pass keeps its own).
@@ -291,7 +293,7 @@ class _StepSink:
                 f"forward's positions",
                 "return one row per position (torchlens.recording.reducers.norm/top_k/probe do)",
             )
-        return value.detach()
+        return safe_copy(value, detach_tensor=True, save_mode="reference")
 
     def _read_kv(self, step: int, window: range, cache: Any) -> int:
         """Keep the declared layers' new KV-cache slices for one forward."""
