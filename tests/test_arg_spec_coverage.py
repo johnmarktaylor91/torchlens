@@ -165,7 +165,6 @@ _KNOWN_UNSUPPORTED_ARG_SPEC_REASONS = {
     "assertasync": "metadata/control helper with no validated tensor-input schema",
     "assertscalar": "metadata/control helper with no validated tensor-input schema",
     "asserttensormetadata": "metadata/control helper with no validated tensor-input schema",
-    "backward": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "batchnormbackwardelemt": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "batchnormbackwardreduce": "autograd/backward helper left on dynamic fallback pending gradient schema audit",
     "cudnnrnn": "demoted fragment: schema mismatch: missing_positions=[5, 15], extra_positions=[14], missing_names=[]",
@@ -699,5 +698,57 @@ def test_deepcopy_inside_forward_calls_are_arg_spec_covered(monkeypatch) -> None
         }
         assert uncovered == set()
         assert not any("clear" in str(op.type).lower() for op in trace.ops)
+    finally:
+        trace.cleanup()
+
+
+class _BackwardInForwardModel(torch.nn.Module):
+    """Writes parameter grads inside forward through both backward spellings."""
+
+    def __init__(self) -> None:
+        """Build the layers."""
+
+        super().__init__()
+        self.fc1 = torch.nn.Linear(4, 4)
+        self.fc2 = torch.nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run ``Tensor.backward`` and ``torch.autograd.backward``, then read the grads."""
+
+        for param in self.fc1.parameters():
+            param.grad = None
+        torch.tanh(self.fc1(x.detach())).sum().backward()
+        torch.autograd.backward(self.fc1(x.detach()).sum(), inputs=[self.fc1.bias])
+        return self.fc2(x) * self.fc1.weight.grad.mean() * self.fc1.bias.grad.sum()
+
+
+def test_backward_inside_forward_calls_are_arg_spec_covered(monkeypatch) -> None:
+    """An in-forward backward leaves no name uncovered in the usage-stats lookup gate.
+
+    ``Tensor.backward`` is decorated and counted as ``backward``; it returns ``None``, so it
+    never logs an op or caches a dynamic spec and needs its static spec. The gradients it
+    writes are counted as ``autogradbackward`` boundary ops. This pins the full-tier gate
+    (``test_arg_positions``) in one process, whatever the xdist worker layout.
+    """
+
+    import torchlens as tl
+    from torchlens import _state
+
+    monkeypatch.setattr(_state, "_collect_usage_stats", True)
+    monkeypatch.setattr(_state, "_function_call_counts", {})
+    monkeypatch.setattr(_state, "_function_call_models", {})
+    torch.manual_seed(0)
+    trace = tl.trace(_BackwardInForwardModel(), torch.rand(2, 4))
+    try:
+        names = {_normalize_func_name(name) for name in _state._function_call_counts}
+        assert {"backward", "autogradbackward"} <= names
+        assert {"backward", "autogradbackward"} <= set(FUNC_ARG_SPECS)
+        uncovered = {
+            name
+            for name in names
+            if name not in FUNC_ARG_SPECS and name not in _state._dynamic_arg_specs
+        }
+        assert uncovered == set()
+        assert not any(op.func_name == "backward" for op in trace.ops)
     finally:
         trace.cleanup()

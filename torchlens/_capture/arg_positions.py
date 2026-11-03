@@ -1621,6 +1621,9 @@ FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
 FUNC_ARG_SPECS["autogradbackward"] = ArgSpec(
     positions=(0, 1, 2, 3), tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs")
 )
+# ``Tensor.backward(self, gradient, retain_graph, create_graph, inputs)`` is decorated and
+# counted under its own name; the gradients it writes are the ``autogradbackward`` ops above.
+FUNC_ARG_SPECS["backward"] = ArgSpec(positions=(0, 1, 4), tensor_kwargs=("gradient", "inputs"))
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )
