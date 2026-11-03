@@ -3907,7 +3907,7 @@ describe each surface in depth.
 | `rolled=` | keyword of `Trace.draw` and `VisualizationOptions`: ``True`` for the rolled graph, ``False`` (default) for every pass |
 | `open_viewer=` | keyword of `Trace.draw`, `tl.draw` and `VisualizationOptions`: ``True`` opens the written picture; the default never does |
 | `size_scale=` | keyword of `Trace.draw` and `VisualizationOptions`: size-channel transform ``"sqrt"`` (default) or ``"linear"``; refuses without `size_by=` |
-| `where=` | keyword of `Trace.summary`: regex string or ``row -> bool`` callable; presentation-only (whole-model totals preserved and coverage disclosed) |
+| `where=` | keyword of `Trace.summary`: regex string (searched in the row name, its module address and, for an op row, the module that ran it), TorchLens selector (``tl.in_module(...)``, ``tl.func(...)``; keeps rows owning a matched op) or ``row -> bool`` callable; presentation-only (whole-model totals preserved and coverage disclosed) |
 | `graph=` | keyword of `Trace.draw` and `VisualizationOptions`: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
 | `editable=` | keyword of `Drawing.save`: ``True`` writes the Graphviz source instead of a rendered picture |
 | `num_posinf=` | keyword of `tl.stats.TensorStats` |

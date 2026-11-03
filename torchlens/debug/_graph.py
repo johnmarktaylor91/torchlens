@@ -25,6 +25,7 @@ from ._common import (
     _source_line,
     _tensor_unavailable_reason,
 )
+from ._unit_axis import unit_axis
 
 LineageDirection = Literal["ancestors", "descendants", "both"]
 
@@ -231,6 +232,39 @@ def _align_for_compare(
     return a, b, "; ".join(notes)
 
 
+def _compare_unavailable_reason(value: Any) -> str | None:
+    """Return why a payload cannot be value-compared, or ``None``.
+
+    Wider than :func:`_tensor_unavailable_reason`: integer, boolean and complex
+    tensors compare too (integers and booleans exactly), so an index or mask op
+    where two runs part ways is reported instead of skipped.
+    """
+
+    reason = _tensor_unavailable_reason(value)
+    if reason in ("non-floating", "complex"):
+        return None
+    return reason
+
+
+def _value_delta(
+    cmp_a: torch.Tensor, cmp_b: torch.Tensor, *, rtol: float, atol: float
+) -> tuple[float, float, bool]:
+    """Return ``(max_abs, mean_abs, allclose)`` for an aligned pair.
+
+    Floating and complex payloads use ``torch.allclose``; integer and boolean
+    payloads must match exactly (a tolerance on an index is meaningless).
+    """
+
+    exact = not (torch.is_floating_point(cmp_a) or torch.is_complex(cmp_a))
+    wide = torch.complex128 if torch.is_complex(cmp_a) else torch.float64
+    delta = torch.abs(cmp_a.to(wide) - cmp_b.to(wide)) if exact else torch.abs(cmp_a - cmp_b)
+    max_abs = float(delta.max().item()) if delta.numel() else 0.0
+    mean_abs = float(delta.mean().item()) if delta.numel() else 0.0
+    if exact:
+        return max_abs, mean_abs, bool(torch.equal(cmp_a, cmp_b))
+    return max_abs, mean_abs, bool(torch.allclose(cmp_a, cmp_b, rtol=rtol, atol=atol))
+
+
 def _compare_coverage(rows: list[dict[str, Any]]) -> str:
     """Return the compare card's coverage line: compared vs skipped, and why."""
 
@@ -243,7 +277,15 @@ def _compare_coverage(rows: list[dict[str, Any]]) -> str:
             skipped[reason] = skipped.get(reason, 0) + 1
     text = f"{compared} of {len(rows)} ops compared"
     if aligned:
-        text += f" ({aligned} after moving to one device or dtype)"
+        notes = sorted(
+            {
+                str(note)
+                for row in rows
+                if row["allclose"] is not None and row["reason"]
+                for note in str(row["reason"]).split("; ")
+            }
+        )
+        text += f" ({aligned} after alignment: {'; '.join(notes)})"
     if skipped:
         detail = ", ".join(f"{reason}: {count}" for reason, count in skipped.items())
         text += f"; {sum(skipped.values())} not compared ({detail})"
@@ -321,8 +363,8 @@ def _compare_rows(
 
         out_a, reason_a = _safe_out(op_a)
         out_b, reason_b = _safe_out(op_b)
-        reason_a = reason_a or _tensor_unavailable_reason(out_a)
-        reason_b = reason_b or _tensor_unavailable_reason(out_b)
+        reason_a = reason_a or _compare_unavailable_reason(out_a)
+        reason_b = reason_b or _compare_unavailable_reason(out_b)
         shape_match = getattr(op_a, "shape", None) == getattr(op_b, "shape", None)
         dtype_match = getattr(op_a, "dtype", None) == getattr(op_b, "dtype", None)
         row = {
@@ -356,10 +398,7 @@ def _compare_rows(
             continue
         cmp_a, cmp_b, row["reason"] = aligned
 
-        delta = torch.abs(cmp_a - cmp_b)
-        max_abs = float(delta.max().item()) if delta.numel() else 0.0
-        mean_abs = float(delta.mean().item()) if delta.numel() else 0.0
-        allclose = bool(torch.allclose(cmp_a, cmp_b, rtol=rtol, atol=atol))
+        max_abs, mean_abs, allclose = _value_delta(cmp_a, cmp_b, rtol=rtol, atol=atol)
         if allclose:
             summary["matched"] += 1
         else:
@@ -388,7 +427,7 @@ def compare(
     rtol: float = 1e-5,
     atol: float = 1e-8,
 ) -> Report:
-    """Compare saved dense floating activations across two traces.
+    """Compare saved tensor activations across two traces, op by op.
 
     Parameters
     ----------
@@ -409,9 +448,10 @@ def compare(
         One row per pass-qualified op with summary counts in ``df.attrs``;
         ``source_line`` is the ``"file:line"`` of the user code that ran the
         op. Activations on different devices are compared on the CPU, and
-        different floating dtypes in the wider dtype (the row's ``reason``
-        says so); the card's coverage line counts the ops that could not be
-        compared and why. The optional view over :func:`_compare_rows` (the
+        different dtypes in the wider dtype (the row's ``reason`` says so, and
+        the card's coverage line names every alignment); integer and boolean
+        activations must match exactly. The coverage line also counts the ops
+        that could not be compared and why. The optional view over :func:`_compare_rows` (the
         pandas-free core).
     """
 
@@ -453,9 +493,10 @@ def first_divergence(
     A divergence row is one whose compared payloads crossed tolerance
     (``allclose=False``), mismatched shape, or exists in only one trace.
     Payloads on different devices (a CPU run against a GPU run) are compared
-    on the CPU, and different floating dtypes in the wider dtype, so those
-    runs diverge where their values really separate. Rows whose payloads
-    could not be compared at all (unsaved, non-tensor, non-floating) are NOT
+    on the CPU, and different dtypes in the wider dtype, so those runs
+    diverge where their values really separate; integer and boolean payloads
+    (indices, masks) must match exactly. Rows whose payloads could not be
+    compared at all (unsaved, non-tensor, sparse, meta, quantized) are NOT
     divergences; ``print(tl.debug.compare(trace_a, trace_b))`` counts them
     on its coverage line, and a divergence inside such a region cannot be
     excluded. The row's ``source_line`` is the ``"file:line"`` of the user
@@ -491,7 +532,7 @@ def first_divergence(
 
 
 def dead_neurons_rows(
-    trace: Trace, *, dim: int = 1, threshold: float = 0.0
+    trace: Trace, *, dim: int | None = None, threshold: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pandas-free core of :func:`dead_neurons` (agent stage-0 item 4).
 
@@ -500,7 +541,8 @@ def dead_neurons_rows(
     trace:
         Completed TorchLens trace.
     dim:
-        Feature dimension.
+        Unit axis forced on every op, or ``None`` to pick it per op (see
+        :func:`dead_neurons`).
     threshold:
         Maximum activation value for post-activation death.
 
@@ -513,6 +555,7 @@ def dead_neurons_rows(
 
     rows: list[dict[str, Any]] = []
     skipped = 0
+    axes: dict[str, int] = {}
     for op in _compute_ops(trace):
         label = _op_label(op)
         source_line = _source_line(op)
@@ -535,8 +578,8 @@ def dead_neurons_rows(
         if not isinstance(out, torch.Tensor):
             skipped += 1
             continue
-        feature_dim = dim if dim >= 0 else out.ndim + dim
-        if feature_dim < 0 or feature_dim >= out.ndim:
+        feature_dim = _feature_dim(trace, op, out, dim, axes)
+        if feature_dim is None:
             skipped += 1
             rows.append(
                 {
@@ -585,7 +628,18 @@ def dead_neurons_rows(
     return rows, attrs
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Report:
+def _feature_dim(
+    trace: Trace, op: Op, out: torch.Tensor, dim: int | None, axes: dict[str, int]
+) -> int | None:
+    """Return the unit axis for one activation, or ``None`` when it is invalid."""
+
+    if dim is None:
+        return unit_axis(trace, op, out, axes)
+    feature_dim = dim if dim >= 0 else out.ndim + dim
+    return feature_dim if 0 <= feature_dim < out.ndim else None
+
+
+def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -597,7 +651,13 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
     trace:
         Completed TorchLens trace.
     dim:
-        Feature dimension.
+        Unit axis. ``None`` (the default) picks it per op: the last axis of a
+        two- or three-dimensional activation (a linear layer's ``(batch,
+        features)`` or a transformer block's ``(batch, tokens, features)``),
+        the channel axis of a convolution, pooling or per-channel norm and of
+        the same-shaped ops it feeds (an activation after a convolution), and
+        axis 1 for four or more dimensions. Activations under two dimensions
+        get ``reason="invalid-dim"``. An int forces that axis on every op.
     threshold:
         Maximum activation value for post-activation death.
 
