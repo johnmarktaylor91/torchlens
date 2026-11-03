@@ -246,7 +246,13 @@ def activation_patch_attention_heads(
         Callable receiving a ``Trace`` and returning a scalar tensor metric.
     facet_name:
         Per-head attention output facet. The default ``"result"`` follows the
-        P3 facet convention ``[batch, pos, head, d_model]``.
+        P3 facet convention ``[batch, pos, head, d_model]``. ``result`` is a
+        computed facet (``z_h @ W_O_h``) that no captured op holds, so the
+        patch writes the head's ``z`` instead, which replaces exactly its
+        ``result``. Under fused attention (``attn_implementation="sdpa"``)
+        ``z`` is reconstructed read-only and the helper refuses with the
+        eager-attention remedy; the pre-kernel ``"q"``/``"k"``/``"v"`` facets
+        stay writable there.
     trace_kwargs:
         Extra keyword arguments forwarded to ``tl.trace``.
 
@@ -362,7 +368,13 @@ def attribution_patch_attention_heads(
         Callable receiving a ``Trace`` and returning a scalar tensor metric.
     facet_name:
         Per-head attention output facet. The default ``"result"`` follows the
-        P3 facet convention ``[batch, pos, head, d_model]``.
+        P3 facet convention ``[batch, pos, head, d_model]``. ``result`` is a
+        computed facet (``z_h @ W_O_h``) that no captured op holds, so the
+        patch writes the head's ``z`` instead, which replaces exactly its
+        ``result``. Under fused attention (``attn_implementation="sdpa"``)
+        ``z`` is reconstructed read-only and the helper refuses with the
+        eager-attention remedy; the pre-kernel ``"q"``/``"k"``/``"v"`` facets
+        stay writable there.
     trace_kwargs:
         Extra keyword arguments forwarded to ``tl.trace``. By default this
         helper captures all gradients; an explicit
@@ -430,11 +442,51 @@ def _baseline_traces(
     """
 
     kwargs = _trace_kwargs(trace_kwargs, save_grads=save_grads)
-    guard.reset()
-    clean_log = trace(model, clean_input, **kwargs)
-    guard.reset()
-    corrupted_log = trace(model, corrupted_input, **kwargs)
+
+    def _capture(inputs: Any) -> Callable[[], Any]:
+        def _run() -> Any:
+            guard.reset()
+            return trace(model, inputs, **kwargs)
+
+        return _run
+
+    clean_log = _capture_by_reference(model, guard, _capture(clean_input))
+    try:
+        corrupted_log = _capture_by_reference(model, guard, _capture(corrupted_input))
+    except BaseException:
+        clean_log.cleanup()
+        raise
     return clean_log, corrupted_log
+
+
+def _capture_by_reference(
+    model: nn.Module, guard: _CounterfactualStateGuard, capture: Callable[[], Any]
+) -> Any:
+    """Run one helper capture with the model's parameter arguments kept by reference.
+
+    ``save_args=True`` (required above) used to copy every weight argument into
+    every helper trace; with a clean, a corrupted and a patched trace alive at
+    once that was three extra copies of the weights (GPT-2's tied 50257 x 768
+    embedding twice per trace: the lookup and ``lm_head``). The helper traces
+    never leave the helper, so a parameter argument is saved as an alias of
+    the parameter's storage instead (see
+    :func:`~torchlens._validation_argument_references.helper_parameter_references`).
+    If the forward wrote a referenced parameter (its version counter moved, or
+    its bytes left the guard's snapshot, which also catches ``param.data``
+    writes), the aliases no longer hold the call-time values: the trace is
+    dropped and the capture runs again on the copy path. ``capture`` must
+    start from :meth:`_CounterfactualStateGuard.reset` so both attempts run
+    from the same state.
+    """
+
+    from .._validation_argument_references import helper_parameter_references
+
+    with helper_parameter_references(model) as references:
+        log = capture()
+    if references.first_change() is None and not guard.parameters_drifted():
+        return log
+    log.cleanup()
+    return capture()
 
 
 def _trace_kwargs(
@@ -612,6 +664,7 @@ def _activation_patch_heads(
     _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
     if not modules:
         raise ValueError(f"No modules expose facet {facet_name!r}.")
+    facet_name = _head_write_facet(clean_log, modules, facet_name)
     n_heads = _num_heads(clean_log.modules[modules[0]], facet_name=facet_name)
     result = torch.empty(
         (len(modules), n_heads), dtype=metric_template.dtype, device=metric_template.device
@@ -652,6 +705,42 @@ def _activation_patch_heads(
         campaign_ledger, f"facet {facet_name!r} heads across modules {tuple(modules)!r}"
     )
     return result
+
+
+def _head_write_facet(log: Any, modules: Sequence[str], facet_name: str) -> str:
+    """Return the facet the per-head patch writes for ``facet_name``.
+
+    ``result`` (a head's contribution to the attention output,
+    ``z_h @ W_O_h``) is a COMPUTED facet: no captured op holds one head's
+    projected output, so it is never writable, on eager attention too. It is
+    linear in the head's ``z`` with the model's own fixed ``W_O`` slice, and
+    the output bias is added after the heads are summed, so replacing head
+    ``h``'s ``z`` with its clean value replaces exactly its ``result`` with the
+    clean ``result``. The patch therefore writes ``z`` whenever ``result`` is
+    read-only and every module exposes ``z``. Any other facet (and ``result``
+    where it is writable) is written as named; under fused attention ``z`` is
+    itself read-only, and the write refuses with the eager-attention remedy.
+    """
+
+    if facet_name != "result":
+        return facet_name
+    if all(_head_facet_writable(log.modules[address], "result") for address in modules):
+        return facet_name
+    if all(log.modules[address].facets.has("z") for address in modules):
+        return "z"
+    return facet_name
+
+
+def _head_facet_writable(module: Any, facet_name: str) -> bool:
+    """Return whether head 0's ``facet_name`` facet on ``module`` is write-safe."""
+
+    try:
+        value = module.facets.head(0)[facet_name]
+        spec = value.spec if isinstance(value, Facet) else value
+        spec._validate_intervention_safe(alias_policy=None)
+    except (AttributeError, KeyError, RuntimeError, ValueError):
+        return False
+    return True
 
 
 def _run_patch(
@@ -723,10 +812,15 @@ def _run_patch(
             fire_ledger["identical"] += 1
         return result
 
-    patched_log = corrupted_log.fork(name)
-    patched_log.attach_hooks(selector, _tracked_hook)
-    guard.reset()
-    patched_log.run(model, corrupted_input)
+    def _capture() -> Any:
+        fire_ledger.update(fires=0, identical=0)
+        log = corrupted_log.fork(name)
+        log.attach_hooks(selector, _tracked_hook)
+        guard.reset()
+        log.run(model, corrupted_input)
+        return log
+
+    patched_log = _capture_by_reference(model, guard, _capture)
     try:
         _require_effective_patch(patched_log, where=where, fire_ledger=fire_ledger)
     except PatchApplicationError:
@@ -781,10 +875,14 @@ def _run_input_patch(
         return result
 
     patched_input = _patch_input_leaf(corrupted_input, model, input_role, _tracked_input_patch)
-    patched_log = corrupted_log.fork(name)
-    guard.reset()
-    patched_log.run(model, patched_input)
-    return patched_log
+
+    def _capture() -> Any:
+        log = corrupted_log.fork(name)
+        guard.reset()
+        log.run(model, patched_input)
+        return log
+
+    return _capture_by_reference(model, guard, _capture)
 
 
 def _warn_if_campaign_all_identical(campaign_ledger: Mapping[str, int], where: str) -> None:

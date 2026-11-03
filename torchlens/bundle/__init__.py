@@ -924,10 +924,15 @@ class Bundle:
         Parameters
         ----------
         fn:
-            Callable receiving one member log. A callable that accepts a
-            second positional parameter additionally receives the member's
-            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
-            callables keep the historical contract unchanged.
+            Callable receiving one member log. A callable whose second
+            positional parameter is required (or that takes ``*args``)
+            additionally receives the member's NAME there
+            (``bundle.map(lambda log, name: ...)``); a callable declaring a
+            parameter called ``name`` receives it by keyword
+            (``lambda log, k=3, name=None: ...``). A defaulted second
+            parameter with another name keeps its default
+            (``lambda log, k=3: ...`` is called as ``fn(log)``), and
+            single-parameter callables keep the historical contract.
 
         Returns
         -------

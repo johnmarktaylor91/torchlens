@@ -231,9 +231,36 @@ def _effective_activation_save_mode(
         )
     if save_mode == "reference":
         _warn_reference_save_mode_once()
-        if is_inplace or (func_name is not None and func_name.endswith("_")):
+        if is_inplace or _has_mutating_func_name(func_name):
             return "copy"
     return save_mode
+
+
+def _has_mutating_func_name(func_name: str | None) -> bool:
+    """Return whether ``func_name`` names a mutating call (the reference-mode fallback).
+
+    ``"__add__".endswith("_")`` is true for EVERY dunder, so the trailing
+    underscore marks a mutation only outside dunders. Among dunders only the
+    augmented assignments (``__iadd__``...) and the item setters mutate. A
+    non-mutating dunder (``a * b``, ``a + b``) returns a fresh tensor, which
+    reference mode keeps as is: copying it would store a payload that is a
+    dead end for autograd, so gradient probes from it (receptive and
+    projective fields' ``method="gradient"``) would find no path downstream.
+    """
+
+    if func_name is None:
+        return False
+    if func_name.startswith("__") and func_name.endswith("__"):
+        from ..backends.torch._ops_capture_records import (
+            _is_inplace_augmented_assignment_dunder,
+        )
+        from ..backends.torch.ops import _SETTER_MUTATION_FUNC_NAMES
+
+        return (
+            _is_inplace_augmented_assignment_dunder(func_name)
+            or func_name in _SETTER_MUTATION_FUNC_NAMES
+        )
+    return func_name.endswith("_")
 
 
 def _stamp_reference_out(

@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 _RECAPTURE_RECIPE = (
-    "tl.trace(model, x.requires_grad_(True), "
+    "tl.trace(model, x, "
     'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
 )
 
@@ -175,7 +175,7 @@ def _projective_recapture_recipe(source: Op, targets: Sequence[Op]) -> str:
     labels = (source.short_layer_label, *(target.short_layer_label for target in targets))
     selectors = " | ".join(f"tl.label({label!r})" for label in labels)
     return (
-        "tl.trace(model, x.requires_grad_(True), "
+        "tl.trace(model, x, "
         'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save={selectors})"
     )
@@ -334,6 +334,62 @@ def _build_projective_result(
     )
 
 
+def projective_supports_by_row_sweep(
+    source: Op, units: Sequence[Sequence[int]], target: Op
+) -> tuple[GradReceptiveField, ...]:
+    """Probe several source units' projective fields one target element at a time.
+
+    The fallback for a captured graph that cannot be differentiated twice (a
+    fused kernel with no second derivative, such as fused scaled-dot-product
+    attention): row ``t`` of the Jacobian is one ordinary VJP seeded at target
+    element ``t``, and each unit's column is read off the rows. The cost is one
+    backward pass per target element, however many source units are probed.
+
+    Parameters
+    ----------
+    source:
+        Operation whose output elements seed the projective fields.
+    units:
+        Complete source indices, one per probe.
+    target:
+        The one operation whose output space the fields live in.
+
+    Returns
+    -------
+    tuple[GradReceptiveField, ...]
+        One exact (zero-threshold) projective field per unit, in ``units`` order.
+    """
+
+    trace: Trace = source.source_trace
+    targets, _ = _select_targets(source, target)
+    source_tensor = _source_tensor(source, targets)
+    (target_tensor,) = _target_tensors(targets)
+    solution = solve_projective(trace, targets)
+    normalized = [_normalize_unit(unit, tuple(source_tensor.shape), source.label) for unit in units]
+    unit_index = tuple(torch.tensor(axis) for axis in zip(*normalized, strict=True))
+    flat_target = target_tensor.reshape(-1)
+    columns = torch.zeros((len(normalized), flat_target.numel()), dtype=source_tensor.dtype)
+    with _probe_suppressed(trace):
+        for element in range(flat_target.numel()):
+            (row,) = torch.autograd.grad(
+                flat_target[element], source_tensor, retain_graph=True, allow_unused=True
+            )
+            if row is not None:
+                columns[:, element] = row.detach()[unit_index]
+    return tuple(
+        _build_projective_result(
+            source=source,
+            target=targets[0],
+            unit=unit,
+            column=columns[position].reshape(target_tensor.shape),
+            solution=solution,
+            atol=0.0,
+            rtol=0.0,
+        )
+        for position, unit in enumerate(normalized)
+    )
+
+
 def projective_gradient_for_unit(
     source: Op,
     unit: Sequence[int],
@@ -430,7 +486,9 @@ def projective_gradient_for_unit(
         raise ReceptiveFieldUnavailableError(
             "Projective gradient cotangent linearization unavailable at the captured "
             f"autograd node: {exc}. Use a receptive-probe sweep over candidate target "
-            "units as the O(units) alternative."
+            "units as the O(units) alternative (a field view's .of(method='gradient') "
+            "runs that sweep itself when the target site has at most probe_budget "
+            "elements)."
         ) from exc
 
     results: dict[str, GradReceptiveField] = {}

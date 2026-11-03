@@ -101,7 +101,8 @@ trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 edited = trace.fork("zeroed")
 edited.do(tl.module("1"), tl.zero_ablate())  # the ReLU output becomes all zeros
 head_out = edited[edited.output_layers[0]].out
-expected = model[2](torch.zeros(2, 4))  # the head sees an all-zero ReLU output
+head = model[2]
+expected = head(torch.zeros(2, 4))  # the head sees an all-zero ReLU output
 RESULT = (
     torch.allclose(head_out, expected, atol=1e-6),
     not torch.allclose(head_out, trace[trace.output_layers[0]].out, atol=1e-6),

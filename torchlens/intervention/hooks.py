@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias, cast
@@ -801,6 +802,45 @@ def is_facet_target(site_target: Any) -> bool:
     return _facet_selector_from_target(site_target) is not None
 
 
+def _fused_attention_write_remedy(facet_name: str, *, reconstructed: bool = True) -> str:
+    """Explain why an attention-interior facet cannot be written, and what can.
+
+    Parameters
+    ----------
+    facet_name:
+        The requested facet (``pattern``, ``scores``, ``z`` or ``result``).
+    reconstructed:
+        Whether the facet is rebuilt from a fused kernel's saved arguments
+        (fused attention). ``False`` means a facet computed from captured
+        values (``result``, ``z_h @ W_O_h``), read-only on eager attention too.
+
+    Returns
+    -------
+    str
+        The cause and the remedies, for the refusal message.
+    """
+
+    if not reconstructed:
+        return (
+            f"The {facet_name!r} facet is computed from other captured values (for "
+            "'result', each head's 'z' times its slice of the output projection), so no "
+            "captured op holds it and it is read-only under every attention "
+            "implementation. Write the facet it is computed from instead: replacing a "
+            "head's 'z' replaces exactly its 'result'."
+        )
+    return (
+        f"Under fused attention (torch scaled_dot_product_attention, the transformers "
+        f"default attn_implementation='sdpa') the {facet_name!r} facet is reconstructed "
+        "read-only from the kernel's saved arguments: the kernel computes it internally, "
+        "so there is no captured tensor op to write. To write it, load the model with "
+        "attn_implementation='eager' (on a transformers model, "
+        "model.set_attn_implementation('eager')) and capture again. On the fused model "
+        "the 'q'/'k'/'v' facets (the projection outputs feeding the kernel) stay "
+        "writable, and tl.mechinterp.patch_head lowers a single head or pattern patch "
+        "exactly to the real output projection."
+    )
+
+
 def expand_facet_hook_entries(
     log: Any, entries: Sequence[NormalizedHookEntry]
 ) -> list[NormalizedHookEntry]:
@@ -833,9 +873,7 @@ def expand_facet_hook_entries(
             if selector.name in {"pattern", "scores", "z", "result"}:
                 raise SiteResolutionError(
                     f"facet selector {selector!r} matched no write-capable real tensor facets. "
-                    "Fused attention reconstruction facets are read-only; re-run with a scoped "
-                    "eager attention implementation so the requested internal facet is captured "
-                    "as an op before attaching this intervention."
+                    + _fused_attention_write_remedy(selector.name)
                 )
             raise SiteResolutionError(
                 f"facet selector {selector!r} matched 0 write-capable facets."
@@ -847,9 +885,11 @@ def expand_facet_hook_entries(
             except RuntimeError as exc:
                 if selector.name in {"pattern", "scores", "z", "result"}:
                     raise SiteResolutionError(
-                        f"facet selector {selector!r} resolved only read-only reconstructed "
-                        "attention facets. Re-run with a scoped eager attention implementation "
-                        "so the requested internal facet is captured as a real tensor op."
+                        f"facet selector {selector!r} resolved only read-only "
+                        "attention facets. "
+                        + _fused_attention_write_remedy(
+                            selector.name, reconstructed=spec.capability_flags.reconstructed
+                        )
                     ) from exc
                 raise
             home_label = _facet_home_label(spec)
@@ -870,6 +910,11 @@ def expand_facet_hook_entries(
                         entry.normalized_callable,
                         spec,
                         facet_name=facet_name,
+                        selector=FacetSelector(
+                            facet_name,
+                            head_index=selector.head_index,
+                            module_address=selector.module_address,
+                        ),
                     ),
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
@@ -1597,11 +1642,36 @@ def _check_facet_write_conflicts(
             )
 
 
+@dataclass(frozen=True, slots=True)
+class _FacetFire:
+    """The facet slice a facet scatter wrapper is editing right now.
+
+    Set for the duration of the wrapped user hook so a donor-reading edit
+    (``patch_from``) can read the SAME facet view of its donor value instead
+    of handing back the whole home-op output.
+    """
+
+    spec: Any
+    selector: FacetSelector
+
+
+_ACTIVE_FACET_FIRE: ContextVar[_FacetFire | None] = ContextVar(
+    "torchlens_active_facet_fire", default=None
+)
+
+
+def _active_facet_fire() -> _FacetFire | None:
+    """Return the facet slice being edited by the enclosing scatter wrapper, if any."""
+
+    return _ACTIVE_FACET_FIRE.get()
+
+
 def _facet_scatter_hook(
     user_hook: HookCallable,
     spec: Any,
     *,
     facet_name: str,
+    selector: FacetSelector | None = None,
 ) -> HookCallable:
     """Return a home-op hook that edits one facet slice.
 
@@ -1613,12 +1683,18 @@ def _facet_scatter_hook(
         FacetSpec used to read and scatter the slice.
     facet_name:
         Public facet name for diagnostics.
+    selector:
+        The facet selector narrowed to ``facet_name``; a donor-reading edit
+        resolves it on its source trace (defaults to ``tl.facet(facet_name)``).
 
     Returns
     -------
     HookCallable
         Hook with the standard whole-output TorchLens contract.
     """
+
+    if selector is None:
+        selector = FacetSelector(facet_name)
 
     def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Apply a user hook to a facet slice and scatter it into ``out``.
@@ -1639,7 +1715,11 @@ def _facet_scatter_hook(
         from .runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
-        edited_slice = user_hook(facet_slice, ctx=ctx)
+        token = _ACTIVE_FACET_FIRE.set(_FacetFire(spec=spec, selector=selector))
+        try:
+            edited_slice = user_hook(facet_slice, ctx=ctx)
+        finally:
+            _ACTIVE_FACET_FIRE.reset(token)
         checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=ctx)
         return spec.scatter_update(out, checked_slice, mode="replace")
 
