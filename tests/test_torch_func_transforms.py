@@ -542,7 +542,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert vmap_ops[0].label == "vmap_1_1:1"
     assert vmap_ops[0].parents == ("input_1",)
     assert vmap_ops[0].call.is_func_transform is True
-    assert vmap_ops[0].transform_kind == "vmap"
+    assert vmap_ops[0].call.func_transform_kind == "vmap"
     assert vmap_ops[0].transform_chain == ("vmap",)
     assert vmap_ops[0].transform_config["in_dims"] == 0
     assert vmap_ops[0].transform_fn_name == "<lambda>"

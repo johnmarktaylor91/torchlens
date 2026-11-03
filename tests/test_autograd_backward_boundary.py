@@ -132,7 +132,7 @@ def test_backward_in_forward_is_a_recorded_boundary_op() -> None:
     mean_ops = [op for op in trace.ops if op.func_name == "mean"]
     assert len(mean_ops) == 1
     assert set(mean_ops[0].parents) <= {op.label for op in ops}
-    assert not mean_ops[0].unattributed_tensor_args
+    assert not mean_ops[0].call.unattributed_tensor_args
     assert [op.label for op in trace.transforms] == [op.label for op in ops]
     selected = tl.trace(
         _GradReader(), torch.rand(2, 4), save=tl.func_transform("autograd.backward")
