@@ -1308,9 +1308,8 @@ def _finish_format3_trace(
 
     root, manifest = artifact.root, artifact.manifest
     state = artifact.trace_state(ModuleAccessor)
-    blobs_dir = (
-        resolve_bundle_blobs_dir(root) if (root / format3_contract.BLOBS_DIR).is_dir() else None
-    )
+    has_blobs = (root / format3_contract.BLOBS_DIR).is_dir()
+    blobs_dir = resolve_bundle_blobs_dir(root) if has_blobs else None
     trace = rehydrate_trace(
         state,
         artifact.manifest_for_rehydrate(),
@@ -1333,9 +1332,8 @@ def _finish_format3_trace(
     _bind_format3_runnable_payloads(
         trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
     )
-    disclosures = manifest.get("disclosures")
-    if disclosures is not None:
-        format3_reader.attach_disclosure_advisory(trace, disclosures)
+    if manifest.get("disclosures") is not None:
+        format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
         trace._intervention_spec = _finish_format3_recipe(root)
     return trace
@@ -1349,8 +1347,7 @@ def _bind_format3_runnable_payloads(
     map_location: str | torch.device,
     blobs_dir: Path | None,
 ) -> None:
-    """Bind a 3.0 artifact's runnable payload families (references rebuilt from its
-    blob-id index and parsed ``run`` descriptor); an analysis artifact binds nothing."""
+    """Bind a 3.0 artifact's runnable payload families; an analysis artifact binds nothing."""
 
     payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
     if not payloads.tensors and trace._sparse_run_descriptor is None:
@@ -1375,26 +1372,27 @@ def _finish_format3_bundle(
     metadata: Mapping[str, Any],
     root: Path,
     tlspec_version: Any,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Bundle:
-    """Assemble a 3.0 bundle from its loaded members and the sections of ``relations.json``
-    (bare unknown keys refuse ``bundle_section_unknown``; namespaced keys load opaque)."""
+    """Assemble a 3.0 bundle from its members and ``relations.json`` (bare unknown keys refuse
+    ``bundle_section_unknown``; ``unknown_relations`` is the policy for unknown relation kinds)."""
 
     from .bundle_container import assemble_bundle
 
-    bundle = assemble_bundle(dict(members), dict(metadata), tlspec_version=tlspec_version)
+    bundle = assemble_bundle(
+        dict(members),
+        dict(metadata),
+        tlspec_version=tlspec_version,
+        unknown_relations=unknown_relations,
+    )
     setattr(bundle, "_source_bundle_path", root)
     return bundle
 
 
 def _finish_format3_recipe(root: Path) -> InterventionSpec:
-    """Stage the recipe ``intervention.json`` describes (design section 8).
-
-    The intervention package owns the rebuild: built-in edits come back
-    through the helper registry, a callable placeholder (rule level or inside
-    a built-in edit's arguments) becomes an audit-only ``Edit`` and is listed
-    in ``metadata["recipe_placeholders"]``, which every rerun door refuses
-    with ``run_intervention_spec_not_persisted``.
-    """
+    """Stage the recipe ``intervention.json`` describes (design section 8): the intervention
+    package rebuilds built-in edits through the helper registry; a callable placeholder becomes
+    an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
     from ..intervention.save import _load_trace_recipe_spec
 
@@ -1593,7 +1591,14 @@ def load(
             )
         if is_format3_root(bundle_path, tlspec_format):
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
-            return load_format3(bundle_path, lazy, map_location, materialize_nested, payload_hints)
+            return load_format3(
+                bundle_path,
+                lazy,
+                map_location,
+                materialize_nested,
+                payload_hints,
+                unknown_relations=unknown_relations,
+            )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec

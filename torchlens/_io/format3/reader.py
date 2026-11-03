@@ -604,8 +604,7 @@ def _restore_record(
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 
-#: Computed columns kept behind their property (column to slot); a ``module`` row's templates
-#: go to its first call (``_install_module_templates``).
+#: Computed columns kept behind their property; a module row's templates go to its first call.
 _TEMPLATE_SLOTS: Final = {
     f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
 }
@@ -616,8 +615,7 @@ _RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
 
 
 def install_load_hooks(**hooks: Callable[..., Any]) -> None:
-    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors (from
-    ``torchlens._io.bundle``; a door without its step refuses ``bundle_load_failed``)."""
+    """Install the rehydration step of each door (``torchlens._io.bundle`` does, at import)."""
 
     unknown = set(hooks) - _HOOK_KINDS
     if unknown:
@@ -720,12 +718,17 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     manifest = validate_artifact(root)
     _require_kind(manifest, root, "bundle")
     metadata = _read_relations(root, manifest)
+    policy = options.pop("unknown_relations", "opaque")
     members = [
         (name, load_trace(member_root, **options))
         for name, member_root in _iter_members(root, manifest, metadata)
     ]
     return _hook("bundle", root)(
-        members, metadata=metadata, root=root, tlspec_version=manifest.get(TLSPEC_KEY)
+        members,
+        metadata=metadata,
+        root=root,
+        tlspec_version=manifest.get(TLSPEC_KEY),
+        unknown_relations=policy,
     )
 
 

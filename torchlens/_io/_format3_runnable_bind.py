@@ -280,7 +280,8 @@ def read_runnable_payload(
         )
     try:
         with safe_open(str(blob_path), framework="pt", device=str(map_location)) as handle:
-            if key not in handle.keys():
+            tensor_keys = handle.keys()
+            if key not in tensor_keys:
                 raise _integrity_error(
                     blob_path, f"it lacks key {key!r} ({entry.blob_id})", code=_INTEGRITY_CODE
                 )
