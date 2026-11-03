@@ -53,6 +53,8 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -90,6 +92,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
 #: aggregate budget; its two largest pages, the tuned-lens training notebook
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
+#: The distributed alignment search notebook trains its model and two rotations:
+#: 8.5 s on one pinned Linux core.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/lrp_transformers_lxt.md",
@@ -100,6 +104,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/feature_visualisation.md",
         "examples/recipes/train_tuned_lens_recipe.ipynb",
         "docs/recipes/prisma_clip_sae.md",
+        "examples/recipes/das_causal_basis_recipe.ipynb",
     }
 )
 
@@ -108,8 +113,11 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: host load about 8 of 20 cores), measured 30.1 s, 23.5 s and 30.2 s in the
 #: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
 #: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
-#: 42.5 s under gate load.
-SLOW_PAGES: frozenset[str] = frozenset({"docs/recipes/acdc_ioi.md"})
+#: 42.5 s under gate load. The function vectors notebook (GPT-2 small, two
+#: saved traces and 144 head scores) measured 73.3 s on one pinned Linux core.
+SLOW_PAGES: frozenset[str] = frozenset(
+    {"docs/recipes/acdc_ioi.md", "examples/recipes/function_vectors_recipe.ipynb"}
+)
 
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
