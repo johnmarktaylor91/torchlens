@@ -53,6 +53,12 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "docs/gallery/causal_tracing.md": "transformers",
+    "docs/gallery/cnn_fields.md": "torchvision",
+    "docs/gallery/neuro_rdms.md": "torchvision",
+    "docs/gallery/jacobian_lens.md": "transformers",
+    "docs/gallery/ioi_circuit.md": "transformers",
+    "docs/gallery/bundles_harness.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
