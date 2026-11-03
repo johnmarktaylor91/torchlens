@@ -136,3 +136,48 @@ def test_visualization_options_path_extension_picks_the_format(
     assert drawing.file_format == "png"
     assert (tmp_path / "g.png").exists()
     assert not (tmp_path / "g.pdf").exists()
+
+
+def _detached_svg_with_key(
+    trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> tuple[str, str, list[str]]:
+    """Draw with the key to a path, then re-render it as a notebook displays it.
+
+    Returns the displayed SVG, the Graphviz text written to stderr and the
+    warning messages raised by the draw and the display.
+    """
+
+    import warnings
+
+    capfd.readouterr()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        drawing = trace.draw(str(tmp_path / "keyed.svg"), show_legend=True)
+        svg = drawing._repr_svg_()
+    assert svg is not None
+    return svg, capfd.readouterr().err, [str(item.message) for item in caught]
+
+
+def test_displayed_drawing_with_key_links_no_temp_file(
+    trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """The key's icons are embedded in the displayed SVG, never linked from the temp folder."""
+
+    import re
+    import tempfile
+
+    svg, _, _ = _detached_svg_with_key(trace, tmp_path, capfd)
+    hrefs = re.findall(r'href="([^"]*)"', svg)
+    assert hrefs, "the key draws its swatches as images"
+    assert all(href.startswith("data:image/") for href in hrefs), hrefs[:3]
+    assert tempfile.gettempdir() not in svg
+
+
+def test_displayed_drawing_with_key_renders_without_graphviz_warning(
+    trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Drawing and displaying the key draws no Graphviz warning (the key table fits its words)."""
+
+    _, stderr, messages = _detached_svg_with_key(trace, tmp_path, capfd)
+    assert "Warning" not in stderr, stderr
+    assert not [message for message in messages if "Graphviz" in message], messages
