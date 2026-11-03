@@ -119,7 +119,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   scikit-learn linear estimator with `coef_`/`intercept_`, an `nn.Linear` or a `(weight, bias)`
   pair), each a named `Reducer`. `kv_sites=` names decoder layer indexes (or `True` for all)
   whose new KV-cache slices are kept per token as series `kv.<layer>.key` and `kv.<layer>.value`
-  (`[positions, kv_heads, head_dim]`). `keep_last=N` is a ring buffer: the payloads of older
+  (`[positions, kv_heads, head_dim]`); `kv_sites=` alone needs no `save=`. `keep_last=N` is a ring buffer: the payloads of older
   forwards are written to `spill=` (one `torch.save` file per step) or dropped, and the record
   keeps a metadata stub (`payload`, `spill_file`). `max_saved_bytes=` (512 MiB by default,
   `None` off) refuses with `record_generation_budget_exceeded` when the retained bytes exceed

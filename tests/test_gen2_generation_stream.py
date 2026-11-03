@@ -124,7 +124,11 @@ def test_a_save_selector_and_reducers_compose() -> None:
     )
 
     for entry in generation.steps:
-        by_site = {str(record.ctx.address): record for record in generation.records_at(entry.step)}
+        by_site = {
+            call.rsplit(":", 1)[0]: record
+            for record in generation.records_at(entry.step)
+            for call in record.ctx.output_of_module_calls
+        }
         assert set(by_site) == {MLP0, MLP1}
         assert by_site[MLP0].ram_payload is not None
         assert by_site[MLP0].ram_payload.shape == (len(entry.positions),)
@@ -272,7 +276,9 @@ def test_ring_buffer_drops_or_spills_older_forwards(tmp_path: Path) -> None:
 def test_budget_guard_refuses_early_with_its_remedy() -> None:
     model = build_distilgpt2("eager")
     forwards: list[int] = []
-    handle = model.register_forward_hook(lambda module, args, out: forwards.append(1))
+    # The recorder calls the model once more inside each routed forward, so the
+    # root module's hook fires twice per step; the decoder stack runs once.
+    handle = model.transformer.register_forward_hook(lambda module, args, out: forwards.append(1))
     try:
         projected = _refusal(
             lambda: tl.record(

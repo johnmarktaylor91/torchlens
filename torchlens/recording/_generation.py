@@ -517,6 +517,22 @@ def _steps(
     return tuple(steps)
 
 
+def _keep_nothing(ctx: Any) -> bool:
+    """Keep no activation: a KV-sites-only recording reads only the cache."""
+
+    return False
+
+
+def _generation_save(save: Any, generation: GenerationOptions) -> Any:
+    """Return the save a widened generation recording runs under."""
+
+    if generation.reducers:
+        return _save_with_sites(save, tuple(generation.reducers))
+    if save is None and generation.kv_sites:
+        return where(_keep_nothing, name_hint="kv sites only")
+    return save
+
+
 def _save_with_sites(save: Any, sites: tuple[str, ...]) -> BaseSelector:
     """Return ``save`` widened to a selector that always keeps the declared sites."""
 
@@ -602,10 +618,8 @@ def record_generation(
     )
     settings = _seeded_settings(settings, recorder_kwargs)
     windows: list[tuple[int, range]] = []
-    if generation is not None and generation.reducers:
-        recorder_kwargs["save"] = _save_with_sites(
-            recorder_kwargs.get("save"), tuple(generation.reducers)
-        )
+    if generation is not None:
+        recorder_kwargs["save"] = _generation_save(recorder_kwargs.get("save"), generation)
     sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
         if generation is not None:
