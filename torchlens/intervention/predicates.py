@@ -12,6 +12,7 @@ import torch
 from .._errors import ArgumentTypeError
 from .._selection.selectors import BaseSelector
 from ._zero_fire import warn_multiclause_unfired
+from .hooks import site_universe
 from .types import Edit, InterventionDecision
 
 InterventionPredicateDecision: TypeAlias = InterventionDecision | Edit | Callable[..., Any] | None
@@ -164,8 +165,6 @@ def _warn_intervene_fired_nowhere(intervene: object, fire_count: int) -> None:
     fire_count:
         How many times the recording's intervene predicate fired.
     """
-
-    from .hooks import site_universe
 
     intervene_selector = getattr(intervene, "selector", None)
     if (
