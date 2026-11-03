@@ -1010,7 +1010,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `b.stored_comparison_names()` lists the stored names. Session-level state on the built
   supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
   first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
-  shared graph, and proven-equal input values; otherwise the read refuses with the gate's
+  shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
+  or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
   `bundle_gate_*` code.
 
 **Bundle.draw**
@@ -2762,6 +2763,22 @@ deprecation shim owed*
   conservative area-only mapping + typed refusal on rolled varying sources).
   See the "size_by" and "scale (size channel)" entries above for semantics.
 
+**highlight (draw kwarg)** — *keyword-only*
+: `Trace.draw(highlight=...)` draws a named highlight over the graph; `None` (the
+  default) draws the plain graph. The one value today is `"interventions"`: the surgery
+  lens marks every recorded intervention on its node (solid border = recorded fact, dashed
+  = heuristic attribution), the caption carries the per-lane census, and a written figure
+  gets the full census text beside it as `<path>.census.txt` (beside the collision-safe
+  file a bare draw chose). A trace with no recorded intervention refuses
+  `surgery_evidence_missing`; any other value refuses `draw_highlight_invalid`, naming the
+  allowed values.
+
+**ContactSheet (contact-sheet page)** — *documented-unstable*
+: What `tl.viz.contact_sheet(view, page=...)` returns: the page's SVG text (a `str`, so
+  every string use keeps working) carrying `page` (zero-based index) and `page_count`
+  (pages in the full sheet at this `tiles_per_page`, at least 1; the "N of M" footer
+  prints the same number).
+
 **stack_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
 : The wave-1 rank encoding channel on `Trace.draw` (stacking split (a):
   explicit + licensed auto on plain traces). The `True`/`"auto"` request form
@@ -3277,9 +3294,13 @@ deprecation shim owed*
 : The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
   subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
   detector resolves, with a did-you-mean over the built-in styles (`classification`,
-  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` without a
-  usable `tokenizer=`. Output decoding is read-time only: the capture runs the automatic
-  detector pass with no option, and `CaptureOptions` has no decode field.
+  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` when no
+  rank-2 or rank-3 logits are retained. `style="hf_text"` without a `tokenizer=` is not a
+  refusal: the rows carry the argmax `token_ids` and `text` is `None` (the trace was
+  captured without a tokenizer). Output decoding is read-time only: the capture runs the
+  automatic detector pass with no option, and `CaptureOptions` has no decode field;
+  `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
+  keywords on `tl.trace` refuse naming `trace.decode_output(...)`.
 
 **`decode_head_unknown`** — *unstable — no deprecation shim owed*
 : `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
@@ -4590,7 +4611,7 @@ alphabetical order.
 | `Trace.collapse_order` | Return each module's smart-collapse score as (module address, score) pairs, highest first, for the chosen policy |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); raise if nothing was captured and no output tensor is retained |
 | `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |

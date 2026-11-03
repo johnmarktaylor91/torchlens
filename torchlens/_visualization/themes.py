@@ -27,8 +27,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
-from .node_spec import NodeSpec
 
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set): the default
 #: ``torchlens`` skin and the ``colorblind`` skin render it; the CVD

@@ -8,7 +8,8 @@ Composition per the real-model matrix row: topology refusal x save/load x
 rank audit, every refusal asserting its stable code (test law 3).
 
 Offline by design: the checkout's pinned revision must already sit in the
-local HF cache (it is a cached matrix row); the test skips, never downloads.
+local HF cache (it is a cached matrix row); the test checks the cache before
+loading and skips visibly when the snapshot is absent, never downloads.
 """
 
 from __future__ import annotations
@@ -17,8 +18,10 @@ from pathlib import Path
 
 import pytest
 import torch
+from support.hf_cache import skip_unless_hf_checkpoint_cached
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.types import Relationship
 
@@ -59,7 +62,8 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     """Two real conversation turns refuse comparison for the right reasons.
 
     One model load carries every leg: (1) the live pair derives the identity
-    relationship yet refuses on input VALUES (Path 1 on a real model);
+    relationship, lines up, and refuses typed on the turns' different shapes
+    (never on the identity rank);
     (2) with the ``successor_of`` row the refusal keys on TOPOLOGY, taking
     precedence over input evidence; (3) both survive the Bundle artifact
     round trip; (4) the loaded pair's relationship rank only ever goes DOWN
@@ -70,13 +74,13 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
-    try:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(_MODEL_ID, revision=_REVISION)
-        model = transformers.AutoModelForCausalLM.from_pretrained(
-            _MODEL_ID, revision=_REVISION, dtype=torch.float32
-        )
-    except Exception as exc:  # noqa: BLE001 - cache miss skips, never downloads
-        pytest.skip(f"pinned {_MODEL_ID}@{_REVISION[:8]} not in the local HF cache: {exc}")
+    # Cache presence is checked BEFORE loading: a missing snapshot is a
+    # visible skip, and a cached snapshot that fails to load fails loudly.
+    skip_unless_hf_checkpoint_cached(_MODEL_ID, revision=_REVISION)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(_MODEL_ID, revision=_REVISION)
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        _MODEL_ID, revision=_REVISION, dtype=torch.float32
+    )
     model.eval()
 
     turn1_ids = _chat_ids(tokenizer, [{"role": "user", "content": "Name one prime number."}])
@@ -99,11 +103,15 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     # input equality.
     assert bundle.comparability("turn1", "turn2") is Relationship.SAME_OBJECT
 
-    # WITHOUT the ordering row, the refusal is the input predicate's own
-    # (right reason: the turns captured different input values).
-    with pytest.raises(BundleComparisonError) as excinfo:
+    # WITHOUT the ordering row, the two turns are legitimate cross-input
+    # operands whose graphs line up (equal graph-shape hashes), and the
+    # refusal is the per-site shape guard's (right reason: the turns have
+    # different token counts), naming the site.
+    assert turn1._provenance_fingerprint == turn2._provenance_fingerprint
+    with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.at(tl.module("model.norm")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+    assert excinfo.value.fields["site"]
 
     # WITH the ordering row, topology takes precedence over input evidence.
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})

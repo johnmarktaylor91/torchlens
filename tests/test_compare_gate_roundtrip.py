@@ -3,8 +3,9 @@
 Test law 2 (foldB D18): in process, every pair short-circuits toward
 identity evidence, so gate bugs are invisible at notebook scale — every
 cross-member claim must therefore also be proven AFTER a save/load round
-trip. This file repeats both defect-path refusals, the legitimate-pair
-success, the fail-closed unproven refusal on payload-free artifacts, and
+trip. This file repeats the cross-input line-up law (lined-up graphs compare,
+divergent control flow refuses), the legitimate-pair success, the unproven
+refusal on payload-free artifacts whose graphs differ, and
 the topology refusal through the Bundle artifact door, and carries the
 rank-upgrade-across-save/load audit (A-GATE item 5) as executable law.
 """
@@ -52,6 +53,59 @@ class _TwoLayer(nn.Module):
         return self.fc2(torch.relu(self.fc1(x)))
 
 
+class _Branchy(nn.Module):
+    """Data-dependent control flow: the graph depends on the input values."""
+
+    def __init__(self) -> None:
+        """Initialize the shared stem and the two branch layers."""
+
+        super().__init__()
+        self.stem = nn.Linear(4, 4)
+        self.up = nn.Linear(4, 4)
+        self.down = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, then one of two branches chosen by the stem's sum.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor.
+        """
+
+        h = self.stem(x)
+        # Data-dependent branch: the sign of the stem output picks the graph.
+        h = torch.relu(self.up(h)) if h.sum() > 0 else torch.sigmoid(self.down(h)) * 2.0
+        return h + 1
+
+
+def _branch_inputs(model: _Branchy) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return one input per branch of ``model`` (positive, then negative stem sum).
+
+    Parameters
+    ----------
+    model:
+        Branching model.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        Inputs that take the ``up`` and the ``down`` branch.
+    """
+
+    generator = torch.Generator().manual_seed(12)
+    candidates = [torch.randn(1, 4, generator=generator) for _ in range(64)]
+    with torch.no_grad():
+        up = next(x for x in candidates if model.stem(x).sum() > 0)
+        down = next(x for x in candidates if model.stem(x).sum() <= 0)
+    return up, down
+
+
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture one intervention-ready trace.
 
@@ -91,11 +145,14 @@ def _round_trip(trace: tl.Trace, path: Path) -> tl.Trace:
     return tl.load(str(path))
 
 
-def test_leg1_refusal_survives_save_load(tmp_path: Path) -> None:
-    """Same-shape/different-values still refuses on VALUES after a round trip.
+def test_leg1_cross_input_line_up_survives_save_load(tmp_path: Path) -> None:
+    """Different input values: lined-up graphs compare, divergent ones refuse, after loading.
 
-    Default saves retain the input payloads, so the value-level predicate
-    stays provable — and provably different — on loaded artifacts.
+    Default saves retain the input payloads and the graph-shape hash, so the
+    same-graph pair reports real distances after loading. A loaded artifact
+    carries no live model object, so the divergent-branch pair (different
+    graph-shape hashes) never reaches ``shared_graph`` and refuses at the
+    model-axis floor, before the line-up predicate.
     """
 
     model = _TwoLayer()
@@ -109,9 +166,20 @@ def test_leg1_refusal_survives_save_load(tmp_path: Path) -> None:
             "b": _round_trip(right, tmp_path / "b.tlspec"),
         }
     )
+    matrix = loaded.at(tl.func("relu")).compare()
+    assert float(matrix[0, 1]) > 0.0
+
+    branchy = _Branchy()
+    up, down = _branch_inputs(branchy)
+    divergent = tl.Bundle(
+        {
+            "a": _round_trip(_capture(branchy, up), tmp_path / "up.tlspec"),
+            "b": _round_trip(_capture(branchy, down), tmp_path / "down.tlspec"),
+        }
+    )
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+        divergent.compare("a", "b")
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
 
 
 def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
@@ -134,33 +202,43 @@ def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
 
 
 def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
-    """A payload-free (runnable-level) artifact refuses UNPROVEN, fail-closed.
+    """A payload-free (runnable-level) artifact lines up only on equal graph hashes.
 
     The sparse runnable core carries no activation payloads, so value-level
-    input identity is unprovable after the round trip even for genuinely
-    identical inputs. The refusal is the gate's own, names the members, and
-    never falls back to the shape-level hash. The persisted carrier that
-    will prove this case is the A-GATE/digest slice (after C07-X).
+    input identity is unprovable after the round trip. A pair whose
+    graph-shape hashes are equal still lines up (the gate admits it). A pair
+    whose graphs differ has no live model object to rank it ``same_object``,
+    so it refuses at the model-axis floor and never falls back to the
+    shape-level input hash. (The live unproven refusal is pinned in
+    ``tests/test_compare_gate_lattice.py``.)
     """
 
     model = _TwoLayer()
     torch.manual_seed(2)
     x = torch.randn(2, 4)
-    left = _capture(model, x)
-    right = _capture(model, x)
-
-    left.save(str(tmp_path / "a.tlspec"), level="runnable")
-    right.save(str(tmp_path / "b.tlspec"), level="runnable")
-    loaded = tl.Bundle(
+    _capture(model, x).save(str(tmp_path / "a.tlspec"), level="runnable")
+    _capture(model, x).save(str(tmp_path / "b.tlspec"), level="runnable")
+    lined_up = tl.Bundle(
         {
             "a": tl.load(str(tmp_path / "a.tlspec")),
             "b": tl.load(str(tmp_path / "b.tlspec")),
         }
     )
+    lined_up._require_comparable("at.compare")
+
+    branchy = _Branchy()
+    up, down = _branch_inputs(branchy)
+    _capture(branchy, up).save(str(tmp_path / "up.tlspec"), level="runnable")
+    _capture(branchy, down).save(str(tmp_path / "down.tlspec"), level="runnable")
+    divergent = tl.Bundle(
+        {
+            "a": tl.load(str(tmp_path / "up.tlspec")),
+            "b": tl.load(str(tmp_path / "down.tlspec")),
+        }
+    )
     with pytest.raises(BundleComparisonError) as excinfo:
-        loaded.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
-    assert excinfo.value.fields["unproven_members"] == ["a", "b"]
+        divergent._require_comparable("at.compare")
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
 
 
 def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
