@@ -29,6 +29,7 @@ from torchlens._errors import _actionable_message, _ActionableErrorMixin
 from torchlens.errors._base import ConfigurationError
 
 from ._record_type import record_type
+from .options import CaptureOptions
 
 if TYPE_CHECKING:
     from torch import nn
@@ -437,7 +438,6 @@ def list_sites(
     if inputs is None and input_kwargs is None:
         return _module_rung(model)
     from ._user_public_impls import trace as _capture_trace
-    from .options import CaptureOptions
 
     options = capture if capture is not None else CaptureOptions(layers_to_save=None)
     trace = _capture_trace(

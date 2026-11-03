@@ -38,9 +38,10 @@ from ._input_coerce import _coerce_input_args
 from ._literals import (
     OutputDeviceLiteral,
 )
+from ._options_validation import _validate_output_device
 from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
-from ._save_budget import SaveBudgetOption
+from ._save_budget import SaveBudgetOption, resolve_save_budget
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
@@ -56,10 +57,9 @@ from ._validation_state_snapshot import (
     with_storage_bindings_of,
 )
 from .backends.registry import BackendName, resolve_backend_spec
+from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 from .errors import TraceNotReproducibleWarning
-from .options import (
-    CaptureOptions,
-)
+from .options import CaptureOptions, CaptureOptions as _CaptureOptions
 
 # FACADE by role: the body of the public ``torchlens.*`` verbs, whose upward
 # calls into the renderers and reports are the facade's own (Rule F).
@@ -500,8 +500,6 @@ def _weightsfree_summary_facade(
     hypothesis banner.
     """
 
-    from .options import CaptureOptions as _CaptureOptions
-
     if input_size is not None:
         from ._quickstart._resolve import resolve_inputs
 
@@ -620,9 +618,6 @@ def validate_forward_pass(
     BackendUnsupportedError
         If a non-default save option is requested for a non-torch backend.
     """
-
-    from ._options_validation import _validate_output_device
-    from ._save_budget import resolve_save_budget
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
@@ -1054,7 +1049,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
         if not is_bound_method_of_module(model):
