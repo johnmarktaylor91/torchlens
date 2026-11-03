@@ -74,6 +74,22 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
         If no forward pass is being captured.
     ValueError
         If either tensor has not been tagged by TorchLens.
+
+    Examples
+    --------
+    >>> class Linked(nn.Module):
+    ...     def forward(self, a):
+    ...         h, y = a.relu(), a.sigmoid()
+    ...         register_tensor_connection(h, y)
+    ...         return y * 2
+    >>> trace = tl.trace(Linked(), x)
+    >>> "relu_1_1" in trace["sigmoid_1_2"].parents
+    True
+    >>> try:
+    ...     register_tensor_connection(x, x)
+    ... except tl.errors.TorchLensError as err:
+    ...     print(type(err).__name__)
+    CaptureNotActiveError
     """
 
     trace = _state._active_trace

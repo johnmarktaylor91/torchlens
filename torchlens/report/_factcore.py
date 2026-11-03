@@ -161,6 +161,15 @@ class PrunedParamFacts:
     count is ``total - masked``. ``masked`` is ``None`` when the capture
     retained no mask values (the pruning is still named, never hidden).
     A weight that is naturally zero under a one in the mask is not masked.
+
+    Examples
+    --------
+    >>> from torch.nn.utils import prune
+    >>> net = nn.Sequential(nn.Linear(4, 4))
+    >>> _ = prune.l1_unstructured(net[0], "weight", amount=0.5)
+    >>> pruned = tl.trace(net.eval(), torch.randn(2, 4)).factcore.params.pruned
+    >>> (pruned.paths, pruned.raw, pruned.masked)
+    (('0.weight',), 16, 8)
     """
 
     paths: tuple[str, ...]
@@ -175,6 +184,14 @@ class ParamFacts:
     ``total`` is torch's own dedup identity rule; ``per_path_total`` is the
     remove_duplicate=False sum DISCLOSED BESIDE it (torchinfo's number),
     never printed under a "unique" label.
+
+    Examples
+    --------
+    >>> params = tl.trace(model, x).factcore.params
+    >>> params.total
+    186
+    >>> params.pruned is None
+    True
     """
 
     total: int | None
@@ -197,6 +214,14 @@ class MemoryFacts:
     retained when it ran); ``retained_bytes`` is what THIS object holds
     (present or lazily materializable payloads) -- zero on a
     payload-stripped artifact even though the capture once held 64 MB.
+
+    Examples
+    --------
+    >>> memory = tl.trace(model, x).factcore.memory
+    >>> memory.captured_saved_ops > 0
+    True
+    >>> memory.captured_bytes > 0
+    True
     """
 
     captured_bytes: int

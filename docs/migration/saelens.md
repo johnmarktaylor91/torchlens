@@ -3,7 +3,7 @@
 This page is for people who load published sparse autoencoders with SAELens (the registry and
 loader, v6.54.14 released 2026-11-02) and want to run, edit and measure them against a model
 in TorchLens. SAELens loads the SAE; TorchLens runs the model and splices it in. TorchLens
-does not pin SAELens in its test environment, so the SAELens call below is shown as text and
+does not pin SAELens in its test environment, so the SAELens calls are described in prose and
 the splice example uses a stand-in SAE that needs no package. Checked 2026-11-03.
 
 ## The same task in both
@@ -13,15 +13,12 @@ Attach an SAE at one site of a model and ablate one of its features, then read w
 ### In SAELens
 
 SAELens loads a published SAE and attaches it to a hook point of a TransformerLens-style
-model. This block is not executed here: the SAE downloads from the Hugging Face Hub.
-
-```text
-from sae_lens import SAE
-
-sae = SAE.from_pretrained("gemma-scope-2b-pt-res-canonical", "layer_12/width_16k/canonical")
-latents = sae.encode(activations)      # activations: the residual stream at the hook point
-reconstruction = sae.decode(latents)
-```
+model. You load one with `SAE.from_pretrained(release, sae_id)`, for example the release
+`"gemma-scope-2b-pt-res-canonical"` and the id `"layer_12/width_16k/canonical"`; then
+`sae.encode(activations)` turns the residual stream at the hook point into latents and
+`sae.decode(latents)` reconstructs it. The SAE downloads from the Hugging Face Hub, so this is
+described here rather than run; the [pretrained-SAE recipe](../recipes/pretrained_saes.md)
+runs the same calls on an SAE built in memory.
 
 ### In TorchLens
 

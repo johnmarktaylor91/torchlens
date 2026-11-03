@@ -7,6 +7,30 @@ training loop. The native forward stops right after `site`, nothing
 downstream runs, and the site's output comes back graph-connected, so the
 loss backpropagates into every parameter upstream of the cut.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). `trace.run(..., until=site)`
+reruns the forward only up to a site; this stops the running CNN at `layer2`. The recipe below
+builds its own model for the method.
+
+```python
+# recipe-test: tool=torchvision expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+result = trace.run(inputs=x, until="layer2", fast=True)
+RESULT = torch.equal(result.trace["layer2"].out, trace["layer2"].out)
+```
+
 ## The recipe
 
 ```python

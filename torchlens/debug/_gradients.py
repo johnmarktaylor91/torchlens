@@ -591,6 +591,16 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         (``grad_basis_invalid``).
     KeywordConflictError
         If both scale spellings are passed (``grad_scale_conflict``).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> net = nn.Sequential(nn.Linear(4, 4), nn.Tanh())
+    >>> run = tl.trace(net, torch.randn(2, 4, requires_grad=True), capture=tl.options.CaptureOptions(save_grads=True))
+    >>> _ = run.log_backward(run[run.output_layers[0]].out.sum())
+    >>> frame = grad_health(run).to_pandas()
+    >>> len(frame) > 0, frame.attrs["bwd"]
+    (True, 1)
     """
 
     rows, attrs = gradient_flow_audit_rows(

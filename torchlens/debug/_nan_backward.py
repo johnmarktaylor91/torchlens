@@ -66,6 +66,18 @@ class BackwardTransition:
     unchecked_leaves:
         Tensor leaves that could not be checked (unsupported dtype); a
         nonzero count keeps this call out of any ``clean`` claim.
+
+    Examples
+    --------
+    >>> class SqrtNet(nn.Module):
+    ...     def forward(self, t):
+    ...         return torch.sqrt(torch.relu(t)).sum()
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
+    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> step = tl.debug.bisect_nan_backward(run).birth
+    >>> isinstance(step, BackwardTransition), step.verdict
+    (True, 'birth')
     """
 
     fire_index: int
@@ -122,6 +134,18 @@ class BackwardNanReport(FoundReport):
         ``inf``-kind and no ``grad_scale`` was supplied; ``None`` otherwise.
     message:
         Human-readable summary headlining the earliest provable birth.
+
+    Examples
+    --------
+    >>> class SqrtNet(nn.Module):
+    ...     def forward(self, t):
+    ...         return torch.sqrt(torch.relu(t)).sum()
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
+    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> report = tl.debug.bisect_nan_backward(run)
+    >>> isinstance(report, BackwardNanReport), report.found, len(report.transitions) > 0
+    (True, True, True)
     """
 
     found: bool
@@ -529,6 +553,18 @@ def bisect_nan_backward(
         names an unknown pass (code ``bwd_selector_unknown``), or
         ``grad_scale`` is not a positive finite number (code
         ``grad_scale_invalid``).
+
+    Examples
+    --------
+    >>> class SqrtNet(nn.Module):
+    ...     def forward(self, t):
+    ...         return torch.sqrt(torch.relu(t)).sum()
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
+    >>> _ = run.log_backward(run.output_ops[0].out)
+    >>> report = bisect_nan_backward(run)
+    >>> report.found, report.birth.verdict, report.birth.emitted
+    (True, 'birth', 'inf')
     """
 
     from ._gradients import _validate_grad_scale

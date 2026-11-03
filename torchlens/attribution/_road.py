@@ -230,6 +230,17 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     AttributionError
         On non-image inputs, an unknown ranking, a negative ``noise_std``, or
         the refusals of :func:`deletion_curve`.
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> curve = tl.attribution.road_curve(
+    ...     model, x, target=0, attribution=attr, num_steps=4, seed=0
+    ... )
+    >>> curve.kind
+    'road'
+    >>> len(curve.steps)
+    5
     """
 
     _validated_road_settings(inputs, ranking, noise_std)

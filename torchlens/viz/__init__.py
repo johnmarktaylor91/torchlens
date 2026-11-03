@@ -125,6 +125,15 @@ def causal_trace_heatmap(
     -------
     object
         Matplotlib axes containing the heatmap.
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> scores = torch.arange(12.0).reshape(3, 4)
+    >>> axes = tl.viz.causal_trace_heatmap(scores)
+    >>> type(axes).__name__
+    'Axes'
+    >>> plt.close("all")
     """
 
     import numpy as np

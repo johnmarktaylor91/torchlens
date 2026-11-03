@@ -52,6 +52,14 @@ def all_sites() -> _AllSitesSelector:
     -------
     _AllSitesSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> len(trace[tl.all_sites()]) == len(trace[tl.label_matches(".*")])
+    True
+    >>> trace[tl.all_sites() - tl.func("relu")].labels
+    ('input_1:1', 'conv2d_1_1:1', 'conv2d_2_3:1', 'output_1:1')
     """
 
     return _AllSitesSelector()

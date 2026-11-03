@@ -42,6 +42,13 @@ def bundle_retained_bytes(bundle: Bundle) -> dict[str, Any]:
         never guessed), and ``basis="lower_bound"``: the figure meters
         retained activation storage only, never full member RSS, and
         cross-fork shared storage is charged per accountant.
+
+    Examples
+    --------
+    >>> bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
+    >>> report = tl.experiment.retained_bytes(bundle)
+    >>> report["basis"], sorted(report["per_member"])
+    ('lower_bound', ['a', 'b'])
     """
 
     per_member: dict[str, int] = {}

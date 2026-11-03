@@ -141,6 +141,7 @@ exclude_docs: |
   /maintainers/review_checklist.md
   /maintainers/saved_format_3.md
   /maintainers/testing.md
+  /maintainers/docstring_examples_census.md
   /maintainers/where.md
   /guides/grouping.md
   /guides/kv_cache.md

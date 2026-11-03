@@ -787,6 +787,16 @@ def sweep_sites(
         Baseline + retained members; the COMPLETE per-candidate effect table
         (released/refused/failed rows included) persists in the bundle
         artifact keyed by operation id and survives discard/save/load.
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> bundle = tl.experiment.sweep_sites(
+    ...     base, candidates={"relu": "relu_1_2"}, edit=tl.zero_ablate(),
+    ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="all",
+    ...     model=model, inputs=x)
+    >>> bundle.names
+    ['baseline', 'relu']
     """
 
     _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)

@@ -78,6 +78,15 @@ class FuncCallLocation:
     **Legacy path** (direct construction, e.g. tests): pass the legacy
     source-context keyword arguments directly. Values are stored directly
     with no lazy loading.
+
+    Examples
+    --------
+    >>> where = FuncCallLocation(file="model.py", line_number=12, func_name="forward")
+    >>> where.func_name, where.line_number
+    ('forward', 12)
+    >>> location = tl.trace(model, x).ops[1].code_context[0]
+    >>> isinstance(location, FuncCallLocation), isinstance(location.line_number, int)
+    (True, True)
     """
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {

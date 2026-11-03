@@ -35,7 +35,14 @@ class _TraceGroup:
 
 
 class TraceCost(_TraceGroup):
-    """Compute, memory and timing totals of a Trace."""
+    """Compute, memory and timing totals of a Trace.
+
+    Examples
+    --------
+    >>> cost = tl.trace(model, x).cost
+    >>> type(cost).__name__, isinstance(cost.forward_duration, tl.types.Duration)
+    ('TraceCost', True)
+    """
 
     __slots__ = ()
 
@@ -206,7 +213,14 @@ class TraceCost(_TraceGroup):
 
 
 class TraceGraph(_TraceGroup):
-    """Graph-shape facts of a Trace: edges, degrees, branching and conditionals."""
+    """Graph-shape facts of a Trace: edges, degrees, branching and conditionals.
+
+    Examples
+    --------
+    >>> graph = tl.trace(model, x).graph
+    >>> type(graph).__name__, graph.is_branching, graph.is_recurrent
+    ('TraceGraph', False, False)
+    """
 
     __slots__ = ()
 
@@ -365,7 +379,14 @@ class TraceGraph(_TraceGroup):
 
 
 class TraceAutograd(_TraceGroup):
-    """Backward-pass records and grad_fn facts of a Trace."""
+    """Backward-pass records and grad_fn facts of a Trace.
+
+    Examples
+    --------
+    >>> autograd = tl.trace(model, x).autograd
+    >>> type(autograd).__name__, autograd.has_backward_pass
+    ('TraceAutograd', False)
+    """
 
     __slots__ = ()
 
@@ -470,7 +491,14 @@ class TraceAutograd(_TraceGroup):
 
 
 class TraceProvenance(_TraceGroup):
-    """How, when and from what this Trace was captured."""
+    """How, when and from what this Trace was captured.
+
+    Examples
+    --------
+    >>> provenance = tl.trace(model, x).provenance
+    >>> type(provenance).__name__, provenance.backend
+    ('TraceProvenance', 'torch')
+    """
 
     __slots__ = ()
 
