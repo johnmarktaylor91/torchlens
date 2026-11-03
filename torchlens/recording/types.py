@@ -453,9 +453,8 @@ class Recording(TraceLike):
     option (``vis_mode``, nesting depth, rolled recurrent views) and the
     ``modules[...].facets`` views. Recorded ops carry the same parameter and
     argument equivalence classes exhaustive capture gives them, so the cooked
-    Trace groups a reused layer into passes the way ``tl.trace`` does; a loop
-    whose body has no parameters stays single-pass (a recording keeps no
-    call sites). ``tl.recording.dry_run(...).draw()`` renders only a flat event graph and
+    Trace groups a reused layer into passes the way ``tl.trace`` does.
+    ``tl.recording.dry_run(...).draw()`` renders only a flat event graph and
     takes ``vis_outpath``, ``vis_save_only`` and ``vis_fileformat`` alone.
 
     Notes

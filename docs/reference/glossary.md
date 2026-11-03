@@ -56,8 +56,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. Recorded ops carry the capture-time `equivalence_class` and
   parameter identity exhaustive capture gives them, so the cooked `Trace` groups a reused layer
-  into passes the way `tl.trace` does (a loop body without parameters stays single-pass: a
-  recording keeps no call sites). A `Recording` has no `draw()` and no facets; `to_trace()`
+  into passes the way `tl.trace` does. A `Recording` has no `draw()` and no facets; `to_trace()`
   unlocks every `Trace.draw` option and `modules[...].facets`. `tl.extract` takes only `model`,
   `inputs`, `layers` and `detach_saved_activations`; every other capture option is a `tl.trace`
   keyword. `tl.record` installs gradient hooks only when `backward_ready=True`,
