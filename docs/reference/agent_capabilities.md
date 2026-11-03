@@ -7,7 +7,7 @@ Each row is a capability name from Goodfire Silico's capabilities page (https://
 | Capability | TorchLens | Call |
 |---|---|---|
 | Activation harvesting | [Capture a forward pass and read an activation](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/see_and_inspect.md); [Keep only the activations you need](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/see_and_inspect.md); [Get named layers' outputs as tensors](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md); [Extract features over a whole dataset](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md); [Record a few sites over many forwards cheaply](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/performance.md); [Stream a large capture to disk](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/intervention_api.md) | `trace = tl.trace(model, x)`; `trace = tl.trace(model, x, save=tl.func("relu"))`; `features = tl.extract(model, x, ["layer3", "avgpool"])`; `tl.extract_dataset(model, stimuli, ["layer3", "avgpool"], path="features")`; `recording = tl.record(model, x, save=tl.func("relu"))`; `trace = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))` |
-| Featurizer training | [Gather activations to train a sparse autoencoder](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/recipes/sae_trainers.md); TorchLens supplies the activations; the trainer is external. | `tl.extract_dataset(model, stimuli, ["layer4"], batch_size=64, path="sae_acts")` |
+| Featurizer training | [Gather activations to train a sparse autoencoder](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/sae_trainers.md); TorchLens supplies the activations; the trainer is external. | `tl.extract_dataset(model, stimuli, ["layer4"], batch_size=64, path="sae_acts")` |
 | Probing | [Collect features to train a linear probe](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md) | `tl.extract_dataset(model, stimuli, ["layer4"], path="probe_features")` |
 | Activation monitoring | Not built in. |  |
 | Automated interpretation | Not built in. |  |
@@ -35,7 +35,7 @@ Each row is a capability name from Goodfire Silico's capabilities page (https://
 | Biological model comparison | Not built in; neuro-compare compares a model with neural recordings. |  |
 | Causal behaviors for biological models | Outside TorchLens. |  |
 | Research design | Outside TorchLens. |  |
-| Access verification | [Diagnose a capture problem](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/agent-reference/common-patterns.md) | `print(tl.report.doctor(model=model, inputs=x).to_markdown())` |
+| Access verification | [Diagnose a capture problem](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/internal/agent-reference/common-patterns.md) | `print(tl.report.doctor(model=model, inputs=x).to_markdown())` |
 | Paper replication | See the Reproduction Gallery (docs/gallery). |  |
 | Interactive HTML | [Open an interactive viewer of a trace](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/export.md); A trace viewer, not a research-thread report. | `tl.export.html(tl.trace(model, x), "trace.html")` |
 | LaTeX | Outside TorchLens. |  |

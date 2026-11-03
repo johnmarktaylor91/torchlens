@@ -1,0 +1,24 @@
+{
+  "schema": "torchlens.first_page_allowlist.v1",
+  "about": "The README's first screen and the docs landing page may name only the core calls. Names are today's spellings; update them here when the decided names land.",
+  "allowed": {
+    "tl": ["trace", "extract"],
+    "trace_methods": ["draw", "do"],
+    "layer_attributes": ["out"]
+  },
+  "trace_variable_names": ["trace", "log"],
+  "pages": [
+    {
+      "path": "README.md",
+      "scope": "first_screen",
+      "enforced": false,
+      "reason": "The README is being rewritten by its author for the launch; its current first screen names calls outside the core set. Set enforced to true when the rewritten README lands."
+    },
+    {
+      "path": "docs/index.md",
+      "scope": "first_screen",
+      "enforced": true,
+      "reason": ""
+    }
+  ]
+}

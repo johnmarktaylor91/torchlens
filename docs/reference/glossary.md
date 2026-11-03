@@ -1105,8 +1105,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   operational state that an assignment can set and that a func-targeted `intervene=` capture
   keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
   functions. How the reading relates to the runnable clean-run promise (a hooked run
-  settles `unverifiable` and marks the trace non-pristine) is stated in
-  [`runnable_model.md`](runnable_model.md), "Clean run, hooked run, and disclosure".
+  settles `unverifiable` and marks the trace non-pristine) is stated in the maintainer page
+  `runnable_model.md`, "Clean run, hooked run, and disclosure".
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
@@ -1623,7 +1623,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  3.0 format: the maintainer contract `docs/maintainers/saved_format_3.md` (not on the site).
   Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
   at load, on its manifest, metadata and blobs entries): a symlink there refuses
   (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
@@ -2068,7 +2068,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   and the decoder ops are trace nodes between the site and its consumers;
   `latents_site` names the latents node (`None` with logging off). The spliced
   outputs are the same with logging on and off. Recipe:
-  `docs/facets/pretrained_saes.md`.
+  `docs/field-guide/pretrained_saes.md`.
 
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
@@ -2107,7 +2107,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
   `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
   dataset (only the retained top entries). Recipe:
-  `docs/recipes/sae_latent_export.md`.
+  `docs/field-guide/sae_latent_export.md`.
 
 **write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
 : Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
@@ -2117,7 +2117,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   carry every token's activation and give `feature_stats` `max` and
   `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
   `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
-  warns once past 256 MiB. Recipe: `docs/recipes/sae_latent_export.md`.
+  warns once past 256 MiB. Recipe: `docs/field-guide/sae_latent_export.md`.
 
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.compute()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a

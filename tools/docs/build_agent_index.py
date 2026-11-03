@@ -39,11 +39,14 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import yaml
@@ -151,8 +154,28 @@ def _string_list(meta: dict[str, Any], key: str) -> bool:
     return isinstance(value, list) and all(isinstance(v, str) for v in value)
 
 
+@cache
+def _schema_module() -> ModuleType | None:
+    """Return the shared task-card schema module beside this script, if present."""
+    path = Path(__file__).with_name("task_card.py")
+    if not path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("_task_card_schema", path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def card_problems(meta: dict[str, Any]) -> list[str]:
     """Return every field-contract problem of one card's fields.
+
+    The local check covers every field, the first-call fields included. When the
+    shared schema module (``tools/docs/task_card.py``) sits beside this script, the
+    card's Field guide fields are also checked through it, so the human page and
+    the generator read one contract.
 
     Parameters
     ----------
@@ -193,6 +216,10 @@ def card_problems(meta: dict[str, Any]) -> list[str]:
         problems.append("prompt must be a string")
     if not isinstance(meta.get("hard_fail", False), bool):
         problems.append("hard_fail must be true or false")
+    schema = _schema_module()
+    if schema is not None:
+        shared = {key: value for key, value in meta.items() if key not in FIRST_CALL_FIELDS}
+        problems += [p for p in schema.card_problems(shared) if p not in problems]
     return problems
 
 

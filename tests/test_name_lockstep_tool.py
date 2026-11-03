@@ -190,7 +190,7 @@ def _lockstep_repo(root: Path, glossary: str, example: str) -> check.Corpus:
         root,
         {
             "docs/reference/glossary.md": glossary,
-            "docs/agent-reference/surface.md": "Use `tl.trace(model, x)` and `tl.io.dump`.\n",
+            "docs/internal/agent-reference/surface.md": "Use `tl.trace(model, x)` and `tl.io.dump`.\n",
             "notebooks/audit/a.py": "trace = tl.trace(model, x)\n",
             "examples/demo.py": example,
             "tests/test_demo.py": "def test_x():\n    trace.ops\n    tl.io.dump(trace, 'p')\n",
@@ -300,7 +300,11 @@ def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     assert dump["reference_source"] == "glossary:docs/reference/glossary.md:1"
     assert "tl.io.dump" in dump["snippet"]
     paths = {s["path"] for s in dump["snippets"]}
-    assert paths == {"examples/demo.py", "tests/test_demo.py", "docs/agent-reference/surface.md"}
+    assert paths == {
+        "examples/demo.py",
+        "tests/test_demo.py",
+        "docs/internal/agent-reference/surface.md",
+    }
 
 
 DOCUMENTED_CORE = '''

@@ -69,7 +69,7 @@ marked in the last column.
 | Save a recording, load it, diff two runs | yes | by hand | partial: the cache as tensors | partial: saved values | partial: saved interventions | no | partial: saves features | no | |
 | Gradients at internal sites | yes | yes: tensor hooks | yes | yes | partial | yes: layer gradients | no | partial: autograd on outputs | |
 | Trainable interventions (DAS, LoReFT) | no: reads pyreft artifacts, ships no trainer | by hand | no | by hand | yes | no | no | no | pyvene, pyreft |
-| Sparse autoencoder training | no: [use a trainer](../recipes/sae_trainers.md) | no | no: SAELens builds on it | no | no | no | no | no | SAELens |
+| Sparse autoencoder training | no: [use a trainer](../field-guide/sae_trainers.md) | no | no: SAELens builds on it | no | no | no | no | no | SAELens |
 | Attribution method breadth (TCAV, influence functions, attacks, text DeepLift and LIME) | partial: a gradient and perturbation set in `tl.attribution` | no | no | no | no | yes | no | no | Captum, inseq |
 | Serving-scale and remote capture (vLLM, remote GPUs, tensor parallel) | no: local eager forward | no | no | yes: vLLM back end, NDIF | no | no | no | no | nnsight |
 | Model-specific LLM conveniences (canonical hook names across families, pretrained loader, folded LayerNorm) | partial: resolves TransformerLens names on Hugging Face models | no | yes | partial: `LanguageModel` | no | no | no | no | TransformerLens |

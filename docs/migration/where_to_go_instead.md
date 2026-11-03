@@ -24,9 +24,9 @@ steering vector on the eager twin
 
 ## Train a sparse autoencoder or a probe
 
-- Sparse autoencoders: SAELens and the trainers on [the SAE trainers recipe](../recipes/sae_trainers.md).
+- Sparse autoencoders: SAELens and the trainers on [the SAE trainers recipe](../field-guide/sae_trainers.md).
   TorchLens writes the activations they train on (`tl.extract_dataset`) and splices a trained
-  SAE back in (`torchlens.bridge.sae.splice`, [pretrained SAEs](../recipes/pretrained_saes.md)).
+  SAE back in (`torchlens.bridge.sae.splice`, [pretrained SAEs](../field-guide/pretrained_saes.md)).
 - Probes: the training loop is yours (scikit-learn or plain PyTorch); `tl.extract_dataset`
   writes the features with their provenance ([non-goals](../non_goals.md)).
 
@@ -42,7 +42,7 @@ LoReFT artifact with `torchlens.bridge.pyreft.read` and applies it as a subspace
 perturbation curves.
 
 - Influence functions and adversarial attacks: use Captum.
-- TCAV: Captum, or [the TCAV recipe](../recipes/tcav.md), which runs it on TorchLens sites with a
+- TCAV: Captum, or [the TCAV recipe](../field-guide/tcav.md), which runs it on TorchLens sites with a
   causal check.
 - DeepLift and LIME for text: Captum or inseq. TorchLens provides no DeepLift or LIME for text.
 

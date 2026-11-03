@@ -4,7 +4,7 @@ Cost first: to steer or patch a model over many forwards or through HF `generate
 capture-free `tl.when(site, action).bind(model)` (about 1x a plain forward hook) instead of a
 `tl.trace` per step; use `tl.record(..., intervene=...)` (output in `recording.output`) when each step
 also needs recorded activations. Which path costs what, and what each reuse path refuses:
-[Performance: choosing a fast path](../guides/fast_paths.md).
+[Performance: choosing a fast path](../../guides/fast_paths.md).
 
 ```python
 import torch

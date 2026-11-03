@@ -11,8 +11,8 @@ nothing here is imported by `import torchlens`. Checked 2026-11-03.
 | From | Bridge | What comes in | Page |
 | --- | --- | --- | --- |
 | pyreft | `torchlens.bridge.pyreft.read` | A saved LoReFT intervention, applied as a TorchLens subspace edit | [Coming from pyvene](from_pyvene.md) |
-| SAELens | `torchlens.bridge.sae_lens.encode`, `reconstruct` | A published sparse autoencoder, run on a captured site | [pretrained SAEs](../recipes/pretrained_saes.md) |
-| any SAE library | `torchlens.bridge.sae.splice` | An SAE's reconstruction spliced back into the forward, with what the splice did | [pretrained SAEs](../recipes/pretrained_saes.md) |
+| SAELens | `torchlens.bridge.sae_lens.encode`, `reconstruct` | A published sparse autoencoder, run on a captured site | [pretrained SAEs](../field-guide/pretrained_saes.md) |
+| any SAE library | `torchlens.bridge.sae.splice` | An SAE's reconstruction spliced back into the forward, with what the splice did | [pretrained SAEs](../field-guide/pretrained_saes.md) |
 | Hugging Face Hub | `torchlens.bridge.huggingface_hub.from_hub` | A `.tlspec` bundle someone published | [glossary](../reference/glossary.md) |
 | Hugging Face transformers | `torchlens.bridge.transformers.trace_text`, `trace_image`, `trace_multimodal` | A model and its processor, traced on raw text or images | [quickstart](../quickstart.md) |
 
@@ -26,7 +26,7 @@ nothing here is imported by `import torchlens`. Checked 2026-11-03.
 | Captum | `torchlens.bridge.captum.attribute`, `layer` | A TorchLens site as a Captum layer target | [Coming from Captum](from_captum.md) |
 | inseq | `torchlens.bridge.inseq.attribute` | Text attribution on a TorchLens-addressed site | [Coming from inseq](inseq.md) |
 | SHAP | `torchlens.bridge.shap.explain` | A site as the explained output | [Coming from Captum](from_captum.md) |
-| pytorch-grad-cam | `torchlens.bridge.pytorch_grad_cam.cam`, `layer` | A TorchLens site as the CAM target layer | [Grad-CAM with torch-cam](../recipes/torchcam.md) |
+| pytorch-grad-cam | `torchlens.bridge.pytorch_grad_cam.cam`, `layer` | A TorchLens site as the CAM target layer | [Grad-CAM with torch-cam](../field-guide/torchcam.md) |
 | steering-vectors, repeng, dialz | `torchlens.bridge.steering_vectors.from_direction`, `torchlens.bridge.repeng.from_direction`, `torchlens.bridge.dialz.from_direction` | A TorchLens `Direction` as that library's steering object | [Coming from RepE](repe.md) |
 | Hugging Face Hub | `torchlens.bridge.huggingface_hub.push_to_hub` | A `.tlspec` bundle, published | [glossary](../reference/glossary.md) |
 | treescope | `torchlens.bridge.treescope.register` | TorchLens objects rendered in treescope | [treescope cards](../guides/treescope_cards.md) |

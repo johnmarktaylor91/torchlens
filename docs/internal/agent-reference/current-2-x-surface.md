@@ -2,7 +2,7 @@
 
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
-- Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
+- Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`).
@@ -1375,7 +1375,7 @@
   `tokens=` adds `ce_loss_clean`/`ce_loss_spliced`/`ce_loss_zero_ablated`,
   `ce_loss_recovered` and `kl_divergence`. `bridge.sae_lens.reconstruct(log, site, sae)`
   replaces the removed `decode`. Pretrained SAEs (Gemma Scope 1 and 2) load with SAELens
-  and run here (`docs/recipes/pretrained_saes.md`); a transcoder splices with
+  and run here (`docs/field-guide/pretrained_saes.md`); a transcoder splices with
   `tl.splice_module(transcoder, input_route="in")` on its MLP module. `log_latents=True` (live
   model only) makes `spliced` a fresh capture with the SAE run inside the model, so the
   encoder ops, the latents node (`SpliceResult.latents_site`) and the decoder ops are trace
@@ -1394,7 +1394,7 @@
   `bridge.sae.write_delphi(latents, tokens, site=, model_name=, n_splits=5, directory=)`
   (DOCUMENTED-UNSTABLE) write a splice's `latents` or a dataset's
   `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` result as the files SAEDashboard
-  0.8.0 and delphi 0.1.3 load (`docs/facets/sae_latent_export.md`). `bridge.brain_score`
+  0.8.0 and delphi 0.1.3 load (`docs/field-guide/sae_latent_export.md`). `bridge.brain_score`
   additionally serves Brain-Score's
   `ActivationsExtractorHelper` seam: `get_activations_fn(model)` is the offline
   per-batch callable (module dotted paths or any TorchLens lookup; `"logits"` = model

@@ -109,10 +109,10 @@ with collector.step(step):
     output.loss.backward(); optimizer.step()
 ```
 
-Route B rides fastlog: every selected OP becomes a site (567 on gpt2 vs
+Route B rides sparse recording (`tl.record()`): every selected OP becomes a site (567 on gpt2 vs
 ~125 leaf modules), reduced at the save point by a declared summary
-transform. The plumbing that makes this affordable is public:
-`torchlens._observability.summary(fn)` declares a NON-DIFFERENTIABLE reducer
+transform. The plumbing that makes this affordable is the observability package's
+`summary(fn)` (private; no public spelling yet), which declares a NON-DIFFERENTIABLE reducer
 (integer outputs legal even under `backward_ready=True`), and with
 `save_raw_activations=False` the raw clone is skipped entirely -- reduce,
 never copy. `facets={label: split_heads(n, dim=...)}` gives per-head series

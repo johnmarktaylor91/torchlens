@@ -122,4 +122,4 @@ RESULT = (
 Sort `relative` to list the most model-specific latents, then read what they
 do with the other recipes: their top examples in each model with
 `tl.stats.TopK(..., encoder=...)` and the export for SAEDashboard
-(`docs/recipes/sae_latent_export.md`).
+(`docs/field-guide/sae_latent_export.md`).
