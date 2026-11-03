@@ -1674,7 +1674,7 @@ def _check_layer_arguments_logged_correctly(
             parent_layer = _op_for_validation_label(self, parent_layer_label)
             for arg_type in ["args", "kwargs"]:
                 iterfunc, argtype_field = argtype_dict[arg_type]
-                saved_values = getattr(target_layer, argtype_field)
+                saved_values = record_member(target_layer, argtype_field)
                 if saved_values is None:
                     return ValidationCheckResult.unverified("missing_saved_args")
                 for key, val in iterfunc(saved_values):
