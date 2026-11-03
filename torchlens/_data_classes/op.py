@@ -2263,11 +2263,9 @@ class Op(OpAtenMixin, _SelectionOperand):
 
     @property
     def is_in_conditional_body(self) -> bool:
-        """Whether this op is in a conditional arm body."""
+        """Whether this op ran inside a conditional arm (the Layer rule; test ops are outside)."""
 
-        if self.has_output_descendant and not self.conditional_entry_children:
-            return False
-        return bool(self._slot("_is_in_conditional_body", False)) or any(
+        return bool(self.conditional_branch_stack) or any(
             role.role == "body" for role in self.in_conditionals or []
         )
 
