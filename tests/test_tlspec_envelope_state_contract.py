@@ -30,6 +30,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, set_cell
 from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
@@ -163,13 +164,10 @@ def tampered_main_bundle(tiny_trace: object, tmp_path: Path) -> Path:
 
     bundle = tmp_path / "art_current_future.tlspec"
     tiny_trace.save(bundle)  # type: ignore[attr-defined]
-    metadata_path = bundle / "metadata.pkl"
-    with metadata_path.open("rb") as fh:
-        scrubbed_state = pickle.load(fh)
-    assert isinstance(scrubbed_state, dict)
-    scrubbed_state[UNKNOWN_KEY] = 1
-    with metadata_path.open("wb") as fh:
-        pickle.dump(scrubbed_state, fh)
+    # The trace record table's ``fields`` gain one column; its digest is re-listed, so
+    # the refusal comes from the persisted-state contract, not the integrity check.
+    assert UNKNOWN_KEY not in read_record(bundle, "trace")["fields"]
+    set_cell(bundle, "trace", UNKNOWN_KEY, 0, 1)
     return bundle
 
 

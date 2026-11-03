@@ -57,6 +57,32 @@ IDENTITY_FIELD_PATTERNS: Final[dict[str, str]] = dict.fromkeys(WRITER_IDENTITY_F
 #: When present each must match its closed shape below; the reader refuses
 #: ``manifest_schema_invalid`` otherwise. Ruled 2 Nov 2026.
 MANIFEST_SUMMARY_FIELDS: Final[tuple[str, ...]] = ("model_fingerprint", "backward_summary")
+#: tlspec 11 fields a 3.0 trace manifest still carries for readers that open
+#: ``manifest.json`` blind (the agent overview, site lookups, provenance restore). A
+#: ``trace`` manifest carries each; in any kind a present one must match its shape in
+#: :mod:`.carried`, else the reader refuses ``manifest_schema_invalid``.
+MANIFEST_CARRIED_FIELDS: Final[tuple[str, ...]] = (
+    "model_signature",
+    "schema_version",
+    "n_layers",
+    "n_out_blobs",
+    "n_grad_blobs",
+    "n_auxiliary_blobs",
+    "bundle_format",
+    "body_format",
+    "body_index",
+    "sites",
+    "optional_dependencies",
+    "spec_compat_info",
+    "intervention_compat_metadata",
+)
+#: Carried fields an older writer omitted: optional, shape-checked when present.
+MANIFEST_CARRIED_OPTIONAL_FIELDS: Final[tuple[str, ...]] = (
+    "unsupported_tensors",
+    "provenance",
+    "custom_attributes_disclosure",
+    "buffer_values_disclosure",
+)
 #: ``model_fingerprint`` model shape: two SHA-256 hex digests, a class name, an object.
 MODEL_FINGERPRINT_HASH_FIELDS: Final[tuple[str, ...]] = ("parameter_meta_hash", "buffer_meta_hash")
 #: ``model_fingerprint`` backend shape: ``{"backend_fingerprint": {<these keys>}}``.

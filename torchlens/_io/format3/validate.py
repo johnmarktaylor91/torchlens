@@ -30,6 +30,7 @@ from ..format_errors import ArtifactError, ArtifactTooOldError
 from ..paths import reject_symlink_path
 from ..writer_contract import writer_contract_digest
 from . import contract
+from .carried import carried_field_errors
 from .summaries import summary_schema_errors
 
 __all__ = [
@@ -104,7 +105,7 @@ def legacy_stamp(manifest_path: Path) -> int | None:
     """
 
     try:
-        data = json.loads(read_bytes_bounded(manifest_path))
+        data = loads_bounded(read_bytes_bounded(manifest_path).decode("utf-8"))
     except (OSError, ValueError, ArtifactError):
         return None
     if not isinstance(data, dict):
@@ -281,6 +282,7 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     errors.extend(_records_table_errors(manifest["records"], manifest["files"], manifest["kind"]))
     errors.extend(_disclosure_errors(manifest.get("disclosures")))
     errors.extend(summary_schema_errors(manifest))
+    errors.extend(carried_field_errors(manifest))
     return errors
 
 

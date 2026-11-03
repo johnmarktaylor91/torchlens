@@ -158,7 +158,7 @@ def save_intervention(
         if _write_tensor_blob_fn is not None:
             # Test hook: runs after the recipe and its tensors are on disk, before publish.
             _write_tensor_blob_fn(tmp_path=tmp_path, chunks=chunks)
-        recipe = json.loads((tmp_path / INTERVENTION_FILE).read_text(encoding="utf-8"))
+        recipe = read_bounded(tmp_path / INTERVENTION_FILE)
         if save_level is SaveLevel.PORTABLE:
             _refuse_unportable_recipe(recipe)
         _TlSpecWriter.write_intervention_manifest(

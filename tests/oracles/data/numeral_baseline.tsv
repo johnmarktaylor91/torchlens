@@ -1845,6 +1845,7 @@ docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	128
 docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	1285
+docs-md	docs/maintainers/where.md	1288
 docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
 docs-md	docs/maintainers/where.md	1293
@@ -1852,7 +1853,6 @@ docs-md	docs/maintainers/where.md	1297
 docs-md	docs/maintainers/where.md	13
 docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
-docs-md	docs/maintainers/where.md	1305
 docs-md	docs/maintainers/where.md	1306
 docs-md	docs/maintainers/where.md	132
 docs-md	docs/maintainers/where.md	1329
@@ -1884,6 +1884,7 @@ docs-md	docs/maintainers/where.md	1413
 docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	1423
 docs-md	docs/maintainers/where.md	143
+docs-md	docs/maintainers/where.md	1437
 docs-md	docs/maintainers/where.md	1439
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	1442
@@ -2143,8 +2144,7 @@ docs-md	docs/maintainers/where.md	3005
 docs-md	docs/maintainers/where.md	301
 docs-md	docs/maintainers/where.md	302
 docs-md	docs/maintainers/where.md	303
-docs-md	docs/maintainers/where.md	304
-docs-md	docs/maintainers/where.md	30426
+docs-md	docs/maintainers/where.md	30476
 docs-md	docs/maintainers/where.md	305
 docs-md	docs/maintainers/where.md	306
 docs-md	docs/maintainers/where.md	307
@@ -2445,6 +2445,7 @@ docs-md	docs/maintainers/where.md	637
 docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	640
+docs-md	docs/maintainers/where.md	640551
 docs-md	docs/maintainers/where.md	641
 docs-md	docs/maintainers/where.md	641880
 docs-md	docs/maintainers/where.md	642
@@ -2541,7 +2542,6 @@ docs-md	docs/maintainers/where.md	78
 docs-md	docs/maintainers/where.md	7812
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	786
-docs-md	docs/maintainers/where.md	788
 docs-md	docs/maintainers/where.md	789
 docs-md	docs/maintainers/where.md	79
 docs-md	docs/maintainers/where.md	790
@@ -2573,6 +2573,8 @@ docs-md	docs/maintainers/where.md	847
 docs-md	docs/maintainers/where.md	8471
 docs-md	docs/maintainers/where.md	8489
 docs-md	docs/maintainers/where.md	8490
+docs-md	docs/maintainers/where.md	8488
+docs-md	docs/maintainers/where.md	8491
 docs-md	docs/maintainers/where.md	85
 docs-md	docs/maintainers/where.md	852
 docs-md	docs/maintainers/where.md	853
@@ -2582,6 +2584,8 @@ docs-md	docs/maintainers/where.md	8669
 docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	871
 docs-md	docs/maintainers/where.md	8789
+docs-md	docs/maintainers/where.md	878
+docs-md	docs/maintainers/where.md	8784
 docs-md	docs/maintainers/where.md	88
 docs-md	docs/maintainers/where.md	882
 docs-md	docs/maintainers/where.md	885
@@ -4829,12 +4833,15 @@ package-docstrings	torchlens/_io/forgery_validation.py	64
 package-docstrings	torchlens/_io/format3/__init__.py	3.0
 package-docstrings	torchlens/_io/format3/_family_nodes.py	3.0
 package-docstrings	torchlens/_io/format3/_tables.py	3.0
+package-docstrings	torchlens/_io/format3/carried.py	11
+package-docstrings	torchlens/_io/format3/carried.py	3.0
 package-docstrings	torchlens/_io/format3/container.py	11
 package-docstrings	torchlens/_io/format3/container.py	256
 package-docstrings	torchlens/_io/format3/container.py	3.0
 package-docstrings	torchlens/_io/format3/contract.py	3.0
 package-docstrings	torchlens/_io/format3/decode.py	3.0
 package-docstrings	torchlens/_io/format3/decode.py	64
+package-docstrings	torchlens/_io/format3/inventory.py	3.0
 package-docstrings	torchlens/_io/format3/payloads.py	256
 package-docstrings	torchlens/_io/format3/payloads.py	3.0
 package-docstrings	torchlens/_io/format3/reader.py	14
@@ -4930,6 +4937,7 @@ package-docstrings	torchlens/_io/scrub.py	69
 package-docstrings	torchlens/_io/sidecar.py	14
 package-docstrings	torchlens/_io/sidecar.py	6.3
 package-docstrings	torchlens/_io/sidecar.py	6.4
+package-docstrings	torchlens/_io/state_contract.py	3.0
 package-docstrings	torchlens/_io/state_contract.py	3.3
 package-docstrings	torchlens/_io/state_contract.py	3.3,
 package-docstrings	torchlens/_io/state_keys.py	336
@@ -9876,6 +9884,7 @@ test-docstrings	tests/test_tlspec_uninit_consumer_r55.py	52
 test-docstrings	tests/test_tlspec_uninit_consumer_r55.py	53
 test-docstrings	tests/test_tlspec_unpickler_first_party_rce.py	20
 test-docstrings	tests/test_tlspec_unpickler_first_party_rce.py	22
+test-docstrings	tests/test_tlspec_unpickler_first_party_rce.py	3.0
 test-docstrings	tests/test_tlspec_unpickler_first_party_rce.py	65
 test-docstrings	tests/test_to_pandas_field_coverage.py	12
 test-docstrings	tests/test_to_pandas_field_coverage.py	3.1

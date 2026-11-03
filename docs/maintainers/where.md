@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1445 modules, 641880 lines, 0 modules without a docstring.
+83 packages, 1448 modules, 642235 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10558 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 59 | 36623 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 23 | 8489 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8794 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11507 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 22 | 8011 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 5811 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 67 | 30426 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30476 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4310 |
 
 ## Modules by package
@@ -493,7 +493,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 modules, 8489 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8794 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -504,20 +504,22 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (23 
 | `_payload_headers` | Validate referenced payload headers without reading tensor contents. | 39 |
 | `_record_refs` | Resolve the closed record-reference and pending-value grammar. | 60 |
 | `_tables` | Record tables of the 3.0 saved format: reading, digest checks and the column contract. | 298 |
+| `carried` | Shapes of the tlspec 11 fields a 3.0 manifest still carries. | 205 |
 | `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 81 |
 | `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 326 |
-| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 304 |
+| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 330 |
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 757 |
+| `inventory` | Inert inventory of a 3.0 save's record tables against the persisted-state contract. | 71 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 480 |
 | `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 773 |
-| `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 789 |
+| `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 790 |
 | `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 183 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 80 |
 | `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 411 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 119 |
-| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 788 |
+| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 790 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 674 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 697 |
 
@@ -2035,16 +2037,17 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (67 modules, 30426 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (68 modules, 30476 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Validation subpackage for saved activations, backward capture, and invariants. | 1305 |
+| `__init__` | Validation subpackage for saved activations, backward capture, and invariants. | 1288 |
 | `_autograd_grad_replay` | Faithful replay of an in-forward ''torch.autograd.grad'' boundary op. | 639 |
 | `_backward_state` | Model-state guards and parameter-gradient evidence for backward validation. | 250 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 240 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 39 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |
+| `_descriptor_versions` | Runnable descriptor version tripwire shared by the sparse-descriptor and artifact validators. | 67 |
 | `_destination_coverage` | Destination-overwrite coverage proofs for indexed writes. | 403 |
 | `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 578 |
 | `_edge_boundary` | Edge-intervention boundary validation (L6 4.3), split out of ''core.py''. | 344 |

@@ -34,8 +34,10 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_manifest, read_record, redigest, set_cell, tensor_columns
 
 import torchlens as tl
+from torchlens._io.format3 import contract
 from torchlens.errors import ArtifactError
 
 pytestmark = pytest.mark.heavy
@@ -50,14 +52,13 @@ _BYTE_FLIP_SEED = 2026 if _FUZZ_SEED_ENV is None else int(_FUZZ_SEED_ENV) + 1
 #: Top-level manifest keys that may legitimately be ABSENT (older manifests
 #: predate them; the loader defaults them). Deleting any OTHER key must be a
 #: typed refusal — a new manifest key lands in the required contract until
-#: consciously ledgered here.
+#: consciously ledgered here. Format 3 requires ``kind``; its optional carried
+#: fields and the two optional summaries (``model_fingerprint``,
+#: ``backward_summary``) are the contract's own optional tables.
 _OPTIONAL_KEYS = frozenset(
     {
-        "unsupported_tensors",
-        "provenance",
-        "custom_attributes_disclosure",
-        "buffer_values_disclosure",
-        "kind",
+        *contract.MANIFEST_CARRIED_OPTIONAL_FIELDS,
+        *contract.MANIFEST_SUMMARY_FIELDS,
     }
 )
 
@@ -158,30 +159,45 @@ def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("blob_id", "9999999999"),
+        ("key", "t9999999999"),
         ("dtype", "float999"),
         ("shape", "bogus"),
-        ("relative_path", "../../outside.safetensors"),
-        ("relative_path", "/etc/passwd"),
+        ("blob", "../../outside.safetensors"),
+        ("blob", "/etc/passwd"),
     ],
 )
 def test_tensor_entry_mutations_are_typed_refusals(
     seed_artifact: Path, tmp_path: Path, field: str, value: str
 ) -> None:
-    """Tensor-entry corruption (including path escapes) must refuse typed."""
+    """Tensor-reference corruption (including path escapes) must refuse typed.
+
+    Format 3 keeps no manifest tensor list: each stored tensor is a typed
+    ``tensor`` reference cell in a record table, so the mutation lands on the
+    first op column holding one (the record digest re-listed, so only the
+    reference itself is wrong).
+    """
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
-    _rewrite_manifest(artifact, lambda data: data["tensors"][0].__setitem__(field, value))
+    columns = tensor_columns(artifact, "op")
+    assert columns, "seed artifact stored no op tensor reference"
+    cells = read_record(artifact, "op")["columns"][columns[0]]
+    row = next(i for i, cell in enumerate(cells) if isinstance(cell, dict) and "blob" in cell)
+    set_cell(artifact, "op", columns[0], row, {**cells[row], field: value})
     with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
 
 def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Path) -> None:
-    """Seeded truncations of manifest and metadata must refuse typed."""
+    """Seeded truncations of the manifest and of a record table must refuse typed.
+
+    The record truncations re-list the cut file's digest, so the refusal comes
+    from the record parse itself, not only from the digest check.
+    """
 
     rng = random.Random(_TRUNCATION_SEED)
     manifest_bytes = (seed_artifact / "manifest.json").read_bytes()
-    metadata_bytes = (seed_artifact / "metadata.pkl").read_bytes()
+    record_relpath = read_manifest(seed_artifact)["records"]["op"]["path"]
+    record_bytes = (seed_artifact / record_relpath).read_bytes()
     for _ in range(8):
         artifact = _corrupt_copy(seed_artifact, tmp_path)
         cut = rng.randrange(1, len(manifest_bytes))
@@ -195,14 +211,15 @@ def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Pa
         )
     for _ in range(4):
         artifact = _corrupt_copy(seed_artifact, tmp_path)
-        cut = rng.randrange(1, len(metadata_bytes))
-        (artifact / "metadata.pkl").write_bytes(metadata_bytes[:cut])
+        cut = rng.randrange(1, len(record_bytes))
+        (artifact / record_relpath).write_bytes(record_bytes[:cut])
+        redigest(artifact, record_relpath)
         try:
             tl.load(str(artifact))
         except ArtifactError:
             continue
         pytest.fail(
-            f"metadata truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
+            f"{record_relpath} truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
         )
 
 

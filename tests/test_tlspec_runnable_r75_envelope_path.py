@@ -16,7 +16,6 @@ total. Nothing untyped escapes; a well-formed artifact is untouched.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -26,6 +25,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._runnable import PathFaithfulness, ReadinessStatus
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
@@ -66,10 +69,9 @@ def _tamper_fact_field(
 ) -> None:
     """Re-encode one decoded-fact field inside every matching control witness."""
 
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    descriptor = read_runnable_descriptor(path)
     tampered = 0
-    for witness in manifest["run"].get("control_witnesses", []):
+    for witness in descriptor.get("control_witnesses", []):
         if not str(witness.get("site_label", "")).startswith(site_prefix):
             continue
         for entry in witness["observed_value"]["entries"]:
@@ -77,7 +79,7 @@ def _tamper_fact_field(
                 entry["value"] = encoded_value
                 tampered += 1
     assert tampered, f"no {site_prefix!r} witness carried field {field_name!r}"
-    manifest_path.write_text(json.dumps(manifest))
+    write_runnable(path, descriptor)
 
 
 def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> None:

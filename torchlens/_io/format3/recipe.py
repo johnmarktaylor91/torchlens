@@ -30,7 +30,7 @@ import torch
 
 from .. import _json
 from ..format_errors import ArtifactError, OpaqueCallableError
-from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
+from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, SAVE_LEVELS, TYPED_VALUE_KEY
 from .decode import decode_value
 from .payloads import PayloadStore, host_tensor, read_tensor, tensor_reference
 from .values import ValueEncoder, build_record, callable_placeholder, tagged
@@ -546,8 +546,9 @@ def read_recipe(root: str | Path) -> dict[str, Any]:
     return {key: _bind(value, Path(root), key) for key, value in data.items()}
 
 
-#: Save levels a recipe may carry.
-_RECIPE_SAVE_LEVELS: Final = frozenset({"audit", "executable_with_callables", "portable"})
+#: Save levels a recipe may carry: the artifact's own, so a recipe saved with a runnable
+#: trace (``level="runnable"``) reads back.
+_RECIPE_SAVE_LEVELS: Final = frozenset(SAVE_LEVELS)
 #: Keys every rule object carries.
 _RULE_KEYS: Final = frozenset({"index", "selector", "edit"})
 
