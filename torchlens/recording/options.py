@@ -12,6 +12,7 @@ from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
+from ._lean import validate_lean_value
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
@@ -49,6 +50,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "on_forward_error",
     "default_grad",
     "postprocess",
+    "lean",
 )
 """The public ``RecordingOptions`` fields, in declaration order."""
 
@@ -113,6 +115,13 @@ class RecordingOptions:
     #: Post-capture finalization pass: ``"none"`` (the default) or the
     #: ``validate_postprocess`` vocabulary (``tl.record(postprocess=...)``).
     postprocess: str
+    #: PROVISIONAL SPELLING (the public name awaits the maintainer's naming
+    #: ruling). ``True`` journals only the events the selection keeps: ops and
+    #: module boundaries the save predicate does not keep get no shell journal
+    #: event, so the per-op bookkeeping a hook never pays is skipped. The
+    #: recording then says what it omitted (``Recording.lean_omissions``) and
+    #: refuses the reads that need the full journal (``recording_lean_omitted``).
+    lean: bool
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -133,6 +142,7 @@ class RecordingOptions:
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         postprocess: str | MissingType = MISSING,
+        lean: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -167,6 +177,7 @@ class RecordingOptions:
             "postprocess": _resolve_recording_option(
                 "postprocess", postprocess, "none", specified_fields
             ),
+            "lean": _resolve_recording_option("lean", lean, False, specified_fields),
         }
         _validate_recording_values(values)
         for field_name in _RECORDING_FIELDS:
@@ -243,6 +254,9 @@ class _RecordingConfig:
     #: detached inspection copies.
     detach_saved_activations: bool = True
     postprocess: str = "none"
+    #: PROVISIONAL SPELLING. Lean journal: no shell event for unkept ops and
+    #: module boundaries (``torchlens/recording/_lean.py`` holds the contract).
+    lean: bool = False
 
     def __post_init__(self) -> None:
         """Validate every slot with the recorder's historical refusals."""
@@ -326,6 +340,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass a bool or CaptureSpec default_grad",
             argument="default_grad",
         )
+    validate_lean_value(values["lean"])
 
 
 def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:

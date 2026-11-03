@@ -87,6 +87,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    lean: bool = False,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
@@ -166,6 +167,16 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    lean:
+        PROVISIONAL SPELLING (behaviour ruled, name pending). ``True`` journals
+        only the events the selection keeps, skipping the shell event, record and
+        replay clone of every unkept op and module boundary. The result names
+        what it omitted (``Recording.lean_omissions``) and refuses the reads that
+        need the full journal (``event_stream``, ``op_events``, ``lazy_trace``,
+        ``raw_metadata()``, ``to_trace()``) with ``recording_lean_omitted``;
+        ``records`` and the other retained-record reads are complete. Gradient
+        capture, ``intervene=``, ``narrate=`` and partial forward-error modes
+        refuse with ``record_lean_unsupported``. Default ``False`` is unchanged.
 
     Returns
     -------
@@ -205,6 +216,7 @@ def record(
                 "default_grad": default_grad,
                 "narrate": narrate,
                 "capture": capture,
+                "lean": lean,
             },
         )
         object.__setattr__(generation.recording, "_output", output_returned(output))
@@ -225,6 +237,7 @@ def record(
         default_grad=default_grad,
         narrate=narrate,
         capture=capture,
+        lean=lean,
     ) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording

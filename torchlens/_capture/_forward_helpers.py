@@ -432,18 +432,16 @@ def _run_predicate_forward_with_root_frame(
             evaluate_halt_stop(trace, enter_ctx, state.options)
         else:
             enter_spec = _module_capture_spec(state.options)
-            append_projected_event(
-                trace,
-                enter_ctx,
-                enter_spec,
-                predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
-            )
+            enter_kept = enter_spec.save_out or enter_spec.save_metadata
+            # Lean journal (recording/_lean.py): no shell event for an unkept boundary.
+            if enter_kept or not state.options.lean:
+                append_projected_event(trace, enter_ctx, enter_spec, predicate_matched=enter_kept)
             evaluate_halt_stop(trace, enter_ctx, state.options)
     except StopSignal:
         raise
     except Exception as exc:
         state.handle_predicate_exception(enter_ctx, exc)
-        if not halt_only:
+        if not halt_only and not state.options.lean:
             append_projected_event(
                 trace,
                 enter_ctx,
@@ -485,12 +483,9 @@ def _run_predicate_forward_with_root_frame(
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
             else:
                 exit_spec = _module_capture_spec(state.options)
-                append_projected_event(
-                    trace,
-                    exit_ctx,
-                    exit_spec,
-                    predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
-                )
+                exit_kept = exit_spec.save_out or exit_spec.save_metadata
+                if exit_kept or not state.options.lean:
+                    append_projected_event(trace, exit_ctx, exit_spec, predicate_matched=exit_kept)
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
         except StopSignal:
             if active_model_exc is None:
@@ -500,7 +495,7 @@ def _run_predicate_forward_with_root_frame(
                 state.handle_predicate_exception(exit_ctx, exc)
             else:
                 state.add_predicate_failure(exit_ctx, exc)
-            if not halt_only:
+            if not halt_only and not state.options.lean:
                 if active_model_exc is None or not any(
                     event.raw_index == exit_ctx.event_index
                     for event in trace.capture_events.op_events

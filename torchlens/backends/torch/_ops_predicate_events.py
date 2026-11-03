@@ -95,6 +95,7 @@ def _emit_predicate_operation_events(
 
     del exec_ctx
     state = get_active_recording_state()
+    lean = state.options.lean  # lean journal: no shell event for an unkept op
     layer_type = _normalize_func_name(func_name)
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
@@ -195,18 +196,19 @@ def _emit_predicate_operation_events(
             else:
                 ram_payload = None
                 transformed_ram_payload = None
-            append_projected_event(
-                self,
-                ctx,
-                spec,
-                tensor=out,
-                ram_payload=ram_payload,
-                transformed_ram_payload=transformed_ram_payload,
-                predicate_matched=spec.save_out or spec.save_metadata,
-                backend_semantics=backend_semantics,
-                function=function_ref,
-                container_path=container_path,
-            )
+            if not (lean and demanded is EnrichmentLevel.SHELL):
+                append_projected_event(
+                    self,
+                    ctx,
+                    spec,
+                    tensor=out,
+                    ram_payload=ram_payload,
+                    transformed_ram_payload=transformed_ram_payload,
+                    predicate_matched=spec.save_out or spec.save_metadata,
+                    backend_semantics=backend_semantics,
+                    function=function_ref,
+                    container_path=container_path,
+                )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except StopSignal:
             raise
@@ -229,7 +231,8 @@ def _emit_predicate_operation_events(
         finally:
             if not halt_only:
                 capture_events = getattr(self, "capture_events", None)
-                if capture_events is None or _label_raw not in capture_events.op_event_by_label_raw:
+                index = None if capture_events is None else capture_events.op_event_by_label_raw
+                if not lean and (index is None or _label_raw not in index):
                     append_projected_event(
                         self,
                         ctx,

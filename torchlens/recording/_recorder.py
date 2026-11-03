@@ -18,11 +18,7 @@ from .. import _state
 from .._capture.finalize.settle import _extract_and_mark_outputs
 from .._capture.outcome import safe_exception_repr, safe_exception_str
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
-from .._capture.projections import (
-    RecordingState,
-    _empty_recording,
-    active_recording_state,
-)
+from .._capture.projections import RecordingState, _empty_recording, active_recording_state
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
@@ -172,11 +168,7 @@ def _resolve_train_mode_default(
 def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
     """Stamp the finalized recording with its capture outcome when none is present."""
 
-    from .._capture.outcome import (
-        CaptureOutcome,
-        CaptureStatus,
-        stamp_recording_outcome,
-    )
+    from .._capture.outcome import CaptureOutcome, CaptureStatus, stamp_recording_outcome
 
     if getattr(recording, "_outcome", None) is not None:
         return
@@ -218,6 +210,7 @@ class Recorder:
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         narrate: Any | None | MissingType = MISSING,
         capture: CaptureOptions | None = None,
+        lean: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -330,8 +323,9 @@ class Recorder:
             save_raw_grads=save_raw_grads,
             echo=echo_normalized,
             detach_saved_activations=detach_saved_activations,
+            lean=lean,
         )
-        validate_recording_options(self.options)
+        validate_recording_options(self.options, backward_requested=self._backward_requested)
         validate_followed_by_capability(
             self.options.keep_op,
             api_name="record(save=...)",
