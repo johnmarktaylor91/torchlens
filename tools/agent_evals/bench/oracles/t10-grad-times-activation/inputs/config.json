@@ -1,0 +1,11 @@
+{
+  "weight_seed": 810,
+  "stimulus_seed": 910,
+  "n_inputs": 16,
+  "input_shape": [
+    3,
+    16,
+    16
+  ],
+  "objective_class": 3
+}

@@ -1,0 +1,7 @@
+{
+  "model": "gpt2",
+  "noise_seed": 98103,
+  "noise_std_multiplier": 3.0,
+  "n_layers": 12,
+  "batch_size": 24
+}

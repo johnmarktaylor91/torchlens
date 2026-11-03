@@ -1,0 +1,4 @@
+{"stimulus_seed": 977, "n_categories": 8, "per_category": 5, "image_size": 224,
+ "cnn": "torchvision resnet18, weights IMAGENET1K_V1",
+ "vit": "facebook/deit-tiny-patch16-224 (transformers)",
+ "normalize_mean": [0.485, 0.456, 0.406], "normalize_std": [0.229, 0.224, 0.225]}

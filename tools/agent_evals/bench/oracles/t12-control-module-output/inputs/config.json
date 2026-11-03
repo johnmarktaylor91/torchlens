@@ -1,0 +1,1 @@
+{"n_inputs": 100, "stimulus_seed": 2024, "weight_seed": 1234, "input_shape": [3, 32, 32], "module": "block2.bn"}

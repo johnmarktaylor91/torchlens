@@ -1,0 +1,8 @@
+{
+  "model": "EleutherAI/pythia-70m",
+  "layer": 3,
+  "coefficient": 4.0,
+  "new_tokens": 12,
+  "seed": 0,
+  "attention_implementation": "eager"
+}

@@ -1,0 +1,179 @@
+"""T7 grader. The oracle re-computes every listed layer explicitly from the
+submodules (no hooks), checks its own result against the networks' logits,
+and compares RDMs and best layers with the agent's outputs."""
+import importlib.util
+import json
+import os
+import sys
+
+import numpy as np
+import torch
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_common"))
+from grade_utils import Report, grader_main, inputs_hash, load_json, load_npz, max_abs, rdm_correlation  # noqa: E402
+
+
+def load_inputs(inputs):
+    cfg = json.load(open(os.path.join(inputs, "config.json")))
+    layers = json.load(open(os.path.join(inputs, "layers.json")))
+    spec = importlib.util.spec_from_file_location("stimuli_oracle", os.path.join(inputs, "stimuli.py"))
+    st = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(st)
+    images, labels = st.make_stimuli(cfg["stimulus_seed"], cfg["n_categories"],
+                                     cfg["per_category"], cfg["image_size"])
+    mean = torch.tensor(cfg["normalize_mean"]).view(1, 3, 1, 1)
+    std = torch.tensor(cfg["normalize_std"]).view(1, 3, 1, 1)
+    return cfg, layers, (torch.from_numpy(images) - mean) / std, labels
+
+
+def _rdm(t):
+    f = t.reshape(t.shape[0], -1).to(torch.float64).numpy()
+    d = 1.0 - np.corrcoef(f)
+    np.fill_diagonal(d, 0.0)
+    return d
+
+
+@torch.no_grad()
+def cnn_oracle(x):
+    import torchvision
+    m = torchvision.models.resnet18(weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).eval()
+    out = {}
+    h = m.relu(m.bn1(m.conv1(x)))
+    out["stem.relu"] = _rdm(h)
+    h = m.maxpool(h)
+    out["stem.maxpool"] = _rdm(h)
+    for stage in (1, 2, 3, 4):
+        for b in (0, 1):
+            blk = getattr(m, f"layer{stage}")[b]
+            p = f"layer{stage}.{b}"
+            c1 = blk.conv1(h)
+            out[f"{p}.conv1"] = _rdm(c1)
+            n1 = blk.bn1(c1)
+            out[f"{p}.bn1"] = _rdm(n1)
+            r1 = torch.relu(n1)
+            out[f"{p}.relu1"] = _rdm(r1)
+            c2 = blk.conv2(r1)
+            out[f"{p}.conv2"] = _rdm(c2)
+            n2 = blk.bn2(c2)
+            out[f"{p}.bn2"] = _rdm(n2)
+            if blk.downsample is not None:
+                idn = blk.downsample(h)
+                out[f"{p}.downsample"] = _rdm(idn)
+            else:
+                idn = h
+            s = n2 + idn
+            out[f"{p}.add"] = _rdm(s)
+            h = torch.relu(s)
+            out[f"{p}.out"] = _rdm(h)
+    h = m.avgpool(h)
+    out["avgpool"] = _rdm(h)
+    logits = m.fc(torch.flatten(h, 1))
+    out["fc"] = _rdm(logits)
+    assert torch.allclose(logits, m(x), atol=1e-4), "oracle CNN recomputation disagrees with the model"
+    return out
+
+
+@torch.no_grad()
+def vit_oracle(x):
+    from transformers import AutoModelForImageClassification
+    model = AutoModelForImageClassification.from_pretrained("facebook/deit-tiny-patch16-224").eval()
+    vit = model.vit
+    blocks = vit.layers if hasattr(vit, "layers") else vit.encoder.layer
+    out = {}
+    h = vit.embeddings(x)
+    out["embeddings"] = _rdm(h)
+    for i, layer in enumerate(blocks):
+        p = f"block{i}"
+        ln1 = layer.layernorm_before(h)
+        out[f"{p}.ln1"] = _rdm(ln1)
+        attn = layer.attention(ln1)
+        attn = attn[0] if isinstance(attn, (tuple, list)) else attn
+        out[f"{p}.attn"] = _rdm(attn)
+        h = attn + h
+        out[f"{p}.add1"] = _rdm(h)
+        ln2 = layer.layernorm_after(h)
+        out[f"{p}.ln2"] = _rdm(ln2)
+        if hasattr(layer, "mlp"):
+            mh = layer.mlp.activation_fn(layer.mlp.fc1(ln2))
+            mo = layer.mlp.fc2(mh)
+        else:
+            mh = layer.intermediate(ln2)
+            mo = layer.output.dense(mh)
+        out[f"{p}.mlp_hidden"] = _rdm(mh)
+        out[f"{p}.mlp_out"] = _rdm(mo)
+        h = mo + h
+        out[f"{p}.add2"] = _rdm(h)
+    h = vit.layernorm(h)
+    out["final_ln"] = _rdm(h)
+    logits = model.classifier(h[:, 0])
+    out["classifier"] = _rdm(logits)
+    assert torch.allclose(logits, model(pixel_values=x).logits, atol=1e-4), \
+        "oracle ViT recomputation disagrees with the model"
+    return out
+
+
+def oracle(inputs, cache_file):
+    if os.path.isfile(cache_file):
+        with np.load(cache_file, allow_pickle=True) as z:
+            return ({k: z[k] for k in z.files if not k.startswith("_")},
+                    json.loads(str(z["_best"])), json.loads(str(z["_scores"])))
+    cfg, layers, x, labels = load_inputs(inputs)
+    cat = (labels[:, None] != labels[None, :]).astype(np.float64)
+    rd = {}
+    best = {}
+    scores = {}
+    for net, o in (("cnn", cnn_oracle(x)), ("vit", vit_oracle(x))):
+        sc = {}
+        for item in layers[net]:
+            lid = item["id"]
+            rd[f"{net}/{lid}"] = o[lid]
+            sc[lid] = rdm_correlation(o[lid], cat)
+        best[net] = max(sc, key=sc.get)
+        scores[net] = sc
+    np.savez(cache_file, _best=np.array(json.dumps(best)), _scores=np.array(json.dumps(scores)), **rd)
+    return rd, best, scores
+
+
+BEST_TOL = 1e-3   # a layer whose category match is within this of the maximum also counts as best
+
+
+def grade_one(rep, label, task_dir, inputs, outputs, cache):
+    key = inputs_hash(inputs, os.path.abspath(__file__))
+    ref, ref_best, ref_scores = oracle(inputs, os.path.join(cache, f"t07_oracle_{key}.npz"))
+    names = [f"{label}:layers_present", f"{label}:rdm_agreement", f"{label}:best_layer"]
+    try:
+        agent = {}
+        for net in ("cnn", "vit"):
+            z = load_npz(os.path.join(outputs, f"rdms_{net}.npz"))
+            agent.update({f"{net}/{k}": v for k, v in z.items()})
+        best = load_json(os.path.join(outputs, "best_layer.json"))
+    except Exception as e:
+        rep.fail_all(names, f"missing output: {e}")
+        return
+    n = next(iter(ref.values())).shape[0]
+    missing = [k for k in ref if k not in agent or agent[k].shape != (n, n)]
+    rep.add(names[0], not missing, len(ref) - len(missing), len(ref),
+            note=f"missing={missing[:5]}" if missing else "")
+    corrs = {k: rdm_correlation(agent[k], ref[k]) for k in ref if k not in missing}
+    absd = {k: max_abs(agent[k], ref[k]) for k in ref if k not in missing}
+    worst = min(corrs.values()) if corrs else float("nan")
+    worst_k = min(corrs, key=corrs.get) if corrs else None
+    worst_abs = max(absd.values()) if absd else float("inf")
+    ok = (not missing) and worst >= 0.999 and worst_abs <= 1e-3
+    rep.add(names[1], ok, worst, 0.999,
+            note=f"worst corr layer {worst_k}; max abs diff {worst_abs:.2e} (bar 1e-3)")
+    accept = {net: [l for l, v in sc.items() if v >= max(sc.values()) - BEST_TOL] for net, sc in ref_scores.items()}
+    best_ok = isinstance(best, dict) and all(best.get(net) in accept[net] for net in accept)
+    rep.add(names[2], best_ok, note=f"agent={best} oracle={ref_best} accepted={accept}")
+
+
+def grade(task_dir, outputs, heldout_outputs, cache):
+    rep = Report("t07-layerwise-rsa")
+    grade_one(rep, "visible", task_dir, os.path.join(task_dir, "inputs"), outputs, cache)
+    if heldout_outputs:
+        grade_one(rep, "heldout", task_dir, os.path.join(task_dir, "heldout"), heldout_outputs, cache)
+    return rep
+
+
+if __name__ == "__main__":
+    sys.exit(grader_main("t07", grade))

@@ -1,0 +1,12 @@
+{
+  "weight_seed": 709,
+  "stimulus_seed": 710,
+  "n_pairs": 6,
+  "length": 24,
+  "steps": [
+    4,
+    8,
+    12,
+    16
+  ]
+}

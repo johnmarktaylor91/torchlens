@@ -1,0 +1,606 @@
+{
+ "cnn": [
+  {
+   "id": "stem.relu",
+   "description": "output of the stem: first convolution, batch norm and ReLU"
+  },
+  {
+   "id": "stem.maxpool",
+   "description": "output of the stem max-pool"
+  },
+  {
+   "id": "layer1.0.conv1",
+   "description": "residual block layer1.0: first convolution output"
+  },
+  {
+   "id": "layer1.0.bn1",
+   "description": "residual block layer1.0: first batch norm output"
+  },
+  {
+   "id": "layer1.0.relu1",
+   "description": "residual block layer1.0: after the first ReLU"
+  },
+  {
+   "id": "layer1.0.conv2",
+   "description": "residual block layer1.0: second convolution output"
+  },
+  {
+   "id": "layer1.0.bn2",
+   "description": "residual block layer1.0: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer1.0.add",
+   "description": "residual block layer1.0: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer1.0.out",
+   "description": "residual block layer1.0: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer1.1.conv1",
+   "description": "residual block layer1.1: first convolution output"
+  },
+  {
+   "id": "layer1.1.bn1",
+   "description": "residual block layer1.1: first batch norm output"
+  },
+  {
+   "id": "layer1.1.relu1",
+   "description": "residual block layer1.1: after the first ReLU"
+  },
+  {
+   "id": "layer1.1.conv2",
+   "description": "residual block layer1.1: second convolution output"
+  },
+  {
+   "id": "layer1.1.bn2",
+   "description": "residual block layer1.1: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer1.1.add",
+   "description": "residual block layer1.1: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer1.1.out",
+   "description": "residual block layer1.1: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer2.0.conv1",
+   "description": "residual block layer2.0: first convolution output"
+  },
+  {
+   "id": "layer2.0.bn1",
+   "description": "residual block layer2.0: first batch norm output"
+  },
+  {
+   "id": "layer2.0.relu1",
+   "description": "residual block layer2.0: after the first ReLU"
+  },
+  {
+   "id": "layer2.0.conv2",
+   "description": "residual block layer2.0: second convolution output"
+  },
+  {
+   "id": "layer2.0.bn2",
+   "description": "residual block layer2.0: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer2.0.downsample",
+   "description": "residual block layer2.0: shortcut branch output (1x1 conv + batch norm)"
+  },
+  {
+   "id": "layer2.0.add",
+   "description": "residual block layer2.0: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer2.0.out",
+   "description": "residual block layer2.0: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer2.1.conv1",
+   "description": "residual block layer2.1: first convolution output"
+  },
+  {
+   "id": "layer2.1.bn1",
+   "description": "residual block layer2.1: first batch norm output"
+  },
+  {
+   "id": "layer2.1.relu1",
+   "description": "residual block layer2.1: after the first ReLU"
+  },
+  {
+   "id": "layer2.1.conv2",
+   "description": "residual block layer2.1: second convolution output"
+  },
+  {
+   "id": "layer2.1.bn2",
+   "description": "residual block layer2.1: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer2.1.add",
+   "description": "residual block layer2.1: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer2.1.out",
+   "description": "residual block layer2.1: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer3.0.conv1",
+   "description": "residual block layer3.0: first convolution output"
+  },
+  {
+   "id": "layer3.0.bn1",
+   "description": "residual block layer3.0: first batch norm output"
+  },
+  {
+   "id": "layer3.0.relu1",
+   "description": "residual block layer3.0: after the first ReLU"
+  },
+  {
+   "id": "layer3.0.conv2",
+   "description": "residual block layer3.0: second convolution output"
+  },
+  {
+   "id": "layer3.0.bn2",
+   "description": "residual block layer3.0: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer3.0.downsample",
+   "description": "residual block layer3.0: shortcut branch output (1x1 conv + batch norm)"
+  },
+  {
+   "id": "layer3.0.add",
+   "description": "residual block layer3.0: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer3.0.out",
+   "description": "residual block layer3.0: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer3.1.conv1",
+   "description": "residual block layer3.1: first convolution output"
+  },
+  {
+   "id": "layer3.1.bn1",
+   "description": "residual block layer3.1: first batch norm output"
+  },
+  {
+   "id": "layer3.1.relu1",
+   "description": "residual block layer3.1: after the first ReLU"
+  },
+  {
+   "id": "layer3.1.conv2",
+   "description": "residual block layer3.1: second convolution output"
+  },
+  {
+   "id": "layer3.1.bn2",
+   "description": "residual block layer3.1: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer3.1.add",
+   "description": "residual block layer3.1: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer3.1.out",
+   "description": "residual block layer3.1: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer4.0.conv1",
+   "description": "residual block layer4.0: first convolution output"
+  },
+  {
+   "id": "layer4.0.bn1",
+   "description": "residual block layer4.0: first batch norm output"
+  },
+  {
+   "id": "layer4.0.relu1",
+   "description": "residual block layer4.0: after the first ReLU"
+  },
+  {
+   "id": "layer4.0.conv2",
+   "description": "residual block layer4.0: second convolution output"
+  },
+  {
+   "id": "layer4.0.bn2",
+   "description": "residual block layer4.0: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer4.0.downsample",
+   "description": "residual block layer4.0: shortcut branch output (1x1 conv + batch norm)"
+  },
+  {
+   "id": "layer4.0.add",
+   "description": "residual block layer4.0: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer4.0.out",
+   "description": "residual block layer4.0: block output (after the final ReLU)"
+  },
+  {
+   "id": "layer4.1.conv1",
+   "description": "residual block layer4.1: first convolution output"
+  },
+  {
+   "id": "layer4.1.bn1",
+   "description": "residual block layer4.1: first batch norm output"
+  },
+  {
+   "id": "layer4.1.relu1",
+   "description": "residual block layer4.1: after the first ReLU"
+  },
+  {
+   "id": "layer4.1.conv2",
+   "description": "residual block layer4.1: second convolution output"
+  },
+  {
+   "id": "layer4.1.bn2",
+   "description": "residual block layer4.1: second batch norm output, BEFORE the shortcut is added"
+  },
+  {
+   "id": "layer4.1.add",
+   "description": "residual block layer4.1: the residual addition (second batch norm output + shortcut), before the final ReLU"
+  },
+  {
+   "id": "layer4.1.out",
+   "description": "residual block layer4.1: block output (after the final ReLU)"
+  },
+  {
+   "id": "avgpool",
+   "description": "global average pool output"
+  },
+  {
+   "id": "fc",
+   "description": "classifier logits"
+  }
+ ],
+ "vit": [
+  {
+   "id": "embeddings",
+   "description": "patch embeddings with class token and position embeddings added (encoder input)"
+  },
+  {
+   "id": "block0.ln1",
+   "description": "transformer block 0: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block0.attn",
+   "description": "transformer block 0: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block0.add1",
+   "description": "transformer block 0: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block0.ln2",
+   "description": "transformer block 0: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block0.mlp_hidden",
+   "description": "transformer block 0: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block0.mlp_out",
+   "description": "transformer block 0: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block0.add2",
+   "description": "transformer block 0: second residual addition (block output)"
+  },
+  {
+   "id": "block1.ln1",
+   "description": "transformer block 1: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block1.attn",
+   "description": "transformer block 1: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block1.add1",
+   "description": "transformer block 1: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block1.ln2",
+   "description": "transformer block 1: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block1.mlp_hidden",
+   "description": "transformer block 1: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block1.mlp_out",
+   "description": "transformer block 1: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block1.add2",
+   "description": "transformer block 1: second residual addition (block output)"
+  },
+  {
+   "id": "block2.ln1",
+   "description": "transformer block 2: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block2.attn",
+   "description": "transformer block 2: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block2.add1",
+   "description": "transformer block 2: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block2.ln2",
+   "description": "transformer block 2: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block2.mlp_hidden",
+   "description": "transformer block 2: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block2.mlp_out",
+   "description": "transformer block 2: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block2.add2",
+   "description": "transformer block 2: second residual addition (block output)"
+  },
+  {
+   "id": "block3.ln1",
+   "description": "transformer block 3: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block3.attn",
+   "description": "transformer block 3: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block3.add1",
+   "description": "transformer block 3: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block3.ln2",
+   "description": "transformer block 3: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block3.mlp_hidden",
+   "description": "transformer block 3: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block3.mlp_out",
+   "description": "transformer block 3: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block3.add2",
+   "description": "transformer block 3: second residual addition (block output)"
+  },
+  {
+   "id": "block4.ln1",
+   "description": "transformer block 4: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block4.attn",
+   "description": "transformer block 4: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block4.add1",
+   "description": "transformer block 4: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block4.ln2",
+   "description": "transformer block 4: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block4.mlp_hidden",
+   "description": "transformer block 4: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block4.mlp_out",
+   "description": "transformer block 4: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block4.add2",
+   "description": "transformer block 4: second residual addition (block output)"
+  },
+  {
+   "id": "block5.ln1",
+   "description": "transformer block 5: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block5.attn",
+   "description": "transformer block 5: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block5.add1",
+   "description": "transformer block 5: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block5.ln2",
+   "description": "transformer block 5: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block5.mlp_hidden",
+   "description": "transformer block 5: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block5.mlp_out",
+   "description": "transformer block 5: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block5.add2",
+   "description": "transformer block 5: second residual addition (block output)"
+  },
+  {
+   "id": "block6.ln1",
+   "description": "transformer block 6: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block6.attn",
+   "description": "transformer block 6: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block6.add1",
+   "description": "transformer block 6: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block6.ln2",
+   "description": "transformer block 6: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block6.mlp_hidden",
+   "description": "transformer block 6: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block6.mlp_out",
+   "description": "transformer block 6: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block6.add2",
+   "description": "transformer block 6: second residual addition (block output)"
+  },
+  {
+   "id": "block7.ln1",
+   "description": "transformer block 7: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block7.attn",
+   "description": "transformer block 7: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block7.add1",
+   "description": "transformer block 7: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block7.ln2",
+   "description": "transformer block 7: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block7.mlp_hidden",
+   "description": "transformer block 7: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block7.mlp_out",
+   "description": "transformer block 7: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block7.add2",
+   "description": "transformer block 7: second residual addition (block output)"
+  },
+  {
+   "id": "block8.ln1",
+   "description": "transformer block 8: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block8.attn",
+   "description": "transformer block 8: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block8.add1",
+   "description": "transformer block 8: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block8.ln2",
+   "description": "transformer block 8: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block8.mlp_hidden",
+   "description": "transformer block 8: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block8.mlp_out",
+   "description": "transformer block 8: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block8.add2",
+   "description": "transformer block 8: second residual addition (block output)"
+  },
+  {
+   "id": "block9.ln1",
+   "description": "transformer block 9: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block9.attn",
+   "description": "transformer block 9: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block9.add1",
+   "description": "transformer block 9: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block9.ln2",
+   "description": "transformer block 9: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block9.mlp_hidden",
+   "description": "transformer block 9: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block9.mlp_out",
+   "description": "transformer block 9: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block9.add2",
+   "description": "transformer block 9: second residual addition (block output)"
+  },
+  {
+   "id": "block10.ln1",
+   "description": "transformer block 10: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block10.attn",
+   "description": "transformer block 10: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block10.add1",
+   "description": "transformer block 10: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block10.ln2",
+   "description": "transformer block 10: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block10.mlp_hidden",
+   "description": "transformer block 10: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block10.mlp_out",
+   "description": "transformer block 10: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block10.add2",
+   "description": "transformer block 10: second residual addition (block output)"
+  },
+  {
+   "id": "block11.ln1",
+   "description": "transformer block 11: output of the first layer norm (attention input)"
+  },
+  {
+   "id": "block11.attn",
+   "description": "transformer block 11: attention sub-layer output after its output projection, before the residual addition"
+  },
+  {
+   "id": "block11.add1",
+   "description": "transformer block 11: first residual addition (block input + attention output)"
+  },
+  {
+   "id": "block11.ln2",
+   "description": "transformer block 11: output of the second layer norm (MLP input)"
+  },
+  {
+   "id": "block11.mlp_hidden",
+   "description": "transformer block 11: MLP hidden activation after the GELU"
+  },
+  {
+   "id": "block11.mlp_out",
+   "description": "transformer block 11: MLP output projection, before the residual addition"
+  },
+  {
+   "id": "block11.add2",
+   "description": "transformer block 11: second residual addition (block output)"
+  },
+  {
+   "id": "final_ln",
+   "description": "final layer norm output over all tokens"
+  },
+  {
+   "id": "classifier",
+   "description": "classifier logits"
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+{
+  "model": "gpt2",
+  "layer": 6,
+  "attention_implementation": "eager",
+  "seed": 0
+}
