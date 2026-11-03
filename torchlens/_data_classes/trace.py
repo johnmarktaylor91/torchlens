@@ -3385,7 +3385,7 @@ class Trace(TraceOutputMixin, TraceLike):
         show_grad_values: bool = False,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
+        file_format: str | None = None,
         open_viewer: bool = False,
         highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":

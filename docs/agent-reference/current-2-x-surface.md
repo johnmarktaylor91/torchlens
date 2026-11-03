@@ -333,15 +333,19 @@
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
-  `nodes="members"` for the member relation graph) and returns the DOT source.
+  `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
+  DOT source). Both draw doors take the format from the path's extension (`file_format=` only for a
+  path without one; a disagreement refuses `draw_format_mismatch`), and a bare `trace.draw()` or
+  `b.draw()` in a Jupyter kernel displays inline and writes no file (JMT, Sun 1 Nov 2026).
   `b.token_pairs("critique", "draft")` (relate's argument order) is the one
   verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
+  `b.draw("bundle.svg")` draws the merged bundle graph (the shared model graph, member lists only where
+  members differ; `b.show()` defaults to it, `b.show(kind="strip")` draws each member on its own);
+  `b.draw("members.svg", nodes="members")` draws members and relation rows;
+  `b.draw("bundle.svg", theme="dark", show_legend=True)` takes draw's skin, shapes, fills and key, and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiments.md`):

@@ -31,6 +31,7 @@ print(log.summary())
 print(log.explain())
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
+log.draw("overview.svg")  # the extension picks the format; a bare draw in a notebook shows inline
 print(log.module_collapse_order[:10])
 tl.release_model(model)  # restore whole-model pickle / torch.save serializability
 

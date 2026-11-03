@@ -955,6 +955,46 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
   the view for the rest.
 
+**Bundle.draw** *(`nodes=` spelling documented-unstable)*
+: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
+  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
+  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
+  the bundle as one picture and returns a `tl.viz.Drawing` (`str(drawing)` is the DOT source,
+  `drawing.path` the written file). It follows `Trace.draw`'s rules (JMT decision, Sun 1 Nov 2026,
+  3:00 PM PT): the path comes first and its extension picks the format (`b.draw("diff.svg")`
+  writes SVG); `file_format=` applies only to a path with no extension (`<path>.<file_format>`,
+  `"pdf"` by default); a `file_format` that disagrees with the extension refuses with
+  `ArgumentConflictError` (`draw_format_mismatch`). Outside a notebook a bare `b.draw()` writes a
+  collision-safe `bundle_modelgraph.<format>` and prints its path; in a Jupyter kernel a bare call
+  writes no file and returns the drawing for inline display. No viewer opens unless
+  `open_viewer=True`. `graph="forward"` (default), `"backward"` (each member's captured grad_fn
+  graph) or `"combined"` draw the bundle's union op graph for that pass, with a member list on
+  each node and arrow that not every member runs; `rolled=True` draws each repeated module once;
+  `direction=None` is `"bottomup"`; `theme` takes the `Trace.draw` skin names (`None` is
+  `"torchlens"`). `node_overrides=` (Bundle-only) keys Graphviz node attributes by op label
+  (member name under `nodes="members"`), `edge_overrides=` by `(source, target)`. `nodes="ops"`
+  (default) draws the ops; `nodes="members"` draws one node per member and one edge per relation
+  row, from the earlier member to the later one, labelled with the kind, the row's `label`, on
+  `fed_by` its basis and coverage, and on `selected_by` its `chosen` decision; solid edges carry
+  token spans TorchLens checked, every other row is dashed, and `graph` must stay `"forward"`.
+  `graph="diff"` draws two members side by side with their aligned sites coloured by `metric`
+  distance on the `on` field: `members=(left, right)` names them (default the baseline and the
+  next member); its defaults are `theme="paper"`, `"svg"` and a `bundle_diff` file, and it runs
+  the comparison gate on the rendered pair only. Any other keyword (a `Trace.draw` keyword the
+  bundle renderer does not support yet, such as `depth=` or `vis_mode=`) refuses with
+  `ArgumentTypeError` (`bundle_draw_keyword_unsupported`) naming the supported list; each is added
+  when the renderer supports it (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). Replaces the removed
+  `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).
+
+**Bundle.show**
+: `bundle.show(kind=None, **kwargs)` is the one bundle display door. With no kind (or
+  `kind="graph"`) it is `bundle.draw(**kwargs)` and returns that `Drawing`, the merged graph of
+  where the members differ. `kind="strip"` draws each member's own graph with
+  `Trace.draw(**kwargs)` and returns a dict of member name to `Drawing` (a `path` gets
+  `_<member>` appended per member); `kind="repr"` and `kind="html"` return each member's `repr` /
+  HTML text by member name. Any other kind refuses with `InvalidArgumentError`
+  (`bundle_show_kind_invalid`).
+
 **Bundle.compare**
 : `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
   two members as `(site_label, distance)` rows over the sites both members share, paired through
@@ -976,23 +1016,6 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
   or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
   `bundle_gate_*` code.
-
-**Bundle.draw**
-: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
-  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
-  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
-  the bundle as one picture beside `b.show()` (one picture per member) and returns the DOT
-  source; the public home of the former `show_bundle_graph`. `Trace.draw` spellings: path first,
-  its extension picks the format (else `file_format`, default `"pdf"`), a bare call writes a
-  collision-safe `bundle_modelgraph` file. `graph="forward"` (default), `"backward"` or
-  `"combined"` draw the bundle's union op graph for that pass; `nodes="members"` draws one node
-  per member and one edge per relation row (`graph` must stay `"forward"`); `rolled=True` draws
-  the per-layer graph; `direction=None` is `"bottomup"`. `theme` takes the `Trace.draw` skin
-  names (`None` is `"torchlens"`). `graph="diff"` draws two members side by side with their
-  aligned sites coloured by `metric` distance on the `on` field (the former `show_diff`):
-  `members=(left, right)` names them (default the baseline and the next member); its defaults
-  are `theme="paper"`, `file_format="svg"` and a `bundle_diff` file. The diff runs the comparison
-  gate on the rendered pair only.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
 : `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
@@ -1642,13 +1665,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
-  `nodes="ops"` (default) the union op graph (`signal="forward"`, the default, or
-  `"backward"` picks which pass's graph), `nodes="members"` (spelling documented-unstable)
-  one node per member and one edge per relation row, from the earlier member to the later one,
-  labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
-  `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
-  row is dashed. `tl.load(path, lazy=True)` on a
+  Trace collections, and `Bundle.draw` (below) draws a bundle's merged graph. `tl.load(path, lazy=True)` on a
   saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
@@ -2757,10 +2774,23 @@ deprecation shim owed*
   `visualization_direction_invalid` naming all four.
 
 **path=None (draw default)** — *unstable — no deprecation shim owed*
-: A bare `Trace.draw()` writes a collision-safe file in the current directory --
+: Outside a notebook a bare `Trace.draw()` writes a collision-safe file in the current directory --
   `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>` -- and always prints
   `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
-  An explicit `path=` is written exactly (overwriting) and printed only on a verbose trace.
+  In a Jupyter kernel (the same detection as `tl.draw`) a bare `trace.draw()` writes no file and
+  returns the `Drawing` with its rendered bytes (SVG unless `file_format=` says otherwise), which
+  the notebook displays inline (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). An explicit `path=` is
+  always written exactly (overwriting), in a notebook too, and printed only on a verbose trace.
+  `Bundle.draw` follows the same rules.
+
+**file_format (draw kwarg)** — *unstable — no deprecation shim owed*
+: The path's extension picks the format: `trace.draw("graph.png")` writes PNG, and
+  `b.draw("graph.svg")` writes SVG. `file_format=` applies only to a path with no extension
+  (`trace.draw("graph", file_format="svg")` writes `graph.svg`) and to a bare call; its default is
+  `"pdf"` (`"svg"` for a notebook bare call and for `Bundle.draw(graph="diff")`). A `file_format`
+  that disagrees with the path's extension refuses with `ArgumentConflictError`
+  (`draw_format_mismatch`). Both draw doors share this rule (JMT decision, Sun 1 Nov 2026,
+  3:00 PM PT); `VisualizationOptions.file_format` reaches `Trace.draw` only when set explicitly.
 
 **show_module_paths / show_grad_values (draw kwargs, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
 : Opt-in label rows on `Trace.draw(graph="backward")`: `show_module_paths=True` adds `module <address>` to
@@ -2776,8 +2806,8 @@ deprecation shim owed*
   keep their colours. The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
-**theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `torchlens._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+**theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
+: `bundle.draw(path, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
@@ -3807,6 +3837,7 @@ describe each surface in depth.
 | `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
 | `VisualizationOptions.rolled` | ``True`` draws each repeated module once (the rolled graph); ``False`` (default) draws every pass |
 | `VisualizationOptions.open_viewer` | ``True`` opens the written picture in the system viewer; the default never does |
+| `VisualizationOptions.file_format` | Format for a ``container_path`` with no extension (default ``"pdf"``); an extension on the path picks the format, and a disagreeing explicit value refuses ``draw_format_mismatch`` |
 | `VisualizationOptions.animate` | A site label, pass-qualified label or record: the picture is the HTML animation of the repeated ops at that site (default ``None``) |
 
 #### `tl.Recording`
@@ -5443,7 +5474,7 @@ alphabetical order.
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
 | `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
-| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `torchlens._visualization.show_bundle_graph` (`"forward"` or `"backward"`) |
+| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`); the removed `show_bundle_graph` keyword is `Bundle.draw(graph=...)` |
 | `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
 | `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
 | `uncounted_op_counts=` | field and constructor keyword of `BackwardStatus` |

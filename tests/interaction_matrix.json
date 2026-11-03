@@ -721,7 +721,7 @@
    "a": "bundle",
    "b": "draw",
    "status": "composes",
-   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "evidence": "tests/test_multi_trace_followons.py::test_bundle_draw_rolled_and_backward_graphs",
    "confidence": "high"
   },
   {
@@ -813,7 +813,7 @@
    "a": "bundle",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/test_multi_trace_followons.py::test_show_bundle_graph_rolled_and_backward_modes",
+   "evidence": "tests/test_multi_trace_followons.py::test_bundle_draw_rolled_and_backward_graphs",
    "confidence": "low",
    "note": "Rolled graphs are shown; multi-pass specific Bundle reads are not separately documented."
   },

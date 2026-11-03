@@ -486,12 +486,6 @@ def show_model_graph(*args: Any, **kwargs: Any) -> None:
     return cast(None, _public_impls_module().show_model_graph(*args, **kwargs))
 
 
-def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
-    """Forward to the bundle graph rendering implementation."""
-
-    return cast(str | None, _public_impls_module().show_bundle_graph(*args, **kwargs))
-
-
 def validate_forward_pass(*args: Any, **kwargs: Any) -> bool:
     """Forward to the backend-dispatched forward validation implementation."""
 
@@ -518,7 +512,6 @@ def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
 
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
-    "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",
