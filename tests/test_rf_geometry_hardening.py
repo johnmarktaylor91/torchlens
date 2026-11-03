@@ -685,7 +685,12 @@ class _ComputedParent(nn.Module):
 
 
 def test_hypernetwork_projective_solve_degrades_typed() -> None:
-    """The r21 4-op hypernetwork must pass invariants with an UNKNOWN branch."""
+    """The r21 4-op hypernetwork passes invariants with a whole-extent weight branch.
+
+    The linear rule bounds a traced weight operand by its whole extent, so the
+    weight branch reaches the whole output as a sound upper bound; it must never
+    claim exactness.
+    """
 
     from torchlens.receptive_field._validation import check_geometric_metadata_invariants
 
@@ -695,8 +700,9 @@ def test_hypernetwork_projective_solve_degrades_typed() -> None:
     descriptors = tanh.projective_field.per_input
     assert descriptors, "weight branch must still produce a projective descriptor"
     for descriptor in descriptors.values():
-        assert descriptor.status.value == "unknown"
-        assert descriptor.status.value != "exact"
+        assert descriptor.status.value == "upper_bound"
+        assert descriptor.axes is not None
+        assert all(axis.kind == "full" for axis in descriptor.axes)
 
 
 def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
@@ -715,7 +721,8 @@ def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
         role: descriptor.status.value
         for role, descriptor in linear.receptive_field.per_input.items()
     }
-    assert statuses.get("input.y") == "unknown"
+    # The traced weight is bounded by its whole extent: sound, never exact.
+    assert statuses.get("input.y") == "upper_bound"
     assert len(trace.projective_fields().to_pandas()) > 0
 
 

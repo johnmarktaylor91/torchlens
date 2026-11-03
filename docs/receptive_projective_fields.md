@@ -80,6 +80,15 @@ extent. Transposed convolutions, masked attention, interpolation, gathers, and d
 routing are never promoted to `EXACT` without a proof. A gradient mask can preserve sparse or
 masked structure that an interval box cannot express.
 
+Channel mixing keeps spatial geometry exact. A dense layer (`linear`) reads the whole feature
+axis at each position, and a `layer_norm` reads its whole normalized slice; with parameter
+weights both are exact whole-axis dependencies, so a ConvNeXt-style block that runs its MLP on
+channels-last tensors (`permute`, `layer_norm`, `linear`, `permute` back) stays `EXACT` through
+the block. A traced (input-derived) weight or bias makes the relation a whole-extent
+`UPPER_BOUND`, as does a `layer_norm` slice of a single element. The identity node TorchLens
+records at an `nn.Identity` module, or at a module that returns its input, passes the field
+through unchanged.
+
 An empty endpoint (a model input or output with a zero extent, such as a zero-size `split`
 chunk) has no units, so its field is empty: it seeds no geometry and no descriptor names it.
 
