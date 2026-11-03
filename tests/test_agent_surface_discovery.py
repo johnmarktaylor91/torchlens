@@ -226,6 +226,10 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
             "import torch\n"
             "from torch import nn\n"
             "torch.manual_seed(0)\n"
+            # A guide recipe that warns teaches agents to distrust a correct result.
+            "import warnings\n"
+            "from torchlens.errors import TorchLensWarning\n"
+            "warnings.simplefilter('error', TorchLensWarning)\n"
             + _GUIDE_MODEL_SOURCE
             + f"import os; os.chdir({str(tmp_path)!r})\n"
             + code

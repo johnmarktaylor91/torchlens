@@ -43,6 +43,8 @@ Replace the names with your model's.
   then scan tr.layers.
 - Change a tensor during the forward pass (ablate, patch, scale, steer):
   tl.trace(..., intervene=tl.when(site, edit)); read tr.output.
+- Only the edited output, over many inputs or sites (patching sweeps,
+  loops): tl.when(site, edit).bind(model)(x), one plain forward per call.
 - Change what goes INTO a module (for example one attention head before
   the output projection): tl.splice_module(fn, input_route="in").
 - Change an op that has no module of its own (an inline softmax or add):
@@ -110,6 +112,17 @@ function, tl.in_module(name) narrows any site to ops inside one module
     both = tl.when(tl.module("blocks.0.mlp"), zero) & tl.when(
         tl.module("blocks.1.mlp"), tl.scale(0.5))
     edited_twice = tl.trace(model, x, intervene=both).output
+
+When you need only the edited output, bind the edit to the model instead:
+a bound call is one plain forward with the edit applied (no op record), so
+use it inside loops over inputs, layers or positions.
+
+    import torchlens as tl
+    def zero(t, *, ctx):
+        return t * 0
+    bound = tl.when(tl.module("blocks.0.mlp"), zero).bind(model)
+    edited = bound(x)                      # what model(x) returns, edited
+    print(bound.last_report.num_fires)     # 1: the edit fired once
 
 Built-in edits: tl.zero_ablate(), tl.scale(f), tl.add(v), tl.replace_with(t).
 Several edits in one pass combine with &:
