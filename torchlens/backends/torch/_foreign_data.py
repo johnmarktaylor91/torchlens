@@ -332,8 +332,9 @@ def _values_equal(out: torch.Tensor, source: torch.Tensor) -> bool:
     if out.size() != source.size():
         return False
     try:
-        cast = source.detach().to(device=out.device, dtype=out.dtype)
-        return bool(torch.equal(cast, out.detach()))
+        with torch.no_grad():
+            cast = source.to(device=out.device, dtype=out.dtype)
+            return bool(torch.equal(cast, out))
     except (RuntimeError, TypeError):
         return False
 
@@ -380,7 +381,8 @@ def _unresolved_entry(linked: list[Departure], entry: str, mark: MetadataSetter)
 def _constant_entry(out: torch.Tensor, entry: str, mark: MetadataSetter) -> HostEntry:
     """Return the entry for a consumed-capsule re-entry in a capture with no departure."""
 
-    value = out.detach().clone()
+    with torch.no_grad():
+        value = out.clone()
 
     def foreigndata() -> torch.Tensor:
         """Return the recorded value: with no departure in the capture it is not torch data."""
