@@ -214,7 +214,7 @@ def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) 
     _write_manifest(path, manifest)
     with pytest.raises(ArtifactError, match="weight entries disagree with tensor slots") as caught:
         validate_tlspec(path)
-    assert caught.value.code == "manifest_schema_invalid"
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
@@ -234,7 +234,7 @@ def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
     _write_manifest(path, manifest)
     with pytest.raises(ArtifactError, match="weight entries disagree with tensor slots") as caught:
         validate_tlspec(path)
-    assert caught.value.code == "manifest_schema_invalid"
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 @pytest.mark.parametrize("include_weights", [False, True])

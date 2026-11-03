@@ -486,7 +486,8 @@ def _bind_activations(trace: Any, declared: Any, values: Mapping[str, torch.Tens
         if _binders().byte_digest(tensor) != member.byte_digest:
             _refuse(
                 "record_file_corrupt",
-                f"The archived activation {member.blob_id!r} does not match its byte digest.",
+                f"byte-digest mismatch: the archived activation {member.blob_id!r} does not hash "
+                "to its recorded digest.",
                 "save the trace again; the runnable component was altered",
             )
         archive_key = f"{member.slot_id}:{member.field}"

@@ -675,9 +675,17 @@ class _AnchorView:
         self.n_layers = entry["rows"] if isinstance(entry, dict) else None
 
 
-def check_record_anchors(
-    manifest: Mapping[str, Any], persisted_rows: int | None, root: Path
-) -> None:
+def _retained_op_rows(trace: Mapping[str, Any]) -> int | None:
+    """Op rows the trace retains: the layer list plus the orphan logs a keep_orphans save kept."""
+
+    layer_list = trace.get("_layer_list")
+    if not isinstance(layer_list, list):
+        return None
+    orphans = trace.get("_orphan_logs")
+    return len(layer_list) + (len(orphans) if isinstance(orphans, (list, tuple)) else 0)
+
+
+def check_record_anchors(manifest: Mapping[str, Any], trace: Mapping[str, Any], root: Path) -> None:
     """The manifest/metadata anchor check of the 2.x path, over the op table's row count."""
 
-    check_manifest_metadata_anchors(_AnchorView(manifest), persisted_rows, root)
+    check_manifest_metadata_anchors(_AnchorView(manifest), _retained_op_rows(trace), root)
