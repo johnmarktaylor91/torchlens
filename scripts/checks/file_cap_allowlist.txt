@@ -92,7 +92,7 @@ torchlens/_data_classes/_trace_removal.py::batch_remove_log_entries	67
 torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	71
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_state_io.py::trace_getstate	111
-torchlens/_data_classes/_trace_state_io.py::trace_setstate	334
+torchlens/_data_classes/_trace_state_io.py::trace_setstate	282
 torchlens/_data_classes/cleanup.py	1081
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
@@ -114,7 +114,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3732
+torchlens/_data_classes/trace.py	3703
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.draw	107
 torchlens/_data_classes/trace.py::Trace.save	83
