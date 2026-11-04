@@ -300,6 +300,21 @@ writes the same file in its own directory: one grammar, two homes.
   `level="executable_with_callables"` the recipe is written with `executable` false and the
   callable placeholder, and the save keeps outs and argument snapshots; at `level="audit"` it
   is written payload-free.
+- A facet write (a `tl.head(i, facet).in_module(m)` or `tl.facet(...)` selector with a built-in
+  edit) fires through a scatter wrapper bound to the captured trace, so its rule saves the
+  request instead: the built-in edit, the selector narrowed to one resolved facet as the rule's
+  `selector` (`selector_kind` `"facet"`, `selector_value`
+  `{"name": "v", "head_index": 0, "module_address": "transformer.h.1.attn"}`), and in the rule
+  `metadata` the resolved `facet_home_label`, `facet_name`, the `facet_write_mask` (a tensor
+  reference) and its `facet_write_mask_sha256`. A recipe holding such a rule is written at
+  `format_version` 4; every other recipe stays at 3, and this reader takes both, so a reader of
+  format 3 alone refuses the facet recipe (`bundle_load_failed`) instead of installing the edit
+  on the whole home tensor. Loading a trace re-resolves each stored selector on the loaded trace
+  and rebuilds the wrapper only when the home label, facet name and mask digest match the stored
+  ones; otherwise the load refuses typed (`ArtifactError`). A spec loaded without a trace
+  keeps the request unbound: re-applied as `(site, edit)` it re-resolves the facet on the target
+  trace, and a sticky rule that lost its wrapper refuses to fire. A facet write whose edit holds
+  a user callable keeps a placeholder of the wrapper.
 - `capture_rules` is an optional array (absent means empty) preserving original built-in
   capture predicates alongside the canonical staged `rules`. Each entry has exactly `index`
   (its zero-based array position), `selector` (the same closed TargetSpec object as a rule),
