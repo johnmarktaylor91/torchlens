@@ -303,11 +303,59 @@ def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
     raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
 
 
+def _infer_vector_axis(
+    direction: torch.Tensor,
+    out: torch.Tensor,
+    *,
+    dim: int | None,
+) -> int | None:
+    """Resolve the axis a 1-D direction lies along when ``dim`` is omitted.
+
+    Parameters
+    ----------
+    direction:
+        Direction tensor.
+    out:
+        Activation tensor.
+    dim:
+        Caller-supplied axis; returned unchanged when given.
+
+    Returns
+    -------
+    int | None
+        ``dim`` when given or when no inference applies (the direction is not a
+        vector, or ``out`` has at most one axis); otherwise the only axis of
+        ``out`` whose size equals the direction's length.
+
+    Raises
+    ------
+    AmbiguousAxisError
+        When two or more axes of ``out`` have the direction's length, or none has.
+    """
+
+    if dim is not None or direction.ndim != 1 or out.ndim <= 1:
+        return dim
+    length = int(direction.shape[0])
+    shape = tuple(out.shape)
+    matches = [axis for axis, size in enumerate(shape) if size == length]
+    if len(matches) == 1:
+        return matches[0]
+    if matches:
+        found = f"matches dims {matches} of out shape {shape}"
+    else:
+        found = f"matches no dim of out shape {shape}"
+    raise AmbiguousAxisError(
+        f"cannot infer the axis for a direction of length {length}: it {found}; "
+        "pass dim= to name the axis the direction lies along"
+    )
+
+
 def _align_direction(
     direction: torch.Tensor,
     out: torch.Tensor,
     *,
     dim: int | None,
+    infer: bool = False,
 ) -> torch.Tensor:
     """Align a direction tensor with an out tensor.
 
@@ -319,6 +367,10 @@ def _align_direction(
         Activation tensor.
     dim:
         Axis receiving a vector direction.
+    infer:
+        Infer an omitted ``dim`` for a vector direction through
+        ``_infer_vector_axis`` (``tl.steer``); otherwise an omitted ``dim``
+        refuses as before.
 
     Returns
     -------
@@ -326,6 +378,8 @@ def _align_direction(
         Broadcast-compatible direction.
     """
 
+    if infer:
+        dim = _infer_vector_axis(direction, out, dim=dim)
     if tuple(direction.shape) == tuple(out.shape):
         return direction
     if direction.ndim == 1 and out.ndim > 1:
