@@ -906,7 +906,9 @@ jobs:
           # Four shard files plus shard 4's serial file; fewer means a shard's
           # data is missing and the total would cover part of the tier.
           ls -l "${{ runner.temp }}/coverage-mid-data"
-          test "$(ls "${{ runner.temp }}/coverage-mid-data" | grep -c '^coverage-mid\.')" -eq 5
+          shopt -s nullglob
+          shard_files=("${{ runner.temp }}/coverage-mid-data"/coverage-mid.*)
+          test "${#shard_files[@]}" -eq 5
           coverage combine "${{ runner.temp }}/coverage-mid-data"
 
       - name: Enforce the aggregate coverage floor on the mid tier
