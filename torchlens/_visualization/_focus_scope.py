@@ -47,8 +47,9 @@ __all__ = [
 ]
 
 #: An op name's counters: ``tanh_6_266`` is the 6th ``tanh`` call and op 266
-#: of the whole forward pass; ``:2`` marks a later pass of a repeated op.
-_OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?::\d+)?$")
+#: of the whole forward pass; ``:2`` marks a later pass of a repeated op. A
+#: DOT node name spells the pass ``pass2``; the drawn label keeps the colon.
+_OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?:(?::|pass)(?P<pass>\d+))?$")
 #: HTML tags inside a node label, and a ``name=value`` call argument in its text.
 _TAG = re.compile(r"<[^>]*>")
 _ARGUMENT = re.compile(r"(?:^|\s)[A-Za-z_]\w*=\S")
@@ -311,6 +312,14 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
     )
 
 
+def _drawn_op_name(match: re.Match[str], text: str) -> str:
+    """Return the op name as the picture spells it: ``add_1_1``, or ``add_1_1:2`` for a pass."""
+
+    base = f"{match['kind']}_{match['nth']}_{match['op']}"
+    drawn = re.search(rf"(?<![\w.]){re.escape(base)}(?::\d+)?(?!\w)", text)
+    return drawn.group(0) if drawn else base
+
+
 def _ordinal(number: int) -> str:
     """Return ``1st``, ``2nd``, ``3rd``, ``4th`` ... for ``number``."""
 
@@ -338,12 +347,18 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
         f"@name: the module at that address{under} (a frame title, or a module drawn as one box)"
     ]
     example = next(
-        (m for m in map(_OP_NAME.match, names) if m and not m["kind"].startswith("_")), None
+        (
+            (m, t)
+            for m, t in zip(map(_OP_NAME.match, names), texts, strict=True)
+            if m and not m["kind"].startswith("_")
+        ),
+        None,
     )
     if example is not None:
+        match, text = example
         notes.append(
-            f"{example.group(0)}: the {_ordinal(int(example['nth']))} {example['kind']} call,"
-            f" op {example['op']} of the whole forward pass"
+            f"{_drawn_op_name(match, text)}: the {_ordinal(int(match['nth']))} {match['kind']}"
+            f" call, op {match['op']} of the whole forward pass"
         )
     notes.append(
         "(shape), size: the op's output tensor and its memory, shown where it differs"
