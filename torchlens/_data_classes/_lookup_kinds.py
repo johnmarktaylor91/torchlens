@@ -366,7 +366,11 @@ def module_item(module: Any, key: str) -> Any:
     if len(matches) == 1:
         return trace[matches[0]]
     if len(matches) > 1:
-        refuse_several("layer", key, matches, f"layers of module '{module.address}'")
+        from .._utils._display_errors import module_lookup_message
+
+        raise AmbiguousOpLookupError(
+            module_lookup_message(key, module, matches), key=key, address=module.address
+        )
     raise KeyError(f"'{key}' not found in module '{module.address}' layers")
 
 

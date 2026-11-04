@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
-from ._input_route import _apply_hf_processor, _route_claims, _route_input, _RoutedInputs
+from ._input_route import _apply_hf_processor, _owner_of, _route_claims, _route_input, _RoutedInputs
 from ._options_removed import REMOVED_CAPTURE_MEMBERS
 
 # Hugging Face processor keyword spellings a modality dict is keyed by
@@ -578,7 +578,8 @@ def _coerce_inputs(
         merged: dict[Any, Any] = dict(input_args.input_kwargs or {})
         merged.update(input_kwargs or {})
         return input_args.input_args, merged
-    return _split_coerced_mapping(input_args, _coerce_input_args(model, input_args), input_kwargs)
+    owner = _owner_of(model)
+    return _split_coerced_mapping(input_args, _coerce_input_args(owner, input_args), input_kwargs)
 
 
 def _is_pil_image(x: Any) -> bool:

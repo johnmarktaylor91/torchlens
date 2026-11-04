@@ -54,6 +54,7 @@ from ._options_validation import (
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils._display_options import _OptionsDisplay
 from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
@@ -356,10 +357,9 @@ def _merge_grouped_options(
     return _build_option(option_factory, values, specified_fields)
 
 
-@dataclass(frozen=True, init=False)
-class CaptureOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class CaptureOptions(_OptionsDisplay):
     """Grouped capture options for ``trace``.
-
         Parameters
         ----------
         input_transform:
@@ -381,7 +381,7 @@ class CaptureOptions:
         layer_visualizers:
             Optional mapping from site selectors to per-layer thumbnail callables.
         save_visualizations:
-            Whether rendered visualizer image files should be copied into portable bundles.
+            Copy rendered visualizer images into portable bundles.
         keep_orphans:
             Whether island ops (computations unreachable from both the model inputs and
             outputs) are retained in raw metadata and exposed via ``trace.graph.orphans``. Defaults
@@ -471,7 +471,7 @@ class CaptureOptions:
             the capture-state contract). A cache hit runs no forward, so nothing
             advances (DOCUMENTED-UNSTABLE).
         name:
-            Optional user-facing name for the returned log.
+            User-facing log name.
         cache:
             Whether to use the content-hash capture cache. The key covers model
             tensor content (including per-tensor device and ``requires_grad``),
@@ -828,8 +828,8 @@ _CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
 }
 
 
-@dataclass(frozen=True, init=False)
-class _SaveTransforms:
+@dataclass(frozen=True, init=False, repr=False)
+class _SaveTransforms(_OptionsDisplay):
     """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
 
     Built by :func:`_save_transforms_from_capture`; not a public option
@@ -908,8 +908,8 @@ class _SaveTransforms:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class VisualizationOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class VisualizationOptions(_OptionsDisplay):
     """Grouped visualization options for capture and graph-rendering APIs.
 
     Parameters
@@ -1215,8 +1215,8 @@ class VisualizationOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class ReplayOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class ReplayOptions(_OptionsDisplay):
     """Grouped replay/rerun options for ``Trace`` propagation APIs.
 
     Parameters
@@ -1290,8 +1290,8 @@ class ReplayOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class InterventionOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class InterventionOptions(_OptionsDisplay):
     """Grouped intervention options for ``Trace.do``.
 
     Parameters
@@ -1371,8 +1371,8 @@ class InterventionOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class StorageOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class StorageOptions(_OptionsDisplay):
     """Grouped streaming-save options for ``trace``.
 
     Parameters

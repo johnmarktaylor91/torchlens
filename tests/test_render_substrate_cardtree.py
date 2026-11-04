@@ -36,5 +36,5 @@ def test_trace_repr_html_stays_bounded() -> None:
     html = log._repr_html_()
     # The Trace card keeps the same bounded rows and explicit exits as text.
     assert ".summary()" in html
-    assert "<table>" in html
+    assert '<table class="tl-record-facts">' in html
     assert len(html) < 20_000

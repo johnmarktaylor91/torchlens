@@ -78,7 +78,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transformer | 39 | 0 |
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
-| viz | 12 | 0 |
-| **total** | **1056** | **0** |
+| viz | 14 | 0 |
+| **total** | **1058** | **0** |
 
 Public callable members of those classes (methods and properties): 1488.

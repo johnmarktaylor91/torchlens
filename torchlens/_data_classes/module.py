@@ -47,8 +47,8 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._utils._display_errors import module_output_message
 from ._accessor_base import Accessor
-from ._bound_owner_alias import owner_address_for
 from ._call_tree import (
     _edge_counts_for_scope,
     _print_call_tree_from_root,
@@ -944,14 +944,7 @@ class ModuleCall:
         if len(self.output_ops) != 1:
             from ..intervention.errors import MultiOutputModuleError
 
-            candidates = ", ".join(
-                f"module_call.output_ops[{index}]={label!r}"
-                for index, label in enumerate(self.output_ops)
-            )
-            raise MultiOutputModuleError(
-                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
-                f"select one candidate explicitly: {candidates or 'none'}."
-            )
+            raise MultiOutputModuleError(module_output_message(self, self._source_trace))
         trace = self._source_trace
         if trace is None:
             raise RecordBindingError(
@@ -2525,7 +2518,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def _module_by_address(self, key: Any) -> "Module":
         """Return the Module an ordinal, address, alias or pass label names (no conversion)."""
-        key = "self" if key == "" else owner_address_for(self, key)
+        key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         return super().__getitem__(self._pass_dict[key].address if key in self._pass_dict else key)

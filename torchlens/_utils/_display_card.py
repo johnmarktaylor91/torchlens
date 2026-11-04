@@ -29,22 +29,22 @@ INLINE_LIMIT = 3
 _INDENT = "  "
 
 
-def card_row(label: str, value: str) -> str:
+def card_row(label: str, value: str, *, width: int = LABEL_WIDTH) -> str:
     """One labelled card row: ``  output    15,360 values, 60 KiB``."""
 
-    return f"{_INDENT}{label:<{LABEL_WIDTH}} {value}".rstrip()
+    return f"{_INDENT}{label:<{width}} {value}".rstrip()
 
 
-def continuation_row(value: str) -> str:
+def continuation_row(value: str, *, width: int = LABEL_WIDTH) -> str:
     """A row continuing the previous label's value, aligned under it."""
 
-    return f"{_INDENT}{'':<{LABEL_WIDTH}} {value}".rstrip()
+    return f"{_INDENT}{'':<{width}} {value}".rstrip()
 
 
-def more_row(attributes: Sequence[str]) -> str:
+def more_row(attributes: Sequence[str], *, width: int = LABEL_WIDTH) -> str:
     """The closing ``more`` row: ``  more      .out  .parents``."""
 
-    return card_row("more", "  ".join(attributes))
+    return card_row("more", "  ".join(attributes), width=width)
 
 
 def render_card(
@@ -61,17 +61,19 @@ def render_card(
     """
 
     kept = [(label, value) for label, value in rows if value]
+    width = max((len(label) for label, _ in kept), default=LABEL_WIDTH)
+    width = max(LABEL_WIDTH, width)
     body_budget = max_rows - (1 if more else 0)
     lines = [first_line]
     if len(kept) > body_budget:
         hidden = len(kept) - body_budget + 1
         kept = kept[: body_budget - 1]
-        lines.extend(card_row(label, value) for label, value in kept)
-        lines.append(continuation_row(f"... and {hidden} more rows"))
+        lines.extend(card_row(label, value, width=width) for label, value in kept)
+        lines.append(continuation_row(f"... and {hidden} more rows", width=width))
     else:
-        lines.extend(card_row(label, value) for label, value in kept)
+        lines.extend(card_row(label, value, width=width) for label, value in kept)
     if more:
-        lines.append(more_row(more))
+        lines.append(more_row(more, width=width))
     return "\n".join(lines)
 
 
