@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 675715 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 675793 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6505 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8470 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 120 | 56636 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 120 | 56714 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9165 |
@@ -1336,7 +1336,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (120 modules, 56636 lines)
+Torch backend implementation package for TorchLens capture. (120 modules, 56714 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1368,7 +1368,7 @@ Torch backend implementation package for TorchLens capture. (120 modules, 56636 
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 764 |
 | `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 102 |
-| `_grad_fn_graph` | Backward graph relations of ''GradFn'' records: parents, children, siblings, co-parents. | 229 |
+| `_grad_fn_graph` | Backward graph relations of ''GradFn'' records: parents, children, siblings, co-parents. | 307 |
 | `_grad_fn_growth` | Append newly discovered ''GradFn'' records to a backward projection in place. | 377 |
 | `_grad_fn_membership` | Module membership of ''GradFn'' records: paired addresses and inferred containment. | 355 |
 | `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 224 |
