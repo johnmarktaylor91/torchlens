@@ -104,7 +104,8 @@ def test_masked_builtin_edit_round_trips_bit_identically(tmp_path: Path, verb: s
     reapplied = _apply(tl.io.load_intervention_spec(path))
     assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
     assert torch.equal(_output(reapplied), _output(session))
-    assert not torch.equal(session[_SITE].out, _ready()[_SITE].out)
+    clean = _ready()
+    assert not torch.equal(session[_SITE].out, clean[_SITE].out)
 
 
 def test_masked_trace_saves_at_the_default_level_and_loads(tmp_path: Path) -> None:
@@ -132,7 +133,8 @@ def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_pat
     keys = [key for key, _ in again.hook_specs[0].helper.kwargs]
     assert keys.count("mask") == 1 and keys.count("mask_sha256") == 1
     assert torch.equal(dict(again.hook_specs[0].helper.kwargs)["mask"], _mask(3))
-    assert torch.equal(_apply(again)[_SITE].out, session[_SITE].out)
+    reapplied = _apply(again)
+    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
 
 
 _MALFORMED = {

@@ -199,4 +199,5 @@ def test_other_masked_builtin_edits_save_portably(tmp_path: Path) -> None:
     saved = loaded.hook_specs[0].helper
     assert saved.portability == "builtin" and saved.factory is not None
     assert torch.equal(dict(saved.kwargs)["mask"], _mask())
-    assert torch.equal(_apply(loaded)[_SITE].out, fork[_SITE].out)
+    reapplied = _apply(loaded)
+    assert torch.equal(reapplied[_SITE].out, fork[_SITE].out)
