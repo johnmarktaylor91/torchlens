@@ -93,7 +93,7 @@ def _release_floor_applies(candidate: dict[str, Any]) -> bool:
         True when :func:`raise_if_saved_by_older_major` runs here.
     """
 
-    if candidate.get("bundle_format") in {"merged-directory", "fastlog-directory"}:
+    if candidate.get("bundle_format") in ("merged-directory", "fastlog-directory"):
         return True
     if _is_extraction_manifest(candidate):
         return False
