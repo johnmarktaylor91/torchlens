@@ -40,11 +40,13 @@ class _Chain(torch.nn.Module):
     """``depth`` Linear/ReLU/add-constant triples: every op carries a replay template."""
 
     def __init__(self, depth: int) -> None:
+        """Build ``depth`` seeded 4x4 Linear layers."""
         super().__init__()
         torch.manual_seed(0)
         self.layers = torch.nn.ModuleList(torch.nn.Linear(4, 4) for _ in range(depth))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply each layer, then ReLU and a constant add."""
         for layer in self.layers:
             x = torch.relu(layer(x)) + 0.5
         return x
@@ -54,12 +56,14 @@ class _OrphanChain(_Chain):
     """``_Chain`` plus a disconnected op chain, so orphan pruning scrubs every template."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Make a disconnected op, then run the chain."""
         unused = torch.zeros(2) + 1  # reaches neither input nor output: pruned as orphans
         del unused
         return super().forward(x)
 
 
 def _first_arg(frame: FrameType) -> Any:
+    """Return the first positional argument of the frame's function, if any."""
     code = frame.f_code
     return frame.f_locals.get(code.co_varnames[0]) if code.co_argcount else None
 
@@ -87,6 +91,7 @@ def _count_in_step(
     real = getattr(real, "__wrapped__", real)  # a second call in one test wraps the original
 
     def profiler(frame: FrameType, event: str, _arg: Any) -> None:
+        """Count calls of the target code objects and record each first argument's class."""
         if event == "call":
             name = targets.get(frame.f_code)
             if name is not None:
@@ -95,6 +100,7 @@ def _count_in_step(
 
     @functools.wraps(real)
     def counted(*args: Any) -> None:
+        """Run the real step with the counting profiler installed, then restore the old one."""
         previous = sys.getprofile()
         sys.setprofile(profiler)
         try:
@@ -109,9 +115,11 @@ def _count_in_step(
 
 
 def _parent_refs(value: Any) -> list[ParentRef]:
+    """Return every ``ParentRef`` leaf of ``value`` in walk order."""
     found: list[ParentRef] = []
 
     def collect(leaf: Any) -> Any:
+        """Record a ``ParentRef`` leaf and keep every node unchanged."""
         if isinstance(leaf, ParentRef):
             found.append(leaf)
         return leaf

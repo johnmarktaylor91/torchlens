@@ -29,9 +29,11 @@ from torchlens.intervention.types import (
 
 
 def _parent_refs(value: Any) -> list[ParentRef]:
+    """Return every ``ParentRef`` leaf of ``value`` in walk order."""
     found: list[ParentRef] = []
 
     def collect(leaf: Any) -> Any:
+        """Record a ``ParentRef`` leaf and keep every node unchanged."""
         if isinstance(leaf, ParentRef):
             found.append(leaf)
         return leaf
@@ -44,6 +46,7 @@ def _parent_refs(value: Any) -> list[ParentRef]:
 
 
 def _ref_rename_template(value: Any, mapping: dict[str, str]) -> Any:
+    """Reference template rename: the plain ``isinstance`` ladder."""
     if isinstance(value, ParentRef):
         return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
     if isinstance(value, tuple):
@@ -66,6 +69,7 @@ _LABELS = {"parent_label", "child_label", "target_label", "call_label", "site_la
 
 
 def _ref_rename_record(value: Any, mapping: dict[str, str]) -> Any:
+    """Reference record rename: the plain ``isinstance`` ladder."""
     if callable(value):
         return value
     if isinstance(value, tuple):
@@ -95,18 +99,22 @@ def _ref_rename_record(value: Any, mapping: dict[str, str]) -> Any:
 
 @dataclass(frozen=True)
 class _SubRef(ParentRef):
+    """A ``ParentRef`` subclass (renamed through ``replace``, not the constructor)."""
+
     extra: int = 0
 
 
 @dataclass(frozen=True)
 class _Record:
+    """A label-bearing frozen record."""
+
     parent_label: str
     payload: Any = None
     note: str = "raw_1"
 
 
 class _Label(str):
-    pass
+    """A ``str`` subclass (renamed like a plain string by the record walk)."""
 
 
 _Pair = namedtuple("_Pair", "left right")
@@ -114,6 +122,7 @@ _MAP = {"raw_1": "fin_1", "raw_2": "fin_2"}
 
 
 def _corpus() -> list[Any]:
+    """Return templates and records covering every branch of both walks."""
     layout = object()
     ref = ParentRef("raw_1", layout)
     return [
@@ -131,6 +140,7 @@ def _corpus() -> list[Any]:
 
 
 def _same(left: Any, right: Any) -> bool:
+    """Return whether two values are equal with identical types at every node."""
     if type(left) is not type(right):
         return False
     if isinstance(left, torch.Tensor):
@@ -175,12 +185,15 @@ def test_template_walks_match_reference(index: int) -> None:
     stale = Unsupported(reason="removed_parent_ref", value_type="ParentRef")
 
     def is_hit(leaf: Any) -> bool:
+        """Return whether ``leaf`` is a ``ParentRef`` to ``raw_2``."""
         return isinstance(leaf, ParentRef) and leaf.parent_label == "raw_2"
 
     def swap(leaf: Any) -> Any:
+        """Replace a hit with the stale marker; keep anything else."""
         return stale if is_hit(leaf) else leaf
 
     def ref_has(node: Any) -> bool:
+        """Reference ``template_has_leaf``: the plain ladder."""
         if is_hit(node):
             return True
         if isinstance(node, (tuple, list)):
@@ -192,6 +205,7 @@ def test_template_walks_match_reference(index: int) -> None:
         return False
 
     def ref_map(node: Any) -> Any:
+        """Reference ``map_template_leaves``: the plain ladder."""
         if swap(node) is not node:
             return stale
         if isinstance(node, tuple):
