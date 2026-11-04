@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import ScalarEscapeWarning
+from torchlens.errors import InvalidArgumentError, ScalarEscapeWarning
 
 N_NEW = 3
 
@@ -79,9 +79,9 @@ def test_generate_trace_addresses_modules_like_a_plain_trace() -> None:
     assert torch.equal(gen["head:1"].out, plain["head"].out)
     # The root's calls are containment facts of the root only: no op lists them
     # as a module it sits in, as on a plain trace.
-    for layer in gen.layers:
-        assert all(not str(m).startswith("self") for m in layer.modules), layer.label
-        assert all(not str(m).startswith("self") for m in layer.module_call_stack), layer.label
+    for op in gen.ops:
+        assert all(not str(m).startswith("self") for m in op.modules), op.label
+        assert all(not str(m).startswith("self") for m in op.module_call_stack), op.label
     assert [str(k) for k in gen.layer_labels if "owner" in str(k)] == []
 
 
@@ -91,8 +91,12 @@ def test_generate_trace_module_tables_match_a_plain_trace() -> None:
     gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
     plain_modules = plain.to_pandas()["module"].dropna().map(str)
     gen_modules = gen.to_pandas()["module"].dropna().map(str)
-    assert set(gen_modules) == set(plain_modules)
-    assert not any(m.startswith("owner") for m in gen_modules)
+    # Same module addresses; generate's calls add only the ``:2`` .. ``:N`` suffixes.
+    assert {m.rsplit(":", 1)[0] for m in gen_modules} == {
+        m.rsplit(":", 1)[0] for m in plain_modules
+    }
+    assert {m.rsplit(":", 1)[1] for m in gen_modules} == {str(k) for k in range(1, N_NEW + 1)}
+    assert not any(m.startswith(("owner", "self")) for m in gen_modules)
 
 
 def test_generate_trace_validates_and_round_trips(tmp_path: Any) -> None:
@@ -170,7 +174,7 @@ def test_text_input_reaches_a_bound_generate(monkeypatch: pytest.MonkeyPatch) ->
 def test_unknown_key_lookup_names_no_wrapper_spelling() -> None:
     model = _ToyGenerator().eval()
     gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
-    with pytest.raises(KeyError) as excinfo:
+    with pytest.raises((KeyError, InvalidArgumentError)) as excinfo:
         gen["no_such_module"]
     assert "owner" not in str(excinfo.value)
 
