@@ -14353,6 +14353,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder___add___0",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14743,6 +14746,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder___add___1",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15150,6 +15156,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_contiguous_0",
     "fx_qualpath": "encoder.self_attn.contiguous",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15548,6 +15557,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout1_dropout_0",
     "fx_qualpath": "encoder.dropout1.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15950,6 +15962,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout_dropout_0",
     "fx_qualpath": "encoder.dropout.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16362,6 +16377,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout2_dropout_0",
     "fx_qualpath": "encoder.dropout2.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16755,6 +16773,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn___getitem___0",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -17145,6 +17166,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn___getitem___1",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -17535,6 +17559,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn___getitem___2",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -17876,6 +17903,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18279,6 +18309,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm1_layer_norm_0",
     "fx_qualpath": "encoder.norm1.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18726,6 +18759,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm2_layer_norm_0",
     "fx_qualpath": "encoder.norm2.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19161,6 +19197,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_linear_0",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19577,6 +19616,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_linear_1",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19989,6 +20031,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear1_linear_0",
     "fx_qualpath": "encoder.linear1.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -20412,6 +20457,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear2_linear_0",
     "fx_qualpath": "encoder.linear2.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -20788,6 +20836,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21189,6 +21240,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_permute_0",
     "fx_qualpath": "encoder.self_attn.permute",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21574,6 +21628,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_relu_0",
     "fx_qualpath": "encoder.relu",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21965,6 +22022,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_reshape_0",
     "fx_qualpath": "encoder.self_attn.reshape",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -22367,6 +22427,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_scaled_dot_product_attention_0",
     "fx_qualpath": "encoder.self_attn.scaled_dot_product_attention",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -22794,6 +22857,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_squeeze_0",
     "fx_qualpath": "encoder.self_attn.squeeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -23185,6 +23251,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_transpose_0",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -23583,6 +23652,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_transpose_1",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -23983,6 +24055,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_transpose_2",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -24377,6 +24452,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_transpose_3",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -24771,6 +24849,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_transpose_4",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -25159,6 +25240,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_transpose_5",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -25569,6 +25653,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unflatten_0",
     "fx_qualpath": "encoder.self_attn.unflatten",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -25964,6 +26051,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unsqueeze_0",
     "fx_qualpath": "encoder.self_attn.unsqueeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -26359,6 +26449,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_view_0",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -26751,6 +26844,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_view_1",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -27143,6 +27239,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_view_2",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -27540,6 +27639,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_view_3",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -27940,6 +28042,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_view_4",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -28340,6 +28445,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_view_5",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -28733,6 +28841,9 @@
     "fx_call_index": 6,
     "fx_label": "encoder_self_attn_view_6",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -48334,6 +48445,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder___add___0",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -48724,6 +48838,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder___add___1",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -49131,6 +49248,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_contiguous_0",
     "fx_qualpath": "encoder.self_attn.contiguous",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -49529,6 +49649,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout1_dropout_0",
     "fx_qualpath": "encoder.dropout1.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -49931,6 +50054,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout_dropout_0",
     "fx_qualpath": "encoder.dropout.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -50343,6 +50469,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout2_dropout_0",
     "fx_qualpath": "encoder.dropout2.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -50736,6 +50865,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn___getitem___0",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -51126,6 +51258,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn___getitem___1",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -51516,6 +51651,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn___getitem___2",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -51857,6 +51995,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -52260,6 +52401,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm1_layer_norm_0",
     "fx_qualpath": "encoder.norm1.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -52707,6 +52851,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm2_layer_norm_0",
     "fx_qualpath": "encoder.norm2.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -53142,6 +53289,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_linear_0",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -53558,6 +53708,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_linear_1",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -53970,6 +54123,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear1_linear_0",
     "fx_qualpath": "encoder.linear1.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -54393,6 +54549,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear2_linear_0",
     "fx_qualpath": "encoder.linear2.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -54769,6 +54928,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -55170,6 +55332,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_permute_0",
     "fx_qualpath": "encoder.self_attn.permute",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -55555,6 +55720,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_relu_0",
     "fx_qualpath": "encoder.relu",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -55946,6 +56114,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_reshape_0",
     "fx_qualpath": "encoder.self_attn.reshape",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -56348,6 +56519,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_scaled_dot_product_attention_0",
     "fx_qualpath": "encoder.self_attn.scaled_dot_product_attention",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -56775,6 +56949,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_squeeze_0",
     "fx_qualpath": "encoder.self_attn.squeeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -57166,6 +57343,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_transpose_0",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -57564,6 +57744,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_transpose_1",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -57964,6 +58147,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_transpose_2",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -58358,6 +58544,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_transpose_3",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -58752,6 +58941,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_transpose_4",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -59140,6 +59332,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_transpose_5",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -59550,6 +59745,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unflatten_0",
     "fx_qualpath": "encoder.self_attn.unflatten",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -59945,6 +60143,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unsqueeze_0",
     "fx_qualpath": "encoder.self_attn.unsqueeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -60340,6 +60541,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_view_0",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -60732,6 +60936,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_view_1",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -61124,6 +61331,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_view_2",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -61521,6 +61731,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_view_3",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -61921,6 +62134,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_view_4",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -62321,6 +62537,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_view_5",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -62714,6 +62933,9 @@
     "fx_call_index": 6,
     "fx_label": "encoder_self_attn_view_6",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -82378,6 +82600,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder___add___0",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -82768,6 +82993,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder___add___1",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -83175,6 +83403,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_contiguous_0",
     "fx_qualpath": "encoder.self_attn.contiguous",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -83573,6 +83804,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout1_dropout_0",
     "fx_qualpath": "encoder.dropout1.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -83975,6 +84209,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout_dropout_0",
     "fx_qualpath": "encoder.dropout.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -84387,6 +84624,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout2_dropout_0",
     "fx_qualpath": "encoder.dropout2.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -84780,6 +85020,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn___getitem___0",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -85170,6 +85413,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn___getitem___1",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -85560,6 +85806,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn___getitem___2",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -85901,6 +86150,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -86304,6 +86556,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm1_layer_norm_0",
     "fx_qualpath": "encoder.norm1.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -86751,6 +87006,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm2_layer_norm_0",
     "fx_qualpath": "encoder.norm2.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -87186,6 +87444,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_linear_0",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -87602,6 +87863,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_linear_1",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -88014,6 +88278,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear1_linear_0",
     "fx_qualpath": "encoder.linear1.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -88437,6 +88704,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear2_linear_0",
     "fx_qualpath": "encoder.linear2.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -88813,6 +89083,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -89214,6 +89487,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_permute_0",
     "fx_qualpath": "encoder.self_attn.permute",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -89599,6 +89875,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_relu_0",
     "fx_qualpath": "encoder.relu",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -89990,6 +90269,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_reshape_0",
     "fx_qualpath": "encoder.self_attn.reshape",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -90392,6 +90674,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_scaled_dot_product_attention_0",
     "fx_qualpath": "encoder.self_attn.scaled_dot_product_attention",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -90819,6 +91104,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_squeeze_0",
     "fx_qualpath": "encoder.self_attn.squeeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -91210,6 +91498,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_transpose_0",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -91608,6 +91899,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_transpose_1",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -92008,6 +92302,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_transpose_2",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -92402,6 +92699,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_transpose_3",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -92796,6 +93096,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_transpose_4",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -93184,6 +93487,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_transpose_5",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -93594,6 +93900,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unflatten_0",
     "fx_qualpath": "encoder.self_attn.unflatten",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -93989,6 +94298,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unsqueeze_0",
     "fx_qualpath": "encoder.self_attn.unsqueeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -94384,6 +94696,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_view_0",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -94776,6 +95091,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_view_1",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -95168,6 +95486,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_view_2",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -95565,6 +95886,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_view_3",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -95965,6 +96289,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_view_4",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -96365,6 +96692,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_view_5",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -96758,6 +97088,9 @@
     "fx_call_index": 6,
     "fx_label": "encoder_self_attn_view_6",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -116365,6 +116698,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder___add___0",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -116723,6 +117059,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder___add___1",
     "fx_qualpath": "encoder.__add__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -117098,6 +117437,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_contiguous_0",
     "fx_qualpath": "encoder.self_attn.contiguous",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -117472,6 +117814,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout1_dropout_0",
     "fx_qualpath": "encoder.dropout1.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -117851,6 +118196,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout_dropout_0",
     "fx_qualpath": "encoder.dropout.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -118240,6 +118588,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_dropout2_dropout_0",
     "fx_qualpath": "encoder.dropout2.dropout",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -118614,6 +118965,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn___getitem___0",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -118984,6 +119338,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn___getitem___1",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -119354,6 +119711,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn___getitem___2",
     "fx_qualpath": "encoder.self_attn.__getitem__",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -119675,6 +120035,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -120068,6 +120431,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm1_layer_norm_0",
     "fx_qualpath": "encoder.norm1.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -120489,6 +120855,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_norm2_layer_norm_0",
     "fx_qualpath": "encoder.norm2.layer_norm",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -120901,6 +121270,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_linear_0",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -121294,6 +121666,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_linear_1",
     "fx_qualpath": "encoder.self_attn.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -121684,6 +122059,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear1_linear_0",
     "fx_qualpath": "encoder.linear1.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -122084,6 +122462,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_linear2_linear_0",
     "fx_qualpath": "encoder.linear2.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -122441,6 +122822,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -122806,6 +123190,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_permute_0",
     "fx_qualpath": "encoder.self_attn.permute",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -123169,6 +123556,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_relu_0",
     "fx_qualpath": "encoder.relu",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -123538,6 +123928,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_reshape_0",
     "fx_qualpath": "encoder.self_attn.reshape",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -123913,6 +124306,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_scaled_dot_product_attention_0",
     "fx_qualpath": "encoder.self_attn.scaled_dot_product_attention",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -124290,6 +124686,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_squeeze_0",
     "fx_qualpath": "encoder.self_attn.squeeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -124657,6 +125056,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_transpose_0",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -125033,6 +125435,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_transpose_1",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -125409,6 +125814,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_transpose_2",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -125781,6 +126189,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_transpose_3",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -126153,6 +126564,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_transpose_4",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -126519,6 +126933,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_transpose_5",
     "fx_qualpath": "encoder.self_attn.transpose",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -126907,6 +127324,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unflatten_0",
     "fx_qualpath": "encoder.self_attn.unflatten",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -127281,6 +127701,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_unsqueeze_0",
     "fx_qualpath": "encoder.self_attn.unsqueeze",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -127652,6 +128075,9 @@
     "fx_call_index": 0,
     "fx_label": "encoder_self_attn_view_0",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -128021,6 +128447,9 @@
     "fx_call_index": 1,
     "fx_label": "encoder_self_attn_view_1",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -128390,6 +128819,9 @@
     "fx_call_index": 2,
     "fx_label": "encoder_self_attn_view_2",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -128763,6 +129195,9 @@
     "fx_call_index": 3,
     "fx_label": "encoder_self_attn_view_3",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -129139,6 +129574,9 @@
     "fx_call_index": 4,
     "fx_label": "encoder_self_attn_view_4",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -129515,6 +129953,9 @@
     "fx_call_index": 5,
     "fx_label": "encoder_self_attn_view_5",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -129885,6 +130326,9 @@
     "fx_call_index": 6,
     "fx_label": "encoder_self_attn_view_6",
     "fx_qualpath": "encoder.self_attn.view",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,

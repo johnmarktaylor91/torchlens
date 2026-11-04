@@ -676,6 +676,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/task_rnn_circuits.md": _RECIPE_PAGES_EXECUTED,
     "gallery/protein_language_model.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/causal_tracing.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/cnn_fields.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/neuro_rdms.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/ioi_circuit.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
