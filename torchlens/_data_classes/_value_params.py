@@ -8,7 +8,14 @@ from .._utils._display_card import inline_names, render_card
 from .._utils._display_numbers import format_exact_count, format_iec_bytes
 from .._utils.fail_open import fail_open
 from ._value_ops import _names
-from ._value_state import METADATA_ONLY, _statistics, metadata_text, value_line, value_words
+from ._value_state import (
+    METADATA_ONLY,
+    _count_words,
+    _statistics,
+    metadata_text,
+    value_line,
+    value_words,
+)
 
 
 def _param_facts(param: Any) -> tuple[str, Any, str, Any]:
@@ -50,9 +57,7 @@ def param_rows(param: Any) -> list[tuple[str, str]]:
     count = getattr(param, "num_params", None)
     memory = getattr(param, "param_memory", None)
     if count is not None and memory is not None:
-        rows.append(
-            ("size", f"{format_exact_count(count)} values, {format_iec_bytes(int(memory))}")
-        )
+        rows.append(("size", f"{_count_words(count, 'value')}, {format_iec_bytes(int(memory))}"))
     rows.append(("values", value_words(stats)))
     used_by = getattr(param, "used_by_layers", ()) or ()
     if used_by:
@@ -93,7 +98,7 @@ def buffer_repr_line(buffer: Any) -> str:
 
     metadata, stats, basis = _buffer_facts(buffer)
     versions = len(getattr(buffer, "versions", ()) or ())
-    facts = (f"{format_exact_count(versions)} versions",) if versions > 1 else ()
+    facts = (_count_words(versions, "version"),) if versions > 1 else ()
     honesty = METADATA_ONLY if basis == METADATA_ONLY else ""
     return value_line(f"Buffer {getattr(buffer, 'address', '?')}", metadata, stats, honesty, facts)
 
@@ -109,5 +114,5 @@ def buffer_card(buffer: Any) -> str:
     ]
     overwrites = getattr(buffer, "num_overwrites", None)
     if overwrites:
-        rows.append(("overwrites", format_exact_count(overwrites)))
+        rows.append(("rewrites", format_exact_count(overwrites)))
     return render_card(buffer_repr_line(buffer), rows, (".versions", ".to_pandas()"))

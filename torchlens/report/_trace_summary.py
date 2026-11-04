@@ -22,8 +22,9 @@ from .._utils._display_numbers import (
     plural,
 )
 from .._utils.fail_open import fail_open
-from ._factcore import capture_fingerprint
-from ._health import _parse_persisted
+from ._factcore import _FACTCORE_CACHE, capture_fingerprint
+from ._health import _health_text as _verdict_text, _parse_persisted
+from ._notebook._axis_labels import sdpa_attention_hint
 from ._notebook.cards import trace_repr_html
 from ._summary_config import resolve_config
 from ._summary_result import build_rebuilt_summary
@@ -186,7 +187,7 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
 __all__ = ["first_nonfinite", "repr_html", "summary"]
 
 
-_MORE = (".summary()", ".modules", ".layers", ".ops", ".params")
+_MORE = (".summary()", ".modules", ".layers", ".ops", ".params", ".output_layers")
 
 
 def _stored_verdict(trace: Any) -> str:
@@ -202,10 +203,7 @@ def _stored_verdict(trace: Any) -> str:
 
 def _health_text(trace: Any) -> str:
     verdict = fail_open(lambda: _stored_verdict(trace), lambda _error: "not_checked")
-    return {
-        "checked_and_clean": "no NaN/Inf (exact)",
-        "found": "NaN/Inf FOUND (.nonfinite_ops)",
-    }.get(verdict, "NaN/Inf not checked")
+    return _verdict_text(verdict)
 
 
 def _state_tokens(trace: Any) -> list[str]:
@@ -267,9 +265,16 @@ def _count_facts(trace: Any) -> list[str]:
     if not trace._tracing_finished:
         return [plural(len(trace.event_stream.op_events), "op event")]
     return [
-        f"{format_count(len(trace._layer_logs))} layers",
-        f"{format_count(trace._num_ops)} ops",
+        _count_text(len(trace._layer_logs), "layer", compact=True),
+        _count_text(trace._num_ops, "op", compact=True),
     ]
+
+
+def _count_text(count: int, noun: str, *, compact: bool = False) -> str:
+    """Use the shared count precision and plural rules for a named count."""
+
+    number = format_count(count) if compact else format_exact_count(count)
+    return f"{number} {plural(count, noun).partition(' ')[2]}"
 
 
 def _trace_rows(trace: Any) -> list[tuple[str, str]]:
@@ -281,28 +286,40 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
         return [("captured", f"{plural(len(trace.event_stream.op_events), 'op event')} so far")]
     exact = format_exact_count
     modules = max(0, len(trace._module_logs) - 1)
-    params = exact(getattr(trace, "num_params", 0))
-    param_ops = exact(trace._num_layers_with_params)
+    params = _count_text(getattr(trace, "num_params", 0), "param")
+    param_tensors = _count_text(trace._num_param_tensors, "tensor")
     duration = float(trace._provenance_duration)
     compute = float(trace._cost_func_calls_duration)
     saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
     rows = [
         (
             "model",
-            f"{trace._source_class_name}, {exact(modules)} modules, {params} params in {param_ops} param ops",
+            f"{_count_text(modules, 'submodule')}, {params} in {param_tensors}",
         ),
         (
             "captured",
-            f"{format_duration(duration)} ({format_duration(duration - compute)} of it logging), seed {trace._options_seed}",
+            f"{_captured_text(duration, compute)}, seed {trace._options_seed}",
         ),
         ("graph", _graph_text(trace)),
         (
             "saved",
             f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
         ),
-        ("outputs", plural(len(trace.output_layers), "output site")),
-        ("flops", "MACs reported as FLOPs // 2"),
     ]
+    cached = _FACTCORE_CACHE.get(id(trace))
+    if cached is not None and cached[0]() is trace:
+        aggregation = cached[1].compute
+        rows.append(
+            ("flops", f"{aggregation.partition_total!s} forward, {aggregation.macs_total!s}")
+        )
+    if sdpa_attention_hint(trace):
+        rows.append(
+            (
+                "note",
+                "attention weights not materialized (fused attention); "
+                "re-capture with attn_implementation='eager'",
+            )
+        )
     if trace._provenance_verified is False:
         rows.insert(
             0,
@@ -312,6 +329,16 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
             ),
         )
     return rows
+
+
+def _captured_text(duration: float, compute: float) -> str:
+    """Describe capture overhead using the same precision as the duration."""
+
+    total = format_duration(duration)
+    logging = format_duration(max(0.0, duration - compute))
+    if duration > 0 and logging == total:
+        return f"{total}, almost all logging"
+    return f"{total} ({logging} of it logging)"
 
 
 def _graph_text(trace: Any) -> str:

@@ -3,6 +3,8 @@
 import dataclasses
 import pickle
 
+import pytest
+
 from torchlens._utils._display_bounded import RecordTuple, short_dataclass_repr
 from torchlens._utils._display_card import (
     REPR_COLS,
@@ -29,13 +31,51 @@ def test_numbers_follow_the_house_spellings() -> None:
     assert format_sig(3.27e-5) == "3.270e-05"
     assert format_count(15360) == "15.4k"
     assert format_exact_count(124439808) == "124,439,808"
-    assert format_iec_bytes(61440) == "60 KiB"
+    assert format_iec_bytes(61440) == "60.0 KiB"
     assert format_iec_bytes(12) == "12 B"
     assert format_duration(0.00402) == "4.02 ms"
     assert format_duration(151e-6) == "151 us"
     assert format_duration(3.52) == "3.52 s"
     assert plural(1, "call") == "1 call"
     assert plural(3, "pass", "passes") == "3 passes"
+
+
+@pytest.mark.parametrize(
+    "count, expected",
+    [
+        (999, "999"),
+        (1000, "1.0k"),
+        (999949, "999.9k"),
+        (999950, "1.0M"),
+        (999950000, "1.0G"),
+        (124439808, "124.4M"),
+    ],
+)
+def test_compact_counts_keep_one_decimal_and_roll_over(count: int, expected: str) -> None:
+    assert format_count(count) == expected
+
+
+@pytest.mark.parametrize("unit, scale", [("KiB", 1024), ("MiB", 1024**2), ("GiB", 1024**3)])
+@pytest.mark.parametrize("value, expected", [(999.5, "0.976"), (1000, "0.977"), (1023.9, "1.00")])
+def test_iec_rounding_promotes_without_scientific_notation(
+    unit: str, scale: int, value: float, expected: str
+) -> None:
+    next_unit = {"KiB": "MiB", "MiB": "GiB", "GiB": "TiB"}[unit]
+    assert format_iec_bytes(round(value * scale)) == f"{expected} {next_unit}"
+    assert format_iec_bytes(15 * scale) == f"15.0 {unit}"
+
+
+@pytest.mark.parametrize("scale, next_unit", [(1e-9, "us"), (1e-6, "ms"), (1e-3, "s")])
+@pytest.mark.parametrize("value, expected", [(999.5, "1.00"), (1000, "1.00"), (1023.9, "1.02")])
+def test_duration_rounding_promotes_without_scientific_notation(
+    scale: float, next_unit: str, value: float, expected: str
+) -> None:
+    assert format_duration(value * scale) == f"{expected} {next_unit}"
+    assert format_duration(-value * scale) == f"-{expected} {next_unit}"
+
+
+def test_duration_keeps_significant_zeros() -> None:
+    assert format_duration(1.5) == "1.50 s"
 
 
 def test_tensor_text_reads_metadata_only() -> None:

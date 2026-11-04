@@ -114,11 +114,11 @@ class TestParamLogFields:
         r = repr(pl)
         assert pl.address in r
         assert "\n" not in r
-        assert "[param]" in r
+        assert r.startswith(f"Param {pl.address}:")
         assert "trainable" in r or "frozen" in r
         card = str(pl)
         assert card.splitlines()[0] == r
-        assert "has_grad" in card
+        assert "  gradient  " + ("captured" if pl._has_grad else "none captured") in card
 
     def test_len_equals_num_params(self):
         mh = trace_fn(_make_simple_model(), _simple_input())

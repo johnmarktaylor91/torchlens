@@ -38,16 +38,14 @@ def format_sig(value: float, digits: int = 4) -> str:
 
 
 def format_count(count: int) -> str:
-    """Compact count for one-line reprs and table cells: ``15.4k``, ``124M``."""
+    """Compact counts with one decimal and unit rollover: ``15.4k``, ``124.4M``."""
 
-    if count < 1000:
+    magnitude = abs(count)
+    if magnitude < 1000:
         return str(count)
     for suffix, divisor in (("G", 1e9), ("M", 1e6), ("k", 1e3)):
-        if count >= divisor:
-            scaled = count / divisor
-            if scaled >= 100:
-                return f"{scaled:.0f}{suffix}"
-            return f"{scaled:.3g}{suffix}"
+        if magnitude >= divisor * 0.99995:
+            return f"{count / divisor:.1f}{suffix}"
     return str(count)
 
 
@@ -58,14 +56,15 @@ def format_exact_count(count: int) -> str:
 
 
 def format_iec_bytes(nbytes: int) -> str:
-    """IEC byte string, 3 significant digits: ``60 KiB``, ``147 MiB``, ``12 B``."""
+    """IEC bytes, three significant digits kept: ``60.0 KiB``, ``15.0 MiB``."""
 
     value = float(nbytes)
     for unit in _IEC_UNITS:
-        if value < 1024 or unit == _IEC_UNITS[-1]:
+        rounded = float(f"{value:.3g}")
+        if abs(rounded) < 1000 or unit == _IEC_UNITS[-1]:
             if unit == "B":
                 return f"{int(value)} B"
-            return f"{value:.3g} {unit}"
+            return f"{format_sig(rounded, 3)} {unit}"
         value /= 1024
     return f"{int(nbytes)} B"
 
@@ -79,11 +78,9 @@ def format_duration(seconds: float) -> str:
         return "0 s"
     magnitude = abs(seconds)
     for unit, scale in _DURATION_UNITS:
-        if magnitude >= scale or unit == "ns":
-            scaled = seconds / scale
-            if abs(scaled) >= 1000:
-                return f"{scaled:.0f} {unit}"
-            return f"{scaled:.3g} {unit}"
+        if magnitude >= scale * 0.9995 or unit == "ns":
+            rounded = float(f"{seconds / scale:.3g}")
+            return f"{format_sig(rounded, 3)} {unit}"
     return f"{seconds:.3g} s"
 
 

@@ -118,7 +118,7 @@ def test_op_card_shows_location_and_text(toy) -> None:
     function = "Toy.forward" if sys.version_info >= (3, 11) else "forward"
     assert (frame.func_qualname or frame.func_name) == function
     assert f"{path.name}:{line} in {function}" in card
-    assert "  code   z = torch.relu(y)  # the relu line" in card
+    assert "  code      z = torch.relu(y)  # the relu line" in card
 
 
 def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
@@ -132,8 +132,9 @@ def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
     assert shown.file == str(path)
     assert shown.line_number == _line_of(path, "y = self.linear(x)")
     card = str(linear)
-    assert "where  module linear:1, " in card
-    assert "  code   y = self.linear(x)" in card
+    assert "  module    linear" in card
+    assert f"  source    {path.name}:{shown.line_number} in " in card
+    assert "  code      y = self.linear(x)" in card
 
 
 def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
@@ -146,7 +147,7 @@ def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
     assert frame.code_context is None
     assert frame._source_text_state()[1] == "source changed on disk since capture"
     assert repr(frame).startswith("FuncCallLocation:")
-    assert "  code   (source changed on disk since capture)" in str(relu)
+    assert "  code      (source changed on disk since capture)" in str(relu)
 
 
 def test_missing_file_shows_reason(toy) -> None:
@@ -158,7 +159,7 @@ def test_missing_file_shows_reason(toy) -> None:
     assert frame.call_line == ""
     assert frame._source_text_state()[1] == "source file not found"
     assert repr(frame).startswith("FuncCallLocation:")
-    assert "  code   (source file not found)" in str(relu)
+    assert "  code      (source file not found)" in str(relu)
 
 
 def test_save_source_context_snapshots_at_capture(toy) -> None:
@@ -174,7 +175,7 @@ def test_save_source_context_snapshots_at_capture(toy) -> None:
     frame = relu.code_context[-1]
     assert frame.source_loading_enabled is True
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
-    assert "  code   z = torch.relu(y)  # the relu line" in str(relu)
+    assert "  code      z = torch.relu(y)  # the relu line" in str(relu)
 
 
 def test_default_capture_stores_no_source_text(toy) -> None:

@@ -46,7 +46,7 @@ Op relu_1: float32 [8] on cpu, min 0.000 max 0.5000 mean 0.1429 sd 0.1821
 The card behind it (`print(op)`) adds `position`, `module`, `output`,
 `values`, `graph`, `function`, and `source` rows, then the `more` exits.
 The source row is a captured location, not a read of the current file.
-Counts in card rows are exact and byte quantities use IEC units (`60 KiB`).
+Counts in card rows are exact and byte quantities use IEC units (`60.0 KiB`).
 Durations use compact units (`4.02 ms`); `Flops` and `Macs` keep their spelling.
 
 The value words use four significant digits, including trailing zeros.
@@ -86,7 +86,7 @@ First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
 >>> _ = log.health_facts
 >>> log
-Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf FOUND (.nonfinite_ops)
+Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf found (see .nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --

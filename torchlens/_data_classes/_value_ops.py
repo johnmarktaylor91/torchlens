@@ -12,6 +12,7 @@ from .._utils._display_numbers import format_duration, format_exact_count, forma
 from .._utils.fail_open import fail_open
 from ._value_state import (
     METADATA_ONLY,
+    _count_words,
     edited_token,
     metadata_text,
     payload_facts,
@@ -54,8 +55,11 @@ def _graph(op: Any) -> str:
     downstream = getattr(op, "output_descendants", None)
     if downstream is not None:
         count = len(downstream)
-        noun = "output" if count == 1 else "outputs"
-        graph += f" ({format_exact_count(count)} {noun} downstream)"
+        outputs = getattr(trace_of(op), "output_layers", None)
+        if outputs is not None:
+            graph += f" (reaches {format_exact_count(count)} of {_count_words(len(outputs), 'model output')})"
+        else:
+            graph += f" ({_count_words(count, 'model output')} downstream)"
     return graph
 
 
@@ -83,6 +87,16 @@ def _source(op: Any) -> str:
     return f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
 
 
+def _code(op: Any) -> str:
+    """Use the fingerprint-checked source helper, retaining missing/edited reasons."""
+
+    frame = display_frame(getattr(op, "code_context", None))
+    if frame is None:
+        return ""
+    view, reason = frame._source_text_state()
+    return str(view[3]).strip() if view is not None else f"({reason})"
+
+
 def _module(op: Any) -> str:
     """Stored module address without a redundant single-call suffix."""
 
@@ -102,7 +116,7 @@ def _output(op: Any) -> str:
     """Captured shape count and byte quantity without a payload read."""
 
     shape = getattr(op, "shape", None)
-    parts = [f"{format_exact_count(math.prod(shape))} values"] if shape is not None else []
+    parts = [_count_words(math.prod(shape), "value")] if shape is not None else []
     memory = getattr(op, "activation_memory", None)
     if memory is not None:
         parts.append(format_iec_bytes(int(memory)))
@@ -139,7 +153,14 @@ def op_rows(op: Any, *, kind: str = "operation") -> list[tuple[str, str]]:
     ]
     if not honesty:
         rows.append(("values", value_words(stats)))
-    rows.extend((("graph", _graph(op)), ("function", _function(op)), ("source", _source(op))))
+    rows.extend(
+        (
+            ("graph", _graph(op)),
+            ("function", _function(op)),
+            ("source", _source(op)),
+            ("code", _code(op)),
+        )
+    )
     return rows
 
 
@@ -175,7 +196,7 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     ops = _first_ops(layer)
     passes = getattr(layer, "num_passes", 1)
     if passes <= 1:
-        return op_rows(ops[0], kind="layer") if ops else []
+        return op_rows(ops[0]) if ops else []
     rows = []
     for op in ops:
         _, stats, honesty = payload_facts(op)

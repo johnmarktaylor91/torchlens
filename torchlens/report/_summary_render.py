@@ -5,7 +5,7 @@ then the table immediately; ONE thin rule under the header and above the
 footer; NO vertical borders; merged "name (Class)" column with the
 attribute name primary; text left-aligned, numerics right-aligned;
 indentation for hierarchy; a labeled five-subject footer block; one
-contextual "More:" line. Designed IN ASCII (the modal rendering);
+contextual "more" line. Designed IN ASCII (the modal rendering);
 unicode is an upgrade applied strictly through the declared glyph table.
 
 The renderer is a pure function of typed data -- it never reads the trace
@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
 
+from .._utils._display_numbers import format_count, format_iec_bytes, plural
+from ._health import _health_text
 from ._summary_charset import assert_no_escape_bytes, degrade
 from ._summary_columns import ATTENTION_FULL_SQUARE_NOTE, OptimizerStateFacts
 from ._summary_config import ColumnSpec, SummaryConfig
@@ -114,26 +116,21 @@ def _commas(value: int | None) -> str:
 
 
 def _bytes_human(value: int | None) -> str:
-    """Binary-ish byte formatting (decimal units, B suffix)."""
+    """The shared IEC byte spelling, retaining a measured-zero disclosure."""
 
     if value is None:
         return "unavailable"
     if value == 0:
         return "0 B (measured)"
-    magnitude = float(value)
-    for suffix in ("B", "KB", "MB", "GB", "TB"):
-        if abs(magnitude) < 1000:
-            return f"{magnitude:.1f}".rstrip("0").rstrip(".") + f" {suffix}"
-        magnitude /= 1000.0
-    return f"{magnitude:.1f} PB"
+    return format_iec_bytes(value)
 
 
 def _format_number(value: int | None, units: str) -> str:
-    """Route a count/flops cell through the configured unit style."""
+    """Route a count cell through the shared precision or exact unit style."""
 
     if value is None:
         return "?"
-    return _human(value) if units == "human" else _commas(value)
+    return format_count(value) if units == "human" else _commas(value)
 
 
 def _name_cell(row: ViewRow) -> str:
@@ -143,7 +140,7 @@ def _name_cell(row: ViewRow) -> str:
     if row.kind == "fold":
         label = f"{row.name} ({row.class_name} ×{row.fold_count})"
     elif row.kind == "elision":
-        label = f"{row.name} ({row.elided_count} rows elided)"
+        label = f"{row.name} ({plural(row.elided_count, 'row')} elided)"
     elif row.kind == "op":
         label = row.name
     elif row.class_name:
@@ -280,7 +277,7 @@ def _flops_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
     if value is None:
         return "?"
     mark = ATTENTION_MARK if row.attention_full_square else ""
-    return _format_number(value, config.units) + mark
+    return (_human(value) if config.units == "human" else _commas(value)) + mark
 
 
 def _flops_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
@@ -318,7 +315,9 @@ _CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]]
     "params_trainable": lambda row, config, totals: _count_cell(row.params_trainable, config),
     "flops": _flops_cell,
     "flops_pct": _flops_pct_cell,
-    "macs": lambda row, config, totals: _format_number(row.macs_owned, config.units),
+    "macs": lambda row, config, totals: (
+        _human(row.macs_owned) if config.units == "human" else _commas(row.macs_owned)
+    ),
     "train": lambda row, config, totals: {
         "all": "yes",
         "none": "no",
@@ -527,11 +526,11 @@ def render_summary_pair(
     )
     lines.append(f"Memory   {memory}")
     graph = (
-        f"{facts.compute_ops} ops, {len(rows)} rows shown"
-        f" | {facts.tracked_tensor_rows} tracked tensor rows"
+        f"{plural(facts.compute_ops, 'op')}, {plural(len(rows), 'row')} shown"
+        f" | {plural(facts.tracked_tensor_rows, 'tracked tensor row')}"
     )
     if view.root_owned_ops:
-        graph += f" | {len(view.root_owned_ops)} root-level ops in footer totals"
+        graph += f" | {plural(len(view.root_owned_ops), 'root-level op')} in footer totals"
     if facts.passes_max > 1:
         graph += f" | up to {facts.passes_max} passes"
     lines.append(f"Graph    {graph}")
@@ -540,12 +539,12 @@ def render_summary_pair(
         capture_bits.append(facts.outcome_status)
     if facts.capture_verified is True:
         capture_bits.append("verified")
-    health = f"health {facts.health_verdict.upper().replace('_', '-')}"
+    health = _health_text(facts.health_verdict)
     capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
-    lines.extend(_legend_lines(rows, columns))
+    lines.extend(_legend_lines(rows, columns, config.flop_convention))
     lines.append(
-        "More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
+        "more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
     )
     unicode_text = assert_no_escape_bytes("\n".join(lines))
     return degrade(unicode_text), unicode_text
@@ -557,11 +556,13 @@ def _shape_str(shape: tuple[int, ...]) -> str:
     return "(" + ", ".join(str(dim) for dim in shape) + ")"
 
 
-def _legend_lines(rows: tuple[ViewRow, ...], columns: tuple[ColumnSpec, ...]) -> list[str]:
+def _legend_lines(
+    rows: tuple[ViewRow, ...], columns: tuple[ColumnSpec, ...], flop_convention: str = "fma2"
+) -> list[str]:
     """Explain every mark used by the table in one footer line."""
 
     # One pass over the three independent marks keeps their shared footer ordering explicit.
-    legend: list[str] = []
+    legend: list[str] = ["1 MAC = 1 FLOP" if flop_convention == "fma1" else "1 MAC = 2 FLOPs"]
     if any(row.tied for row in rows):
         legend.append("* tied parameters (identity counted once; see Params)")
     flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}

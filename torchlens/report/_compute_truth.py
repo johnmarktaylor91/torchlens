@@ -30,6 +30,7 @@ from .._quantities import Flops, Macs
 from .._record_type import record_type
 from .._utils._display_card import render_card
 from .._utils._display_constructor import clipped, display_guard
+from .._utils._display_numbers import plural
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -273,7 +274,7 @@ class ComputeAggregation:
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
-        return clipped(f"ComputeAggregation {self.scope}: {len(self.rows)} rows")
+        return clipped(f"ComputeAggregation {self.scope}: {plural(len(self.rows), 'row')}")
 
     @display_guard
     def __str__(self) -> str:
@@ -284,7 +285,7 @@ class ComputeAggregation:
             [
                 ("total", str(self.partition_total)),
                 ("macs", str(self.macs_total)),
-                ("convention", self.convention),
+                ("rule", "1 MAC = 2 FLOPs" if self.convention == "fma2" else self.convention),
                 ("scope", self.scope),
             ],
             (".rows", ".coverage", ".by_dtype"),

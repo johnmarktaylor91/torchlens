@@ -213,7 +213,9 @@ def test_sdpa_hint_fires_only_without_softmax() -> None:
     fused_log = tl.trace(FusedAttention(), torch.randn(2, 3, 4, 8))
     hint = sdpa_attention_hint(fused_log)
     assert hint is not None and "attn_implementation='eager'" in hint
-    assert "attention weights were never materialized" in fused_log._repr_html_()
+    notice = "attention weights not materialized (fused attention)"
+    assert notice in fused_log._repr_html_()
+    assert notice in str(fused_log)
 
     class EagerAttention(nn.Module):
         """Attention with an explicit softmax -- the hint must NOT fire."""
