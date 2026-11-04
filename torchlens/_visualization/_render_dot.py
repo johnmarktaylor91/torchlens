@@ -25,7 +25,7 @@ from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
 from ._graph_shell import build_graphviz_shell
 from ._header_block import graph_caption_html
-from ._pass_label_placement import place_forward_pass_labels
+from ._pass_label_placement import forward_sources
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -963,7 +963,7 @@ def _emit_and_finish_forward(
             source_override = _strip_sibling_rank_groups(dot.source)
             _warn_sibling_order_fallback_once(exc)
     render_timeout = 120
-    final_source = place_forward_pass_labels(dot, source_override, trace, render_timeout)
+    sources = forward_sources(dot, source_override, trace, render_timeout)
     if in_notebook() and not target.save_only:
         try:
             from IPython.display import SVG, display  # #72: lazy import
@@ -980,7 +980,7 @@ def _emit_and_finish_forward(
         # every CLI path was already bounded at ``render_timeout`` with a
         # typed error. Timeout/failure map to the same typed raises.
         with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as notebook_source_file:
-            notebook_source_file.write(final_source)
+            notebook_source_file.write(sources[1])
             notebook_source_path = notebook_source_file.name
         try:
             notebook_image_root = getattr(trace, "_visualizer_dir", None)
@@ -1018,7 +1018,7 @@ def _emit_and_finish_forward(
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
     try:
-        return _publish_forward_render(trace, context, target, final_source, speculative)
+        return _publish_forward_render(trace, context, target, sources, speculative)
     finally:
         if speculative is not None:
             shutil.rmtree(speculative.scratch_dir, ignore_errors=True)
@@ -1066,7 +1066,7 @@ def _publish_forward_render(
     trace: "Trace",
     context: _ForwardRenderContext,
     target: RenderTarget,
-    final_source: str,
+    sources: tuple[str, str],
     speculative: SpeculativeRender | None,
 ) -> Any:
     """Write the DOT source and publish the rendered artifact atomically.
@@ -1075,10 +1075,10 @@ def _publish_forward_render(
     ----------
     trace, context, target:
         Render state (``context.dot`` is the Graphviz graph).
-    final_source:
-        The DOT text to publish.
+    sources:
+        The DOT to return, and the text the image is rendered from (``forward_sources``).
     speculative:
-        Verifier layouts that may already hold the artifact for ``final_source``.
+        Verifier layouts that may already hold the artifact for the image text.
 
     Returns
     -------
@@ -1094,7 +1094,7 @@ def _publish_forward_render(
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
-        source_file.write(final_source)
+        source_file.write(sources[1])
     with _timed_phase(trace, "render_graphviz_forward"):
         try:
             rendered_path = f"{target.outpath}.{target.fileformat}"
@@ -1120,7 +1120,7 @@ def _publish_forward_render(
                 # dimensions are fiction; it was silently discarded).
                 with atomic_render_target(rendered_path) as temp_rendered_path:
                     reusable = (
-                        speculative.reusable_for(final_source) if speculative is not None else None
+                        speculative.reusable_for(sources[1]) if speculative is not None else None
                     )
                     if reusable is not None:
                         # the verifier already laid out exactly this
@@ -1136,7 +1136,7 @@ def _publish_forward_render(
                                 target.fileformat,
                                 render_timeout,
                                 render_image_root,
-                                final_source,
+                                sources[1],
                                 context.highlighter,
                             ),
                         )
@@ -1168,7 +1168,7 @@ def _publish_forward_render(
             )
         except subprocess.CalledProcessError as error:
             _raise_graphviz_failure("forward graph", source_path, error)
-    return final_source
+    return sources[0]
 
 
 @dataclass(frozen=True)

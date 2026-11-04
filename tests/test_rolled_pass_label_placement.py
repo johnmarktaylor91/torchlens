@@ -36,6 +36,7 @@ from torchlens._visualization._pass_label_placement import (
     _shift_label,
     choose_pass_label_placements,
     has_pass_labels,
+    place_pass_labels,
 )
 
 #: how far (pt) a pass label may sit from its own edge's end and still touch it
@@ -92,7 +93,11 @@ def _label(line: str, kind: str) -> str | None:
 
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_path: Path) -> None:
-    dot = _rolled_dot(direction, tmp_path)
+    drawn = _rolled_dot(direction, tmp_path)
+    # the returned DOT is the same under every Graphviz build; placement goes only into
+    # the text the image is rendered from
+    assert "labelangle=" not in drawn and "labeldistance=" not in drawn
+    dot = place_pass_labels(drawn, engine="dot", timeout=60)
     arc = _edge(dot, "linear_2_6", "linear_1_4")
     entry = _edge(dot, "neg_1_3", "linear_1_4")
     exit_ = _edge(dot, "linear_2_6", "output_1")
@@ -350,7 +355,9 @@ def test_a_failed_placement_layout_leaves_the_labels_unplaced(
         raise subprocess.CalledProcessError(1, cmd)
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", failing_json)
-    dot = _rolled_dot("bottomup", tmp_path)
+    drawn = _rolled_dot("bottomup", tmp_path)
+    dot = place_pass_labels(drawn, engine="dot", timeout=60)
+    assert dot == drawn
     arc = _edge(dot, "linear_2_6", "linear_1_4")
     assert (_label(arc, "taillabel"), _label(arc, "headlabel")) == ("Out 1", "In 2")
     assert "labelangle=" not in arc

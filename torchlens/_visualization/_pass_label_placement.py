@@ -11,7 +11,8 @@ takes the candidate placement whose labels clear every obstacle and sit at the e
 of their own edge, clearly nearer it than any other edge at that node.  A label the
 shared pair still leaves colliding, astray or ambiguous moves on its own by blank
 padding on one side of its HTML table.  The choices are written onto the edge
-statement before the real render.
+statements of the text the image is rendered from only: they depend on the installed
+Graphviz build, so the DOT a drawing returns or saves never carries them.
 """
 
 from __future__ import annotations
@@ -137,21 +138,25 @@ def place_pass_labels(source: str, *, engine: str, timeout: float, cwd: str | No
     return "".join(choose_pass_label_placements(lines, layout))
 
 
-def place_forward_pass_labels(
+def forward_sources(
     dot: Any, source_override: str | None, trace: Any, timeout: float
-) -> str:
-    """Return the forward render's final source with its pass labels placed.
+) -> tuple[str, str]:
+    """Return the forward render's DOT and the text its image is rendered from.
 
-    ``source_override`` is the sibling-ordering verifier's source when it rewrote
-    the graph; Graphviz runs in the trace's visualizer directory, so the extra
-    layout resolves relative image paths the same way the render does.
+    The DOT is ``source_override`` (the sibling-ordering verifier's source when it
+    rewrote the graph) or ``dot.source``; it is what a drawing returns, identical under
+    every Graphviz build or none.  Only the image text carries the pass-label
+    placement, which reads the installed Graphviz's layout.  Graphviz runs in the
+    trace's visualizer directory, so the extra layout resolves relative image paths
+    the same way the render does.
     """
 
     source = source_override if source_override is not None else dot.source
     cwd = trace._visualizer_dir
-    return place_pass_labels(
+    placed = place_pass_labels(
         source, engine=dot.engine, timeout=timeout, cwd=str(cwd) if cwd else None
     )
+    return source, placed
 
 
 def pass_label_layout(

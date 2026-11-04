@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils import _call_site
+from torchlens._visualization._pass_label_placement import place_pass_labels
 from torchlens._visualization._render_nodes import compute_default_node_lines
 
 # Session-private output root (conftest exports it before collection); the
@@ -832,7 +833,9 @@ def test_recurrent_self_loop_merges_in_out_into_one_label_placed_at_its_node(
     """
 
     recurrent_trace = _trace(ReusedReluLoop())
-    recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", depth=1000)
+    drawn = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", depth=1000)
+    assert "labelangle=" not in drawn  # placement goes only into the image's source
+    recurrent_dot = place_pass_labels(drawn, engine="dot", timeout=60)
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
@@ -931,7 +934,9 @@ def test_varying_forward_edges_label_their_partial_ends_at_the_node(tmp_path: Pa
     labeldistance/labelangle; unlabelled body edges carry none.
     """
 
-    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", depth=1000)
+    drawn = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", depth=1000)
+    assert "labelangle=" not in drawn  # placement goes only into the image's source
+    dot = place_pass_labels(drawn, engine="dot", timeout=60)
 
     body_out = _dot_edge_attrs(dot, "linear_1_1", "relu_1_2")
     assert len(body_out) == 1
