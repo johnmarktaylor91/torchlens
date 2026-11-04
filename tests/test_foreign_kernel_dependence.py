@@ -565,7 +565,8 @@ def _fa2_siblings(trace: Any) -> dict[int, Any]:
     by_index = {op.multi_output_index: op for op in ops}
     assert set(by_index) == {0, 1, 2, 3}, by_index
     for op in ops:
-        assert op.func_name != FOREIGN_FUNCTION_FUNC_NAME and not op.transform_config
+        assert op.func_name != FOREIGN_FUNCTION_FUNC_NAME
+        assert "function_module" not in op.transform_config, op.transform_config
     return by_index
 
 

@@ -16,10 +16,11 @@ unmapped position, a position outside the row's ``positions``, or any declared-d
 position. Output 0 of FlashAttention 4 has no row, so its every edge stays tested.
 
 A native custom op (``_foreign_data._KNOWN_NATIVE_CUSTOM_OPS``: FlashAttention 2's
-``flash_attn::_flash_attn_forward``) has no boundary op and no ``transform_config``: TorchLens
-records it as one native op per output. It is identified by the operator its replay callable
-calls plus its recorded ``func_name``; the same projection then applies. A callable that is not
-a recorded ``torch.ops`` operator (including none, on a loaded bundle) stays strict.
+``flash_attn::_flash_attn_forward``) has no boundary op and its ``transform_config`` names no
+Function: TorchLens records it as one native op per output. It is identified by the operator
+its replay callable calls plus its recorded ``func_name``; the same projection then applies. A
+callable that is not a recorded ``torch.ops`` operator (including none, on a loaded bundle)
+stays strict.
 
 Registered in ``exemptions.CUSTOM_EXEMPTION_CHECKS`` under ``autogradfunction`` and
 ``_flash_attn_forward``.
@@ -62,9 +63,9 @@ def declared_output_dependence(layer: Op) -> OutputDependence | None:
     if not isinstance(output_index, int):
         return None
     config = getattr(layer, "transform_config", None)
-    if isinstance(config, dict) and config:
+    if isinstance(config, dict) and "function_module" in config:
         return _boundary_dependence(config, output_index)
-    # Native ops record an empty ``transform_config``.
+    # A native op's ``transform_config`` names no Function (annotations at most).
     return _native_dependence(layer, output_index)
 
 
