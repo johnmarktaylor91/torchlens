@@ -1011,8 +1011,8 @@ def _modules_with_facet(log: Any, facet_name: str) -> list[str]:
 
     return [
         str(module.address)
-        for module in log.modules
-        if getattr(module, "address", None) != "self" and module.facets.has(facet_name)
+        for module in log.modules_with_facet(facet_name)
+        if getattr(module, "address", None) != "self"
     ]
 
 

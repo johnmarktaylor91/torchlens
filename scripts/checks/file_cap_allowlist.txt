@@ -1023,7 +1023,7 @@ torchlens/debug/_determinism.py::check_determinism	138
 torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
-torchlens/debug/_gradients.py::grad_health	66
+torchlens/debug/_gradients.py::grad_health	65
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	145
 torchlens/debug/_graph.py::_compare_rows	126
 torchlens/debug/_graph.py::dead_neurons_rows	76

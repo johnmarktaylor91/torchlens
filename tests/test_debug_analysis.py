@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from inspect import signature
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -201,6 +202,30 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
     assert non_torch.attrs["message"] == "torch-only"
     assert params["vanishing_threshold"].default == 1e-7
     assert params["exploding_threshold"].default == 1e4
+
+
+def test_grad_health_default_basis_announces_no_deprecation_window() -> None:
+    """The default basis stays total_norm and no attrs key or doc announces a planned flip.
+
+    Interim-phase policy is remove-and-rename, never a deprecation window, so the
+    default is simply the default: no ``basis_notice`` in attrs and no window in the
+    glossary row.
+    """
+
+    torch.manual_seed(4)
+    trace = tl.trace(
+        TinyMlp(), torch.randn(2, 4), capture=tl.options.CaptureOptions(save_grads=True)
+    )
+    trace.backward(trace[trace.output_layers[0]].out.sum())
+
+    attrs = tl.debug.grad_health(trace).to_pandas().attrs
+    glossary = (Path(__file__).resolve().parents[1] / "docs/reference/glossary.md").read_text()
+    basis_rows = [line for line in glossary.splitlines() if line.startswith("| `basis=` |")]
+
+    assert signature(tl.debug.grad_health).parameters["basis"].default == "total_norm"
+    assert attrs["basis"] == "total_norm"
+    assert "basis_notice" not in attrs
+    assert basis_rows and not any("deprecation" in row for row in basis_rows)
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_recompute.py.
