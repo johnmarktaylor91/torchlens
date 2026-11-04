@@ -30,6 +30,7 @@ from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
 from .._record_type import record_type
 from ..intervention.types import ParentRef
+from ._module_containment import _log_module_hierarchy_info_for_layer
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -348,6 +349,12 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
     for module in mbd["top_level_module_ops"]:
         module_no_pass = module.rsplit(":", 1)[0]
         if module_no_pass == "self":
+            # A bound-method root's owner call: the modules it called directly
+            # are the top-level modules, as under a plain trace of the owner.
+            for child in mbd["module_pass_children"].get(module, []):
+                child_no_pass = child.rsplit(":", 1)[0]
+                if child_no_pass not in mbd["top_level_modules"]:
+                    mbd["top_level_modules"].append(child_no_pass)
             continue
         if module_no_pass not in mbd["top_level_modules"]:
             mbd["top_level_modules"].append(module_no_pass)
@@ -684,70 +691,6 @@ def _rename_label_dataclass(value: Any, mapping: dict[str, str]) -> Any:
     if isinstance(value, str):
         return mapping.get(value, value)
     return value
-
-
-def _log_module_hierarchy_info_for_layer(
-    self: "Trace", layer_entry: Op, _shadow_sets: dict[str, Any]
-) -> None:
-    """Populate module hierarchy data for a single layer in _module_build_data.
-
-    For each module in the layer's modules, records:
-    - Module tensor counts (per-module and per-pass).
-    - Module-to-layer mappings.
-    - Top-level module ops and parent-child relationships.
-    - Module addresses and pass labels.
-
-    Uses shadow sets for O(1) dedup checks (the primary lists maintain insertion
-    order for downstream consumers, but linear ``in`` checks on lists are O(n)).
-
-    Args:
-        layer_entry: Log entry to process.
-        _shadow_sets: Dict of shadow sets mirroring _module_build_data lists.
-    """
-    _module_labels_seen = _shadow_sets["module_layers"]
-    _module_call_labels_seen = _shadow_sets["module_pass_layers"]
-    _top_level_module_ops_seen = _shadow_sets["top_level_module_ops"]
-    _module_pass_children_seen = _shadow_sets["module_pass_children"]
-    _addresses_seen = _shadow_sets["addresses"]
-    _module_ops_seen = _shadow_sets["module_ops"]
-    mbd = self._module_capture_ws.module_build_data
-
-    parent_call_label = None
-    layer_label = layer_entry.layer_label
-    op_label = layer_entry.label
-    for module_index, raw_module_call_label in enumerate(layer_entry.modules):
-        if isinstance(raw_module_call_label, str):
-            module_name, module_pass = raw_module_call_label.rsplit(":", 1)
-            module_pass = int(module_pass)  # type: ignore[assignment]
-        else:
-            module_name, module_pass = raw_module_call_label
-        module_pass_nice_label = f"{module_name}:{module_pass}"
-        mbd["module_num_tensors"][module_name] += 1
-        mbd["module_call_index_tensors"][module_pass_nice_label] += 1
-        if layer_label not in _module_labels_seen[module_name]:
-            _module_labels_seen[module_name].add(layer_label)
-            mbd["module_layers"][module_name].append(layer_label)
-        if op_label not in _module_call_labels_seen[module_pass_nice_label]:
-            _module_call_labels_seen[module_pass_nice_label].add(op_label)
-            mbd["module_pass_layers"][module_pass_nice_label].append(op_label)
-        if (module_index == 0) and (module_pass_nice_label not in _top_level_module_ops_seen):
-            _top_level_module_ops_seen.add(module_pass_nice_label)
-            mbd["top_level_module_ops"].append(module_pass_nice_label)
-        else:
-            if (parent_call_label is not None) and (
-                module_pass_nice_label not in _module_pass_children_seen[parent_call_label]
-            ):
-                _module_pass_children_seen[parent_call_label].add(module_pass_nice_label)
-                mbd["module_pass_children"][parent_call_label].append(module_pass_nice_label)
-        parent_call_label = module_pass_nice_label
-        if mbd["module_num_calls"][module_name] < module_pass:
-            mbd["module_num_calls"][module_name] = module_pass
-        if module_name not in _addresses_seen:
-            _addresses_seen.add(module_name)
-            mbd["addresses"].append(module_name)
-        if module_pass_nice_label not in _module_ops_seen:
-            _module_ops_seen.add(module_pass_nice_label)
-            mbd["module_ops"].append(module_pass_nice_label)
 
 
 def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:

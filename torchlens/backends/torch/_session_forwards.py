@@ -25,6 +25,7 @@ from torch import nn
 from ... import _state
 from ..._utils._module_call_dispatch import forward_entered_through_module_call
 from ._tl import get_module_meta, is_forward_call_decorated, mark_forward_call_decorated
+from .bound_root import instrumented_modules
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -218,7 +219,8 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Trace whose session owns the wrappers; the install record lives in
         ``trace._module_capture_ws.session_forward_wrappers``.
     model:
-        Root module of the capture; its own ``forward`` stays undecorated.
+        Root module of the capture; its own ``forward`` stays undecorated. A
+        bound-method root's owner is wrapped too (``instrumented_modules``).
 
     Returns
     -------
@@ -231,9 +233,7 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
 
     register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")
     installed = trace._module_capture_ws.session_forward_wrappers
-    for module in model.modules():
-        if module is model:
-            continue
+    for module in instrumented_modules(model):
         # Heal a decoration a cut-short cleanup or a mid-session shallow copy left.
         restore_undecorated_forward(module)
         if not hasattr(module, "forward"):

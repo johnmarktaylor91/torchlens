@@ -58,6 +58,7 @@ from ._conditional_records import (
 )
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from ._root_module_log import _recorded_root_calls, _root_call_build_inputs, _root_call_children
 from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
@@ -185,12 +186,18 @@ def _build_root_module_log(
     The root module encomops all layers and params. Its address_children are
     only direct children (no dots in address), while call_children may include
     grandchildren called directly (e.g., self.level21.level12(x)).
+
+    The root's calls: one synthesized ``self:1`` spanning the whole capture
+    when the root's forward ran undecorated (a plain module root), else the
+    recorded ``self:1`` .. ``self:N`` (a bound-method root whose owner the
+    bound method called N times).
     """
     from .._data_classes.param import ParamAccessor
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_capture_ws.module_metadata)
     root_meta = module_metadata.get("self", {})
     root_layers = list(self._layer_logs.keys())
+    recorded_calls = _recorded_root_calls(mbd)
 
     root_param_dict = {pl.address: pl for pl in self._param_logs}
     root_params = ParamAccessor(root_param_dict)
@@ -234,9 +241,9 @@ def _build_root_module_log(
         call_parent=None,
         call_children=[m for m in mbd["top_level_modules"] if m != "self"],
         call_depth=0,
-        num_calls=1,
+        num_calls=max(1, recorded_calls),
         ops={},
-        call_labels=["self:1"],
+        call_labels=[f"self:{call_index}" for call_index in range(1, max(1, recorded_calls) + 1)],
         layer_labels=root_layers,
         params=root_params,
         num_params=root_num_params,
@@ -256,9 +263,37 @@ def _build_root_module_log(
         _source_trace=self,
     )
 
+    if recorded_calls:
+        child_to_parent, input_layers_by_call = _root_call_build_inputs(self, mbd)
+        root_ops, _labels = _build_submodule_call_logs(
+            self,
+            "self",
+            recorded_calls,
+            pass_dict,
+            mbd,
+            child_to_parent,
+            all_addresses=list(root_meta.get("all_addresses", ["self"])),
+            module_class=root_meta.get("cls"),
+            pass_input_layers_by_call=input_layers_by_call,
+        )
+        for root_call in root_ops.values():
+            root_call.call_parent = None  # the root's own calls have no calling module
+        root_module.ops = root_ops
+    else:
+        root_module.ops[1] = _synthesized_root_call(self, mbd, root_meta)
+        pass_dict["self:1"] = root_module.ops[1]
+    root_module._sync_boundary_fields_from_calls()
+    return root_module
+
+
+def _synthesized_root_call(
+    self: Trace, mbd: dict[str, Any], root_meta: dict[str, Any]
+) -> ModuleCall:
+    """The synthesized ``self:1`` spanning the whole capture of a plain module root."""
+
     root_pre_hook_provenance = _pre_hook_provenance_for_call(self, "self:1")
     root_args, root_kwargs = self._module_capture_ws.root_forward_args or (None, None)
-    root_pass = ModuleCall(
+    return ModuleCall(
         address="self",
         call_index=1,
         label="self:1",
@@ -284,11 +319,6 @@ def _build_root_module_log(
         module_call_stack=[],
         _source_trace=self,
     )
-    root_module.ops[1] = root_pass
-    root_module._sync_boundary_fields_from_calls()
-    pass_dict["self:1"] = root_pass
-
-    return root_module
 
 
 def _pre_hook_provenance_for_call(
@@ -342,37 +372,6 @@ def _finalize_snapshot_source_labels(
         for observation in snapshot.tensor_observations
     )
     return replace(snapshot, tensor_observations=observations)
-
-
-def _root_call_children(mbd: dict[str, Any]) -> list[str]:
-    """Resolve the root ``self:1`` ModuleCall's direct call children.
-
-    Two capture shapes feed this:
-
-    * Function-root traces (``self`` is synthetic and never appears in an op's
-      module stack): the direct children are the outermost real module calls,
-      recorded in ``top_level_module_ops`` while ``module_pass_children['self:1']``
-      stays empty.
-    * Object-module / explicit-self traces (``self`` is itself a traced module,
-      so ops carry ``['self:1', child:1, ...]`` stacks): the outermost call IS
-      ``self:1`` itself, so ``top_level_module_ops`` collapses to ``['self:1']``
-      and the real direct children land in ``module_pass_children['self:1']``.
-
-    Unioning both sources (preserving order, dropping the self-reference) yields
-    the correct children in both shapes. Previously only ``top_level_module_ops``
-    was consulted, so the explicit-self shape silently dropped every child of
-    ``self:1`` -- an asymmetric call-tree the module-hierarchy invariant rightly
-    flags (parent lists no children while children point back to ``self:1``).
-    """
-
-    children: list[str] = []
-    for label in mbd.get("top_level_module_ops", []):
-        if label != "self:1" and label not in children:
-            children.append(label)
-    for label in mbd.get("module_pass_children", {}).get("self:1", []):
-        if label != "self:1" and label not in children:
-            children.append(label)
-    return children
 
 
 def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module") -> None:
@@ -879,9 +878,25 @@ def _build_module_logs(self: "Trace") -> None:
     pass_dict: dict[str, ModuleCall] = {}  # "addr:pass" -> ModuleCall
     module_order = []  # ordered by first appearance
 
-    # --- Build root Module ("self") ---
     root_module = _build_root_module_log(self, pass_dict, mbd)
     module_dict["self"] = root_module
+    # Pre-compute reverse mapping: child_call_label -> parent_call_label
+    _child_to_parent_pass = {}
+    for parent_call_label, children in mbd["module_pass_children"].items():
+        for child_label in children:
+            _child_to_parent_pass[child_label] = parent_call_label
+
+    # Pre-compute input layers for each module call.  Large traces may have
+    # tens of thousands of ModuleCalls; scanning every Op once per call is
+    # quadratic and dominates validation postprocessing.
+    _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
+    for te in self._layer_list:
+        # B3R7-R05-1: iterate the fed-call fact directly; the old
+        # ``module_call_stack`` emptiness guard was an enter-lane proxy.
+        for call_label in te.input_to_module_calls:
+            _pass_input_layers_by_call[call_label].append(te.layer_label)
+
+    # --- Build root Module ("self") ---
     module_order.append(root_module)
 
     # Pre-compute param_logs grouped by module address
@@ -889,12 +904,6 @@ def _build_module_logs(self: "Trace") -> None:
     for pl in self._param_logs:
         for module_address in pl.all_module_addresses:
             self._param_logs_by_module[module_address].append(pl)
-
-    # Pre-compute reverse mapping: child_call_label -> parent_call_label
-    _child_to_parent_pass = {}
-    for parent_call_label, children in mbd["module_pass_children"].items():
-        for child_label in children:
-            _child_to_parent_pass[child_label] = parent_call_label
 
     # Build alias-to-metadata map for shared modules (same nn.Module instance
     # registered under multiple addresses). _module_metadata stores metadata
@@ -914,16 +923,6 @@ def _build_module_logs(self: "Trace") -> None:
             if hasattr(bl_entry, "address") and bl_entry.address is not None:
                 module_addr = bl_entry.address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
-
-    # Pre-compute input layers for each module call.  Large traces may have
-    # tens of thousands of ModuleCalls; scanning every Op once per call is
-    # quadratic and dominates validation postprocessing.
-    _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in self._layer_list:
-        # B3R7-R05-1: iterate the fed-call fact directly; the old
-        # ``module_call_stack`` emptiness guard was an enter-lane proxy.
-        for call_label in te.input_to_module_calls:
-            _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build ModuleLogs for each submodule ---
     for address in mbd["addresses"]:

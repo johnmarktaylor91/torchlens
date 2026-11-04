@@ -21,8 +21,8 @@ To look inside generation rather than edit it, trace the model's own `generate` 
 forward call `generate` makes is one call of every module, so a module's `num_calls` is the
 number of generated tokens and `module:k` is its output while generating token `k`. Call 1 is the
 prefill, which reads the whole prompt; each later call reads only the newest token, because the
-earlier ones are in the KV cache. The model is the `owner` of the trace's root, so its modules
-are addressed `owner.<address>`.
+earlier ones are in the KV cache. Module addresses are the model's own, as in a plain trace of
+the model; the model itself is the root `self`, called once per token.
 
 ```python
 # docs-test: expected=[3, [1, 5, 32], [1, 1, 32]]
@@ -35,7 +35,7 @@ lm = GPT2LMHeadModel(GPT2Config(vocab_size=128, n_embd=32, n_layer=2, n_head=2))
 prompt = torch.tensor([[3, 17, 42, 8, 99]])
 
 trace = tl.trace(lm.generate, prompt, input_kwargs={"max_new_tokens": 3})
-mlp = "owner.transformer.h.1.mlp"
+mlp = "transformer.h.1.mlp"
 RESULT = [
     trace[mlp].num_calls,  # 3: one call per generated token
     list(trace[f"{mlp}:1"].out.shape),  # the prefill: all 5 prompt positions

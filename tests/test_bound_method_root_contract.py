@@ -2,8 +2,9 @@
 
 The ruled root contract, pinned on toy models: ``tl.trace`` accepts an
 ``nn.Module`` OR a bound method of one; the owner resolves via
-``method.__self__`` and registers as a submodule of the TL-authored
-wrapper root; ``stepped_module`` defaults to the owner on bound-method
+``method.__self__`` and is the root ``self`` of the TL-authored wrapper
+root's tree (plain addresses, its own calls ``self:1..self:N``);
+``stepped_module`` defaults to the owner on bound-method
 episode captures; the method is called exactly once; the synthetic root
 discloses TL-authorship (``bound_method:`` root fact + the
 ``Op.tl_authored_root`` marker on the root op record) and reads
@@ -83,7 +84,7 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
 def test_bound_method_called_exactly_once() -> None:
     model = _ToyLM()
     log = tl.trace(model.generate, _ids())
-    assert stashed(log, "generate_calls", module="owner") == 1
+    assert stashed(log, "generate_calls") == 1
     assert log.provenance.root_entry_point.endswith(".generate")
 
 
@@ -110,7 +111,7 @@ def test_episode_stepped_module_defaults_to_owner() -> None:
         episode=tl.options.EpisodeOptions(num_steps=3),
     )
     episode = log.annotations["episode"]
-    assert episode["header"]["stepped_module"] == "owner"
+    assert episode["header"]["stepped_module"] == "self"
     assert len(episode["rows"]) == 3
     assert log.provenance.root_entry_point.endswith("._ToyLM.generate")
 

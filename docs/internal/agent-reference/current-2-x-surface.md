@@ -206,9 +206,11 @@
   Doc of record: `docs/quickstart.md`.
 - BOUND-METHOD ROOTS (F41, by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
   (and `tl.validate`) accept an `nn.Module` OR a bound method of one — `tl.trace(model.generate,
-  ids, ...)`. The owner resolves via `method.__self__` and registers as the `owner` submodule of
-  a TL-authored wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the
-  exact bound method EXACTLY ONCE; module addresses read `owner.*`. The synthetic root reads
+  ids, ...)`. The owner resolves via `method.__self__` and is the root `self` of a TL-authored
+  wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the exact bound
+  method EXACTLY ONCE; the wrapper presents the owner's tree, so module addresses, labels,
+  drawings, exports and saved files read as on a plain trace (no `owner.` prefix) and the owner's
+  own calls are the root's calls `self:1..self:N`. The synthetic root reads
   `type(owner).__name__` (never "method") for `model_class_name`/`model_class_qualname`, writes
   `root_entry_point="bound_method:<owner_qualname>.<method>"`, and marks the root op record
   (output-boundary ops) `tl_authored_root=True` (both persisted, fail-closed load validation).

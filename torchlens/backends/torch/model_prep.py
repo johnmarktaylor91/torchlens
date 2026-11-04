@@ -65,6 +65,13 @@ from ._replacement_op_fields import (
     _copy_field_value_for_replacement,
     _next_untagged_tensor_label,
 )
+from ._root_prep import (
+    _source_start_line,
+    prepare_bound_owner_once,
+    record_model_identity,
+    register_bound_owner_calls,
+    register_session_module_calls,
+)
 from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
     _clear_callable_session_tensor_metadata,
     _clear_container_tree_tensor_metadata,
@@ -93,6 +100,7 @@ from ._tl import (
     set_param_meta,
     set_tensor_label,
 )
+from .bound_root import capture_root_module
 from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
@@ -107,37 +115,7 @@ from .tensor_tracking import _append_module_suffix_to_equivalence_class
 # the session; the next capture rebuilds from the current class definitions.
 _module_class_metadata_cache: dict[type, dict[str, Any]] = {}
 
-# Process-stable memo for source start lines. ``inspect.findsource`` re-tokenizes
-# (functions) or fully AST-parses (classes, CPython < 3.13) the defining file on
-# every call, a fixed multi-ms tax repaid each capture because the per-session
-# cache above is cleared. The start line is a fact of the definition site, so it
-# is keyed on the class object itself or on a function's code object: a
-# reloaded/redefined class or a monkey-patched method is a *new* object and can
-# never be served a stale entry. Weak keys keep dynamically created classes and
-# code collectable; failures are never cached, so exception behavior is unchanged.
-_source_line_cache: "weakref.WeakKeyDictionary[Any, int]" = weakref.WeakKeyDictionary()
 
-
-def _source_start_line(obj: Any) -> int:
-    """Memoized ``inspect.getsourcelines(obj)[1]`` for classes and functions."""
-    key = obj if isinstance(obj, type) else getattr(obj, "__code__", None)
-    if key is not None:
-        try:
-            line = _source_line_cache.get(key)
-        except TypeError:
-            key = None
-        else:
-            if line is not None:
-                return line
-    line = inspect.getsourcelines(obj)[1]
-    if key is not None:
-        _source_line_cache[key] = line
-    return line
-
-
-# Pre-computed set of nn.Module attribute names (from MRO). Used to filter out
-# inherited custom_methods/attrs when scanning for user-defined extras. Computed once
-# at import time — nn.Module's interface is stable within a process.
 _NN_MODULE_ATTRS = set(dir(nn.Module))
 
 # PyTorch internal instance attributes to skip when scanning for user-defined
@@ -429,67 +407,13 @@ def _prepare_model_once(model: nn.Module) -> None:
 
     addressed_module_ids: set[int] = set()
     _traverse_model_modules(model, _make_once_visitor(model, addressed_module_ids))
+    prepare_bound_owner_once(model, _restore_undecorated_forward)
     _state._prepared_models.add(model)
 
 
 # ---------------------------------------------------------------------------
 # Per-session model preparation
 # ---------------------------------------------------------------------------
-
-
-def _record_model_identity(trace: "Trace", model: nn.Module) -> None:
-    """Record the root's class, signatures, docstrings and source locations on ``trace``.
-
-    Moved out of ``_prepare_model_session`` unchanged.
-    """
-
-    # F41 bound-method roots: the synthetic TL-authored root's identity reads
-    # the OWNER (type(owner).__name__, the owner's class/source metadata) and
-    # the bound METHOD as the entry callable -- never the wrapper class name
-    # or the string "method".
-    from .bound_root import TLBoundMethodRoot
-
-    if isinstance(model, TLBoundMethodRoot):
-        identity_cls = type(model.tl_owner)
-        entry_callable = getattr(identity_cls, model.tl_method_name, None)
-    else:
-        identity_cls = type(model)
-        entry_callable = getattr(identity_cls, "forward", None)
-    trace._source_class_name = str(identity_cls.__name__)
-    trace._source_class_docstring = identity_cls.__doc__
-    init_method = getattr(identity_cls, "__init__", None)
-    forward_method = entry_callable
-    try:
-        trace._source_init_signature = str(inspect.signature(init_method)) if init_method else None
-    except (TypeError, ValueError):
-        trace._source_init_signature = None
-    trace._source_init_docstring = getattr(init_method, "__doc__", None)
-    try:
-        trace._source_forward_signature = (
-            str(inspect.signature(forward_method)) if forward_method else None
-        )
-    except (TypeError, ValueError):
-        trace._source_forward_signature = None
-    trace._source_forward_docstring = getattr(forward_method, "__doc__", None)
-    try:
-        trace._source_class_file = inspect.getfile(identity_cls)
-        trace._source_class_line = _source_start_line(identity_cls)
-        trace._source_init_file = inspect.getfile(identity_cls.__init__)
-        trace._source_init_line = _source_start_line(identity_cls.__init__)
-    except (OSError, TypeError):
-        trace._source_class_file = None
-        trace._source_class_line = None
-        trace._source_init_file = None
-        trace._source_init_line = None
-    try:
-        forward_func = model.forward if entry_callable is None else entry_callable
-        trace._source_forward_file = inspect.getsourcefile(forward_func) or inspect.getfile(
-            forward_func
-        )
-        trace._source_forward_line = _source_start_line(forward_func)
-    except (OSError, TypeError):
-        trace._source_forward_file = None
-        trace._source_forward_line = None
 
 
 def _prepare_model_session(
@@ -522,7 +446,7 @@ def _prepare_model_session(
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
     _install_session_forward_wrappers(trace, model)
-    _record_model_identity(trace, model)
+    record_model_identity(trace, model)
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -532,8 +456,9 @@ def _prepare_model_session(
 
     # Use model.modules() + cached module addresses from phase 1, avoiding a
     # second full DFS with string concatenation and list(named_children()) calls.
+    root_module = capture_root_module(model)  # the owner, on a bound-method root
     for module in model.modules():
-        is_root = module is model
+        is_root = module is root_module
         address = _module_address(module)
         named_children = list(module.named_children())
         _capture_module_metadata(
@@ -589,12 +514,8 @@ def _prepare_model_session(
             trace._module_capture_ws.module_build_data["module_types"][address] = _module_type(
                 module
             )
-            # Session-scoped tracking in Trace dicts (keyed by id(module)).
-            mod_id = id(module)
-            trace._module_capture_ws.mod_call_index[mod_id] = 0
-            trace._module_capture_ws.mod_call_labels[mod_id] = []
-            trace._module_capture_ws.mod_entered[mod_id] = []
-            trace._module_capture_ws.mod_exited[mod_id] = []
+            register_session_module_calls(trace, module)
+    register_bound_owner_calls(trace, model)
     if trace._options_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     else:
@@ -1117,9 +1038,13 @@ def _record_module_entry_build_data(
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
         module_call_label_str
     ] = code_context
+    # Ancestor module calls, root excluded: a plain root is never pushed, and a
+    # bound-method root's owner (address ``self``) is dropped here so the
+    # containment facts read exactly as under a plain trace of the owner.
     call_stack = [
         f"{frame.address}:{frame.pass_number}"
         for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
+        if frame.address != "self"
     ]
     trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
         module_call_label_str

@@ -250,8 +250,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Bound-method root**
 : The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.
   `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). The owner resolves via
-  `method.__self__` and registers as the `owner` submodule of a TorchLens-authored wrapper root
-  whose forward calls the exact bound method exactly once; the capture's identity reads
+  `method.__self__` and is the root module `self` of a TorchLens-authored wrapper root whose
+  forward calls the exact bound method exactly once: module addresses, layer labels, module
+  paths, drawings, pandas exports and saved files read as on a plain `tl.trace(model, ...)`
+  (`transformer.h.5.mlp`, no wrapper prefix), and the owner's own calls inside the method are the
+  root's calls (`self:1` .. `self:N`, `trace.modules["self"].num_calls == N`); the capture's identity reads
   `type(owner).__name__`, `Trace.provenance.root_entry_point` records
   `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
   carries `tl_authored_root=True` — both persisted with fail-closed load validation. On

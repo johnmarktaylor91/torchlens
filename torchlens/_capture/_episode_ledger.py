@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._utils.hashing import sha256_canonical_json
+from ..backends.torch.bound_root import ROOT_ADDRESS, TLBoundMethodRoot, module_at_address
 from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
 from ._episode_derivation import (
     _call_returned,
@@ -1146,8 +1147,6 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
         # F41 bound-method roots: the stepped module DEFAULTS to the bound
         # method's owner (foldA MEMO s5 item 9); on a module root it stays
         # required -- an unowned None has no honest default.
-        from ..backends.torch.bound_root import TLBoundMethodRoot
-
         if isinstance(model, TLBoundMethodRoot):
             stepped = model.tl_owner
         else:
@@ -1174,8 +1173,8 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
             "nn.Module whose forward steps this model, and trace the wrapper."
         )
     for name, candidate in model.named_modules():
-        if candidate is stepped and name:
-            return name
+        if candidate is stepped:  # a bound root's owner stands at "" (the root ``self``)
+            return name or ROOT_ADDRESS
     raise _declaration_error(
         "EpisodeOptions.stepped_module is not a submodule of the traced episode "
         "root; the ledger's step boundaries are the stepped module's calls "
@@ -1391,7 +1390,7 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
         # bound-method root the spec's stepped_module is None and defaults
         # to the owner (F41), which only the address resolution sees.
         join_session=EpisodeJoinSession(
-            model.get_submodule(address),
+            module_at_address(model, address),
             feed=spec.feed,
             on_feed_break=spec.on_feed_break,
             crossings=crossings,
