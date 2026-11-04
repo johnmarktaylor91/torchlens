@@ -1,0 +1,184 @@
+{
+  "comment": "Saved example of interp-engine's point format, copied from the source below; the interp-engine export is tested against it. Points: interp_engine/points.py (POINTS, HYPER_CONNECTION_POINTS). Address: interp_engine/address.py (Address dataclass fields; format_address / parse_address). Examples: docs/USAGE.md 'Naming a point' and docs/SUPPORTED_POINTS.md.",
+  "source": {
+    "repository": "https://github.com/decoderesearch/interp-engine",
+    "version": "1.14.3",
+    "commit": "2afe000da14f1fff8b9c611665f7fe343f523dd0"
+  },
+  "address_fields": [
+    "name",
+    "layer",
+    "stream"
+  ],
+  "grammar": {
+    "name": "^[a-z][a-z0-9_]*$",
+    "layer": "^[0-9]+$",
+    "coordinate": "^([a-z][a-z0-9_]*)-([0-9]+)$",
+    "module_path_prefix": "path"
+  },
+  "points": [
+    [
+      "embeddings",
+      "global"
+    ],
+    [
+      "resid_pre",
+      "layer"
+    ],
+    [
+      "attn_in",
+      "layer"
+    ],
+    [
+      "q_norm_in",
+      "layer"
+    ],
+    [
+      "q_norm_out",
+      "layer"
+    ],
+    [
+      "k_norm_in",
+      "layer"
+    ],
+    [
+      "k_norm_out",
+      "layer"
+    ],
+    [
+      "value",
+      "layer"
+    ],
+    [
+      "attn_scores",
+      "layer"
+    ],
+    [
+      "attn_probs",
+      "layer"
+    ],
+    [
+      "z",
+      "layer"
+    ],
+    [
+      "attn_gate",
+      "layer"
+    ],
+    [
+      "attn_out",
+      "layer"
+    ],
+    [
+      "attn_out_post",
+      "layer"
+    ],
+    [
+      "resid_mid",
+      "layer"
+    ],
+    [
+      "mlp_in",
+      "layer"
+    ],
+    [
+      "mlp_pre",
+      "layer"
+    ],
+    [
+      "mlp_pre_linear",
+      "layer"
+    ],
+    [
+      "mlp_act",
+      "layer"
+    ],
+    [
+      "router_logits",
+      "layer"
+    ],
+    [
+      "expert_weights",
+      "layer"
+    ],
+    [
+      "expert_indices",
+      "layer"
+    ],
+    [
+      "mlp_out",
+      "layer"
+    ],
+    [
+      "mlp_out_post",
+      "layer"
+    ],
+    [
+      "resid_post",
+      "layer"
+    ],
+    [
+      "final_norm",
+      "global"
+    ],
+    [
+      "lm_head",
+      "global"
+    ],
+    [
+      "resid_streams",
+      "layer"
+    ],
+    [
+      "attn_stream_collapse",
+      "layer"
+    ],
+    [
+      "attn_stream_write",
+      "layer"
+    ],
+    [
+      "attn_stream_mix",
+      "layer"
+    ],
+    [
+      "mlp_stream_collapse",
+      "layer"
+    ],
+    [
+      "mlp_stream_write",
+      "layer"
+    ],
+    [
+      "mlp_stream_mix",
+      "layer"
+    ]
+  ],
+  "examples": {
+    "resid_post.10": {
+      "name": "resid_post",
+      "layer": 10,
+      "stream": null
+    },
+    "mlp_out.3": {
+      "name": "mlp_out",
+      "layer": 3,
+      "stream": null
+    },
+    "embeddings": {
+      "name": "embeddings",
+      "layer": null,
+      "stream": null
+    },
+    "resid_streams.5": {
+      "name": "resid_streams",
+      "layer": 5,
+      "stream": null
+    },
+    "resid_post.5.stream-2": {
+      "name": "resid_post",
+      "layer": 5,
+      "stream": 2
+    }
+  }
+}

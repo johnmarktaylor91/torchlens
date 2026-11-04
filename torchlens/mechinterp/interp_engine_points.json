@@ -1,0 +1,195 @@
+{
+  "schema": "torchlens_interp_engine_registry_v1",
+  "comment": "interp-engine's canonical point registry, pinned for the interp-engine generation of alias_report and its points-file writer. Copied from the source named below, never inferred: points (name, scope) from interp_engine/points.py POINTS and HYPER_CONNECTION_POINTS, the address grammar from interp_engine/address.py. A point with no_torchlens_site is reported structurally absent with that reason; every other point has a translation.json row of generation interp-engine. facets_without_point gives the reason a torchlens tensor facet has no interp-engine point.",
+  "source": {
+    "repository": "https://github.com/decoderesearch/interp-engine",
+    "version": "1.14.3",
+    "commit": "2afe000da14f1fff8b9c611665f7fe343f523dd0",
+    "files": [
+      "interp_engine/points.py",
+      "interp_engine/address.py",
+      "docs/SUPPORTED_POINTS.md",
+      "docs/ENGINE_HOOK_MAPPINGS.md"
+    ]
+  },
+  "address": {
+    "fields": [
+      "name",
+      "layer",
+      "stream"
+    ],
+    "separator": ".",
+    "coordinate_separator": "-",
+    "module_path_prefix": "path",
+    "name_pattern": "^[a-z][a-z0-9_]*$",
+    "layer_pattern": "^[0-9]+$",
+    "coordinate_pattern": "^([a-z][a-z0-9_]*)-([0-9]+)$"
+  },
+  "points": [
+    {
+      "name": "embeddings",
+      "scope": "global"
+    },
+    {
+      "name": "resid_pre",
+      "scope": "layer"
+    },
+    {
+      "name": "attn_in",
+      "scope": "layer"
+    },
+    {
+      "name": "q_norm_in",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a query/key norm (QK-norm families such as Qwen3 and Gemma-3); read the attention's q or k facet, which is the projection before any QK norm"
+    },
+    {
+      "name": "q_norm_out",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a query/key norm (QK-norm families such as Qwen3 and Gemma-3); read the attention's q or k facet, which is the projection before any QK norm"
+    },
+    {
+      "name": "k_norm_in",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a query/key norm (QK-norm families such as Qwen3 and Gemma-3); read the attention's q or k facet, which is the projection before any QK norm"
+    },
+    {
+      "name": "k_norm_out",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a query/key norm (QK-norm families such as Qwen3 and Gemma-3); read the attention's q or k facet, which is the projection before any QK norm"
+    },
+    {
+      "name": "value",
+      "scope": "layer"
+    },
+    {
+      "name": "attn_scores",
+      "scope": "layer"
+    },
+    {
+      "name": "attn_probs",
+      "scope": "layer"
+    },
+    {
+      "name": "z",
+      "scope": "layer"
+    },
+    {
+      "name": "attn_gate",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a gated attention's double-width query projection"
+    },
+    {
+      "name": "attn_out",
+      "scope": "layer"
+    },
+    {
+      "name": "attn_out_post",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for the output of a post-attention norm (sandwich-norm families such as Gemma-2 and OLMo-2); where the family has no such norm interp-engine serves the raw output here, so read attn_out.{L}"
+    },
+    {
+      "name": "resid_mid",
+      "scope": "layer"
+    },
+    {
+      "name": "mlp_in",
+      "scope": "layer"
+    },
+    {
+      "name": "mlp_pre",
+      "scope": "layer"
+    },
+    {
+      "name": "mlp_pre_linear",
+      "scope": "layer"
+    },
+    {
+      "name": "mlp_act",
+      "scope": "layer"
+    },
+    {
+      "name": "router_logits",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for MoE routing (router logits, selected experts, expert weights); trace the router module and read its outputs by op label"
+    },
+    {
+      "name": "expert_weights",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for MoE routing (router logits, selected experts, expert weights); trace the router module and read its outputs by op label"
+    },
+    {
+      "name": "expert_indices",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for MoE routing (router logits, selected experts, expert weights); trace the router module and read its outputs by op label"
+    },
+    {
+      "name": "mlp_out",
+      "scope": "layer"
+    },
+    {
+      "name": "mlp_out_post",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for the output of a post-MLP norm (sandwich-norm families such as Gemma-2 and OLMo-2); where the family has no such norm interp-engine serves the raw output here, so read mlp_out.{L}"
+    },
+    {
+      "name": "resid_post",
+      "scope": "layer"
+    },
+    {
+      "name": "final_norm",
+      "scope": "global",
+      "no_torchlens_site": "torchlens records the final norm's input (final_norm_input) and the logits but has no facet for the final norm's output"
+    },
+    {
+      "name": "lm_head",
+      "scope": "global"
+    },
+    {
+      "name": "resid_streams",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "attn_stream_collapse",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "attn_stream_write",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "attn_stream_mix",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "mlp_stream_collapse",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "mlp_stream_write",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    },
+    {
+      "name": "mlp_stream_mix",
+      "scope": "layer",
+      "no_torchlens_site": "torchlens has no facet for a hyper-connection trunk's parallel residual streams (DeepSeek-V4 style mHC); resid_pre and resid_post are single-stream sites"
+    }
+  ],
+  "facets_without_point": {
+    "q": "interp-engine has no point for the query projection; it names q only after a QK norm (q_norm_out), on QK-norm families",
+    "k": "interp-engine has no point for the key projection; it names k only after a QK norm (k_norm_out), on QK-norm families",
+    "result": "interp-engine has no point for per-head residual contributions; its capture.head_contributions helper computes them from z",
+    "gated_out": "interp-engine has no point for a gated MLP's activated gate; mlp_act is the product with the up projection",
+    "down_out": "interp-engine has no point for the down projection's own output; mlp_out is the MLP module's output",
+    "normalized": "interp-engine has no per-norm points (a norm's scale is not a point); attn_in and mlp_in are the sublayers' inputs",
+    "inv_rms": "interp-engine has no per-norm points (a norm's scale is not a point)",
+    "indices": "token ids, not an activation; interp-engine takes them as the prompt",
+    "final_norm_input": "interp-engine has no point for the final norm's input"
+  }
+}
