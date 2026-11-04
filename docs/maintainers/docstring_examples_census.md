@@ -63,7 +63,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | intervention | 95 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
-| mechinterp | 48 | 0 |
+| mechinterp | 50 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
 | options | 6 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 14 | 0 |
-| **total** | **1058** | **0** |
+| **total** | **1060** | **0** |
 
-Public callable members of those classes (methods and properties): 1488.
+Public callable members of those classes (methods and properties): 1489.

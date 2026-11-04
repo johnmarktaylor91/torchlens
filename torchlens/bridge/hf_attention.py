@@ -490,9 +490,11 @@ def record_attention(model: Any, *, check_sdpa: bool = False) -> Iterator[Attent
         Also run ``scaled_dot_product_attention`` on each call's inputs and
         refuse (``hf_attention_sdpa_mismatch``) when the outputs disagree
         beyond the semantic SDPA reconstruction tolerance. Calls with
-        dropout, softcapping or attention sinks are not checked
-        (``AttentionCall.sdpa_checked`` says which were). Doubles the
-        attention cost.
+        dropout, softcapping or learned sink logits (``s_aux``) are not
+        checked (``AttentionCall.sdpa_checked`` says which were). Emergent
+        attention sinks (trained heads that put most of their mass on one
+        position) are not a property of the call; the checks kit's sink
+        probe measures them. Doubles the attention cost.
 
     Yields
     ------

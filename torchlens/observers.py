@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from . import _state
+from ._entry_refusals import refuse_if_bad_signal, refuse_log_value_outside_trace
 
 
 @dataclass(frozen=True)
@@ -428,8 +429,7 @@ def tap(
     (1, 4, 8, 8)
     """
 
-    if signal not in {"forward", "backward", "both"}:
-        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
+    refuse_if_bad_signal(signal)
     return TapObserver(site=site, signal=signal)
 
 
@@ -466,8 +466,7 @@ def span(
     'phase'
     """
 
-    if signal not in {"forward", "backward", "both"}:
-        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
+    refuse_if_bad_signal(signal)
     span_record = {
         "name": str(name),
         "signal": signal,
@@ -549,7 +548,7 @@ def log_value(name: str, value: Any) -> None:
 
     trace = _state._active_trace
     if trace is None:
-        raise RuntimeError("torchlens.observers.log_value() must be called during trace.")
+        refuse_log_value_outside_trace()
     trace.annotations.setdefault("logged_values", {})[str(name)] = value
 
 

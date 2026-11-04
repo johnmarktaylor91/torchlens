@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, TypeAlias, cast
 
 from ..._ir.events import JaxEquationKind
+from .. import _entry_refusals as _refusals
 from ..registry import BackendUnsupportedError
 from ._source_path_components import _normalize_jax_source_path_component
 from .modules import decode_module_call_scope, decode_module_scope
@@ -404,8 +405,7 @@ def interpret_closed_jaxpr_with_inlining(
             primitive_name = eqn.primitive.name
             eqn_path = (*path, f"{eqn_index}:{primitive_name}")
             if primitive_name == "scan":
-                if jax_control_flow == "reject":
-                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
                 if jax_control_flow == "region":
                     outputs = _interpret_region(
                         eqn=eqn,
@@ -456,8 +456,7 @@ def interpret_closed_jaxpr_with_inlining(
                     _write_env(env, var, value, core)
                 continue
             if primitive_name == "cond":
-                if jax_control_flow == "reject":
-                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
                 outputs = _interpret_cond(
                     eqn=eqn,
                     env=env,
@@ -472,8 +471,7 @@ def interpret_closed_jaxpr_with_inlining(
                     _write_env(env, var, value, core)
                 continue
             if primitive_name in {"while", "while_loop"}:
-                if jax_control_flow == "reject":
-                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
                 if jax_control_flow == "region":
                     outputs = _interpret_region(
                         eqn=eqn,
@@ -523,8 +521,7 @@ def interpret_closed_jaxpr_with_inlining(
                     _write_env(env, var, value, core)
                 continue
             if primitive_name == "custom_vjp_call":
-                if jax_control_flow == "reject":
-                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
                 outputs = _interpret_region(
                     eqn=eqn,
                     env=env,
@@ -542,11 +539,11 @@ def interpret_closed_jaxpr_with_inlining(
                     _write_env(env, var, value, core)
                 continue
             if primitive_name in REJECTED_NESTED_PRIMITIVES:
-                raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                _refusals.refuse_nested_primitive(primitive_name)
             if eqn.effects:
-                raise ValueError(f"unsupported equation effects: {primitive_name} {eqn.effects}")
+                _refusals.refuse_equation_effects(primitive_name, eqn.effects)
             if primitive_name in EFFECT_PRIMITIVES:
-                raise ValueError(f"unsupported jaxpr effect primitive: {primitive_name}")
+                _refusals.refuse_effect_primitive(primitive_name)
             nested = _closed_jaxpr_param(eqn, core)
             inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
             if nested is not None:
@@ -579,7 +576,7 @@ def interpret_closed_jaxpr_with_inlining(
                     _write_env(env, var, value, core)
                 continue
             if _has_nested_jaxpr(eqn, core):
-                raise ValueError(f"unsupported nested jaxpr in primitive: {primitive_name}")
+                _refusals.refuse_nested_jaxpr(primitive_name)
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
             capture_index = len(captures)

@@ -12,6 +12,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._entry_refusals import refuse_captum_method
 from .._errors import InvalidArgumentError
 from .._selection.selectors import site as site_selector
 from .._user_funcs import trace as _trace
@@ -158,7 +159,7 @@ def attribute(
 
     _require_captum()
     if not hasattr(method, "attribute"):
-        raise TypeError("Captum bridge expected a method object with an attribute(...) method.")
+        refuse_captum_method(method)
 
     captum_inputs = _logged_inputs(trace) if inputs is None else inputs
     if target is not None:
