@@ -14,6 +14,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import ArgumentConflictError, InvalidArgumentError, ShapeInferenceError
+from torchlens.report._summary_config import resolve_config
 
 
 class _Toy(nn.Module):
@@ -158,3 +159,19 @@ def test_input_size_synthesizes_and_discloses() -> None:
     assert "synthetic input" in str(report)
     assert "input_shape=(2, 8)" in str(report)
     assert report.total_params == (8 * 16 + 16) + (16 * 8 + 8)
+
+
+def test_invalid_view_ranks_all_candidates_and_aligns_remedy() -> None:
+    """Summary refusals use the shared ranking and complete card layout."""
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        resolve_config(view="cmpt")
+    message = str(excinfo.value)
+    candidates = next(line for line in message.splitlines() if line.startswith("  candidates"))
+    remedy = next(line for line in message.splitlines() if line.startswith("  remedy"))
+    assert (
+        candidates.index("'compute'") < candidates.index("'stats'") < candidates.index("'overview'")
+    )
+    assert candidates.index("'compute'") == remedy.index("pass one of:")
+    assert excinfo.value.fields["code"] == "summary_option_invalid"
+    assert excinfo.value.fields["remedy"] == "pass one of: overview, compute, stats"
