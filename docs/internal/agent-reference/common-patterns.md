@@ -258,6 +258,8 @@ lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your 
 ids = torch.tensor([[1, 5, 9, 2]])
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
+# dim=-1 stays explicit: omitted, the axis is inferred only while exactly one axis has
+# length 32, and a generated sequence can grow to 32 tokens.
 spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 # Steering only: bind once, then call or generate as often as needed.
