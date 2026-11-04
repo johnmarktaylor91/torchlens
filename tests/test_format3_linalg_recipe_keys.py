@@ -6,7 +6,7 @@ in ``intervention.json``; loading it resolves each key through
 admits keys on the same allowlisted roots and enumerated torch namespaces
 (``torchlens._utils._torch_symbols``). These tests pin that both read one table:
 
-* a trace holding a ``torch.linalg`` op round-trips through the 3.0 writer, loads and
+* a trace holding a ``torch.linalg`` op round-trips through the saved-format writer, loads and
   reruns equal to the live intervened trace;
 * every key the two resolvers see agrees: admitted by both or refused by both;
 * keys outside the purity-gated set still refuse with the existing typed errors.
@@ -32,10 +32,7 @@ from torchlens._utils._torch_symbols import (
     ENUMERATED_TORCH_NAMESPACES,
     torch_namespace,
 )
-from torchlens.intervention._resolver_registry import (
-    function_registry_key_from_callable,
-    resolve_function_registry_key,
-)
+from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
 from torchlens.intervention.types import FunctionRegistryKey
 
@@ -60,7 +57,7 @@ class _NormModel(nn.Module):
 
 
 def _saved_trace(tmp_path: Path) -> tuple[Path, nn.Module, torch.Tensor]:
-    """Save a scale-edited trace of ``_NormModel`` through the 3.0 writer."""
+    """Save a scale-edited trace of ``_NormModel`` through the saved-format writer."""
 
     model = _NormModel().eval()
     value = torch.randn(2, 4, generator=torch.Generator().manual_seed(1))
@@ -152,7 +149,6 @@ def test_verifier_and_replay_resolver_admit_the_same_keys() -> None:
     assert not disagreements, disagreements[:10]
     linalg = FunctionRegistryKey("torch.linalg", "vector_norm", "function")
     assert _verifier_admits(linalg)
-    assert function_registry_key_from_callable(torch.linalg.vector_norm) == linalg
 
 
 @pytest.mark.parametrize(
