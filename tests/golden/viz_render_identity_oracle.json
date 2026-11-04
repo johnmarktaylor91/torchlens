@@ -5322,7 +5322,7 @@
           "collapsed_node_spec_fn": [],
           "node_spec_fn": []
         },
-        "dot": "// Computational graph for the feedforward sweep\ndigraph OracleFocusedAntiparallel {\n\tgraph [bgcolor=white fontname=Helvetica label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"LEFT\" BALIGN=\"LEFT\"><FONT COLOR='black'><B>OracleFocusedAntiparallel&#160;&#8250;&#160;encoder&#160;(OracleAlternating)</B><br align='left'/>2 layers (32 B)<br align='left'/></FONT></TD></TR><TR><TD ALIGN=\"LEFT\"><TABLE ID=\"tl_key\" BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"3\" CELLPADDING=\"0\" FIXEDSIZE=\"TRUE\" ALIGN=\"LEFT\" WIDTH=\"299\" HEIGHT=\"34\"><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-oval-98fb98-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">input</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-oval-ff9999-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">output</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-d9d9d9-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">trainable weights</FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-b0b0b0-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">frozen weights</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-frame-white-black-w1.5-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">module</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-white-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">module run as one op</FONT></TD></TR></TABLE></TD></TR></TABLE>> labeljust=left labelloc=t newrank=true nodesep=0.5 ordering=out rankdir=BT ranksep=0.3]\n\tnode [fontname=Helvetica ordering=out]\n\tedge [fontname=Helvetica]\n\tlinear_1_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1 (x2)</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.shared</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_1_1 -> __module_focus_output_linear_3_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=13 minlen=2 style=solid]\n\tlinear_2_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.middle</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\t__module_focus_input_input_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>from model input x</B></TD></TR><TR><TD ALIGN=\"CENTER\">input_1</TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t__module_focus_input_input_1 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=13 minlen=2 style=solid]\n\t__module_focus_output_linear_3_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>to head</B></TD></TR><TR><TD ALIGN=\"CENTER\">linear_3_3</TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2), 8 B</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tsubgraph cluster_encoder {\n\t\tfillcolor=white label=<<B>@encoder</B><br align='left'/>> labeljust=l labelloc=b margin=20 penwidth=1.5 style=\"filled,solid\"\n\t\tlinear_1_1 -> linear_2_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD WIDTH=\"2\"></TD><TD><FONT POINT-SIZE=\"13\">Out 1</FONT></TD><TD WIDTH=\"8\"></TD></TR></TABLE>> arrowsize=.7 color=black fontcolor=black labelfontsize=13 style=solid]\n\t\tlinear_2_2 -> linear_1_1 [arrowsize=.7 color=black constraint=false fontcolor=black headport=ne labelfontsize=13 style=solid tailport=se xlabel=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD WIDTH=\"2\"></TD><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD><TD WIDTH=\"8\"></TD></TR></TABLE>>]\n\t}\n\t{\n\t\trank=source\n\t\t__module_focus_input_input_1\n\t}\n\t{\n\t\trank=sink\n\t\t__module_focus_output_linear_3_3\n\t}\n}\n",
+        "dot": "// Computational graph for the feedforward sweep\ndigraph OracleFocusedAntiparallel {\n\tgraph [bgcolor=white fontname=Helvetica label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"LEFT\" BALIGN=\"LEFT\"><FONT COLOR='black'><B>OracleFocusedAntiparallel&#160;&#8250;&#160;encoder&#160;(OracleAlternating)</B><br align='left'/>2 layers (32 B)<br align='left'/></FONT></TD></TR><TR><TD ALIGN=\"LEFT\"><TABLE ID=\"tl_key\" BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"3\" CELLPADDING=\"0\" FIXEDSIZE=\"TRUE\" ALIGN=\"LEFT\" WIDTH=\"299\" HEIGHT=\"34\"><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-oval-98fb98-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">input</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-oval-ff9999-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">output</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-d9d9d9-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">trainable weights</FONT></TD></TR><TR><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-b0b0b0-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">frozen weights</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-frame-white-black-w1.5-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">module</FONT></TD><TD FIXEDSIZE=\"TRUE\" WIDTH=\"22\" HEIGHT=\"12\"><IMG SRC=\"key-box-white-black-v1.png\" SCALE=\"TRUE\"/></TD><TD ALIGN=\"LEFT\"><FONT POINT-SIZE=\"10\" COLOR=\"black\">module run as one op</FONT></TD></TR></TABLE></TD></TR></TABLE>> labeljust=left labelloc=t newrank=true nodesep=0.5 ordering=out rankdir=BT ranksep=0.3]\n\tnode [fontname=Helvetica ordering=out]\n\tedge [fontname=Helvetica]\n\tlinear_1_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_1_1 (x2)</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">in_features=4</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.shared</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\tlinear_1_1 -> __module_focus_output_linear_3_3 [arrowsize=.7 color=black fontcolor=black labelfontsize=13 minlen=2 style=solid]\n\tlinear_2_2 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>linear_2_2</B></TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR><TR><TD ALIGN=\"CENTER\">params: weight (4, 4) \u00b7 bias (4,)</TD></TR><TR><TD ALIGN=\"CENTER\">@encoder.middle</TD></TR></TABLE>> color=black fillcolor=\"#D9D9D9\" fontcolor=black ordering=out shape=box style=\"filled,solid\"]\n\t__module_focus_input_input_1 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>from model input x</B></TD></TR><TR><TD ALIGN=\"CENTER\">input_1</TD></TR><TR><TD ALIGN=\"CENTER\">(1, 4), 16 B</TD></TR></TABLE>> color=black fillcolor=\"#98FB98\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\t__module_focus_input_input_1 -> linear_1_1 [arrowsize=.7 color=black fontcolor=black labelfontsize=13 minlen=2 style=solid]\n\t__module_focus_output_linear_3_3 [label=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"2\"><TR><TD ALIGN=\"CENTER\"><B>to head</B></TD></TR><TR><TD ALIGN=\"CENTER\">linear_3_3</TD></TR><TR><TD ALIGN=\"CENTER\">(1, 2), 8 B</TD></TR></TABLE>> color=black fillcolor=\"#ff9999\" fontcolor=black ordering=out shape=oval style=\"filled,solid\"]\n\tsubgraph cluster_encoder {\n\t\tfillcolor=white label=<<B>@encoder</B><br align='left'/>> labeljust=l labelloc=b margin=20 penwidth=1.5 style=\"filled,solid\"\n\t\tlinear_1_1 -> linear_2_2 [arrowsize=.7 color=black fontcolor=black labelfontsize=13 minlen=2 style=solid taillabel=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"13\">Out 1</FONT></TD></TR></TABLE>>]\n\t\tlinear_2_2 -> linear_1_1 [arrowsize=.7 color=black constraint=false fontcolor=black headlabel=<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD></TR></TABLE>> headport=ne labelfontsize=13 style=solid tailport=se]\n\t}\n\t{\n\t\trank=source\n\t\t__module_focus_input_input_1\n\t}\n\t{\n\t\trank=sink\n\t\t__module_focus_output_linear_3_3\n\t}\n}\n",
         "plans": {
           "0.25": "CollapsePlan(total=6, raw_op=6)",
           "0.75": "CollapsePlan(total=6, raw_op=6)",
@@ -5381,9 +5381,10 @@
                 "arrowsize": ".7",
                 "color": "black",
                 "fontcolor": "black",
-                "label": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD WIDTH=\"2\"></TD><TD><FONT POINT-SIZE=\"13\">Out 1</FONT></TD><TD WIDTH=\"8\"></TD></TR></TABLE>>",
                 "labelfontsize": "13",
-                "style": "solid"
+                "minlen": "2",
+                "style": "solid",
+                "taillabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"13\">Out 1</FONT></TD></TR></TABLE>>"
               },
               "decorations": {
                 "color": "black",
@@ -5405,11 +5406,11 @@
                 "color": "black",
                 "constraint": "false",
                 "fontcolor": "black",
+                "headlabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD></TR></TABLE>>",
                 "headport": "ne",
                 "labelfontsize": "13",
                 "style": "solid",
-                "tailport": "se",
-                "xlabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD WIDTH=\"2\"></TD><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD><TD WIDTH=\"8\"></TD></TR></TABLE>>"
+                "tailport": "se"
               },
               "decorations": {
                 "color": "black",
@@ -5530,11 +5531,11 @@
                 "color": "black",
                 "constraint": "false",
                 "fontcolor": "black",
+                "headlabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"4\"><TR><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD></TR></TABLE>>",
                 "headport": "ne",
                 "labelfontsize": "13",
                 "style": "solid",
-                "tailport": "se",
-                "xlabel": "<<TABLE BORDER=\"0\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD WIDTH=\"2\"></TD><TD><FONT POINT-SIZE=\"13\">In 2</FONT></TD><TD WIDTH=\"8\"></TD></TR></TABLE>>"
+                "tailport": "se"
               },
               "decorations": {
                 "color": "black",
@@ -8900,13 +8901,13 @@
     "schema_version": 1
   },
   "sha256_chunks": [
-    "73fd4bbf",
-    "bd4339da",
-    "9b2c6350",
-    "39581d94",
-    "a807f7a9",
-    "d07158ec",
-    "3e21f80f",
-    "d089d9d0"
+    "1c87524a",
+    "64471457",
+    "0798e30a",
+    "c9cccffc",
+    "4faf12f5",
+    "3c07f91f",
+    "f46d5a86",
+    "9a896574"
   ]
 }
