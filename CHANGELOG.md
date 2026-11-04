@@ -5,6 +5,14 @@
 
 ### Fixed
 
+- **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
+  head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
+  `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
+  `mask_sha256` among its keywords (written through the tensor sidecar), and a reload applies
+  bit-identically. A malformed or tampered stored mask refuses
+  `intervention_helper_arguments_invalid` at load. An edit that needs user code still refuses
+  `intervention_spec_not_portable`. DOCUMENTED-UNSTABLE persisted form.
+
 - **capture**: `torch.get_rng_state` and `torch.random.get_rng_state` are recorded as source ops
   with no parents, so a forward that reads the RNG state and uses the bytes gets an attributed
   node and passes `tl.validate`. TorchLens's own RNG snapshots do not appear in the trace. The
@@ -12,6 +20,15 @@
   `_to_sparse_bsc`, `_conj`, `_conj_physical`, `_neg_view`, `_lazy_clone`, `_addmm_activation`,
   `_is_all_true` and `_is_any_true` are recorded like their `torch.*` twins. Before, each
   result reached its consumer with no provenance and validation failed.
+
+- **capture**: the in-place philox fills `Tensor._philox_normal_` and `Tensor._philox_uniform_`
+  (torch 2.13+, CUDA) are recorded with the key tensor as a parent. Before, the filled tensor
+  reached its consumer with no provenance. Replays with the same key reproduce the fill exactly, and
+  `tl.validate` passes: the overwritten destination is excused like `normal_`'s, the key is
+  still perturbation-tested.
+
+- **validation**: a `uint16`, `uint32` or `uint64` parent is perturbed as an integer. Before,
+  it reached the float branch and validation crashed with a `torch.finfo` TypeError.
 
 - **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
   `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes

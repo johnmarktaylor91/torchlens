@@ -312,7 +312,10 @@ subspace with `within=tl.units(site, mask)`, `mask` True on every feature of tha
 subspace edit with a builtin verb stores its mask and the mask's sha256, so a one-position edit
 still saves at `level="portable"` and reloads as the same edit; a stored mask that is malformed
 refuses `subspace_spec_invalid` at load and one changed after saving refuses
-`subspace_spec_mask_tampered`. Other masked edits keep their own portability.
+`subspace_spec_mask_tampered`. A plain builtin verb under an element mask (`fork.do(tl.units(site,
+mask), tl.zero_ablate())`, the heads `head_ablation_candidates` returns) stores its mask and the
+mask's sha256 the same way and saves at `level="portable"`; an edit that needs user code still
+refuses `intervention_spec_not_portable`.
 `tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
 (`artifact.subspace(site, positions=...)` and `artifact.edit`); see
 [from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
