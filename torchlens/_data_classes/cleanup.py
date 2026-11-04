@@ -32,8 +32,9 @@ from .._utils._cuda_probe import _is_cuda_available
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
-from ._removed_parent_refs import _scrub_template
+from ..intervention.types import ParentRef, Unsupported
 from ._state_adapter import state_items
+from ._template_walk import map_template_leaves, template_has_leaf
 from .op import Op, _detach_op_husk, release_op_row
 
 if TYPE_CHECKING:
@@ -745,6 +746,32 @@ def _scrub_intervention_spec_after_removal(self: Any, labels_to_remove: set[str]
 
     if spec_mutated and hasattr(self, "_mark_intervention_spec_mutated"):
         self._mark_intervention_spec_mutated()
+
+
+def _scrub_template(template: Any, labels_to_remove: set[str]) -> Any:
+    """Return ``template`` with removed-parent refs replaced, rebuilt only if it names one.
+
+    An untouched template keeps its object: every removal runs before the
+    step-9 rename, which rebuilds each template into a fresh copy.
+    """
+
+    def names_removed(leaf: Any) -> bool:
+        return isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove
+
+    if template_has_leaf(template, names_removed):
+        return _replace_removed_parent_refs(template, labels_to_remove)
+    return template
+
+
+def _replace_removed_parent_refs(value: Any, labels_to_remove: set[str]) -> Any:
+    """Return ``value`` rebuilt with refs to removed parents as unsupported leaves."""
+
+    def replace_leaf(leaf: Any) -> Any:
+        if isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove:
+            return Unsupported(reason="removed_parent_ref", value_type="ParentRef")
+        return leaf
+
+    return map_template_leaves(value, replace_leaf)
 
 
 def _record_mentions_removed_label(record: Any, labels_to_remove: set[str]) -> bool:

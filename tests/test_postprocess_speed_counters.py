@@ -115,10 +115,8 @@ def test_branch_stacks_are_private_per_op(monkeypatch: pytest.MonkeyPatch) -> No
 def test_orphan_removal_rebuilds_no_untouched_template(monkeypatch: pytest.MonkeyPatch) -> None:
     """Counter: pruning orphans rebuilds zero templates that name no removed op."""
 
-    from torchlens._data_classes import _removed_parent_refs
-
     scrubs = _count_calls(monkeypatch, cleanup, "_scrub_intervention_fields_after_removal")
-    rebuilds = _count_calls(monkeypatch, _removed_parent_refs, "_replace_removed_parent_refs")
+    rebuilds = _count_calls(monkeypatch, cleanup, "_replace_removed_parent_refs")
     with quiet_gc():
         trace = tl.trace(_RepeatedSites().eval(), torch.randn(2, 4))
     removed = set().union(*(set(args[1]) for args in scrubs)) if scrubs else set()
