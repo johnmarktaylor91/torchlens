@@ -217,6 +217,16 @@ prompts), pick the path by what you need back. Build the spec once; every path t
   batched prompts, more than one return sequence and `intervene=` refuse with
   `record_generation_unsupported`. Do not loop a fresh `tl.record` over the growing prefix: it
   recomputes and re-saves every earlier position at every step.
+- Thousands of tokens, keeping only what you declared: `tl.record(model, ids,
+  generate_kwargs={"max_new_tokens": 2000}, generation=GenerationOptions(reducers={site:
+  reducers.norm()}, kv_sites=(0,), keep_last=64, spill=dir))` (DOCUMENTED-UNSTABLE;
+  `from torchlens.recording import GenerationOptions, reducers`). Each forward keeps the
+  reducer's value instead of the activation (`reducers.norm`, `reducers.top_k`,
+  `reducers.probe(fitted)` for a fitted linear probe scored on every generated token), layer 0's
+  new KV slices become series `kv.0.key` and `kv.0.value`, the ring buffer spills forwards older
+  than 64 steps to disk, and `max_saved_bytes=` (512 MiB default) refuses early with
+  `record_generation_budget_exceeded` when the projected cost exceeds it. Read a series with
+  `generation.series(site).values` and `.positions`.
 - A correctness oracle: one full `tl.trace(model, x, intervene=spec)`, run once and compared
   against the fast path. It is several times slower per op than `tl.record`, so never run it
   per generation step.

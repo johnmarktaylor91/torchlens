@@ -72,6 +72,7 @@ from ._completeness_dispatch import record_uncaptured_owner_callsite
 from ._completeness_escape_state import record_data_alias_mutation
 from ._completeness_origins import internal_scalar_read
 from ._foreign_data import FOREIGN_DATA_FUNC_NAME, HOST_CONSTRUCTOR_FUNC_NAMES, resolve_host_entry
+from ._foreign_wrappers import rebase_buried_wrapper, warn_buried_sites
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     PLAIN_EXPORT_FUNC_NAMES,
@@ -2209,6 +2210,56 @@ def _stamp_wrapper_provenance(
         pass
 
 
+# Callable types ``_install_function_wrapper`` wraps; the others (getset
+# descriptors) take the property path in ``_decorate_torch_func_pairs``. These
+# MUST come from ``types`` constants, not live torch attributes (e.g.
+# ``type(torch.mean)``): after decoration the torch attributes are wrappers, and
+# probing them would misclassify every pristine C callable.
+_WRAPPABLE_FUNCTION_TYPES = (
+    types.FunctionType,  # <class 'function'>
+    types.BuiltinFunctionType,  # <class 'builtin_function_or_method'>
+    types.MethodDescriptorType,  # <class 'method_descriptor'>
+    types.WrapperDescriptorType,  # <class 'wrapper_descriptor'>
+)
+
+
+def _install_function_wrapper(
+    local_func_namespace: Any, namespace_name: str, func_name: str, orig_func: Any
+) -> None:
+    """Wrap ``orig_func`` into ``namespace.func_name`` and record it in the ledgers.
+
+    Shared by first install, late torchvision ops and re-install adoption of a
+    callable that drifted while torch was unwrapped (a peer that patched the
+    slot in between): first install and re-install then agree on what gets
+    wrapped. A shared original (``torch.cos`` and ``torch._VF.cos`` are one C
+    builtin) reuses its existing wrapper; a second wrapper would break the 1:1
+    mapping in ``_orig_to_decorated`` and the JIT builtin table.
+    """
+
+    if id(orig_func) in _state._orig_to_decorated:
+        existing = _state._orig_to_decorated[id(orig_func)]
+        try:
+            _setattr_ignoring_advisories(local_func_namespace, func_name, existing)
+        except (AttributeError, TypeError):
+            pass
+        return
+
+    recorded_name = _recorded_func_name(namespace_name, func_name)
+    new_func = torch_func_decorator(orig_func, recorded_name)
+    _stamp_wrapper_provenance(new_func, namespace_name, func_name)
+    try:
+        _setattr_ignoring_advisories(local_func_namespace, func_name, new_func)
+        mark_decorated_function(new_func)
+        # Bidirectional id-keyed mappings for fast lookup.
+        _state._orig_to_decorated[id(orig_func)] = new_func
+        _state._decorated_to_orig[id(new_func)] = orig_func
+        # Object-keyed mappings for cases where we have the object, not its id.
+        _state._decorated_func_mapper[new_func] = orig_func
+        _state._decorated_func_mapper[orig_func] = new_func
+    except (AttributeError, TypeError):
+        pass
+
+
 def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
     """Collect argument names, then decorate one batch of torch func targets.
 
@@ -2222,15 +2273,7 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
     func_pairs:
         ``(namespace, func_name)`` targets to decorate.
     """
-    # Pre-compute type objects for efficient isinstance-like checks below.
-    # These MUST come from ``types`` constants, not live torch attributes
-    # (e.g. ``type(torch.mean)``): when this helper runs after decoration
-    # (late torchvision import), the torch attributes are already wrappers and
-    # probing them would misclassify every pristine C callable.
-    function_class = types.FunctionType  # <class 'function'>
-    builtin_class = types.BuiltinFunctionType  # <class 'builtin_function_or_method'>
-    method_class = types.MethodDescriptorType  # <class 'method_descriptor'>
-    wrapper_class = types.WrapperDescriptorType  # <class 'wrapper_descriptor'>
+    # From ``types``, never a live torch attribute (see _WRAPPABLE_FUNCTION_TYPES).
     getset_class = types.GetSetDescriptorType  # <class 'getset_descriptor'> (properties)
 
     # --- Pass 1: Collect argument names before any decoration ---
@@ -2262,34 +2305,8 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
         if is_decorated_function(orig_func):
             continue
 
-        if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
-            # --- Shared-original deduplication ---
-            # If this exact C builtin was already wrapped under a different namespace
-            # (e.g. torch.cos and torch._VF.cos share the same id()), reuse the
-            # existing wrapper. Creating a second wrapper would break the 1:1 mapping
-            # in _orig_to_decorated and the JIT builtin table.
-            if id(orig_func) in _state._orig_to_decorated:
-                existing = _state._orig_to_decorated[id(orig_func)]
-                try:
-                    _setattr_ignoring_advisories(local_func_namespace, func_name, existing)
-                except (AttributeError, TypeError):
-                    pass
-                continue
-
-            recorded_name = _recorded_func_name(namespace_name, func_name)
-            new_func = torch_func_decorator(orig_func, recorded_name)
-            _stamp_wrapper_provenance(new_func, namespace_name, func_name)
-            try:
-                _setattr_ignoring_advisories(local_func_namespace, func_name, new_func)
-                mark_decorated_function(new_func)
-                # Bidirectional id-keyed mappings for fast lookup.
-                _state._orig_to_decorated[id(orig_func)] = new_func
-                _state._decorated_to_orig[id(new_func)] = orig_func
-                # Object-keyed mappings for cases where we have the object, not its id.
-                _state._decorated_func_mapper[new_func] = orig_func
-                _state._decorated_func_mapper[orig_func] = new_func
-            except (AttributeError, TypeError):
-                pass
+        if type(orig_func) in _WRAPPABLE_FUNCTION_TYPES:
+            _install_function_wrapper(local_func_namespace, namespace_name, func_name, orig_func)
 
         elif type(orig_func) is getset_class:
             # getset_descriptors (e.g. Tensor.real, Tensor.imag) are C-level
@@ -2441,43 +2458,6 @@ def _refuse_unwrap_during_active_capture() -> None:
     )
 
 
-def _buries_live_wrapper(current: Any) -> bool:
-    """Return whether a foreign callable buries a live torchlens wrapper.
-
-    ``_unwrap_torch_locked`` restores a namespace slot only when the CURRENT
-    attribute is a known torchlens wrapper; a third-party wrapper installed on
-    top of ours is (correctly) left untouched, but that leaves the torchlens
-    wrapper LIVE inside its ``__wrapped__``/closure chain with zero diagnostic
-    (B8-6). This walk detects the burial so teardown can name it. Bounded and
-    cheap: it runs only for drifted slots (rare), never on the hot path.
-    """
-
-    seen: set[int] = set()
-    stack: list[Any] = [current]
-    visited = 0
-    while stack and visited < 32:
-        obj = stack.pop()
-        if id(obj) in seen:
-            continue
-        seen.add(id(obj))
-        visited += 1
-        if obj is not current and id(obj) in _state._decorated_to_orig:
-            return True
-        wrapped = getattr(obj, "__wrapped__", None)
-        if callable(wrapped):
-            stack.append(wrapped)
-        closure = getattr(obj, "__closure__", None)
-        if closure:
-            for cell in closure:
-                try:
-                    content = cell.cell_contents
-                except ValueError:
-                    continue
-                if callable(content):
-                    stack.append(content)
-    return False
-
-
 def _unwrap_torch_locked() -> None:
     """Remove torchlens wrappers; caller holds ``_wrapper_install_lock``."""
 
@@ -2491,7 +2471,8 @@ def _unwrap_torch_locked() -> None:
     restore_belt_references()
     from .backward import uninstall_autograd_wrappers
 
-    uninstall_autograd_wrappers()
+    buried_sites: list[str] = []
+    uninstall_autograd_wrappers(buried_sites)
     from .legacy_ctors import uninstall_legacy_constructor_wrappers
 
     uninstall_legacy_constructor_wrappers()
@@ -2501,9 +2482,9 @@ def _unwrap_torch_locked() -> None:
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
+        warn_buried_sites(buried_sites)
         return
 
-    buried_sites: list[str] = []
     for namespace_name, func_name in get_orig_torch_funcs():
         # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
         # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
@@ -2515,12 +2496,12 @@ def _unwrap_torch_locked() -> None:
         orig = _state._decorated_to_orig.get(id(current))
         if orig is None:
             # B8-6: a drifted slot whose foreign wrapper chains to a live
-            # torchlens wrapper stays buried past this teardown -- collect it
-            # so the user learns unwrap did NOT fully restore that callable.
+            # torchlens wrapper is rebased onto the restored original; only a
+            # burial that survives the rebase is reported (at the very end).
             if (
                 id(current) not in _state._orig_to_decorated
                 and callable(current)
-                and _buries_live_wrapper(current)
+                and rebase_buried_wrapper(current)
             ):
                 buried_sites.append(f"{namespace_name}.{func_name}")
             continue
@@ -2554,21 +2535,6 @@ def _unwrap_torch_locked() -> None:
             _setattr_ignoring_advisories(local_func_namespace, func_name, orig)
         except (AttributeError, TypeError):
             pass
-
-    if buried_sites:
-        from ..._errors import TorchLensWarning
-
-        shown = ", ".join(buried_sites[:5])
-        more = f" (+{len(buried_sites) - 5} more)" if len(buried_sites) > 5 else ""
-        warnings.warn(
-            f"unwrap_torch() left {len(buried_sites)} torch callable(s) with a "
-            f"torchlens wrapper buried under a third-party wrapper: {shown}{more}. "
-            "TorchLens never clobbers foreign patches, so those slots still run "
-            "the torchlens wrapper underneath. Remove or reinstall the outer "
-            "wrapper around the restored original to fully unwrap.",
-            TorchLensWarning,
-            stacklevel=3,
-        )
 
     _state._is_decorated = False
 
@@ -2607,6 +2573,10 @@ def _unwrap_torch_locked() -> None:
     # release_model serializability remedy survives the unwrap instead of
     # inverting into the unrecoverable pickle shape.
     _renormalize_released_models_after_flip()
+
+    # Teardown is complete here; the report may raise under a warning filter,
+    # so it comes after the flag flip and the cache clears (B8-6).
+    warn_buried_sites(buried_sites)
 
 
 def _configure_escape_detector(mode: EscapeDetectorMode | None) -> EscapeDetectorMode:
@@ -2696,6 +2666,40 @@ def wrap_torch(
         install_identity_shims()
 
 
+def _reinstall_torch_func_wrappers() -> None:
+    """Put the recorded wrappers back after a prior ``unwrap_torch``.
+
+    A slot holding a recorded original gets its wrapper back; a slot that
+    DRIFTED while torch was unwrapped (a peer patched it in between, or
+    ``unwrap_torch`` rebased a foreign wrapper onto the original) is adopted as
+    a new original, exactly as first install wraps whatever is current, so a
+    capture after ``tl.validate`` still logs the call. Non-callable drift
+    (a property, a deleted attribute) is left alone.
+    """
+
+    for namespace_name, func_name in get_orig_torch_funcs():
+        # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
+        # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
+        # leaving torch partially wrapped (a process-global leak).
+        local_func_namespace = get_optional_torch_namespace(namespace_name)
+        if local_func_namespace is None or not hasattr(local_func_namespace, func_name):
+            continue
+        current = getattr(local_func_namespace, func_name)
+        if id(current) in _state._decorated_to_orig:
+            continue
+        if id(current) in _state._orig_to_decorated:
+            decorated = _state._orig_to_decorated[id(current)]
+        elif type(current) in _WRAPPABLE_FUNCTION_TYPES:
+            _install_function_wrapper(local_func_namespace, namespace_name, func_name, current)
+            continue
+        else:
+            continue
+        try:
+            _setattr_ignoring_advisories(local_func_namespace, func_name, decorated)
+        except (AttributeError, TypeError):
+            pass
+
+
 def _wrap_torch_locked(
     *,
     escape_detector: EscapeDetectorMode | None,
@@ -2762,25 +2766,7 @@ def _wrap_torch_locked(
     # something happened to materialize them between unwrap and re-wrap.
     _warm_derived_identity_caches()
 
-    for namespace_name, func_name in get_orig_torch_funcs():
-        # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
-        # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
-        # leaving torch partially wrapped (a process-global leak).
-        local_func_namespace = get_optional_torch_namespace(namespace_name)
-        if local_func_namespace is None or not hasattr(local_func_namespace, func_name):
-            continue
-        current = getattr(local_func_namespace, func_name)
-        decorated = None
-        if id(current) in _state._orig_to_decorated:
-            decorated = _state._orig_to_decorated[id(current)]
-        elif id(current) in _state._decorated_to_orig:
-            decorated = current
-        if decorated is None:
-            continue
-        try:
-            _setattr_ignoring_advisories(local_func_namespace, func_name, decorated)
-        except (AttributeError, TypeError):
-            pass
+    _reinstall_torch_func_wrappers()
 
     _decorate_transform_builders()
     _decorate_direct_transforms()

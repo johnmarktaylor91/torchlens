@@ -4270,11 +4270,131 @@ recorded: 2026-11-03T19:39:17.079424+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rulings-gap-6 streaming generation recorder
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 806ca1c72583d166746724829d5c0067ef94a1de (dirty)
+recorded: 2026-11-03T13:07:19.283455+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rulings-gap-6 streaming generation recorder
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 806ca1c72583d166746724829d5c0067ef94a1de (dirty)
+recorded: 2026-11-03T13:07:30.311410+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: properties-gaps: README any-model gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f797628c85648a0b70ed00e1876b429e99657e7e (dirty)
+recorded: 2026-11-03T08:23:16.355485+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: properties-gaps: README any-model gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f797628c85648a0b70ed00e1876b429e99657e7e (dirty)
+recorded: 2026-11-03T08:23:28.052388+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: backport of the multi-pass GradFn, Layer door and ops accessor fixes moved producer/consumer read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5ed8ae547e94849852c310c4fa5fbff75f377e39 (clean)
+recorded: 2026-10-31T04:59:43.633845+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 integration: static read-site scan and mutator inventory after the lane A and lane B merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a8d24db9e3c40ead16241542c62ba7a1a8f9603a (dirty)
+recorded: 2026-10-27T04:01:39.293547+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 integration: static read-site scan and mutator inventory after the lane A and lane B merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a8d24db9e3c40ead16241542c62ba7a1a8f9603a (dirty)
+recorded: 2026-10-27T04:01:43.820203+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 round 2 close-out: static read-site scan gains the parent_arg_positions read of the structural-slot carve-out checks (validation/_structural_slot_checks.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69e25d0e3c97d3d97b30b61c458cc3b8854dcb68 (dirty)
+recorded: 2026-10-27T07:16:44.450024+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: r4 round 2 close-out: static read-site scan gains the parent_arg_positions read of the structural-slot carve-out checks (validation/_structural_slot_checks.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69e25d0e3c97d3d97b30b61c458cc3b8854dcb68 (dirty)
+recorded: 2026-10-27T07:16:48.918540+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: foreign-kernel boundary: _function_boundary reads journal OpRecord fields (label_raw, parents, function) to detect host re-entry inside Function.apply
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
+recorded: 2026-10-29T04:14:18.497593+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: foreign-kernel boundary: _function_boundary reads journal OpRecord fields (label_raw, parents, function) to detect host re-entry inside Function.apply
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
+recorded: 2026-10-29T04:14:24.023243+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family c129-r2 on b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf (dirty)
+recorded: 2026-11-03T20:13:50.693973+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family c129-r2 on b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf (dirty)
+recorded: 2026-11-03T20:13:55.748259+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: record-overhead lane: the module-exit retention read sites of _predicate_forward.py moved into _record_stores._RetainedRecordKeys and projections.RecordingState.append_context (one ctx.kind site fewer, sites re-keyed); no producer or consumer semantics changed
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bebc218bd7546af063ae93349f5288057dd07bd2 (dirty)
 recorded: 2026-11-03T17:34:27.084895+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rulings-gap-2
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3962a28aac1ea45e4f06c994b718a0763d33fdb5 (dirty)
+recorded: 2026-11-03T12:15:22.273985+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rulings-gap-2
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3962a28aac1ea45e4f06c994b718a0763d33fdb5 (dirty)
+recorded: 2026-11-03T12:15:29.348669+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1

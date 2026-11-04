@@ -29,10 +29,11 @@
       "statement": "A sticky hook staged on a fork followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
       "status": "closed",
       "fix_lane": "phase 1 (intervention honesty cluster)",
-      "closed_by": "A04 (intervention honesty cluster) + the run/stage contract: fork.run(inputs=...) after a staged sticky hook now REFUSES typed",
+      "closed_by": "A04 (intervention honesty cluster) + the run/attach contract: fork.run(inputs=...) after a hook do APPLIES the staged spec with fire receipts on last_run (engine live) and settles unverifiable; a staged entry that fires nowhere warns or raises rerun_zero_fire; only a loaded artifact refuses typed (run_staged_spec_unapplied)",
       "closure_evidence": [
-        "probe 2026-09-02 at 0537becb799d: a sticky zero_ablate hook staged on relu of a fork, then fork.run(inputs=x), raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
-        "tests/test_interv_honesty_failed_do_cleanup.py::test_explicit_attach_hooks_stays_sticky_by_contract",
+        "probe 2026-09-02 at 0537becb799d: fork.attach_hooks(zero_ablate relu) then fork.run(inputs=x) raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
+        "2026-11-03: the live run(inputs=x) applies the staged spec (tests/test_run_inputs_staged_spec.py::test_live_run_inputs_applies_the_staged_hook_with_receipts_on_the_fork); the refusal stays for loaded artifacts only",
+        "tests/test_interv_honesty_failed_do_cleanup.py::test_staged_hook_stays_sticky_when_a_later_do_fails",
         "tests/test_intervention_phase7.py::test_rerun_warns_when_value_dependent_sticky_hook_stops_matching"
       ],
       "verified_at": "2026-09-02 (D05 release gate)"

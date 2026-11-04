@@ -18,8 +18,8 @@ class _MLXReplayModuleFrames:
         self.call_counts: dict[str, int] = {}
         self.stack: list[str] = []
 
-    def push(self, address: str | None) -> bool:
-        """Enter one module call; return whether a frame was pushed.
+    def enter(self, address: str | None) -> bool:
+        """Enter one module call; return whether a frame was entered.
 
         Parameters
         ----------
@@ -30,7 +30,7 @@ class _MLXReplayModuleFrames:
         Returns
         -------
         bool
-            ``True`` when a frame was pushed (the caller must ``pop`` it).
+            ``True`` when a frame was entered (the caller must ``leave`` it).
         """
 
         if address is None:
@@ -40,7 +40,7 @@ class _MLXReplayModuleFrames:
         self.stack.append(f"{address}:{call_index}")
         return True
 
-    def pop(self) -> None:
+    def leave(self) -> None:
         """Leave the innermost module call."""
 
         self.stack.pop()
