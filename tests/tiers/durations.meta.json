@@ -1,27 +1,16 @@
 {
-  "carried_files": 4,
-  "files": 1780,
+  "carried_files": 1738,
+  "files": 1796,
   "inputs": [
-    "r61.xml",
-    "rwm.xml",
-    "shard-0.xml",
-    "shard-1.xml",
-    "shard-2.xml",
-    "shard-3.xml",
-    "shard-4.xml",
-    "shard-5.xml",
-    "shard-6.xml",
-    "shard-7.xml",
-    "shard-8.xml",
-    "shard-9.xml",
-    "serial.xml"
+    "ma.xml",
+    "mb.xml"
   ],
   "instrumented": false,
   "measured_on": "2026-11-04",
-  "note": "full tier (-m 'not rare and not serial') in 10 balanced shards under -n 4, 4 Nov 2026, on two SLURM clusters and rented CPU pods; shards 1-5, 8, 9 measured at ba96b5d31e and shards 0, 6, 7 at 699c0e92a7 (same test tree except one shard-7 file); serial tier alone; tests/test_real_world_models.py measured alone at 40 GiB and tests/test_tlspec_runnable_r61_alloc_projection.py alone on a cluster where its host-budget refusal fires; rare-only and collection-skipped files carry their previous rows",
+  "note": "regen-3: 61 test files changed since 699c0e92a7 re-measured on axon (mp-tdr3-ma-1) and runpod (mp-tdr3-mb-1), 2026-11-04; other rows carried from regen-2 (699c0e92a7/ba96b5d31e)",
   "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "699c0e92a7",
-  "tests": 21239,
+  "source_commit": "367dc7fbad",
+  "tests": 21396,
   "workers": 4
 }
