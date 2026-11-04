@@ -31,6 +31,8 @@ N_NEW = 3
 class _ToyGenerator(nn.Module):
     """Two-module decoder stand-in with an HF-shaped ``generate`` loop."""
 
+    config: Any  # set by the text-input test only; annotation, no class attribute
+
     def __init__(self, *, stop_token: int | None = None) -> None:
         super().__init__()
         torch.manual_seed(0)
