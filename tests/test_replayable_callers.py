@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.attribution as attribution
+import torchlens.experiment
 import torchlens.experimental
 
 pytestmark = pytest.mark.filterwarnings("ignore::torchlens.errors.InterventionWarning")
@@ -125,7 +126,7 @@ def test_site_sweep_capture_door_captures_plainly(monkeypatch: pytest.MonkeyPatc
     base = tl.trace(model, x)
     label = list(base[tl.func("relu")].labels)[0]
     produced = _recording(monkeypatch, user_funcs)
-    bundle = tl.experiment.sweep_sites(
+    bundle = torchlens.experiment.sweep_sites(
         base,
         candidates={"relu": label},
         edit=tl.zero_ablate(),

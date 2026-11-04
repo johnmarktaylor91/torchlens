@@ -48,6 +48,7 @@ from .._io import (
 )
 from .._quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
+from ._bound_owner_alias import owner_address_for
 from ._call_tree import (
     _edge_counts_for_scope,
     _print_call_tree_from_root,
@@ -2524,7 +2525,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def _module_by_address(self, key: Any) -> "Module":
         """Return the Module an ordinal, address, alias or pass label names (no conversion)."""
-        key = "self" if key == "" else key
+        key = "self" if key == "" else owner_address_for(self, key)
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         return super().__getitem__(self._pass_dict[key].address if key in self._pass_dict else key)
