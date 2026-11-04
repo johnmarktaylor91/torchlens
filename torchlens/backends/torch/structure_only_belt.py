@@ -56,6 +56,7 @@ from ..._utils._exception_notes import defer_failure_note
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
 from ._completeness_cross_thread import _internal_read_active
+from ._consumer_kind import _classify_consumer_kind
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
@@ -148,24 +149,6 @@ def _belt_should_consider(state: _StructureOnlyBeltState) -> bool:
         and threading.get_ident() == state.owner_thread_id
         and not _internal_read_active()
     )
-
-
-def _classify_consumer_kind(filename: str, line: int) -> str:
-    """Raise-time branch-kind classification (memo sec 2.3).
-
-    Uses the standalone ``ast_branches.classify_bool`` lookup — no
-    postprocess dependency; its ``"unknown"`` maps to ``"scalar_escape"`` (an
-    escape the classifier cannot tie to a branch context is by definition a
-    bare escape). The vocabulary of record is ``BoolConsumer.kind``.
-    """
-
-    try:
-        from ..._postprocess.ast_branches import classify_bool
-
-        kind = classify_bool(filename, line).kind
-    except Exception:  # noqa: BLE001 — classification must never mask the refusal
-        return "scalar_escape"
-    return "scalar_escape" if kind == "unknown" else kind
 
 
 def _tensor_substrate(tensor: Any) -> str:

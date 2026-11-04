@@ -64,6 +64,10 @@ PAGES: dict[str, str] = {
     "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
     "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
     "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
+    "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
@@ -79,6 +83,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
@@ -150,6 +155,16 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: The Jacobian lens notebook downloads GPT-2 small and fits sixteen prompts of
+#: batched autograd through the whole model, then a jacrev check on two blocks.
+#: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
+#: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
+#: measured 168.3 and 193.0 s in the test call and 175.7 and 195.6 s run alone
+#: (two runs); the LEACE notebook (GPT-2 small, twelve block erasers) measured
+#: 73.3 and 72.6 s, and 82.0 and 76.9 s. The vision logit lens notebook measured
+#: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
+#: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
+#: use, so it sits in the slow tier with the CLIP notebooks.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
@@ -157,6 +172,10 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/clip_head_attention_recipe.ipynb",
         "examples/methods/clip_text_decomposition_recipe.ipynb",
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )
 
