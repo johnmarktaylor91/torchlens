@@ -8,6 +8,8 @@
   ``dataclasses.replace`` (which re-reads the field list per leaf).
 * The removal scrub (orphan pruning) likewise reads each dataclass's field
   list once per class per sweep, not once per surviving op's template.
+* The container-pooling alias census (metadata compaction) recurses only into
+  containers; it used to call itself on every int of every shape tuple.
 
 ``tests/test_label_rename_reference.py`` pins that the faster walks return
 exactly what the plain ``isinstance`` ladders returned.
@@ -16,6 +18,7 @@ exactly what the plain ``isinstance`` ladders returned.
 from __future__ import annotations
 
 import sys
+from collections import defaultdict
 from dataclasses import fields, replace
 from types import FrameType
 from typing import Any
@@ -25,7 +28,8 @@ import torch
 from _hermetic_counters import quiet_gc
 
 import torchlens as tl
-from torchlens._data_classes import cleanup
+from torchlens._data_classes import cleanup, op as op_module
+from torchlens._data_classes._op_container_census import _count_container_ids
 from torchlens._data_classes._template_walk import map_template_leaves
 from torchlens._postprocess import labeling
 from torchlens.intervention.types import ParentRef
@@ -65,12 +69,19 @@ def _count_in_step(
     owner: Any = labeling,
     step: str = "_log_final_info_for_layers",
     model: type[_Chain] = _Chain,
-) -> tuple[tl.Trace, dict[str, int], list[type]]:
-    """Trace ``model(depth)``; count Python calls of interest inside ``owner.step`` only."""
+) -> tuple[tl.Trace, dict[str, int], list[tuple[str, type]]]:
+    """Trace ``model(depth)``; count Python calls of interest inside ``owner.step`` only.
 
-    counts = {"fields": 0, "replace": 0}
-    replaced: list[type] = []
-    targets = {fields.__code__: "fields", replace.__code__: "replace"}
+    Returns the trace, call counts, and ``(name, first-argument class)`` per call.
+    """
+
+    counts = {"fields": 0, "replace": 0, "census": 0}
+    seen: list[tuple[str, type]] = []
+    targets = {
+        fields.__code__: "fields",
+        replace.__code__: "replace",
+        _count_container_ids.__code__: "census",
+    }
     real = getattr(owner, step)
 
     def profiler(frame: FrameType, event: str, _arg: Any) -> None:
@@ -78,8 +89,7 @@ def _count_in_step(
             name = targets.get(frame.f_code)
             if name is not None:
                 counts[name] += 1
-                if name == "replace":
-                    replaced.append(type(_first_arg(frame)))
+                seen.append((name, type(_first_arg(frame))))
 
     def counted(*args: Any) -> None:
         previous = sys.getprofile()
@@ -92,7 +102,7 @@ def _count_in_step(
     monkeypatch.setattr(owner, step, counted)
     with quiet_gc():
         trace = tl.trace(model(depth).eval(), torch.randn(2, 4))
-    return trace, counts, replaced
+    return trace, counts, seen
 
 
 def _parent_refs(value: Any) -> list[ParentRef]:
@@ -124,9 +134,9 @@ def test_rename_builds_parent_refs_without_dataclasses_replace(
 ) -> None:
     """Counter: no ``replace`` call on a ``ParentRef`` in step 9; refs carry final labels."""
 
-    trace, counts, replaced = _count_in_step(monkeypatch, 4)
+    trace, counts, seen = _count_in_step(monkeypatch, 4)
     assert counts["replace"] > 0, "the sweep must rebuild dataclass template nodes"
-    assert ParentRef not in replaced
+    assert ParentRef not in {cls for name, cls in seen if name == "replace"}
     final_labels = {op.label for op in trace.ops} | {op.layer_label for op in trace.ops}
     refs = [ref for op in trace.ops for ref in _parent_refs(op.args_template)]
     assert len(refs) >= len(trace.ops) // 2
@@ -144,3 +154,12 @@ def test_removal_scrub_reads_dataclass_fields_once_per_class(
     assert len(large.ops) >= len(small.ops) + 27
     assert small_counts["fields"] > 0, "the scrub must walk dataclass template nodes"
     assert large_counts["fields"] == small_counts["fields"]
+
+
+def test_alias_census_recurses_only_into_containers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Counter: compaction's alias census never calls itself on a non-container value."""
+
+    _, counts, seen = _count_in_step(monkeypatch, 4, op_module, "_pool_container_cells")
+    walked = {dict, defaultdict, list, set, tuple}
+    assert counts["census"] > 0, "compaction must census container cells"
+    assert {cls for name, cls in seen if name == "census"} <= walked
