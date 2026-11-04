@@ -340,11 +340,8 @@ def _within(labels: list[str]) -> Any:
 def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
     """Return the edge label of a frozen module's output, or of an op label."""
 
-    try:
-        trace.modules[name]
-    except Exception:  # noqa: BLE001 - not a module name: try it as an op label
-        if name in index.edges or f"{name}:1" in index.edges:
-            return _edge_label(index, name, "frozen")
+    if not is_module(trace, name) and (name in index.edges or f"{name}:1" in index.edges):
+        return _edge_label(index, name, "frozen")
     module = _module(trace, name, "frozen")
     return _edge_label(index, _one_op(module, name, "output_ops", "frozen"), "frozen")
 

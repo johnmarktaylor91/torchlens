@@ -16,7 +16,6 @@ from ._errors import (
     ReceptiveFieldError,
     ReceptiveFieldUnavailableError,
 )
-from ._path import resolve_graph_point
 from ._types import (
     GradReceptiveField,
     GridLayout,
@@ -392,9 +391,6 @@ class ReceptiveFieldView:
                 raise TypeError("Projective queries select their far endpoint with target=.")
             from ._forward_query import _select_target_descriptor, box_for_source_unit
 
-            if target is not None and not isinstance(target, str):
-                # A Module or ModuleCall (trace[module address]) names its output op.
-                target = resolve_graph_point(self._op.source_trace, target)
             projective_solution = self._projective_solution(target)
             source_unit: Sequence[int]
             if unit == "center":
@@ -422,7 +418,7 @@ class ReceptiveFieldView:
             source = target
 
         from . import _engine
-        from ._path import require_path
+        from ._path import require_path, resolve_graph_point
         from ._query import box_for_unit
 
         source_op: Op | None = None

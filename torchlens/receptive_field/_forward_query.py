@@ -110,6 +110,26 @@ def box_for_source_unit(
     )
 
 
+def _target_identity(target: Any) -> str:
+    """The op label a projective target names.
+
+    A string or an Op names itself; a Module or ModuleCall (what ``trace[...]``
+    gives for a module address) names its one output op.
+    """
+
+    if isinstance(target, str):
+        return target
+    if type(target).__name__ not in {"Module", "ModuleCall"}:
+        return str(target.label)
+    outputs = list(target.output_ops)
+    if len(outputs) != 1:
+        raise AmbiguousTargetError(
+            f"Target module {target.address!r} has {len(outputs)} output ops "
+            f"({', '.join(map(str, outputs))}); pass one of them as target=."
+        )
+    return str(outputs[0])
+
+
 def _select_target_descriptor(
     descriptors: Mapping[str, ReceptiveField], target: Op | str | None
 ) -> ReceptiveField:
@@ -122,7 +142,7 @@ def _select_target_descriptor(
                 f"Select one reachable target; available target roles: {roles}."
             )
         return next(iter(descriptors.values()))
-    identity = target if isinstance(target, str) else target.label
+    identity = _target_identity(target)
     for role, descriptor in descriptors.items():
         if identity in {role, descriptor.input_op_label}:
             return descriptor

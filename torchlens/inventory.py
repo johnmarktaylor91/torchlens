@@ -311,7 +311,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
     The qualified module address (the INNERMOST owning module --
     ``output_of_modules`` is innermost-first) wins ONLY when the engine's
     own matcher certifies it: it names exactly one executed site in this
-    inventory AND ``trace[address]`` resolves to this very layer (a
+    inventory AND ``trace.ops[address]`` resolves to this very layer (a
     multi-output container module's address is engine-ambiguous even when
     the inventory holds one row for it). Otherwise the exact layer label,
     pass-qualified when the owning layer is multi-pass. This certification
@@ -337,7 +337,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
     if address and address_counts[address] == 1:
         # engine-ambiguous or unresolvable addresses fall to the label
         with contextlib.suppress(Exception):
-            resolved = trace[str(address)]
+            resolved = trace.ops[str(address)]  # the module's output Op
             if str(getattr(resolved, "layer_label", "")) == str(layer.layer_label):
                 return str(address)
     if int(getattr(layer, "num_passes", 1) or 1) > 1:

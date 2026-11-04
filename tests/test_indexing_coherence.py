@@ -25,7 +25,7 @@ from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
-from torchlens._selection.errors import AmbiguousSiteError
+from torchlens._selection.errors import AmbiguousSiteError, MultiMatchWarning
 
 FC1 = "linear_1_4"
 SHARED = "linear_2_6"
@@ -176,10 +176,11 @@ def test_do_on_a_bare_multi_pass_label_edits_every_pass() -> None:
     torch.manual_seed(0)
     captured = tl.trace(DoorModel().eval(), torch.randn(3, 4))
     try:
-        edited = captured[SHARED].do(
-            lambda out, *, ctx: torch.zeros_like(out),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
-        )
+        with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+            edited = captured[SHARED].do(
+                lambda out, *, ctx: torch.zeros_like(out),
+                intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            )
         for label in (f"{SHARED}:1", f"{SHARED}:2"):
             assert torch.count_nonzero(edited[label].out) == 0
         assert torch.count_nonzero(edited[f"{FC1}:1"].out) > 0
