@@ -749,8 +749,8 @@ def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
 
     While the deferred-payload registry holds anything, every mutating torch call
     searches its arguments; a fork's tensor deep copies call ``set_``. Dead entries
-    of a dropped trace once stayed until a sweep, so a fork after such a capture
-    read about 9,000 to 14,000 events (C-143, tests/backend_parity/test_b10_*).
+    of a dropped trace once stayed until a sweep, and a fork run after such a
+    capture went over the bar (the search reads properties of a storage object).
     """
 
     before = set(tensor_utils._DEFER_PENDING)
