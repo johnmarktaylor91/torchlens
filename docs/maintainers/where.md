@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1469 modules, 656829 lines, 0 modules without a docstring.
+83 packages, 1469 modules, 656827 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5523 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36024 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36022 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1929 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 434 |
@@ -1651,7 +1651,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36024 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36022 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1729,7 +1729,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 339 |
 | `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1420 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 560 |
-| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 866 |
+| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 864 |
 
 ### `torchlens.intervention._super`
 
