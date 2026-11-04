@@ -339,7 +339,7 @@ print(report.columns.tolist())
 Output:
 
 ```text
-['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
+['op', 'module', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
 ```
 
 ## `dtype_range`
