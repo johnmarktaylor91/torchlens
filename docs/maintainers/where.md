@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1565 modules, 673007 lines, 0 modules without a docstring.
+83 packages, 1565 modules, 673018 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6364 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8512 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 117 | 55728 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 117 | 55739 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9135 |
@@ -1331,7 +1331,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (117 modules, 55728 lines)
+Torch backend implementation package for TorchLens capture. (117 modules, 55739 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1405,7 +1405,7 @@ Torch backend implementation package for TorchLens capture. (117 modules, 55728 
 | `_predicate_boundary_replacements` | Sparse replacement ops for module-boundary edits on the predicate path. | 130 |
 | `_predicate_forward` | Predicate-mode module forward: the cold arm of ''decorated_forward''. | 457 |
 | `_prehook_state` | Pre-hook input state: metadata observation, transition comparison and tensor snapshots. | 312 |
-| `_protocol_redispatch` | Declined-protocol redispatch: offer a handler the WRAPPER identity it keyed on. | 374 |
+| `_protocol_redispatch` | Declined-protocol redispatch: offer a handler the WRAPPER identity it keyed on. | 381 |
 | `_quantized_flops` | FLOPs estimation for PyTorch quantized modules logged as internal sources. | 149 |
 | `_replacement_op_fields` | Label minting and field copying for synthesized untagged-tensor boundary ops. | 65 |
 | `_root_prep` | Root-module preparation: the root's identity and the bound-method owner. | 104 |
@@ -1430,7 +1430,7 @@ Torch backend implementation package for TorchLens capture. (117 modules, 55728 
 | `arg_names` | Argument-name introspection for wrapped torch callables (''_state._arg_names''). | 93 |
 | `backend` | Torch implementation of the capture backend Protocol. | 787 |
 | `backward` | Capture torch backward execution and autograd graph metadata. | 4186 |
-| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 587 |
+| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 591 |
 | `bound_root` | TL-authored synthetic root for bound-method capture. | 201 |
 | `buffer_writes` | Registered-buffer write capture for the torch backend. | 1772 |
 | `collectives` | Collective boundary capture for explicit ''torch.distributed'' python calls. | 843 |
