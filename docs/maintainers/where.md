@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1469 modules, 653527 lines, 0 modules without a docstring.
+83 packages, 1472 modules, 654049 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 75 | 33531 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 75 | 33562 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1418 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -90,16 +90,16 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7192 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
-| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
+| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5344 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30858 |
-| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4569 |
+| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4772 |
 
 ## Modules by package
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33531 lines)
+TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33562 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -132,8 +132,8 @@ TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33531 li
 | `_fast_live_until` | Early stop (''until='') for the guarded fast live run. | 208 |
 | `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1439 |
 | `_fast_sparse_state` | Cached-state safety analysis for the guarded fast sparse engine. | 297 |
-| `_input_coerce` | Duck-typed ergonomic input coercion for TorchLens entry points. | 799 |
-| `_input_route` | The one input-routing door every entry that takes model inputs shares. | 251 |
+| `_input_coerce` | Duck-typed ergonomic input coercion for TorchLens entry points. | 800 |
+| `_input_route` | The one input-routing door every entry that takes model inputs shares. | 281 |
 | `_input_walk` | Single-sourced model-input boundary traversal ( Cluster Y, the normative dispatch). | 1627 |
 | `_kernel_telemetry` | Detachable CUDA kernel telemetry for the gated ATen execution profile. | 496 |
 | `_legacy_ctor_sites` | Legacy tensor constructor classes whose ''__new__'' the torch backend patches. | 39 |
@@ -2017,7 +2017,7 @@ Trackers: one engine, first-party sinks, measured relays. (15 modules, 5269 line
 
 ### `torchlens.transformer`
 
-torchlens.transformer -- transformer pictures (tviz memo). (14 modules, 5056 lines)
+torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5344 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2026,13 +2026,14 @@ torchlens.transformer -- transformer pictures (tviz memo). (14 modules, 5056 lin
 | `_decomp` | Score decomposition: the BertViz neuron-view DATA, term-complete. | 227 |
 | `_errors` | Typed refusals for the transformer-pictures package (tviz memo). | 59 |
 | `_extract` | Trace-side extractors: attention views with mask provenance (/). | 401 |
+| `_generation_attention` | Per-step attention pictures from a recorded generation (tviz ). | 254 |
 | `_lens_heatmap` | Layers-by-positions logit-lens heatmap over :class:'LogitLensResult'. | 385 |
 | `_metrics` | Per-token loss and per-context entropy strips (inspectus, matched). | 200 |
-| `_mpl` | matplotlib gate + shared figure chrome (tviz /, FORK-T1 branch A). | 216 |
+| `_mpl` | matplotlib gate + shared figure chrome (tviz /, FORK-T1 branch A). | 220 |
 | `_predictions` | Prediction pictures: ribbon, answer trajectory, rank panel, top-k table. | 563 |
 | `_receipts` | Causal receipt grids: attachment validation + visual grammar (-). | 527 |
 | `_records` | Typed display records for transformer pictures (tviz ). | 1321 |
-| `_render_attention` | Attention picture renderers: single head, grids, atlas (tviz roster). | 464 |
+| `_render_attention` | Attention picture renderers: single head, grids, atlas (tviz roster). | 494 |
 | `_strip` | Colored-token strips: matplotlib paper path + zero-dependency emitters. | 296 |
 | `_wording` | Exact rendered disclosure wording for transformer pictures (tviz memo). | 96 |
 
@@ -2133,15 +2134,17 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 
 ### `torchlens.viz`
 
-Visualization convenience namespace for TorchLens. (9 modules, 4569 lines)
+Visualization convenience namespace for TorchLens. (11 modules, 4772 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Visualization convenience namespace for TorchLens. | 158 |
+| `__init__` | Visualization convenience namespace for TorchLens. | 161 |
 | `_drawing` | ''tl.viz.Drawing'': the result of every TorchLens picture call. | 404 |
 | `_heatmap_axes` | Heatmap axis-label layout: margins, overlap selection, honest omission. | 698 |
 | `_node_visualizers` | Node visualizer factories for ''trace.draw(node_spec_fn=...)'' (''torchlens.viz.nodes''). | 378 |
-| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 274 |
+| `_rgb_scale` | Scale a three-channel image into ''[0, 1]'' for display. | 56 |
+| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 269 |
+| `_tensor_images` | Image views of a bare tensor: ''rgb'' and ''chans'' (views.4). | 149 |
 | `batch_summary` | Reusable batch summary renderers for TorchLens visualizations. | 121 |
 | `feature_maps` | Trace-aware activation feature-map node visualizations. | 1049 |
 | `node_plots` | PIL-only render primitives for compact node visualizations. | 1420 |

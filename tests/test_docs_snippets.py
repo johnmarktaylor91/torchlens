@@ -658,6 +658,8 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_attention.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tensor_images.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,

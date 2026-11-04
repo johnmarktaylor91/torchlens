@@ -97,6 +97,11 @@ as a live per-firing stream on the capture hook surface;
 summary panel and HTML cards consume, so a number can never exist only
 in HTML.
 
+The same stance holds for pictures: `tl.viz.rgb(t)` and `tl.viz.chans(t)`
+draw a bare tensor as an RGB image or a channel grid, as functions rather
+than tensor attributes ([Look at a tensor as an
+image](../field-guide/tensor_images.md)).
+
 ## Credits
 
 The philosophy this surface mines and extends:
