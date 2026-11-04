@@ -3463,8 +3463,8 @@ def warm_lazy_torch_imports() -> None:
     silent, order-dependent breach of the contract's "a plain deterministic
     capture records nothing" pin. The monitor calls this BEFORE arming any
     patch so the cascade runs outside every window. ``torch.backends.opt_einsum``
-    (imported inside ``torch.einsum``) is warmed too, as is TorchLens's own
-    producer-version parser (imported lazily by ``resolve_runnable_torch_alias``):
+    (imported inside ``torch.einsum``) is warmed too, as are TorchLens's producer-version
+    parser and alias table (imported lazily by ``resolve_runnable_torch_alias``):
     an in-window import's ``sys.meta_path`` finder frames become deep-inventory
     roots (see ``rng.py``). The list lives in ``_lazy_import_warm``.
 

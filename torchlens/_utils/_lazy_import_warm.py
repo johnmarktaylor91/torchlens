@@ -11,13 +11,14 @@ import importlib
 #: Modules a process's first wrapped op imports lazily. Torch's own
 #: ``torch._compile``/``torch._dynamo`` cascade draws host entropy at module-exec
 #: time, ``torch.backends.opt_einsum`` is imported inside ``torch.einsum``, and
-#: TorchLens's producer-version parser is imported inside
+#: TorchLens's producer-version parser and runnable alias table are imported inside
 #: ``resolve_runnable_torch_alias``, which the first wrapped op reaches in-window.
 _FIRST_CAPTURE_LAZY_MODULES: tuple[str, ...] = (
     "torch._compile",
     "torch._dynamo",
     "torch.backends.opt_einsum",
     "torchlens._utils._producer_version",
+    "torchlens._utils._runnable_torch_aliases",
 )
 
 
