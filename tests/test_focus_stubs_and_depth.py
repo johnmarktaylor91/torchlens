@@ -155,8 +155,9 @@ def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path
     (to_shared,) = [rows for rows in stubs.values() if rows[-1].startswith("@shared.fc")]
     assert to_shared[-1] == "@shared.fc:1"
     assert to_shared[0].startswith("to linear_")
-    (to_output,) = [rows for rows in stubs.values() if rows[-1].startswith("@output")]
+    (to_output,) = [rows for rows in stubs.values() if rows[-1].startswith("model output")]
     assert to_output[0].startswith("to output_")
+    assert to_output[-1] == "model output 1"
     # No size row: the tensor leaving is the inner op's own, already drawn.
     assert all(len(rows) == 2 for rows in stubs.values()), by_first_row
 
@@ -174,7 +175,7 @@ def test_model_input_stub_reads_the_input_role(trace: tl.Trace, tmp_path: Path) 
     (rows,) = _stubs(dot, "input").values()
     assert rows[0] == "from input_1"
     assert rows[1] == _tensor_row(trace, "input_1")
-    assert rows[2].startswith("@input")
+    assert rows[2] == "model input x"  # the role in words, not an ``@`` module address
 
 
 def test_leaf_focus_draws_its_ops_between_its_stubs(trace: tl.Trace, tmp_path: Path) -> None:
@@ -187,7 +188,8 @@ def test_leaf_focus_draws_its_ops_between_its_stubs(trace: tl.Trace, tmp_path: P
     assert into[0].startswith("from linear_") and into[-1] == "@fc"
     assert out[0].startswith("to cat_") and out[-1] == "@mixer"
     assert "<B>@act</B>" in dot and "@pre_x.act" not in dot
-    assert "@name: the module at that address under pre_x" in dot
+    notes = _dot(trace, tmp_path, "act_notes", module="pre_x.act", show_legend=True)
+    assert "@name: a module address under pre_x" in notes
 
 
 def test_focus_on_a_module_called_twice_draws_both_passes(trace: tl.Trace, tmp_path: Path) -> None:
@@ -200,11 +202,13 @@ def test_focus_on_a_module_called_twice_draws_both_passes(trace: tl.Trace, tmp_p
     assert out[-1] == "@head"
 
 
-def test_reading_notes_explain_from_and_to(trace: tl.Trace, tmp_path: Path) -> None:
-    dot = _dot(trace, tmp_path, "mixer", module="mixer")
+def test_reading_notes_explain_from_and_to_when_asked(trace: tl.Trace, tmp_path: Path) -> None:
+    dot = _dot(trace, tmp_path, "mixer", module="mixer", show_legend=True)
     header = dot[dot.index("label=<") : dot.index("labeljust")]
     assert "from name, to name: the op outside this module" in header
-    whole = _dot(trace, tmp_path, "whole")
+    plain = _dot(trace, tmp_path, "mixer_plain", module="mixer")
+    assert "from name, to name" not in plain  # the reading key is opt-in
+    whole = _dot(trace, tmp_path, "whole", show_legend=True)
     assert "from name, to name" not in whole
 
 
@@ -218,30 +222,29 @@ def test_rolled_and_unrolled_focus_share_the_stub_rows(
         assert rows[-1] in {"@pre_x.act", "@pre_y.act"}
 
 
-def test_shape_rows_are_drawn_where_the_shape_changes(trace: tl.Trace, tmp_path: Path) -> None:
-    dot = _dot(trace, tmp_path, "mixer", module="mixer")
-    rows = _node_rows(dot)
-    by_kind = {name.split("_")[0]: name for name in rows if not name.startswith("__")}
-    cat, proj, mul, norm = (by_kind[kind] for kind in ("cat", "linear", "mul", "layernorm"))
-    # cat widens its inputs and the projection narrows again: both show a shape.
-    assert _tensor_row(trace, cat) in rows[cat]
-    assert _tensor_row(trace, proj) in rows[proj]
-    # mul and norm keep the projection's shape: no row to repeat.
-    assert _tensor_row(trace, mul) not in rows[mul]
-    assert _tensor_row(trace, norm) not in rows[norm]
-    assert "shown where it differs from the op's inputs" in dot
-
-
-def test_a_leaf_chain_shows_its_shape_once_on_the_input_stub(
-    trace: tl.Trace, tmp_path: Path
+@pytest.mark.parametrize("module", ["mixer", "pre_x.act"])
+def test_every_default_op_node_carries_name_shape_size_and_params(
+    trace: tl.Trace, tmp_path: Path, module: str
 ) -> None:
-    dot = _dot(trace, tmp_path, "act", module="pre_x.act")
+    """A focused draw's op nodes keep the whole-model rows: name, ``(shape), size``, params.
+
+    The shape row is never left off because it repeats an input's: mul and
+    norm keep the projection's shape and still show it.
+    """
+
+    dot = _dot(trace, tmp_path, module.replace(".", "_"), module=module)
     rows = _node_rows(dot)
-    (into,) = _stubs(dot, "input").values()
-    assert into[1] == _tensor_row(trace, "linear_1_1") or into[1].startswith("(")
-    for name, node_rows in rows.items():
-        if not name.startswith("__module_focus_"):
-            assert not any(row.startswith("(") for row in node_rows), (name, node_rows)
+    drawn = {name: node_rows for name, node_rows in rows.items() if not name.startswith("__")}
+    assert drawn
+    for name, node_rows in drawn.items():
+        label = name.replace("pass", ":")
+        assert node_rows[0].startswith(name.rsplit("pass", 1)[0]), (name, node_rows)
+        assert _tensor_row(trace, label) in node_rows, (name, node_rows)
+        if trace[label].has_params:
+            assert any(row.startswith("params:") for row in node_rows), (name, node_rows)
+    (into,) = _stubs(dot, "input").values() if module == "pre_x.act" else (None,)
+    if into is not None:  # the input stub still brings its tensor's shape and size
+        assert into[1] == _tensor_row(trace, "linear_1_1")
 
 
 def test_whole_model_draw_keeps_every_shape_row(trace: tl.Trace, tmp_path: Path) -> None:

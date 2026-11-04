@@ -1092,7 +1092,6 @@ def _add_edges_for_node(
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
-
         # Add it to the appropriate module cluster (most nested one containing both nodes)
         if edge_has_boundary:
             module = _get_lowest_module_for_two_render_nodes(
@@ -1110,11 +1109,9 @@ def _add_edges_for_node(
             )
         if tail_name == head_name and _self_loop_is_single_op_module(self, parent_node):
             module = -1
-        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
-        # below clobber the ``module`` loop variable (they reassign it to each
-        # node's own module path). Without this, the captured forward edge would
-        # record the wrong cluster key and sibling rank-groups would never resolve
-        # to a common cluster (always falling back to top-level emission).
+        # Keep the edge's LCA cluster key before the has_input_ancestor loops
+        # below reassign ``module``; the captured forward edge needs it so that
+        # sibling rank-groups resolve to a common cluster.
         edge_module_key: str | int = module
         if hook_edge is not None:
             # The site-to-hook edge goes in the cluster the site-to-child edge
@@ -1218,6 +1215,8 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
         }
+        if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
+            edge_dict["minlen"] = "2"
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%

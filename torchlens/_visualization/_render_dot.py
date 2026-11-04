@@ -89,7 +89,7 @@ if TYPE_CHECKING:
     from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse
-    from .render_ir import RenderIR
+    from .render_ir import RenderIR, RenderIRRankGroup
     from .source_graph import SourceGraph
 
 
@@ -778,9 +778,10 @@ def _forward_header_label(
 
     ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
     channel disclosure when a channel is active and, on a ``module=`` focused
-    draw, the swatches and the reading key; ``False`` is honoured (the docs
-    state the encoding is then undisclosed). The key sits inside the header
-    label so both stay top left on every engine. A ``vis_graph_overrides``
+    draw, the swatches; ``True`` adds the reading key (the notes explaining
+    the picture's notation); ``False`` is honoured (the docs state the
+    encoding is then undisclosed). The key sits inside the header label so
+    both stay top left on every engine. A ``vis_graph_overrides``
     label (or a lens caption) stays the header.
     """
 
@@ -805,7 +806,8 @@ def _forward_header_label(
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
         )
-        notes = reading_notes(node_attrs, request.module)
+        if request.show_legend is True:
+            notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
     if request.encoding is not None and request.show_legend is not False:
         sections = encoding_sections(request.encoding)
@@ -818,6 +820,24 @@ def _forward_header_label(
             str(override(trace) if callable(override) else override), context.theme
         )
     return header_block_label(caption, swatches, sections, context.theme, notes=notes)
+
+
+def _emit_rank_groups(dot: Any, rank_groups: "tuple[RenderIRRankGroup, ...]") -> None:
+    """Emit the IR's rank groups as ``rank=`` subgraphs.
+
+    Stacking channel (L5 M3): rank=same groups span module clusters, so
+    newrank=true opts dot into global rank constraints (without it
+    cross-cluster rank=same is silently ignored, a dishonest no-op). A
+    focused draw's stub groups (rank=source/sink) need no newrank.
+    """
+
+    if any(group.rank == "same" for group in rank_groups):
+        dot.graph_attr.update({"newrank": "true"})
+    for rank_group in rank_groups:
+        with dot.subgraph() as rank_subgraph:
+            rank_subgraph.attr(rank=rank_group.rank)
+            for member in rank_group.members:
+                rank_subgraph.node(member)
 
 
 def _emit_and_finish_forward(
@@ -904,16 +924,7 @@ def _emit_and_finish_forward(
 
     dot = context.dot
     GraphvizRenderer().emit(forward_render_ir, dot)
-    if forward_render_ir.stack_rank_groups:
-        # Stacking channel (L5 M3): rank=same groups span module clusters,
-        # so newrank=true opts dot into global rank constraints (without it
-        # cross-cluster rank=same is silently ignored -- a dishonest no-op).
-        dot.graph_attr.update({"newrank": "true"})
-        for rank_group in forward_render_ir.stack_rank_groups:
-            with dot.subgraph() as rank_subgraph:
-                rank_subgraph.attr(rank="same")
-                for member in rank_group.members:
-                    rank_subgraph.node(member)
+    _emit_rank_groups(dot, forward_render_ir.stack_rank_groups)
     for overlay_edge in work.container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,

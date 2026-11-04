@@ -14,8 +14,9 @@ rectangles, so the swatches are small drawn PNG images in a shared,
 content-addressed folder under the system temp directory, referenced by
 absolute path so the DOT source renders from any working directory. Rows
 appear only for marks the picture contains; the key is opt-in
-(``show_legend=True``), except that a ``module=`` focused draw shows it by
-default with a reading key (``show_legend=False`` turns both off).
+(``show_legend=True``, which also adds the reading key, the notes explaining
+the picture's notation), except that a ``module=`` focused draw shows the key
+by default (``show_legend=False`` turns it off).
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """

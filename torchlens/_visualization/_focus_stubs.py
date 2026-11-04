@@ -158,10 +158,9 @@ def _boundary_lines(
 
     ``from <op>`` (an input stub) or ``to <op>`` (an output stub) names the
     outside op by its label (the name its own node carries); an input stub adds
-    ``tensor_row``, the shape and size of the tensor it brings, which no drawn
-    node shows;
-    the last row is that op's module (``@input.x`` or ``@output.logits`` for
-    the model's own input or output).
+    ``tensor_row``, the shape and size of the tensor it brings; the last row
+    is that op's module (``@mlp``), or ``model input x`` / ``model output
+    logits`` when the outside op is the model's own input or output.
     """
 
     title = external_node.layer_label
@@ -170,21 +169,25 @@ def _boundary_lines(
         rows.append(tensor_row)
     address = _boundary_address(trace, external_node, vis_mode)
     if address is not None:
-        rows.append(f"@{address}")
+        rows.append(address if address.startswith("model ") else f"@{address}")
     return tuple(rows)
 
 
 def _boundary_address(trace: Trace, external_node: GraphNode, vis_mode: str) -> str | None:
     """Return the module address an outside op's own node would show, or ``None``.
 
-    A model input or output shows its role (``input.x``, ``output.logits``);
-    an op inside a module shows its innermost module, pass-qualified in the
-    unrolled view when that module ran more than once; a top-level op none.
+    A model input or output shows its role in words (``model input x``,
+    ``model output logits``); an op inside a module shows its innermost
+    module, pass-qualified in the unrolled view when that module ran more than
+    once; a top-level op none.
     """
 
     if external_node.is_input or external_node.is_output:
         role = getattr(external_node, "io_role", None)
-        return str(role) if role else None
+        if not role:
+            return None
+        kind, _, name = str(role).partition(".")
+        return f"model {kind} {name}".rstrip()
     modules = [str(call) for call in getattr(external_node, "modules", ()) or ()]
     if not modules:
         return None

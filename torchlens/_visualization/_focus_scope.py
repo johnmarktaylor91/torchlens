@@ -285,13 +285,15 @@ def _breadcrumb(address: str) -> list[str]:
 
 
 def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: str) -> str:
-    """Return the header head of a focused draw: scope, drawn view, whole model.
+    """Return the header head: a focused draw's scope and drawn view, else the whole model's.
 
-    The first line is the scope: the model class, then each enclosing module
-    down to the focused one with its class (``GPT2LMHeadModel > transformer >
-    h.5 > mlp (GPT2MLP)``); the frames of the enclosing modules are not drawn.
-    The count line covers the drawn view, the parameter line the whole model,
-    and each says so.
+    A focused draw's first line is the scope: the model class, then each
+    enclosing module down to the focused one with its class
+    (``GPT2LMHeadModel > transformer > h.5 > mlp (GPT2MLP)``); the frames of
+    the enclosing modules are not drawn. Its second line counts the drawn
+    view. The separators are non-breaking spaces, so the spacing around the
+    bold steps stays even in every SVG viewer. The whole model's parameter
+    line is printed on a whole-model draw only.
     """
 
     focus = focus_address(module)
@@ -303,13 +305,9 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
         )
     focus_module = trace.modules[focus]
     steps = [_escape(step) for step in _breadcrumb(focus)]
-    steps[-1] = f"<B>{steps[-1]}</B> ({_escape(focus_module.class_name)})"
-    scope = " &gt; ".join([f"<B>{class_name}</B>", *steps])
-    return (
-        f"{scope}<br align='left'/>"
-        f"drawn: {_escape(count_line)}<br align='left'/>"
-        f"whole model: {params_line}<br align='left'/>"
-    )
+    steps[-1] = f"<B>{steps[-1]}</B>&#160;({_escape(focus_module.class_name)})"
+    scope = "&#160;&gt;&#160;".join([f"<B>{class_name}</B>", *steps])
+    return f"{scope}<br align='left'/>drawn: {_escape(count_line)}<br align='left'/>"
 
 
 def _drawn_op_name(match: re.Match[str], text: str) -> str:
@@ -329,7 +327,7 @@ def _ordinal(number: int) -> str:
 
 
 def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple[str, ...]:
-    """Return the text rows of a focused draw's reading key.
+    """Return the text rows of a focused draw's reading key (``show_legend=True``).
 
     Each row explains one notation the picture uses, taking a real example
     from the drawn nodes where it can: the ``@`` address prefix, an op
@@ -344,7 +342,8 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
     prefix = focus_parent_prefix(module)
     under = f" under {prefix}" if prefix else ""
     notes = [
-        f"@name: the module at that address{under} (a frame title, or a module drawn as one box)"
+        f"@name: a module address{under} (a frame title, a module drawn as one box,"
+        " or the module holding a from/to op)"
     ]
     example = next(
         (
@@ -360,10 +359,7 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
             f"{_drawn_op_name(match, text)}: the {_ordinal(int(match['nth']))} {match['kind']}"
             f" call, op {match['op']} of the whole forward pass"
         )
-    notes.append(
-        "(shape), size: the op's output tensor and its memory, shown where it differs"
-        " from the op's inputs"
-    )
+    notes.append("(shape), size: the op's output tensor and its memory")
     if any(name.startswith("__module_focus_") for name in names):
         notes.append(
             "from name, to name: the op outside this module that made its input,"
