@@ -462,7 +462,6 @@ torchlens/_semantic/patching.py::_run_patch	74
 torchlens/_semantic/patching.py::activation_patch_residual_stream	128
 torchlens/_semantic/patching.py::attribution_patch_attention_heads	67
 torchlens/_semantic/recipes/__init__.py::activate_entrypoint_recipes	63
-torchlens/_semantic/recipes/attention.py	801
 torchlens/_semantic/recipes/attention.py::_eager_result_checked	68
 torchlens/_semantic/recipes/lm_head.py::language_model_head	62
 torchlens/_semantic/reconstruction.py::_result_or_missing	65
