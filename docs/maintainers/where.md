@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1565 modules, 672797 lines, 0 modules without a docstring.
+83 packages, 1566 modules, 673473 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,12 +40,12 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 52 | 17843 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6358 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 87 | 45876 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 88 | 46531 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
-| `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 278 |
+| `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 299 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 197 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 16 | 5541 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
@@ -931,7 +931,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (87 modules, 45876 lines)
+Computational graph visualization via Graphviz. (88 modules, 46531 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -953,7 +953,7 @@ Computational graph visualization via Graphviz. (87 modules, 45876 lines)
 | `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 814 |
 | `_container_edges` | Edge labels that name a container slot (dict key, list index, dataclass field). | 148 |
 | `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 158 |
-| `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 339 |
+| `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 337 |
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 351 |
 | `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 523 |
@@ -976,11 +976,12 @@ Computational graph visualization via Graphviz. (87 modules, 45876 lines)
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 84 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 69 |
-| `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 116 |
+| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 725 |
+| `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 78 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse , the ''__segment__'' half). | 168 |
 | `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 922 |
 | `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1850 |
-| `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 1954 |
+| `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 1924 |
 | `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 592 |
 | `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2021 |
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2198 |
@@ -1070,13 +1071,13 @@ The lens validation harness (themes memo build item 17). (5 modules, 1896 lines)
 
 ### `torchlens._visualization.renderers`
 
-Renderer contracts and implementations for visualization RenderIR. (3 modules, 278 lines)
+Renderer contracts and implementations for visualization RenderIR. (3 modules, 299 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Renderer contracts and implementations for visualization RenderIR. | 17 |
 | `base` | Backend-neutral renderer contracts. | 148 |
-| `graphviz` | Dumb Graphviz serializer for decision-complete RenderIR. | 113 |
+| `graphviz` | Dumb Graphviz serializer for decision-complete RenderIR. | 134 |
 
 ### `torchlens._vocab`
 

@@ -2806,7 +2806,6 @@ docs-md	docs/maintainers/where.md	155
 docs-md	docs/maintainers/where.md	1556
 docs-md	docs/maintainers/where.md	1560
 docs-md	docs/maintainers/where.md	1562
-docs-md	docs/maintainers/where.md	1565
 docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
@@ -2881,7 +2880,6 @@ docs-md	docs/maintainers/where.md	1923
 docs-md	docs/maintainers/where.md	193
 docs-md	docs/maintainers/where.md	1942
 docs-md	docs/maintainers/where.md	195
-docs-md	docs/maintainers/where.md	1954
 docs-md	docs/maintainers/where.md	196
 docs-md	docs/maintainers/where.md	1965
 docs-md	docs/maintainers/where.md	197
@@ -3204,7 +3202,6 @@ docs-md	docs/maintainers/where.md	455
 docs-md	docs/maintainers/where.md	456
 docs-md	docs/maintainers/where.md	457
 docs-md	docs/maintainers/where.md	458
-docs-md	docs/maintainers/where.md	45876
 docs-md	docs/maintainers/where.md	4592
 docs-md	docs/maintainers/where.md	46
 docs-md	docs/maintainers/where.md	460
@@ -3374,7 +3371,6 @@ docs-md	docs/maintainers/where.md	667
 docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
 docs-md	docs/maintainers/where.md	672
-docs-md	docs/maintainers/where.md	672797
 docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
@@ -6975,7 +6971,6 @@ package-docstrings	torchlens/_visualization/_render_edges.py	14
 package-docstrings	torchlens/_visualization/_render_edges.py	2,4
 package-docstrings	torchlens/_visualization/_render_edges.py	25
 package-docstrings	torchlens/_visualization/_render_edges.py	27
-package-docstrings	torchlens/_visualization/_render_edges.py	38
 package-docstrings	torchlens/_visualization/_render_entrypoints.py	13
 package-docstrings	torchlens/_visualization/_render_entrypoints.py	17
 package-docstrings	torchlens/_visualization/_render_entrypoints.py	30,
