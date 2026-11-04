@@ -30,8 +30,8 @@ the verified path: load with your ecosystem's own loader, verify the input
 side, address the layer precisely, extract at scale into a self-describing
 artifact, take the features anywhere, and keep the proof.
 
-Every API spelling on this page is documented-unstable (a naming pass
-precedes 3.0); the workflow is the stable part.
+Every API spelling on this page is documented-unstable and may change in a
+later naming pass; the workflow is the stable part.
 
 ## 1. Load
 

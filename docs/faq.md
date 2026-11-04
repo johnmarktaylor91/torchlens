@@ -143,17 +143,19 @@ aliases, so old code fails with an error instead of quietly doing something diff
 maps each old name to its replacement (for example, the 1.x capture function and the object it
 returned are now `tl.trace` and `Trace`), and
 [TorchLens 2.0 API changes](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/v2.0_api_changes.md)
-lists where each former top-level name lives now. Files saved by torchlens 2.x do not load in
-TorchLens 3; [MIGRATIONS.md](https://github.com/johnmarktaylor91/torchlens/blob/main/MIGRATIONS.md)
+lists where each former top-level name lives now. Files saved by torchlens 2.37 and earlier do
+not load in 2.38; [MIGRATIONS.md](https://github.com/johnmarktaylor91/torchlens/blob/main/MIGRATIONS.md)
 gives the remedy for each kind of file.
 
 ## Will the API change again?
 
-[JMT: confirm] TorchLens follows semantic versioning, and the
-[glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
-fixes the public meaning of every 3.x name. Names the glossary marks *unstable* may still change
-without a deprecation period. For saved files, a newer 3.x release loads files written by older
-3.x releases and refuses, with a typed error, anything it cannot read
+The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
+fixes the public meaning of every name. Names the glossary marks *unstable* may change without
+notice. A release that removes or renames a name lists it in the
+[CHANGELOG](https://github.com/johnmarktaylor91/torchlens/blob/main/CHANGELOG.md) and in the
+[removed-spellings ledger](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/deprecations.md).
+For saved files, a newer release loads files written by older releases of the same saved format
+and refuses, with a typed error, anything it cannot read
 ([MIGRATIONS.md](https://github.com/johnmarktaylor91/torchlens/blob/main/MIGRATIONS.md)).
 
 ## I use another package. How does TorchLens compare?
