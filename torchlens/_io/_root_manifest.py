@@ -3,8 +3,12 @@
 A merged, fastlog or dataset-extraction directory carries a root
 ``manifest.json`` that is a different discriminated object from a trace
 bundle's manifest (it has no tensor table), so :func:`torchlens.load` routes it
-here before ``Manifest`` parsing. Every routed format first passes the one
-earlier-major refusal.
+here before ``Manifest`` parsing. A merged or fastlog directory, and any
+other manifest that stamps the current format number, first passes the
+release-stamp floor (``raise_if_saved_by_older_major``); an extraction
+directory takes the same floor inside ``load_extraction``, after its schema
+check, and a manifest stamping an older format number is left to the
+format-specific refusal downstream.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from . import _json
-from .format_contract import raise_if_saved_by_older_major
+from .format_contract import MIN_TLSPEC_VERSION, raise_if_saved_by_older_major
 
 NOT_ROUTED = object()
 """Sentinel: the directory is not a root-manifest format; continue to format detection."""
@@ -68,6 +72,35 @@ def _read_root_manifest(bundle_path: Path) -> dict[str, Any] | None:
     return candidate if isinstance(candidate, dict) else None
 
 
+def _release_floor_applies(candidate: dict[str, Any]) -> bool:
+    """Return whether the release-stamp floor is checked at this door.
+
+    Merged and fastlog directories have no other release check, so they always
+    are. An extraction manifest is checked by ``load_extraction`` after its
+    schema refusal. Any other manifest is checked only when it stamps the
+    current format number: an older format number is refused downstream by the
+    format-specific door, which names the format (a 2.16 ModelLog, a
+    ``tlspec_version`` below the floor) more precisely than a release stamp.
+
+    Parameters
+    ----------
+    candidate:
+        The parsed root ``manifest.json`` mapping.
+
+    Returns
+    -------
+    bool
+        True when :func:`raise_if_saved_by_older_major` runs here.
+    """
+
+    if candidate.get("bundle_format") in {"merged-directory", "fastlog-directory"}:
+        return True
+    if _is_extraction_manifest(candidate):
+        return False
+    stamp = candidate.get("tlspec_version")
+    return isinstance(stamp, int) and stamp >= MIN_TLSPEC_VERSION
+
+
 def load_by_root_manifest(bundle_path: Path) -> Any:
     """Load a directory whose root manifest names a merged, fastlog or extraction format.
 
@@ -86,13 +119,14 @@ def load_by_root_manifest(bundle_path: Path) -> Any:
     candidate = _read_root_manifest(bundle_path)
     if candidate is None:
         return NOT_ROUTED
-    # One refusal for every saved format: a file an earlier major
-    # release wrote is never read (no compatibility reader is carried).
-    from .. import __version__ as _running_version
+    # A file a release below the first format-11 release wrote is never read
+    # (no compatibility reader is carried).
+    if _release_floor_applies(candidate):
+        from .. import __version__ as _running_version
 
-    raise_if_saved_by_older_major(
-        candidate.get("torchlens_version"), str(bundle_path), running_version=_running_version
-    )
+        raise_if_saved_by_older_major(
+            candidate.get("torchlens_version"), str(bundle_path), running_version=_running_version
+        )
     if candidate.get("bundle_format") == "merged-directory":
         from .._merged._artifact import load_merged
 

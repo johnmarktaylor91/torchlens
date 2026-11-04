@@ -75,6 +75,7 @@ def _saved_extraction(tmp_path: Path) -> Path:
 
 
 _SAVERS = {
+    "trace": lambda tmp_path: _saved_trace(tmp_path)[0],
     "merged": _saved_merged,
     "fastlog": _saved_fastlog,
     "extraction": _saved_extraction,
@@ -147,7 +148,7 @@ def test_an_unparseable_stamp_is_left_to_its_own_checks(saved: object) -> None:
 
 @pytest.mark.parametrize("kind", sorted(_SAVERS))
 def test_a_root_manifest_stamped_2_37_1_refuses_at_load(tmp_path: Path, kind: str) -> None:
-    """Merged, fastlog and extraction directories stamped 2.37.1 refuse at ``tl.load``."""
+    """Trace, merged, fastlog and extraction directories stamped 2.37.1 refuse at ``tl.load``."""
 
     path = _SAVERS[kind](tmp_path)
     _restamp(path, "2.37.1")
