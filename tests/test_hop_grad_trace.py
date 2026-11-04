@@ -13,15 +13,19 @@ reproduce the no-grad outputs bit for bit, validate True (and still fail
 validation when a capture bug is planted), keep the no-grad ops as an ordered
 subsequence, hold only real activations, and carry backward.
 
-Capture runs under the ``force_eager`` stance. A grad-requiring ``map`` then
-returns one tensor per row instead of the stacked tensor (plain torch does the
-same under that stance), so its capture keeps failing loudly rather than
-returning a different structure. ``cond`` backward under that stance fails in
-plain torch too, so backward is checked for ``while_loop`` and ``scan``.
+Capture runs under the ``force_eager`` stance, but each operator's own entry
+compile still runs (as in plain torch), so ``map`` returns its stacked tensor
+and ``cond`` carries backward. Those compiles are internal to the operator:
+they are not a user ``torch.compile`` region, record exactly the ops the
+forced-eager capture records, and leave the user's later operator calls
+compiling as before. A user ``torch.compile`` region around an operator is
+still detected and refused exactly as before.
 """
 
 from __future__ import annotations
 
+import collections
+import contextlib
 import warnings
 from collections.abc import Callable, Iterator
 
@@ -31,7 +35,8 @@ from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
-from torchlens import _state
+from torchlens import _capture_state_helpers, _state
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch import rescue, wrappers
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TraceCaptureError
@@ -223,6 +228,7 @@ _COND_CASES: dict[str, Callable[[], nn.Module]] = {
 }
 
 _LOOP_CASES: dict[str, Callable[..., nn.Module]] = {
+    "map": _MapModel,
     "while_loop": _WhileModel,
     "scan": _ScanModel,
 }
@@ -486,7 +492,7 @@ def test_grad_operands_leave_only_real_activations(name: str) -> None:
         assert op.out.device.type == x.device.type, op.func_name
 
 
-@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
+@pytest.mark.parametrize("name", _ALL_CASES)
 def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     """The traced output carries the graph, and backward gives the eager grads."""
 
@@ -504,3 +510,140 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     producer = trace[output.parents[0]]
     assert producer.has_saved_grad
     assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+
+
+@contextlib.contextmanager
+def _forced_eager_capture() -> Iterator[None]:
+    """Capture with every operator entry compile skipped, as before the compile was lifted.
+
+    Yields
+    ------
+    None
+        Nothing; the context is entered for its side effect.
+    """
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            _capture_state_helpers,
+            "lift_hop_entry_compiles",
+            lambda: contextlib.nullcontext(False),
+        )
+        yield
+
+
+@pytest.mark.parametrize(
+    ("name", "grad"),
+    [(n, False) for n in _ALL_CASES]
+    + [(n, True) for n in sorted(_COND_CASES)]
+    + [("while_loop", True)],
+)
+def test_hop_entry_compile_records_the_forced_eager_ops(name: str, grad: bool) -> None:
+    """The lifted entry compile logs exactly the op multiset the forced-eager capture logs.
+
+    A grad-requiring ``map`` has no forced-eager capture to compare (it returned
+    per-row outputs), and ``scan``'s grad path runs a different program.
+    """
+
+    model, x = _model(name), _input(name)
+    lifted = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
+    with _forced_eager_capture():
+        forced = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
+    assert collections.Counter(lifted) == collections.Counter(forced)
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_hop_entry_compile_is_not_a_user_compile_region(name: str) -> None:
+    """The operator's own compile neither raises the Dynamo-region flag nor its warning."""
+
+    model, x = _model(name), _input(name)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, x.requires_grad_(True))
+    assert trace._raw_dynamo_region_detected is False
+    assert not [w for w in caught if "torch.compile (Dynamo) region" in str(w.message)]
+
+
+class _UserCompiledCond(nn.Module):
+    """A user ``torch.compile`` region wrapped around a ``cond``."""
+
+    def __init__(self) -> None:
+        """Compile the region as a plain attribute, which capture cannot unwrap."""
+
+        super().__init__()
+        self.region = torch.compile(_UserCompiledCond._branch, backend="eager")
+
+    @staticmethod
+    def _branch(x: torch.Tensor) -> torch.Tensor:
+        """Run the ``cond``.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            ``2 * x`` for a positive sum, else ``x - 1``.
+        """
+
+        return _hop_cond(x.sum() > 0, lambda t: t * 2, lambda t: t - 1, (x,))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the compiled region.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The region's output plus one.
+        """
+
+        return self.region(x) + 1
+
+
+def test_user_compile_region_around_a_hop_is_still_detected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the stance, a user region around a ``cond`` is detected and refused as before."""
+
+    monkeypatch.setattr(_torch_compat, "HAS_SET_STANCE", False)
+    torch.manual_seed(0)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(_UserCompiledCond(), torch.rand(3, 4) + 0.1)
+    assert trace._raw_dynamo_region_detected is True
+    assert [w for w in caught if "torch.compile (Dynamo) region" in str(w.message)]
+    assert _func_names(trace) == ["none", "__add__", "none"]
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_capture_leaves_the_users_hop_compiles_working(name: str) -> None:
+    """After grad captures and a validation, the untraced operator call still compiles and matches."""
+
+    model, x = _model(name), _input(name)
+    expected = model(x.clone().requires_grad_(True)).detach()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.clone(), validate_metadata=True) is True
+        tl.trace(model, x.clone().requires_grad_(True))
+    assert torch.equal(model(x.clone().requires_grad_(True)).detach(), expected)
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_untraced_call_after_a_capture_reuses_the_users_own_compile(name: str) -> None:
+    """A capture's operator compiles leave the user's Dynamo cache unpoisoned: no new compile."""
+
+    model, x = _model(name), _input(name)
+    counters = _torch_compat.get_dynamo_compile_counters(force_probe=True)
+    assert counters is not None
+    for _ in range(2):
+        model(x.clone().requires_grad_(True))
+    tl.trace(model, x.clone().requires_grad_(True))
+    compiled_before = counters["frames"]["total"]
+    model(x.clone().requires_grad_(True))
+    assert counters["frames"]["total"] == compiled_before
