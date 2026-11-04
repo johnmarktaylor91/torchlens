@@ -645,22 +645,32 @@ print("encoded differs", d.dot != base.dot, "overlay differs", o.dot != base.dot
 ```
 
 ### options-vis-buffers
-Show buffer nodes always, only when meaningful, or never.
+Show buffer nodes always, only when meaningful (BatchNorm's running statistics hidden, the registered `scale` kept), or never.
 
 - covers: `VisualizationOptions.show_buffers`
 - tasks: draw, buffers
 - fixture: none
 
 ```python
-net = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.BatchNorm1d(4)).eval()
-trace = tl.trace(net, torch.randn(2, 4))
+class Net(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = torch.nn.Linear(4, 4)
+        self.bn = torch.nn.BatchNorm1d(4)
+        self.register_buffer("scale", torch.full((4,), 2.0))
+
+    def forward(self, x):
+        return self.bn(self.lin(x) * self.scale)
+
+
+trace = tl.trace(Net().eval(), torch.randn(2, 4))
 for mode in ["never", "meaningful", "always"]:
     d = trace.draw(path=mode, file_format="gv", show_buffers=mode)
-    print(mode, d.dot.count("running_mean"))
+    print(mode, d.dot.count("<B>buffer_"))
 # Output:
-# never 1
+# never 0
 # meaningful 1
-# always 1
+# always 3
 ```
 
 ### options-vis-backward-graph
