@@ -68,6 +68,10 @@ def _run(module: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str])
     assert f"RULE: {module.RULE}" in printed
     assert f"VERDICT: {summary['verdict']}" in printed
     assert len(list(tmp_path.glob("*.tlspec"))) == 1
+    replay = summary["replay"]
+    assert replay["loaded_equal"] and replay["replay_equal"], replay
+    assert replay["tensors_compared"] > 0
+    assert f"REPLAY: {replay['bundle']} loads back and replays bitwise equal" in printed
     return summary
 
 

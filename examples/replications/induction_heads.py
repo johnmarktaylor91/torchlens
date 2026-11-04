@@ -106,7 +106,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     mine = ranked_heads(got)[:TOP_K]
     theirs = ranked_heads(want)[:TOP_K]
     passed = mine == theirs and gap <= SCORE_TOLERANCE
-    _save_small_trace(model, tokens, out_dir)
+    replay = _save_small_trace(model, tokens, out_dir)
     summary = {
         "replication": "induction_heads",
         "claim": CLAIM,
@@ -126,12 +126,15 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
                 for name in ranked_heads(got)[:5]
             ],
         },
+        "replay": replay,
         "verdict": common.REPLICATED if passed else common.NOT_REPLICATED,
     }
     return common.report(summary, out_dir, "induction_heads")
 
 
-def _save_small_trace(model: torch.nn.Module, tokens: torch.Tensor, out_dir: Path | None) -> None:
+def _save_small_trace(
+    model: torch.nn.Module, tokens: torch.Tensor, out_dir: Path | None
+) -> dict[str, Any] | None:
     """Write a portable ``.tlspec`` of the first sequence's run (one row keeps it small).
 
     Parameters
@@ -145,10 +148,11 @@ def _save_small_trace(model: torch.nn.Module, tokens: torch.Tensor, out_dir: Pat
     """
 
     if out_dir is None:
-        return
-    trace = tl.trace(model, tokens[:1], save="all")
+        return None
+    row = tokens[:1]
+    trace = tl.trace(model, row, save="all")
     try:
-        common.save_trace(trace, out_dir, "induction_heads")
+        return common.save_trace(trace, out_dir, "induction_heads", model=model, inputs=row)
     finally:
         trace.cleanup()
 

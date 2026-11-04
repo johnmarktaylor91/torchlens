@@ -120,7 +120,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     ranked = sorted(means, key=lambda name: means[name], reverse=True)
     top = ranked[:TOP_K]
     passed = len(means) == 144 and all(name in top for name in NAME_MOVERS)
-    _save_first_prompt(model, tokenizer, rows[0], out_dir)
+    replay = _save_first_prompt(model, tokenizer, rows[0], out_dir)
     summary = {
         "replication": "ioi_name_movers",
         "claim": CLAIM,
@@ -141,6 +141,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
             "fraction_io_over_s": round(sum(diff > 0 for diff in diffs) / len(diffs), 4),
             "paper_fraction_io_over_s": PAPER_IO_OVER_S,
         },
+        "replay": replay,
         "verdict": common.REPLICATED if passed else common.NOT_REPLICATED,
     }
     return common.report(summary, out_dir, "ioi_name_movers")
@@ -148,15 +149,15 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
 
 def _save_first_prompt(
     model: torch.nn.Module, tokenizer: Any, row: dict[str, Any], out_dir: Path | None
-) -> None:
-    """Write a portable ``.tlspec`` of the first prompt's run."""
+) -> dict[str, Any] | None:
+    """Write a portable ``.tlspec`` of the first prompt's run and verify its replay."""
 
     if out_dir is None:
-        return
+        return None
     ids = tokenizer(row["prompt"], return_tensors="pt").input_ids
     trace = tl.trace(model, ids, save="all")
     try:
-        common.save_trace(trace, out_dir, "ioi_name_movers")
+        return common.save_trace(trace, out_dir, "ioi_name_movers", model=model, inputs=ids)
     finally:
         trace.cleanup()
 
