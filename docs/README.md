@@ -10,6 +10,8 @@
   [extract features](field-guide/extract_features.md),
   [intervene](field-guide/intervene.md).
 - [Quickstart: the input ladder](quickstart.md).
+- [Also in TorchLens](also_in_torchlens.md): every feature the README tour does not show, grouped
+  by task, one line each.
 
 ## What it shows
 

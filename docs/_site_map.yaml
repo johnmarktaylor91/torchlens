@@ -56,6 +56,9 @@ pages:
     section: project
   - path: activation_transform_persistence.md
     section: concepts
+  - path: also_in_torchlens.md
+    section: get-started
+    note: every feature the README tour does not show, grouped by task; the README's "Also in TorchLens" list links here
   - path: internal/agent-reference/architecture.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
@@ -149,6 +152,9 @@ pages:
     section: doors
   - path: facets.md
     section: concepts
+  - path: faq.md
+    section: get-started
+    publish: true
   - path: fields/debugging_and_training.md
     section: fields
     note: landing page for people debugging or training networks; linked from the README
