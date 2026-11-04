@@ -4,7 +4,10 @@
 ``HigherOrderOperator``. TorchLens captures the ops those callables run, so the
 completeness witness must census the same ops: a correct capture validates True,
 and an op inside the subgraph that TorchLens does not capture (a raw
-``torch._C._VariableFunctions`` call, the planted drop) validates False. Before the
+original ``torch.mul`` taken while the wrappers are removed, the planted drop)
+validates False. Branch callables use Tensor operators: ``tl.validate`` computes its
+ground truth with a plain run that sends eager HOPs through ``torch.compile``, which
+cannot inline a TorchLens wrapper captured by closure. Before the
 witness carried a rule per HOP, ``tl.validate`` raised ``NotImplementedError``
 ("no rule registered for HigherOrderOperator cond") on every such capture.
 """
@@ -12,18 +15,48 @@ witness carried a rule per HOP, ``tl.validate`` raised ``NotImplementedError``
 from __future__ import annotations
 
 import importlib
+import operator
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens.backends.torch import rescue
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
-_RAW_MUL = torch._C._VariableFunctions.mul
-"""A dispatcher-level multiply TorchLens does not wrap: the planted dropped op."""
+_Mul = Callable[[torch.Tensor, object], torch.Tensor]
+
+_CLEAN_MUL: _Mul = operator.mul
+"""The Tensor ``*`` operator: captured by TorchLens and inlinable by ``torch.compile``."""
+
+
+@pytest.fixture
+def raw_mul() -> Iterator[_Mul]:
+    """Yield the original ``torch.mul``, taken while TorchLens's wrappers are removed.
+
+    The original is a builtin TorchLens never sees, so calling it inside a HOP
+    subgraph plants an op the capture drops while the witness still observes it.
+    The wrappers are re-installed with the session's diagnostic modes before the
+    test and again at teardown.
+
+    Yields
+    ------
+    _Mul
+        The unwrapped ``torch.mul``.
+    """
+
+    saved_escape = _state._escape_detector_mode
+    saved_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    original = torch.mul
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+    yield original
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
 
 def _hop_function(module: str, name: str) -> Callable[..., object]:
@@ -110,13 +143,13 @@ class _CondLinear(nn.Module):
         return torch.cond(x.sum() > -1e9, lambda t: self.lin(t), lambda t: t - 1, (x,)) + x
 
 
-def _cond_true(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _cond_true(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward whose ``torch.cond`` takes the true branch.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the taken branch.
+    mul:
+        Multiply the taken branch runs.
 
     Returns
     -------
@@ -124,17 +157,16 @@ def _cond_true(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
         The forward function.
     """
 
-    mul = _RAW_MUL if raw else torch.mul
     return lambda x: torch.cond(x.sum() > -1e9, lambda t: mul(t, 2.0), lambda t: t - 1, (x,)) + x
 
 
-def _cond_false(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _cond_false(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward whose ``torch.cond`` takes the false branch.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the taken (false) branch.
+    mul:
+        Multiply the taken (false) branch runs.
 
     Returns
     -------
@@ -142,17 +174,16 @@ def _cond_false(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
         The forward function.
     """
 
-    mul = _RAW_MUL if raw else torch.mul
     return lambda x: torch.cond(x.sum() < -1e9, lambda t: t - 1, lambda t: mul(t, 2.0), (x,)) + x
 
 
-def _while_loop(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _while_loop(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward running a three-step ``while_loop``.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the loop body.
+    mul:
+        Multiply the loop body runs.
 
     Returns
     -------
@@ -161,7 +192,6 @@ def _while_loop(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     """
 
     while_loop = _hop_function("while_loop", "while_loop")
-    mul = _RAW_MUL if raw else torch.mul
 
     def forward(x: torch.Tensor) -> torch.Tensor:
         """Loop three times doubling the carry.
@@ -184,13 +214,13 @@ def _while_loop(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     return forward
 
 
-def _map(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _map(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward mapping a function over rows with ``map``.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the mapped function.
+    mul:
+        Multiply the mapped function runs.
 
     Returns
     -------
@@ -199,17 +229,16 @@ def _map(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     """
 
     hop_map = _hop_function("map", "map")
-    mul = _RAW_MUL if raw else torch.mul
     return lambda x: hop_map(lambda r: mul(r.sin(), 2.0), x) + x
 
 
-def _scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _scan(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward running a cumulative ``scan``.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the combine function.
+    mul:
+        Multiply the combine function runs.
 
     Returns
     -------
@@ -218,7 +247,6 @@ def _scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     """
 
     scan = _hop_function("scan", "scan")
-    mul = _RAW_MUL if raw else torch.mul
 
     def forward(x: torch.Tensor) -> torch.Tensor:
         """Scan rows, carrying a running sum.
@@ -240,13 +268,13 @@ def _scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     return forward
 
 
-def _associative_scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
+def _associative_scan(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
     """Build a forward running a generic-mode ``associative_scan`` on CPU.
 
     Parameters
     ----------
-    raw:
-        Plant the uncaptured multiply in the combine function.
+    mul:
+        Multiply the combine function runs.
 
     Returns
     -------
@@ -255,13 +283,12 @@ def _associative_scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     """
 
     associative_scan = _hop_function("associative_scan", "associative_scan")
-    mul = _RAW_MUL if raw else torch.mul
     return lambda x: (
         associative_scan(lambda a, b: mul(a + b, 2.0), x, 0, combine_mode="generic") + x
     )
 
 
-_HOP_FORWARDS: dict[str, Callable[[bool], Callable[[torch.Tensor], torch.Tensor]]] = {
+_HOP_FORWARDS: dict[str, Callable[[_Mul], Callable[[torch.Tensor], torch.Tensor]]] = {
     "cond_true_branch": _cond_true,
     "cond_false_branch": _cond_false,
     "while_loop": _while_loop,
@@ -296,12 +323,14 @@ def _validate(model: nn.Module) -> bool:
 def test_hop_capture_validates_true(hop: str) -> None:
     """A correct capture through a HOP validates True instead of raising."""
 
-    fn = _HOP_FORWARDS[hop](False)
+    fn = _HOP_FORWARDS[hop](_CLEAN_MUL)
     assert _validate(_Forward(fn)) is True
 
 
 @pytest.mark.parametrize("hop", sorted(_HOP_FORWARDS))
-def test_hop_planted_dropped_op_validates_false(hop: str, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_hop_planted_dropped_op_validates_false(
+    hop: str, raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An uncaptured op inside the HOP subgraph that ran is caught by the witness.
 
     The rescue re-run is disabled so the primary capture keeps the planted drop (it would
@@ -309,7 +338,7 @@ def test_hop_planted_dropped_op_validates_false(hop: str, monkeypatch: pytest.Mo
     """
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    fn = _HOP_FORWARDS[hop](True)
+    fn = _HOP_FORWARDS[hop](raw_mul)
     assert _validate(_Forward(fn)) is False
 
 
@@ -325,14 +354,14 @@ def test_cond_capture_holds_only_the_taken_branch() -> None:
     x = torch.randn(3, 3)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        taken_true = tl.trace(_Forward(_cond_true(False)), x)
-        taken_false = tl.trace(_Forward(_cond_false(False)), x)
+        taken_true = tl.trace(_Forward(_cond_true(_CLEAN_MUL)), x)
+        taken_false = tl.trace(_Forward(_cond_false(_CLEAN_MUL)), x)
     try:
         true_funcs = [op.func_name for op in taken_true.ops]
         false_funcs = [op.func_name for op in taken_false.ops]
     finally:
         taken_true.cleanup()
         taken_false.cleanup()
-    assert "mul" in true_funcs and "__sub__" not in true_funcs
-    assert "mul" in false_funcs and "__sub__" not in false_funcs
-    assert true_funcs.count("mul") == 1 and false_funcs.count("mul") == 1
+    assert "__mul__" in true_funcs and "__sub__" not in true_funcs
+    assert "__mul__" in false_funcs and "__sub__" not in false_funcs
+    assert true_funcs.count("__mul__") == 1 and false_funcs.count("__mul__") == 1
