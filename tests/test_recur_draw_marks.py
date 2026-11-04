@@ -3,8 +3,10 @@
 * Edge annotations (``In``/``Out`` pass ranges, argument labels, IF/THEN) follow
   the edge font size (``edge_overrides["fontsize"]`` or ``font_size``) instead of
   a fixed 8 pt; the default drawing keeps 8 pt and 18 pt.
-* A rolled pass range on a conditional edge shares the branch label's midpoint
-  slot rather than floating as a tail or head label.
+* A rolled pass range sits at the node it describes (``Out`` as the tail label,
+  ``In`` as the head label), also on a conditional edge, whose branch word keeps
+  the midpoint, and beside an argument label, which takes the midpoint (restored
+  head/tail placement, JMT 3 Nov 2026).
 * The ``"label"`` token of ``node_label_fields`` carries the pass marks the default
   title shows, and the ``"pass"`` token prints nothing on single-pass nodes.
 """
@@ -65,6 +67,13 @@ def _edge_lines(dot: str) -> list[str]:
 
 def _edge_point_sizes(dot: str) -> set[str]:
     return {size for line in _edge_lines(dot) for size in _POINT_SIZE.findall(line)}
+
+
+def _edge_attr(line: str, kind: str) -> str:
+    """Return one HTML label attribute (``label``, ``headlabel``, ...) of a DOT edge line."""
+
+    match = re.search(rf"(?<![a-z]){kind}=(<<TABLE.*?</TABLE>>)", line)
+    return "" if match is None else match.group(1)
 
 
 def _branch_edge(dot: str) -> str:
@@ -134,12 +143,13 @@ def test_edge_font_size_sizes_argument_labels(linear_trace: tl.Trace) -> None:
     assert "12" in _edge_point_sizes(sized)
 
 
-def test_rolled_pass_range_shares_the_branch_midpoint(loop_if_trace: tl.Trace) -> None:
+def test_rolled_pass_range_sits_at_its_node_beside_the_branch_label(
+    loop_if_trace: tl.Trace,
+) -> None:
     line = _branch_edge(_dot(loop_if_trace, rolled=True))
-    label = line.split("[label=", 1)[1]
-    assert "<u>IF</u>" in label and ">Out " in label
-    assert "taillabel" not in line
-    assert "headlabel" not in line
+    assert "<u>IF</u>" in _edge_attr(line, "label") and ">Out " not in _edge_attr(line, "label")
+    assert ">Out " in _edge_attr(line, "taillabel")
+    assert _edge_attr(line, "headlabel") == ""
 
 
 def test_label_token_carries_pass_marks(linear_trace: tl.Trace) -> None:
@@ -164,11 +174,14 @@ def test_pass_token_is_empty_on_single_pass_nodes(linear_trace: tl.Trace) -> Non
         assert f">{pass_number}<" in unrolled
 
 
-def test_rolled_argument_and_pass_range_share_one_midpoint(loop_if_trace: tl.Trace) -> None:
+def test_rolled_argument_takes_the_midpoint_and_pass_range_stays_at_the_head(
+    loop_if_trace: tl.Trace,
+) -> None:
     dot = _dot(loop_if_trace, rolled=True)
     input_edges = [line for line in _edge_lines(dot) if line.strip().startswith("input_")]
     assert len(input_edges) == 2
     for line in input_edges:
-        assert "headlabel" not in line and "xlabel" not in line
-        label = line.split("[label=", 1)[1]
-        assert ">arg " in label and ">In " in label
+        assert _edge_attr(line, "xlabel") == ""
+        assert ">In " in _edge_attr(line, "headlabel")
+        assert ">arg " not in _edge_attr(line, "headlabel")
+        assert ">arg " in _edge_attr(line, "label") and ">In " not in _edge_attr(line, "label")

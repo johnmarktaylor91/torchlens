@@ -12,7 +12,7 @@ Nov 2026).
 
 from __future__ import annotations
 
-__all__ = ["loop_edge_attrs", "pass_label_placement", "self_loop_port_attrs"]
+__all__ = ["loop_edge_attrs", "pass_label_spacing", "self_loop_port_attrs"]
 
 # self-loop: tail port (output side), head port (input side) per rank direction
 _LOOP_PORTS: dict[str, tuple[str, str]] = {
@@ -32,25 +32,21 @@ _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
     "LR": ("sw", "se"),
     "RL": ("se", "sw"),
 }
-# return arc's head/tail label placement (labeldistance, labelangle) per rank direction
-_BACK_EDGE_LABEL_PLACEMENT: dict[str, tuple[str, str]] = {
-    "BT": ("2", "-45"),
-    "TB": ("2", "-45"),
-    "LR": ("2", "-45"),
-    "RL": ("2", "-45"),
-}
 
 
-def pass_label_placement(rankdir: str) -> dict[str, str]:
-    """Return the head/tail label placement for a return arc's ``In``/``Out`` labels.
+def pass_label_spacing(rankdir: str, is_back_edge: bool) -> dict[str, str]:
+    """Return the room a straight edge needs for its head/tail pass labels.
 
-    The arc leaves the tail and enters the head at inner corners (``_BACK_EDGE_PORTS``),
-    so each label is placed relative to the arc's end tangent to sit beside its own
-    node's corner, clear of the box and the curve.
+    Sideways (``LR``/``RL``) the label text runs along the edge, and Graphviz reserves
+    no space for head/tail labels, so a one-rank edge is shorter than ``Out 2`` is
+    wide; two ranks give the label the length a midpoint label used to reserve.
+    Upright drawings put the text beside the edge and need nothing.  A return arc
+    is ``constraint=false`` and takes no length from ranks.
     """
 
-    distance, angle = _BACK_EDGE_LABEL_PLACEMENT.get(rankdir, _BACK_EDGE_LABEL_PLACEMENT["BT"])
-    return {"labeldistance": distance, "labelangle": angle}
+    if is_back_edge or rankdir not in ("LR", "RL"):
+        return {}
+    return {"minlen": "2"}
 
 
 def self_loop_port_attrs(rankdir: str) -> dict[str, str]:

@@ -17,7 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
-from ._loop_edges import loop_edge_attrs, pass_label_placement
+from ._loop_edges import loop_edge_attrs, pass_label_spacing
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
@@ -1932,10 +1932,10 @@ def _label_rolled_call_indexs(
     (the passes the edge leaves its source on), ``In`` the head label (the
     passes it enters its destination on), so neither floats mid-edge between
     two nodes.  This restores TorchLens's original head/tail placement (JMT, 3
-    Nov 2026), which midpoint merging had replaced.  A rolled loop's return arc
-    leaves and enters at inner corners, so its two labels get placement from
-    ``pass_label_placement`` for the drawing direction; straight edges keep
-    Graphviz's default endpoint placement, which avoids nodes and other labels.
+    Nov 2026), which midpoint merging had replaced.  Where each pair sits is
+    chosen after layout from the drawn geometry (``_pass_label_placement``);
+    sideways drawings give a labelled straight edge two ranks of length
+    (``pass_label_spacing``).
     A recurrence self-loop has one node at both ends, so its In/Out pair merges
     into one label beside the loop, ``In`` above ``Out`` unless flow runs down.
     Labels are HTML tables with a small even margin, so the text keeps a gap
@@ -1948,7 +1948,7 @@ def _label_rolled_call_indexs(
         is_self_loop: Whether this edge is a node's recurrence self-loop.
         is_back_edge: Whether this edge is a rolled loop's return arc.
         rankdir: Graphviz rank direction, used to order a self-loop's lines and
-            to place a return arc's labels.
+            to size a labelled straight edge.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -1976,8 +1976,8 @@ def _label_rolled_call_indexs(
         edge_dict["taillabel"] = _html_edge_label(out_label)
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
-    if is_back_edge:
-        edge_dict.update(pass_label_placement(rankdir))
+    if "minlen" not in edge_dict:
+        edge_dict.update(pass_label_spacing(rankdir, is_back_edge))
 
 
 def _get_lowest_module_for_two_render_nodes(

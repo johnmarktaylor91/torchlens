@@ -8,6 +8,7 @@ from typing import Any
 import graphviz
 
 from .. import _render_utils
+from .._pass_label_placement import choose_pass_label_placements, has_pass_labels
 from ..render_execution import atomic_render_target, surface_layout_stderr
 from ..render_ir import RenderIR, RenderIRDotStatement
 from ..request import RenderTarget
@@ -62,6 +63,7 @@ class GraphvizRenderer:
             format=target.fileformat,
         )
         self.emit(ir, dot)
+        self._place_pass_labels(dot, target)
         source_path = Path(dot.save(target.outpath))
         output_path = Path(f"{target.outpath}.{target.fileformat}")
         # Atomic publish + exit-0 stderr surfacing (vizmech D20/D24): a
@@ -80,6 +82,24 @@ class GraphvizRenderer:
             engine=dot.engine,
             layout_stderr=stderr_text,
         )
+
+    @staticmethod
+    def _place_pass_labels(dot: graphviz.Digraph, target: RenderTarget) -> None:
+        """Lay the graph out once and set each rolled pass label pair where it fits.
+
+        Head and tail labels never move nodes or edges, so this layout's geometry
+        is the final one (``_pass_label_placement``).  Drawings without rolled pass
+        labels skip the extra layout.
+        """
+
+        if not has_pass_labels(dot.body):
+            return
+        completed = _render_utils.run_bounded_subprocess(
+            [dot.engine, "-Tjson"], input=dot.source.encode("utf-8"), timeout=target.timeout
+        )
+        stdout = completed.stdout
+        layout = stdout.decode("utf-8", "replace") if isinstance(stdout, bytes) else str(stdout)
+        dot.body[:] = choose_pass_label_placements(dot.body, layout)
 
     def _emit_statements(
         self,
