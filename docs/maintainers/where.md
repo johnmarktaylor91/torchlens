@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1464 modules, 651491 lines, 0 modules without a docstring.
+84 packages, 1464 modules, 651477 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5523 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 77 | 36779 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 77 | 36765 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1917 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
@@ -1098,10 +1098,10 @@ Attribution graphs: direct linear effects between transcoder features, errors, t
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 14 |
-| `_build` | ''build_graph'': an attribution graph from one capture, one backward read. | 870 |
+| `_build` | ''build_graph'': an attribution graph from one capture, one backward read. | 866 |
 | `_neuronpedia` | Attribution graphs in Neuronpedia's published attribution-graph schema. | 581 |
 | `_neuronpedia_upload` | Uploads to Neuronpedia through its documented API, with the standard library only. | 436 |
-| `_read_sites` | Read sites inside modules and facet-named frozen sets for ''build_graph''. | 164 |
+| `_read_sites` | Read sites inside modules and facet-named frozen sets for ''build_graph''. | 168 |
 | `_result` | The attribution-graph result: typed nodes, a dense adjacency, and its accounting. | 294 |
 | `_transcoders` | Transcoder specs for the attribution graph: what each feature reads and writes. | 168 |
 
@@ -1638,7 +1638,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (77 modules, 36779 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (77 modules, 36765 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1687,7 +1687,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_subspace_edits` | k-dimensional subspace ablation and interchange edits (N-IV-6). | 280 |
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
-| `_trace_edits` | (syntax error at line 46) | 749 |
+| `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 735 |
 | `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention''. | 135 |
 | `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 751 |
 | `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 588 |

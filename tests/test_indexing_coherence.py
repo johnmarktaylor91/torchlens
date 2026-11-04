@@ -191,6 +191,9 @@ def test_modules_door_converts_op_param_and_buffer_keys(trace: tl.Trace) -> None
     assert trace.modules["fc1.weight"] is trace.modules["fc1"]
     assert trace.modules["bn.running_mean"] is trace.modules["bn"]
     assert trace.modules["shared:1"] is trace.modules["shared"]  # existing: call label
+    # Membership does not convert: only addresses, aliases and call labels are in the door.
+    assert FC1 not in trace.modules and "fc1.weight" not in trace.modules
+    assert "fc1" in trace.modules and "shared:1" in trace.modules
 
 
 def test_module_calls_door_converts_op_labels(trace: tl.Trace) -> None:

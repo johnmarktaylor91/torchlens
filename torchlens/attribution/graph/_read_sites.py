@@ -40,13 +40,17 @@ def _site_refusal(message: str, *, code: str) -> AttributionError:
 
 
 def is_module(trace: Any, name: str) -> bool:
-    """Return whether ``name`` is a module of the capture."""
+    """Return whether ``name`` is a module address of the capture.
+
+    Membership, not lookup: ``trace.modules[op_label]`` converts an op label to
+    the Module the op ran in, so a successful lookup does not mean ``name``
+    addresses a module.
+    """
 
     try:
-        trace.modules[name]
-    except Exception:  # noqa: BLE001 - any lookup failure means "not a module name"
+        return name in trace.modules
+    except Exception:  # noqa: BLE001 - any membership failure means "not a module name"
         return False
-    return True
 
 
 def op_read_label(index: ReadEdgeIndex, reader: Reader) -> str:
