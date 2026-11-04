@@ -203,26 +203,26 @@ def test_s1_extension_points_resolve_on_contract_modules() -> None:
 
 
 # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
-def test_trace_run_satisfies_protocol_minimum() -> None:
+def test_trace_run_transaction_satisfies_protocol_minimum() -> None:
     """The concrete run door structurally satisfies the frozen protocol minimum.
 
-    ``RunnableTraceProtocol.run`` promises the stable typed minimum (``inputs``,
-    ``seed``, ``fast``, ``on_divergence``). The concrete ``Trace.run`` may add
+    ``RunnableTraceProtocol.run_transaction`` promises the stable typed minimum (``inputs``,
+    ``seed``, ``fast``, ``on_divergence``). The concrete ``Trace.run_transaction`` may add
     keywords only as defaulted (keyword-only preferred) parameters, so every
     existing typed consumer keeps compiling while unstable keywords incubate.
     """
 
     from torchlens._data_classes.trace import Trace
 
-    protocol_params = inspect.signature(RunnableTraceProtocol.run).parameters
-    concrete = inspect.signature(Trace.run)
+    protocol_params = inspect.signature(RunnableTraceProtocol.run_transaction).parameters
+    concrete = inspect.signature(Trace.run_transaction)
     for name in ("inputs", "seed", "fast", "on_divergence"):
-        assert name in concrete.parameters, f"Trace.run lost protocol parameter {name}"
+        assert name in concrete.parameters, f"Trace.run_transaction lost protocol parameter {name}"
         proto_param = protocol_params[name]
         conc_param = concrete.parameters[name]
         if proto_param.default is not inspect.Parameter.empty:
             assert conc_param.default == proto_param.default, (
-                f"Trace.run default for {name} drifted from the protocol minimum"
+                f"Trace.run_transaction default for {name} drifted from the protocol minimum"
             )
     # Structural satisfiability: every concrete parameter beyond the protocol
     # minimum must be optional (defaulted or VAR kinds), so a protocol-typed
@@ -233,7 +233,7 @@ def test_trace_run_satisfies_protocol_minimum() -> None:
         assert param.default is not inspect.Parameter.empty or param.kind in (
             inspect.Parameter.VAR_POSITIONAL,
             inspect.Parameter.VAR_KEYWORD,
-        ), f"Trace.run parameter {name} must carry a default (protocol satisfaction)"
+        ), f"Trace.run_transaction parameter {name} must carry a default (protocol satisfaction)"
 
 
 # The S1 seam contract (docs/reference/runnable_model.md "Extension points"):

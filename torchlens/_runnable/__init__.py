@@ -1675,10 +1675,10 @@ class RunResult:
 class RunnableTraceProtocol(Protocol):
     """Frozen type contract for ``Trace`` runnable methods across implementation stages."""
 
-    def run(
+    def run_transaction(
         self,
-        inputs: Any,
         *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
