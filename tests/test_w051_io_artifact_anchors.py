@@ -26,6 +26,7 @@ import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._io.format3 import contract
 from torchlens._io.format3.decode import decode_value
+from torchlens._io.format3.validate import check_record_anchors
 from torchlens._io.format3.values import ValueEncoder
 
 #: The op-table columns the forgeries below edit (the 2.x pickled ``Op`` attributes).
@@ -135,6 +136,23 @@ def test_manifest_row_count_disagreeing_with_metadata_refuses(
     path = _tampered(source_bundle, tmp_path / "rows.tlspec", mutate_manifest=declare_999)
     error = _assert_refuses(path, contract.REFUSAL_CODES["record_file_corrupt"])
     assert "999" in error.fields["detail"], error.fields
+
+
+def test_record_anchor_check_refuses_a_row_count_disagreement(tmp_path: Path) -> None:
+    """The manifest anchor behind the format 3 validators refuses a contradicted op count.
+
+    Through ``tl.load`` the op record check (``record_file_corrupt``) and the op
+    reference coverage check refuse every row-count forgery first, so the anchor is
+    a backstop; this calls it with a declared count the retained rows contradict.
+    """
+
+    manifest = {"records": {"op": {"rows": 3}}}
+    trace = {"_layer_list": [object(), object()], "_orphan_logs": []}
+    with pytest.raises(ArtifactError) as excinfo:
+        check_record_anchors(manifest, trace, tmp_path)
+    assert excinfo.value.fields["code"] == "bundle_manifest_metadata_mismatch"
+    assert excinfo.value.fields["field"] == "n_layers"
+    assert excinfo.value.fields["reason"] == "row_count_mismatch"
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
