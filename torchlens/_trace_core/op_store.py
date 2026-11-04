@@ -335,6 +335,7 @@ class OpRowStore:
         "layout",
         "ref_labels",
     )
+    _label_share: list[Any]  # set lazily by ``label_cells.shared_entry``
 
     def __init__(self, layout: OpStoreLayout) -> None:
         """Create an empty building-phase store."""

@@ -215,8 +215,10 @@ def shared_entry(ops: Sequence[Any]) -> dict[str, Any] | None:
     )
     if entries is None:
         entries = root._label_share = []
-    for entry_snapshot, results in entries:
+    for position, (entry_snapshot, results) in enumerate(entries):
         if entry_snapshot == snapshot:
+            if position:
+                entries.insert(0, entries.pop(position))  # most recently used first
             return results
     results = {}
     entries.insert(0, (snapshot, results))
@@ -280,7 +282,7 @@ def positions_of(
 
 def shared_site_index(
     sites: Sequence[Any], build: Callable[[Sequence[Any]], Mapping[str, Sequence[Any]] | None]
-) -> Mapping[str, tuple[Any, ...]] | None:
+) -> Mapping[str, Sequence[Any]] | None:
     """Return the selector label index for ``sites``, built once per equal snapshot.
 
     ``build`` is the selector evaluator's label-index builder; its ``None``

@@ -205,7 +205,8 @@ def test_label_writes_reach_only_their_own_trace(pair: Any) -> None:
 
         want = _logits(reference.fork(), france, 1, 0)
         assert torch.equal(_logits(sib_b, france, 1, 0), want)
-        assert torch.equal(_logits(parent, france, 1, 0), want)
+        with tl.errors.quiet():  # a root-trace replay warns that it mutates the trace
+            assert torch.equal(_logits(parent, france, 1, 0), want)
         assert torch.equal(_logits(sib_a, france, 1, 0), want)
     finally:
         reference.cleanup()
