@@ -32,7 +32,6 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
     _build_option,
@@ -277,9 +276,6 @@ _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "retain_in_memory": "retain_in_memory",
     "on_save": "on_save",
 }
-
-
-suppress_mutate_warnings = _MutateWarningSuppression()
 
 
 def _merge_grouped_options(
@@ -1722,7 +1718,6 @@ __all__ = [
     "ReplayOptions",
     "StorageOptions",
     "VisualizationOptions",
-    "suppress_mutate_warnings",
 ]
 
 

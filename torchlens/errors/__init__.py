@@ -18,6 +18,7 @@ from ._base import (
     TraceNotReproducibleWarning,
     ValidationError,
 )
+from ._quiet import quiet
 from .episode import (
     BundleExperimentError,
     BundleRelationError,
@@ -465,5 +466,6 @@ __all__ = [
     "TorchLensWarning",
     "TraceNotReproducibleWarning",
     "ValidationError",
+    "quiet",
     *_LAZY_EXCEPTION_PATHS,
 ]

@@ -27,11 +27,11 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
   flags any `__all__` entry that fails `getattr`.)
 - **Submodule families:** `tl.debug` 8/8 · `tl.export` 17/17 (12 dep-free formats
   executed, tracker formats enumerated) · `tl.attribution` 10/10 · `tl.viz` 11/11
-  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 12 of 16 `__all__`
+  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 12 of 15 `__all__`
   names exercised (`inspect_tlspec`, `detect_tlspec_format`, `log_model_metadata` +
   its deprecated alias, `list_logs`, `save_intervention`, `load_intervention_spec`,
   `save`, `load`, `PayloadLoadHints`, `JaxPayloadLoadHint`; the remainder —
-  `cleanup_tmp`, `rehydrate_nested`, `TraceState`, `suppress_mutate_warnings` — is
+  `cleanup_tmp`, `rehydrate_nested`, `TraceState` — is
   judged plumbing) · `torchlens.errors` hierarchy enumerated + typed-catch
   demonstrated with the payload contract (nb 12) · `torchlens.backends` registry
   enumerated + `UnknownBackendError` surface (nb 16) · `tl.compat` 9/9 (all `from_*` shims invoked, guarded) ·

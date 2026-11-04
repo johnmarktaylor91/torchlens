@@ -273,7 +273,7 @@ _REDIRECTS: dict[str, str] = {
     "SiteTable": "use torchlens.Selection -- trace[selector] returns one",
     "SpecCompat": "use torchlens.types.SpecCompat",
     "StreamingOptions": "use torchlens.options.StorageOptions",
-    "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
+    "suppress_mutate_warnings": "use torchlens.errors.quiet() (or quiet(code, ...) for chosen codes)",
     "swap_with": "use torchlens.intervention.helpers.swap_with (swap_with(other_label)) -- an edit helper under torchlens.intervention.helpers, not a root verb",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",

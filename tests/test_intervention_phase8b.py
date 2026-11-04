@@ -15,7 +15,7 @@ from torchlens.intervention.errors import (
     ModelMismatchError,
     TraceMutationWarning,
 )
-from torchlens.io import TraceState, suppress_mutate_warnings
+from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 
 
@@ -149,7 +149,7 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     assert warnings_record == []
 
     session, _ = _capture()
-    with suppress_mutate_warnings(), warnings.catch_warnings(record=True) as warnings_record:
+    with tl.errors.quiet(), warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
         session.do(
             tl.func("relu"),
@@ -159,12 +159,8 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
     assert warnings_record == []
 
     callable_session, _ = _capture()
-    suppress_mutate_warnings(False)
-    assert suppress_mutate_warnings.is_suppressed is False
+    scope = tl.errors.quiet()
     try:
-        returned = suppress_mutate_warnings(True)
-        assert returned is suppress_mutate_warnings
-        assert suppress_mutate_warnings.is_suppressed is True
         with warnings.catch_warnings(record=True) as warnings_record:
             warnings.simplefilter("always")
             callable_session.do(
@@ -174,7 +170,17 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
             )
         assert warnings_record == []
     finally:
-        suppress_mutate_warnings(False)
+        scope.__exit__(None, None, None)
+
+    restored_session, _ = _capture()
+    with warnings.catch_warnings(record=True) as warnings_record:
+        warnings.simplefilter("always")
+        restored_session.do(
+            tl.func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
+    assert TraceMutationWarning in [item.category for item in warnings_record]
 
 
 def test_direct_out_write_warns_once_and_marks_dirty() -> None:

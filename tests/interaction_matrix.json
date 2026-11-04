@@ -172,9 +172,7 @@
   "input_shape",
   "forward_kwargs"
  ],
- "plain_options": [
-  "suppress_mutate_warnings"
- ],
+ "plain_options": [],
  "cells": [
   {
    "a": "backend",

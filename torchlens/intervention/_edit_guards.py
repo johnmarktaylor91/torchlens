@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from torch import nn
 
 from .._errors import InvalidArgumentError
-from ..options import suppress_mutate_warnings
+from ..errors._quiet import quiet_all_active
 from .errors import EngineDispatchError, TraceMutationWarning
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
 
     if confirm_mutation or trace._parent_run is not None or trace._warned_mutate_in_place:
         return
-    if suppress_mutate_warnings.is_suppressed:
+    if quiet_all_active():
         return
     warnings.warn(
         "TraceMutationWarning: Trace mutators modify root logs in place. "
