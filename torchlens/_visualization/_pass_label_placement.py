@@ -41,6 +41,9 @@ _PASS_TEXT = re.compile(r"(?<![a-z])(?:headlabel|taillabel)=<<TABLE[^\n]*?>(?:In
 _EDGE_LINE = re.compile(r'^\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)\s*->\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)')
 _ASCENT, _DESCENT = 0.78, 0.22  # glyph box model of tests/support/label_geometry.py
 _MIN_GAP = 0.5  # (pt) a label nearer than this to anything collides (the gate allows 0.25 overlap)
+#: (pt) extra room text keeps from other text: two labels each nudged by padding can
+#: land a point or so off their predicted spots on older Graphviz
+_TEXT_MARGIN = 1.5
 _CLEAR_TARGET = 3.0  # clearance (pt) after which closeness to the node wins
 _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
 _REACH = 90.0  # (pt) the gap reported when there is nothing to measure against
@@ -474,10 +477,14 @@ def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
     farther away are skipped.
     """
 
-    probe = _grow(rect, _CLEAR_TARGET)
+    probe = _grow(rect, _CLEAR_TARGET + _TEXT_MARGIN)
     gaps = [_rect_poly_gap(rect, p) for b, p in local.polygons if _overlaps(probe, b)]
     gaps += [_rect_line_gap(rect, p) for b, p in local.lines if _overlaps(probe, b)]
-    gaps += [_rect_rect_gap(rect, r) for r in (*local.rects, *extra) if _overlaps(probe, r)]
+    gaps += [
+        _rect_rect_gap(rect, r) - _TEXT_MARGIN
+        for r in (*local.rects, *extra)
+        if _overlaps(probe, r)
+    ]
     return min(gaps, default=_CLEAR_TARGET)
 
 
