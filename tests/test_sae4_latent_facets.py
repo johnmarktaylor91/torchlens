@@ -128,7 +128,8 @@ def test_facet_read_door_returns_the_encoder_activation(setup) -> None:
     """``trace[site].facets`` serves every latent, one latent and a chosen set."""
 
     model, x, _sae = setup
-    facets = _trace(model, x)["fc1"].facets
+    trace = _trace(model, x)
+    facets = trace["fc1"].facets
     listed = facets.keys()
     assert "res" in listed
     torch.testing.assert_close(facets["res"].value, torch.tensor([_latents(r) for r in X]), **TOL)

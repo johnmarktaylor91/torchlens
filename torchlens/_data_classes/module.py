@@ -50,7 +50,9 @@ from .._quantities import Bytes, Duration, Flops, Macs
 from .._utils._display_errors import module_output_message
 from ._accessor_base import Accessor
 from ._call_tree import (
+    _bound_call_trace,
     _edge_counts_for_scope,
+    _live_call_trace,
     _print_call_tree_from_root,
     _resolve_call_ops,
     _sum_call_ops_field,
@@ -312,7 +314,8 @@ class ModuleCall:
 
     Examples
     --------
-    >>> call = tl.trace(model, x).modules["0"].calls[0]
+    >>> trace = tl.trace(model, x)
+    >>> call = trace.modules["0"].calls[0]
     >>> type(call).__name__
     'ModuleCall'
     >>> call.forward_pre_hook_effects
@@ -533,13 +536,7 @@ class ModuleCall:
     def module(self) -> "Module":
         """Return the Module record invoked by this call."""
 
-        trace = self._source_trace
-        if trace is None:
-            raise RecordBindingError(
-                "ModuleCall not bound to a Trace",
-                code="record_not_bound",
-                remedy="keep the owning Trace alive and read records through it",
-            )
+        trace = _bound_call_trace(self)
         return cast("Module", trace.modules[self.address])
 
     @property
@@ -826,13 +823,7 @@ class ModuleCall:
 
         if include_self:
             yield self
-        trace = self._source_trace
-        if trace is None:
-            raise RecordBindingError(
-                "ModuleCall not bound to a Trace",
-                code="record_not_bound",
-                remedy="keep the owning Trace alive and read records through it",
-            )
+        trace = _bound_call_trace(self)
         for child_label in self.call_children:
             child = trace.module_calls[child_label]
             yield from child.walk_descendants(include_self=True)
@@ -881,11 +872,8 @@ class ModuleCall:
 
     @property
     def _source_trace(self) -> "Trace | None":
-        """Owning Trace, if still alive."""
+        """Owning Trace, if still alive (held weakly: a call never pins its trace)."""
 
-        strong_ref = self.__dict__.get("_source_trace_strong")
-        if strong_ref is not None:
-            return cast("Trace", strong_ref)
         ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None
@@ -893,9 +881,8 @@ class ModuleCall:
 
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
-        """Store the owning Trace for live module-call lookups."""
+        """Store the owning Trace weak reference for live module-call lookups."""
 
-        self.__dict__["_source_trace_strong"] = value
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
@@ -905,9 +892,9 @@ class ModuleCall:
         return self._source_trace
 
     def _output_values(self, field_name: str) -> list[Any]:
-        """Return one field from all output layers."""
+        """Return one field from all output layers (refuses once the Trace was collected)."""
 
-        trace = self._source_trace
+        trace = _live_call_trace(self)
         if trace is None:
             return []
         return [getattr(trace.ops[op_label], field_name) for op_label in self.output_ops]
@@ -945,13 +932,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(module_output_message(self, self._source_trace))
-        trace = self._source_trace
-        if trace is None:
-            raise RecordBindingError(
-                "ModuleCall not bound to a Trace",
-                code="record_not_bound",
-                remedy="keep the owning Trace alive and read records through it",
-            )
+        trace = _bound_call_trace(self)
         return trace.ops[self.output_ops[0]].receptive_field
 
     @property
@@ -964,13 +945,7 @@ class ModuleCall:
             raise MultiOutputModuleError(
                 f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops."
             )
-        trace = self._source_trace
-        if trace is None:
-            raise RecordBindingError(
-                "ModuleCall not bound to a Trace",
-                code="record_not_bound",
-                remedy="keep the owning Trace alive and read records through it",
-            )
+        trace = _bound_call_trace(self)
         return trace.ops[self.output_ops[0]].projective_field
 
     @property
@@ -1093,7 +1068,6 @@ class ModuleCall:
         from ._state_adapter import state_items
 
         state = dict(state_items(self))
-        state.pop("_source_trace_strong", None)
         state.pop("_source_trace_ref", None)
         state.pop("_facets_cache", None)
         state["tlspec_version"] = TLSPEC_VERSION
@@ -1210,7 +1184,8 @@ class Module:
 
     Examples
     --------
-    >>> module = tl.trace(model, x).modules["0"]
+    >>> trace = tl.trace(model, x)
+    >>> module = trace.modules["0"]
     >>> type(module).__name__, module.address, len(module.calls)
     ('Module', '0', 1)
     """

@@ -85,9 +85,9 @@ def atomic_module(op: Op) -> Module | None:
     address = op.atomic_module_address
     if address is None:
         return None
-    trace = op._source_trace
-    if trace is None:
+    if op._slot("_source_trace_ref") is None:
         return None
+    trace = op.trace  # a collected Trace refuses typed (trace_reference_collected)
     try:
         return cast("Module", trace.modules[address])
     except (KeyError, TypeError):
