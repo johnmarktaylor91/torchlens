@@ -21,7 +21,10 @@ if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-from ._vocab._package_version import __version__ as __version__
+#: The release version. python-semantic-release rewrites this literal together with
+#: ``torchlens/_vocab/_package_version.py`` (the copy the io modules read without
+#: importing this facade); ``tests/test_version_coherence.py`` pins the two equal.
+__version__ = "2.37.1"
 
 if _typing.TYPE_CHECKING:
     from ._data_classes.trace import Trace

@@ -95,8 +95,9 @@ def test_root_underscore_rows_are_gone() -> None:
     assert not any(name.startswith("_") for name in tl._LAZY_ATTRS)
     assert "__version__" in dir(tl)
     from torchlens import __version__
+    from torchlens._vocab._package_version import __version__ as released
 
-    assert __version__ == tl.__version__ == "2.36.3"
+    assert __version__ == tl.__version__ == released
     with pytest.raises(AttributeError):
         tl._trace  # noqa: B018 - attribute access IS the assertion.
 
