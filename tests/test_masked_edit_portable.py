@@ -84,7 +84,7 @@ def _coded(error: BaseException) -> Any:
 _VERBS = {
     "zero_ablate": lambda: tl.zero_ablate(),
     "scale": lambda: tl.scale(2.0),
-    "clamp": lambda: tl.clamp(min=-0.1, max=0.1),
+    "clamp": lambda: tl.clamp(low=-0.1, high=0.1),
 }
 
 
