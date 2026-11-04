@@ -78,7 +78,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
-    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib", "IPython"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
