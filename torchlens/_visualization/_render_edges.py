@@ -1933,9 +1933,8 @@ def _label_rolled_call_indexs(
     passes it enters its destination on), so neither floats mid-edge between
     two nodes.  This restores TorchLens's original head/tail placement (JMT, 3
     Nov 2026), which midpoint merging had replaced.  Where each pair sits is
-    chosen after layout from the drawn geometry (``_pass_label_placement``);
-    sideways drawings give a labelled straight edge two ranks of length
-    (``pass_label_spacing``).
+    chosen after layout from the drawn geometry (``_pass_label_placement``),
+    and a labelled straight edge keeps two ranks of length (``pass_label_spacing``).
     A recurrence self-loop has one node at both ends, so its In/Out pair merges
     into one label beside the loop, ``In`` above ``Out`` unless flow runs down.
     Labels are HTML tables with a small even margin, so the text keeps a gap
@@ -1947,8 +1946,7 @@ def _label_rolled_call_indexs(
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
         is_self_loop: Whether this edge is a node's recurrence self-loop.
         is_back_edge: Whether this edge is a rolled loop's return arc.
-        rankdir: Graphviz rank direction, used to order a self-loop's lines and
-            to size a labelled straight edge.
+        rankdir: Graphviz rank direction, used to order a self-loop's lines.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -1977,7 +1975,7 @@ def _label_rolled_call_indexs(
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
     if "minlen" not in edge_dict:
-        edge_dict.update(pass_label_spacing(rankdir, is_back_edge))
+        edge_dict.update(pass_label_spacing(is_back_edge))
 
 
 def _get_lowest_module_for_two_render_nodes(

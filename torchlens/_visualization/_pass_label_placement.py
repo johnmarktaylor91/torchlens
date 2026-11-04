@@ -211,6 +211,10 @@ class _Scene:
     """Obstacles and pass-labelled edges of one laid-out graph (points, y up)."""
 
     def __init__(self, layout: dict[str, Any]) -> None:
+        # dot places port labels before it turns the drawing to ``rankdir``; bottom-up
+        # and right-to-left are reflections of top-down and left-to-right, so a
+        # ``labelangle`` turns the other way in the final drawing there.
+        self.turn = -1.0 if str(layout.get("rankdir", "TB")).upper() in ("BT", "RL") else 1.0
         objects = layout.get("objects", [])
         sub_count = int(layout.get("_subgraph_cnt", 0))
         names = {obj["_gvid"]: obj.get("name", "") for obj in objects}
@@ -282,10 +286,11 @@ class _Scene:
             self.rects.extend(lines)
         return best[1]
 
-    @staticmethod
-    def _placed(label: dict[str, Any], distance: float, angle: float) -> list[Rect]:
+    def _placed(self, label: dict[str, Any], distance: float, angle: float) -> list[Rect]:
+        """Return the label's text boxes for one ``labeldistance``/``labelangle`` pair."""
+
         (ex, ey), (fx, fy) = label["end"], label["inner"]
-        theta = math.atan2(fy - ey, fx - ex) + math.radians(angle)
+        theta = math.atan2(fy - ey, fx - ex) + self.turn * math.radians(angle)
         cx = ex + _PORT_LABEL_DISTANCE * distance * math.cos(theta)
         cy = ey + _PORT_LABEL_DISTANCE * distance * math.sin(theta)
         return [(cx + o[0], cy + o[1], cx + o[2], cy + o[3]) for o in label["offsets"]]

@@ -6,9 +6,9 @@ destination on), on straight edges and on a rolled loop's return arc alike.  A m
 midpoint label had floated those ranges between two nodes, belonging to neither.
 Graphviz reserves no room for head/tail labels and moves both ends of an edge with one
 ``labeldistance``/``labelangle``, so the renderer chooses each edge's pair after layout
-(``torchlens/_visualization/_pass_label_placement.py``), and sideways drawings give a
-labelled straight edge two ranks of length.  These tests pin that per direction on the
-README loop toy with the label-geometry audit the rolled gate uses.
+(``torchlens/_visualization/_pass_label_placement.py``), and a labelled straight edge
+keeps the two ranks of length its midpoint label used to reserve.  These tests pin that
+per direction on the README loop toy with the label-geometry audit the rolled gate uses.
 """
 
 from __future__ import annotations
@@ -87,9 +87,9 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
     assert _label(arc, "label") is None and _label(arc, "xlabel") is None, arc
     assert (_label(entry, "headlabel"), _label(entry, "taillabel")) == ("In 1", None), entry
     assert (_label(exit_, "taillabel"), _label(exit_, "headlabel")) == ("Out 2", None), exit_
-    sideways = direction in ("leftright", "rightleft")
     for line in (entry, exit_):
-        assert ("minlen=2" in line) is sideways, line
+        assert "minlen=2" in line, line
+    assert "minlen" not in arc, arc
 
     result = audit_gv_source(dot)
     assert result.hard_violation_count == 0, result.describe_violations(direction)

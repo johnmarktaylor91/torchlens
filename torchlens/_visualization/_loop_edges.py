@@ -34,19 +34,16 @@ _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
 }
 
 
-def pass_label_spacing(rankdir: str, is_back_edge: bool) -> dict[str, str]:
-    """Return the room a straight edge needs for its head/tail pass labels.
+def pass_label_spacing(is_back_edge: bool) -> dict[str, str]:
+    """Return the length a straight edge needs for its head/tail pass labels.
 
-    Sideways (``LR``/``RL``) the label text runs along the edge, and Graphviz reserves
-    no space for head/tail labels, so a one-rank edge is shorter than ``Out 2`` is
-    wide; two ranks give the label the length a midpoint label used to reserve.
-    Upright drawings put the text beside the edge and need nothing.  A return arc
-    is ``constraint=false`` and takes no length from ranks.
+    Graphviz reserves no space for head/tail labels.  A pass-labelled straight edge
+    keeps the two ranks its midpoint label used to reserve, so ``Out 2`` fits between
+    the nodes sideways and nearby loops keep the room the label geometry gate was
+    measured with.  A return arc is ``constraint=false`` and takes no length from ranks.
     """
 
-    if is_back_edge or rankdir not in ("LR", "RL"):
-        return {}
-    return {"minlen": "2"}
+    return {} if is_back_edge else {"minlen": "2"}
 
 
 def self_loop_port_attrs(rankdir: str) -> dict[str, str]:
