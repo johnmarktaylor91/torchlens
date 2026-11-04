@@ -13,7 +13,6 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-from .._quantities import Duration
 from .._trace_core.op_store import _MISSING
 
 if TYPE_CHECKING:
@@ -123,7 +122,7 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
                 continue
             cls = value.__class__
             if cls in pooled_classes:
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
+                key = (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:
                     pool[key] = value

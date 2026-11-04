@@ -371,7 +371,7 @@ _FIDS_INIT_NONE = tuple(
 #
 # The pass is VALUE-PRESERVING by construction:
 #   * only exact-class IMMUTABLE values are pooled (str/bytes, the frozen
-#     DtypeRef/DeviceRef refs, the int/float quantity subclasses, and tuples /
+#     DtypeRef/DeviceRef refs, the int quantity subclasses, and tuples /
 #     frozensets built purely out of those).  Sharing an immutable object can
 #     never alias-corrupt an owner.
 #   * mutable containers (list/set/dict) keep their own identity and
@@ -380,13 +380,13 @@ _FIDS_INIT_NONE = tuple(
 #     untouched and never enters the pool.
 # ---------------------------------------------------------------------------
 
-# Exact classes that are safe to share.  Exact-class (not isinstance) matching
-# keeps subclasses out, so a pooled value always has the original's type.
-# ``torch.dtype``/``torch.device`` are immutable value objects (process
-# singletons for dtypes), so sharing references is safe; they appear inside
-# per-op config dicts such as ``func_autocast_state``.
+# Exact immutable classes safe to share (exact class, so a pooled value keeps the
+# original's type; dtype/device are process value objects, e.g. inside
+# ``func_autocast_state``). ``Duration`` is never pooled: wall-clock timings are
+# equal across ops only by chance, and sharing them made the saved graph's identity
+# (pickle memo back-references, ``metadata.pkl`` bytes) depend on timing.
 _POOLED_CLASSES = frozenset(
-    {str, bytes, DtypeRef, DeviceRef, Bytes, Flops, Macs, Duration, torch.dtype, torch.device}
+    {str, bytes, DtypeRef, DeviceRef, Bytes, Flops, Macs, torch.dtype, torch.device}
 )
 _NONE_POOL_KEY = (type(None), None)
 # Slots skipped by the pass: tensor payloads, replay/attestation raw values,
@@ -687,7 +687,7 @@ def _pool_key(value: Any) -> Any:
     if cls is float:
         return (cls, value.hex())
     if cls in _POOLED_CLASSES:
-        return (cls, value.hex()) if cls is Duration else (cls, value)
+        return (cls, value)
     if value is None:
         return _NONE_POOL_KEY
     if cls is tuple or cls is frozenset:
@@ -720,7 +720,7 @@ def _pool_value(value: Any, pool: dict[Any, Any]) -> Any:
 
     cls = value.__class__
     if cls in _POOLED_CLASSES:
-        key = (cls, value.hex()) if cls is Duration else (cls, value)
+        key = (cls, value)
     elif (cls is tuple or cls is frozenset) and value:
         key = _pool_key(value)
         if key is None:
@@ -1745,7 +1745,7 @@ class Op(OpAtenMixin, _SelectionOperand):
                 continue
             cls = value.__class__
             if cls in pooled_classes:
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
+                key = (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:
                     pool[key] = value
