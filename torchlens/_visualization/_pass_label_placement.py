@@ -148,13 +148,19 @@ def place_forward_pass_labels(
 def pass_label_layout(
     source: str, *, engine: str, timeout: float, cwd: str | None = None
 ) -> str | None:
-    """Return ``engine -Tjson`` output for ``source``, or ``None`` when the layout fails."""
+    """Return ``engine -Tjson`` output for ``source``, or ``None`` when the layout fails.
+
+    A missing Graphviz executable is ``None`` too: DOT source is still written
+    without one, and a real render reports the missing binary itself.
+    """
+
+    from ..errors import GraphvizUnavailableError
 
     try:
         completed = _render_utils.run_bounded_subprocess(
             [engine, "-Tjson"], input=source.encode("utf-8"), timeout=timeout, cwd=cwd
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GraphvizUnavailableError):
         return None
     stdout = completed.stdout
     return stdout.decode("utf-8", "replace") if isinstance(stdout, bytes) else str(stdout)
