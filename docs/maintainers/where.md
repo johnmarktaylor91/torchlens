@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1513 modules, 658941 lines, 0 modules without a docstring.
+83 packages, 1513 modules, 658965 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1935 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 423 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 27 | 9296 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 27 | 9320 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
@@ -1774,7 +1774,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 423 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 9296 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 9320 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1792,7 +1792,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 
 | `_errors` | Typed refusals for the mech-interp kit (mikit memo; teaching refusals law). | 62 |
 | `_factored` | ''FactoredMatrix'': low-rank ''A @ B'' algebra (vendored from TransformerLens). | 440 |
 | `_faithfulness` | Circuit faithfulness areas: CPR and CMD over a faithfulness curve. | 154 |
-| `_feature` | Feature optimization through the shared capture-free intervention binding. | 224 |
+| `_feature` | Feature optimization through the shared capture-free intervention binding. | 248 |
 | `_grids` | The generic patching-grid driver + thin presets (mikit section 7). | 458 |
 | `_heads` | Per-query-head attention contributions (mikit ; TLens | 342 |
 | `_kv_heads` | Per-query-head patching under grouped-query attention (an op-level interceptor). | 552 |
