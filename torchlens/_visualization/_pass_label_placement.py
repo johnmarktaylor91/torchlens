@@ -333,6 +333,8 @@ def _outlines(ops: Any) -> list[list[Point]]:
         elif op["op"] in ("p", "P"):
             corners = [(float(x), float(y)) for x, y in op["points"]]
             outlines.append(_densify([*corners, corners[0]]))
+        elif op["op"] in ("b", "B"):  # curved shapes (cylinder, rounded box)
+            outlines.append(_sample_bezier([(float(x), float(y)) for x, y in op["points"]]))
     return outlines
 
 
