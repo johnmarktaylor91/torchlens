@@ -108,7 +108,7 @@ def test_resolve_edge_typography_scales_annotation_and_emphasis() -> None:
     assert ordered.annotation_pt == "11"
 
 
-def test_default_edge_annotations_keep_13_and_14_point(loop_if_trace: tl.Trace) -> None:
+def test_default_edge_annotations_keep_the_theme_sizes(loop_if_trace: tl.Trace) -> None:
     dot = _dot(loop_if_trace, rolled=True)
     assert '<FONT POINT-SIZE="14"><b><u>THEN</u>' in _branch_edge(dot)
     assert '"13"' in {f'"{size}"' for size in _edge_point_sizes(dot)}

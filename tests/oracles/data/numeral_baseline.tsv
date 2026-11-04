@@ -10794,7 +10794,6 @@ test-names	tests/test_real_world_models.py	50
 test-names	tests/test_real_world_models.py	50_
 test-names	tests/test_real_world_models.py	8_224
 test-names	tests/test_receptive_field_deep_chain.py	450_
-test-names	tests/test_recur_draw_marks.py	18_
 test-names	tests/test_replay_templates_default_capture.py	18_
 test-names	tests/test_replay_tolerance_dtype_tripwire.py	32_
 test-names	tests/test_replay_tolerance_dtype_tripwire.py	64
