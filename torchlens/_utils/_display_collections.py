@@ -12,6 +12,8 @@ from .fail_open import fail_open
 
 
 def accessor_noun(kind: str, count: int) -> str:
+    """Display noun for an accessor's item kind, pluralized when ``count`` is not 1."""
+
     noun = {
         "GradFn": "gradient function",
         "GradFnCall": "gradient call",
@@ -51,20 +53,28 @@ def collection_str(header: str, items: Any) -> str:
 
 
 def callable_list_repr(items: list[Any]) -> str:
+    """Count-only one-line repr for a CallableList."""
+
     return collection_repr("CallableList", len(items), "item" if len(items) == 1 else "items")
 
 
 def callable_list_str(items: list[Any]) -> str:
+    """CallableList card: the header, the first five members and the call exit."""
+
     return "\n".join(
         [callable_list_repr(items), *bounded_lines(items, member_repr), more_row(("()",))]
     )
 
 
 def callable_dict_repr(items: dict[Any, Any]) -> str:
+    """Count-only one-line repr for a CallableDict."""
+
     return collection_repr("CallableDict", len(items), "entry" if len(items) == 1 else "entries")
 
 
 def callable_dict_str(items: dict[Any, Any]) -> str:
+    """CallableDict card: the header, the first five entries, the exact remainder and exits."""
+
     shown = list(islice(items.items(), LIST_LIMIT))
     lines = [callable_dict_repr(items)]
     lines.extend(f"  {member_repr(key)}: {member_repr(value)}" for key, value in shown)

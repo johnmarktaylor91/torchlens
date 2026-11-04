@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 
 def _bounded_record_repr(record: Any) -> str:
+    """Bounded one-line repr for a journal record; display helpers load only when it is shown."""
+
     # Keep the journal vocabulary independent of rendering until it is displayed.
     from .._utils._display_records import ir_record_repr
 
@@ -24,6 +26,8 @@ def _bounded_record_repr(record: Any) -> str:
 
 
 def _bounded_record_str(record: Any) -> str:
+    """Bounded card for a CaptureEvents journal; display helpers load only when it is shown."""
+
     from .._utils._display_records import capture_events_str
 
     return capture_events_str(record)

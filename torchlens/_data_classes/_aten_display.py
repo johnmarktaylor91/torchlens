@@ -12,10 +12,14 @@ from .._utils.fail_open import fail_open
 
 
 def _fact_text(fact: Any, *, device: bool = True) -> str:
+    """Render one tensor fact as dtype, shape and, unless ``device`` is false, device text."""
+
     return tensor_text(fact.dtype, fact.shape, fact.device if device else None)
 
 
 def _owners(row: Any) -> str:
+    """Name the ops owning this ATen row: display keys, else the first parent row, else status."""
+
     keys = getattr(row, "_display_owner_keys", ())
     if keys:
         return "in " + inline_names(keys)
@@ -25,6 +29,8 @@ def _owners(row: Any) -> str:
 
 
 def _tensor_flow(row: Any) -> str:
+    """Summarize tensor flow: the two shapes for a one-in, one-out call, otherwise the counts."""
+
     inputs, outputs = row.input_tensor_facts, row.output_tensor_facts
     if len(inputs) == len(outputs) == 1:
         return f"{_fact_text(inputs[0], device=False)} to {_fact_text(outputs[0])}"
@@ -32,10 +38,14 @@ def _tensor_flow(row: Any) -> str:
 
 
 def aten_repr(row: Any) -> str:
+    """One-line ATen repr from metadata only; a fixed text replaces it if a read fails."""
+
     return fail_open(lambda: _aten_identity(row), lambda _error: "AtenOp: metadata unavailable")
 
 
 def _aten_identity(row: Any) -> str:
+    """Build the ATen repr line: operator, overload, any non-returned outcome, optional facts."""
+
     operator = f"{row.namespace}::{row.operator}"
     if row.overload not in ("", "default"):
         operator += f".{row.overload}"
@@ -50,6 +60,8 @@ def _aten_identity(row: Any) -> str:
 
 
 def _fact_rows(facts: tuple[Any, ...]) -> str:
+    """Render up to three tensor facts with stride and grad flag, then the exact remainder."""
+
     lines = []
     for fact in facts[:3]:
         grad = ", requires grad" if fact.requires_grad else ""
@@ -60,10 +72,14 @@ def _fact_rows(facts: tuple[Any, ...]) -> str:
 
 
 def aten_str(row: Any) -> str:
+    """Multi-line ATen card; the one-line repr replaces it if a read fails."""
+
     return fail_open(lambda: _aten_card(row), lambda _error: aten_repr(row))
 
 
 def _aten_card(row: Any) -> str:
+    """Build the ATen card: schema, sequence, inputs, outputs, FLOPs and module rows."""
+
     phase = (
         f"{row.capture_phase} pass {row.forward_pass_index}"
         if row.capture_phase == "forward"
