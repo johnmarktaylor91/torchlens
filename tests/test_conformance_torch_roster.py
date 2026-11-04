@@ -60,6 +60,31 @@ def test_roster_has_the_probe_rows_and_the_two_rule_rows() -> None:
     assert sum(bool(row.expected_intermediates) for row in rows) >= 8
 
 
+def test_reference_adapter_seeds_the_random_row_so_its_cells_repeat() -> None:
+    """Both arms of the random row repeat exactly and still differ from each other.
+
+    An unseeded capture drew a fresh automatic seed, so about one run in 256 its
+    dropout mask matched the direct run's and the recorded parity cell flipped.
+    The direct run leaves the caller's global RNG as it was.
+    """
+
+    from tests.conformance._adapters import TorchReferenceAdapter
+
+    adapter = TorchReferenceAdapter()
+    runs = []
+    for _ in range(2):
+        model, example = ROWS[RANDOM_ROW].builder()
+        captured = adapter.trace(model, example).output_ops[0].out
+        before = torch.get_rng_state()
+        reference = adapter.reference_output(model, example)
+        assert torch.equal(torch.get_rng_state(), before)
+        runs.append((captured, reference))
+    (capture_a, reference_a), (capture_b, reference_b) = runs
+    assert torch.equal(capture_a, capture_b)
+    assert torch.equal(reference_a, reference_b)
+    assert not torch.equal(capture_a, reference_a)
+
+
 def test_ecosystem_rows_need_the_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretrained rows join only under the ecosystem switch, with checkpoint evidence."""
 
