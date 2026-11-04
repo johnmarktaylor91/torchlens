@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any, NoReturn, TypeVar, cast
 
-from .errors._base import CaptureError, ConfigurationError, TorchLensError, TorchLensWarning
+from .errors._base import (
+    CaptureError,
+    ConfigurationError,
+    TorchLensError,
+    TorchLensWarning,
+    _actionable_message,
+)
 
 _ProjectionT = TypeVar("_ProjectionT")
 
@@ -13,32 +19,6 @@ _ProjectionT = TypeVar("_ProjectionT")
 #: frozen vocabularies and contracts that execute no torchlens behavior --
 #: so importing it from any layer is a downward edge, never an inversion.
 __tl_layer__ = "L0"
-
-
-def _actionable_message(problem: str, remedy: str) -> str:
-    """Combine a refusal description with its required user remedy.
-
-    Parameters
-    ----------
-    problem:
-        Description of the rejected object or operation and its cause.
-    remedy:
-        Concrete action the caller can take to resolve the refusal.
-
-    Returns
-    -------
-    str
-        Stable human-readable message containing both clauses.
-    """
-
-    problem_clause = problem.rstrip()
-    if "\n  remedy " in problem_clause:
-        problem_clause, old_remedy = problem_clause.rsplit("\n  remedy", 1)
-        padding = old_remedy[: len(old_remedy) - len(old_remedy.lstrip())]
-        return f"{problem_clause}\n  remedy{padding}{remedy.rstrip()}"
-    if not problem_clause.endswith((".", "!", "?", ":", ";")):
-        problem_clause = f"{problem_clause}."
-    return f"{problem_clause} Remedy: {remedy.rstrip().rstrip('.')}."
 
 
 def _restore_actionable_error(
