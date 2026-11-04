@@ -147,7 +147,7 @@ flatten_1      (1, 256)           -      -          0
 fc (Linear)    (1, 5)          1.3k  92.2%      2.56K
 -----------------------------------------------------
 Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
+Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | no NaN/Inf (exact)
@@ -173,7 +173,7 @@ flatten_1      (1, 256)           -      -          0
 fc (Linear)    (1, 5)          1.3k  92.2%      2.56K
 ─────────────────────────────────────────────────────
 Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
+Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | no NaN/Inf (exact)

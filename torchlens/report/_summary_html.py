@@ -22,10 +22,11 @@ _CSS = """
 <style>
 .tl-summary {font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px; line-height: 1.45; color: #1a1a2e;}
-.tl-summary table {border-collapse: collapse; width: auto; max-width: 100%;}
+.tl-summary .tl-table {max-width: 100%; overflow-x: auto;}
+.tl-summary table {border-collapse: collapse; width: auto;}
 .tl-summary thead th {position: sticky; top: 0; background: #f4f4f8;
-  text-align: left; padding: 3px 10px; border-bottom: 1px solid #888;}
-.tl-summary td {padding: 1px 10px; white-space: pre-wrap; overflow-wrap: anywhere;}
+  text-align: left; white-space: nowrap; padding: 3px 10px; border-bottom: 1px solid #888;}
+.tl-summary td {padding: 1px 10px; white-space: pre;}
 .tl-summary td.num, .tl-summary th.num {text-align: right;}
 .tl-summary td.num {white-space: pre;}
 .tl-summary tr[data-kind="fold"] td {font-weight: 600;}
@@ -93,6 +94,6 @@ def render_html(  # noqa: PLR0913 - the four presentation slices are distinct re
         f'{_CSS}<div class="tl-summary">'
         f"<div><b>{html.escape(header_line)}</b></div>{banner}"
         f'<div class="tl-disclosure">{html.escape(view.disclosure)}</div>'
-        f"<table><thead><tr>{head_cells}</tr></thead>"
-        f"<tbody>{body}</tbody></table>{footer}</div>"
+        f'<div class="tl-table"><table><thead><tr>{head_cells}</tr></thead>'
+        f"<tbody>{body}</tbody></table></div>{footer}</div>"
     )

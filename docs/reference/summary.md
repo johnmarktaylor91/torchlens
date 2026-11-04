@@ -142,7 +142,7 @@ beside `fwd flops`).
 | `params_trainable` | `trainable` | trainable parameters per module path (a count) |
 | `flops` | `fwd flops` | forward FLOPs under `flop_convention` |
 | `flops_pct` | `(%)` | share of the whole-model known forward FLOPs |
-| `macs` | `macs` | MACs the row owns |
+| `macs` | `macs` | MACs in the displayed row and its descendants |
 | `train` | `train` | `yes` / `no` / `partial` over `requires_grad` (auto-shown when trainability is mixed) |
 | `mode` | `mode` | `train` / `eval` from `module.training` as captured; `mixed` when the row's modules disagree |
 | `passes` | `passes` | call count |

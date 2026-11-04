@@ -316,7 +316,7 @@ _CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]]
     "flops": _flops_cell,
     "flops_pct": _flops_pct_cell,
     "macs": lambda row, config, totals: (
-        _human(row.macs_owned) if config.units == "human" else _commas(row.macs_owned)
+        _human(row.macs_display) if config.units == "human" else _commas(row.macs_display)
     ),
     "train": lambda row, config, totals: {
         "all": "yes",
@@ -460,7 +460,7 @@ def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
     macs = f"{_human(facts.macs_forward)} MACs"
     known = facts.coverage_known + facts.coverage_zero
     denominator = known + facts.coverage_unknown
-    coverage = f"{known}/{denominator} ops known (formula-exact)"
+    coverage = f"{known}/{denominator} ops known"
     if facts.coverage_unknown:
         names = ", ".join(facts.unknown_op_names[:3])
         more = max(facts.coverage_unknown - len(facts.unknown_op_names[:3]), 0)
