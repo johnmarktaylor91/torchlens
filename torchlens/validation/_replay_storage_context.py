@@ -47,8 +47,8 @@ def restore_receiver_storage_context(layer: Any, input_args: dict[str, Any]) -> 
         _restore_receiver_view_context(layer, input_args)
     index = storage_context_arg_index(func_name)
     saved_args = getattr(layer, "saved_args", None) or ()
-    args = input_args.get("args") or ()
-    if index is None or len(saved_args) <= index or len(args) <= index:
+    args = input_args.get("args")
+    if index is None or not args or len(saved_args) <= index or len(args) <= index:
         return
     saved = saved_args[index]
     if not isinstance(saved, torch.Tensor) or not views_part_of_its_storage(saved):
