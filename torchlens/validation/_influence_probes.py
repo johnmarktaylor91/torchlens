@@ -66,11 +66,15 @@ _ELEMENTWISE_COMPARISON_FUNCS = frozenset(
 _COMPARISON_KEYWORDS = ("input", "other")
 """Keyword spellings of a comparison's two operands, in positional order."""
 
-_PROBE_REFUSALS = (TypeError, ValueError, RuntimeError, NotImplementedError)
+_PROBE_REFUSALS = (TypeError, ValueError, RuntimeError, NotImplementedError, IndexError)
 """Errors a legitimate op raises when it rejects a substitute: "probe cannot run".
 
-Anything else (a poisoned replay callable, a torchlens internal error) is a
-capture bug and propagates instead of reverting to an evidence-free pass.
+Dtype, shape and value refusals, unimplemented substitute dtypes, and an
+out-of-range substitute index (``IndexError`` from advanced indexing,
+``aten::index`` / ``Tensor.__getitem__``, as in a vmapped mask builder).
+Anything else (a poisoned replay callable, a torchlens internal error,
+``KeyError`` included) is a capture bug and propagates instead of reverting to
+an evidence-free pass.
 """
 
 Slot = int | str
