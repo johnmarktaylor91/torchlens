@@ -228,7 +228,9 @@ def test_extract_knob_returns_attached_outs_on_request() -> None:
     assert attached.grad_fn is not None
     assert torch.equal(default, attached.detach())
     attached.sum().backward()
-    assert model.layer1[0].conv1.weight.grad is not None
+    first_block = model.layer1[0]
+    assert isinstance(first_block, _Block)
+    assert first_block.conv1.weight.grad is not None
 
 
 def test_record_knob_returns_attached_payloads_on_request() -> None:
