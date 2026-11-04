@@ -38,6 +38,7 @@ from torchlens._trace_core.op_store import (
     cow_copy_value,
 )
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
+from torchlens._utils import tensor_utils
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _NO_FLAT_COPY = trace_fork._NO_FLAT_COPY
@@ -724,5 +725,40 @@ _FORK_EVENT_BAR = 31_000
 def test_one_fork_stays_cheap() -> None:
     """Profiler events (calls and C calls) of one fork of a fixed capture."""
 
+    events = _fork_events(_capture())
+    assert events <= _FORK_EVENT_BAR, events
+
+
+class _Paramless(nn.Module):
+    """No parameters and a plain capture: its payloads are deferred (clone-on-write)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x + 1) * 2
+
+
+def _pending_keys(alive: bool) -> set[Any]:
+    return {
+        key
+        for key, entries in tensor_utils._DEFER_PENDING.items()
+        if any((entry.ref() is not None) is alive for entry in entries)
+    }
+
+
+def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
+    """A dropped capture with deferred payloads leaves no registry entry a later fork pays for.
+
+    While the deferred-payload registry holds anything, every mutating torch call
+    searches its arguments; a fork's tensor deep copies call ``set_``. Dead entries
+    of a dropped trace once stayed until a sweep, so a fork after such a capture
+    read about 9,000 to 14,000 events (C-143, tests/backend_parity/test_b10_*).
+    """
+
+    before = set(tensor_utils._DEFER_PENDING)
+    trace = tl.trace(_Paramless(), torch.ones(4, 4))
+    minted = _pending_keys(alive=True) - before
+    assert minted, "the capture must defer its payloads for this test to mean anything"
+    del trace
+    gc.collect()
+    assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
     events = _fork_events(_capture())
     assert events <= _FORK_EVENT_BAR, events
