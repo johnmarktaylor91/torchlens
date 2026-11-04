@@ -2779,7 +2779,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def do(
         self,
         hooks_or_site: Any,
-        value_or_hook: Any = None,
+        edit: Any = None,
         *,
         model: nn.Module | None = None,
         inputs: Any = None,
@@ -2791,7 +2791,7 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.intervention()._trace_edits.do(
             self,
             hooks_or_site,
-            value_or_hook,
+            edit,
             model=model,
             inputs=inputs,
             intervention=intervention,

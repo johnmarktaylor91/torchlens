@@ -1160,7 +1160,7 @@ class Recording(TraceLike):
     def do(
         self,
         hooks_or_site: Any,
-        value_or_hook: Any = None,
+        edit: Any = None,
         *,
         model: torch.nn.Module | None = None,
         inputs: Any = None,
@@ -1172,7 +1172,7 @@ class Recording(TraceLike):
         fork = self.to_trace().fork()
         return fork.do(
             hooks_or_site,
-            value_or_hook,
+            edit,
             model=model,
             inputs=inputs,
             intervention=intervention,

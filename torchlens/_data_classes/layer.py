@@ -1566,7 +1566,7 @@ class Layer(_SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1576,8 +1576,9 @@ class Layer(_SelectionOperand):
 
         Parameters
         ----------
-        input_transform:
-            Transform or hook to apply to this layer's output.
+        edit:
+            Value, hook or helper to apply to this layer's output (the same
+            edit argument as ``Trace.do``).
         model:
             Model required when ``intervention.engine="rerun"``.
         inputs:
@@ -1593,7 +1594,7 @@ class Layer(_SelectionOperand):
 
         return self._source_trace_or_error().do(
             self._intervention_site(),
-            input_transform,
+            edit,
             model=model,
             inputs=inputs,
             intervention=intervention,

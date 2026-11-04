@@ -115,7 +115,7 @@ DOCS: dict[str, str] = {
         ----------
         hooks_or_site:
             Mapping/list batch input or selector-like site.
-        value_or_hook:
+        edit:
             Optional value, hook or helper for the ``(site, edit)`` input shape.
         model:
             Model required when ``engine="rerun"``.
