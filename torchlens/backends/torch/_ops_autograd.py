@@ -24,7 +24,7 @@ from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
-from ._internal_originals import tensor_read, tensor_reads
+from ._internal_read import tensor_read, tensor_reads
 from ._tl import (
     get_tensor_label,
 )

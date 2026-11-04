@@ -65,7 +65,7 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
 )
-from ._internal_originals import tensor_reads
+from ._internal_read import tensor_reads
 from ._tl import (
     get_label_list,
     get_live_tensor_label,

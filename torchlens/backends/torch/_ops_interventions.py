@@ -39,7 +39,7 @@ from ...intervention.types import (
 from ...recording.types import (
     RecordContext,
 )
-from ._internal_originals import tensor_read
+from ._internal_read import tensor_read
 from ._tl import get_label_list
 
 if TYPE_CHECKING:

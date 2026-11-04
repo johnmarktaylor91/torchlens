@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import torch
 
-from ..backends.torch._internal_originals import tensor_reads
+from ..backends.torch._internal_read import tensor_reads
 
 CaptureLayout = tuple[tuple[int, ...], tuple[int, ...], int]
 """``(shape, stride, storage_offset)`` of a tensor argument at capture."""

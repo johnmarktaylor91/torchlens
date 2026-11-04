@@ -13,7 +13,7 @@ from ..._ir.intervention import FunctionEventInput
 from ..._ir.semantics import BackendSemantics
 from ..._utils.collections import index_nested
 from ..._utils.tensor_utils import tensor_nanequal
-from ._internal_originals import tensor_read
+from ._internal_read import tensor_read
 
 
 def detect_torch_alias_contract(

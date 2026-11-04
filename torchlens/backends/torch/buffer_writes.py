@@ -18,7 +18,7 @@ from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
 from ._identity_cache import IdentityCache, identity_cached
-from ._internal_originals import tensor_read
+from ._internal_read import tensor_read
 from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
 from ._tl import (

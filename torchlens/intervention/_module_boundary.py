@@ -26,7 +26,7 @@ import torch
 from .. import _state
 from .._ir.intervention import FireResult
 from .._state import pause_logging
-from ..backends.torch._internal_originals import tensor_read
+from ..backends.torch._internal_read import tensor_read
 from ..backends.torch._tl import clear_tensor_label, get_tensor_label
 from ._rule_match import _match_rules, _rule_decision
 from ._zero_fire import note_capture_rule_fired

@@ -44,7 +44,7 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
 )
 from ._state import pause_logging
 from ._utils._display_bounded import short_dataclass_repr
-from .backends.torch._internal_originals import tensor_read
+from .backends.torch._internal_read import tensor_read
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a

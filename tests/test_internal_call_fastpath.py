@@ -130,7 +130,7 @@ def _capture_census(model: nn.Module, x: torch.Tensor) -> tuple[Counter[str], in
 def test_routed_names_are_the_census_names() -> None:
     """The routing table holds exactly the census read names."""
 
-    from torchlens.backends.torch._internal_originals import ROUTED_TENSOR_READS
+    from torchlens.backends.torch._internal_read import ROUTED_TENSOR_READS
 
     assert ROUTED_TENSOR_READS == _EXPECTED_ROUTED
 
@@ -175,10 +175,10 @@ def test_capture_spends_no_wrapper_entry_on_routed_reads() -> None:
 def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Capture makes fewer Python calls per op with the routing on than off."""
 
-    from torchlens.backends.torch import _internal_originals
+    from torchlens.backends.torch import _internal_read
 
     paused_on, calls_on, ops_on = _capture_census(_chain(), torch.zeros(2, 4))
-    monkeypatch.setattr(_internal_originals, "_route_open", lambda tensor: False)
+    monkeypatch.setattr(_internal_read, "_route_open", lambda tensor: False)
     paused_off, calls_off, ops_off = _capture_census(_chain(), torch.zeros(2, 4))
     assert ops_on == ops_off
     skipped = sum(paused_off[name] for name in _EXPECTED_ROUTED)
@@ -191,7 +191,7 @@ def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.Monke
 def test_gates_fall_back_to_the_method_call_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every gate that would make the wrapper do more than pass through keeps it."""
 
-    from torchlens.backends.torch import _internal_originals as io
+    from torchlens.backends.torch import _internal_read as io
 
     tl.trace(_chain(), torch.zeros(2, 4))  # wraps torch
     t = torch.zeros(3)
@@ -329,11 +329,11 @@ def test_logged_ops_identical_with_and_without_routing(
 ) -> None:
     """Every run-stable op-store field is identical with the routing on and off."""
 
-    from torchlens.backends.torch import _internal_originals
+    from torchlens.backends.torch import _internal_read
 
     build = dict(_corpus())[spec]
     with monkeypatch.context() as closed:
-        closed.setattr(_internal_originals, "_route_open", lambda tensor: False)
+        closed.setattr(_internal_read, "_route_open", lambda tensor: False)
         base_a = _op_fields(build)
         base_b = _op_fields(build)
     routed = _op_fields(build)
