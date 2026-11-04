@@ -1963,3 +1963,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
 recorded: 2026-11-03T23:41:05.434507+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.137838+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.162103+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.180665+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.200290+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.222119+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-154 walk rulings 3 Nov (names.6 MoE router facts: Op.expert, Module/Trace.routing_table; names.1, names.8, names.10, names.11, names.13 spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
+recorded: 2026-11-04T08:36:35.243728+00:00
