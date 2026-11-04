@@ -1,5 +1,4 @@
 """Backend-neutral recurrence grouping model and service.
-
 This module contains the graph-only inputs needed by Step 7 loop grouping. Backend
 finishers are responsible for adapting their postprocess state into this model,
 passing only data-flow edges in ``data_parents`` and ``data_children``.
@@ -13,6 +12,7 @@ from collections import Counter, OrderedDict, defaultdict, deque
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..errors._base import TorchLensWarning
 
 FrontierNodes = OrderedDict[str, dict[str, deque[str]]]
@@ -79,7 +79,6 @@ _SlotColor = tuple[str, object]
 @dataclass(frozen=True)
 class RecurrenceNode:
     """Graph-only node input for recurrence grouping.
-
     Parameters
     ----------
     label:
@@ -173,7 +172,6 @@ class RecurrenceNode:
 @dataclass(frozen=True)
 class RecurrenceGroupingGraph:
     """Backend-neutral graph input for recurrence grouping.
-
     Parameters
     ----------
     nodes:
@@ -291,6 +289,8 @@ class IsomorphicExpansionState:
 @dataclass
 class _GroupingWorkspace:
     """Mutable recurrence grouping workspace built from a neutral graph."""
+
+    __repr__ = short_dataclass_repr
 
     nodes: dict[str, _MutableRecurrenceNode]
     raw_labels: tuple[str, ...]

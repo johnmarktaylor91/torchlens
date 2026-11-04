@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._display_bounded import short_dataclass_repr
 from ._encoding_size_layout import layout_encoded_sizes
 from .request import RenderContext
 
@@ -27,7 +28,6 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class RenderIRNode:
     """Resolved render node independent of Graphviz mutation.
-
     Parameters
     ----------
     name:
@@ -68,6 +68,8 @@ class RenderIRNode:
 class _NodeDecisionInputs:
     """Per-draw inputs shared by every render-node presentation decision."""
 
+    __repr__ = short_dataclass_repr
+
     universe: Any
     repeat_folds: Mapping[str, ModuleRepeatFold] | None
     segment_lookup: _SegmentLookup
@@ -78,7 +80,6 @@ class _NodeDecisionInputs:
 @dataclass(frozen=True)
 class RenderIREdge:
     """Resolved forward edge independent of DOT emission.
-
     Parameters
     ----------
     source_unit:
@@ -118,7 +119,6 @@ class RenderIREdge:
 @dataclass(frozen=True)
 class RenderIRRegion:
     """One nested, renderer-neutral region selected for DOT emission.
-
     Parameters
     ----------
     key:

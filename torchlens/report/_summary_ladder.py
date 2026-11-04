@@ -1,8 +1,6 @@
 """The summary auto ladder (F08; summary memo item 11, decisions 3.1/3.4).
-
 One deterministic view resolver: given a finished trace and a body-row
 budget, resolve the deepest informative rung of the view ladder --
-
 1. COALESCED HYBRID, full depth: every executed compute op appears exactly
    once; a leaf module owning exactly one op coalesces into a single
    ``fc1 (Linear)`` row; orphan functional ops (the classic torchsummary
@@ -12,7 +10,6 @@ budget, resolve the deepest informative rung of the view ladder --
 4. ELISION on the appropriate rung: protected, totals-conserving
    accounting rows replace the lowest-share contiguous runs -- never
    truncation, so no model at any budget collapses to opaque containers.
-
 Identity-partition law (memo 3.1): every executed compute-op event and
 every parameter identity is owned by exactly one accounting row at every
 depth, fold, and elision; fold representatives own all members' events;
@@ -30,6 +27,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import short_dataclass_repr
 from ._factcore import factcore
 from ._summary_columns import (
     ATTENTION_FULL_SQUARE_FUNCS,
@@ -180,6 +178,8 @@ class _ParamFact:
 @dataclass
 class _ModuleFact:
     """One module-tree node with rollups the rung builders read."""
+
+    __repr__ = short_dataclass_repr
 
     address: str
     class_name: str

@@ -1,5 +1,4 @@
 """Capture torch backward execution and autograd graph metadata.
-
 This module installs backward/grad wrappers, walks grad_fn graphs, records hook
 events, and exposes Trace/Recording backward helpers.
 """
@@ -53,6 +52,7 @@ from ..._ir.events import (
 )
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
@@ -144,14 +144,12 @@ def _run_with_detached_activation_guidance(
     engine_callable: Callable[[], Any],
 ) -> Any:
     """Run autograd and augment only a proven TorchLens-detached-root failure.
-
     Parameters
     ----------
     roots:
         Tensor roots passed to the PyTorch autograd engine.
     engine_callable:
         Zero-argument invocation of the original PyTorch entry point.
-
     Returns
     -------
     Any
@@ -1095,6 +1093,8 @@ class _BackwardFoldState:
     computes along the way so that a clean appended event tail can be folded
     in O(tail) instead of re-reading every backward event ever emitted.
     """
+
+    __repr__ = short_dataclass_repr
 
     discovered: OrderedDict[int, GradFnDiscovered] = field(default_factory=OrderedDict)
     latest_topology: dict[int, tuple[int, ...]] = field(default_factory=dict)

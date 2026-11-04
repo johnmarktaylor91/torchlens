@@ -230,6 +230,13 @@ def card_css(theme: str = "torchlens") -> str:
         "padding:0 4px}"
         f"{scope} details{{margin:4px 0}}"
         f"{scope} summary{{cursor:pointer;font-weight:600}}"
+        f"{scope} .tl-record-facts{{border-collapse:collapse;width:100%;"
+        "font-family:ui-monospace,monospace}"
+        f"{scope} .tl-record-facts th,{scope} .tl-record-facts td"
+        "{text-align:left;vertical-align:top;padding:2px 0;overflow-wrap:anywhere}"
+        f"{scope} .tl-record-facts th"
+        "{font-weight:400;width:9ch;padding-right:1ch;white-space:nowrap}"
+        f"{scope} .tl-record-facts td{{white-space:pre-wrap}}"
         # Native array grid + six-state motif styles (F16): motifs are
         # PATTERN glyphs, so these classes only set weight/color contrast.
         f"{scope} .tl-grid-table{{border-collapse:collapse;margin:4px 0}}"

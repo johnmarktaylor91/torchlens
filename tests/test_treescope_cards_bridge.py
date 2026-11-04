@@ -129,8 +129,8 @@ def test_trace_method_route_and_container_rule(small_log) -> None:
 
     bridge.register()
     html = _render(small_log)
-    assert "TorchLens Trace" in html
-    assert "lookup keys" in html
+    assert f"Trace {small_log.name}:" in html
+    assert "model" in html and ".summary()" in html
     assert len(html) < 400_000
     # Container rule: the trace render embeds no child full cards.
     assert "tl-grid-table" not in html
@@ -141,7 +141,7 @@ def test_nested_container_stays_bounded(small_log) -> None:
 
     bridge.register()
     html = treescope.render_to_html({"before": small_log}, ignore_exceptions=True, compressed=False)
-    assert "TorchLens Trace" in html
+    assert f"Trace {small_log.name}:" in html
     assert len(html) < 500_000
 
 

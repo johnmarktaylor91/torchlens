@@ -3,15 +3,19 @@
 Every user-facing object answers a REPL in one voice (spellings are
 DOCUMENTED-UNSTABLE pending the naming session):
 
-- `repr(x)` is ONE nestable line: a provenance **envelope** around a
-  byte-stable numeric **core**.
-- `str(x)` is a bounded card (at most 8 lines) whose **first line is the
-  repr**; every card names its exits on a `More:` line.
+- Value-record `repr(x)` is one nestable line, up to 100 columns: kind,
+  stored short key, dtype, shape, device, and available value words.
+- Value-record `str(x)` is a bounded card with at most 10 rows below the
+  first line. Its first line is the repr, and its `more` row names the exits.
+- Record HTML cards contain those same rows, with no automatic value grid.
+- A Trace `str(x)` is a bounded card with at most twelve rows below the
+  first line, which is the repr; the module tree stays in `.summary()`.
 - Containers point, records show: collection reprs are one-line
-  composition cards (`LayerAccessor(553 layers (539 ops, 14 buffers) |
-  .head() .search() .to_pandas())`), never member dumps.
+  composition cards (`LayerAccessor: 553 layers (539 ops, 14 buffers)`),
+  with at most five members and `.head()`, `.search()` and `.to_pandas()`
+  exits in `str()`.
 
-## The core line
+## The explicit glance core line
 
 ```
 <dtype><shape>@<device>  n=<count>  (<bytes>)  <distribution>  <health>  <evidence>
@@ -31,30 +35,44 @@ contract. Extremes, the NaN/Inf census, and zero counts are EXACT at
 every size; only the sd and histogram may sample above declared gates,
 and a sampled family carries the `~` mark with disclosed precision.
 
-## The envelope
+## Value records
+
+A captured op renders:
 
 ```
-<trace>/<address> (pass <k>/<n>) [<kind> <position> <function>] -> <core>
+Op relu_1: float32 [8] on cpu, min 0.000 max 0.5000 mean 0.1429 sd 0.1821
 ```
 
-A captured op renders (real output):
+The card behind it (`print(op)`) adds `position`, `module`, `output`,
+`values`, `graph`, `function`, and `source` rows, then the `more` exits.
+The source row is a captured location, not a read of the current file.
+Counts in card rows are exact and byte quantities use IEC units (`60 KiB`).
+Durations use compact units (`4.02 ms`); `Flops` and `Macs` keep their spelling.
 
-```
-_Elementwise/relu_1_3 (pass 1/1) [op 3/4 relu] -> f32[8]@cpu [0.000 .. 0.5000] mean=0.1429 sd=0.1821 zero=4/8
-```
-
-The card behind it (`print(op)`) adds `graph` / `func` / `params` /
-`cost` lines and the `More:` exits; the raw preview, full relation lists,
-and lookup keys live behind those exits.
+The value words use four significant digits, including trailing zeros.
+If the line exceeds 100 columns, it drops mean and sd first, then min
+and max in favor of `values in print()`. Geometry and honesty stay visible.
+The explicit `tl.stats.glance` form retains its sparkline and its ASCII
+and Unicode equivalence contract.
 
 ## Honesty vocabulary (never laundered)
 
-`(not saved)` (distinguishable from saved-and-boring), `(freed)`,
-`(disk-backed: metadata only until read)`, `(preview backend: shape/dtype
-only)`, `(edited)` (post-intervention values are never presented as
-observed), `live v<N>` (Params render live, version-checked cores),
-`~` + `(is_sampled k/N)`, pass tags `(pass k/n)`. Multi-pass layers show per-pass
-cores or a count -- never a pooled statistic.
+`(not saved)` distinguishes an absent capture from saved-and-boring;
+`(freed)`, `(disk-backed: metadata only until read)`,
+`(preview backend: shape/dtype only)`, and `(edited)` retain their meanings.
+Value words preserve nonfinite counts, magnitude-based complex statistics,
+and `~` for sampled moments.
+
+A saved CPU activation below the existing sampling gate is summarized once
+and cached by tensor version. Live parameters, device tensors, and larger
+activations show `values    not computed` unless valid cached evidence
+already exists. Parameter cards disclose the live basis and version.
+Buffers disclose their capture-snapshot basis. Displays never load a lazy
+payload to produce a summary.
+
+Multi-pass layers identify their pass count without a pooled statistic;
+the card shows up to three per-pass summaries. An individual operation
+uses its stored short key and pass suffix, such as `tanh_1:2`.
 
 ## What no repr library can say (the forensics exhibit)
 
@@ -62,17 +80,20 @@ Real output from a poisoned capture (a `0/0` minted mid-network):
 
 ```
 >>> log[bad]
-_Poisoned/truediv_1_4 (pass 1/1) [op 4/5 __truediv__] -> f32[1,8]@cpu n=8 no_finite_values nan=37.5%! +inf=62.5%!
+Op truediv_1: float32 [1, 8] on cpu NaN 3, +Inf 5, no finite values
 >>> log.first_nonfinite()
 First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=(1, 8),
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
+>>> _ = log.health_facts
 >>> log
-Trace(name='_poisoned_1', model_class_qualname='_Poisoned', layers=7, state=PRISTINE) [NaN/Inf FOUND (.nonfinite_ops)]
+Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf FOUND (.nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
-in the same one-line language as the health report. On a clean, fully
-checked capture the trace repr instead carries the per-trace PROOF line
+in the same one-line language as the health report. Trace rendering reads
+cached health evidence and never scans tensors. Until health has been
+checked it says `NaN/Inf not checked`. A clean, fully
+checked capture carries the per-trace proof
 `no NaN/Inf (exact)`.
 
 ## The graph-scale table
@@ -112,3 +133,14 @@ The philosophy this surface mines and extends:
   collapsed-first rendering.
 - **flax `tabulate`** (totals conservation), **Keras 3** (footer
   authority), **pysnooper** `normalize=True` (diffable summaries).
+
+## Trace and owned record collections
+
+`print(trace)` shows at most twelve rows below its identity line. The card
+contains stored model, capture, graph and save metadata; `trace.summary()`
+provides the module hierarchy. Default pristine state is omitted.
+
+ATen and event tuples keep tuple iteration, equality, hashing and slicing.
+Their bounded displays show counts and at most five records, for example
+`AtenOps: 500 calls`. Portable saves encode these sequences as ordinary
+tuples, so their display type does not change the artifact format.

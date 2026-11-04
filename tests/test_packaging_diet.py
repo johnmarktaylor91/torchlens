@@ -135,7 +135,7 @@ def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
     html = log._repr_html_()
 
     assert html.startswith("<style>")
-    assert "TorchLens Trace" in html
+    assert f"Trace {log.name}:" in html
     assert "NaN/Inf" in html
 
 
@@ -154,7 +154,7 @@ def test_repr_html_without_ipython_still_renders_the_card(monkeypatch: pytest.Mo
         patched.setitem(sys.modules, "IPython.display", None)
         html = log._repr_html_()
 
-    assert "TorchLens Trace" in html
+    assert f"Trace {log.name}:" in html
     assert "NaN/Inf" in html
     assert html != repr(log)
 

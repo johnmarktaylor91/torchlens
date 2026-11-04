@@ -3110,32 +3110,11 @@ class Op(OpAtenMixin, _SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Op card (F10; lovely D15: line 1 IS the repr).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Data-model contract: never raises. An Op detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of silently printing an unknown
-        denominator (``operation 1/?``) or propagating the typed relation
-        refusal out of ``repr()``/``print()`` (r5 b7-opus R52-B, matching
-        the Layer degradation). The historical 21-line dump is gone: the
-        preview, relation lists, and lookup keys live behind the card's
-        ``More:`` exits.
-        """
+        from ._value_repr import op_card
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_card
-
-            try:
-                return op_card(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_card(self)
 
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
@@ -3169,26 +3148,11 @@ class Op(OpAtenMixin, _SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Never raises: a detached Op degrades to the same placeholder as
-        ``__str__``, and a mid-capture Op keeps the during-pass form.
-        """
+        from ._value_repr import op_repr_line
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_repr_line
-
-            try:
-                return op_repr_line(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_repr_line(self)
 
 
 # ---------------------------------------------------------------------------

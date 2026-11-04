@@ -103,7 +103,8 @@ def test_default_capture_reads_source_lazily(toy) -> None:
     assert frame._call_line == ""  # nothing stored at capture
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
     assert "--->  " in frame.code_context_labeled
-    assert "z = torch.relu(y)" in repr(frame)
+    assert repr(frame).startswith("FuncCallLocation:")
+    assert "z = torch.relu(y)" not in repr(frame)
 
 
 def test_op_card_shows_location_and_text(toy) -> None:
@@ -143,7 +144,8 @@ def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
     frame = relu.code_context[-1]
     assert frame.call_line == ""
     assert frame.code_context is None
-    assert repr(frame).endswith("code: source changed on disk since capture")
+    assert frame._source_text_state()[1] == "source changed on disk since capture"
+    assert repr(frame).startswith("FuncCallLocation:")
     assert "  code   (source changed on disk since capture)" in str(relu)
 
 
@@ -154,7 +156,8 @@ def test_missing_file_shows_reason(toy) -> None:
     path.unlink()
     frame = relu.code_context[-1]
     assert frame.call_line == ""
-    assert repr(frame).endswith("code: source file not found")
+    assert frame._source_text_state()[1] == "source file not found"
+    assert repr(frame).startswith("FuncCallLocation:")
     assert "  code   (source file not found)" in str(relu)
 
 
