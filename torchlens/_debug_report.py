@@ -27,11 +27,11 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import os
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ._data_classes._trace_missing_attrs import is_live_trace
+from ._utils._display_records import _source_path
 
 __tl_layer__ = "L1"
 
@@ -50,8 +50,9 @@ def display_source_line(location: str | None) -> str | None:
     """Return a ``file:line`` location as a printed card shows it.
 
     Report fields and table columns keep the full path; a card prints the
-    path relative to the current directory when the file is under it, so the
-    line a finding names stays short enough to read.
+    path the way an op card's ``source`` row does: an installed package's file
+    from its package root (``transformers/pytorch_utils.py:119``), a file
+    under the current directory relative to it, anything else unchanged.
 
     Parameters
     ----------
@@ -61,8 +62,7 @@ def display_source_line(location: str | None) -> str | None:
     Returns
     -------
     str | None
-        The location with its path made relative to the working directory
-        when the file is under it; otherwise unchanged.
+        The location with its path shortened as above.
     """
 
     if not location:
@@ -70,13 +70,8 @@ def display_source_line(location: str | None) -> str | None:
     path, sep, line = location.rpartition(":")
     if not sep or not line.isdigit():
         path, line = location, ""
-    try:
-        relative = os.path.relpath(path)
-    except ValueError:  # another drive on Windows
-        return location
-    if relative.startswith(os.pardir) or os.path.isabs(relative):
-        return location
-    return f"{relative}:{line}" if line else relative
+    short = _source_path(path)
+    return f"{short}:{line}" if line else short
 
 
 def at_source(location: str | None) -> str:
@@ -354,6 +349,8 @@ class _TableReport(Report):
     subject_text: str
     finding_columns: tuple[str, ...]
     coverage_text: str | None = None
+    status_text: str | None = None
+    severity_counts: tuple[tuple[str, int], ...] = ()
 
     @property
     def report_type(self) -> str:
@@ -369,7 +366,14 @@ class _TableReport(Report):
     def _report_status(self) -> str:
         """The verdict token on the card's lead line."""
 
+        if self.status_text is not None:
+            return self.status_text
         return "empty" if len(self.frame) == 0 else f"{len(self.frame)} rows"
+
+    def _report_severity_counts(self) -> dict[str, int]:
+        """Severity-token counts the helper states for the lead line."""
+
+        return dict(self.severity_counts)
 
     def _report_coverage(self) -> str | None:
         """What this report did and did not examine, when the helper says."""
@@ -437,6 +441,8 @@ def table_report(
     subject: str,
     finding_columns: Sequence[str],
     coverage: str | None = None,
+    status: str | None = None,
+    severity_counts: Mapping[str, int] | None = None,
 ) -> Report:
     """Wrap a helper's frame in the tabular :class:`Report`.
 
@@ -452,6 +458,10 @@ def table_report(
         Columns shown on each finding line of the printed card.
     coverage:
         Optional coverage line for the card (what was and was not examined).
+    status:
+        Optional verdict token for the lead line; the row count otherwise.
+    severity_counts:
+        Optional severity-token counts printed on the lead line.
 
     Returns
     -------
@@ -465,6 +475,8 @@ def table_report(
         subject_text=subject,
         finding_columns=tuple(finding_columns),
         coverage_text=coverage,
+        status_text=status,
+        severity_counts=tuple((severity_counts or {}).items()),
     )
 
 
