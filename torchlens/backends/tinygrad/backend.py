@@ -34,7 +34,7 @@ from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
-    pop_static_label_save_predicate,
+    split_backend_save_keyword,
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
@@ -306,7 +306,7 @@ class TinygradBackend:
         input_kwargs
             Keyword arguments. Unsupported in this preview.
         save
-            Must be ``"all"`` (``tl.trace(save=)`` spelling); the preview is full-save only.
+            ``"all"`` or a static-label selector, as ``tl.trace(save=)``; other shaping refuses.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -374,7 +374,7 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
+        save, save_predicate = split_backend_save_keyword(save, backend_name="tinygrad")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.

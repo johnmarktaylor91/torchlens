@@ -407,7 +407,7 @@ def _inspect(subject: _Subject, tmp_path: Path) -> None:
     del tmp_path
     trace = subject.trace()
     op = _act_op(trace, subject.act_func)
-    assert op.label.split(":")[0] in str(op)
+    assert op.short_layer_label in str(op)
     assert tuple(op.shape) == _np(op.out).shape
 
 
