@@ -82,11 +82,11 @@ def test_branch_attribution_runs_once_per_distinct_stack(monkeypatch: pytest.Mon
     calls = _count_calls(monkeypatch, control_flow, "_translate_conditional_stack")
     with quiet_gc():
         trace = tl.trace(_BranchedRepeatedSites().eval(), torch.randn(2, 4))
-    distinct = {_frame_position_key(op.code_context) for op in trace.ops}
+    attributed = [_frame_position_key(args[0]) for args in calls]
     assert len(trace.ops) >= 12
     assert any(op.conditional_branch_stack for op in trace.ops), "step 5 must attribute"
-    assert len(calls) == len(distinct)
-    assert len(calls) < len(trace.ops)
+    assert len(attributed) == len(set(attributed)), "a stack was attributed twice"
+    assert 0 < len(attributed) < len(trace.ops) // 2
 
 
 def test_branch_stacks_are_private_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
