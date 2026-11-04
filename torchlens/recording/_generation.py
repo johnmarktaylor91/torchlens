@@ -642,6 +642,7 @@ def record_generation(
         recorder_kwargs["save"] = _generation_save(recorder_kwargs.get("save"), generation)
     sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
+        recorder._trim_pass_cores = True  # linear retention in generated tokens (_run_cores)
         if generation is not None:
             sink = _StepSink(generation, recorder, partial(_max_new_tokens, settings))
         with _forwards_through(model, recorder, windows, sink):

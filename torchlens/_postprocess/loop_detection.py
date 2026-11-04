@@ -353,11 +353,11 @@ def _detect_and_label_loops(self: "Trace") -> None:
     """Group ops into layers and passes (step 7).
 
     A capture whose ops carry call-site classes (the torch backend's
-    exhaustive capture, ``RawGraphWorkspace._call_site_classes``) groups by
-    call site (``callsite_v1``,
-    :func:`_group_by_call_sites`). Captures without that evidence (other
-    backends, predicate-mode recordings) keep the backend-neutral structural
-    grouper (``grouper_v1``).
+    exhaustive capture and cooked predicate recordings,
+    ``RawGraphWorkspace._call_site_classes``) groups by call site
+    (``callsite_v1``, :func:`_group_by_call_sites`). Captures without that
+    evidence (other backends) keep the backend-neutral structural grouper
+    (``grouper_v1``).
 
     Parameters
     ----------
