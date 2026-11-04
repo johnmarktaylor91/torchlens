@@ -7,9 +7,8 @@ Graphviz reserves no layout space for head and tail labels, and one
 placement keeps them off nodes, lines, arrowheads, other labels and module borders
 in every drawing and direction.  Head and tail labels never move nodes or edges,
 though, so one ``dot -Tjson`` pass gives the final geometry: each pass-labelled edge
-keeps Graphviz's default placement when that is clear, and otherwise takes the
-candidate placement whose labels clear every obstacle and sit closest to their own
-nodes.  The chosen pair is written onto the edge statement before the real render.
+takes the candidate placement whose labels clear every obstacle and sit closest to
+their own nodes.  The chosen pair is written onto the edge statement before the real render.
 """
 
 from __future__ import annotations
@@ -42,32 +41,14 @@ _PEN_EPS = 0.25  # penetration (pt) that counts as a collision
 _CLEAR_TARGET = 3.0  # clearance (pt) after which closeness to the node wins
 _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
 _REACH = 90.0  # obstacles farther than this from a label are ignored
-_DEFAULT_SLACK = 1.0  # Graphviz's default placement is kept when this close to the target
 _NEAR_NODE = 14.0  # (pt) a label farther than this from its own node no longer reads as its
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
+#: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
 _CANDIDATES: tuple[tuple[float, float], ...] = tuple(
-    (distance, angle)
-    for distance in (1.5, 2.0, 2.5, 3.0, 3.5)
-    for angle in (
-        -150,
-        -135,
-        -120,
-        -105,
-        -90,
-        -75,
-        -60,
-        -45,
-        -30,
-        30,
-        45,
-        60,
-        75,
-        90,
-        105,
-        120,
-        135,
-        150,
-    )
+    (distance, float(angle))
+    for distance in (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0)
+    for angle in range(-165, 166, 15)
+    if abs(angle) > 15
 )
 
 
@@ -84,8 +65,8 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
     Returns
     -------
     list[str]
-        A new list; lines of edges whose default label placement collides gain
-        ``labeldistance`` and ``labelangle``.  Unparseable layouts leave ``body`` as is.
+        A new list; every pass-labelled edge line gains ``labeldistance`` and
+        ``labelangle``.  Unparseable layouts leave ``body`` as is.
     """
 
     targets = _pass_label_lines(body)
@@ -102,9 +83,7 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
         line_index = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
         if line_index is None or not edge["labels"]:
             continue
-        choice = scene.choose(edge)
-        if choice is not None:
-            new_body[line_index] = _with_placement(new_body[line_index], choice)
+        new_body[line_index] = _with_placement(new_body[line_index], scene.choose(edge))
     return new_body
 
 
@@ -267,24 +246,22 @@ class _Scene:
                 self.rects.extend(lines)
         self.edges.append({"tail": tail, "head": head, "occurrence": occurrence, "labels": labels})
 
-    def choose(self, edge: dict[str, Any]) -> tuple[float, float] | None:
-        """Pick the edge's placement and record its labels as obstacles for later edges."""
+    def choose(self, edge: dict[str, Any]) -> tuple[float, float]:
+        """Pick the edge's placement and record its labels as obstacles for later edges.
 
-        default_score = self._score(edge, [label["default"] for label in edge["labels"]])
-        best: tuple[Any, ...] = (
-            default_score,
-            None,
-            [label["default"] for label in edge["labels"]],
+        Always an explicit pair: Graphviz's default spot for an unplaced label is
+        chosen around the other labels, so it moves when they move and cannot be
+        trusted from this layout.
+        """
+
+        placements = (
+            ((distance, angle), [self._placed(label, distance, angle) for label in edge["labels"]])
+            for distance, angle in _CANDIDATES
         )
-        if default_score[0] > 0 or default_score[2] > _CLEAR_TARGET - _DEFAULT_SLACK:
-            for distance, angle in _CANDIDATES:
-                boxes = [self._placed(label, distance, angle) for label in edge["labels"]]
-                score = self._score(edge, boxes)
-                if score < best[0]:
-                    best = (score, (distance, angle), boxes)
-        for lines in best[2]:
+        choice, boxes = min(placements, key=lambda item: self._score(edge, item[1]))
+        for lines in boxes:
             self.rects.extend(lines)
-        return best[1]
+        return choice
 
     def _placed(self, label: dict[str, Any], distance: float, angle: float) -> list[Rect]:
         """Return the label's text boxes for one ``labeldistance``/``labelangle`` pair."""
