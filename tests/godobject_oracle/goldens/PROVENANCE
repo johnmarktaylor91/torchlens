@@ -930,3 +930,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7d0a2d80a95f555473f68067ccad21b6e8550dde (dirty)
 recorded: 2026-11-04T09:16:18.707754+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-157 loop-labels: loop-if 367773cfc1 (pass labels at their own edge's end) merged onto C-156 9cbe67605e: viz identity on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0b4eeefea1b1ece9e309693aebfff1e063daa83 (dirty)
+recorded: 2026-11-04T11:34:50.419118+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-157 loop-labels: loop-if 367773cfc1 (pass labels at their own edge's end) merged onto C-156 9cbe67605e: viz identity on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0b4eeefea1b1ece9e309693aebfff1e063daa83 (dirty)
+recorded: 2026-11-04T11:34:51.608893+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-157 loop-labels: loop-if 367773cfc1 (pass labels at their own edge's end) merged onto C-156 9cbe67605e: viz identity on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0b4eeefea1b1ece9e309693aebfff1e063daa83 (dirty)
+recorded: 2026-11-04T11:34:52.664194+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-157 loop-labels: loop-if 367773cfc1 (pass labels at their own edge's end) merged onto C-156 9cbe67605e: viz identity on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d0b4eeefea1b1ece9e309693aebfff1e063daa83 (dirty)
+recorded: 2026-11-04T11:34:53.771865+00:00
