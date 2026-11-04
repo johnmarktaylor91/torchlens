@@ -157,9 +157,10 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: batched autograd through the whole model, then a jacrev check on two blocks.
 #: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
 #: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
-#: measured 168.3 s in the test call and 175.7 s run alone; the LEACE notebook
-#: (GPT-2 small, twelve block erasers) measured 73.3 s and 82.0 s. The vision
-#: logit lens notebook measured 8.1 s and 6.4 s with a warm cache, but it
+#: measured 168.3 and 193.0 s in the test call and 175.7 and 195.6 s run alone
+#: (two runs); the LEACE notebook (GPT-2 small, twelve block erasers) measured
+#: 73.3 and 72.6 s, and 82.0 and 76.9 s. The vision logit lens notebook measured
+#: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
 #: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
 #: use, so it sits in the slow tier with the CLIP notebooks.
 SLOW_PAGES: frozenset[str] = frozenset(
