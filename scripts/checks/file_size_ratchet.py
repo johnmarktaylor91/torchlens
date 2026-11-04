@@ -145,7 +145,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merge): the C-063 stack and C-076 brought op.py to 3549, re-keyed down to
     # the next 50-line step; replay-templates' template gating lands on the
     # same tree (merged measurement 3497) and the row stays at 3550.
-    "torchlens/_data_classes/op.py": 3550,
+    "torchlens/_data_classes/op.py": 3450,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -182,19 +182,18 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # rides the tip's debloated bundle (union measures 4600) -- the lane's
     # 4660 raise is unnecessary and the ceiling burns back down.
     # 4650 -> 4700 (2026-09-02 W051-IO / T102 lint-size settle): the save
-    # path gains the write/read-symmetry portability preflight (the canonical
-    # metadata.pkl bytes dry-run through the loader's default-deny unpickler
-    # before anything is written) and the load path the manifest anchors
-    # (stamp / n_layers checked against the pickled root state, AUD-CODE
-    # 3.0b). Both bodies live in their own modules (_portability_preflight,
-    # _artifact_anchors); bundle.py carries only the two call seams and the
+    # path gained the write/read-symmetry portability preflight (since replaced
+    # by the 3.0 writer's reload check, format3/writer.py::reload_check) and the
+    # load path the manifest anchors (stamp / n_layers checked against the
+    # pickled root state, AUD-CODE 3.0b). The anchor body lives in its own
+    # module (_artifact_anchors); bundle.py carries only the call seams and the
     # persisted-row-count disclosure (+27 measured at settle). Conscious
     # raise, F41 precedent; PRE-SPRINT BASELINE 4450 and the debloat target
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 4250,
-    "torchlens/_io/runnable_load.py": 3850,
+    "torchlens/_io/bundle.py": 3750,
+    "torchlens/_io/runnable_load.py": 3750,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
@@ -239,7 +238,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
     # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
-    "torchlens/_data_classes/trace.py": 3500,
+    # 3600 -> 3500: the do fold, the names codemod and the confirm_mutation sweep (slack rule).
+    # 3500 -> 3400: C-138 remerge4 on train 19cfba538 measures 3398 (slack rule).
+    "torchlens/_data_classes/trace.py": 3400,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -405,7 +406,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 2400,
+    "torchlens/backends/torch/model_prep.py": 2300,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
@@ -449,12 +450,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
     "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
-    "torchlens/_visualization/_render_leaf.py": 2400,
-    # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
-    # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
-    # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
-    # head/tail placement classes.
-    "torchlens/_visualization/_render_edges.py": 2100,
+    # Re-keyed down 2300 -> 2200 (r7 R43-F2 slack rule): the branch-label text
+    # helpers moved to _branch_label_text.py; measured 2198.
+    "torchlens/_visualization/_render_leaf.py": 2200,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,

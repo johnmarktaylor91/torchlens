@@ -6,7 +6,7 @@ their full public surface:
 1. the SESSION product (one wrapped capture, the ruled representation),
 2. the FLOOR product (N observer-discipline per-step captures in a Bundle
    with S6 episode_member rows, folded by the ratified 2.3 derivation),
-3. the guarded-fast re-run of the session product (``trace.run(fast=True)``).
+3. the guarded-fast re-run of the session product (``trace.run_transaction(inputs=..., fast=True)``).
 
 The gap-9 pin: the L2 spike measured wrapped-vs-native token identity only;
 guarded-fast-vs-wrapped identity was UNMEASURED, and the E-A3 escalation
@@ -192,7 +192,7 @@ def test_gap9_guarded_fast_rerun_token_identity():
     assert ledger is not None
     wrapped_tokens = [row.step_output[0] for row in ledger.rows]
 
-    result = session.run(inputs=_prompt(), fast=True)
+    result = session.run_transaction(inputs=_prompt(), fast=True)
     fast_tokens = [int(v) for v in result.output.reshape(-1).tolist()]
     assert fast_tokens == wrapped_tokens, (
         "cross-tier token identity broken: guarded-fast and wrapped-episode "

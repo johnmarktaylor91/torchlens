@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import set_cell
 from torch import nn
 
 import torchlens as tl
@@ -104,9 +105,10 @@ def test_cuda_mps_and_backward_semantics_are_unchanged() -> None:
 def test_malformed_reason_refuses_at_load(tmp_path: Path, peak: Any, reason: Any, why: str) -> None:
     trace = _capture()
     trace._cost_forward_peak_memory = peak
-    trace._cost_forward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
     trace.save(path)
+    # The 3.0 save refuses a malformed reason, so the forgery is planted on disk and re-digested.
+    set_cell(path, "trace", "_cost_forward_peak_memory_reason", 0, reason)
 
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)

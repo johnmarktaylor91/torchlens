@@ -6,11 +6,12 @@
 - The header's count names what it counts, and the count and the byte total
   cover the same nodes: the drawn nodes that show a tensor size (a focus's
   input and output stubs show none and are not counted).
-- Parameter counts carry thousands separators; every size uses the binary
-  unit its 1024 divisor implies (KiB, MiB).
+- Parameter counts carry thousands separators; every drawn size divides by
+  1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
-  view and which the whole model, shows the key and a reading key by default,
+  view and which the whole model, shows the key by default (the reading key is
+  opt-in through ``show_legend=True``),
   and draws no frame for the focus's ancestors.
 - Key entries match drawn marks: a frame for an expanded module, a box for a
   module drawn as one op, a 3-D box for a collapsed module, a double outline
@@ -32,25 +33,20 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import KEY_TABLE_ID, drawn_module_marks, key_swatches
 from torchlens._visualization._label_format import binary_size, format_memory
-from torchlens._visualization.themes import OKABE_ITO_SEMANTIC_PALETTE, resolve_theme
+from torchlens._visualization.modes import _compact_size
+from torchlens._visualization.overlays import format_overlay_value
+from torchlens._visualization.themes import (
+    OKABE_ITO_SEMANTIC_PALETTE,
+    RELEASED_SEMANTIC_PALETTE,
+    resolve_theme,
+)
 from torchlens.errors import ArgumentConflictError
 
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
 
-#: The eight Okabe-Ito colours.
-_OKABE_ITO = {
-    "#E69F00",
-    "#56B4E9",
-    "#009E73",
-    "#F0E442",
-    "#0072B2",
-    "#D55E00",
-    "#CC79A7",
-    "#000000",
-}
 _FOCUS = "transformer.h.1.mlp"
-_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KiB|MiB|GiB))\)")
-_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KiB|MiB|GiB)<")
+_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KB|MB|GB))\)")
+_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KB|MB|GB)<")
 _NODE = re.compile(r"^\t(\S+) \[label=<")
 _CLUSTER = re.compile(r'subgraph "?cluster_([^"\s{]+)')
 
@@ -120,6 +116,12 @@ def _header(dot: str) -> str:
     return dot[dot.index("label=<") : dot.index("labeljust")]
 
 
+def _node_names(dot: str) -> list[str]:
+    """Names of the drawn nodes."""
+
+    return [m.group(1) for m in map(_NODE.match, dot.splitlines()) if m is not None]
+
+
 def _sized_nodes(dot: str) -> list[str]:
     """Names of the drawn nodes whose label shows a tensor size."""
 
@@ -172,13 +174,16 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 # -- header count and units (AGT-2536) ----------------------------------------
 
 
-def test_binary_units_match_the_1024_divisor() -> None:
+def test_drawn_sizes_use_the_released_unit_names() -> None:
     assert binary_size(0) == "0 B"
     assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1.0 KiB"
-    assert binary_size(1.5 * 1024**2) == "1.5 MiB"
-    assert binary_size(3 * 1024**3) == "3.0 GiB"
-    assert format_memory(61440) == "60.0 KiB"
+    assert binary_size(1024) == "1.0 KB"
+    assert binary_size(1.5 * 1024**2) == "1.5 MB"
+    assert binary_size(3 * 1024**3) == "3.0 GB"
+    assert binary_size(1024**2 - 1) == "1024.0 KB"
+    assert format_memory(61440) == "60.0 KB"
+    assert _compact_size(61440) == "60.0KB"
+    assert format_overlay_value("bytes", 61440) == "bytes: 60.0 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         binary_size(-1)
@@ -193,7 +198,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
     assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{trace.num_params:,} params" in dot
-    assert not re.search(r"\d (?:KB|MB|GB)\b", dot)
+    assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
 
 @pytest.mark.parametrize("rolled", [False, True])
@@ -203,15 +208,21 @@ def test_focus_count_skips_the_boundary_stubs(
     dot = _dot(trace, tmp_path, "focus", module=_FOCUS, rolled=rolled)
     header = _header(dot)
     count, noun, _size = _COUNT.search(header).groups()  # type: ignore[union-attr]
-    sized = _sized_nodes(dot)
+    stubs = [name for name in _sized_nodes(dot) if name.startswith("__module_focus")]
+    drawn = [name for name in _node_names(dot) if not name.startswith("__module_focus")]
     assert noun == ("layers" if rolled else "ops")
-    assert int(count) == len(sized)
-    assert not any(name.startswith("__module_focus") for name in sized)
+    assert int(count) == len(drawn)
+    # Every stub names its outside op's output size (made outside the drawn
+    # module), and no stub is counted. Every drawn op shows its output size,
+    # as on a whole-model draw.
+    kinds = {name.split("_")[4] for name in stubs}  # __module_focus_<kind>_<op>
+    assert kinds == {"input", "output"}, stubs
+    assert len(_sized_nodes(dot)) - len(stubs) == len(drawn)
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
-        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
+        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
-        assert f"drawn: {count} ops ({binary_size(expected)})" in header
+        assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
 
 
 # -- focus scope line and reading key (AGT-2538) ------------------------------
@@ -219,28 +230,41 @@ def test_focus_count_skips_the_boundary_stubs(
 
 def test_focus_header_names_its_scope_and_its_lines(trace: tl.Trace, tmp_path: Path) -> None:
     header = _header(_dot(trace, tmp_path, "scope", module=_FOCUS))
-    scope = "<B>_Toy</B> &gt; transformer &gt; h.1 &gt; <B>mlp</B> (_MLP)"
+    # Non-breaking spaces around the U+203A separators, and ONE bold run for
+    # the whole scope: Graphviz writes each change of weight as its own SVG
+    # <text> placed by its own metrics, so a mixed line drifted at every
+    # bold/plain boundary in browsers whose font differs.
+    sep = "&#160;&#8250;&#160;"
+    scope = f"<B>_Toy{sep}transformer{sep}h.1{sep}mlp&#160;(_MLP)</B><br align='left'/>"
     assert scope in header
-    assert "drawn: " in header
-    assert f"whole model: {trace.num_params:,} params" in header
+    assert header.count("<B>") == 1, header
+    assert "drawn: " not in header  # the count line carries no label, as on a whole-model draw
+    assert "whole model" not in header and "params" not in header
 
 
 def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "keyed", module=_FOCUS)
     assert KEY_TABLE_ID in dot
-    assert "@name: the module at that address" in dot
+    assert "module run as one op" in dot  # the dropout and GELU are drawn as boxes
+    assert "@name: a module address" not in dot  # the reading key is opt-in
+    assert "(shape), size:" not in dot
+    bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
+    assert KEY_TABLE_ID not in bare and "@name: a module" not in bare
+    assert "&#8250;&#160;mlp&#160;(_MLP)</B>" in bare  # the scope line is the header, not the key
+
+
+def test_reading_key_is_opt_in_through_show_legend(trace: tl.Trace, tmp_path: Path) -> None:
+    dot = _dot(trace, tmp_path, "notes", module=_FOCUS, show_legend=True)
+    assert KEY_TABLE_ID in dot
+    assert "@name: a module address under transformer.h.1" in dot
     assert re.search(r"\w+_\d+_\d+: the \d+(st|nd|rd|th) \w+ call, op \d+ of the whole", dot)
     assert "(shape), size: the op's output tensor and its memory" in dot
     assert "params: the weights the op used (filled as the key shows)" in dot
-    assert "module run as one op" in dot  # the dropout and GELU are drawn as boxes
-    bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
-    assert KEY_TABLE_ID not in bare and "@name: the module" not in bare
-    assert "&gt; <B>mlp</B> (_MLP)" in bare  # the scope line is the header, not the key
 
 
 def test_whole_model_draw_keeps_its_key_opt_in(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "plain")
-    assert KEY_TABLE_ID not in dot and "@name: the module" not in dot
+    assert KEY_TABLE_ID not in dot and "@name: a module" not in dot
     assert "drawn: " not in _header(dot) and "&gt;" not in _header(dot)
 
 
@@ -254,7 +278,7 @@ def test_focus_draws_no_ancestor_frames(trace: tl.Trace, tmp_path: Path, rolled:
     assert frames, dot
     assert all(frame.startswith(_FOCUS) for frame in frames), frames
     widths = re.findall(r"penwidth=([\d.]+)", dot[dot.index("subgraph") :])
-    assert max(float(width) for width in widths) == 5.0  # the focus frame is the outermost
+    assert {float(width) for width in widths} == {1.5}  # one stroke at every depth
 
 
 def test_whole_model_draw_keeps_every_frame(trace: tl.Trace, tmp_path: Path) -> None:
@@ -310,11 +334,12 @@ def test_each_module_mark_gets_its_own_key_entry() -> None:
     assert [s.text for s in key_swatches(theme, frozenset(), has_module=True)] == ["module"]
 
 
-def test_frozen_weights_take_okabe_ito_black_with_white_ink(tmp_path: Path) -> None:
-    # Okabe-Ito blue #0072B2 fails the CVD gate against the input green
-    # (deuteranopia 37, tritanopia 21, floor 40); black is the member left.
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] in _OKABE_ITO
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#000000"
+def test_frozen_weights_take_dark_grey_with_black_ink(tmp_path: Path) -> None:
+    # No skin draws weights in blue: trainable is light grey, frozen darker grey, and black
+    # ink reads on both (the default skin keeps the released #D9D9D9 / #B0B0B0).
+    assert RELEASED_SEMANTIC_PALETTE["params_frozen"] == "#B0B0B0"
+    assert RELEASED_SEMANTIC_PALETTE["params_trainable"] == "#D9D9D9"
+    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#808080"
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     model[0].requires_grad_(False)
     captured = tl.trace(model, torch.randn(1, 4))
@@ -322,6 +347,6 @@ def test_frozen_weights_take_okabe_ito_black_with_white_ink(tmp_path: Path) -> N
         dot = captured.draw(str(tmp_path / "frozen.svg")).dot
     finally:
         captured.cleanup()
-    frozen = [line for line in dot.splitlines() if "#000000" in line and "[label=<" in line]
+    frozen = [line for line in dot.splitlines() if "#B0B0B0" in line and "[label=<" in line]
     assert frozen, dot
-    assert all('fontcolor="#FFFFFF"' in line or "fontcolor=#FFFFFF" in line for line in frozen)
+    assert not any("#FFFFFF" in line.upper() or "fontcolor=white" in line for line in frozen)

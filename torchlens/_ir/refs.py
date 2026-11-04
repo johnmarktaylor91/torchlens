@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -152,3 +152,30 @@ class ReservedLabel:
     type_index: int
     layer_type: str
     site: object
+
+
+#: Field names per frozen record class, for :func:`_clone_frozen_record`.
+_FROZEN_RECORD_FIELD_NAMES: dict[type, tuple[str, ...]] = {}
+
+
+def _clone_frozen_record(value: Any, **changes: Any) -> Any:
+    """Shallow-copy a frozen ``slots`` dataclass, overriding ``changes``.
+
+    ``dataclasses.replace`` rebuilds the instance through keyword
+    ``__init__``, which for a frozen class pays one guarded ``__setattr__``
+    per field plus the keyword marshalling; a capture clones every journal
+    record twice (pass absorption and the replay projection), so this copies
+    the slots directly. The result equals ``replace(value, **changes)`` field
+    for field: the record classes define no ``__post_init__`` and no
+    ``init=False`` field, so there is nothing to recompute.
+    """
+
+    cls = type(value)
+    names = _FROZEN_RECORD_FIELD_NAMES.get(cls)
+    if names is None:
+        names = tuple(spec.name for spec in fields(cls))
+        _FROZEN_RECORD_FIELD_NAMES[cls] = names
+    clone = object.__new__(cls)
+    for name in names:
+        object.__setattr__(clone, name, changes[name] if name in changes else getattr(value, name))
+    return clone

@@ -7,7 +7,6 @@ Covers:
   swallowed internal ``TypeError`` / double side effect).
 * M17 ``_non_torch_array_summary`` rejects callable ``.shape``/``.dtype``.
 * M20 ``copy_arg_tree`` cycle safety.
-* M3 ``suppress_mutate_warnings`` context-manager state restoration.
 * F9 ``CaptureOptions._from_values`` validation parity with ``__init__``.
 """
 
@@ -23,10 +22,7 @@ import torch
 from torchlens._utils import _torch_compat
 from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens._utils.display import _non_torch_array_summary
-from torchlens.options import (
-    CaptureOptions,
-    suppress_mutate_warnings,
-)
+from torchlens.options import CaptureOptions
 
 # --------------------------------------------------------------------------- #
 # M15 -- runnable torch alias target-existence probe
@@ -210,64 +206,6 @@ def test_m20_containers_and_tensors_still_copied() -> None:
     assert torch.equal(cloned, t)
     # Tensors are cloned per occurrence (not memoized/aliased).
     assert copied["a"][0] is not copied["a"][1][0]
-
-
-# --------------------------------------------------------------------------- #
-# M3 -- suppress_mutate_warnings context state restoration
-# --------------------------------------------------------------------------- #
-
-
-def test_m3_context_restores_prior_state() -> None:
-    """``with suppress_mutate_warnings():`` restores the pre-with state."""
-
-    suppress_mutate_warnings(False)
-    try:
-        assert suppress_mutate_warnings.is_suppressed is False
-        with suppress_mutate_warnings():
-            assert suppress_mutate_warnings.is_suppressed is True
-        assert suppress_mutate_warnings.is_suppressed is False  # no leak
-    finally:
-        suppress_mutate_warnings(False)
-
-
-def test_m3_context_restores_prior_true_state_and_nests() -> None:
-    """Nesting restores each level's prior state without leaking."""
-
-    suppress_mutate_warnings(True)
-    try:
-        assert suppress_mutate_warnings.is_suppressed is True
-        with suppress_mutate_warnings():
-            assert suppress_mutate_warnings.is_suppressed is True
-            with suppress_mutate_warnings():
-                assert suppress_mutate_warnings.is_suppressed is True
-            assert suppress_mutate_warnings.is_suppressed is True
-        assert suppress_mutate_warnings.is_suppressed is True  # restored to prior True
-    finally:
-        suppress_mutate_warnings(False)
-
-
-def test_m3_bare_call_toggle_and_identity_preserved() -> None:
-    """The bare session toggle and ``returned is controller`` contract hold."""
-
-    suppress_mutate_warnings(False)
-    try:
-        returned = suppress_mutate_warnings(True)
-        assert returned is suppress_mutate_warnings
-        assert suppress_mutate_warnings.is_suppressed is True
-    finally:
-        suppress_mutate_warnings(False)
-    assert suppress_mutate_warnings.is_suppressed is False
-
-
-def test_m3_context_suppresses_warning_body() -> None:
-    """The suppressed block behaves like the historical usage."""
-
-    suppress_mutate_warnings(False)
-    try:
-        with suppress_mutate_warnings():
-            assert suppress_mutate_warnings.is_suppressed is True
-    finally:
-        suppress_mutate_warnings(False)
 
 
 # --------------------------------------------------------------------------- #

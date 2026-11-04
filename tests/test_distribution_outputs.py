@@ -137,7 +137,7 @@ def test_distribution_output_settles_verified_on_run() -> None:
 
     model = NormalHead().eval()
     trace = _trace(model)
-    result = trace.run(inputs=_x())
+    result = trace.run_transaction(inputs=_x())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_same_distribution(result.output, model(_x()))
 
@@ -147,7 +147,7 @@ def test_lossy_distribution_output_settles_unverifiable_on_run() -> None:
 
     model = TanhHead().eval()
     trace = _trace(model)
-    result = trace.run(inputs=_x(), on_divergence="return")
+    result = trace.run_transaction(inputs=_x(), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
@@ -361,7 +361,7 @@ def test_rerun_doors_zero_fire_name_the_distribution_output() -> None:
         warnings.simplefilter("ignore")
         trace = tl.trace(model, _x(), intervene=_policy_rule())
     with pytest.raises(RunCapabilityUnavailableError) as refused:
-        trace.run(inputs=_x() + 1, fast=True)
+        trace.run_transaction(inputs=_x() + 1, fast=True)
     assert refused.value.fields.get("reason") == NON_TENSOR_MODULE_OUTPUT_REASON
     assert "(output paths .loc, .scale)" in str(refused.value)
     with warnings.catch_warnings(record=True) as caught:
@@ -400,7 +400,7 @@ def test_runnable_save_round_trips_a_normal_output_verified(tmp_path: Path) -> N
     trace = _trace(model, capture=CaptureOptions(replayable=True, capture_container_structure=True))
     path = tmp_path / "normal.tlspec"
     trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=_x())
+    result = tl.load(path).run_transaction(inputs=_x())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_same_distribution(result.output, model(_x()))
 
@@ -419,7 +419,7 @@ def test_runnable_save_never_blesses_a_lossy_distribution(tmp_path: Path) -> Non
         trace.save(path, level="runnable", include_weights=True)
     except tl.errors.TorchLensError:
         return
-    result = tl.load(path).run(inputs=_x(), on_divergence="return")
+    result = tl.load(path).run_transaction(inputs=_x(), on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 

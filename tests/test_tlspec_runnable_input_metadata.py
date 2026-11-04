@@ -109,9 +109,9 @@ def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Pat
     path = _save_runnable(ContiguityBranch(), x, tmp_path / "contig.tlspec")
 
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=_layout_twin(x))
+        tl.load(path).run_transaction(inputs=_layout_twin(x))
 
-    diverged = tl.load(path).run(inputs=_layout_twin(x), on_divergence="return")
+    diverged = tl.load(path).run_transaction(inputs=_layout_twin(x), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert diverged.report.is_poisoned
@@ -127,13 +127,13 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
     x = torch.randn(3)
     path = _save_runnable(RequiresGradBranch(), x, tmp_path / "grad.tlspec")
 
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     grad_input = x.clone().requires_grad_(True)
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=grad_input)
-    diverged = tl.load(path).run(inputs=grad_input, on_divergence="return")
+        tl.load(path).run_transaction(inputs=grad_input)
+    diverged = tl.load(path).run_transaction(inputs=grad_input, on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert diverged.report.is_poisoned

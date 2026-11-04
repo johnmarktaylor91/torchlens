@@ -55,7 +55,7 @@ def _run_report(model: nn.Module, tmp_path: Path) -> Any:
     trace = tl.trace(model.eval(), x.clone(), capture=_CAPTURE)
     path = tmp_path / "sysrandom.tlspec"
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    return tl.load(path).run(inputs=x.clone()).report
+    return tl.load(path).run_transaction(inputs=x.clone()).report
 
 
 # Kept: sole branch coverage of _utils/rng/digest.py, _utils/rng/generator_sweep.py, _utils/rng/inventory_types.py and more.

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
+from ._display import _call_message, _output_message, _pass_message
 from ._errors import (
     AmbiguousCallError,
     AmbiguousPassError,
+    AmbiguousTargetError,
     NoInfluencePathError,
     ReceptiveFieldError,
 )
@@ -18,6 +20,48 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from ._query import _IndexSet
+    from ._types import ReceptiveField
+
+# Output path segments that name a cache field; see ``_is_cache_role``.
+_CACHE_ROLE_SEGMENTS = frozenset({"past_key_values", "presents", "mems"})
+
+
+def _op_by_name(trace: Trace, handle: str) -> Op:
+    """Resolve a label, or the IO role that field status reports, to one operation.
+
+    Parameters
+    ----------
+    trace:
+        Trace against which the name is resolved.
+    handle:
+        Exact pass-qualified label, or an IO role such as ``"output.logits"``.
+
+    Returns
+    -------
+    Op
+        The uniquely resolved operation.
+
+    Raises
+    ------
+    ReceptiveFieldError
+        If the name matches no operation, or an IO role matches several.
+    """
+
+    matches = [op for op in trace._layer_list if op.label == handle]
+    if len(matches) == 1:
+        return matches[0]
+    detail = f"No operation with exact pass-qualified label {handle!r} exists in this trace."
+    if not matches:
+        by_role = [op for op in trace._layer_list if str(op.io_role or "") == handle]
+        if len(by_role) == 1:
+            return by_role[0]
+        if by_role:
+            spellings = ", ".join(op.label for op in by_role)
+            detail = (
+                f"IO role {handle!r} names several operations ({spellings}); "
+                "select one by its pass-qualified label."
+            )
+    raise ReceptiveFieldError(detail)
 
 
 def resolve_graph_point(trace: Trace, handle: object) -> Op:
@@ -28,7 +72,8 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     trace:
         Trace against which the handle is resolved.
     handle:
-        Exact pass-qualified label, ``Op``, ``Layer``, ``ModuleCall``, or ``Module``.
+        Exact pass-qualified label, IO role as field status reports it, ``Op``,
+        ``Layer``, ``ModuleCall``, or ``Module``.
 
     Returns
     -------
@@ -53,12 +98,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):
-        matches = [op for op in trace._layer_list if op.label == handle]
-        if len(matches) != 1:
-            raise ReceptiveFieldError(
-                f"No operation with exact pass-qualified label {handle!r} exists in this trace."
-            )
-        return matches[0]
+        return _op_by_name(trace, handle)
 
     if isinstance(handle, Op):
         _require_trace_owner(trace, handle.source_trace, handle.label)
@@ -67,32 +107,19 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     if isinstance(handle, Layer):
         _require_trace_owner(trace, handle.source_trace, handle.layer_label)
         if handle.num_passes != 1 or len(handle.ops) != 1:
-            passes = ", ".join(f"layer.ops[{index}]" for index in handle.ops)
-            raise AmbiguousPassError(
-                f"Layer {handle.layer_label!r} has {handle.num_passes} passes: {passes}."
-            )
+            raise AmbiguousPassError(_pass_message(handle))
         return handle.ops[0]
 
     if isinstance(handle, ModuleCall):
         _require_trace_owner(trace, handle._source_trace, handle.label)
         if len(handle.output_ops) != 1:
-            candidates = ", ".join(
-                f"module_call.output_ops[{index}]={label!r}"
-                for index, label in enumerate(handle.output_ops)
-            )
-            raise MultiOutputModuleError(
-                f"ModuleCall {handle.label!r} has {len(handle.output_ops)} output ops; "
-                f"select one candidate explicitly: {candidates or 'none'}."
-            )
+            raise MultiOutputModuleError(_output_message(handle, trace))
         return resolve_graph_point(trace, handle.output_ops[0])
 
     if isinstance(handle, Module):
         _require_trace_owner(trace, handle._source_trace, handle.address)
         if handle.num_calls != 1 or len(handle.calls) != 1:
-            calls = ", ".join(f"module.calls[{index}]" for index in handle.calls)
-            raise AmbiguousCallError(
-                f"Module {handle.address!r} has {handle.num_calls} calls: {calls}."
-            )
+            raise AmbiguousCallError(_call_message(handle))
         return resolve_graph_point(trace, handle.calls[0])
 
     raise ReceptiveFieldError(
@@ -338,3 +365,102 @@ def _reachable_labels(start: str, adjacency: Mapping[str, frozenset[str]]) -> fr
 
 
 __all__: list[str] = []
+
+
+def _is_cache_role(role: str) -> bool:
+    """Return whether an output IO role names a cache tensor rather than a real output.
+
+    A role is a cache role when one of its dotted path segments is a known
+    cache field (``past_key_values``, ``presents``, ``mems``) or contains
+    ``cache`` (``cache_params``, ``kv_cache``), compared case-insensitively.
+    """
+
+    return any(
+        segment in _CACHE_ROLE_SEGMENTS or "cache" in segment for segment in role.lower().split(".")
+    )
+
+
+def _primary_target_role(
+    descriptors: Mapping[str, ReceptiveField], order: Sequence[str]
+) -> str | None:
+    """Return the primary output role when every other reachable target is a cache.
+
+    Parameters
+    ----------
+    descriptors:
+        Reachable target descriptors keyed by output IO role.
+    order:
+        Target operation labels in model output order.
+
+    Returns
+    -------
+    str | None
+        The role whose last segment is ``logits``, else the first non-cache
+        role in output order; ``None`` when no cache role is reachable (two
+        real outputs stay ambiguous) or every reachable role is a cache.
+    """
+
+    real = [role for role in descriptors if not _is_cache_role(role)]
+    if not real or len(real) == len(descriptors):
+        return None
+    logits = [role for role in real if role.rsplit(".", 1)[-1] == "logits"]
+    if logits:
+        return logits[0]
+    rank = {label: index for index, label in enumerate(order)}
+    return min(real, key=lambda role: rank.get(descriptors[role].input_op_label, len(rank)))
+
+
+def _target_identities(target: Any) -> tuple[str, ...]:
+    """The op labels a projective target names.
+
+    A string or an Op names itself; a Module or ModuleCall (what ``trace[...]``
+    gives for a module address) names its output ops.
+    """
+
+    if isinstance(target, str):
+        return (target,)
+    if type(target).__name__ in {"Module", "ModuleCall"}:
+        return tuple(map(str, target.output_ops))
+    return (str(target.label),)
+
+
+def _select_target_descriptor(
+    descriptors: Mapping[str, ReceptiveField],
+    target: Any,
+    order: Sequence[str] = (),
+    source_label: str | None = None,
+) -> ReceptiveField:
+    """Resolve one projective result descriptor without choosing silently.
+
+    With no ``target`` and several reachable targets, the primary output is
+    chosen only when the others are cache tensors (see ``_primary_target_role``;
+    ``order`` is the solution's target labels in model output order). Any other
+    several-target case raises ``AmbiguousTargetError``. A target naming several
+    ops (a multi-output module) must reach exactly one of them from this source.
+    """
+
+    if target is None:
+        if len(descriptors) == 1:
+            return next(iter(descriptors.values()))
+        primary = _primary_target_role(descriptors, order)
+        if primary is not None:
+            return descriptors[primary]
+        roles = ", ".join(descriptors)
+    else:
+        names = _target_identities(target)
+        matched = [
+            role
+            for role, descriptor in descriptors.items()
+            if {role, descriptor.input_op_label} & set(names)
+        ]
+        if not matched:
+            shown = names[0] if len(names) == 1 else ", ".join(names)
+            raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
+        if len(matched) == 1 or len(names) == 1:
+            return descriptors[matched[0]]
+        roles = ", ".join(matched)  # a multi-output module reaches several of its outputs
+    prefix = "This source" if source_label is None else f"Source {source_label!r}"
+    raise AmbiguousTargetError(
+        f"{prefix} has multiple reachable targets: {roles}. "
+        "Select one with view[target_op] or target=<io_role>."
+    )

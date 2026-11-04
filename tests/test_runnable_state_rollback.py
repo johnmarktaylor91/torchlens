@@ -164,7 +164,7 @@ def test_restore_runs_on_failed_forward() -> None:
     log = tl.trace(model, torch.randn(2, 4))
     before = _declared_state_clone(model)
     with pytest.raises((RuntimeError, ValueError)):
-        log.run(inputs=torch.randn(2, 9))
+        log.run_transaction(inputs=torch.randn(2, 9))
     _assert_declared_state_equal(model, before)
 
 
@@ -177,7 +177,7 @@ def test_carry_state_fast_refuses_typed() -> None:
     model = _EmaParamModel()
     log = tl.trace(model, torch.randn(2, 4))
     with pytest.raises(ValueError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), fast=True, carry_state=True)
+        log.run_transaction(inputs=torch.randn(2, 4), fast=True, carry_state=True)
     assert exc_info.value.fields["code"] == "run_fast_carry_state_unsupported"
 
 
@@ -199,23 +199,8 @@ def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
     log.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(ValueError) as exc_info:
-        loaded.run(inputs=x, carry_state=True)
+        loaded.run_transaction(inputs=x, carry_state=True)
     assert exc_info.value.fields["code"] == "run_carry_state_requires_live_model"
-
-
-# Kept: sole branch coverage of _errors.py, intervention/_trace_run.py.
-def test_carry_state_legacy_surface_refuses_typed() -> None:
-    """carry_state= is unified-only: the legacy run surface refuses typed."""
-
-    import torchlens as tl
-    from torchlens._errors import KeywordConflictError
-
-    model = _EmaParamModel()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x)
-    with pytest.raises(KeywordConflictError) as exc_info:
-        log.run(model, x, carry_state=True)
-    assert exc_info.value.fields["code"] == "run_legacy_options_conflict"
 
 
 # Kept: sole branch coverage of _runnable/state.py, _runnable/transaction.py.
@@ -229,12 +214,12 @@ def test_snapshot_preflight_refuses_overlapping_state_typed() -> None:
     log = tl.trace(model, x)
     before = _declared_state_clone(model)
     with pytest.raises(StateBindingError) as exc_info:
-        log.run(inputs=torch.randn(2, 4))
+        log.run_transaction(inputs=torch.randn(2, 4))
     assert exc_info.value.fields["code"] == "run_state_snapshot_unsupported"
     # No forward ran, so no state moved.
     _assert_declared_state_equal(model, before)
     # carry_state=True is the documented escape: the run proceeds without the bracket.
-    result = log.run(inputs=torch.randn(2, 4), carry_state=True)
+    result = log.run_transaction(inputs=torch.randn(2, 4), carry_state=True)
     assert result.report.has_carried_state is True
 
 
@@ -248,10 +233,10 @@ def test_restore_failure_source_refuses_next_live_run() -> None:
     x = torch.randn(2, 4)
     log = tl.trace(model, x)
     with pytest.raises(StateBindingError):
-        log.run(inputs=torch.randn(2, 4))
+        log.run_transaction(inputs=torch.randn(2, 4))
     for kwargs in ({}, {"fast": True}):
         with pytest.raises(StateBindingError) as exc_info:
-            log.run(inputs=torch.randn(2, 4), **kwargs)
+            log.run_transaction(inputs=torch.randn(2, 4), **kwargs)
         assert exc_info.value.fields["code"] == "run_state_restore_failed"
     # The legacy live surface reads the same live model and refuses identically.
     with pytest.raises(StateBindingError):

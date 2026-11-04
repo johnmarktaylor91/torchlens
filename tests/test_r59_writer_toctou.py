@@ -70,13 +70,14 @@ def test_intervention_save_overwrite_false_does_not_destroy_concurrent(
     from torchlens.intervention import save as intervention_save
 
     target = tmp_path / "spec.tlspec"
-    real_fsync = intervention_save._fsync_directory
+    # The staged directory's fsync is the last step before the swap-time check.
+    real_fsync = intervention_save.fsync_tree
 
     def racing_fsync(path: Path) -> None:
         _plant_concurrent(target)
         return real_fsync(path)
 
-    monkeypatch.setattr(intervention_save, "_fsync_directory", racing_fsync)
+    monkeypatch.setattr(intervention_save, "fsync_tree", racing_fsync)
     torch.manual_seed(0)
     trace = tl.trace(
         nn.Linear(4, 4),

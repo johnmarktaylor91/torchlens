@@ -51,7 +51,7 @@ def main() -> None:
         tl.scale(1.0),
         model=model,
         inputs=first,
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
     log.run(model, second, replay=tl.options.ReplayOptions(append=True))
 

@@ -15,7 +15,7 @@ TorchLens read.
 One positional reader was wrong regardless of geometry: the fast live run's
 input refresh looked each listing up in ``layer_dict_all_keys``, which maps a
 folded input's bare label to its last pass, so a saved earlier pass kept its
-capture-time tensor after ``trace.run(inputs=..., fast=True)``.
+capture-time tensor after ``trace.run_transaction(inputs=..., fast=True)``.
 """
 
 from __future__ import annotations
@@ -159,7 +159,7 @@ def test_run_refreshes_each_saved_input_pass_with_its_own_input(
     first_input = next(iter(trace.input_ops.values()))
     assert first_input.has_saved_activation
     assert torch.equal(first_input.out, a)
-    result = trace.run(inputs=[new_a, new_b], fast=fast)
+    result = trace.run_transaction(inputs=[new_a, new_b], fast=fast)
     with torch.no_grad():
         assert torch.equal(result.output, model(new_a, new_b))
     refreshed = result.trace if result.trace is not None else trace

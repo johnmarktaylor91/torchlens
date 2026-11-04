@@ -19,6 +19,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.hooks import HookContext
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CAPTURE = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
 
 
@@ -105,13 +107,19 @@ def test_patch_from_on_gradient_site_refuses_before_attaching() -> None:
     )
     audit_before = list(trace.intervention_audit)
     with pytest.raises(InvalidArgumentError) as exc_info:
-        trace._attach_hooks(tl.grad(mul), tl.patch_from(donor))
+        trace.do(
+            tl.grad(mul),
+            tl.patch_from(donor),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert exc_info.value.fields["code"] == "edit_signal_mismatch"
     hook_specs_after = len(
         getattr(getattr(trace, "_intervention_spec", None), "hook_specs", ()) or ()
     )
     assert hook_specs_after == hook_specs_before
-    assert list(trace.intervention_audit) == audit_before
+    # The refused do leaves the earlier audit intact and adds only its error row.
+    assert list(trace.intervention_audit)[: len(audit_before)] == audit_before
+    assert trace.intervention_audit[-1]["status"] == "error"
 
 
 def test_hook_context_signal_state_and_run_state() -> None:

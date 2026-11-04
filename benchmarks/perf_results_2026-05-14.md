@@ -6,7 +6,7 @@ Run status: **ok**. Wall clock: 12318.9 s.
 
 Each operation/model/device/pass cell runs in a fresh subprocess. Timing cells use 5 untimed warmups and 50 measured wall-clock samples unless the row is a one-time startup cost. Memory cells are separate subprocesses that record USS after setup, run the operation 10 untimed times, and report `uss_delta_mb_memory_pass`. CUDA memory columns are true allocator peaks after `torch.cuda.reset_peak_memory_stats()`.
 
-Gradient mode is enabled for headline rows, models are in eval mode, dtype is float32, autocast is not used, TF32 is disabled, and seeds are fixed to 0. `Trace.rerun(model, x)` uses the round-4 steady-state contract: capture once before the timing loop, run warmups, then measure repeated reruns on that same Trace.
+Gradient mode is enabled for headline rows, models are in eval mode, dtype is float32, autocast is not used, TF32 is disabled, and seeds are fixed to 0. `Trace.run(model, x)` uses the round-4 steady-state contract: capture once before the timing loop, run warmups, then measure repeated reruns on that same Trace.
 
 ## Environment
 
@@ -44,7 +44,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 4005.8 | 4005.8 | 4005.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 2773.8 | 2497.0 | 2953.8 | 289.9 | 1424.4 | N/A | N/A | ok |
 | TL Trace, replayable=True | 2951.9 | 2601.6 | 3163.7 | 342.2 | 3462.3 | N/A | N/A | ok |
-| Trace.rerun(model, x) | 2984.4 | 2626.1 | 3205.0 | 399.4 | 5884.7 | N/A | N/A | ok |
+| Trace.run(model, x) | 2984.4 | 2626.1 | 3205.0 | 399.4 | 5884.7 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 278.6 | 254.1 | 587.7 | 23.9 | 346.7 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 290.9 | 269.9 | 579.8 | 42.8 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 305.5 | 281.8 | 618.8 | 43.0 | N/A | N/A | N/A | ok |
@@ -54,7 +54,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | TL Trace, metadata only (no saved outs) | 1928.3 | 1327.0 | 3400.9 | 699.3 | -944.9 | N/A | N/A | ok |
-| Trace.rerun(model, x), no saved outs | 5725.3 | 3189.3 | 7470.7 | 1381.3 | 7280.8 | N/A | N/A | ok |
+| Trace.run(model, x), no saved outs | 5725.3 | 3189.3 | 7470.7 | 1381.3 | 7280.8 | N/A | N/A | ok |
 | fastlog zero-retention predicates | 760.8 | 503.7 | 1378.4 | 391.0 | -88.1 | N/A | N/A | ok |
 
 ### gpt2_hf / cuda
@@ -70,7 +70,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 4916.7 | 4916.7 | 4916.7 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 3273.9 | 2767.5 | 3841.6 | 520.9 | 838.9 | 3881.2 | 4540.0 | ok |
 | TL Trace, replayable=True | 3293.8 | 2823.4 | 3728.9 | 448.9 | 976.9 | 5370.1 | 5944.0 | ok |
-| Trace.rerun(model, x) | 3285.8 | 2830.4 | 3802.8 | 574.0 | 1313.6 | 7453.9 | 8312.0 | ok |
+| Trace.run(model, x) | 3285.8 | 2830.4 | 3802.8 | 574.0 | 1313.6 | 7453.9 | 8312.0 | ok |
 | fastlog module-boundary metadata | 149.4 | 145.3 | 535.2 | 22.7 | 5.6 | 2441.9 | 2744.0 | ok |
 | fastlog 10% op selectivity | 146.4 | 141.7 | 509.0 | 20.0 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 163.2 | 159.6 | 555.3 | 33.1 | N/A | N/A | N/A | ok |
@@ -80,7 +80,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | TL Trace, metadata only (no saved outs) | 834.0 | 545.6 | 1065.5 | 339.3 | 3.2 | 1888.0 | 2316.0 | ok |
-| Trace.rerun(model, x), no saved outs | 3269.0 | 2810.7 | 3910.4 | 576.8 | 1762.5 | 7434.5 | 8292.0 | ok |
+| Trace.run(model, x), no saved outs | 3269.0 | 2810.7 | 3910.4 | 576.8 | 1762.5 | 7434.5 | 8292.0 | ok |
 | fastlog zero-retention predicates | 165.5 | 157.3 | 546.9 | 84.9 | 5.6 | 2441.9 | 2744.0 | ok |
 
 ### gpt2_hooked / cpu
@@ -91,7 +91,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | TL Trace, every-op capture | 6234.3 | 6076.6 | 6844.2 | 292.6 | 1586.6 | N/A | N/A | ok |
 | TransformerLens run_with_cache | 349.3 | 336.6 | 373.0 | 17.0 | N/A | N/A | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 3602.6 | 2885.4 | 4501.0 | 547.5 | -907.9 | N/A | N/A | ok |
-| Trace.rerun(model, x), no saved outs | 11852.5 | 10545.4 | 14813.1 | 1380.7 | 8113.6 | N/A | N/A | ok |
+| Trace.run(model, x), no saved outs | 11852.5 | 10545.4 | 14813.1 | 1380.7 | 8113.6 | N/A | N/A | ok |
 | fastlog zero-retention predicates | 1574.0 | 1042.7 | 2432.4 | 459.9 | -525.0 | N/A | N/A | ok |
 
 ### gpt2_hooked / cuda
@@ -102,7 +102,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | TL Trace, every-op capture | 7819.6 | 6431.0 | 8905.2 | 1631.0 | 583.6 | 4828.1 | 5404.0 | ok |
 | TransformerLens run_with_cache | 32.5 | 30.1 | 38.2 | 5.8 | N/A | N/A | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 1600.9 | 1471.4 | 2109.7 | 277.7 | -27.0 | 2433.3 | 2738.0 | ok |
-| Trace.rerun(model, x), no saved outs | 6610.6 | 6420.7 | 6801.9 | 115.7 | 2059.9 | 8470.4 | 9356.0 | ok |
+| Trace.run(model, x), no saved outs | 6610.6 | 6420.7 | 6801.9 | 115.7 | 2059.9 | 8470.4 | 9356.0 | ok |
 | fastlog zero-retention predicates | 404.9 | 348.7 | 879.0 | 373.6 | -24.9 | 3687.0 | 4082.0 | ok |
 
 ### resnet18 / cpu
@@ -118,7 +118,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 1231.6 | 1231.6 | 1231.6 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 824.3 | 784.0 | 1022.0 | 100.7 | 1956.5 | N/A | N/A | ok |
 | TL Trace, replayable=True | 829.1 | 793.0 | 981.7 | 56.6 | 2255.1 | N/A | N/A | ok |
-| Trace.rerun(model, x) | 841.0 | 800.3 | 976.9 | 90.5 | 2899.3 | N/A | N/A | ok |
+| Trace.run(model, x) | 841.0 | 800.3 | 976.9 | 90.5 | 2899.3 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 106.3 | 99.2 | 238.1 | 13.0 | 959.7 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 115.5 | 104.4 | 242.8 | 19.1 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 121.7 | 111.9 | 266.2 | 17.2 | N/A | N/A | N/A | ok |
@@ -128,11 +128,11 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | tl.validate(scope='forward') | 2224.7 | 2135.2 | 2422.6 | 114.8 | 1597.4 | N/A | N/A | ok |
-| tl.compat.report | 0.5 | 0.5 | 0.7 | 0.2 | 13.8 | N/A | N/A | ok |
-| tl.save fresh tlspec path | 845.3 | 827.0 | 935.1 | 23.3 | 24.3 | N/A | N/A | ok |
+| tl.report.doctor | 0.5 | 0.5 | 0.7 | 0.2 | 13.8 | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 845.3 | 827.0 | 935.1 | 23.3 | 24.3 | N/A | N/A | ok |
 | tl.load saved fixture | 1255.7 | 1232.9 | 1390.1 | 110.9 | 1757.4 | N/A | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 558.3 | 400.8 | 1000.4 | 253.3 | 543.1 | N/A | N/A | ok |
-| Trace.rerun(model, x), no saved outs | 2052.7 | 1582.7 | 2584.8 | 417.3 | 3155.8 | N/A | N/A | ok |
+| Trace.run(model, x), no saved outs | 2052.7 | 1582.7 | 2584.8 | 417.3 | 3155.8 | N/A | N/A | ok |
 | fastlog zero-retention predicates | 314.4 | 183.4 | 609.4 | 127.9 | 962.8 | N/A | N/A | ok |
 
 ### resnet18 / cuda
@@ -148,7 +148,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 1462.2 | 1462.2 | 1462.2 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 896.0 | 792.7 | 1195.1 | 252.7 | 613.0 | 2447.9 | 2566.0 | ok |
 | TL Trace, replayable=True | 927.0 | 766.5 | 1300.4 | 274.0 | 488.1 | 2194.1 | 2264.0 | ok |
-| Trace.rerun(model, x) | 912.5 | 771.9 | 1226.0 | 254.9 | 724.5 | 3342.2 | 3458.0 | ok |
+| Trace.run(model, x) | 912.5 | 771.9 | 1226.0 | 254.9 | 724.5 | 3342.2 | 3458.0 | ok |
 | fastlog module-boundary metadata | 43.9 | 41.8 | 245.7 | 2.8 | 4.0 | 1506.1 | 1556.0 | ok |
 | fastlog 10% op selectivity | 38.9 | 37.6 | 241.9 | 1.3 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 39.5 | 37.8 | 232.3 | 1.5 | N/A | N/A | N/A | ok |
@@ -158,11 +158,11 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | tl.validate(scope='forward') | 393.5 | 377.6 | 508.2 | 31.1 | 84.7 | 2395.0 | 2576.0 | ok |
-| tl.compat.report | 0.5 | 0.5 | 0.5 | 0.0 | 0.1 | 49.3 | 64.0 | ok |
-| tl.save fresh tlspec path | 920.0 | 897.9 | 1025.2 | 49.2 | 57.3 | 553.6 | 618.0 | ok |
+| tl.report.doctor | 0.5 | 0.5 | 0.5 | 0.0 | 0.1 | 49.3 | 64.0 | ok |
+| Trace.save fresh tlspec path | 920.0 | 897.9 | 1025.2 | 49.2 | 57.3 | 553.6 | 618.0 | ok |
 | tl.load saved fixture | 1254.7 | 1237.2 | 1396.1 | 114.5 | 2303.3 | 553.6 | 618.0 | ok |
 | TL Trace, metadata only (no saved outs) | 143.8 | 129.1 | 324.0 | 71.8 | 7.4 | 1055.4 | 1100.0 | ok |
-| Trace.rerun(model, x), no saved outs | 860.4 | 801.9 | 1150.3 | 209.7 | 801.1 | 3347.3 | 3458.0 | ok |
+| Trace.run(model, x), no saved outs | 860.4 | 801.9 | 1150.3 | 209.7 | 801.1 | 3347.3 | 3458.0 | ok |
 | fastlog zero-retention predicates | 62.2 | 42.6 | 254.8 | 21.9 | 4.0 | 1506.1 | 1556.0 | ok |
 
 ### small_lstm / cpu
@@ -178,7 +178,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 353.9 | 353.9 | 353.9 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 14.3 | 13.1 | 16.8 | 0.7 | 1.0 | N/A | N/A | ok |
 | TL Trace, replayable=True | 15.4 | 13.7 | 18.2 | 0.5 | 1.5 | N/A | N/A | ok |
-| Trace.rerun(model, x) | 16.4 | 15.3 | 22.4 | 2.6 | 2.1 | N/A | N/A | ok |
+| Trace.run(model, x) | 16.4 | 15.3 | 22.4 | 2.6 | 2.1 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 4.6 | 4.4 | 5.1 | 0.3 | 1.0 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 4.9 | 3.8 | 5.2 | 0.6 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 4.4 | 3.9 | 6.0 | 0.7 | N/A | N/A | N/A | ok |
@@ -188,7 +188,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | TL Trace, metadata only (no saved outs) | 23.8 | 16.0 | 86.8 | 18.9 | 0.8 | N/A | N/A | ok |
-| Trace.rerun(model, x), no saved outs | 32.1 | 19.2 | 130.8 | 35.4 | 2.2 | N/A | N/A | ok |
+| Trace.run(model, x), no saved outs | 32.1 | 19.2 | 130.8 | 35.4 | 2.2 | N/A | N/A | ok |
 | fastlog zero-retention predicates | 15.9 | 4.9 | 50.5 | 14.6 | 1.1 | N/A | N/A | ok |
 
 ### tinynet / cpu
@@ -204,7 +204,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 300.8 | 300.8 | 300.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 26.7 | 24.3 | 32.6 | 2.9 | 16.6 | N/A | N/A | ok |
 | TL Trace, replayable=True | 28.0 | 26.0 | 41.1 | 2.9 | 18.1 | N/A | N/A | ok |
-| Trace.rerun(model, x) | 112.3 | 36.2 | 346.6 | 122.7 | 38.1 | N/A | N/A | ok |
+| Trace.run(model, x) | 112.3 | 36.2 | 346.6 | 122.7 | 38.1 | N/A | N/A | ok |
 | fastlog module-boundary metadata | 8.9 | 7.2 | 15.7 | 4.2 | 7.4 | N/A | N/A | ok |
 | fastlog 10% op selectivity | 8.4 | 7.4 | 12.1 | 1.9 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 8.4 | 7.5 | 10.4 | 1.4 | N/A | N/A | N/A | ok |
@@ -214,11 +214,11 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | tl.validate(scope='forward') | 218.3 | 114.8 | 465.5 | 98.3 | 12.9 | N/A | N/A | ok |
-| tl.compat.report | 0.3 | 0.3 | 0.4 | 0.0 | 13.7 | N/A | N/A | ok |
-| tl.save fresh tlspec path | 25.6 | 25.3 | 33.1 | 0.5 | 0.9 | N/A | N/A | ok |
+| tl.report.doctor | 0.3 | 0.3 | 0.4 | 0.0 | 13.7 | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 25.6 | 25.3 | 33.1 | 0.5 | 0.9 | N/A | N/A | ok |
 | tl.load saved fixture | 23.1 | 22.4 | 26.1 | 1.0 | 8.8 | N/A | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 61.0 | 26.2 | 205.6 | 62.3 | 9.1 | N/A | N/A | ok |
-| Trace.rerun(model, x), no saved outs | 65.9 | 39.1 | 249.6 | 59.8 | 34.8 | N/A | N/A | ok |
+| Trace.run(model, x), no saved outs | 65.9 | 39.1 | 249.6 | 59.8 | 34.8 | N/A | N/A | ok |
 | fastlog zero-retention predicates | 18.4 | 10.2 | 103.3 | 18.1 | 7.1 | N/A | N/A | ok |
 
 ### tinynet / cuda
@@ -234,7 +234,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | first-capture-of-target-model startup | 473.8 | 473.8 | 473.8 | 0.0 | N/A | N/A | N/A | ok |
 | TL Trace, every-op capture | 30.0 | 28.4 | 32.9 | 1.4 | 7.3 | 26.7 | 40.0 | ok |
 | TL Trace, replayable=True | 40.8 | 31.2 | 50.8 | 9.9 | 5.6 | 27.2 | 40.0 | ok |
-| Trace.rerun(model, x) | 38.3 | 31.4 | 42.7 | 9.6 | 12.2 | 44.5 | 58.0 | ok |
+| Trace.run(model, x) | 38.3 | 31.4 | 42.7 | 9.6 | 12.2 | 44.5 | 58.0 | ok |
 | fastlog module-boundary metadata | 7.9 | 7.2 | 9.0 | 0.6 | 1.1 | 19.1 | 32.0 | ok |
 | fastlog 10% op selectivity | 6.3 | 6.0 | 7.0 | 0.4 | N/A | N/A | N/A | ok |
 | fastlog 50% op selectivity | 6.7 | 6.4 | 7.6 | 0.6 | N/A | N/A | N/A | ok |
@@ -244,7 +244,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | baukit TraceDict | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: baukit is not importable |
 | nnsight trace | N/A | N/A | N/A | N/A | N/A | N/A | N/A | skipped: generic nn.Module does not expose nnsight trace |
 | TL Trace, metadata only (no saved outs) | 21.7 | 20.9 | 23.8 | 0.8 | 1.8 | 21.6 | 34.0 | ok |
-| Trace.rerun(model, x), no saved outs | 31.9 | 30.1 | 51.5 | 11.2 | 79.2 | 39.0 | 52.0 | ok |
+| Trace.run(model, x), no saved outs | 31.9 | 30.1 | 51.5 | 11.2 | 79.2 | 39.0 | 52.0 | ok |
 | fastlog zero-retention predicates | 8.1 | 7.3 | 14.6 | 1.7 | 1.1 | 19.1 | 32.0 | ok |
 
 ## Wrapper-only overhead (no-save variants)
@@ -257,7 +257,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 133.4 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 1928.3 | 14.45x (+1345%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 5725.3 | 42.92x (+4192%) | True | ok |
+| Trace.run(model, x), no saved outs | 5725.3 | 42.92x (+4192%) | True | ok |
 | fastlog zero-retention predicates | 760.8 | 5.70x (+470%) | N/A | ok |
 
 ### gpt2_hf / cuda
@@ -266,7 +266,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 8.9 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 834.0 | 94.16x (+9316%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 3269.0 | 369.06x (+36806%) | True | ok |
+| Trace.run(model, x), no saved outs | 3269.0 | 369.06x (+36806%) | True | ok |
 | fastlog zero-retention predicates | 165.5 | 18.68x (+1768%) | N/A | ok |
 
 ### gpt2_hooked / cpu
@@ -275,7 +275,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 331.7 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 3602.6 | 10.86x (+986%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 11852.5 | 35.73x (+3473%) | True | ok |
+| Trace.run(model, x), no saved outs | 11852.5 | 35.73x (+3473%) | True | ok |
 | fastlog zero-retention predicates | 1574.0 | 4.75x (+375%) | N/A | ok |
 
 ### gpt2_hooked / cuda
@@ -284,7 +284,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 19.4 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 1600.9 | 82.43x (+8143%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 6610.6 | 340.35x (+33935%) | True | ok |
+| Trace.run(model, x), no saved outs | 6610.6 | 340.35x (+33935%) | True | ok |
 | fastlog zero-retention predicates | 404.9 | 20.84x (+1984%) | N/A | ok |
 
 ### resnet18 / cpu
@@ -293,7 +293,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 60.0 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 558.3 | 9.30x (+830%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 2052.7 | 34.20x (+3320%) | True | ok |
+| Trace.run(model, x), no saved outs | 2052.7 | 34.20x (+3320%) | True | ok |
 | fastlog zero-retention predicates | 314.4 | 5.24x (+424%) | N/A | ok |
 
 ### resnet18 / cuda
@@ -302,7 +302,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 4.3 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 143.8 | 33.41x (+3241%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 860.4 | 199.98x (+19898%) | True | ok |
+| Trace.run(model, x), no saved outs | 860.4 | 199.98x (+19898%) | True | ok |
 | fastlog zero-retention predicates | 62.2 | 14.45x (+1345%) | N/A | ok |
 
 ### small_lstm / cpu
@@ -311,7 +311,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 0.3 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 23.8 | 94.72x (+9372%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 32.1 | 127.60x (+12660%) | True | ok |
+| Trace.run(model, x), no saved outs | 32.1 | 127.60x (+12660%) | True | ok |
 | fastlog zero-retention predicates | 15.9 | 63.07x (+6207%) | N/A | ok |
 
 ### tinynet / cpu
@@ -320,7 +320,7 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 1.0 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 61.0 | 62.67x (+6167%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 65.9 | 67.70x (+6670%) | True | ok |
+| Trace.run(model, x), no saved outs | 65.9 | 67.70x (+6670%) | True | ok |
 | fastlog zero-retention predicates | 18.4 | 18.92x (+1792%) | N/A | ok |
 
 ### tinynet / cuda
@@ -329,10 +329,10 @@ Headline insight: on ResNet-18 CPU, Trace metadata-only capture is 9.30x (+830%)
 |---|---:|---:|---|---|
 | Pure raw forward | 0.4 | 1.00x (+0%) | N/A | ok |
 | TL Trace, metadata only (no saved outs) | 21.7 | 52.09x (+5109%) | True | ok |
-| Trace.rerun(model, x), no saved outs | 31.9 | 76.67x (+7567%) | True | ok |
+| Trace.run(model, x), no saved outs | 31.9 | 76.67x (+7567%) | True | ok |
 | fastlog zero-retention predicates | 8.1 | 19.37x (+1837%) | N/A | ok |
 
-With tensor retention disabled, these rows isolate wrapper dispatch and metadata bookkeeping from activation-copy cost; Trace.rerun is for new inputs, not interventions. Ratios versus raw forward are gpt2_hf/cpu: trace 14.45x (+1345%), rerun 42.92x (+4192%), fastlog 5.70x (+470%); gpt2_hf/cuda: trace 94.16x (+9316%), rerun 369.06x (+36806%), fastlog 18.68x (+1768%); gpt2_hooked/cpu: trace 10.86x (+986%), rerun 35.73x (+3473%), fastlog 4.75x (+375%); gpt2_hooked/cuda: trace 82.43x (+8143%), rerun 340.35x (+33935%), fastlog 20.84x (+1984%); resnet18/cpu: trace 9.30x (+830%), rerun 34.20x (+3320%), fastlog 5.24x (+424%); resnet18/cuda: trace 33.41x (+3241%), rerun 199.98x (+19898%), fastlog 14.45x (+1345%); small_lstm/cpu: trace 94.72x (+9372%), rerun 127.60x (+12660%), fastlog 63.07x (+6207%); tinynet/cpu: trace 62.67x (+6167%), rerun 67.70x (+6670%), fastlog 18.92x (+1792%); tinynet/cuda: trace 52.09x (+5109%), rerun 76.67x (+7567%), fastlog 19.37x (+1837%).
+With tensor retention disabled, these rows isolate wrapper dispatch and metadata bookkeeping from activation-copy cost; Trace.run is for new inputs, not interventions. Ratios versus raw forward are gpt2_hf/cpu: trace 14.45x (+1345%), rerun 42.92x (+4192%), fastlog 5.70x (+470%); gpt2_hf/cuda: trace 94.16x (+9316%), rerun 369.06x (+36806%), fastlog 18.68x (+1768%); gpt2_hooked/cpu: trace 10.86x (+986%), rerun 35.73x (+3473%), fastlog 4.75x (+375%); gpt2_hooked/cuda: trace 82.43x (+8143%), rerun 340.35x (+33935%), fastlog 20.84x (+1984%); resnet18/cpu: trace 9.30x (+830%), rerun 34.20x (+3320%), fastlog 5.24x (+424%); resnet18/cuda: trace 33.41x (+3241%), rerun 199.98x (+19898%), fastlog 14.45x (+1345%); small_lstm/cpu: trace 94.72x (+9372%), rerun 127.60x (+12660%), fastlog 63.07x (+6207%); tinynet/cpu: trace 62.67x (+6167%), rerun 67.70x (+6670%), fastlog 18.92x (+1792%); tinynet/cuda: trace 52.09x (+5109%), rerun 76.67x (+7567%), fastlog 19.37x (+1837%).
 
 ## Peer Comparison Tables
 
@@ -420,16 +420,16 @@ With tensor retention disabled, these rows isolate wrapper dispatch and metadata
 | Operation | median_ms | p5_ms | p95_ms | IQR_ms | USS delta MB (10-run memory pass) | max_allocated_mb | max_reserved_mb | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
 | tl.validate(scope='forward') | 218.3 | 114.8 | 465.5 | 98.3 | 12.9 | N/A | N/A | ok |
-| tl.compat.report | 0.3 | 0.3 | 0.4 | 0.0 | 13.7 | N/A | N/A | ok |
-| tl.save fresh tlspec path | 25.6 | 25.3 | 33.1 | 0.5 | 0.9 | N/A | N/A | ok |
+| tl.report.doctor | 0.3 | 0.3 | 0.4 | 0.0 | 13.7 | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 25.6 | 25.3 | 33.1 | 0.5 | 0.9 | N/A | N/A | ok |
 | tl.load saved fixture | 23.1 | 22.4 | 26.1 | 1.0 | 8.8 | N/A | N/A | ok |
 | tl.validate(scope='forward') | 2224.7 | 2135.2 | 2422.6 | 114.8 | 1597.4 | N/A | N/A | ok |
-| tl.compat.report | 0.5 | 0.5 | 0.7 | 0.2 | 13.8 | N/A | N/A | ok |
-| tl.save fresh tlspec path | 845.3 | 827.0 | 935.1 | 23.3 | 24.3 | N/A | N/A | ok |
+| tl.report.doctor | 0.5 | 0.5 | 0.7 | 0.2 | 13.8 | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 845.3 | 827.0 | 935.1 | 23.3 | 24.3 | N/A | N/A | ok |
 | tl.load saved fixture | 1255.7 | 1232.9 | 1390.1 | 110.9 | 1757.4 | N/A | N/A | ok |
 | tl.validate(scope='forward') | 393.5 | 377.6 | 508.2 | 31.1 | 84.7 | 2395.0 | 2576.0 | ok |
-| tl.compat.report | 0.5 | 0.5 | 0.5 | 0.0 | 0.1 | 49.3 | 64.0 | ok |
-| tl.save fresh tlspec path | 920.0 | 897.9 | 1025.2 | 49.2 | 57.3 | 553.6 | 618.0 | ok |
+| tl.report.doctor | 0.5 | 0.5 | 0.5 | 0.0 | 0.1 | 49.3 | 64.0 | ok |
+| Trace.save fresh tlspec path | 920.0 | 897.9 | 1025.2 | 49.2 | 57.3 | 553.6 | 618.0 | ok |
 | tl.load saved fixture | 1254.7 | 1237.2 | 1396.1 | 114.5 | 2303.3 | 553.6 | 618.0 | ok |
 
 ## Decoration Overhead
@@ -472,7 +472,7 @@ With tensor retention disabled, these rows isolate wrapper dispatch and metadata
 - Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.
 - TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.
 - HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.
-- No-save Trace rows use `save=[]`, which records metadata for every op but saves no activation tensors.
+- No-save Trace rows use `save=lambda _ctx: False`, which records metadata for every op but saves no activation tensors.
 
 ## Rerun Tolerance
 

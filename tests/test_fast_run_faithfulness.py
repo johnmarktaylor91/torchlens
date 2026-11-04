@@ -73,8 +73,8 @@ def test_fast_run_original_input_escape_stays_verified(tmp_path: Path) -> None:
     )
 
     loaded = tl.load(path)
-    first = loaded.run(inputs=original, fast=True)
-    second = loaded.run(inputs=original.clone(), fast=True)
+    first = loaded.run_transaction(inputs=original, fast=True)
+    second = loaded.run_transaction(inputs=original.clone(), fast=True)
 
     assert first.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert second.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -135,7 +135,7 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
     del model.second
 
     with pytest.raises(Exception) as excinfo:
-        captured.run(inputs=torch.ones(2, 3), fast=True)
+        captured.run_transaction(inputs=torch.ones(2, 3), fast=True)
     assert excinfo.value.fields["detection_stage"] == "fast_live_module_plan"
 
     saved_after = {op.label for op in captured._layer_list if op.has_saved_activation}
@@ -166,12 +166,12 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
         captured = tl.trace(model, torch.ones(2), save=tl.func("relu"))
 
     with pytest.raises(PathDivergenceError):
-        captured.run(inputs=-torch.ones(2), fast=True)
+        captured.run_transaction(inputs=-torch.ones(2), fast=True)
     # The poisoned mark is monotonic; a later good-input run raises the
     # inherited divergence but must leave the USER-owned Trace registered
     # (every other provider passes a throwaway fork to the discard arm).
     with pytest.raises(PathDivergenceError):
-        captured.run(inputs=torch.ones(2), fast=True)
+        captured.run_transaction(inputs=torch.ones(2), fast=True)
     assert any(log is captured for log in _state.list_logs())
 
 
@@ -272,7 +272,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
 
     model = _PlainLinear().eval()
     captured = tl.trace(model, torch.ones(2, 3), save=lambda op: True)
-    captured.run(inputs=torch.ones(2, 3), fast=True)
+    captured.run_transaction(inputs=torch.ones(2, 3), fast=True)
 
     def _boom(*args, **kwargs):
         raise RuntimeError("injected classifier failure")
@@ -281,7 +281,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     for module in (transaction, input_sites, fast_run_module):
         monkeypatch.setattr(module, "_live_runtime_input_leaves", _boom)
     with pytest.raises(RunCapabilityUnavailableError):
-        captured.run(inputs=torch.ones(2, 3), fast=True)
+        captured.run_transaction(inputs=torch.ones(2, 3), fast=True)
 
 
 # Kept: sole branch coverage of _fast_run.py.
@@ -297,7 +297,7 @@ def test_fast_live_input_refresh_arity_guarded_and_poisons(monkeypatch) -> None:
 
     model = _PlainLinear().eval()
     captured = tl.trace(model, torch.ones(2, 3), save=lambda op: True)
-    captured.run(inputs=torch.ones(2, 3), fast=True)
+    captured.run_transaction(inputs=torch.ones(2, 3), fast=True)
 
     # Patch the REFRESH-side binding only (_fast_run's module global); the
     # admission classifier keeps the real execution-module binding, so the
@@ -312,7 +312,7 @@ def test_fast_live_input_refresh_arity_guarded_and_poisons(monkeypatch) -> None:
 
     monkeypatch.setattr(fast_run, "_live_runtime_input_leaves", _truncating)
     with pytest.raises(PathDivergenceError) as excinfo:
-        captured.run(inputs=torch.ones(2, 3), fast=True)
+        captured.run_transaction(inputs=torch.ones(2, 3), fast=True)
     assert excinfo.value.fields["code"] == "input_tree_mismatch"
 
 
@@ -379,11 +379,11 @@ def test_fast_sparse_mid_loop_divergence_poisons_reused_target(tmp_path: Path) -
     first = torch.ones(2, 3)
     loaded = tl.load(_saved_all_runnable(model, first, tmp_path / "m.tlspec"))
 
-    ok = loaded.run(inputs=first, fast=True)
+    ok = loaded.run_transaction(inputs=first, fast=True)
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=-torch.ones(2, 3) * 5, fast=True)
+        loaded.run_transaction(inputs=-torch.ones(2, 3) * 5, fast=True)
 
     assert ok.trace._runnable.path_faithfulness is PathFaithfulness.DIVERGED
 
@@ -433,13 +433,13 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
 
     ordinary = tl.load(path)
     with pytest.raises(PathDivergenceError):
-        ordinary.run(inputs=box_b(t=tensor))
+        ordinary.run_transaction(inputs=box_b(t=tensor))
 
     fast = tl.load(path)
-    verify_once = fast.run(inputs=box_a(t=tensor), fast=True)
+    verify_once = fast.run_transaction(inputs=box_a(t=tensor), fast=True)
     assert verify_once.report.path_faithfulness is PathFaithfulness.VERIFIED
     with pytest.raises(PathDivergenceError):
-        fast.run(inputs=box_b(t=tensor), fast=True)
+        fast.run_transaction(inputs=box_b(t=tensor), fast=True)
     assert verify_once.trace._runnable.path_faithfulness is PathFaithfulness.DIVERGED
 
 

@@ -10,7 +10,7 @@ stays with the dataclasses in ``options.py``; this module never imports it.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._literals import (
@@ -188,6 +188,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
 # truthily meant ON (R64-F3).
 _VISUALIZATION_BOOL_FIELDS = (
+    "show_edge_shapes",
     "rolled",
     "open_viewer",
     "show_cone",
@@ -288,8 +289,7 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
     Raises
     ------
     ValueError
-        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an
-        unsupported value.
+        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an unsupported value.
     TypeError
         If ``jax_max_control_flow_unroll`` is not an integer.
     """
@@ -380,6 +380,25 @@ def _validate_capture_flag_values(values: Mapping[str, Any]) -> None:
             argument="structure_only",
             received_type=type(values["structure_only"]).__name__,
         )
+    _validate_transformed_output_request(values)
+
+
+def _validate_transformed_output_request(values: Mapping[str, Any]) -> None:
+    """Refuse ``save_transformed_output=True`` with no ``output_transform``.
+
+    The flag asks to keep the transformed output, yet nothing transforms it:
+    refuse before the capture instead of silently saving nothing.
+    """
+
+    if values["save_transformed_output"] is True and values["output_transform"] is None:
+        raise InvalidArgumentError(
+            "Capture option save_transformed_output=True needs an output_transform; "
+            "without one there is no transformed output to save",
+            code="save_transformed_output_without_output_transform",
+            remedy="pass output_transform=<callable> alongside save_transformed_output=True, "
+            "or drop save_transformed_output",
+            argument="save_transformed_output",
+        )
 
 
 def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
@@ -393,9 +412,8 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``: the field names, with
-        ``container_path`` as ``path``; ``file_format`` only when explicit,
-        ``fold_repeats`` when set or explicit, the rest only when set.
+        ``Trace.draw`` field names, renaming ``container_path`` to ``path``;
+        include ``file_format`` only when explicit and ``fold_repeats`` when set or explicit.
     """
     explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
@@ -416,6 +434,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "open_viewer": visualization.open_viewer,
         "file_format": visualization.file_format if explicit("file_format") else None,
         "show_buffers": visualization.show_buffers,
+        "show_edge_shapes": visualization.show_edge_shapes,
         "direction": visualization.direction,
         "layout": visualization.layout,
         "renderer": visualization.renderer,
@@ -442,3 +461,13 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         if value is not None and value is not False or explicit(field_name):
             kwargs[field_name] = value
     return kwargs
+
+
+def _validate_visualization_values(values: Mapping[str, Any]) -> None:
+    """Validate resolved visualization values shared by both constructors."""
+    _validate_buffer_visibility(values["show_buffers"])
+    _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
+    _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
+    _validate_collapse(cast(CollapseLiteral, values["collapse"]))
+    _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
+    _validate_visualization_flag_fields(values)

@@ -23,6 +23,7 @@ from ..._data_classes._preprocessing_provenance import stamp_user_transform_prov
 from ..._data_classes.trace import (
     Trace,
 )
+from ..._quantities import Bytes
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
 from ...errors import TorchLensWarning
 from .._episode_ledger import (
@@ -161,6 +162,7 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     _check_stop_after_fired(trace, facts)
     if getattr(options, "on_nonfinite", "ignore") == "warn":
         _warn_once_nonfinite_detected(trace)
+    _warn_once_capture_memory_threshold(trace)
     input_transform = getattr(options, "input_transform", None)
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
@@ -234,6 +236,31 @@ def _warn_once_nonfinite_detected(trace: Trace) -> None:
             f"{shown}. Remedy: inspect trace.nonfinite_ops, or capture with "
             "CaptureOptions(on_nonfinite='raise') to stop at the first one",
             code="capture_nonfinite_detected",
+        ),
+        stacklevel=4,
+    )
+
+
+_CAPTURE_MEMORY_THRESHOLD = 1 << 30
+"""Saved-activation bytes past which a capture warns, once per session."""
+_CAPTURE_MEMORY_WARNED = False
+
+
+def _warn_once_capture_memory_threshold(trace: Trace) -> None:
+    """Warn once per session when a capture's saved activations pass the size threshold."""
+
+    global _CAPTURE_MEMORY_WARNED
+    saved = trace._cost_saved_activation_memory
+    if _CAPTURE_MEMORY_WARNED or int(saved) <= _CAPTURE_MEMORY_THRESHOLD:
+        return
+    _CAPTURE_MEMORY_WARNED = True
+    warnings.warn(
+        TorchLensWarning(
+            f"This capture kept {Bytes(int(saved))} of saved activations, past the "
+            f"{Bytes(_CAPTURE_MEMORY_THRESHOLD)} guard (warned once per session). Remedy: "
+            "keep only the ops you need with tl.trace(model, x, save=...) (a label list "
+            "or a selector such as tl.in_module(...)), or save='stats' for per-op summaries",
+            code="capture_memory_threshold_exceeded",
         ),
         stacklevel=4,
     )

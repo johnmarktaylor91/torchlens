@@ -5,13 +5,13 @@
 <text x="20" y="54">CollapsePlan(total=13, module_box=5, raw_op=8)</text>
 <text x="20" y="72"></text>
 <text x="20" y="90">draw(collapse=&#x27;max&#x27;).collapse_plan</text>
-<text x="20" y="108">CollapsePlan(total=11, module_box=2, raw_op=8, child_segment=1)</text>
+<text x="20" y="108">CollapsePlan(total=11, module_box=1, raw_op=9, child_segment=1)</text>
 <text x="20" y="126"></text>
 <text x="20" y="144">t      target  visible  collapsed module addresses</text>
 <text x="20" y="162">0.000      71       71      0</text>
-<text x="20" y="180">0.108      58       58      2</text>
-<text x="20" y="198">0.269      43       43      3</text>
-<text x="20" y="216">0.499      28       28      4</text>
-<text x="20" y="234">0.910      13       13      5</text>
-<text x="20" y="252">1.000      11       11      5</text>
+<text x="20" y="180">0.108      58       58      1</text>
+<text x="20" y="198">0.269      43       43      2</text>
+<text x="20" y="216">0.499      28       28      3</text>
+<text x="20" y="234">0.910      13       13      4</text>
+<text x="20" y="252">1.000      11       11      4</text>
 </svg>

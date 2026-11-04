@@ -108,6 +108,7 @@ class ResolvedRenderRequest:
     # encoding channel is active, then a channel-only disclosure legend.
     # True/False keep their historical meanings; explicit False is honored
     # even with channels active (a deliberate act).
+    show_edge_shapes: bool = False
     show_legend: bool | None = None
     # Encoding channel core (L5, DOCUMENTED-UNSTABLE until ratified):
     # ``color_by``/``size_by``/``scale`` are the raw user sources;

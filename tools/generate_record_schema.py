@@ -44,7 +44,7 @@ generation, so hand edits cannot survive. The declared axes live in
 from __future__ import annotations
 
 from ._schema_bindings_trace import TRACE_BINDINGS
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 '''
 
@@ -59,7 +59,7 @@ generation, so hand edits cannot survive.
 
 from __future__ import annotations
 
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 '''
 

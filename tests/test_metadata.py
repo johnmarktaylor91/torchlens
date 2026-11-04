@@ -6,6 +6,7 @@ fields are populated correctly across different model types.
 
 import linecache
 import pickle
+from pathlib import Path
 
 import example_models
 import pytest
@@ -451,7 +452,7 @@ def test_refresh_shape_change_emits_single_aggregated_warning() -> None:
 
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
-        trace.run(inputs=torch.randn(8, 4))
+        trace.run_transaction(inputs=torch.randn(8, 4))
 
     shape_warnings = [w for w in caught if "Tensor shape changed" in str(w.message)]
     assert len(shape_warnings) == 1
@@ -506,10 +507,11 @@ def test_repr_contains_key_info(small_input):
             break
     assert loc is not None
     r = repr(loc)
-    assert loc.file in r
+    assert Path(loc.file).name in r
     assert str(loc.line_number) in r
     assert loc.func_name in r
-    assert "--->" in r
+    assert len(r) <= 100 and "\n" not in r
+    assert "--->" in loc.code_context_labeled
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/func_call_location.py.
@@ -527,7 +529,8 @@ def test_repr_source_unavailable():
         source_context_lines=0,
     )
     r = repr(loc)
-    assert "source unavailable" in r
+    assert r == "FuncCallLocation: test.py:1 in test"
+    assert loc.code_context is None
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/func_call_location.py.
@@ -729,11 +732,11 @@ class TestConditionalBranchDetection:
     # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_render_leaf.py.
     @pytest.mark.parametrize(
         ("stem", "view", "message"),
-        [("cond_rolled_test", "rolled", "Rolled graph should contain IF edge label")],
+        [("cond_rolled_test", "rolled", "Rolled graph should name its IF test")],
         ids=["rolled_graph_conditional_edges"],
     )
     def test_if_label_in_visualization(self, stem, view, message):
-        """Rendered graph contains 'IF' edge label; rolled view preserves IF/THEN labels."""
+        """Rendered graph names the IF test node; rolled view keeps the THEN arm labels."""
         import os
         import tempfile
 

@@ -18,6 +18,7 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from ._display import site_table_card, site_table_repr
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -138,16 +139,12 @@ class _SiteTable:
             Summary including count and first labels.
         """
 
-        count = len(self)
-        if count == 0:
-            return "_SiteTable(0 sites)"
-        labels = self.labels()
-        if count == 1:
-            return f"_SiteTable(1 site: {labels[0]})"
-        if count <= 3:
-            return f"_SiteTable({count} sites: {', '.join(labels)})"
-        prefix = ", ".join(labels[:3])
-        return f"_SiteTable({count} sites: {prefix}, ... {labels[-1]})"
+        return site_table_repr(self)
+
+    def __str__(self) -> str:
+        """Show a bounded prefix of the resolved sites."""
+
+        return site_table_card(self)
 
     def where(self, predicate: Callable[[Site], bool]) -> _SiteTable:
         """Filter the table with a predicate.
@@ -305,10 +302,10 @@ def _resolve_facet_sites(
 ) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
-    The facets are the ones the write doors (``attach_hooks``,
-    ``do``) resolve for the same selector, each the ``Facet`` that
+    The facets are the ones the write door (``do``, on any engine)
+    resolves for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
-    those doors receives (a head's slice, an SAE latent's encoder activation).
+    that door receives (a head's slice, an SAE latent's encoder activation).
     A selector that matches several facets keeps its broadcast; the caller's
     fan-out check and multi-match count report apply to them as to op sites.
 

@@ -98,13 +98,13 @@ def test_r29_storage_offset_twin_diverges(tmp_path: Path) -> None:
     xn = base[2:6]  # storage_offset 2, identical shape/dtype
     path = _save(StorageOffsetBranch(), x0, tmp_path / "off.tlspec")
 
-    result = tl.load(path).run(inputs=base.clone()[0:4])
+    result = tl.load(path).run_transaction(inputs=base.clone()[0:4])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=xn)
-    diverged = tl.load(path).run(inputs=xn, on_divergence="return")
+        tl.load(path).run_transaction(inputs=xn)
+    diverged = tl.load(path).run_transaction(inputs=xn, on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -115,11 +115,14 @@ def test_r29_is_leaf_flip_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(4)
     path = _save(IsLeafBranch(), x, tmp_path / "leaf.tlspec")
-    assert tl.load(path).run(inputs=x).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
 
     nonleaf = torch.randn(4, requires_grad=True) * 1.0  # grad_fn set, is_leaf False
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=nonleaf)
+        tl.load(path).run_transaction(inputs=nonleaf)
 
 
 # Kept: sole branch coverage of _runnable/input_sites.py.
@@ -128,11 +131,14 @@ def test_r29_grad_fn_presence_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(4)
     path = _save(GradFnBranch(), x, tmp_path / "gradfn.tlspec")
-    assert tl.load(path).run(inputs=x).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
 
     with_grad_fn = torch.randn(4, requires_grad=True) + 0.0
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=with_grad_fn)
+        tl.load(path).run_transaction(inputs=with_grad_fn)
 
 
 # Kept: sole branch coverage of backends/torch/_completeness_boundaries.py; a sole mutation kill.
@@ -142,7 +148,7 @@ def test_r29_derived_view_layout_read_is_unverifiable(tmp_path: Path) -> None:
     x = torch.randn(4, 4)
     path = _save(ViewContiguityBranch(), x, tmp_path / "vc.tlspec")
 
-    report = tl.load(path).run(inputs=x.clone()).report
+    report = tl.load(path).run_transaction(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 

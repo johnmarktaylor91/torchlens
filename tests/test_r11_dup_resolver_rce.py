@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -143,7 +144,7 @@ def test_multi_output_type_denies_loaded_but_inadmissible_type() -> None:
 
 
 def test_end_to_end_tampered_bundle_property_read_is_safe(tmp_path) -> None:
-    """Full flow: tamper the saved bundle's metadata, load, read property -> no code exec."""
+    """Full flow: tamper the saved bundle's record tables, load, read property -> no code exec."""
 
     sentinel = os.path.join(str(tmp_path / "sentinel_dir"), "r11_pwned_sentinel")
     os.makedirs(os.path.dirname(sentinel), exist_ok=True)
@@ -162,10 +163,18 @@ def test_end_to_end_tampered_bundle_property_read_is_safe(tmp_path) -> None:
         os.makedirs(os.path.dirname(bundle), exist_ok=True)
         trace.save(bundle, level="runnable")
 
-        pkl = os.path.join(bundle, "metadata.pkl")
-        raw = open(pkl, "rb").read()
-        raw = raw.replace(b"torch.return_types", evil.encode())
-        open(pkl, "wb").write(raw)
+        # The saved format keeps the multi-output type path in the JSON record
+        # tables: rewrite it in every record file and re-list each in the
+        # manifest so the tampered path reaches the property read.
+        replaced = 0
+        for record in sorted(Path(bundle, "records").glob("*.json")):
+            raw = record.read_bytes()
+            if b"torch.return_types" not in raw:
+                continue
+            replaced += raw.count(b"torch.return_types")
+            record.write_bytes(raw.replace(b"torch.return_types", evil.encode()))
+            redigest(Path(bundle), record.relative_to(bundle).as_posix())
+        assert replaced, "the saved bundle names no torch.return_types type to tamper"
 
         loaded = tl.load(bundle)
         _ = _multi_output_op(loaded).multi_output_type

@@ -418,7 +418,7 @@ def test_loaded_sparse_control_run_is_verified_and_attested(tmp_path) -> None:
     from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 
     path, x = _save_runnable_tanh(tmp_path)
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
@@ -445,7 +445,7 @@ def test_loaded_sparse_refuses_wrapper_shadowed_callable(tmp_path) -> None:
     torch.tanh = hostile
     try:
         with pytest.raises(Exception) as excinfo:
-            tl.load(path).run(inputs=x)
+            tl.load(path).run_transaction(inputs=x)
     finally:
         torch.tanh = real
     assert type(excinfo.value).__name__ == "ReattachError", excinfo.value
@@ -476,7 +476,7 @@ def test_loaded_sparse_refuses_poisoned_unwrap_ledger_entry(tmp_path) -> None:
     ledger[key] = hostile
     try:
         with pytest.raises(Exception) as excinfo:
-            tl.load(path).run(inputs=x)
+            tl.load(path).run_transaction(inputs=x)
     finally:
         ledger[key] = real
     assert type(excinfo.value).__name__ == "ReattachError", excinfo.value

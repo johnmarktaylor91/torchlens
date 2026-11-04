@@ -79,7 +79,8 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
 
     # ---- persistence ---------------------------------------------------------
     bundle_path = tmp_path / "sweep_bundle"
-    bundle.save(str(bundle_path))
+    # Head ablation is a masked edit (opaque_audit): the audit level records it.
+    bundle.save(str(bundle_path), level="audit")
     loaded = tl.load(str(bundle_path))
     loaded_view = loaded.effects()
     assert [row.to_payload() for row in loaded_view.rows] == [row.to_payload() for row in view.rows]

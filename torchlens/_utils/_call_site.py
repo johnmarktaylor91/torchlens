@@ -33,6 +33,30 @@ MODULE_CALL_IS_PASS = True
 #: Marks a call-site equivalence class (``<type>@cs<N>``).
 CALL_SITE_CLASS_MARKER = "@cs"
 
+
+def call_site_class(
+    index: dict[Any, int], key: tuple[Any, ...], layer_type: str, slot: int | None
+) -> str:
+    """Return the call-site class ``<type>@cs<N>`` of one op output.
+
+    ``key`` is ``(innermost module address, call-site chain, func_name, output
+    slot)``; ``N`` is its first-appearance number in ``index``, the per-capture
+    table the caller owns, so equal keys get equal classes and the string is
+    deterministic for the same model code. Exhaustive capture and predicate
+    recording mint through this one function, so a cooked recording groups by
+    the same classes as ``tl.trace``.
+    """
+
+    number = index.get(key)
+    if number is None:
+        number = len(index) + 1
+        index[key] = number
+    site_class = f"{layer_type}{CALL_SITE_CLASS_MARKER}{number}"
+    if slot is not None:
+        site_class += f"_outindex{slot}"
+    return site_class
+
+
 _HAS_CO_POSITIONS = sys.version_info >= (3, 11)
 
 # Code objects of TorchLens's module forward wrappers (``decorated_forward``),

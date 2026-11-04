@@ -6,12 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationStatus
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 GOLDEN_PATH = Path(__file__).with_name("validation_decisions.json")
 
@@ -67,6 +70,37 @@ class TinyBatchNorm(nn.Module):
         """
 
         return self.bn(x) + self.bn.running_mean
+
+
+class TinyTrainBatchNorm(nn.Module):
+    """Training-mode BatchNorm whose fused call writes its running statistics.
+
+    The write happens inside ``batch_norm``, so each written buffer gets a
+    buffer-version node with no replayable function of its own: the genuine
+    functionless boundary that validation exempts.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.bn = nn.BatchNorm1d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a training-mode BatchNorm pass.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output.
+        """
+
+        return self.bn(x)
 
 
 class TinyRecurrent(nn.Module):
@@ -471,6 +505,11 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     x_bn = torch.randn(3, 4)
     bn_trace = tl.trace(bn, x_bn, capture=full_capture, save="all")
 
+    torch.manual_seed(23)
+    train_bn = TinyTrainBatchNorm().train()
+    x_train_bn = torch.randn(3, 4)
+    train_bn_trace = tl.trace(train_bn, x_train_bn, capture=full_capture, save="all")
+
     torch.manual_seed(13)
     recurrent = TinyRecurrent().eval()
     x_recurrent = torch.randn(3, 2, 3)
@@ -493,7 +532,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     edited.do(
         tl.func("relu"),
         torch.zeros_like(relu_pass.out),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     edited.run(intervention, x_intervention)
 
@@ -583,6 +622,9 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         ),
         "tiny_batch_norm": _case_summary(
             _seeded_status_for_trace(102, bn_trace, [_trace_output(bn_trace)])
+        ),
+        "tiny_train_batch_norm": _case_summary(
+            _seeded_status_for_trace(113, train_bn_trace, [_trace_output(train_bn_trace)])
         ),
         "tiny_recurrent": _case_summary(
             _seeded_status_for_trace(103, recurrent_trace, [_trace_output(recurrent_trace)])
