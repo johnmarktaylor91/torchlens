@@ -7,8 +7,8 @@ TorchLens 2.38 does not load files saved by torchlens 2.37 and earlier. A saved 
 path, a recording, merged or extraction directory whose manifest names a pre-2.38
 `torchlens_version`, and the formats below all refuse at `tl.load` with
 `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
-names the pre-2.38 origin and the remedy: load the file with torchlens 2.36.x
-(`pip install 'torchlens>=2.36,<2.38'`), which reads it, or capture the model again with
+names the pre-2.38 origin and the remedy: load the file with torchlens 2.36.x or 2.37.x
+(`pip install "torchlens<2.38"`), which read it, or capture the model again with
 this release and save that. Saving the file again with torchlens 2.36.x does not help
 for a trace: 2.36.x writes `tlspec_version` 9. The promise earlier releases made, that
 `.tlspec` files written by torchlens 2.16 would always load, is withdrawn.

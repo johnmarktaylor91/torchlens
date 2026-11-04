@@ -80,8 +80,8 @@ _PRE_3_GLOBALS = frozenset(
 )
 
 _REMEDY = (
-    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<2.38'), or "
-    "capture the model again with this release and save that."
+    'load it with torchlens 2.36.x or 2.37.x, which read it (pip install "torchlens<2.38"), '
+    "or capture the model again with this release and save that."
 )
 
 #: Extra remedy sentence for a format_version-1 intervention spec: unlike a saved trace,
