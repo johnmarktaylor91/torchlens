@@ -23,6 +23,8 @@ from torchlens._selection.selectors import FacetSelector
 from torchlens.intervention.errors import BindingRuntimeError
 from torchlens.options import InterventionOptions
 
+_STAGE = InterventionOptions(engine="set_only")
+
 
 class _AttnOnce(nn.Module):
     """One attention block between two activations."""
@@ -92,7 +94,7 @@ def _fanout_codes(action: Any) -> list[str]:
     ]
 
 
-def test_folded_selector_writes_at_attach_hooks_and_do() -> None:
+def test_folded_selector_writes_at_staged_and_rerun_do() -> None:
     model, x, clean = _case()
     clean_out = _output(clean).clone()
 

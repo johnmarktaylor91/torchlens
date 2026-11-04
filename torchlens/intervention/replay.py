@@ -59,7 +59,6 @@ from ._replay_sites import (
     _keeps_captured_draw,
     _no_func_message,
     _parent_value,
-    _require_hook_origins,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -101,51 +100,6 @@ if TYPE_CHECKING:
     from .._selection.selectors import SelectorLike
 
 
-def push(
-    trace: Trace,
-    *,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Push the edit downstream through the recorded graph (DAG replay).
-
-    Parameters
-    ----------
-    trace:
-        Model log to mutate in place.
-    replay:
-        Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
-
-    Returns
-    -------
-    Trace
-        The same model log, mutated in place.
-    """
-
-    replay_options = merge_replay_options(replay=replay)
-    _preflight_log(trace)
-    _refuse_armed_gradient_rules(trace, replay_options.hooks)
-    _warn_if_direct_writes_will_be_overlaid(trace)
-    hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
-    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
-    origins = _require_hook_origins(found)
-    with changed_param_scope(replay_options.allow_changed_params):
-        if replay_options.differentiable:
-            return _run_differentiable_replay(
-                trace,
-                origins,
-                hook_entries=hook_entries,
-                strict=replay_options.strict,
-                preserve_origins=False,
-            )
-        return _run_replay(
-            trace,
-            origins,
-            hook_entries=hook_entries,
-            strict=replay_options.strict,
-            preserve_origins=False,
-        )
-
-
 def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
     """Return the ONE ``(message, remedy)`` for a gradient edit meeting replay.
 
@@ -182,7 +136,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
 
     Replay recomputes forward values off the autograd graph, so a gradient
     rule could never fire there, whether the recipe arms it or the call
-    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    passes it as an explicit ``{tl.grad(site): edit}`` hook mapping; refusing
     keeps a push from returning a result that silently dropped it.
 
     Parameters
@@ -190,7 +144,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
     trace:
         Trace about to be pushed.
     hooks:
-        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+        Mapping of sites to edits (via ``Trace.do``; ``ReplayOptions`` has no hooks), or ``None``.
 
     Raises
     ------
@@ -213,7 +167,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
         )
 
 
-def push_from(
+def replay_from_op(
     trace: Trace,
     site: SelectorLike | str | Op,
     *,
@@ -1718,8 +1672,7 @@ def _threaded_buffer_value(
 
 __all__ = [
     "cone_of_effect",
-    "push",
-    "push_from",
+    "replay_from_op",
     "_reconstruct_args_from_template",
     "_replay_container_path",
     "_slice_output_by_path",

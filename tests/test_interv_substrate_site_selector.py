@@ -20,6 +20,9 @@ from torchlens._errors import ArgumentTypeError
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _TinyModel(nn.Module):
     def __init__(self) -> None:

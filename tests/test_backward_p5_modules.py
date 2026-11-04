@@ -11,6 +11,9 @@ from torch import nn
 import torchlens as tl
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _ModuleContainmentModel(nn.Module):
     """Small model with paired, intervening, and parameter backward nodes."""
