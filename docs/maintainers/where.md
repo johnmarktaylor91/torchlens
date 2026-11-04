@@ -5,19 +5,19 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1439 modules, 647375 lines, 0 modules without a docstring.
+83 packages, 1441 modules, 647782 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32876 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1254 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 33243 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1293 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 47 | 25317 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
-| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
+| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4651 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38116 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
@@ -99,13 +99,13 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32876 lines)
+TorchLens - extract outs and metadata from PyTorch models. (76 modules, 33243 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 801 |
+| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 803 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
-| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 261 |
+| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 265 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
@@ -173,23 +173,25 @@ TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32876 li
 | `facets` | Lazy alias module: ''torchlens.facets'' is :mod:'torchlens._semantic.facets'. | 15 |
 | `features` | The ONE named, recorded feature-matrix shaping operation (tvscope B7/). | 340 |
 | `fingerprint` | Provisional public structural-hash helpers. | 350 |
+| `inputs` | Input preprocessors: teach ''tl.trace'' to accept your model's raw input. | 182 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 491 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 598 |
 | `options` | Grouped option dataclasses for public TorchLens APIs. | 1768 |
+| `outputs` | Output decoders: give your model's outputs human-readable labels. | 179 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 174 |
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1254 lines)
+TorchLens auto-routing registries. (6 modules, 1293 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
 | `_builtin_input` | Built-in input auto-route detectors. | 60 |
-| `_builtin_output` | Built-in output auto-route detectors and decoders. | 749 |
+| `_builtin_output` | Built-in output auto-route detectors and decoders. | 769 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
-| `_registry` | Direction-agnostic priority registry for TorchLens auto-routing. | 216 |
+| `_registry` | Direction-agnostic priority registry for TorchLens auto-routing. | 235 |
 
 ### `torchlens._autoroute.input`
 
@@ -274,12 +276,12 @@ FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue
 
 ### `torchlens._capture.prepare`
 
-PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modules, 4650 lines)
+PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modules, 4651 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 48 |
-| `cache` | Capture-cache lookup and store for the PREPARE stage. | 736 |
+| `cache` | Capture-cache lookup and store for the PREPARE stage. | 737 |
 | `chunked` | Chunked capture fan-out helpers for the PREPARE stage. | 793 |
 | `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 706 |
 | `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1121 |
