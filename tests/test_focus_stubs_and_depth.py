@@ -160,9 +160,12 @@ def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path
     assert to_output[0] == "to model output 1"
     assert to_output[1].startswith("output_")
     # A stub reads like any node: its last row is its op's shape and size.
+    # The stub names a layer; its first row names the pass (``shared.fc:1``).
     for name, rows in stubs.items():
         label = name.removeprefix("__module_focus_output_")
-        assert rows == [rows[0], rows[1], _tensor_row(trace, label)], by_first_row
+        call = rows[0].rpartition(":")[2] if ":" in rows[0] else ""
+        op = f"{label}:{call}" if call else label
+        assert rows == [rows[0], rows[1], _tensor_row(trace, op)], by_first_row
 
 
 def test_stubs_sit_outside_the_focused_frame(trace: tl.Trace, tmp_path: Path) -> None:
