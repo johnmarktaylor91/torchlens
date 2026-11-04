@@ -87,7 +87,7 @@ trace["tanh_6"].grad_fn.calls[0].grad_inputs[0].shape    # torch.Size([1, 5, 307
 
 ```python
 print(trace["tanh_6"])                       # everything TorchLens knows about one operation
-# Op tanh_6: float32 [1, 5, 3072] on cpu, min -1.000 max 0.9937 mean -0.4892 sd 0.4728
+# Layer tanh_6: float32 [1, 5, 3072] on cpu, min -1.000 max 0.9937 mean -0.4892 sd 0.4728
 #   position  operation 266 of 541
 #   module    transformer.h.5.mlp.act
 #   output    15,360 values, 60.0 KiB
@@ -95,7 +95,7 @@ print(trace["tanh_6"])                       # everything TorchLens knows about 
 #   graph     mul_23 -> tanh_6 -> add_25 (reaches 13 of 25 model outputs)
 #   function  tanh, gradient TanhBackward0, 151 us
 #   source    transformers/activations.py:66 in forward
-#   more      .out  .parents  .children  .func_config  .code_context  .lookup_keys
+#   more      .ops  .parents  .children  .to_pandas()
 trace["tanh_6"].code_context[-1].call_line   # the exact line of source code that called tanh_6
 # 'return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))'
 trace.params["lm_head.weight"].all_module_addresses   # GPT-2 reuses its embedding weights as its output layer
