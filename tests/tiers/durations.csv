@@ -47,12 +47,12 @@ tests/oracles/test_legacy_collapse_priority.py,2,0.15,0.08,unmarked
 tests/oracles/test_legacy_graph_counts.py,9,0.62,0.29,unmarked
 tests/oracles/test_legacy_module_counts.py,10,0.71,0.14,unmarked
 tests/oracles/test_legacy_payload_bytes.py,1,0.52,0.52,unmarked
-tests/oracles/test_legacy_peak_memory_bounds.py,4,0.85,0.44,unmarked
+tests/oracles/test_legacy_peak_memory_bounds.py,4,0.64,0.33,unmarked
 tests/oracles/test_legacy_peak_rss_units.py,2,0.01,0.00,unmarked
 tests/oracles/test_legacy_quantity_doors.py,7,0.17,0.05,unmarked
 tests/oracles/test_legacy_timing_bounds.py,8,2.24,0.86,unmarked
 tests/oracles/test_oracle_w0_deprecation.py,8,0.03,0.01,unmarked
-tests/oracles/test_oracle_w0_lints.py,28,20.70,11.42,heavy
+tests/oracles/test_oracle_w0_lints.py,14,10.62,10.43,heavy
 tests/oracles/test_oracle_w0_registry.py,24,0.46,0.34,unmarked
 tests/oracles/test_oracle_w0_skeleton.py,5,0.02,0.01,unmarked
 tests/oracles/test_oracle_w0_surface.py,12,0.91,0.76,unmarked
@@ -242,7 +242,7 @@ tests/test_boundary_multipass_readers.py,9,0.62,0.12,unmarked
 tests/test_brainpipe_byte_model.py,5,0.75,0.42,unmarked
 tests/test_brainpipe_capture_floor.py,1,5.33,5.33,heavy
 tests/test_brainpipe_geometry_reduced.py,3,0.11,0.06,unmarked
-tests/test_brainpipe_peak_pair.py,5,7.23,6.28,heavy
+tests/test_brainpipe_peak_pair.py,5,7.99,6.92,heavy
 tests/test_brainpipe_plan.py,14,0.63,0.17,unmarked
 tests/test_brainpipe_rdm_options.py,6,0.02,0.00,unmarked
 tests/test_bridge_adapter_behaviors.py,7,0.32,0.19,unmarked
@@ -673,6 +673,7 @@ tests/test_hon_export_refusals.py,3,0.24,0.14,unmarked
 tests/test_hon_stats_refusals.py,3,0.02,0.01,unmarked
 tests/test_hon_summary_honesty.py,2,0.06,0.04,unmarked
 tests/test_hook_handle_remove_mid_rerun.py,6,1.40,0.50,unmarked
+tests/test_host_peak_without_vmhwm_reset.py,2,0.12,0.11,unmarked
 tests/test_hybrid_registered_container_kind.py,3,0.01,0.01,unmarked
 tests/test_identity_shims.py,14,2.00,0.48,unmarked
 tests/test_ignored_torch_capture.py,57,7.00,0.61,unmarked
@@ -832,7 +833,7 @@ tests/test_marker_lint.py,66,10.46,3.19,rare
 tests/test_masked_edit_portable.py,13,1.40,0.28,unmarked
 tests/test_mcp_bridge.py,6,0.62,0.31,unmarked
 tests/test_mean_ablate_door.py,7,0.24,0.12,unmarked
-tests/test_measure_host_peak_opt_in.py,4,1.13,0.38,unmarked
+tests/test_measure_host_peak_opt_in.py,4,1.08,0.40,unmarked
 tests/test_mechanical_belt.py,10,2.04,0.91,unmarked
 tests/test_mechinterp_controls.py,12,4.00,2.54,unmarked
 tests/test_members_fold_rulings.py,13,2.81,1.05,unmarked
@@ -989,7 +990,7 @@ tests/test_pass_token_short_labels.py,2,0.17,0.10,unmarked
 tests/test_patch_from_facet_slice.py,11,9.96,4.55,unmarked
 tests/test_patching_heads_fused_attention.py,7,65.65,20.16,unmarked
 tests/test_patching_helper_memory.py,5,26.75,13.01,unmarked
-tests/test_peak_memory_counter_lag.py,2,0.38,0.38,unmarked
+tests/test_peak_memory_counter_lag.py,2,0.48,0.45,unmarked
 tests/test_per_file_sharded_runner.py,4,0.04,0.01,unmarked
 tests/test_perf5_rf_invariant_cost.py,6,1.31,0.43,unmarked
 tests/test_perf6_label_index.py,4,0.15,0.13,unmarked
@@ -1286,6 +1287,7 @@ tests/test_runnable_ambient_restore.py,1,0.01,0.01,unmarked
 tests/test_runnable_code_provocation.py,12,3.13,0.36,unmarked
 tests/test_runnable_contract_scaffolding.py,8,0.07,0.02,unmarked
 tests/test_runnable_fp32_precision_policy.py,6,1.74,0.48,unmarked
+tests/test_runnable_host_budget_rlimit.py,6,0.10,0.05,unmarked
 tests/test_runnable_live_nondeterministic_sources.py,2,0.05,0.03,unmarked
 tests/test_runnable_load_parse_hardening.py,8,2.37,1.06,smoke
 tests/test_runnable_r36_regressions.py,48,18.93,8.75,heavy
@@ -1630,7 +1632,7 @@ tests/test_tvscope_preprocessing.py,15,0.06,0.01,heavy
 tests/test_two_pass_inplace_fix.py,9,9.16,8.55,slow
 tests/test_type_checking_imports.py,1,6.29,6.29,unmarked
 tests/test_unhide_surfaces.py,5,0.89,0.80,heavy
-tests/test_union_merge_integrity.py,58,3.66,0.21,unmarked
+tests/test_union_merge_integrity.py,29,1.68,0.19,unmarked
 tests/test_unpickle_c_path.py,2,0.04,0.04,smoke
 tests/test_unpickle_c_security.py,8,6.83,4.14,unmarked
 tests/test_user_docs_currency.py,43,0.19,0.09,unmarked
