@@ -668,7 +668,8 @@ def test_gpt2_at_without_target_answers_the_logits() -> None:
 
     At base the call refused with ``AmbiguousTargetError``. Now it answers exactly
     as ``target="output.logits"`` does (through causal attention that is the
-    window refusal pointing at ``probe_grad()``), and a cache target still works.
+    window refusal pointing at ``probe_grad()``), and ``target=`` still selects a
+    cache tensor (no windowed axes there either, so it too is the window refusal).
     """
 
     from torchlens.errors import AmbiguousTargetError
@@ -684,6 +685,9 @@ def test_gpt2_at_without_target_answers_the_logits() -> None:
         assert default == _outcome(lambda: view.at((3, 0), target="output.logits"))
         assert view.axes == view["output.logits"].axes
         keys = next(role for role in caches if role.endswith("keys"))
-        assert view.at("center", target=keys).io_role == keys
+        assert view[keys].io_role == keys
+        selected = _outcome(lambda: view.at((3, 0), target=keys))
+        assert selected[0] != AmbiguousTargetError.__name__
+        assert "not reachable" not in selected[-1]
     finally:
         trace.cleanup()
