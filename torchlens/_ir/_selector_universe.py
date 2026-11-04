@@ -22,9 +22,26 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .._data_classes._trace_missing_attrs import is_live_trace
 from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
+
+
+def _is_live_trace(candidate: Any) -> bool:
+    """Return whether ``candidate`` is a live ``Trace`` (deferred import).
+
+    ``torchlens._data_classes`` is imported inside the function on purpose: a
+    module-level import runs that package's ``__init__``, whose ``op`` module
+    imports the ``intervention`` package, whose ``spec`` imports back into
+    ``selector_eval``. With this module on the ``selector_eval`` import path, a
+    cold ``import torchlens._ir.selector_eval`` (or ``_selection.resolver``)
+    then hit a partially initialised ``selector_eval``. Keeping the guard
+    deferred leaves the selector modules importable first in a fresh interpreter.
+    """
+
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    return is_live_trace(candidate)
+
 
 #: String-label attribute universes per lifecycle, in match order.
 _STRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
@@ -236,7 +253,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
         candidates.append(str(address))
     source_trace: Any = getattr(ctx, "source_trace", None)
     if (
-        source_trace._options_module_identity_mode if is_live_trace(source_trace) else None
+        source_trace._options_module_identity_mode if _is_live_trace(source_trace) else None
     ) == "function_root":
         candidates.append("self")
         candidates.append("self:1")
@@ -339,7 +356,7 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
         # owning session as ``source_trace`` (they have no ``trace`` member).
         source_trace: Any = getattr(subject, "source_trace", None)
         if (
-            source_trace._provenance_backend if is_live_trace(source_trace) else TORCH_BACKEND_NAME
+            source_trace._provenance_backend if _is_live_trace(source_trace) else TORCH_BACKEND_NAME
         ) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:
