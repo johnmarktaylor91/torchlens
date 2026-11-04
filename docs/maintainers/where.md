@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 676001 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 676063 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37020 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37082 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -1716,7 +1716,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37020 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37082 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1749,10 +1749,10 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_patch_mapping` | Source-site to target-site mapping for ''patch_from'' (Patchscopes, SelfIE). | 211 |
 | `_position_edits` | Token-position editing. | 205 |
 | `_recipe_io` | Save and load a :class:'Recipe' as a ''.tlspec'' directory (manifest kind ''"recipe"''). | 309 |
-| `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 288 |
+| `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 312 |
 | `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 332 |
 | `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 455 |
-| `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 181 |
+| `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 183 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 540 |
 | `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 739 |
@@ -1767,7 +1767,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_subspace_edits` | k-dimensional subspace ablation and interchange edits (N-IV-6). | 280 |
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
-| `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 735 |
+| `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 772 |
 | `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention''. | 135 |
 | `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 714 |
 | `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 603 |
@@ -1789,7 +1789,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `population` | The public population noun for stochastic/population edits (edits ). | 651 |
 | `predicates` | Predicate-time intervention decisions and sugar. | 203 |
 | `regions` | Regions: derived admissibility on the existing verbs (surgery ). | 1083 |
-| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1679 |
+| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1678 |
 | `rerun` | Full-forward rerun engine for TorchLens interventions. | 1640 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1638 |
 | `save` | Persistence for TorchLens intervention specifications. | 863 |
