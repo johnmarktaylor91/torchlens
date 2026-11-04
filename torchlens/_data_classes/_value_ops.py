@@ -127,7 +127,7 @@ def _position(op: Any, kind: str) -> str:
     """Position belongs to the card, not the one-line identity."""
 
     trace = trace_of(op)
-    total = getattr(trace, "_num_ops", None)
+    total = trace._num_ops if trace is not None else None
     index = getattr(op, "step_index", None)
     if index is None or total is None:
         return ""
