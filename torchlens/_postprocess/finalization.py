@@ -1044,7 +1044,9 @@ def _build_layer_logs(self: "Trace") -> None:
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).
     """
-    _column_passes_finalize.build_layer_logs(self, _reconcile_multipass_layer_fields)
+    from .._data_classes.layer import Layer
+
+    _column_passes_finalize.build_layer_logs(self, Layer, _reconcile_multipass_layer_fields)
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
 

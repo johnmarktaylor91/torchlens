@@ -51,31 +51,34 @@ _READ_FIELDS = (
 )
 
 
-def build_layer_logs(trace: Trace, reconcile: Callable[..., None]) -> None:
+def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> None:
     """Build ``trace._layer_logs`` and the autograd-memory total (step 15.5 body).
 
     Parameters
     ----------
     trace:
         Trace being postprocessed; ``_layer_list`` holds its per-pass ops.
+    layer_class:
+        The aggregate ``Layer`` class (passed in so this module stays outside
+        the record import cycle).
     reconcile:
         Multi-pass reconcile applied to every aggregate layer after its
         autograd sums (``finalization._reconcile_multipass_layer_fields``),
         called as ``reconcile(layer, read)`` with the pass's field reader.
     """
 
-    from .._data_classes.layer import Layer
-
     ops = trace._layer_list
     lookup = column_rows_by_label(dict(enumerate(ops))) if ops else None
     if lookup is None:
-        layer_logs = _group_passes_facade(ops, Layer)
+        layer_logs = _group_passes_facade(ops, layer_class)
         total = _sum_autograd(layer_logs, reconcile, _facade_reader)
     else:
         columns, rows_by_index = lookup
         get = {name: columns.getter(name) for name in _READ_FIELDS}
         row_of = {id(op): rows_by_index[index] for index, op in enumerate(ops)}
-        layer_logs = _group_passes_columns(ops, Layer, get, columns.setter("is_constant"), row_of)
+        layer_logs = _group_passes_columns(
+            ops, layer_class, get, columns.setter("is_constant"), row_of
+        )
         total = _sum_autograd(layer_logs, reconcile, _column_reader(columns, get, row_of))
     trace._cost_total_autograd_memory = total
     trace._layer_logs = layer_logs
