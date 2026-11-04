@@ -17,8 +17,11 @@ from torchlens.intervention.errors import (
 from torchlens.intervention.rerun import run
 from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
-from torchlens.options import CaptureOptions
+from torchlens.options import CaptureOptions, InterventionOptions
 from torchlens.types import Relationship
+
+#: Stage a sticky hook on the trace without propagating it (the rerun propagates it).
+_STAGE = InterventionOptions(engine="set_only", confirm_mutation=True)
 
 
 class BadModel(torch.nn.Module):

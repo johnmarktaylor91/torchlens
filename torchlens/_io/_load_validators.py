@@ -13,7 +13,9 @@ through that module's shared teaching ``_refuse``.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
@@ -492,3 +494,30 @@ def _validate_executed_flops_records(trace: Trace) -> None:
                     "the counted backward record"
                 ),
             )
+
+
+# Unified tlspec kinds that carry no model: an intervention spec or a recipe. Each
+# maps to the module and loader that rebuilds it; the module is imported on demand
+# so this loader stays a leaf of the intervention package.
+MODEL_FREE_TLSPEC_KINDS: Mapping[str, tuple[str, str]] = {
+    "intervention": ("torchlens.intervention.save", "load_intervention_spec"),
+    "recipe": ("torchlens.intervention._recipe_io", "load_recipe"),
+}
+
+
+def load_model_free_tlspec(
+    kind: str,
+    bundle_path: Path,
+    *,
+    trust_custom_callables: bool,
+    allowed_custom_callable_modules: Any,
+) -> Any:
+    """Load an intervention spec or a recipe from its ``.tlspec`` directory."""
+
+    module_name, loader_name = MODEL_FREE_TLSPEC_KINDS[kind]
+    loader = getattr(importlib.import_module(module_name), loader_name)
+    return loader(
+        bundle_path,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+    )

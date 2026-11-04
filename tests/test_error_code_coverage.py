@@ -107,7 +107,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "container_selector_requires_registry",
         "container_selector_unresolved",
         "container_value_source_invalid",
-        "dagua_renderer_not_opted_in",
         "decoded_output_not_classification",
         "fsdp_capture_unsupported",
         "gradient_not_saved",

@@ -165,8 +165,8 @@ FASTLOG_DOOR_CASES: tuple[tuple[str, type[BaseException], dict[str, Any]], ...] 
     ("history_size_invalid", ValueError, {"history_size": -1}),
     ("lookback_invalid", ValueError, {"lookback": 4096}),
     ("lookback_payload_policy_invalid", ValueError, {"lookback_payload_policy": "bogus"}),
-    ("recording_intervention_predicate_type_invalid", ValueError, {"intervene": "not-callable"}),
-    ("recording_halt_predicate_type_invalid", ValueError, {"halt": "not-callable"}),
+    ("intervention_predicate_type_invalid", TypeError, {"intervene": "not-callable"}),
+    ("halt_predicate_type_invalid", TypeError, {"halt": "not-callable"}),
     ("max_predicate_failures_invalid", ValueError, {"max_predicate_failures": -3}),
     ("on_predicate_error_invalid", ValueError, {"on_predicate_error": "explode"}),
     ("on_forward_error_invalid", ValueError, {"on_forward_error": "shrug"}),
@@ -203,6 +203,7 @@ _RECORDING_FIELDS = {
     "default_grad",
     "include_source_events",
     "postprocess",
+    "lean",
 }
 _CAPTURE_FIELDS = {
     "lookback",
@@ -258,8 +259,9 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
 ) -> None:
     """The tl.trace() non-callable intervene/halt doors expose codes and remedies.
 
-    Trace-side twins of the ``recording_*_predicate_type_invalid`` fastlog
-    doors above (new vocabulary must ship provoked).
+    The same codes and ``TypeError`` lineage as the ``tl.record`` doors above:
+    predicate misuse raises identically on both entry points, so one catch
+    handles the pair.
     """
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())

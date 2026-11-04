@@ -240,7 +240,7 @@ DOCS: dict[str, str] = {
         layout:
             Node placement: ``"auto"``, ``"dot"`` or ``"rank"``.
         renderer:
-            ``"graphviz"`` (default) or the experimental ``"dagua"`` after opt-in.
+            ``"graphviz"`` (default) or a renderer registered out of tree.
         direction:
             Edge flow: ``"bottomup"``, ``"topdown"``, ``"leftright"`` or
             ``"rightleft"``. ``None`` takes the graph's default (forward
@@ -289,10 +289,13 @@ DOCS: dict[str, str] = {
             ``"intervention"``, ``"bundle_delta"``), a mapping of layer label
             to value, or a callable ``node -> value``.
         node_label_fields:
-            Explicit list of label rows to show on every node.
+            Explicit list of label rows to show on every node. ``"label"`` keeps
+            the default title's pass marks (``:2``, ``(x3)``); ``"pass"`` adds
+            no row on a single-pass node.
         graph_overrides, edge_overrides, grad_edge_overrides, module_overrides:
             Graphviz attribute overrides for the graph, forward edges, gradient
-            edges and module boxes.
+            edges and module boxes. A static forward-edge ``fontsize`` also sizes
+            the edge annotations (pass ranges, IF/THEN, argument labels).
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn:
             Per-node styling and selection callbacks (see ``tl.viz.nodes``).
         intervention_mode:
@@ -302,7 +305,8 @@ DOCS: dict[str, str] = {
         code_panel:
             Source-location panel option (``False``, ``True`` or a panel spec).
         font_size, dpi:
-            Typography and raster resolution overrides.
+            Typography and raster resolution overrides; ``font_size`` sizes the
+            edge annotations when ``edge_overrides`` sets no ``fontsize``.
         order_siblings:
             Keep sibling ops in execution order (a post-pass; off while
             ``stack_by`` is active).
@@ -564,21 +568,6 @@ DOCS: dict[str, str] = {
             A ``SummaryReport`` (``str`` subclass) carrying typed rows,
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
-        """
-    ),
-    "to_dagua_graph": (
-        """Translate this model log into an experimental Dagua graph.
-        
-        Parameters
-        ----------
-        rolled, depth, show_buffers, direction, include_grad_edges:
-            Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
-        
-        Returns
-        -------
-        Any
-            Dagua graph object.
         """
     ),
     "narrate": (

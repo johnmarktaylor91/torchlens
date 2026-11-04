@@ -9,12 +9,16 @@ import torch
 from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
+from torchlens._data_classes._trace_intervention_records import STAGED_UNFIRED_KEY
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention._trace_edits import set_site
 from torchlens.intervention.errors import SpecMutationError
 from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
-from torchlens.options import CaptureOptions
+from torchlens.options import CaptureOptions, InterventionOptions
+
+#: Stage a sticky hook on this trace without propagating it.
+_STAGE = InterventionOptions(engine="set_only", confirm_mutation=True)
 
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -71,6 +75,31 @@ def _first_internal_label(log: Any) -> str:
         if not (layer.is_input or layer.is_output or layer.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
+
+
+def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
+    """``set(site, tensor)`` updates recipe state without propagation."""
+
+    log = _capture()
+    initial_revision = log._spec_revision
+    replacement = torch.zeros(2, 3)
+
+    result = log.do(
+        tl.func("relu"),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
+
+    assert result is log
+    assert log._spec_revision == initial_revision + 1
+    assert log.state is TraceState.SPEC_STALE
+    assert log._out_recipe_revision == initial_revision
+    assert len(log._intervention_spec.target_value_specs) == 1
+    value_spec = log._intervention_spec.target_value_specs[0]
+    assert value_spec.value is replacement
+    # A set-only tensor stays staged until a replay fires it; no created_by marker.
+    assert value_spec.metadata == {STAGED_UNFIRED_KEY: True}
+    assert not log._recipe_is_clean()
 
 
 def test_set_callable_tags_one_shot_metadata() -> None:
