@@ -167,7 +167,8 @@ def test_ops_door_keeps_the_bare_multi_pass_refusal(trace: tl.Trace) -> None:
     with pytest.raises(AmbiguousSiteError) as refusal:
         trace[tl.label(SHARED)]
     assert refusal.value.fields["code"] == "multipass_bare_label_ambiguous"
-    assert f"trace[{SHARED!r}]" in str(refusal.value)
+    aggregate = trace.layers[SHARED].short_layer_label
+    assert f"trace.layers[{aggregate!r}]" in str(refusal.value)
 
 
 def test_do_on_a_bare_multi_pass_label_edits_every_pass() -> None:
@@ -177,10 +178,8 @@ def test_do_on_a_bare_multi_pass_label_edits_every_pass() -> None:
     captured = tl.trace(DoorModel().eval(), torch.randn(3, 4))
     try:
         with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-            edited = captured[SHARED].do(
-                lambda out, *, ctx: torch.zeros_like(out),
-                intervention=tl.options.InterventionOptions(confirm_mutation=True),
-            )
+            with tl.io.suppress_mutate_warnings():
+                edited = captured[SHARED].do(lambda out, *, ctx: torch.zeros_like(out))
         for label in (f"{SHARED}:1", f"{SHARED}:2"):
             assert torch.count_nonzero(edited[label].out) == 0
         assert torch.count_nonzero(edited[f"{FC1}:1"].out) > 0
@@ -242,11 +241,23 @@ def test_layers_door_converts_module_keys(trace: tl.Trace) -> None:
     assert trace.layers["shared:2"] is trace.layers[SHARED]
     # Both calls of ``shared`` land in one two-pass Layer, so the address is one Layer.
     assert trace.layers["shared"] is trace.layers[SHARED]
-    # Two buffer versions sit in two Layers, so the bare address refuses; a version is one.
-    with pytest.raises(AmbiguousOpLookupError) as info:
-        trace.layers["bn.running_mean"]
-    assert "'bn.running_mean:1'" in str(info.value)
-    assert isinstance(trace.layers["bn.running_mean:1"], Layer)
+    # An eval-mode batchnorm writes no running stats, so its buffer has one version.
+    assert trace.layers["bn.running_mean"] is trace.layers["bn.running_mean:1"]
+
+
+def test_layers_door_refuses_a_buffer_with_versions_in_two_layers() -> None:
+    """A training-mode batchnorm writes its running stats: the bare buffer address refuses."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(DoorModel().train(), torch.randn(3, 4))
+    try:
+        assert len(list(captured.buffers["bn.running_mean"].versions)) == 2
+        with pytest.raises(AmbiguousOpLookupError) as info:
+            captured.layers["bn.running_mean"]
+        assert "'bn.running_mean:1'" in str(info.value)
+        assert isinstance(captured.layers["bn.running_mean:1"], Layer)
+    finally:
+        captured.cleanup()
 
 
 # --------------------------------------------------------------------------- #
