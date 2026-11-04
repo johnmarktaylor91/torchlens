@@ -46,7 +46,12 @@ print(selection[0])
 # Site
 # Site
 # Site
-# Site(('tanh_1_2', 1), 8/8 elements, relation=exact)
+# Site ACT tanh_1:1: 8 values, relation exact
+#   shape     [2, 4]
+#   values    8 selected
+#   relation  exact
+#   source    selector tl.func('tanh')
+#   more      .key  .mask  .provenance  .record
 ```
 
 ### selection-to-pandas

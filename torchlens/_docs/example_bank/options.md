@@ -645,7 +645,7 @@ print("encoded differs", d.dot != base.dot, "overlay differs", o.dot != base.dot
 ```
 
 ### options-vis-buffers
-Show buffer nodes always, only when meaningful, or never.
+Show buffer nodes always, only when meaningful, or never; a hidden buffer is named in its consumer's "Hidden buffers" tooltip.
 
 - covers: `VisualizationOptions.show_buffers`
 - tasks: draw, buffers
@@ -656,11 +656,11 @@ net = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.BatchNorm1d(4)).eval()
 trace = tl.trace(net, torch.randn(2, 4))
 for mode in ["never", "meaningful", "always"]:
     d = trace.draw(path=mode, file_format="gv", show_buffers=mode)
-    print(mode, d.dot.count("running_mean"))
+    print(mode, d.dot.count("running_mean"), "Hidden buffers" in d.dot)
 # Output:
-# never 1
-# meaningful 1
-# always 2
+# never 1 True
+# meaningful 1 True
+# always 1 False
 ```
 
 ### options-vis-backward-graph
