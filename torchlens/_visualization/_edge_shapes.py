@@ -6,6 +6,8 @@ from dataclasses import replace
 from html import escape
 from typing import TYPE_CHECKING, Any
 
+from .._errors import InvalidArgumentError
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .render_ir import RenderIR, RenderIRDotStatement
@@ -19,7 +21,13 @@ def _producer_ops(trace: Trace, label: str, rolled: bool) -> tuple[Any, ...]:
     """
     if label in trace.layers and (rolled or ":" not in label):
         return tuple(trace.layers[label].ops)
-    entry = trace[label]
+    try:
+        entry = trace[label]
+    except InvalidArgumentError as error:
+        if error.fields.get("code") != "op_lookup_not_found":
+            raise
+        # A focused render's boundary placeholder names no recorded producer: no shape.
+        return ()
     return tuple(entry.ops) if rolled and hasattr(entry, "ops") else (entry,)
 
 
