@@ -160,9 +160,9 @@ def _build_shared_fields_dict(
     # (which become metadata and feed into equivalence_class hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
-    parent_layer_labels = get_live_label_list(
-        arg_tensors, self.capture_events.live_index.by_raw_label
-    )
+    # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
+    live_labels = get_live_label_list(arg_tensors, self.capture_events.live_index.by_raw_label)
+    parent_layer_labels = list(dict.fromkeys(live_labels))
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
