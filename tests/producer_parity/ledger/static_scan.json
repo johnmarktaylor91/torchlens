@@ -44,7 +44,7 @@
   "field": "module_stack",
   "file": "torchlens/_capture/_forward_helpers.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -69,6 +69,30 @@
   "file": "torchlens/_capture/_input_records.py",
   "has_default": false,
   "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_capture/_lazy_contexts.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/_capture/_lazy_contexts.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_capture/_lazy_contexts.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -6388,7 +6412,7 @@
   "field": "module_stack",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -6404,7 +6428,7 @@
   "field": "step_index",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -6540,7 +6564,7 @@
   "field": "module_stack",
   "file": "torchlens/backends/torch/_predicate_forward.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -6589,6 +6613,14 @@
   "file": "torchlens/backends/torch/_session_forwards.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/torch/_sources_lazy.py",
+  "has_default": false,
+  "sites": 2,
   "via_getattr": false
  },
  {
