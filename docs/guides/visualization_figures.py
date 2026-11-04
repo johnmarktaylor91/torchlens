@@ -36,7 +36,7 @@ from torchlens.errors import TorchLensError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = REPO_ROOT / "docs" / "images" / "visualization"
-DPI = 110
+DPI = 96
 
 
 # ---------------------------------------------------------------------------
