@@ -121,7 +121,9 @@ def _cluster_body(dot: str, cluster: str) -> str:
 
 
 def _tensor_row(trace: tl.Trace, label: str) -> str:
-    op = trace[label]
+    """The ``(shape), size`` row of an op named by its label or its DOT node name."""
+
+    op = trace[label.replace("pass", ":")]
     return f"{format_shape(op.shape)}, {format_memory(op.activation_memory)}"
 
 

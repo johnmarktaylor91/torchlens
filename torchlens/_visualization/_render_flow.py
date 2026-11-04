@@ -1279,8 +1279,8 @@ def _build_module_focus_entries(
                 inner_node=node,
                 tensor_row=shape_size_row(parent_node),
             )
-            if node.layer_label not in boundary.children:
-                boundary.children.append(node.layer_label)
+            if _relation_label(node) not in boundary.children:
+                boundary.children.append(_relation_label(node))
             new_parents.append(boundary.layer_label)
         node.parents = new_parents
 
@@ -1301,8 +1301,8 @@ def _build_module_focus_entries(
                 boundary_kind="output",
                 inner_node=node,
             )
-            if node.layer_label not in boundary.parents:
-                boundary.parents.append(node.layer_label)
+            if _relation_label(node) not in boundary.parents:
+                boundary.parents.append(_relation_label(node))
             new_children.append(boundary.layer_label)
         node.children = new_children
 

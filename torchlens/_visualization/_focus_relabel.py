@@ -62,7 +62,9 @@ def relabel_focus_nodes(
     if focus_address(module) is None:
         return render_ir
     prefix = focus_parent_prefix(module)
-    drawn = frozenset(node.name for node in render_ir.nodes)
+    drawn = frozenset(
+        name for node in render_ir.nodes for name in (node.name, node.source_label) if name
+    )
     relabels: dict[str, str] = {}
     nodes = tuple(
         _relabelled_node(node, trace, prefix, drawn, relabels) for node in render_ir.nodes
@@ -175,9 +177,14 @@ def _drawn_op(trace: Trace, label: str | None) -> Any | None:
 
 
 def _is_drawn(label: str, drawn: frozenset[str]) -> bool:
-    """Whether ``label`` is a drawn node, or a focus stub stands for it."""
+    """Whether ``label`` is a drawn node, or a focus stub stands for it.
 
-    names = {label, label.split(":", 1)[0]}
+    ``drawn`` holds DOT node names (``add_1_1pass1``) and source labels
+    (``add_1_1``); ``label`` is an op's parent spelling (``add_1_1`` or
+    ``add_1_1:2``).
+    """
+
+    names = {label, label.split(":", 1)[0], label.replace(":", "pass")}
     names |= {f"__module_focus_input_{name.replace(':', 'pass')}" for name in list(names)}
     return bool(names & drawn)
 
