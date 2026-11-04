@@ -114,7 +114,7 @@ def _copy_container(
         memo[id(value)] = copied_bytes
         return copied_bytes
     # ``list.copy`` on a list subclass returns a plain list; ``copy.copy`` keeps the subclass.
-    copied = value.copy() if type(value) in _PLAIN_CONTAINERS else copy.copy(value)
+    copied: Any = value.copy() if type(value) in _PLAIN_CONTAINERS else copy.copy(value)
     memo[id(value)] = copied
     if isinstance(value, list):
         atomic = _ATOMIC_TYPES
