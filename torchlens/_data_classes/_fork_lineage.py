@@ -8,6 +8,8 @@ record-side helpers the fork builder and the rerun-refresh paths call;
 
 from __future__ import annotations
 
+from itertools import compress, repeat
+from operator import eq, methodcaller, truth
 from typing import TYPE_CHECKING, Any
 
 from ._trace_intervention_records import record_operation
@@ -15,6 +17,8 @@ from ._trace_missing_attrs import is_live_trace
 
 if TYPE_CHECKING:
     from .trace import Trace
+
+_GET_OP = methodcaller("get", "op")
 
 
 def _is_fork_relative(trace: Trace, other: Trace) -> bool:
@@ -63,11 +67,13 @@ def next_fork_name(trace: Trace) -> str:
     """Return a deterministic default fork name for this parent log."""
 
     base_name = trace.name or "trace"
-    fork_count = sum(
-        1
-        for record in trace.state_history
-        if isinstance(record, dict) and record.get("op") == "fork"
-    )
+    # Count rows with ``isinstance(record, dict) and record.get("op") == "fork"``.
+    # The history gains one row per fork, so the count runs inside ``map`` and
+    # ``compress`` (no Python frame per row): a sweep's later forks must not
+    # cost more calls than its first.
+    history = trace.state_history
+    dict_rows = compress(history, map(dict.__instancecheck__, history))
+    fork_count = sum(map(truth, map(eq, map(_GET_OP, dict_rows), repeat("fork"))))
     return f"{base_name}_fork_{fork_count + 1}"
 
 
