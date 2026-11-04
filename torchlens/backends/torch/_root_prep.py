@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch.nn as nn
 
-from . import _state
+from ... import _state
 from ._tl import set_module_meta
 from .bound_root import ROOT_ADDRESS, TLBoundMethodRoot
 
