@@ -10,7 +10,12 @@ from ..._ir.container import (
 )
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
-from ..._storage_bindings import STORAGE_CONTEXT_RECEIVER_FUNCS, copy_with_storage_context
+from ..._storage_bindings import (
+    STORAGE_CONTEXT_RECEIVER_FUNCS,
+    VIEW_CONTEXT_RECEIVER_FUNCS,
+    copy_with_storage_context,
+    copy_with_view_context,
+)
 from ..._utils._tensor_layout import CaptureLayout, layout_of
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
@@ -466,24 +471,40 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 def _copy_saved_call_args(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], retained: bool = False
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Copy one call's arguments for ``save_arg_values``, receiver storage context included.
+    """Copy one call's arguments for ``save_arg_values``, receiver context included.
 
     The receiver (positional argument 0) of a
     :data:`~torchlens._storage_bindings.STORAGE_CONTEXT_RECEIVER_FUNCS` call keeps
-    its whole storage; every other argument is copied as :func:`_copy_saved_arg_tree`
-    does.
+    its whole storage, and that of a
+    :data:`~torchlens._storage_bindings.VIEW_CONTEXT_RECEIVER_FUNCS` call keeps its
+    view relation; every other argument is copied as :func:`_copy_saved_arg_tree` does.
     """
 
-    storage_context = func_name in STORAGE_CONTEXT_RECEIVER_FUNCS
+    receiver_copy = _receiver_copier(func_name)
     arg_copies = tuple(
-        _copy_saved_arg_tree(arg, retained, storage_context=storage_context and index == 0)
+        _copy_saved_arg_tree(arg, retained, receiver_copy=receiver_copy if index == 0 else None)
         for index, arg in enumerate(args)
     )
     kwarg_copies = {key: _copy_saved_arg_tree(value, retained) for key, value in kwargs.items()}
     return arg_copies, kwarg_copies
 
 
-def _copy_saved_arg_tree(arg: Any, retained: bool = False, *, storage_context: bool = False) -> Any:
+def _receiver_copier(func_name: str) -> Callable[[torch.Tensor], torch.Tensor] | None:
+    """Return the copier that keeps a receiver's storage or view context, if ``func_name`` has one."""
+
+    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS:
+        return copy_with_storage_context
+    if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
+        return copy_with_view_context
+    return None
+
+
+def _copy_saved_arg_tree(
+    arg: Any,
+    retained: bool = False,
+    *,
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
+) -> Any:
     """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
 
     Outside forward validation's own capture this is exactly
@@ -499,11 +520,14 @@ def _copy_saved_arg_tree(arg: Any, retained: bool = False, *, storage_context: b
 
     references = active_argument_references()
     if references is None:
-        if storage_context and isinstance(arg, torch.Tensor):
-            return _copy_tensor_with_storage_context(arg)
+        if receiver_copy is not None and isinstance(arg, torch.Tensor):
+            return _copy_receiver_with_context(receiver_copy, arg)
         return copy_arg_tree(arg)
+    if isinstance(arg, torch.Tensor) and receiver_copy is copy_with_view_context:
+        # A parameter alias is not a view, so a view-function receiver is always copied.
+        return _copy_receiver_with_context(receiver_copy, arg)
     if isinstance(arg, torch.Tensor):
-        return _parameter_alias(references, arg, retained, storage_context=storage_context)
+        return _parameter_alias(references, arg, retained, receiver_copy=receiver_copy)
     if _is_flat_sequence(arg):
         return type(arg)(
             _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
@@ -521,15 +545,19 @@ def _is_flat_sequence(arg: Any) -> bool:
 
 
 def _parameter_alias(
-    references: Any, tensor: torch.Tensor, retained: bool = False, *, storage_context: bool = False
+    references: Any,
+    tensor: torch.Tensor,
+    retained: bool = False,
+    *,
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> torch.Tensor:
     """Alias a parameter-storage tensor (recording its version), else copy it as before.
 
     The guard decides and builds the alias (see
     ``ParameterArgumentReferences.alias``) and, for a ``retained`` snapshot,
     the offloaded copy (``ParameterArgumentReferences.offload``); anything it
-    declines is copied exactly as on the copy path (with its whole storage
-    when ``storage_context`` is set; an alias already shares the storage).
+    declines is copied exactly as on the copy path (through ``receiver_copy``
+    when it is set; an alias already shares the storage).
     """
 
     # Paused: the guard's storage and version reads, its alias and its copy are
@@ -540,16 +568,18 @@ def _parameter_alias(
             alias = references.offload(tensor)
     if alias is not None:
         return alias
-    if storage_context:
-        return _copy_tensor_with_storage_context(tensor)
+    if receiver_copy is not None:
+        return _copy_receiver_with_context(receiver_copy, tensor)
     return cast(torch.Tensor, copy_arg_tree(tensor))
 
 
-def _copy_tensor_with_storage_context(tensor: torch.Tensor) -> torch.Tensor:
-    """Copy a storage-geometry receiver with its whole storage, as TorchLens's own work."""
+def _copy_receiver_with_context(
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor], tensor: torch.Tensor
+) -> torch.Tensor:
+    """Copy a receiver with its storage or view context, as TorchLens's own work."""
 
     with pause_logging():
-        return copy_with_storage_context(tensor)
+        return receiver_copy(tensor)
 
 
 def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.device]:

@@ -1224,6 +1224,7 @@ IGNORED_FUNCS = [
             *(f"_to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
             *("_conj", "_conj_physical", "_neg_view", "_lazy_clone", "_addmm_activation"),
             *("_is_all_true", "_is_any_true", "_philox_normal_", "_philox_uniform_"),
+            *("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"),
         )
         if hasattr(torch.Tensor, _private_name)
     ),
@@ -1231,9 +1232,8 @@ IGNORED_FUNCS = [
     # snapshots read ``torch.default_generator.get_state()``, so they never record.
     ("torch", "get_rng_state"),
     ("torch.random", "get_rng_state"),
-    # Exclusions on record: ``torch.empty_quantized`` (uninitialized quantized memory has no
-    # replayable value, and no validation exemption is added for it); ``to_padded_tensor``
-    # (its receiver is a nested tensor, which capture refuses).
+    # Exclusions on record: ``torch.empty_quantized`` (uninitialized quantized memory, no
+    # validation exemption); ``to_padded_tensor`` (nested receiver, which capture refuses).
 ]
 
 
