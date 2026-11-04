@@ -1969,7 +1969,6 @@ docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	1285
 docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
-docs-md	docs/maintainers/where.md	1293
 docs-md	docs/maintainers/where.md	13
 docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
@@ -2256,7 +2255,6 @@ docs-md	docs/maintainers/where.md	307
 docs-md	docs/maintainers/where.md	308
 docs-md	docs/maintainers/where.md	31
 docs-md	docs/maintainers/where.md	310
-docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	313
 docs-md	docs/maintainers/where.md	314
@@ -2336,7 +2334,6 @@ docs-md	docs/maintainers/where.md	401
 docs-md	docs/maintainers/where.md	402
 docs-md	docs/maintainers/where.md	403
 docs-md	docs/maintainers/where.md	404
-docs-md	docs/maintainers/where.md	405
 docs-md	docs/maintainers/where.md	407
 docs-md	docs/maintainers/where.md	4084
 docs-md	docs/maintainers/where.md	409
@@ -2852,7 +2849,6 @@ docs-md	docs/migration/from_torchextractor.md	2026
 docs-md	docs/migration/from_torchextractor.md	3.0
 docs-md	docs/migration/from_torchinfo.md	0..11
 docs-md	docs/migration/from_torchinfo.md	1,388
-docs-md	docs/migration/from_torchinfo.md	1.28
 docs-md	docs/migration/from_torchinfo.md	100
 docs-md	docs/migration/from_torchinfo.md	108
 docs-md	docs/migration/from_torchinfo.md	11
@@ -2865,7 +2861,6 @@ docs-md	docs/migration/from_torchinfo.md	16.64
 docs-md	docs/migration/from_torchinfo.md	163,037,184.
 docs-md	docs/migration/from_torchinfo.md	163.43
 docs-md	docs/migration/from_torchinfo.md	19
-docs-md	docs/migration/from_torchinfo.md	1_3
 docs-md	docs/migration/from_torchinfo.md	2.56
 docs-md	docs/migration/from_torchinfo.md	2026
 docs-md	docs/migration/from_torchinfo.md	212
@@ -2875,7 +2870,6 @@ docs-md	docs/migration/from_torchinfo.md	256
 docs-md	docs/migration/from_torchinfo.md	31
 docs-md	docs/migration/from_torchinfo.md	32
 docs-md	docs/migration/from_torchinfo.md	40
-docs-md	docs/migration/from_torchinfo.md	5.6
 docs-md	docs/migration/from_torchinfo.md	7.8
 docs-md	docs/migration/from_torchinfo.md	8.19
 docs-md	docs/migration/from_torchinfo.md	92.2
@@ -4163,7 +4157,6 @@ docs-md	docs/reference/summary.md	3,124
 docs-md	docs/reference/summary.md	3,326,696
 docs-md	docs/reference/summary.md	48
 docs-md	docs/reference/summary.md	48,
-docs-md	docs/reference/summary.md	5.6
 docs-md	docs/reference/summary.md	50
 docs-md	docs/reference/summary.md	60
 docs-md	docs/reference/summary.md	64

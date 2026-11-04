@@ -1351,8 +1351,7 @@ torchlens/report/_profile.py::_honesty_row	71
 torchlens/report/_profile.py::profile	158
 torchlens/report/_stats_table.py::StatsTable.sort_rows	65
 torchlens/report/_stats_table.py::build_stats_table	88
-torchlens/report/_summary_ladder.py	1293
-torchlens/report/_summary_ladder.py::_ModelIndex.__init__	64
+torchlens/report/_summary_ladder.py	1283
 torchlens/report/_summary_ladder.py::_elide_once	74
 torchlens/report/_summary_render.py::render_summary_pair	66
 torchlens/report/_summary_result.py::collect_summary_facts	71
