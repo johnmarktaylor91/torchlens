@@ -56,6 +56,7 @@ _SIDES: dict[str, Point] = {
     "top": (0.0, 1.0),
 }
 _ON_SIDE = 2.0  # (pt) an end this close to a side of its node's box is on that side
+_AT_NODE = 16.0  # (pt) an edge end (arrowhead base included) this close to a node box is at it
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
 _CHUNK = 12  # samples per indexed piece of a line, so a distant stretch is skipped whole
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
@@ -330,7 +331,17 @@ class _Scene:
                 label["box"] = _union(
                     [_bounds(o) for o in self.nodes.get(node, [])] or [(*end, *end)]
                 )
-                label["side"] = _side(label["box"], end, (ahead[0] - end[0], ahead[1] - end[1]))
+                used = {
+                    _nearest_side(label["box"], point)
+                    for other in self.edges
+                    if other is not edge
+                    and other["samples"]
+                    and node in (other["tail"], other["head"])
+                    for point in (other["samples"][0], other["samples"][-1])
+                    if _point_rect_distance(point, label["box"]) <= _AT_NODE
+                }
+                heading = (ahead[0] - end[0], ahead[1] - end[1])
+                label["side"] = _side(label["box"], end, heading, used)
                 label["other_lines"] = [
                     near
                     for other in self.edges
@@ -468,11 +479,12 @@ def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
     return min(gaps, default=_CLEAR_TARGET)
 
 
-def _side(box: Rect, end: Point, heading: Point) -> str:
+def _side(box: Rect, end: Point, heading: Point, used: set[str]) -> str:
     """The side of a node's box where its edge meets it.
 
-    The side the end lies on; at a corner, or on a curved outline away from the box,
-    the side the edge heads away from the node through.
+    The side its end lies on.  At a corner, the touching side no other edge at the node
+    uses (a label there cannot be read as that edge's), then the side the edge heads
+    away from the node through; an end off the box (a curved outline) counts every side.
     """
 
     gaps = {
@@ -482,9 +494,20 @@ def _side(box: Rect, end: Point, heading: Point) -> str:
         "top": abs(box[3] - end[1]),
     }
     touching = [side for side, gap in gaps.items() if gap <= _ON_SIDE] or list(_SIDES)
-    return max(
-        touching, key=lambda side: _SIDES[side][0] * heading[0] + _SIDES[side][1] * heading[1]
-    )
+    free = [side for side in touching if side not in used] or touching
+    return max(free, key=lambda side: _SIDES[side][0] * heading[0] + _SIDES[side][1] * heading[1])
+
+
+def _nearest_side(box: Rect, point: Point) -> str:
+    """The side of a node's box nearest a point just outside it (another edge's end)."""
+
+    gaps = {
+        "left": abs(point[0] - box[0]),
+        "right": abs(box[2] - point[0]),
+        "bottom": abs(point[1] - box[1]),
+        "top": abs(box[3] - point[1]),
+    }
+    return min(gaps, key=gaps.__getitem__)
 
 
 def _wrong_side(label: dict[str, Any], lines: list[Rect]) -> bool:

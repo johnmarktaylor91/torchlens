@@ -113,6 +113,10 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
         assert end_gap <= _NEAR_END_PT, (direction, text, end_gap)
         assert rival_gap >= own_gap + _ATTACH_MARGIN_PT, (direction, text, own_gap, rival_gap)
         assert beyond, (direction, text, side)
+    sides = {text: side for text, *_, side, _ in attachments}
+    # the return arc meets its nodes off the chain's axis, where the chain edges do not
+    chain = {"left", "right"} if direction in ("leftright", "rightleft") else {"top", "bottom"}
+    assert sides["In 2"] not in chain and sides["Out 1"] not in chain, (direction, sides)
 
 
 def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool]]:
@@ -164,7 +168,15 @@ def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool]]:
                 max(b[2] for b in boxes),
                 max(b[3] for b in boxes),
             )
-            side = _side_met(node_boxes[node], end, ahead)
+            box = node_boxes[node]
+            used = {
+                _nearest_side(box, p)
+                for other_tail, other_head, other, other_samples in edges
+                if other is not edge and other_samples and node in (other_tail, other_head)
+                for p in (other_samples[0], other_samples[-1])
+                if _box_point_gap(box, p) <= 16.0
+            }
+            side = _side_met(box, end, ahead, used)
             found.append(
                 (
                     texts[0],
@@ -188,9 +200,10 @@ def _side_met(
     box: tuple[float, float, float, float],
     end: tuple[float, float],
     ahead: tuple[float, float],
+    used: set[str],
 ) -> str:
     """The side of the node's box the edge meets: the one its end lies on; at a corner,
-    the one the edge leaves through."""
+    the one no other edge at the node meets, then the one the edge leaves through."""
 
     gaps = {
         "left": abs(end[0] - box[0]),
@@ -200,8 +213,19 @@ def _side_met(
     }
     normals = {"left": (-1, 0), "right": (1, 0), "bottom": (0, -1), "top": (0, 1)}
     near = [side for side, gap in gaps.items() if gap <= _ON_SIDE_PT] or list(normals)
+    near = [side for side in near if side not in used] or near
     heading = (ahead[0] - end[0], ahead[1] - end[1])
     return max(near, key=lambda s: normals[s][0] * heading[0] + normals[s][1] * heading[1])
+
+
+def _nearest_side(box: tuple[float, float, float, float], point: tuple[float, float]) -> str:
+    gaps = {
+        "left": abs(point[0] - box[0]),
+        "right": abs(box[2] - point[0]),
+        "bottom": abs(point[1] - box[1]),
+        "top": abs(box[3] - point[1]),
+    }
+    return min(gaps, key=gaps.__getitem__)
 
 
 def _beyond(
