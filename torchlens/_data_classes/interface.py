@@ -281,10 +281,8 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if len(entries_with_substr) == 1:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
-            raise AmbiguousOpLookupError(
-                ambiguous_substring_message(str(ix), list(entries_with_substr.values()))
-                + _bound_owner_hint(self, ix)
-            )
+            message = ambiguous_substring_message(str(ix), list(entries_with_substr.values()))
+            raise AmbiguousOpLookupError(message + _bound_owner_hint(self, ix))
 
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
