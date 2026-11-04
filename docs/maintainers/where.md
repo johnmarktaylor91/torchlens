@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1511 modules, 659684 lines, 0 modules without a docstring.
+83 packages, 1511 modules, 659690 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34172 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34152 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1439 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -68,7 +68,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10727 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
-| `torchlens.errors` | Public TorchLens exception classes. | 4 | 1281 |
+| `torchlens.errors` | Public TorchLens exception classes. | 4 | 1307 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2045 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34172 lines)
+TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34152 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -123,7 +123,7 @@ TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34172 li
 | `_doctor_types` | Doctor report types: the compatibility truth-table row and the report that holds them. | 347 |
 | `_entry_refusals` | Typed, coded refusals raised by public entry points. | 540 |
 | `_episode_spec` | The episode declaration dataclass for ''tl.trace(..., episode=...)''. | 181 |
-| `_errors` | Shared TorchLens exception types. | 992 |
+| `_errors` | Shared TorchLens exception types. | 972 |
 | `_extract_refusals` | Typed refusals and capture options used by ''extract'' and ''pluck''. | 43 |
 | `_extraction_provenance` | Input-preprocessing provenance seam for dataset extraction (tvscope B4/B5). | 358 |
 | `_fast_live_events` | Nested wrapped-call bookkeeping for the guarded fast live run. | 121 |
@@ -1574,12 +1574,12 @@ Distributed capture opt-in: arming, group lifetime identity, and evidence. (6 mo
 
 ### `torchlens.errors`
 
-Public TorchLens exception classes. (4 modules, 1281 lines)
+Public TorchLens exception classes. (4 modules, 1307 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Public TorchLens exception classes. | 469 |
-| `_base` | Shared TorchLens exception and warning base classes. | 323 |
+| `_base` | Shared TorchLens exception and warning base classes. | 349 |
 | `episode` | Episode-capture and bundle-relation exception families (L2 core). | 288 |
 | `runnable` | Error classes for the frozen sparse runnable ''.tlspec'' contract. | 201 |
 
