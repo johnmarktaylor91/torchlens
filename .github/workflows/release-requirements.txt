@@ -4,9 +4,9 @@
 # Regenerate (and review the diff) with:
 #   uv pip compile --generate-hashes --python-version 3.11 \
 #     --python-platform x86_64-unknown-linux-gnu \
-#     <(echo 'build==1.5.0'; echo 'setuptools==84.0.0') \
+#     <(echo 'build==1.6.1'; echo 'setuptools==84.0.0') \
 #     -o .github/workflows/release-requirements.txt
-build==1.5.0 \
+build==1.6.1 \
     --hash=sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f \
     --hash=sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647
     # via -r requirements
