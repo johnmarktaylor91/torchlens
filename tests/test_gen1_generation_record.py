@@ -9,7 +9,8 @@ first acceptance run (float32, ``rtol=1e-4``, ``atol=1e-5``).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import pytest
 import torch
@@ -100,6 +101,101 @@ def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
             torch.testing.assert_close(
                 recorded, reference[:, entry.positions.start :], rtol=RTOL, atol=ATOL
             )
+
+
+def _rewritable(ctx: Any, label_map: dict[str, str]) -> bool:
+    raw = ctx.raw_label if ctx.raw_label is not None else ctx.label_raw or None
+    return bool(raw) and raw in label_map
+
+
+def _distinct_rewritable(roots: Iterable[Any], label_map: dict[str, str]) -> tuple[int, int]:
+    """Count the distinct original contexts a pass's fold must rewrite, and the shared hits.
+
+    The walk follows the lookback by identity, the way the fold does, and stops
+    at a context outside the pass (the fold keeps those as they are). The second
+    count is how often the walk reaches a context it has already seen: a
+    lookback context shared by more than one later context.
+    """
+
+    seen: set[int] = set()
+    shared = 0
+    stack = list(roots)
+    while stack:
+        ctx = stack.pop()
+        if not _rewritable(ctx, label_map):
+            continue
+        if id(ctx) in seen:
+            shared += 1
+            continue
+        seen.add(id(ctx))
+        stack.extend(ctx.recent_events)
+        stack.extend(ctx.recent_ops)
+    return len(seen), shared
+
+
+def test_folding_generate_passes_rewrites_each_shared_lookback_context_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Counter guard on the multi-pass fold of a generation Recording.
+
+    Each forward ``generate()`` issues after the prefill is folded into the
+    prefill's label space, and a record context's lookback holds earlier
+    contexts shared between records. The fold must rewrite every original
+    context once per pass and hand every referrer the same rewrite; a walk
+    that rewrites a context again expands the shared graph exponentially.
+    The spy fails at the first repeated rewrite, before memory grows.
+    """
+
+    from torchlens._capture import _multipass_cook as cook
+
+    real_context = cook._relabeled_context
+    real_recording = cook._relabeled_recording
+    passes: dict[int, dict[str, Any]] = {}  # by id of the pass's memo
+    kept: list[Any] = []  # holds every object whose id is a key, so no id is reused
+
+    def pass_of(memo: dict[int, Any], label_map: dict[str, str]) -> dict[str, Any]:
+        if id(memo) not in passes:
+            kept.append(memo)
+            passes[id(memo)] = {"labels": label_map, "roots": [], "rewrites": {}}
+        return passes[id(memo)]
+
+    def spy_recording(facet: Any, offsets: Any, label_map: Any, memo: Any) -> Any:
+        if facet is not None and isinstance(facet.record_context, cook.RecordContext):
+            pass_of(memo, label_map)["roots"].append(facet.record_context)
+        return real_recording(facet, offsets, label_map, memo)
+
+    def spy_context(ctx: Any, offsets: Any, label_map: Any, memo: Any) -> Any:
+        state = pass_of(memo, label_map)
+        cached = id(ctx) in memo
+        rewritten = real_context(ctx, offsets, label_map, memo)
+        if rewritten is ctx:
+            return rewritten
+        kept.extend((ctx, rewritten))
+        outputs = state["rewrites"].setdefault(id(ctx), [])
+        if not cached and outputs:
+            pytest.fail(f"record context {ctx.label!r} rewritten again in one pass")
+        outputs.append(rewritten)
+        return rewritten
+
+    monkeypatch.setattr(cook, "_relabeled_recording", spy_recording)
+    monkeypatch.setattr(cook, "_relabeled_context", spy_context)
+    build, sites = FAMILIES["distilgpt2"]
+    n_new = 8
+
+    generation = tl.record(
+        build("eager"), PROMPT, save=_save(sites), generate_kwargs=_greedy(n_new)
+    )
+
+    assert generation.n_steps == n_new
+    assert len(passes) == n_new - 1  # every forward after the prefill is folded
+    shared_total = 0
+    for state in passes.values():
+        distinct, shared = _distinct_rewritable(state["roots"], state["labels"])
+        shared_total += shared
+        assert len(state["rewrites"]) == distinct
+        for outputs in state["rewrites"].values():
+            assert len({id(rewrite) for rewrite in outputs}) == 1
+    assert shared_total > 0  # the passes do share lookback, so the guard is not vacuous
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_generation.py.
