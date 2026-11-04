@@ -11,7 +11,6 @@ graph shell can share the spacing constant without an import cycle.
 
 from __future__ import annotations
 
-from ._render_common import _SELF_LOOP_LABEL_HGAP
 from ._render_utils import html_escape
 from ._typography import edge_annotation_pt
 
@@ -19,6 +18,7 @@ from ._typography import edge_annotation_pt
 #: is half of it wide, so a recurrence draws as an obvious loop.
 ROLLED_NODESEP = "0.5"
 _PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
+_SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer on the far side of a pass label
 
 #: Self-loop ports by rank direction: the loop leaves the node's downstream
 #: side and comes back on its upstream side, so it draws as a tall D-shaped
