@@ -269,7 +269,8 @@ def _saved_scalar_text(op: Any) -> str | None:
     """Return one pass's saved 0-d value as label text, or ``None``."""
 
     out = getattr(op, "out", None)
-    if not getattr(op, "has_saved_activation", False) or getattr(out, "ndim", None) != 0:
+    saved = getattr(op, "has_saved_activation", False)
+    if out is None or not saved or getattr(out, "ndim", None) != 0:
         return None
     try:
         value = out.item()
