@@ -4875,3 +4875,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 2fd53282ce2c1ea976a16cd2b411abe4bcae4c66 (dirty)
 recorded: 2026-11-04T15:52:34.647608+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: fork-decoded-output-stale: the replay commit reads is_output/is_output_parent/out to mark transformed_output stale; transformed_output reads move behind the Trace property and __dict__ in scrub, render and the selection journal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a37927c7150d30db3e354813e0425478709f6a22 (dirty)
+recorded: 2026-11-04T18:54:26.844290+00:00
