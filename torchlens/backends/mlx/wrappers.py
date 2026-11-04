@@ -9,7 +9,7 @@ from typing import Any
 
 from ... import _state
 from ..._ir.events import ModuleFrame
-from ._module_interventions import _apply_module_exit, _module_capture_op
+from .interventions import _apply_module_exit, _module_capture_op
 from .model_prep import MLXModuleTree
 
 _ACTIVE_TAP_OBSERVER: object | None = None

@@ -9,7 +9,7 @@ from typing import Any
 from ... import _state
 from ..._ir.events import ModuleFrame
 from .._finalize import join_module_address as _join_module_address, nearest_metadata_parent
-from ._module_interventions import _apply_module_exit
+from .interventions import _apply_module_exit
 
 
 @dataclass
