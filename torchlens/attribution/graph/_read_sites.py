@@ -24,6 +24,7 @@ from ._transcoders import Reader
 __all__ = [
     "check_upstream",
     "facet_labels",
+    "frozen_op_label",
     "is_module",
     "is_pooled_logits",
     "op_read_label",
@@ -52,6 +53,27 @@ def is_module(trace: Any, name: str) -> bool:
         return name in trace.modules
     except Exception:  # noqa: BLE001 - any membership failure means "not a module name"
         return False
+
+
+def frozen_op_label(index: ReadEdgeIndex, name: str) -> str:
+    """Return the edge label of a ``frozen=`` name that is not a module, or refuse.
+
+    A name of neither a module nor an addressable op (a typo, or an op label
+    taken from another capture, whose op counts differ) refuses naming both
+    readings, as a transcoder key does (``op_read_label``).
+    """
+
+    if name not in index.edges and f"{name}:1" not in index.edges:
+        example = next(iter(index.edges), "softmax_1_3:1")
+        raise _site_refusal(
+            f"frozen= holds {name!r}, which names neither a module nor an addressable op "
+            "of this capture. Remedy: name a module from dict(model.named_modules()) whose "
+            "output is held, or an op label of this capture (for example "
+            f"{example!r}; list them with [str(op.label) for op in trace]). An op label "
+            "counts the ops before it, so take it from this capture.",
+            code="attribution_graph_site_not_found",
+        )
+    return resolve_site_edge(index, name, role="frozen").label
 
 
 def op_read_label(index: ReadEdgeIndex, reader: Reader) -> str:
