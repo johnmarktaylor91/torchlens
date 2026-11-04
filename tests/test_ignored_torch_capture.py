@@ -46,7 +46,9 @@ _PRIVATE_METHOD_FORWARDS: dict[str, Callable[[torch.Tensor, torch.Tensor], torch
     "_conj_physical": lambda m, x: torch.view_as_real(_complex_of(m)._conj_physical()).sum(-1) + x,
     "_neg_view": lambda m, x: m._neg_view().resolve_neg() * 2 + x,
     "_lazy_clone": lambda m, x: m._lazy_clone() * 2 + x,
-    "_addmm_activation": lambda m, x: m._addmm_activation(x, x) + x,
+    # Distinct mat operands: one tensor passed as both mats does not re-trace to the same graph,
+    # and the decorated ``torch._addmm_activation`` twin shows the same on the unchanged base.
+    "_addmm_activation": lambda m, x: m._addmm_activation(x, x * 2) + x,
     "_is_all_true": lambda m, x: x + (m > -1)._is_all_true().float(),
     "_is_any_true": lambda m, x: x + (m > 100)._is_any_true().float(),
 }
