@@ -11,13 +11,23 @@ if TYPE_CHECKING:
     from .render_ir import RenderIR, RenderIRDotStatement
 
 
+def _producer_ops(trace: Trace, label: str, rolled: bool) -> tuple[Any, ...]:
+    """Return the ops a rendered producer label stands for.
+
+    A rolled render names a layer by its bare label, which ``trace[...]`` refuses
+    for a multi-pass layer; the aggregate ``trace.layers[...]`` holds every pass.
+    """
+    if rolled and label in trace.layers:
+        return tuple(trace.layers[label].ops)
+    entry = trace[label]
+    return tuple(entry.ops) if rolled and hasattr(entry, "ops") else (entry,)
+
+
 def _shape_text(trace: Trace, labels: tuple[str, ...], rolled: bool) -> str:
     """Read each represented producer's own output slot, never the call container."""
     shapes = []
     for label in labels:
-        entry = trace[label]
-        ops = entry.ops if rolled and hasattr(entry, "ops") else (entry,)
-        for op in ops:
+        for op in _producer_ops(trace, label, rolled):
             shape = op.shape
             if shape is not None:
                 text = "[" + ", ".join(str(dim) for dim in shape) + "]"
