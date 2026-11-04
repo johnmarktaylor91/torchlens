@@ -759,6 +759,6 @@ def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
     assert minted, "the capture must defer its payloads for this test to mean anything"
     del trace
     gc.collect()
-    assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
     events = _fork_events(_capture())
     assert events <= _FORK_EVENT_BAR, events
+    assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
