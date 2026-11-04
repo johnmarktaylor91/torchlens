@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1463 modules, 652395 lines, 0 modules without a docstring.
+83 packages, 1464 modules, 652424 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6365 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 114 | 55273 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 115 | 55302 |
 | `torchlens.bridge` | External-tool bridge namespace. | 27 | 8829 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9100 |
@@ -1258,7 +1258,7 @@ tinygrad backend preview. (9 modules, 4474 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (114 modules, 55273 lines)
+Torch backend implementation package for TorchLens capture. (115 modules, 55302 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1320,7 +1320,8 @@ Torch backend implementation package for TorchLens capture. (114 modules, 55273 
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 510 |
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 826 |
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
-| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 888 |
+| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 793 |
+| `_ops_predicate_identity` | Grouping identity of predicate-mode op outputs: parameter refs, call-site chain, equivalence class. | 124 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 546 |
 | `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 756 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 429 |
