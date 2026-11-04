@@ -1577,8 +1577,7 @@ class Layer(_SelectionOperand):
         Parameters
         ----------
         edit:
-            Value, hook or helper to apply to this layer's output (the same
-            edit argument as ``Trace.do``).
+            Value, hook or helper applied to this layer's output, as in ``Trace.do``.
         model:
             Model required when ``intervention.engine="rerun"``.
         inputs:
