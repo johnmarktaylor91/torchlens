@@ -38,6 +38,7 @@ from ._halt import StopSignal
 from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._recording_door import _unfold_recording_options
+from ._run_cores import retain_run_core
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -511,8 +512,7 @@ class Recorder:
                 )
         except StopSignal as halt_exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            if captured_run_core is not None:
-                self._captured_run_cores.append(captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core)
             self._absorb_pass_events(trace)
             object.__setattr__(
                 self._state.recording,
@@ -530,8 +530,7 @@ class Recorder:
             return output
         except Exception as exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            if captured_run_core is not None:
-                self._captured_run_cores.append(captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if self._echo_session is not None:
                 # Crash tail (snoop D5 tail 2): flush synchronously, extend the
@@ -570,8 +569,7 @@ class Recorder:
         output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
         output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
         captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-        if captured_run_core is not None:
-            self._captured_run_cores.append(captured_run_core)
+        retain_run_core(self._captured_run_cores, captured_run_core)
         if output_tensors is None or output_tensor_addresses is None:
             # Defensive fallback only; the postprocess=False branch above always
             # populates these on a normal return.
@@ -806,6 +804,7 @@ class Recorder:
         self._state.history.clear()
         self._state.op_counts.clear()
         self._state.module_stack.clear()
+        self._state.clear_pass_indexes()
         self._state.sample_id = sample_id
         self._state.pass_index = self._next_pass_index
         self._state.event_index = 0

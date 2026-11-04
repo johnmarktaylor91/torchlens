@@ -12,7 +12,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError, InvalidArgumentError
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -153,8 +153,8 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
         )
 
 
-def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> Any:
-    """Coerce ``inputs`` and run trace()'s up-front tensor-variant guard on them.
+def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> tuple[Any, Any]:
+    """Coerce ``inputs`` and ``input_kwargs`` and run trace()'s up-front tensor-variant guard on them.
 
     Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
@@ -162,9 +162,9 @@ def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> Any:
     instead of crashing deep in capture with an opaque torch error.
     """
 
-    coerced = _coerce_input_args(model, inputs)
-    check_model_and_input_variants(model, coerced, input_kwargs)
-    return coerced
+    coerced, coerced_kwargs = _coerce_inputs(model, inputs, input_kwargs)
+    check_model_and_input_variants(model, coerced, coerced_kwargs)
+    return coerced, coerced_kwargs
 
 
 def record(
@@ -194,7 +194,7 @@ def record(
     model:
         PyTorch module to execute.
     inputs:
-        Tensor, list, or tuple of positional model inputs.
+        Tensor, list, or tuple of positional model inputs; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Optional keyword arguments for the model call.
     save:
@@ -296,7 +296,7 @@ def record(
     knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
-    inputs = _checked_inputs(model, inputs, input_kwargs)
+    inputs, input_kwargs = _checked_inputs(model, inputs, input_kwargs)
     _require_generate_kwargs(generation, generate_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
