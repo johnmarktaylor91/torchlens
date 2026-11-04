@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1455 modules, 651225 lines, 0 modules without a docstring.
+83 packages, 1456 modules, 651484 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -47,7 +47,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 278 |
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 192 |
-| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5249 |
+| `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 16 | 5524 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15088 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2527 |
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2751 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 25 | 7350 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 25 | 7334 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -1016,16 +1016,17 @@ Relocated cross-layer vocabulary closures (L0 BASIS; private home). (3 modules, 
 
 ### `torchlens.agent`
 
-torchlens.agent -- the read-only agent inspection surface (agent ). (15 modules, 5249 lines)
+torchlens.agent -- the read-only agent inspection surface (agent ). (16 modules, 5524 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.agent -- the read-only agent inspection surface (agent ). | 69 |
-| `_apimap` | api_map v2: compact rows from ONE authoritative export registry. | 210 |
+| `_apimap` | api_map v2: compact rows from ONE authoritative export registry. | 227 |
 | `_artifacts` | Artifact session: manifest-first facts, content identity, bounded loads. | 510 |
 | `_budgets` | Budgets, truncation, floor semantics, and the continuation struct. | 264 |
 | `_compare` | compare: two-artifact structural + value diff with coverage honesty. | 252 |
 | `_envelope` | Canonical serializer and the one agent-surface envelope (agent ). | 214 |
+| `_example_bank` | Read the example bank: tested snippets for agents, keyed by public name and by task. | 258 |
 | `_fold` | The recurrence fold: the agent surface's default structural view. | 341 |
 | `_guide_text` | The curated agent guide, shipped in the wheel as a module constant. | 108 |
 | `_init_block` | ''torchlens agent init'': point a project's agent instruction file at the agent index. | 262 |
@@ -1852,7 +1853,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 15
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (25 modules, 7350 lines)
+Lightweight predicate-recording namespace for TorchLens. (25 modules, 7334 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1864,7 +1865,7 @@ Lightweight predicate-recording namespace for TorchLens. (25 modules, 7350 lines
 | `_halt` | Fastlog early-abort control signal. | 90 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_lean` | The lean recording contract: what ''lean=True'' skips, refuses and reports. | 77 |
-| `_record_one_shot` | (syntax error at line 315) | 337 |
+| `_record_one_shot` | One-shot public fastlog recording API. | 321 |
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 845 |
 | `_recorder_config` | Resolved stop and capture configuration for one predicate recording pass. | 32 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
