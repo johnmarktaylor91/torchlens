@@ -24,6 +24,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any, NamedTuple
 
 from . import _render_utils
+from ._render_common import GraphvizUnavailableError
 
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
@@ -161,8 +162,6 @@ def pass_label_layout(
     A missing Graphviz executable is ``None`` too: DOT source is still written
     without one, and a real render reports the missing binary itself.
     """
-
-    from ..errors import GraphvizUnavailableError
 
     try:
         completed = _render_utils.run_bounded_subprocess(
