@@ -81,7 +81,9 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
 
     Only builtin edits qualify: their stored ``(args, kwargs)`` are exactly the
     constructor arguments the saved-spec loader re-invokes. A selection recipe
-    is not a constructor argument, so an edit carrying one never qualifies.
+    is not a constructor argument, so an edit carrying one never qualifies, and
+    neither does one whose stored keywords the constructor does not take (a
+    stored element mask).
 
     Parameters
     ----------
@@ -100,7 +102,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     from .helpers import builtin_helper_constructor
 
     target = builtin_helper_constructor(spec.name)
-    if target is None:
+    if target is None or not _binds(target, spec):
         return None
     import importlib
 
@@ -145,3 +147,26 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
 
 
 _render_value = value_text
+
+
+def _binds(target: Callable[..., Any], spec: Edit) -> bool:
+    """Return whether ``spec``'s stored arguments are a call ``target`` accepts.
+
+    Parameters
+    ----------
+    target:
+        Public constructor.
+    spec:
+        Edit whose ``args`` and ``kwargs`` are tried.
+
+    Returns
+    -------
+    bool
+        ``False`` when printing the call would show a keyword it refuses.
+    """
+
+    try:
+        inspect.signature(target).bind(*spec.args, **dict(spec.kwargs))
+    except (TypeError, ValueError):
+        return False
+    return True
