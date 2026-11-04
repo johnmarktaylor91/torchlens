@@ -25,6 +25,7 @@ from .._capture.structure_only import (
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._entry_refusals import require_xarray_presentations
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
@@ -825,8 +826,7 @@ def xarray(trace: Any) -> Any:
         layer_coord.extend([label] * flat.shape[1])
         index_coord.extend(range(flat.shape[1]))
 
-    if not arrays or presentation_count is None:
-        raise ValueError("No saved tensor outs are available for xarray export.")
+    presentation_count = require_xarray_presentations(arrays, presentation_count)
 
     data = np.concatenate(arrays, axis=1)
     honesty = capture_honesty_facts(trace)

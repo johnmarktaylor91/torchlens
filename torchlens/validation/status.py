@@ -6,6 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
+from .._entry_refusals import refuse_region_provenance_missing, refuse_status_not_bool
+
 ValidationReplayState = Literal["available", "passed", "failed", "unavailable", "unverified"]
 ValidationReplaySource = Literal["live", "loaded", "unknown"]
 
@@ -491,10 +493,7 @@ class ValidationStatus:
 
         if self.state in {"passed", "failed"}:
             return self.passed
-        raise TypeError(
-            "ValidationStatus is not a boolean pass/fail result unless "
-            "replay validation has actually run."
-        )
+        refuse_status_not_bool()
 
 
 def is_region_replay_annotation(annotations: Mapping[str, Any] | None) -> bool:
@@ -572,9 +571,7 @@ def count_importer_region_annotations(trace: Any) -> int:
             continue
         if not has_importer_region_provenance(trace_annotations, op_annotations):
             label = getattr(op, "layer_label", getattr(op, "label", type(op).__name__))
-            raise ValueError(
-                f"Region replay annotation on {label!r} is missing importer provenance."
-            )
+            refuse_region_provenance_missing(label)
         region_count += 1
     return region_count
 

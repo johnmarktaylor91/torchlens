@@ -26,6 +26,7 @@ from typing import Any, cast
 
 import torch.nn as nn
 
+from ..._entry_refusals import refuse_bound_root
 from ..._errors import InvalidArgumentError
 
 #: Attribute name under which the owner registers as a submodule of the
@@ -51,10 +52,7 @@ class TLBoundMethodRoot(nn.Module):
 
     def __init__(self, method: Any) -> None:
         if not is_bound_method_of_module(method):
-            raise TypeError(
-                "TLBoundMethodRoot wraps a bound method of an nn.Module; "
-                f"got {type(method).__name__}."
-            )
+            refuse_bound_root(method)
         super().__init__()
         owner = method.__self__
         # Registered submodule: model preparation walks the wrapper's tree,

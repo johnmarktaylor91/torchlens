@@ -6,6 +6,7 @@ import importlib
 from types import ModuleType
 from typing import Any
 
+from .._entry_refusals import refuse_ilg_return_layers, refuse_torchextractor_layers
 from .torchextractor import Extractor
 
 _COMPAT_MODULES = {"lovely", "torchshow"}
@@ -197,9 +198,7 @@ def from_torchextractor(model: Any, layers: Any | None = None) -> Extractor:
     if resolved_layers is None:
         resolved_layers = getattr(model, "layer_names", None)
     if resolved_layers is None:
-        raise ValueError(
-            "from_torchextractor requires explicit layers or an extractor-like object."
-        )
+        refuse_torchextractor_layers()
     return Extractor(source_model, resolved_layers)
 
 
@@ -277,7 +276,7 @@ def from_ilg(model: Any, return_layers: dict[str, str] | None = None) -> Extract
     if resolved_layers is None:
         resolved_layers = getattr(model, "return_layers", None)
     if resolved_layers is None:
-        raise ValueError("from_ilg requires a return_layers mapping.")
+        refuse_ilg_return_layers()
     torchlens_layers = {
         output_name: module_name for module_name, output_name in resolved_layers.items()
     }

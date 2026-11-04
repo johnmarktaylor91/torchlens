@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import torch
 
+from .._entry_refusals import require_member_name
 from .._utils.facade import refuse_removed_member
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
@@ -286,9 +287,7 @@ class Bundle:
             Matching member log.
         """
 
-        if not isinstance(name, str):
-            raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
-        return self._members[name]
+        return self._members[require_member_name(name)]
 
     @property
     def outcome(self) -> CaptureOutcome:

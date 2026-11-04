@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
+from .._entry_refusals import require_hook_factory
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -113,9 +114,7 @@ class Edit:
             If the spec does not carry a runtime factory.
         """
 
-        if self.factory is None:
-            raise TypeError(f"Edit {self.name!r} has no hook factory")
-        return self.factory()
+        return require_hook_factory(self.name, self.factory)()
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state, dropping factories pickle cannot carry.

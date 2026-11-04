@@ -67,6 +67,7 @@ from ..._utils._torch_compat import (
 )
 from ..._utils._torch_symbols import torch_attr
 from ...errors import ScalarEscapeWarning
+from .._entry_refusals import require_tensorbase_class
 from ._completeness_audited import (
     _EXPECTED_OPAQUE_WRAPPERS,
     AUDITED_COMPLETENESS_BOUNDARIES,
@@ -994,12 +995,7 @@ it); a freed-then-reused address has only dead weakrefs and never matches. Meta/
 # r-b4 R26-2). The witness originals below are structurally REQUIRED, so absence
 # raises explicitly -- a module-level ``assert`` here was stripped under
 # ``python -O``, leaving ``_TENSORBASE_CLS = None`` and a delayed AttributeError.
-_TENSORBASE_CLS = get_tensorbase_class()
-if _TENSORBASE_CLS is None:  # pragma: no cover - torch >= 2.1 exposes the C base.
-    raise RuntimeError(
-        "TorchLens requires torch._C.TensorBase / _TensorBase (torch >= 2.1) for the "
-        "completeness witness originals; this torch build exposes neither."
-    )
+_TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
 _ORIG_TENSORBASE_UNTYPED_STORAGE = _TENSORBASE_CLS.untyped_storage
 _ORIG_UNTYPED_STORAGE_DATA_PTR = torch.UntypedStorage.data_ptr
 # r67 C3: the true-original byte-count accessor, for TorchLens's OWN base-geometry reads

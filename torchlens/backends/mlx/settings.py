@@ -15,6 +15,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Literal
 
+from .._entry_refusals import refuse_mlx_unwrapped_policy
+
 UnwrappedPolicy = Literal["flag", "refuse"]
 
 #: The capture outcomes a caller may choose for an unwrapped op.
@@ -53,9 +55,7 @@ def set_unwrapped_policy(policy: str) -> str:
 
     global _unwrapped_policy
     if policy not in UNWRAPPED_POLICIES:
-        raise ValueError(
-            f"MLX unwrapped policy must be one of {sorted(UNWRAPPED_POLICIES)}, got {policy!r}."
-        )
+        refuse_mlx_unwrapped_policy(policy, UNWRAPPED_POLICIES)
     previous = _unwrapped_policy
     _unwrapped_policy = policy
     return previous

@@ -12,6 +12,7 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._entry_refusals import refuse_validation_scope
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
 from .._utils.display import user_stacklevel
@@ -532,7 +533,7 @@ def validate(
     normalized_scope = scope.lower()
     valid_scopes = {"forward", "backward", "saved", "intervention", "receptive_field"}
     if normalized_scope not in valid_scopes:
-        raise ValueError(f"scope must be one of {sorted(valid_scopes)!r}.")
+        refuse_validation_scope(scope, valid_scopes)
     _validate_scope_keywords(
         normalized_scope,
         loss_fn=loss_fn,

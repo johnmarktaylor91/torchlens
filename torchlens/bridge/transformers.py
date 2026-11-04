@@ -26,6 +26,8 @@ from torchlens.bridge.hf_attention import (
     register_attention,
 )
 
+from .._entry_refusals import refuse_processor_unresolved
+
 
 def _is_hf_chat_message(item: Any) -> bool:
     """Return whether ``item`` is a plausible Hugging Face chat-message dict.
@@ -392,7 +394,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
-        raise ValueError("Could not auto-resolve AutoProcessor for this model.")
+        refuse_processor_unresolved()
     processor = _resolve_hf_processor(model, name_or_path)
     record = ResolvedPreprocessing(
         source="hf_auto_processor",
