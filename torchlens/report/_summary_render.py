@@ -92,23 +92,6 @@ class SummaryFacts:
     health_hint: str | None = None
 
 
-def _human(value: int | None) -> str:
-    """Human-unit magnitude (K/M/G/T) for table cells."""
-
-    if value is None:
-        return "?"
-    if value == 0:
-        return "0"
-    magnitude = float(value)
-    for suffix in ("", "K", "M", "G", "T", "P"):
-        if abs(magnitude) < 1000:
-            if suffix == "":
-                return str(value)
-            return f"{magnitude:.2f}".rstrip("0").rstrip(".") + suffix
-        magnitude /= 1000.0
-    return f"{magnitude:.2f}E"
-
-
 def _commas(value: int | None) -> str:
     """Full digits with thousands separators."""
 
@@ -277,7 +260,7 @@ def _flops_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
     if value is None:
         return "?"
     mark = ATTENTION_MARK if row.attention_full_square else ""
-    return (_human(value) if config.units == "human" else _commas(value)) + mark
+    return _format_number(value, config.units) + mark
 
 
 def _flops_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
@@ -315,9 +298,7 @@ _CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]]
     "params_trainable": lambda row, config, totals: _count_cell(row.params_trainable, config),
     "flops": _flops_cell,
     "flops_pct": _flops_pct_cell,
-    "macs": lambda row, config, totals: (
-        _human(row.macs_display) if config.units == "human" else _commas(row.macs_display)
-    ),
+    "macs": lambda row, config, totals: _format_number(row.macs_display, config.units),
     "train": lambda row, config, totals: {
         "all": "yes",
         "none": "no",
@@ -454,10 +435,10 @@ def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
 
     if flop_convention == "fma1":
         total = facts.flops_forward_fma2 - facts.macs_forward
-        flops = f"{_human(total)} FLOPs fwd (fma=1)"
+        flops = f"{format_count(total)} FLOPs fwd (fma=1)"
     else:
-        flops = f"{_human(facts.flops_forward_fma2)} FLOPs fwd (fma=2)"
-    macs = f"{_human(facts.macs_forward)} MACs"
+        flops = f"{format_count(facts.flops_forward_fma2)} FLOPs fwd (fma=2)"
+    macs = f"{format_count(facts.macs_forward)} MACs"
     known = facts.coverage_known + facts.coverage_zero
     denominator = known + facts.coverage_unknown
     coverage = f"{known}/{denominator} ops known"

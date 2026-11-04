@@ -141,13 +141,13 @@ _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
 name (type)    output        params    (%)  fwd flops
 -----------------------------------------------------
-conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%      13.8k
 relu (ReLU)    (1, 4, 8, 8)       -      -        256
 flatten_1      (1, 256)           -      -          0
-fc (Linear)    (1, 5)          1.3k  92.2%      2.56K
+fc (Linear)    (1, 5)          1.3k  92.2%       2.6k
 -----------------------------------------------------
 Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known
+Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | no NaN/Inf (exact)
@@ -167,13 +167,13 @@ _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
 name (type)    output        params    (%)  fwd flops
 ─────────────────────────────────────────────────────
-conv (Conv2d)  (1, 4, 8, 8)     108   7.8%     13.82K
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%      13.8k
 relu (ReLU)    (1, 4, 8, 8)       -      -        256
 flatten_1      (1, 256)           -      -          0
-fc (Linear)    (1, 5)          1.3k  92.2%      2.56K
+fc (Linear)    (1, 5)          1.3k  92.2%       2.6k
 ─────────────────────────────────────────────────────
 Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known
+Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
 Capture  torch | complete | no NaN/Inf (exact)
