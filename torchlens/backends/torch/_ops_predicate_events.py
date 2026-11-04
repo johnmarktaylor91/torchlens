@@ -65,6 +65,7 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
 )
+from ._internal_originals import tensor_reads
 from ._tl import (
     get_label_list,
     get_live_tensor_label,
@@ -441,6 +442,12 @@ def _extract_through_dynamic_spec(
     return None
 
 
+def _param_bytes(param: Any) -> int:
+    """Return ``nelement() * element_size()`` of one parameter through the routed reads."""
+    nelement, element_size = tensor_reads(param, "nelement", "element_size")
+    return int(nelement(param) * element_size(param))
+
+
 def _extract_arg_tensors_and_params(
     normalized_name: str,
     args: tuple[Any, ...],
@@ -563,9 +570,7 @@ def _build_param_fields(
         pl.num_params for pl in _param_logs if not pl.is_trainable
     )
     with pause_logging():
-        fields_dict["param_memory"] = sum(
-            p.nelement() * p.element_size() for p in resolved_parameters
-        )
+        fields_dict["param_memory"] = sum(_param_bytes(p) for p in resolved_parameters)
     return parent_param_ops
 
 

@@ -39,9 +39,8 @@ from ...intervention.types import (
 from ...recording.types import (
     RecordContext,
 )
-from ._tl import (
-    get_label_list,
-)
+from ._internal_originals import tensor_read
+from ._tl import get_label_list
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -89,7 +88,7 @@ def _store_out_of_band_fire_results(
     tensor_id = id(tensor)
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
         records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
         if records is None:
             records = {}
@@ -115,7 +114,7 @@ def _take_out_of_band_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
 
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
         records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
     except (AttributeError, RuntimeError, TypeError):
         return ()

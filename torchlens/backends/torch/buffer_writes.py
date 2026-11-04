@@ -18,6 +18,7 @@ from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
 from ._identity_cache import IdentityCache, identity_cached
+from ._internal_originals import tensor_read
 from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
 from ._tl import (
@@ -1438,7 +1439,7 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
 
     try:
         with _state.pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             if tensor.is_meta:
                 from ..._capture._weightsfree_admission import meta_storage_key
 
@@ -1689,10 +1690,7 @@ def _witness_marker_state() -> Any:
     return _WITNESS_MARKER_STATE
 
 
-def _resolve_buffer_address(
-    tracker: BufferWriteTracker,
-    tensor: torch.Tensor,
-) -> str | None:
+def _resolve_buffer_address(tracker: BufferWriteTracker, tensor: torch.Tensor) -> str | None:
     """Resolve a tensor/view/data tensor to a registered-buffer address."""
 
     direct = get_buffer_address(tensor)
