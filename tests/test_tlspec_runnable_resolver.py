@@ -31,6 +31,7 @@ from torchlens._runnable import (
 from torchlens._utils._torch_compat import (
     resolve_runnable_torch_alias,
 )
+from torchlens._utils._torch_symbols import getattr_allowlisted
 from torchlens.errors import ReattachError
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
@@ -221,7 +222,7 @@ def test_cross_version_alias_fixture_and_bounds() -> None:
         assert namespace == fixture["target_namespace"]
         assert qualname == fixture["target_qualname"]
         assert provenance
-        assert runnable_load._getattr_allowlisted(namespace, qualname) is not None
+        assert getattr_allowlisted(namespace, qualname) is not None
 
     assert resolve_runnable_torch_alias("Tensor.add", "2.0.1") is None
     assert resolve_runnable_torch_alias("Tensor.add", "2.13.0") is None
