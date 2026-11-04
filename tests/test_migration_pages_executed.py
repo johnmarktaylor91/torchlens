@@ -42,6 +42,7 @@ PAGES: dict[str, frozenset[str]] = {
     "migration/repe.md": frozenset({"torchlens"}),
     "migration/autocircuit.md": frozenset({"torchlens"}),
     "migration/baukit.md": frozenset({"baukit", "torchlens"}),
+    "migration/from_flax_tabulate.md": frozenset({"flax", "torchlens"}),
 }
 
 #: Tool key -> modules that must import for the fence to run.
@@ -56,6 +57,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "surgeon_pytorch": ("surgeon_pytorch",),
     "lovely_tensors": ("lovely_tensors",),
     "baukit": ("baukit",),
+    "flax": ("flax", "jax"),
 }
 
 HEADER_RE = re.compile(r"# migration-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")

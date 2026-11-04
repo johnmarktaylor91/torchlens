@@ -51,6 +51,9 @@ PAGES: dict[str, str] = {
     "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
     "docs/field-guide/prisma_clip_sae.md": "prisma",
     "docs/field-guide/linear_probes.md": "sklearn",
+    "docs/field-guide/craft_concepts.md": "sklearn",
+    "docs/field-guide/das_gpt2.md": "transformers",
+    "docs/field-guide/entropy_steering.md": "transformers",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -112,6 +115,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: family inside its aggregate budget.
 #: The linear-probe page measured 5.9 s through its sixth fence alone on one
 #: core (OMP_NUM_THREADS=1), before its streaming fence.
+#: The CRAFT page trains a small CNN for 150 steps and estimates Sobol indices
+#: over 32 images; it measured 12.4 s on a two-core worker.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -127,6 +132,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "examples/methods/probe_accuracy_by_layer_recipe.ipynb",
         "examples/methods/cka_rsa_two_models_recipe.ipynb",
         "docs/field-guide/linear_probes.md",
+        "docs/field-guide/craft_concepts.md",
     }
 )
 
@@ -363,11 +369,14 @@ def test_token_result_save_line_names_a_real_method() -> None:
 
 
 def test_roadmap_names_the_quantized_summary_footer() -> None:
-    """The bits-per-weight footer and flax-tabulate recipe are a roadmap note."""
+    """The bits-per-weight footer stays a roadmap note; the flax-tabulate page says so."""
 
     text = (REPO / "ROADMAP.md").read_text("utf-8")
     assert "bits-per-weight footer" in text
-    assert "coming from flax\n  `tabulate`" in text
+    assert "`docs/migration/from_flax_tabulate.md`" in text
+    page = (REPO / "docs/migration/from_flax_tabulate.md").read_text("utf-8")
+    assert "There is no\nbits-per-weight line in the footer" in page
+    assert "`quantized_tensor` row" in page
 
 
 def test_neuro_refusal_homes_have_recipe_pages() -> None:

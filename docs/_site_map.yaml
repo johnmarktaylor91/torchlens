@@ -150,9 +150,15 @@ pages:
   - path: field-guide/conditional_steering.md
     section: field-guide
     moved_from: [recipes/conditional_steering.md]
+  - path: field-guide/craft_concepts.md
+    section: field-guide
+  - path: field-guide/das_gpt2.md
+    section: field-guide
   - path: field-guide/dissection.md
     section: field-guide
     moved_from: [recipes/dissection.md]
+  - path: field-guide/entropy_steering.md
+    section: field-guide
   - path: field-guide/extract_features.md
     section: field-guide
   - path: field-guide/feature_visualisation.md
@@ -289,6 +295,8 @@ pages:
   - path: migration/from_captum.md
     section: relation
     moved_from: [migration/captum.md]
+  - path: migration/from_flax_tabulate.md
+    section: relation
   - path: migration/from_fx.md
     section: relation
   - path: migration/from_hf_kwargs.md
