@@ -1430,6 +1430,8 @@ string value fails the gate exactly like an inline code.
 | `tv_decomposition_unclosed` | The score-decomposition terms do not reproduce the captured scores facet within tolerance, so the record refuses rather than mis-decomposing (tviz D19; RoPE-class families refuse per-family until term extraction covers them) | Decompose a gpt2/bert-class head, or extend the family terms |
 | `tv_bridge_unavailable` | circuitsvis (the one supported bridge, a dormant upstream) is not installed | `pip install circuitsvis`, or use the native static renderers, which never depend on the bridge |
 | `tv_bridge_payload_too_large` | The CircuitsVis payload exceeds the tested embedding ceiling; a multi-MB JSON blob stalls the notebook | Crop the views (`crop_to`), select fewer layers/heads, or use the native static renderers |
+| `source_unavailable` | No captured root forward source for annotation | Re-capture a model defined in a source file; save with `include_source=True` |
+| `feature_visualization_invalid` | Invalid feature optimization settings, missing/multiple tensor sites or a disconnected/non-finite objective | Use one floating input, one tensor site, a valid unit, positive steps and finite lr |
 
 The related `group_lifetime_evidence_conflict` kind is governed by the merged-trace
 contract (`docs/reference/merged_trace_contract.md`), where it is also a

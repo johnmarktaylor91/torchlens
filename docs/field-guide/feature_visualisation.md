@@ -1,5 +1,40 @@
 # Feature visualisation: optimise an input for a TorchLens site
 
+Use `tl.mechinterp.visualize_feature` to maximize a module output or a captured op's
+activation. It returns an optimized input and the objective history, including the
+initial value. This CPU example optimizes channel 0 of a tiny convolution:
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Conv2d(1, 2, 1, bias=False)).eval()
+with torch.no_grad():
+    model[0].weight.fill_(1)
+image, objectives = tl.mechinterp.visualize_feature(
+    model, "0", input_shape=(1, 1, 8, 8), unit=0, steps=4, lr=0.1, seed=0,
+)
+RESULT = objectives[-1] > objectives[0]
+```
+
+Pass `inputs=x` instead of `input_shape=` to start from a cloned floating tensor.
+An integer `unit` selects a channel (axis 1), a tuple selects non-batch indices,
+and `None` averages the site's output. Pass an op label from `tl.trace(model, x)`
+or a structural selector such as `tl.site(func="conv2d", module_path="0")` to read an op.
+The site must fire once and return one floating tensor. A differentiable
+`sae=codec` uses `codec.encode(output)` and integer `unit` selects its last-axis
+latent. Integer token inputs require a model that accepts differentiable embeddings.
+
+The native helper applies unconstrained Adam ascent to one input tensor. It preserves
+model mode, parameters and existing parameter gradients; ordinary forward side effects
+still occur, so use evaluation mode for a deterministic objective. Noise uses a local
+seed. No image prior, Fourier parameterization or augmentation is applied by this helper.
+
+## How it works
+
+
 Feature visualisation by optimisation starts from noise and changes the input,
 step by step, until a chosen part of the network responds strongly (Olah,
 Mordvintsev and Schubert, 2017, "Feature Visualization", Distill,
