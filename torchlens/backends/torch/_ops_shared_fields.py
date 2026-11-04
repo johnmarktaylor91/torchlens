@@ -1,5 +1,6 @@
 """Shared operation fields and tensor variation tracking."""
 
+from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -107,7 +108,7 @@ def _set_arg_template_fields(
         # identity lets replay validation resolve the callable on a loaded
         # bundle (``validation/_loaded_callables.py``), which carries no callables.
         fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self._options_save_args else None
+            _function_registry_key(func, func_name, self) if self._options_save_args else None
         )
 
 
@@ -506,6 +507,30 @@ def _predicate_equivalence_class(
     return _append_module_suffix_to_equivalence_class(base, modules)
 
 
+def _build_module_context_fields(
+    self: "Trace",
+    fields_dict: dict[str, Any],
+    arg_tensors: list[torch.Tensor],
+    parent_layer_entries: list[Op],
+) -> None:
+    """Populate module nesting, address, and input/output status fields."""
+    modules = _snapshot_exhaustive_module_stack(self)
+    module = modules[-1] if modules else None
+
+    fields_dict["module"] = module
+    fields_dict["modules"] = modules
+    # B3R7-R05-1: same containment fact as ``modules`` (relabeled together at
+    # step 11), never the fed-call stack -- that is ``input_to_module_calls``.
+    fields_dict["module_call_stack"] = list(modules)
+    fields_dict["module_entry_arg_keys"] = defaultdict(list)
+    fields_dict["input_to_module_calls"] = []
+    fields_dict["output_of_modules"] = []
+    fields_dict["output_of_module_calls"] = []
+    fields_dict["is_module_output"] = False
+    fields_dict["is_atomic_module"] = False
+    fields_dict["atomic_module_call"] = None
+
+
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_arguments import (  # noqa: E402
@@ -515,6 +540,7 @@ from ._ops_arguments import (  # noqa: E402
 from ._ops_capture_records import (  # noqa: E402
     _bind_writeback_receiver_label,
     _record_label_version_snapshot,
+    _snapshot_exhaustive_module_stack,
 )
 from ._ops_emission import (  # noqa: E402
     _unattributed_tensor_arg_positions,
@@ -524,7 +550,6 @@ from ._ops_exhaustive import (  # noqa: E402
 )
 from ._ops_predicate_events import (  # noqa: E402
     _build_graph_relationship_fields,
-    _build_module_context_fields,
     _build_param_fields,
     _extract_arg_tensors_and_params,
 )
