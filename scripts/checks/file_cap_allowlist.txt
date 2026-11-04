@@ -472,7 +472,7 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1393
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1906
+torchlens/_trace_core/op_store.py	1843
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
@@ -1025,7 +1025,7 @@ torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
 torchlens/debug/_gradients.py::grad_health	65
-torchlens/debug/_gradients.py::gradient_flow_audit_rows	145
+torchlens/debug/_gradients.py::gradient_flow_audit_rows	144
 torchlens/debug/_graph.py::_compare_rows	126
 torchlens/debug/_graph.py::dead_neurons_rows	76
 torchlens/debug/_graph.py::lineage	80
