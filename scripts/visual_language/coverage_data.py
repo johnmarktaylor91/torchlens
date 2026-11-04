@@ -218,7 +218,7 @@ ROWS: Mapping[str, Row] = {
         "edge.self_loop", "loop-rolled", C, "_render_edges:_is_rolled_loop_carried_self_edge"
     ),
     "VE06": _R(
-        "edge.label.conditional", "branches", P, "_render_leaf:_format_branch_edge_label_html"
+        "edge.label.conditional", "branches", P, "_branch_label_text:_format_branch_edge_label_html"
     ),
     "VE07": _R("edge.skip_bridge", "skip", P, "_render_flow:_build_skip_filtered_edge_map"),
     "VE08": _R("edge.forward_gradient", "combined", P, "_render_leaf:_add_grad_edge"),

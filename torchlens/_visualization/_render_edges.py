@@ -8,6 +8,12 @@ from ._buffer_visibility import (
     _is_buffer_visible,
     _is_noise_buffer,
 )
+from ._container_edges import (
+    _occurrence_matches_op,
+    _op_is_model_input_container_leaf,
+    _op_is_model_output_container_leaf,
+    container_edge_text,
+)
 from ._edge_multiplicity import (
     _ARG_LABEL_MIDPOINT_FANIN,
     _bump_deduped_edge_multiplicity,
@@ -1253,17 +1259,9 @@ def _add_edges_for_node(
             )
         if edge_label is not None:
             edge_dict["label"] = edge_label
-        if show_containers:
-            container_label = _container_edge_label(metadata_base)
-            if (
-                container_label is None
-                and show_containers == "nodes"
-                and not _op_is_model_input_container_leaf(parent_node)
-                and not _op_is_model_output_container_leaf(parent_node)
-            ):
-                container_label = _container_edge_label(_base_node_for_metadata(parent_node))
-            if container_label is not None and "label" not in edge_dict:
-                edge_dict["label"] = _html_container_edge_label(container_label)
+        container_label = container_edge_text(parent_node, metadata_base, show_containers)
+        if container_label is not None and "label" not in edge_dict:
+            edge_dict["label"] = _html_container_edge_label(container_label)
 
         # Annotate ops for rolled node edge if it varies across ops
         if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
@@ -1761,88 +1759,6 @@ def _visible_parent_count_rolled(
         max_parents_shown = max(max_parents_shown, num_parents_shown)
 
     return max_parents_shown
-
-
-def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
-    """Return whether ``node`` is a model-input container leaf.
-
-    Parameters
-    ----------
-    node:
-        Candidate render node.
-
-    Returns
-    -------
-    bool
-        ``True`` when the node is an input leaf that already receives a
-        container-node source edge in ``show_containers="nodes"`` mode.
-    """
-    op = _unwrap_focus_node(node)
-    if not isinstance(op, Op):
-        return False
-    trace = getattr(op, "source_trace", None)
-    if trace is None:
-        return False
-    for record in getattr(trace, "_containers", {}).values():
-        if not isinstance(record, ContainerRecord):
-            continue
-        for snapshot in record.snapshots:
-            if snapshot.role != Role.MODEL_INPUT:
-                continue
-            for occurrence in snapshot.leaf_occurrences:
-                if _occurrence_matches_op(trace, occurrence.producer_op_label, op):
-                    return True
-    return False
-
-
-def _op_is_model_output_container_leaf(node: GraphNode) -> bool:
-    """Return whether ``node`` is a final model-output container leaf.
-
-    Parameters
-    ----------
-    node:
-        Candidate render node.
-
-    Returns
-    -------
-    bool
-        ``True`` when a sink container-node edge should carry its key label.
-    """
-
-    if not isinstance(_unwrap_focus_node(node), Op):
-        return False
-    trace = getattr(node, "source_trace", None)
-    if trace is None:
-        return False
-    return getattr(node, "layer_label", None) in set(getattr(trace, "output_layers", ()) or ())
-
-
-def _occurrence_matches_op(trace: "Trace", label: str | None, op: Op) -> bool:
-    """Return whether a container occurrence producer label resolves to ``op``.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing ``op``.
-    label:
-        Final or raw producer label from a container occurrence.
-    op:
-        Candidate operation.
-
-    Returns
-    -------
-    bool
-        ``True`` if the label identifies ``op``.
-    """
-
-    if label is None:
-        return False
-    if label in trace.ops and trace.ops[label] is op:
-        return True
-    return (
-        getattr(op, "layer_label_raw", None) == label
-        or getattr(op, "_layer_label_raw", None) == label
-    )
 
 
 def _html_container_edge_label(text: str) -> str:

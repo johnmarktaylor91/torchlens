@@ -321,7 +321,10 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # the train's 451 + 1 for _focus_stubs._boundary_lines (trace, external_node,
     # vis_mode, boundary_kind, tensor_row, prefix); _get_or_create_boundary_node
     # moved from _render_flow into _focus_stubs and stays one count. Same pinned mode.
-    "PLR0913": 452,
+    # 453 (2026-11-04, same JMT d-90086c50): loop-if rides in C-149; + 1 for
+    # _render_edges._is_rolled_back_edge (parent_node, child_node, vis_mode,
+    # rolled_maps, parent_segment, child_segment). Same pinned mode.
+    "PLR0913": 453,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

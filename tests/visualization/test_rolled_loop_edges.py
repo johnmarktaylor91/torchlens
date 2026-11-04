@@ -15,12 +15,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization._loop_edges import loop_edge_attrs
-from torchlens._visualization._pass_marks import _BRANCH_LABEL
-from torchlens._visualization._render_leaf import (
+from torchlens._visualization._branch_label_text import (
     BRANCH_EDGE_LABEL_PAD,
     _format_branch_edge_label_html,
 )
+from torchlens._visualization._loop_edges import loop_edge_attrs
+from torchlens._visualization._pass_marks import _BRANCH_LABEL
 from torchlens.options import CaptureOptions
 
 
