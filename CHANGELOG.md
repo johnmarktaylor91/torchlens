@@ -5,6 +5,29 @@
 
 <!-- version list -->
 
+## v2.38.1 (2026-11-04)
+
+v2.38.0 was tagged but never published to PyPI: its release checks failed. 2.38.1 is the first
+2.38 release on PyPI and carries everything listed under v2.38.0 below, plus these fixes.
+
+### Fixes
+
+- **capture**: capturing no longer fails with 0 ops after a library installs a module stub that
+  raises on attribute access (for example shap without matplotlib, imported by
+  `tl.report.doctor()`); the wrap step classifies module globals by their real type.
+- **intervention**: `trace.fork().do(selection, edit)` accepts a selection made on the parent
+  trace (for example `trace['layer4'].receptive_field.of(...)`) and resolves it on the fork by
+  site; selections from unrelated, sibling or descendant traces still refuse with
+  `selection_trace_mismatch`.
+- **intervention**: `tl.steer` infers `dim` when exactly one axis of the site matches the
+  direction's length.
+- **io**: receptive-field reads work on loaded traces.
+- **backends**: PaddlePaddle and MLX traces record the root module's class name; TensorFlow
+  parameter addresses no longer carry the Keras root-model prefix; loading a saved TensorFlow
+  trace refuses again when the TensorFlow runtime does not match; the JAX root module lists its
+  children, and Equinox `Sequential` parameters are named by position.
+- **docs**: the learn notebooks use `trace.ops[name]`; the FAQ's version answers are factual.
+
 ## v2.38.0 (2026-11-04)
 
 Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; install
