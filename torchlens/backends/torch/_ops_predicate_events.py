@@ -3,6 +3,7 @@
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from math import prod
 from typing import TYPE_CHECKING, Any, cast
 
@@ -50,10 +51,12 @@ from ..._errors import UserTransformError
 from ..._ir.events import (
     FunctionCallRef,
 )
-from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.predicate import RecordContext, RetroactiveCaptureDecision
+from ..._ir.refs import ParamRef
 from ..._ir.selector_eval import module_union_matches
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
+from ..._utils._call_site import call_site_class
 from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
@@ -109,10 +112,21 @@ def _emit_predicate_operation_events(
     del exec_ctx
     state = get_active_recording_state()
     layer_type = _normalize_func_name(func_name)
-    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
     out_iter = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
     expected_output_count = len(out_iter)
+    identity = PredicateOpIdentity.for_call(
+        self,
+        state,
+        args,
+        kwargs,
+        arg_parameters,
+        func_name,
+        layer_type,
+        expected_output_count,
+        _is_inplace_augmented_assignment_dunder,
+    )
     function_ref: FunctionCallRef | None = None
 
     for output_index, (out, container_path, _container_spec) in enumerate(out_iter):
@@ -126,36 +140,23 @@ def _emit_predicate_operation_events(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
-        with _timed_phase(self, "ctx_build:record_context"):
-            ctx = build_op_record_context(
-                kind="op",
-                label=_label_raw,
-                raw_label=_label_raw,
-                raw_index=raw_index,
-                layer_type=layer_type,
-                type_index=type_index,
-                func_name=func_name,
-                parent_labels=parent_labels,
-                tensor=out,
-                output_index=_live_output_index(container_path) or output_index,
-                is_bottom_level_func=is_bottom_level_func,
-                module_stack=state.module_stack,
-                history=tuple(state.history),
-                op_counts=state.op_counts,
-                pass_index=state.pass_index,
-                event_index=state.event_index,
-                step_index=state.step_index,
-                capture_start_time=self._provenance_start_time,
-                include_source_events=state.options.include_source_events,
-                sample_id=state.sample_id,
-                address=module_frame.address if module_frame else None,
-                module_type=module_frame.module_type if module_frame else None,
-                module_pass_number=module_frame.pass_number if module_frame else None,
-                is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
-                or func_name in TRANSFORM_FUNC_NAMES,
-                transform_kind=getattr(func, "__tl_transform_kind__", None)
-                or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
-            )
+        identity.register_call_site(_label_raw, module_frame, output_index)
+        ctx = _predicate_output_context(
+            self,
+            state,
+            out,
+            label_raw=_label_raw,
+            raw_index=raw_index,
+            type_index=type_index,
+            layer_type=layer_type,
+            func=func,
+            func_name=func_name,
+            parent_labels=parent_labels,
+            container_path=container_path,
+            output_index=output_index,
+            is_bottom_level_func=is_bottom_level_func,
+            module_frame=module_frame,
+        )
         try:
             halt_only = _is_halt_only_capture(state.options)
             if halt_only:
@@ -219,6 +220,8 @@ def _emit_predicate_operation_events(
                     backend_semantics=backend_semantics,
                     function=function_ref,
                     container_path=container_path,
+                    equivalence_class=identity.equivalence_class(ctx, output_index),
+                    params=identity.param_refs,
                 )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except StopSignal:
@@ -269,6 +272,57 @@ def _emit_predicate_operation_events(
                         intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
                 state.append_context(ctx)
+
+
+def _predicate_output_context(
+    trace: "Trace",
+    state: Any,
+    out: Any,
+    *,
+    label_raw: str,
+    raw_index: int,
+    type_index: int,
+    layer_type: str,
+    func: Callable[..., Any],
+    func_name: str,
+    parent_labels: tuple[str, ...],
+    container_path: tuple[Any, ...],
+    output_index: int,
+    is_bottom_level_func: bool,
+    module_frame: Any,
+) -> RecordContext:
+    """Build the predicate record context of one logged output."""
+
+    with _timed_phase(trace, "ctx_build:record_context"):
+        return build_op_record_context(
+            kind="op",
+            label=label_raw,
+            raw_label=label_raw,
+            raw_index=raw_index,
+            layer_type=layer_type,
+            type_index=type_index,
+            func_name=func_name,
+            parent_labels=parent_labels,
+            tensor=out,
+            output_index=_live_output_index(container_path) or output_index,
+            is_bottom_level_func=is_bottom_level_func,
+            module_stack=state.module_stack,
+            history=tuple(state.history),
+            op_counts=state.op_counts,
+            pass_index=state.pass_index,
+            event_index=state.event_index,
+            step_index=state.step_index,
+            capture_start_time=trace._provenance_start_time,
+            include_source_events=state.options.include_source_events,
+            sample_id=state.sample_id,
+            address=module_frame.address if module_frame else None,
+            module_type=module_frame.module_type if module_frame else None,
+            module_pass_number=module_frame.pass_number if module_frame else None,
+            is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
+            or func_name in TRANSFORM_FUNC_NAMES,
+            transform_kind=getattr(func, "__tl_transform_kind__", None)
+            or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
+        )
 
 
 def _build_graph_relationship_fields(
@@ -518,6 +572,86 @@ def _build_module_context_fields(
     fields_dict["atomic_module_call"] = None
 
 
+@dataclass(frozen=True, slots=True)
+class PredicateOpIdentity:
+    """What one torch call contributes to its outputs' grouping identity.
+
+    Exhaustive capture gives every op a parameter identity, a call-site class
+    and an equivalence class at capture time; predicate recording mints the
+    same three here, from the same builders, so ``Recording.to_trace()``
+    resolves parameters and groups recurrent layers exactly as ``tl.trace``.
+    """
+
+    state: Any
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+    func_name: str
+    layer_type: str
+    output_count: int
+    param_refs: tuple[ParamRef, ...]
+    call_site_chain: tuple[Any, ...]
+    is_inplace_dunder: Callable[[str], bool]
+
+    @classmethod
+    def for_call(
+        cls,
+        trace: "Trace",
+        state: Any,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        arg_parameters: list[Any],
+        func_name: str,
+        layer_type: str,
+        output_count: int,
+        is_inplace_dunder: Callable[[str], bool],
+    ) -> "PredicateOpIdentity":
+        """Resolve the call's prepared parameters and walk its call site once."""
+
+        return cls(
+            state,
+            args,
+            kwargs,
+            func_name,
+            layer_type,
+            output_count,
+            _prepared_param_refs(state, arg_parameters),
+            _predicate_call_site_chain(trace),
+            is_inplace_dunder,
+        )
+
+    def register_call_site(self, label_raw: str, module_frame: Any, output_index: int) -> None:
+        """Record one output's call-site class when the walk saw the call site."""
+
+        if not self.call_site_chain:
+            return
+        slot = output_index if self.output_count > 1 else None
+        key = (
+            module_frame.address if module_frame else "",
+            self.call_site_chain,
+            self.func_name,
+            slot,
+        )
+        self.state.call_site_classes[label_raw] = call_site_class(
+            self.state.call_site_index, key, self.layer_type, slot
+        )
+
+    def equivalence_class(self, ctx: RecordContext, output_index: int) -> str:
+        """The loop-grouping fingerprint of one output."""
+
+        return _predicate_equivalence_class(
+            self.state,
+            ctx,
+            self.args,
+            self.kwargs,
+            self.param_refs,
+            func_name=self.func_name,
+            layer_type=self.layer_type,
+            output_index=output_index,
+            in_multi_output=self.output_count > 1,
+            is_inplace_dunder=self.is_inplace_dunder,
+        )
+
+
 def install_lazy_record_contexts(trace: "Trace") -> None:
     """Defer this pass's record contexts when its lean module read allows it.
 
@@ -635,6 +769,7 @@ def _defer_lazy_op_output(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
     _snapshot_exhaustive_module_stack,
 )
 from ._ops_interventions import (  # noqa: E402
@@ -646,6 +781,11 @@ from ._ops_predicates import (  # noqa: E402
     _predicate_backend_semantics,
     _predicate_function_ref,
     _record_predicate_output,
+)
+from ._ops_shared_fields import (  # noqa: E402
+    _predicate_call_site_chain,
+    _predicate_equivalence_class,
+    _prepared_param_refs,
 )
 from .ops import (  # noqa: E402
     TRANSFORM_FUNC_NAMES,

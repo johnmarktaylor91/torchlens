@@ -15,6 +15,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._ir import BufferWriteEvent
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
+from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
 from ._identity_cache import IdentityCache, identity_cached
 from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
@@ -50,16 +51,6 @@ shape, or changes nothing depends only on the receiver's size and storage
 capacity at entry, so a resize of a registered buffer is journaled the same
 way from every entry state (see ``BufferWriteTracker._journal_resize``).
 """
-
-_FUSED_MUTATOR_NAMES = {
-    "batch_norm",
-    "native_batch_norm",
-    "_native_batch_norm_legit",
-    "_native_batch_norm_legit_no_training",
-    "cudnn_batch_norm",
-    "instance_norm",
-    "native_group_norm",
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1369,15 +1360,21 @@ def snapshot_buffer_args(
     func_name: str,
     tensors: list[torch.Tensor],
     kwargs: dict[str, Any],
+    args: tuple[Any, ...] | None = None,
 ) -> list[BufferSnapshot]:
-    """Snapshot buffer-backed arguments for one wrapped torch call."""
+    """Snapshot buffer-backed arguments for a wrapped torch call that can write them.
+
+    A fused normalization call snapshots its buffers only when its own update
+    flag lets it write them (``fused_call_writes``): an eval-mode ``batch_norm``
+    reads its running statistics and writes nothing.
+    """
 
     if trace._options_mode != "exhaustive":
         return []
     tracker = peek_buffer_write_tracker(trace)
     if not isinstance(tracker, BufferWriteTracker):
         return []
-    if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
+    if not fused_call_writes(func_name, args, kwargs) and not _could_mutate(func_name, kwargs):
         return []
     return tracker.snapshot_buffer_args(
         tensors,
@@ -1734,18 +1731,6 @@ def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:
             "__delitem__",
         }
     )
-
-
-def _is_fused_mutator(func_name: str) -> bool:
-    """Return whether a torch function is a known fused/native buffer mutator."""
-
-    return func_name in _FUSED_MUTATOR_NAMES
-
-
-def _fused_update_mode(func_name: str) -> bool:
-    """Return whether a known fused mutator should emit op-execution write events."""
-
-    return func_name in _FUSED_MUTATOR_NAMES
 
 
 def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> str | None:

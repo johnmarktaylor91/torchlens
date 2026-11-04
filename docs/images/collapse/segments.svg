@@ -90,7 +90,7 @@
 <g id="node6" class="node">
 <title>layer1__segment__layer2pass1</title>
 <path fill="#f7f7f7" stroke="#666666" stroke-dasharray="5,2" d="M433.5,-691.86C433.5,-691.86 63.25,-691.86 63.25,-691.86 57.25,-691.86 51.25,-685.86 51.25,-679.86 51.25,-679.86 51.25,-667.86 51.25,-667.86 51.25,-661.86 57.25,-655.86 63.25,-655.86 63.25,-655.86 433.5,-655.86 433.5,-655.86 439.5,-655.86 445.5,-661.86 445.5,-667.86 445.5,-667.86 445.5,-679.86 445.5,-679.86 445.5,-685.86 439.5,-691.86 433.5,-691.86"/>
-<text xml:space="preserve" text-anchor="start" x="61.25" y="-669.43" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#222222">layer1&#45;layer2 &#45;&#45; 2 blocks, 74 ops + 92 buffers, 1.4M params</text>
+<text xml:space="preserve" text-anchor="start" x="61.25" y="-669.43" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#222222">layer1&#45;layer2 &#45;&#45; 2 blocks, 74 ops + 46 buffers, 1.4M params</text>
 </g>
 <!-- maxpool2d_1_4pass1&#45;&gt;layer1__segment__layer2pass1 -->
 <g id="edge5" class="edge">
@@ -108,7 +108,7 @@
 <text xml:space="preserve" text-anchor="start" x="222.12" y="-817.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer3</text>
 <text xml:space="preserve" text-anchor="start" x="216.5" y="-796.56" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="177.12" y="-776.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1024, 4, 4), 64.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="190.25" y="-757.06" font-family="Helvetica,sans-Serif" font-size="14.00">50 ops + 76 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="190.25" y="-757.06" font-family="Helvetica,sans-Serif" font-size="14.00">50 ops + 38 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="156.5" y="-737.31" font-family="Helvetica,sans-Serif" font-size="14.00">7098368 params (all trainable)</text>
 </g>
 <!-- layer1__segment__layer2pass1&#45;&gt;layer3pass1 -->
@@ -127,7 +127,7 @@
 <text xml:space="preserve" text-anchor="start" x="222.12" y="-973.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
 <text xml:space="preserve" text-anchor="start" x="216.5" y="-953.06" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="177.12" y="-933.31" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 2, 2), 32.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="190.25" y="-913.56" font-family="Helvetica,sans-Serif" font-size="14.00">26 ops + 40 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="190.25" y="-913.56" font-family="Helvetica,sans-Serif" font-size="14.00">26 ops + 20 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="152.75" y="-893.81" font-family="Helvetica,sans-Serif" font-size="14.00">14964736 params (all trainable)</text>
 </g>
 <!-- layer3pass1&#45;&gt;layer4pass1 -->
