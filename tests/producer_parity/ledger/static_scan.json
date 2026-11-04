@@ -4592,6 +4592,22 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "bool_value",
+  "file": "torchlens/_visualization/_bool_outcomes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "bool_value",
+  "file": "torchlens/_visualization/_bool_outcomes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_boundary_bundle.py",
@@ -4720,6 +4736,22 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "layer_label_raw",
+  "file": "torchlens/_visualization/_container_edges.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_visualization/_container_edges.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_encoding.py",
@@ -4754,6 +4786,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_visualization/_focus_relabel.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_visualization/_focus_scope.py",
   "has_default": false,
   "sites": 1,
@@ -4764,8 +4804,32 @@
   "field": "modules",
   "file": "torchlens/_visualization/_focus_scope.py",
   "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_focus_scope.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_focus_stubs.py",
+  "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_focus_stubs.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -4856,14 +4920,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "layer_label_raw",
-  "file": "torchlens/_visualization/_render_edges.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_visualization/_render_edges.py",
@@ -4897,14 +4953,6 @@
  },
  {
   "ambiguous": false,
-  "field": "source_trace",
-  "file": "torchlens/_visualization/_render_edges.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/_visualization/_render_edges.py",
   "has_default": true,
@@ -4924,7 +4972,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_flow.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -4997,14 +5045,6 @@
   "file": "torchlens/_visualization/_render_module_scope.py",
   "has_default": false,
   "sites": 3,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "bool_value",
-  "file": "torchlens/_visualization/_render_nodes.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

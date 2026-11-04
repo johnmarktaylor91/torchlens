@@ -83,8 +83,8 @@ def test_histogram_visualizer_draws_bars_and_skips_empty_input() -> None:
     image = visualizer(torch.randn(100))
     assert isinstance(image, Image.Image)
     assert image.size == (64, 48)
-    # Bars painted in the histogram blue over the white background.
-    assert (66, 133, 244) in {color for _count, color in image.getcolors(maxcolors=4096)}
+    # Bars painted in the histogram grey over the white background.
+    assert (96, 96, 96) in {color for _count, color in image.getcolors(maxcolors=4096)}
 
     all_nan = torch.full((10,), float("nan"))
     assert visualizer(all_nan) is None

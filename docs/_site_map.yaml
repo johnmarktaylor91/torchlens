@@ -298,6 +298,10 @@ pages:
   - path: guides/treescope_cards.md
     section: field-guide
     group: See and inspect
+  - path: guides/visualization.md
+    section: field-guide
+    group: See and inspect
+    publish: true
   - path: index.md
     section: home
     publish: true

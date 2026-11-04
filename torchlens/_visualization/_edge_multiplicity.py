@@ -194,7 +194,11 @@ def _argument_edge_label_rows_text(arg_label: str) -> str | None:
 
 
 def _set_argument_edge_label(
-    edge_dict: dict[str, Any], arg_label: str, *, prefer_midpoint: bool = False
+    edge_dict: dict[str, Any],
+    arg_label: str,
+    *,
+    prefer_midpoint: bool = False,
+    rolled: bool = False,
 ) -> str:
     """Attach an argument-position label without overwriting semantic edge labels.
 
@@ -208,6 +212,8 @@ def _set_argument_edge_label(
             ``label`` -- which graphviz reserves real layout space for --
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.
+        rolled:
+            Rolled drawing: a label with no pass range beside it takes the free midpoint.
 
     A head slot already taken (a rolled ``In 2-3`` pass range) moves both labels,
     stacked, to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
@@ -219,9 +225,9 @@ def _set_argument_edge_label(
         ``"midpoint"`` (the free midpoint after a taken head slot; not merged with
         same-pair parallel edges, whose head labels differ), or ``"xlabel"``.
     """
-    if prefer_midpoint and "label" not in edge_dict:
+    if (prefer_midpoint or (rolled and "headlabel" not in edge_dict)) and "label" not in edge_dict:
         edge_dict["label"] = arg_label
-        return "label"
+        return "label" if prefer_midpoint else "midpoint"
     if "headlabel" not in edge_dict:
         edge_dict["headlabel"] = arg_label
         return "headlabel"

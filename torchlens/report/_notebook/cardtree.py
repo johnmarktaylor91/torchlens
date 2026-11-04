@@ -184,7 +184,7 @@ class _ThemeTokens:
     fill: str = "#ffffff"
     border: str = "#d0d7de"
     font: str = "#1f2328"
-    muted: str = "#57606a"
+    muted: str = "#5f5f5f"
     notice: str = "#9a6700"
 
 
