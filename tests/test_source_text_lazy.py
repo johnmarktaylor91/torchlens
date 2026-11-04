@@ -73,7 +73,7 @@ def _source_row(card: str) -> str:
 
 
 def _function_name() -> str:
-    """``co_qualname`` exists from Python 3.11; before it the card names the bare function."""
+    """The qualified name where ``co_qualname`` exists, else the bare function name."""
 
     return "Toy.forward" if sys.version_info >= (3, 11) else "forward"
 

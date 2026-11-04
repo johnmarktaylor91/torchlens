@@ -50,7 +50,7 @@ def three_pass_log() -> Generator[tl.Trace, None, None]:
 def test_trace_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
     """print(trace) spells multiplicity in passes, never "(k/N ops)".
 
-    The trace card has no per-layer rows (house style A17): it states the pass count on
+    The trace card has no per-layer rows (the house style moves them out): it states the pass count on
     its graph row, and the per-layer rows moved to ``summary()``, which counts passes too.
     """
 
