@@ -102,6 +102,112 @@ def test_paddle_capability_lift_is_real() -> None:
     assert implementation is not None
 
 
+def test_paddle_module_exit_changes_output_and_validates() -> None:
+    """The Sequential child output is replaced before the next child consumes it."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0"), tl.zero_ablate()),
+    )
+    producer = _relu_op(trace)
+    assert producer.is_edited
+    assert list(producer.edits)
+    assert producer.edits[0].target_label == producer._label_raw
+    assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_in_module_intervention_keeps_op_dispatch() -> None:
+    """Containment selectors still edit the existing op door once."""
+
+    trace = tl.trace(
+        paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid()),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.in_module("0"), tl.scale(0.5)),
+    )
+    assert np.allclose(_relu_op(trace).out.numpy(), 0.5)
+    assert np.allclose(_output_op(trace).out.numpy(), 1 / (1 + np.exp(-0.5)))
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("second, expected", [("0", 0.5), ("1", 0.25)])
+def test_paddle_module_union_fires_once_per_call(second: str, expected: float) -> None:
+    """Overlapping module addresses apply scale once rather than twice."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.ReLU())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0") | tl.module(second), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("address, expected", [("block", 9.0), ("block:2", 13.5)])
+def test_paddle_module_exit_nested_leaves_aliases_and_repeated_calls(
+    address: str, expected: float
+) -> None:
+    """Edit boundary leaves while keeping aliases and earlier consumers replayable."""
+
+    class Leaves(paddle.nn.Layer):
+        def forward(self, x: Any) -> Any:
+            first = x + 1
+            return {"main": first, "alias": first, "other": [first * 2, x], "tag": "kept"}
+
+    class Model(paddle.nn.Layer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Leaves()
+
+        def forward(self, x: Any) -> Any:
+            a, b = self.block(x), self.block(x)
+            assert a["tag"] == b["tag"] == "kept"
+            return (
+                a["main"] + a["alias"] + sum(a["other"]) + b["main"] + b["alias"] + sum(b["other"])
+            )
+
+    trace = tl.trace(
+        Model(),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module(address), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("kind", ["and", "or", "not"])
+def test_paddle_mixed_module_selector_refuses_before_forward(kind: str) -> None:
+    """Unsupported module trees must refuse before invoking user code."""
+
+    calls = []
+    module = tl.module("0")
+    selector = {
+        "and": module & tl.func("functional.relu"),
+        "or": module | tl.func("functional.relu"),
+        "not": ~module,
+    }[kind]
+
+    def forward(x: Any) -> Any:
+        calls.append(True)
+        return paddle.nn.functional.relu(x)
+
+    with pytest.raises(BackendUnsupportedError, match="(?i)paddle"):
+        tl.trace(
+            forward,
+            paddle.ones([2, 4]),
+            backend="paddle",
+            intervene=tl.when(selector, tl.zero_ablate()),
+        )
+    assert calls == []
+
+
 def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
     """Ablating relu changes downstream values and replay validation passes."""
 
