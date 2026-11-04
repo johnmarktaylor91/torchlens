@@ -251,3 +251,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 51aae6ba75b956084c7f91007c4468029c65b1d1 (clean)
 recorded: 2026-11-04T01:41:29.964663+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: focus-nesting: a module= draw labels its picture relative to the scope line (frame titles and @address rows; the focused frame carries its address alone), keeps every op's name, shape and size rows, shows input and output stubs outside the frame (the outside op, tensor shape and size, its module or the model input/output) pinned first and last with clearance from the frame, shows the key without reading notes unless show_legend=True, drops the whole-model line from the focused header, and prints the capture advisory unbolded (JMT 3 Nov 2026, EST e-1103-15a)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69c22b5fa5c53e3f29c373f6fee3a02d347dd907 (clean)
+recorded: 2026-11-04T02:10:35.607381+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: focus-nesting: a module= draw labels its picture relative to the scope line (frame titles and @address rows; the focused frame carries its address alone), keeps every op's name, shape and size rows, shows input and output stubs outside the frame (the outside op, tensor shape and size, its module or the model input/output) pinned first and last with clearance from the frame, shows the key without reading notes unless show_legend=True, drops the whole-model line from the focused header, and prints the capture advisory unbolded (JMT 3 Nov 2026, EST e-1103-15a)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 69c22b5fa5c53e3f29c373f6fee3a02d347dd907 (clean)
+recorded: 2026-11-04T02:10:56.716303+00:00
