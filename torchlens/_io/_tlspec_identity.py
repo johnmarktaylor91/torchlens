@@ -407,7 +407,7 @@ def _backend_model_fingerprint(source: Any, *, backend_name: str) -> dict[str, A
 
 
 def _preflight_schema_v2_runtime(
-    manifest: dict[str, Any],
+    manifest: Mapping[str, Any],
     *,
     backend_name: str,
 ) -> None:
