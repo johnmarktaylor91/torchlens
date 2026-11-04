@@ -4702,11 +4702,14 @@ The sections above describe each surface in depth.
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
+| `GuessInputShapeReport.dtype` | Input dtype for the primary tensor |
 | `GuessInputShapeReport.example_input` | Ready-to-use input object |
 | `GuessInputShapeReport.flexible_dims` | Dimensions that are expected to tolerate other sizes |
 | `GuessInputShapeReport.found` | Whether a verified input was found |
 | `GuessInputShapeReport.message` | Actionable human-readable summary |
+| `GuessInputShapeReport.reason` | Failure reason when `found` is false |
 | `GuessInputShapeReport.shapes` | Multi-input shapes, when applicable |
+| `GuessInputShapeReport.source_line` | Source line for the constraining op, when known |
 | `GuessInputShapeReport.strategy` | Strategy that produced the winning input |
 | `GuessInputShapeReport.value_range` | Synthetic value recipe: `("uniform", 0, 1)` or `("randint", 0, vocab)` |
 | `HealthFacts.num_nonfinite_ops` | Nonfinite ops in the identity partition (alias rows excluded) |

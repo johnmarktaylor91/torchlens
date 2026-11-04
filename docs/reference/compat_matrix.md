@@ -120,6 +120,11 @@ per-output dependence per kernel in a table."), so the perturbation check excuse
 those edges. The attention output has no row and keeps every edge tested; another
 operator under the same name, a parent at any other position or a keyword stays strict.
 The dated gap `flash-attention-2-impl` in the real-model suite is closed.
+With dropout (`dropout_p > 0`, `return_attn_probs=True`, train mode) every output replays
+bit for bit (`test_flash_attention_2_dropout_replays_exactly`): replay restores the captured
+CUDA generator state, so the kernel redraws the same dropout mask, and the mask's padding past
+the sequence lengths, which the kernel leaves undefined, is zeroed where the recorded call
+returns, in the capture and in the replay alike.
 
 ## Model Explorer with adapter 0.2.x
 
