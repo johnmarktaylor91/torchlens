@@ -539,7 +539,7 @@ class Duration(_FloatQuantity):
     --------
     >>> elapsed = Duration(0.0015)
     >>> str(elapsed)
-    '1.5 ms'
+    '1.50 ms'
     >>> isinstance(elapsed, float)
     True
     """
