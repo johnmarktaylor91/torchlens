@@ -201,10 +201,12 @@ direction = torch.tensor([1.0, 1.0, 0.0, 0.0])
 unit = direction / direction.norm()
 site = tl.module("0")
 
-clean = tl.trace(model, x, save=site).find_sites(site).first().out
-off = tl.trace(
+clean_trace = tl.trace(model, x, save=site)
+clean = clean_trace.find_sites(site).first().out
+off_trace = tl.trace(
     model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
-).find_sites(site).first().out
+)
+off = off_trace.find_sites(site).first().out
 
 # project_out leaves no component along the direction and keeps the rest.
 RESULT = [
@@ -242,7 +244,8 @@ model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
-source_value = tl.trace(model, x_source)[site].out
+source_trace = tl.trace(model, x_source)
+source_value = source_trace[site].out
 
 fork = tl.trace(model, x).fork()
 fork.do(

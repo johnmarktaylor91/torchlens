@@ -299,7 +299,8 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     spec = tl.when(tl.module("fc2"), _steer())
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
-        torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
+        trace = tl.trace(model, x, intervene=spec)
+        torch.testing.assert_close(trace.output_ops[0].out, want)
         recorded = tl.record(
             model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
         ).to_trace()
@@ -608,7 +609,8 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         with pytest.raises(KeyboardInterrupt):
             call()
         with torch.no_grad():
-            assert tl.trace(model, x).output_ops[0].out.equal(model(x))
+            trace = tl.trace(model, x)
+            assert trace.output_ops[0].out.equal(model(x))
 
 
 # ---------------------------------------------------------------------------

@@ -308,7 +308,8 @@ class Layer(_SelectionOperand):
 
     Examples
     --------
-    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> trace = tl.trace(model, x)
+    >>> layer = trace.layers["relu_1_2"]
     >>> type(layer).__name__, layer.func_name
     ('Layer', 'relu')
     >>> tuple(layer.out.shape)
@@ -806,9 +807,9 @@ class Layer(_SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; a Layer does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
