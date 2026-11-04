@@ -14,10 +14,10 @@ gradient of mean generated-token entropy at the residual stream entering one dec
 projected onto the covariance eigenvectors of ranks 16 to 255, normalised, and added at
 generated positions with a coefficient times the median residual norm. The repository samples
 20 continuations for the gradient and 60 for the covariance with up to 512 new tokens; this
-page uses fewer and shorter ones so it runs on a CPU. The contrast-pair recipe is the
-[steering pattern](../internal/agent-reference/common-patterns.md#steering-many-forwards--generation)
-and the [conditional steering](conditional_steering.md) page; for steering at serving speed,
-see EasySteer and EasyEdit2 in the [landscape](../migration/landscape.md).
+page uses fewer and shorter ones so it runs on a CPU. For contrast-pair steering see
+[coming from RepE](../migration/repe.md) and the [conditional steering](conditional_steering.md)
+page; for steering at serving speed, see EasySteer and EasyEdit2 in the
+[landscape](../migration/landscape.md).
 
 The recipe downloads GPT-2 small from the Hugging Face Hub (about 500 MB) on first use and
 runs on a CPU in about a minute.
