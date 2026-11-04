@@ -311,6 +311,9 @@ class TraceOpAccessor(Accessor[Op]):
         self._alias_indexes: _AliasIndexes | None = None
         self._alias_index_unavailable = False
         self._resolved_op_cache: dict[str, Op] = {}
+        # Lazily built Layer-label index for ``resolve_all`` and pass-token
+        # lookups; same lifetime and settle rule as ``_counted_cache``.
+        self._layer_label_index: dict[str, list[Op]] | None = None
 
     def _counted_ops(self) -> list[Op]:
         """The counted op rows, in capture order.
@@ -438,7 +441,7 @@ class TraceOpAccessor(Accessor[Op]):
         token = split_pass_token(key)
         if token is None:
             return None
-        passes = [op for op in self._list if token[0] in {op.layer_label, op.short_layer_label}]
+        passes = self._ops_for_layer_label(token[0])
         if not passes:
             return None
         if token[1] == PASS_TOKEN_ALL:
@@ -466,7 +469,25 @@ class TraceOpAccessor(Accessor[Op]):
         direct = self._resolve_pass_qualified(key)
         if direct is not None:
             return [direct]
-        return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        return self._ops_for_layer_label(key)
+
+    def _ops_for_layer_label(self, key: str) -> list[Op]:
+        """Return the Ops whose layer label or short layer label is ``key``, in order.
+
+        Once the last row is finished the rows are settled, so the answer
+        comes from an index built once per accessor; mid-capture reads scan.
+        """
+
+        index = getattr(self, "_layer_label_index", None)
+        if index is None:
+            if not (self._list and getattr(self._list[-1], "_tracing_finished", False)):
+                return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+            index = {}
+            for op in self._list:
+                for label in {op.layer_label, op.short_layer_label}:
+                    index.setdefault(label, []).append(op)
+            self._layer_label_index = index
+        return list(index.get(key, ()))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
