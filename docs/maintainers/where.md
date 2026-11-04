@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1576 modules, 676077 lines, 0 modules without a docstring.
+83 packages, 1576 modules, 676174 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34158 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34150 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 54 | 18051 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6358 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46638 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46743 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34158 lines)
+TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34150 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -117,7 +117,7 @@ TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34158 li
 | `_chunking` | Input chunking helpers for forward-only chunked capture. | 24 |
 | `_comparison_tensor` | Host tensor conversion for saved-payload comparisons without artifact imports. | 46 |
 | `_constants` | Shared constants: field-order tuples and function discovery for TorchLens. | 1442 |
-| `_debug_report` | The one typed ''tl.debug'' report object (spelling DOCUMENTED-UNSTABLE). | 486 |
+| `_debug_report` | The one typed ''tl.debug'' report object (spelling DOCUMENTED-UNSTABLE). | 478 |
 | `_deploy_env` | Deployment-envelope detection helpers (R5). | 192 |
 | `_deprecations` | The MISSING kwarg-omission sentinel. | 35 |
 | `_distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 1156 |
@@ -934,7 +934,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46638 lines)
+Computational graph visualization via Graphviz. (89 modules, 46743 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -977,10 +977,10 @@ Computational graph visualization via Graphviz. (89 modules, 46638 lines)
 | `_highlight` | ''Trace.draw(highlight=...)'': named highlights routed through the lens doors. | 113 |
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 662 |
 | `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 338 |
-| `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 84 |
+| `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 69 |
-| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 740 |
+| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 776 |
 | `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 78 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse , the ''__segment__'' half). | 168 |
 | `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 922 |
@@ -999,7 +999,7 @@ Computational graph visualization via Graphviz. (89 modules, 46638 lines)
 | `_segment_descriptors` | Segment descriptor construction and label derivation for collapse plans. | 424 |
 | `_stacking` | Rank (stacking) channel: annotation -> same-graphviz-rank groups (L5 ). | 273 |
 | `_surgery_diff` | Site-key-first surgery diff: two captures, joined on identity. | 491 |
-| `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 380 |
+| `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 394 |
 | `_trace_collapse` | Collapse diagnostics as ''f(trace, ...)'' functions. | 104 |
 | `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 354 |
 | `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 92 |
