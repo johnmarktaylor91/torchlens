@@ -108,7 +108,7 @@ def _set_arg_template_fields(
         # identity lets replay validation resolve the callable on a loaded
         # bundle (``validation/_loaded_callables.py``), which carries no callables.
         fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self._options_save_args else None
+            _function_registry_key(func, func_name, self) if self._options_save_args else None
         )
 
 
