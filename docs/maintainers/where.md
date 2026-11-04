@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1464 modules, 652874 lines, 0 modules without a docstring.
+83 packages, 1464 modules, 652877 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 48 | 25609 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4655 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38146 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38149 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10663 |
@@ -291,7 +291,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38146 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38149 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -377,7 +377,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38146 
 | `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 779 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 849 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 390 |
-| `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 695 |
+| `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 698 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1809 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2642 |
