@@ -186,7 +186,7 @@ def _fn_loop3() -> tuple[Any, Any]:
             v = paddle.nn.functional.relu(paddle.matmul(v, weight) + bias)
         return v
 
-    return loop, paddle.to_tensor(_X24)
+    return loop, paddle.to_tensor(_LOOP_X)
 
 
 def _loop3_intermediates() -> dict[str, list[np.ndarray]]:
