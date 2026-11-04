@@ -38,6 +38,9 @@ from .contract import (
 
 #: Largest integer magnitude JSON readers carry exactly (IEEE double mantissa).
 _JSON_SAFE_INT = 2**53
+#: Exact types ``ValueEncoder._encode`` returns unchanged at any position. The record
+#: writer appends such cells as they are, without an encoder call (``plain_cell``).
+_VERBATIM_TYPES: frozenset[type] = frozenset({type(None), bool, str})
 #: Largest ``bytes`` value written inline (base64), per the contract.
 BYTES_LIMIT = 1 << 20
 #: Deepest inline nesting the encoder writes; the bounded JSON reader refuses
@@ -115,6 +118,18 @@ def tagged(tag: str, **fields: Any) -> dict[str, Any]:
     """Return a typed JSON object with ``tag`` and its fields."""
 
     return {TYPED_VALUE_KEY: tag, **fields}
+
+
+def plain_cell(value: Any) -> bool:
+    """Whether the encoder writes ``value`` as it is: ``None``, an exact bool or str, or an
+    exact int within the JSON-safe range (the first branches of ``ValueEncoder._encode``).
+
+    The record writer appends such cells without an encoder call; anything else, a
+    float included, goes through ``ValueEncoder.encode``.
+    """
+
+    kind = type(value)
+    return kind in _VERBATIM_TYPES or (kind is int and -_JSON_SAFE_INT <= value <= _JSON_SAFE_INT)
 
 
 #: TorchLens value-object classes the format holds inline that declare no
@@ -319,7 +334,7 @@ class ValueEncoder:
         """Encode one value at a nesting depth."""
 
         kind = type(value)
-        if value is None or kind is bool or kind is str:
+        if kind in _VERBATIM_TYPES:
             return value
         if kind is int:
             return value if abs(value) <= _JSON_SAFE_INT else tagged("int", v=str(value))
