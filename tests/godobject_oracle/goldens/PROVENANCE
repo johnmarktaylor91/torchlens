@@ -861,3 +861,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad409a44c8fb9733a223530d9f494f5930d3ffd0 (dirty)
 recorded: 2026-11-04T07:31:01.188681+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: ModuleCall no longer stores a strong _source_trace_strong extra; the owning trace is held weakly so a dead trace is freed by refcount
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a9ad62da6993067637eca2e394d3000d78bc299c (dirty)
+recorded: 2026-11-03T18:50:15.232875+00:00
