@@ -48,7 +48,6 @@ from .._io import (
 )
 from .._quantities import Bytes, Duration, Flops, Macs
 from ._accessor_base import Accessor
-from ._bound_owner_alias import owner_address_for
 from ._call_tree import (
     _edge_counts_for_scope,
     _print_call_tree_from_root,
@@ -2535,7 +2534,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __getitem__(self, key: int | str) -> "Module":
         """Return a Module by module-specific lookup rules."""
-        key = "self" if key == "" else owner_address_for(self, key)
+        key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         if isinstance(key, str) and key in self._pass_dict:
@@ -2544,7 +2543,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
-        key = "self" if key == "" else owner_address_for(self, key)
+        key = "self" if key == "" else key
         return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
 
     def __dir__(self) -> list[str]:

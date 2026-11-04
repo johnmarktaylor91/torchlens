@@ -3225,6 +3225,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_postprocess/_module_containment.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_postprocess/_orphan_seeds.py",
   "has_default": true,
@@ -3548,7 +3556,7 @@
   "field": "modules",
   "file": "torchlens/_postprocess/labeling.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6840,14 +6848,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/_session_forwards.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/_sources_lazy.py",
@@ -7021,6 +7021,14 @@
   "file": "torchlens/backends/torch/belt.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/bound_root.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
