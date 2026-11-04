@@ -280,6 +280,22 @@ def test_an_assignment_target_is_not_a_gone_keyword(tmp_path: Path) -> None:
     assert _stale_locations(findings) == set()
 
 
+def test_an_unpacking_target_or_a_semicolon_statement_is_not_a_gone_keyword(tmp_path: Path) -> None:
+    """``model, log = ...`` and ``seed(0); log = ...`` assign; nothing is passed."""
+
+    base, head = _inventory(TRACE, LOG_PARAM), _inventory(TRACE)
+    notebook = '{"cells": [{"source": [\n    "import torch\\n",\n    "    model, log = ZOO[\\"tiny\\"]()\\n"\n]}]}\n'
+    (tmp_path / "notebooks/audit").mkdir(parents=True)
+    (tmp_path / "notebooks/audit/a.ipynb").write_text(notebook, encoding="utf-8")
+    corpus = _corpus(
+        tmp_path,
+        glossary="Seed it via `torch.manual_seed(0); log = tl.trace(model)`.\n",
+        example="m, log = factory()\nfor m, log in pairs:\n    pass\n",
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == set()
+
+
 def test_a_keyword_argument_still_reports_on_one_line_split_or_in_prose(tmp_path: Path) -> None:
     """``log=True`` inside a call, on a continuation line, in a notebook or in backticks."""
 
