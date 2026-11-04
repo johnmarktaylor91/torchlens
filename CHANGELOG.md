@@ -6,9 +6,8 @@
 ### Behavior changes
 
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
-  written; the default never does) in place of `vis_save_only=`. `Trace.to_dagua_graph` and
-  `tl.experimental.dagua.trace_to_dagua_graph` take `rolled=` (a bool) and `depth=` in place of
-  `vis_mode=` and `vis_call_depth=`, the same spellings as `trace.draw`.
+  written; the default never does) in place of `vis_save_only=`.
+- **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.
 - **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
   points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
@@ -251,6 +250,9 @@
   completeness census reported its interior dispatches as unaccounted. The slot shape is the
   capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
   `TorchCapabilityWarning` instead of degrading silently.
+- **validation**: `tl.validate(model, x)` runs the forward scope: `scope=` defaults to
+  `"forward"`, so the call equals `tl.validate(model, x, scope="forward")`. No scope checks
+  anything different.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
@@ -3742,7 +3744,7 @@ H9: intervention_sites_for_log deduped resolved sites by the aggregate layer_lab
   unrolled); a rolled aggregate Layer matches the aggregate set (colors the rolled node when any
   pass is a site), read crash-safe via the shared helper. The public
   intervention_site_and_cone_labels contract (aggregate layer_labels, used by _render_dot and the
-  dagua bridge) is unchanged.
+  experimental renderer bridge) is unchanged.
 
 - **viz**: Key rolled cluster-owned segment owners pass-free
   ([`097b0ef`](https://github.com/johnmarktaylor91/torchlens/commit/097b0efa98037d30313de11e01c6bb6d800caf55))
@@ -11790,7 +11792,7 @@ test_per_operation_oracle_deferred_per_ad_50 and test_not_mvp_audit shelled out 
   repo is a git checkout, i.e. CI and dev), searching tracked files -- correct for source-hygiene
   audits. Use -E for the regex-pattern audit; keeps the tripwire coverage on CI.
 
-- Version-gate functorch-level capability + guard dagua tests for lean CI
+- Version-gate functorch-level capability + guard experimental-renderer tests for lean CI
   ([`65fd4b8`](https://github.com/johnmarktaylor91/torchlens/commit/65fd4b812f07c2910914647367e7a2203ab9ff8d))
 
 Two more pre-existing cert10 torch-matrix / optional-dep test-hygiene gaps surfaced on CI:
@@ -11800,9 +11802,9 @@ Two more pre-existing cert10 torch-matrix / optional-dep test-hygiene gaps surfa
   required it everywhere. Probe torch directly and gate that one flag's expected value on actual
   availability (other flags unchanged).
 
-- dagua is an unused experimental integration whose renderer imports the external `dagua` package on
-  use; the 6 tests that build/render dagua graphs now pytest.importorskip("dagua") so they skip on
-  envs without it (CI, and everywhere until dagua is adopted) while the surrounding non-dagua tests
+- The experimental renderer is an unused integration whose renderer imports an external package on
+  use; the 6 tests that build/render its graphs now importorskip that package so they skip on
+  envs without it (CI, and everywhere until it is adopted) while the surrounding tests
   still run.
 
 
@@ -11983,9 +11985,9 @@ Added two regression tests to tests/test_backend_registry.py: one monkeypatching
   filterwarnings unconditionally downgrades any warning matching the alias message pattern back to
   non-fatal, so it can't distinguish deliberate user/test alias use from torchlens tripping over its
   own alias. Add tests/test_no_internal_self_deprecation.py, which runs a representative
-  trace/record/semantic-patch/dagua-audit/save-load slice under warnings.catch_warnings and flags
+  trace/record/semantic-patch/renderer-audit/save-load slice under warnings.catch_warnings and flags
   any DeprecationWarning/UserWarning matching warn_deprecated_alias's message shape or originating
-  from torchlens/. Confirmed live that a reintroduced regression in either the dagua
+  from torchlens/. Confirmed live that a reintroduced regression in either the experimental renderer
   deprecated-field skip-list or semantic/patching.py's Trace.run()-not-rerun() fix is caught by this
   test (and that a naive "except this test file" exemption would mask it, due to
   warn_deprecated_alias's fixed stacklevel misattributing the warning's origin at some call depths).
@@ -12477,7 +12479,7 @@ render_dot_to_file (and rank-layout neato) delete the DOT source only after a SU
   copy/deepcopy. - intervention/types: add _facets_cache -> FORK_RECONSTRUCT to the Op fork-policy
   table so Trace.fork()/Bundle.fork()/push(differentiable=True) no longer RecursionError when
   Op.facets was read pre-fork. - semantic/patching._run_patch: call Trace.run() instead of
-  deprecated Trace.rerun(). - experimental/dagua/_bridge._list_public_fields: skip deprecated
+  deprecated Trace.rerun(). - the experimental renderer bridge's _list_public_fields: skip deprecated
   conditional_{then,elif,else}_entry_edges during dir()/getattr() enumeration.
 
 - **classics**: Add functional weather generator
@@ -14717,7 +14719,7 @@ The five trace-mixin modules drop their blanket mypy ignore pragmas (debt from t
 - Document package layout policy
   ([`b5cdf65`](https://github.com/johnmarktaylor91/torchlens/commit/b5cdf65a165455da455738897d203874a4cc8fc5))
 
-- Spotless round 4 — docstring completion across utils/compat/semantic/dagua-bridge
+- Spotless round 4 — docstring completion across utils/compat/semantic/renderer-bridge
   ([`3b2b3f6`](https://github.com/johnmarktaylor91/torchlens/commit/3b2b3f62f8bc338c6328150ef90d655a9ba227dd))
 
 - **audit**: Add attribution + compat/bridges notebooks; rewrite README and recipe
@@ -19768,8 +19770,8 @@ Renders 'weight: (16, 3, 3, 3)' instead of 'weight (16, 3, 3, 3)' in graphviz pa
   ([`2dfe89d`](https://github.com/johnmarktaylor91/torchlens/commit/2dfe89ddde3aa5e609c4a36235ceb8b64596b50b))
 
 Module path rows rendered as "@ module1.module2"; tighten to "@module1.module2" so the dotted path
-  reads as a single token and matches the no-space form already used by bundle_diff and the dagua
-  bridge.
+  reads as a single token and matches the no-space form already used by bundle_diff and the experimental
+  renderer bridge.
 
 Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
 
@@ -21349,7 +21351,7 @@ Top-level surface (`torchlens.__all__`): - 84 names → 40 (exact). Slim per sub
   (Phase 2); `validate/tap/record_span/sites` (Phase 5a).
 
 New namespace submodules (each with explicit `__all__`): `torchlens.accessors`, `.bridge`,
-  `.callbacks`, `.compat`, `.errors`, `.examples`, `.experimental` (+ `.experimental.dagua`),
+  `.callbacks`, `.compat`, `.errors`, `.examples`, `.experimental` (+ an experimental renderer namespace),
   `.export`, `.grad`, `.intervene`, `.io`, `.partial`, `.report`, `.stats`, `.viz`. Existing
   namespaces extended: `.types`, `.options`, `.utils`, `.validation`, `.visualization`, `.fastlog`.
   `torchlens.visualization` exposes graph functions lazily (`__getattr__`) to avoid circular
@@ -21437,13 +21439,13 @@ Migration doc: docs/migration/v2.0_api_changes.md adds Phase 1c table.
 Quality gates: ruff PASS, mypy PASS (138 files clean), Tier-1 smoke 143/143, new tests 56/56,
   len(__all__)==40 PASS.
 
-* refactor(visualization): retire ELK from public API + dagua to experimental opt-in
+* refactor(visualization): retire ELK from public API + the alternate renderer to experimental opt-in
 
 Phase 1d: tightens the rendering surface per §13.6.
 
-Dagua → experimental: - `torchlens/visualization/dagua_bridge.py` →
-  `torchlens/experimental/dagua/_bridge.py`. - `vis_renderer="dagua"` raises RuntimeError unless
-  `from torchlens.experimental import dagua` was imported (sets opt-in marker).
+Alternate renderer → experimental: its bridge module moved from `torchlens/visualization/` to
+  `torchlens/experimental/`; selecting it raises RuntimeError unless the experimental module was
+  imported (sets opt-in marker).
 
 ELK → internal layout backend only: - `torchlens/visualization/elk_layout.py` →
   `_elk_internal/layout.py`. - Public docs say `layout="auto"`; `layout="elk"` accepted as internal
@@ -21459,7 +21461,7 @@ Total Audit growth: notebooks/total_audit/16_visualization_advanced.ipynb skelet
   .secrets.baseline regenerated.
 
 Quality gates: ruff PASS, mypy PASS (140 files clean), Tier-1 smoke 143/143, visualization-adjacent
-  tests 34 + 4 dagua all PASS, len(__all__)==40 PASS.
+  tests 34 + 4 experimental-renderer all PASS, len(__all__)==40 PASS.
 
 * feat(packaging): pandas + IPython move to opt-in extras
 
@@ -22255,7 +22257,7 @@ Add intervention visualization to graph rendering: - vis_intervention_mode="node
   vis_show_cone=True (default). - vis_intervention_mode="as_node": hook nodes inserted between
   producer and downstream consumers. - Cone extracted via Phase 6 cone_of_effect helper (no
   duplication). - Reuses existing node_spec_fn callback infrastructure. - ModelLog.show() and
-  Bundle.show() public methods. - Dagua bridge exposes is_intervention_site / is_in_cone /
+  Bundle.show() public methods. - The experimental renderer bridge exposes is_intervention_site / is_in_cone /
   intervention_log_summary fields. - Direct-write dirty flag surfaced in summary panel where
   available. - Re-enabled 21 previously-skipped multi_trace_visualization tests where intent maps to
   new Bundle API.
@@ -22654,7 +22656,7 @@ Expand visualization/_render_utils.py with the Graphviz primitives shared betwee
 
 Update rendering.py and elk_layout.py to call these helpers instead of inlining the formulae and
   constants. Output is byte-equivalent for ModelLog renderings -- the regression suite
-  (test_output_aesthetics, test_backward_visualization, test_dagua_theme) confirms.
+  (test_output_aesthetics, test_backward_visualization, the experimental theme test) confirms.
 
 The motivation is the upcoming bundle renderer refactor, where the multi-trace cluster builder will
   reuse the same primitives so single-and multi-trace cluster aesthetics stay in sync.
@@ -23076,7 +23078,7 @@ Per execution plan Step 6. Adds model_log.preview_fastlog() and tl.preview_fastl
   alias. Generates node_spec_fn at call time; does not touch MODE_REGISTRY. Uses
   _build_record_context to synthesize RecordContext from postprocessed LayerLog so a predicate that
   accesses a postprocess-only field fails the same way as in dry_run. preview_fastlog(...,
-  vis_renderer='dagua') raises NotImplementedError for v1.
+  the experimental renderer) raises NotImplementedError for v1.
 
 * feat(fastlog): dry_run live visualization
 
@@ -23675,7 +23677,7 @@ Tests (tests/test_conditional_rendering.py, 5 passing): -
   test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate -
   test_rolled_mixed_arm_graphviz_shows_composite_pass_label
 
-Dagua bridge and ELK remain deferred per user direction.
+The experimental renderer bridge and ELK remain deferred per user direction.
 
 Quality gates: rendering tests (5/5), mypy clean, ruff clean.
 
@@ -23917,7 +23919,7 @@ Break the symlink mirroring convention: CLAUDE.md now holds architect-level cont
 - **decoration**: Add global undecorate override
   ([`b0bafeb`](https://github.com/johnmarktaylor91/torchlens/commit/b0bafeb51fbf9b406bd34a84ed826cd4b9c607bb))
 
-- **viz**: Add dagua torchlens integration
+- **viz**: Add an experimental alternate-renderer integration
   ([`35d5bcd`](https://github.com/johnmarktaylor91/torchlens/commit/35d5bcdb976420b86be54048ab4503cbbc146763))
 
 ### Refactoring

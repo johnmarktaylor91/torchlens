@@ -35,7 +35,7 @@ from ..._errors import (
     TorchLensWarning,
 )
 from ..._input_coerce import (
-    _coerce_input_args,
+    _coerce_inputs,
     _reject_non_mapping_input_kwargs,
 )
 from ..._ir.selector_eval import looks_like_finalized_label
@@ -501,7 +501,7 @@ def _open_door_state(
             input_args = transformed_input
     else:
         original_input_args = input_args
-        input_args = _coerce_input_args(model, input_args)
+        input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
         if _should_store_auto_coerced_raw_input(original_input_args, input_args):
             raw_input = original_input_args
     return _DoorState(

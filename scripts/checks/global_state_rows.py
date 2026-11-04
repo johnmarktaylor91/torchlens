@@ -687,6 +687,10 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # imports a first capture would otherwise trigger inside a monitor window;
         # append-only for the process, run before every window arms.
         ("torchlens/_utils/rng/monitor_state.py", "_WARMUPS"),
+        # Input routes the auto-route layer installs at import (the HF text,
+        # modality-dict and image resolution the coercion door applies at every
+        # entry); append-only for the process.
+        ("torchlens/_input_route.py", "_ROUTES"),
         # Doctor capability-snapshot provider: report/_doctor.py registers the
         # torch-aware snapshot at import; the basis module falls back to the torch
         # compat snapshot when nothing is registered.
@@ -1288,7 +1292,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/experiment/_grid.py", "__all__"),
         ("torchlens/experiment/_head_sugar.py", "__all__"),
         ("torchlens/experimental/__init__.py", "__all__"),
-        ("torchlens/experimental/dagua/__init__.py", "__all__"),
         ("torchlens/experimental/node_styles.py", "__all__"),
         ("torchlens/export/__init__.py", "__all__"),
         ("torchlens/export/_graphs.py", "__all__"),
