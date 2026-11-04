@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1583 modules, 677682 lines, 0 modules without a docstring.
+83 packages, 1584 modules, 677734 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -32,7 +32,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 35 | 17625 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14959 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10583 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7268 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3030 |
@@ -725,7 +725,7 @@ Private registry kernel package (architecture ; never public API). (3 modules, 5
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14907 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 14959 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -734,6 +734,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 | `call_arguments` | Sparse-call argument decoding and binding. | 630 |
 | `call_outputs` | Sparse-call output binding and mutation checks. | 700 |
 | `execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 404 |
+| `host_budget` | The host allocation budget the runnable preflight refuses against. | 97 |
 | `input_aliases` | Input alias topology and non-tensor tree contracts. | 508 |
 | `input_metadata` | Input structure, literal, and metadata witness helpers. | 677 |
 | `input_sites` | Live input sites and metadata contract checks. | 628 |
@@ -742,7 +743,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 | `providers` | Public provider entry points and run finalization. | 326 |
 | `retention` | What a loaded-sparse run retains, and the run-prep and bind bounds that follow from it. | 515 |
 | `seam` | Narrow ownership seam between ''Trace'' and sparse runnable internals. | 197 |
-| `state` | Non-executing state binding and allocation for sparse runnable traces. | 2831 |
+| `state` | Non-executing state binding and allocation for sparse runnable traces. | 2786 |
 | `state_context` | State contracts and captured execution contexts. | 614 |
 | `state_live` | Live-model state restore for the run and capture brackets. | 435 |
 | `transaction` | Loaded-sparse transaction execution and allocation checks. | 1265 |
