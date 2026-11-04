@@ -584,3 +584,101 @@ def test_flash_attention_2_witness_sees_no_gap() -> None:
         trace.cleanup()
     gap_warnings = [w for w in caught if issubclass(w.category, tl.errors.CaptureGapWarning)]
     assert gap_warnings == [], [str(w.message) for w in gap_warnings]
+
+
+class _Fa2DropoutAttention(torch.nn.Module):
+    """One bf16 projection into q, k, v and a FlashAttention 2 call with dropout and S_dmask."""
+
+    def __init__(self, seq: int) -> None:
+        super().__init__()
+        self.seq = seq
+        self.proj = torch.nn.Linear(32, 96).to("cuda", torch.bfloat16)
+        self.seen: list[torch.Tensor] = []
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        from flash_attn import flash_attn_func
+
+        q, k, v = self.proj(x).view(1, self.seq, 3, 2, 16).unbind(2)
+        out, _lse, s_dmask = flash_attn_func(q, k, v, dropout_p=0.25, return_attn_probs=True)
+        self.seen.append(s_dmask)
+        return out.sum(-1)
+
+
+def _fa2_dropout_model(seq: int) -> tuple[_Fa2DropoutAttention, torch.Tensor]:
+    """A train-mode dropout attention on CUDA and its input, or skip with the reason."""
+
+    reason = _flash_attention_2_ready()
+    if reason:
+        pytest.skip(reason)
+    torch.manual_seed(0)
+    model = _Fa2DropoutAttention(seq).train()
+    x = torch.randn(1, seq, 32, device="cuda", dtype=torch.bfloat16)
+    return model, x
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+@pytest.mark.parametrize("seq", [8, 136])
+def test_flash_attention_2_dropout_replays_exactly(seq: int) -> None:
+    """With dropout_p > 0 every FA2 output replays bit for bit, the dropout mask included.
+
+    Replay restores the captured CUDA generator state, so the kernel redraws the same
+    dropout mask. The mask's padding beyond (seqlen_q, seqlen_k), which the kernel leaves
+    undefined, is zeroed where the recorded call returns, so the model, the saved value and
+    the replay hold the same bytes and validation compares the whole tensor.
+    """
+
+    from torchlens.options import CaptureOptions
+    from torchlens.validation import last_validation_failure
+    from torchlens.validation.core import (
+        _check_whether_func_on_saved_parents_yields_saved_tensor,
+    )
+
+    model, x = _fa2_dropout_model(seq)
+    with torch.no_grad():
+        verdict = tl.validate(model, (x,), scope="forward")
+    assert verdict is True, last_validation_failure()
+    with torch.no_grad():
+        trace = tl.trace(
+            model, (x,), capture=CaptureOptions(save_args=True, save_rng=True), save="all"
+        )
+    try:
+        kernel_ops = _fa2_kernel_ops(trace)
+        assert sorted(op.multi_output_index for op in kernel_ops) == [0, 1, 2, 3]
+        (mask_op,) = [op for op in kernel_ops if op.multi_output_index == 2]
+        saved, rounded = mask_op.out, -(-seq // 128) * 128
+        assert saved.shape == (1, 2, rounded, rounded)
+        assert torch.equal(saved, model.seen[-1])
+        assert not saved[..., seq:, :].any() and not saved[..., :seq, seq:].any()
+        assert (saved[..., :seq, :seq] < 0).any(), "dropped entries carry the sign bit"
+        for op in kernel_ops:
+            result = _check_whether_func_on_saved_parents_yields_saved_tensor(trace, op.label)
+            assert result.decision == "validated", (op.label, result.reason)
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_2_dropout_without_padding_zeroing_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation proof on the real kernel: without the zeroing the dropout mask fails replay."""
+
+    from torchlens.backends.torch import _torch_ops_calls
+    from torchlens.validation import last_validation_failure
+
+    monkeypatch.setattr(_torch_ops_calls, "_zero_fa2_softmax_padding", lambda *_args: None)
+    model, x = _fa2_dropout_model(8)
+    with torch.no_grad():
+        verdict = tl.validate(model, (x,), scope="forward")
+    failure = last_validation_failure()
+    assert verdict is False and failure is not None, (verdict, failure)
+    assert failure.check_name == "forward_replay", failure
+    with torch.no_grad():
+        trace = tl.trace(model, (x,))
+    try:
+        (mask_op,) = [op for op in _fa2_kernel_ops(trace) if op.multi_output_index == 2]
+        assert failure.op_label == mask_op.label, failure
+    finally:
+        trace.cleanup()
