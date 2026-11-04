@@ -1,6 +1,5 @@
 """Shared operation fields and tensor variation tracking."""
 
-from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -63,18 +62,13 @@ __all__ = (
 
 
 def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
-    """Seed the gradient fields every op starts with before any backward pass."""
-    # Grad info
-    fields_dict["grad"] = None
-    fields_dict["transformed_grad"] = None
+    """Record whether this op saves gradients.
+
+    The per-gradient placeholders (``grad``, ``grad_shape``, ``gradient_memory`` and
+    their ``transformed_`` forms) are not written: the freeze never reads them and
+    the op defaults supply them.
+    """
     fields_dict["save_grads"] = self._options_save_grads not in (None, False)
-    fields_dict["has_grad"] = False
-    fields_dict["grad_shape"] = None
-    fields_dict["transformed_grad_shape"] = None
-    fields_dict["grad_dtype"] = None
-    fields_dict["transformed_grad_dtype"] = None
-    fields_dict["gradient_memory"] = 0
-    fields_dict["transformed_gradient_memory"] = None
 
 
 def _set_arg_template_fields(
@@ -175,11 +169,9 @@ def _build_shared_fields_dict(
     fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
-    fields_dict["edits"] = []
     _set_arg_template_fields(self, fields_dict, func, func_name, args, kwargs)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
-    fields_dict["multi_output_name"] = None
 
     _set_grad_info_fields(self, fields_dict)
 
@@ -201,7 +193,6 @@ def _build_shared_fields_dict(
         call_site_out=call_site_out,
     )
     self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
-    fields_dict["var_names"] = []
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state
@@ -513,22 +504,15 @@ def _build_module_context_fields(
     arg_tensors: list[torch.Tensor],
     parent_layer_entries: list[Op],
 ) -> None:
-    """Populate module nesting, address, and input/output status fields."""
+    """Populate the module nesting fields (``module``, ``modules``)."""
     modules = _snapshot_exhaustive_module_stack(self)
     module = modules[-1] if modules else None
 
     fields_dict["module"] = module
     fields_dict["modules"] = modules
-    # B3R7-R05-1: same containment fact as ``modules`` (relabeled together at
-    # step 11), never the fed-call stack -- that is ``input_to_module_calls``.
-    fields_dict["module_call_stack"] = list(modules)
-    fields_dict["module_entry_arg_keys"] = defaultdict(list)
-    fields_dict["input_to_module_calls"] = []
-    fields_dict["output_of_modules"] = []
-    fields_dict["output_of_module_calls"] = []
-    fields_dict["is_module_output"] = False
-    fields_dict["is_atomic_module"] = False
-    fields_dict["atomic_module_call"] = None
+    # The module-I/O placeholders (``module_call_stack``, ``input_to_module_calls``,
+    # ``output_of_modules`` and the rest) are not written: the freeze never reads
+    # them and postprocess derives them from the records.
 
 
 # Late imports: the split modules of this package import one another (cycles), so each
