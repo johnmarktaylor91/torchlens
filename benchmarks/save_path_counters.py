@@ -158,14 +158,22 @@ def bundle_bytes(path: Path) -> dict[str, Any]:
 
 
 def build_capture() -> Any:
-    """Capture the benchmark's ``tinynet`` cell (the ``aux_save`` row's model and input)."""
+    """Capture the benchmark's ``tinynet`` cell (the ``aux_save`` row's model and input).
+
+    The capture's seed and name are pinned. An unseeded capture draws a random seed,
+    and pickle writes a seed below 2**31 in 4 bytes but one above it in 5 bytes plus a
+    length byte, so ``metadata`` bytes would move by 2 between processes. The
+    automatic name counts captures in the process (``tinynet_1``, ``tinynet_12``), so
+    its length depends on what ran before. Pinning both leaves the save path as is.
+    """
 
     import torchlens as tl
     from benchmarks.perf_models import load_model_and_input
+    from torchlens.options import CaptureOptions
 
     torch.manual_seed(0)
     model, x = load_model_and_input("tinynet", "cpu")
-    return tl.trace(model, x)
+    return tl.trace(model, x, capture=CaptureOptions(seed=0, name="tinynet"))
 
 
 def measure(trace: Any, workdir: Path) -> dict[str, Any]:
@@ -214,6 +222,7 @@ def run() -> dict[str, Any]:
         "model": "tinynet",
         "torch": torch.__version__,
         "python": sys.version.split()[0],
+        "platform": sys.platform,
         "counters": first,
         "repeat_agrees": first == second,
         "information": info,
