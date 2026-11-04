@@ -4894,20 +4894,6 @@ recorded: 2026-11-04T18:50:37.406584+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: C-178 hf4-attention-mask + vit-facets-transformers4: modules_with_facet consumer sites moved (torchlens/_semantic/recipes/_helpers.py now via trace.modules_with_facet; _modules_with_facet deleted from torchlens/_semantic/patching.py)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: eef3623490239d8390ff12a7809476d4df8b28ed (dirty)
-recorded: 2026-11-04T19:29:40.263295+00:00
----
-generator: producer_parity/test_ledger.py (full closure)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: C-178 hf4-attention-mask + vit-facets-transformers4: modules_with_facet consumer sites moved (torchlens/_semantic/recipes/_helpers.py now via trace.modules_with_facet; _modules_with_facet deleted from torchlens/_semantic/patching.py)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: eef3623490239d8390ff12a7809476d4df8b28ed (dirty)
-recorded: 2026-11-04T19:29:47.020453+00:00
----
 reason: C-182 gemma2-frozen-facets-hf4: modules reads in torchlens/attribution/graph/_build.py (sites 1 to 2; this unit edits _build.py and _read_sites.py)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
@@ -4929,3 +4915,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a37927c7150d30db3e354813e0425478709f6a22 (dirty)
 recorded: 2026-11-04T18:54:26.844290+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-178 hf4-attention-mask + vit-facets-transformers4: modules_with_facet consumer sites moved (torchlens/_semantic/recipes/_helpers.py now via trace.modules_with_facet; _modules_with_facet deleted from torchlens/_semantic/patching.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: eef3623490239d8390ff12a7809476d4df8b28ed (dirty)
+recorded: 2026-11-04T19:29:40.263295+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-178 hf4-attention-mask + vit-facets-transformers4: modules_with_facet consumer sites moved (torchlens/_semantic/recipes/_helpers.py now via trace.modules_with_facet; _modules_with_facet deleted from torchlens/_semantic/patching.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: eef3623490239d8390ff12a7809476d4df8b28ed (dirty)
+recorded: 2026-11-04T19:29:47.020453+00:00
