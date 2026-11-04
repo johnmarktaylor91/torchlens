@@ -19,7 +19,6 @@ Comparing a model with brain or behaviour data needs per-layer features for a fi
 - [Multi-GPU extraction](../migration/multi_gpu_extraction.md) and [streaming statistics](../reference/stats.md): extraction and dataset-level statistics when the data does not fit in memory.
 - [Connectors to other tools](../bridges.md): rsatoolbox, Brain-Score, xarray, Hugging Face and timm loaders, one entry each.
 - Coming from [thingsvision](../migration/from_thingsvision.md), [torchvision feature extraction](../migration/from_torchvision_feature_extraction.md), a [model zoo wrapper](../migration/from_model_zoos.md) or plain [forward hooks](../migration/from_hooks.md).
-- [NeuroAI demand ledger](demand_ledger.md): what the feature-extraction community has asked for in public issue trackers, and where TorchLens stands on each.
 
 ## The journey
 
