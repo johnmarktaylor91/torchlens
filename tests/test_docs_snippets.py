@@ -798,6 +798,13 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/intervene.md": _LAUNCH_PAGES_EXECUTED,
     "gallery/any_architecture.md": _LAUNCH_PAGES_EXECUTED,
     "migration/comparison.md": _LAUNCH_PAGES_EXECUTED,
+    # Conditional attribution reads the model's source file (tokenize.open), and
+    # this suite execs fences from memory, so an executed copy records no conditional.
+    "conditional_attribution.md": (
+        "the conditional indexer needs the model's source on disk; the same "
+        "early-return shape and its fired_arm_kind and outcome asserts are "
+        "pinned in tests/test_conditional_fallthrough_outcome.py"
+    ),
 }
 
 

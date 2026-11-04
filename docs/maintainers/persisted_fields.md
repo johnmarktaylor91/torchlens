@@ -442,7 +442,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_has_direct_writes` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary` |
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
-| `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
+| `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 14 more |
 | `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
 | `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 7 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |

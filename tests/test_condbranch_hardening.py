@@ -744,6 +744,8 @@ def test_single_line_if_false_never_fires_then(
 
     (conditional,) = list(trace.graph.conditionals)
     assert conditional.fired_arm_kind is None
+    assert [arm.kind for arm in conditional.arms] == ["then"]
+    assert conditional.outcome == "skipped"
     then_arm = conditional.arms[0]
     assert then_arm.fired is False
     assert then_arm.execution_ops == []
@@ -1029,6 +1031,7 @@ def test_unrolled_both_arms_loop_reports_honest_multi_fire() -> None:
     assert then_arm.fired is True
     assert else_arm.fired is True
     assert conditional.fired_arm_kind is None
+    assert conditional.outcome == "multiple"
     # Two witnessed evaluations (False then True): the scalar refuses.
     assert then_arm.bool_value_at_run is None
 

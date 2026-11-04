@@ -114,6 +114,7 @@ from . import (
     _trace_views,
 )
 from ._accessor_base import Accessor
+from ._conditional_arms import ConditionalOutcome, arm_role_ops, derive_conditional_outcome
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
 from ._repr import trace_honesty_suffix
@@ -334,14 +335,14 @@ class ConditionalRoleRef:
     arm_index:
         Index of the arm within ``Conditional.arms``.
     arm_kind:
-        Arm kind: ``"then"``, ``"elif"``, or ``"else"``.
+        Arm kind: ``"then"``, ``"elif"``, ``"else"`` or ``"fallthrough"``.
     role:
         Role within the arm: ``"evaluation"`` or ``"body"``.
     """
 
     conditional_id: str
     arm_index: int
-    arm_kind: Literal["then", "elif", "else"]
+    arm_kind: Literal["then", "elif", "else", "fallthrough"]
     role: Literal["evaluation", "body"]
 
 
@@ -349,7 +350,7 @@ class ConditionalRoleRef:
 class ConditionalArm:
     """One arm of an if-chain."""
 
-    kind: Literal["then", "elif", "else"]
+    kind: Literal["then", "elif", "else", "fallthrough"]
     terminal_bool_op_label: str | None = None
     bool_value_at_run: bool | None = None
     condition_evaluated: bool = False
@@ -370,7 +371,7 @@ class ConditionalArm:
             Labels for ops with an evaluation role in this arm.
         """
 
-        return self._role_ops("evaluation")
+        return arm_role_ops(self._trace, self._conditional_id, self._arm_index, "evaluation")
 
     @property
     def execution_ops(self) -> list[str]:
@@ -382,7 +383,7 @@ class ConditionalArm:
             Labels for ops with a body role in this arm.
         """
 
-        return self._role_ops("body")
+        return arm_role_ops(self._trace, self._conditional_id, self._arm_index, "body")
 
     def _bind(self, trace: Any, conditional_id: str, arm_index: int) -> None:
         """Bind this arm to its Trace and owning conditional identity.
@@ -400,33 +401,6 @@ class ConditionalArm:
         self._trace = trace
         self._conditional_id = conditional_id
         self._arm_index = arm_index
-
-    def _role_ops(self, role: Literal["evaluation", "body"]) -> list[str]:
-        """Return op labels participating in this arm with a given role.
-
-        Parameters
-        ----------
-        role:
-            Conditional role to collect.
-
-        Returns
-        -------
-        list[str]
-            Participating op labels.
-        """
-
-        if self._trace is None or self._conditional_id is None or self._arm_index is None:
-            return []
-        labels: list[str] = []
-        for op in self._trace._layer_list:
-            if any(
-                ref.conditional_id == self._conditional_id
-                and ref.arm_index == self._arm_index
-                and ref.role == role
-                for ref in op.in_conditionals or []
-            ):
-                labels.append(op.layer_label)
-        return labels
 
 
 @dataclass
@@ -448,7 +422,7 @@ class Conditional:
     id: str
     arms: list[ConditionalArm]
     fired_arm_index: int | None
-    fired_arm_kind: Literal["then", "elif", "else"] | None
+    fired_arm_kind: Literal["then", "elif", "else", "fallthrough"] | None
     source_file: str | None
     source_line: int | None
 
@@ -469,6 +443,12 @@ class Conditional:
         if self.fired_arm_index < 0 or self.fired_arm_index >= len(self.arms):
             return None
         return self.arms[self.fired_arm_index]
+
+    @property
+    def outcome(self) -> ConditionalOutcome:
+        """Which way this conditional went, derived from its arms; never persisted."""
+
+        return derive_conditional_outcome(self.arms)
 
     @property
     def has_else(self) -> bool:

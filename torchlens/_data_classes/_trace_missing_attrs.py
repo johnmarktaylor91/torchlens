@@ -90,13 +90,13 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "set": removed_set_remedy("Trace", "trace", "site, value"),
     "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
     "conditional_elif_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
     "conditional_else_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
 }
 

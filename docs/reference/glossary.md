@@ -4982,8 +4982,8 @@ alphabetical order.
 | `Op.co_parents` | Labels of other Ops that share at least one child with this Op |
 | `Op.code_context` | Call-stack frames showing where this Op ran, outermost first: `[0]` is the call site that started the capture and `[-1]` is the frame that ran the Op; `print(op)` shows the innermost frame outside torch itself |
 | `Op.compute_record` | Two-term compute record (`fma_macs` and `other_flops`), derived on read |
-| `Op.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm |
-| `Op.conditional_branch_depth` | Number of conditional branches this Op is nested inside; 0 when it is not in a conditional body |
+| `Op.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else, fallthrough) and the labels of this Op's children inside each arm |
+| `Op.conditional_branch_depth` | Number of conditional arms this Op is nested inside or guarded by (a `fallthrough` arm guards the code after an early-return chain); 0 when it is in no arm |
 | `Op.conditional_context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
 | `Op.conditional_elif_children` | Dict mapping each elif arm index to the labels of this Op's children in that arm |
 | `Op.conditional_else_children` | Labels of this Op's children that sit in an else arm of a conditional |
@@ -5156,7 +5156,7 @@ alphabetical order.
 | `Layer.children_per_pass` | Mapping from pass number to the child layer labels (without pass suffixes) of that pass |
 | `Layer.co_parents` | Union across ops of the co-parent layer labels, without pass suffixes |
 | `Layer.code_context` | The captured call stack of the user code that ran this layer's function, for single-pass layers, outermost first with the frame that ran it last |
-| `Layer.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm |
+| `Layer.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`, `fallthrough`) and the labels of this layer's child ops inside each arm |
 | `Layer.conditional_branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
 | `Layer.conditional_elif_children` | Dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm |
 | `Layer.conditional_else_children` | List of labels of this layer's child ops that sit in an `else` arm of a conditional |
@@ -5264,6 +5264,28 @@ alphabetical order.
 | `Layer.transformed_out_dtype` | Dtype of the saved transformed output, or `None` |
 | `Layer.type_index` | Index of this layer among layers of the same type, counted from 1 in execution order |
 | `Layer.visualizer_path` | Path of the PNG used as this node's thumbnail in graph renders, or `None` |
+
+#### Conditional records (`trace.graph.conditionals`)
+
+`trace.graph.conditionals` holds one `Conditional` per `if` chain or ternary, each with its
+`ConditionalArm`s; an op's `in_conditionals` lists its `ConditionalRoleRef`s. Arms come from the
+source and are never invented: `then`, one `elif` per elif, `else` only when the source has one,
+and `fallthrough` for the code after a chain with no `else` whose every arm provably ends in
+`return`, `raise`, `break` or `continue` (that code runs only when every test was false). The
+fall-through arm, its token and drawing label `FALLTHROUGH`, and `Conditional.outcome` were added
+by JMT decision (Tue 3 Nov 2026, 3:23 PM PT); `docs/conditional_attribution.md` has the worked
+example.
+
+| Spelling | Meaning |
+| --- | --- |
+| `Conditional.fired_arm` | The arm at `fired_arm_index`, or `None` when no single arm fired |
+| `Conditional.fired_arm_kind` | Kind of the one arm whose body was witnessed firing (`then`, `elif`, `else` or `fallthrough`); `None` when no single source arm's body was witnessed firing, and `outcome` says why |
+| `Conditional.has_else` | Whether the source has an `else` block; a `fallthrough` arm never counts as one |
+| `Conditional.num_arms` | Number of arms, the `fallthrough` arm included |
+| `Conditional.outcome` | Which way the conditional went, derived from its arms and never persisted: `then`, `elif`, `else` or `fallthrough` when that arm fired or its witnessed test selected it with no tensor op in it, `skipped` when every test was witnessed false and there is no `else` or `fallthrough` arm, `multiple` when more than one arm fired across passes, `unknown` when no evidence decides it |
+| `ConditionalArm.execution_ops` | Labels of the ops that hold the `body` role in this arm: the ops its entry edges feed |
+| `ConditionalArm.kind` | Arm kind: `then`, `elif`, `else` or `fallthrough` |
+| `ConditionalRoleRef.arm_kind` | Kind of the arm the role is in: `then`, `elif`, `else` or `fallthrough` |
 
 #### `tl.types.Module`
 

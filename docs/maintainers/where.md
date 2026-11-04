@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1450 modules, 649844 lines, 0 modules without a docstring.
+83 packages, 1452 modules, 650073 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 47 | 25311 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4658 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 91 | 38112 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 92 | 38243 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10636 |
@@ -29,7 +29,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17211 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 30 | 17351 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 41 | 16501 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44644 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44597 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2303 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30853 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30858 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4569 |
 
 ## Modules by package
@@ -289,7 +289,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (91 modules, 38112 lines)
+Core data structures for representing a logged forward pass. (92 modules, 38243 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -299,6 +299,7 @@ Core data structures for representing a logged forward pass. (91 modules, 38112 
 | `_bound_owner_alias` | Bare module addresses for a bound-method trace. | 56 |
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 278 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 139 |
+| `_conditional_arms` | Derived reads over the arms of a recorded conditional. | 151 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
 | `_doors` | Doors from the records to the packages above them (Rule F). | 142 |
 | `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 91 |
@@ -383,7 +384,7 @@ Core data structures for representing a logged forward pass. (91 modules, 38112 
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3502 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1089 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 216 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3456 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3436 |
 
 ### `torchlens._data_substrate`
 
@@ -606,11 +607,12 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 516 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17211 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (30 modules, 17351 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 318 |
+| `_ast_predicates` | Statement and expression predicates for the conditional AST indexer. | 162 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 295 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'') and its in-memory evidence. | 133 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 227 |
@@ -629,9 +631,9 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 343 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 293 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 35 |
-| `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2235 |
+| `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2214 |
 | `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1372 |
-| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1843 |
+| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1842 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 957 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 1114 |
@@ -866,7 +868,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (77 modules, 44644 lines)
+Computational graph visualization via Graphviz. (77 modules, 44597 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -909,10 +911,10 @@ Computational graph visualization via Graphviz. (77 modules, 44644 lines)
 | `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 2036 |
 | `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 591 |
 | `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2064 |
-| `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2364 |
+| `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2363 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | (syntax error at line 2005) | 2130 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2084 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 514 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 675 |
@@ -2039,7 +2041,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (68 modules, 30853 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (68 modules, 30858 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2065,7 +2067,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_backward_graph` | Backward graph and grad-function invariants. | 584 |
 | `_invariants_buffers` | Parameter indexes and buffer ownership invariants. | 531 |
 | `_invariants_conditional_base` | Recurrence and foundational conditional invariants. | 503 |
-| `_invariants_conditional_modules` | Conditional membership and module hierarchy invariants. | 530 |
+| `_invariants_conditional_modules` | Conditional membership and module hierarchy invariants. | 535 |
 | `_invariants_conditionals` | Conditional labels, events, and branch-edge invariants. | 541 |
 | `_invariants_connectivity` | Distance, connectivity, lookup, and contract helpers. | 847 |
 | `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 584 |

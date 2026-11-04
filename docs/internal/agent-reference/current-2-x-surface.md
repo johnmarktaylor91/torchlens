@@ -146,6 +146,19 @@
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
+- **Conditionals keep source arms; `Conditional.outcome` says which way it went** (doc of
+  record `docs/conditional_attribution.md`). An `if` with no `else` never gains one; when every
+  arm ends in `return`/`raise`/`break`/`continue`, the code after the chain is one more arm of kind
+  `fallthrough` (drawn `FALLTHROUGH`, counted by `num_arms`, `has_else` stays `False`).
+  `Conditional.outcome` (a plain string, derived, not persisted; unrelated to the
+  `CaptureOutcome` of `Trace.outcome`) is `then`/`elif`/`else`/`fallthrough`/`skipped`/
+  `multiple`/`unknown`; `fired_arm_kind is None` means no single arm fired.
+
+  ```python
+  cond = trace.graph.conditionals[0]
+  cond.outcome          # e.g. "fallthrough" for `if c: return a` then `return b`, c false
+  cond.fired_arm_kind   # "fallthrough"; cond.fired_arm.execution_ops names the after-code ops
+  ```
 - **Every capture product carries ONE settled typed outcome** (early-stopping
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen
