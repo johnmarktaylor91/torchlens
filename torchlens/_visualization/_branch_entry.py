@@ -25,7 +25,7 @@ def _bool_kinds(trace: Trace) -> dict[str, str]:
     """Map every condition bool's base label to ``"IF"`` or ``"ELIF"``."""
 
     bool_kind: dict[str, str] = {}
-    for event in getattr(trace, "_graph_conditional_records", None) or ():
+    for event in trace.graph.conditional_records or ():
         for bool_label in getattr(event, "bool_layers", ()) or ():
             bool_layer = trace.layers[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
@@ -104,7 +104,7 @@ def edge_is_conditional_branch(
         ``"unrolled"`` or ``"rolled"``; a rolled edge matches on base labels.
     """
 
-    branch_edges = getattr(trace, "_graph_conditional_branch_edges", None) or ()
+    branch_edges = trace.graph.conditional_branch_edges or ()
     edge_key = (parent_node.layer_label, child_node.layer_label)
     if vis_mode == "unrolled":
         return edge_key in branch_edges
