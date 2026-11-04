@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
+from ._op_out_read import _refuse_read_without_trace
+
 if TYPE_CHECKING:
     from .module import Module
     from .op import Op
@@ -87,6 +89,7 @@ def atomic_module(op: Op) -> Module | None:
         return None
     trace = op._source_trace
     if trace is None:
+        _refuse_read_without_trace(op)
         return None
     try:
         return cast("Module", trace.modules[address])

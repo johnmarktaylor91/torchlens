@@ -109,6 +109,7 @@ from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importer
 )
 from ._op_out_read import (
     _out_read_state,
+    _refuse_read_without_trace,
     _synthesized_out_read_due,
     _validate_reference_out_not_mutated,
 )
@@ -1646,10 +1647,8 @@ class Op(OpAtenMixin, _SelectionOperand):
                     remedy="re-run with save=... to retain this activation",
                     label=str(label),
                 )
-            if out is None and slot("_tracing_finished") and source_trace is not None:
-                from ..stats._capture_stats import refuse_reduced_payload_read
-
-                refuse_reduced_payload_read(slot, source_trace)
+            if out is None:
+                _refuse_read_without_trace(self, out_trace=source_trace)
             _warn_synthesized_out_read(source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
                 _validate_reference_out_not_mutated(_out_read_state(slot, out))
@@ -1662,6 +1661,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
             if not name.startswith("_"):
                 refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
+                _refuse_read_without_trace(self, member=name)
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(
@@ -1907,13 +1907,13 @@ class Op(OpAtenMixin, _SelectionOperand):
     def bytes_read(self) -> Bytes | None:
         """Theoretical ideal read-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
+        return _op_cost.theoretical_bytes(self, 0)
 
     @property
     def bytes_written(self) -> Bytes | None:
         """Theoretical ideal write-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
+        return _op_cost.theoretical_bytes(self, 1)
 
     @property
     def arithmetic_intensity(self) -> float | None:

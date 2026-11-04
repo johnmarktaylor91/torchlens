@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._quantities import Flops, Macs, as_macs
+from .._quantities import Bytes, Flops, Macs, as_macs
+from . import _doors
+from ._op_out_read import _refuse_read_without_trace
 
 if TYPE_CHECKING:
     from .op import Op
@@ -83,6 +85,18 @@ def macs_total(op: Op) -> Macs | None:
     """
 
     return None
+
+
+def theoretical_bytes(op: Op, side: int) -> Bytes | None:
+    """Theoretical ideal read-once (``side`` 0) or write-once (1) traffic for this Op.
+
+    Refuses typed on an Op whose Trace was garbage-collected: the traffic model
+    reads the Op's graph parents through the Trace, so ``None`` there would
+    read as "insufficient metadata".
+    """
+
+    _refuse_read_without_trace(op)
+    return _doors.debug()._cost.theoretical_op_bytes(op)[side]
 
 
 def arithmetic_intensity(op: Op) -> float | None:
