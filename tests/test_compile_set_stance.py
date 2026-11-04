@@ -26,7 +26,9 @@ broad fallback contract lives in ``test_dynamo_fake_guard.py`` under the
 
 from __future__ import annotations
 
+import functools
 import warnings
+from collections.abc import Callable
 
 import pytest
 import torch
@@ -185,7 +187,16 @@ def test_forced_eager_disclosure_note_fires_once_per_process() -> None:
     assert not [w for w in second if "force_eager" in str(w.message)]
 
 
-_compiled_free_fn = torch.compile(lambda t: torch.tanh(t) + torch.sigmoid(t), fullgraph=True)
+@functools.cache
+def _compiled_free_fn() -> Callable[[torch.Tensor], torch.Tensor]:
+    """Return the module-level compiled free function, compiled on first use.
+
+    Compiling at import would switch ``torch.distributions`` argument
+    validation off for every test collected after this module, so the compile
+    waits until a test needs it, where per-test isolation restores the default.
+    """
+
+    return torch.compile(lambda t: torch.tanh(t) + torch.sigmoid(t), fullgraph=True)
 
 
 class _UsesCompiledFreeFunction(nn.Module):
@@ -217,7 +228,7 @@ class _UsesCompiledFreeFunction(nn.Module):
             Free-function output.
         """
 
-        return _compiled_free_fn(self.fc(x))
+        return _compiled_free_fn()(self.fc(x))
 
 
 def test_compiled_free_function_interior_is_logged_without_any_warning() -> None:
