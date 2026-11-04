@@ -253,6 +253,6 @@ def examples_for(name: str) -> list[BankExample]:
 
 
 def _focus_key(example: BankExample) -> tuple[bool, bool, int]:
-    """Sort key putting the example most about one name first."""
+    """Sort key putting the example most about one name first (trap pairs last)."""
 
-    return (example.kind == "wrong", example.kind == "right", len(example.covers))
+    return (example.id.endswith("-wrong"), example.id.endswith("-right"), len(example.covers))
