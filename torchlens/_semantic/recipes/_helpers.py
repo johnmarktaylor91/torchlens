@@ -7,6 +7,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from .._call_subject import CallBoundModule, bound_child
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
 
@@ -27,9 +28,13 @@ def child_module(module: Any, child_name: str) -> Any | None:
         return None
     child_address = child_name if module.address == "self" else f"{module.address}.{child_name}"
     try:
-        return trace.modules[child_address]
+        child = trace.modules[child_address]
     except (KeyError, ValueError):
         return None
+    if isinstance(module, CallBoundModule):
+        # One call of a reused module: read the child's call made inside it.
+        return bound_child(module, child)
+    return child
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
