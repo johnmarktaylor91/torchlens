@@ -250,6 +250,9 @@
   completeness census reported its interior dispatches as unaccounted. The slot shape is the
   capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
   `TorchCapabilityWarning` instead of degrading silently.
+- **validation**: `tl.validate(model, x)` runs the forward scope: `scope=` defaults to
+  `"forward"`, so the call equals `tl.validate(model, x, scope="forward")`. No scope checks
+  anything different.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116

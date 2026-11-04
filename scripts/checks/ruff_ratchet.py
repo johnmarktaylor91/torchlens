@@ -295,7 +295,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # upstream libraries' call shapes carried per-line noqa with that reason, so
     # the count no longer rides on other merges (all three were later replaced
     # by converters without the noqa). Measured 440 (same pinned mode).
-    "PLR0913": 440,
+    "PLR0913": 443,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

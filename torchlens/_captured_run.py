@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import gc
 from collections.abc import Iterable
-from typing import Any, Protocol, TypeVar, cast, runtime_checkable
+from typing import Any, Final, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
+
+from ._errors import CaptureNotActiveError
 
 ActivationT = TypeVar("ActivationT")
 
@@ -19,6 +21,47 @@ def _event_tuple(items: Iterable[Any], title: str, noun: str) -> tuple[Any, ...]
     from ._utils._display_bounded import RecordTuple
 
     return RecordTuple(items, title, noun)
+
+
+#: What a lean recording (``tl.record(lean=True)``, PROVISIONAL SPELLING) leaves out.
+LEAN_OMISSIONS: Final[tuple[str, ...]] = (
+    "shell_records_of_unkept_ops",
+    "module_boundary_events_of_unkept_modules",
+    "event_indexes_of_unkept_events",
+    "op_counts",
+)
+
+#: Recording reads that need the full journal and refuse on a lean recording.
+LEAN_REFUSED_READS: tuple[str, ...] = (
+    "event_stream",
+    "op_events",
+    "lazy_trace",
+    "raw_metadata",
+    "to_trace",
+)
+
+
+def is_lean(run: Any) -> bool:
+    """Return whether ``run`` is a recording made with the lean journal option."""
+
+    try:
+        options = object.__getattribute__(run, "_options")
+    except AttributeError:
+        return False
+    return bool(getattr(options, "lean", False))
+
+
+def refuse_if_lean(recording: Any, read: str) -> None:
+    """Raise ``recording_lean_omitted`` when ``read`` needs the events lean dropped."""
+
+    if is_lean(recording):
+        raise CaptureNotActiveError(
+            f"Recording.{read} needs the journal events of every op, and this recording "
+            "was made with lean=True, which journals only the events its selection keeps "
+            f"(omitted: {', '.join(LEAN_OMISSIONS)})",
+            code="recording_lean_omitted",
+            remedy="record again without lean=True to keep every event",
+        )
 
 
 def forget_event_stream(run: object) -> None:
@@ -72,10 +115,21 @@ class TraceLike:
     True
     """
 
+    def _check_journal_read(self, read: str) -> None:
+        """Refuse ``read`` when this projection lacks the full journal (a lean recording)."""
+
+        refuse_if_lean(self, read)
+
+    def _lean_omissions(self) -> tuple[str, ...]:
+        """Return what a lean recording left out; ``()`` for any other run."""
+
+        return LEAN_OMISSIONS if is_lean(self) else ()
+
     @property
     def event_stream(self) -> CaptureEvents | None:
         """Return the raw capture event bundle when retained."""
 
+        self._check_journal_read("event_stream")
         try:
             events = object.__getattribute__(self, "capture_events")
         except AttributeError:
@@ -92,6 +146,7 @@ class TraceLike:
     def op_events(self) -> tuple[Any, ...]:
         """Return the raw operation event stream."""
 
+        self._check_journal_read("op_events")
         events = self.event_stream
         if events is None:
             return _event_tuple((), "OpEvents", "events")

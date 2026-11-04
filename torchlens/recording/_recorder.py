@@ -18,11 +18,7 @@ from .. import _state
 from .._capture.finalize.settle import _extract_and_mark_outputs
 from .._capture.outcome import safe_exception_repr, safe_exception_str
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
-from .._capture.projections import (
-    RecordingState,
-    _empty_recording,
-    active_recording_state,
-)
+from .._capture.projections import RecordingState, _empty_recording, active_recording_state
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
@@ -41,6 +37,7 @@ from ._capture_door import _unfold_capture_options
 from ._halt import StopSignal
 from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
+from ._run_cores import retain_run_core
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -161,11 +158,7 @@ def _resolve_train_mode_default(
 def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
     """Stamp the finalized recording with its capture outcome when none is present."""
 
-    from .._capture.outcome import (
-        CaptureOutcome,
-        CaptureStatus,
-        stamp_recording_outcome,
-    )
+    from .._capture.outcome import CaptureOutcome, CaptureStatus, stamp_recording_outcome
 
     if getattr(recording, "_outcome", None) is not None:
         return
@@ -184,6 +177,16 @@ def _settle_recording_outcome(recording: Recording, state: RecordingState) -> No
     else:
         stamped = CaptureOutcome(status=CaptureStatus.COMPLETE, inference_only=inference_only)
     stamp_recording_outcome(recording, stamped)
+
+
+def _normalize_narrate(narrate: Any) -> Any:
+    """Normalize ``narrate=`` at construction so its typed refusals fire before any forward."""
+
+    if narrate is MISSING or narrate is None or narrate is False:
+        return None
+    from .._snoop import normalize_echo
+
+    return normalize_echo(narrate)
 
 
 class Recorder:
@@ -214,6 +217,7 @@ class Recorder:
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         narrate: Any | None | MissingType = MISSING,
         capture: CaptureOptions | None = None,
+        lean: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -295,14 +299,7 @@ class Recorder:
             or not (save_grads is MISSING or save_grads is None or save_grads is False)
             or not (default_grad is MISSING or default_grad is False)
         )
-        # narrate= normalization runs at construction so the typed refusals
-        # (bad spellings, finalized-label selectors) fire BEFORE any forward.
-        if narrate is MISSING or narrate is None or narrate is False:
-            echo_normalized = None
-        else:
-            from .._snoop import normalize_echo
-
-            echo_normalized = normalize_echo(narrate)
+        echo_normalized = _normalize_narrate(narrate)
         self.options: _RecordingConfig = _resolve_recording_config(
             keep_op=save,
             default_op=default_op,
@@ -326,8 +323,9 @@ class Recorder:
             save_raw_grads=save_raw_grads,
             echo=echo_normalized,
             detach_saved_activations=detach_saved_activations,
+            lean=lean,
         )
-        validate_recording_options(self.options)
+        validate_recording_options(self.options, backward_requested=self._backward_requested)
         validate_followed_by_capability(
             self.options.keep_op,
             api_name="record(save=...)",
@@ -518,8 +516,7 @@ class Recorder:
                 )
         except StopSignal as halt_exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            if captured_run_core is not None:
-                self._captured_run_cores.append(captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core)
             self._absorb_pass_events(trace)
             object.__setattr__(
                 self._state.recording,
@@ -537,8 +534,7 @@ class Recorder:
             return output
         except Exception as exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            if captured_run_core is not None:
-                self._captured_run_cores.append(captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if self._echo_session is not None:
                 # Crash tail (snoop D5 tail 2): flush synchronously, extend the
@@ -577,8 +573,7 @@ class Recorder:
         output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
         output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
         captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-        if captured_run_core is not None:
-            self._captured_run_cores.append(captured_run_core)
+        retain_run_core(self._captured_run_cores, captured_run_core)
         if output_tensors is None or output_tensor_addresses is None:
             # Defensive fallback only; the postprocess=False branch above always
             # populates these on a normal return.
@@ -813,6 +808,7 @@ class Recorder:
         self._state.history.clear()
         self._state.op_counts.clear()
         self._state.module_stack.clear()
+        self._state.clear_pass_indexes()
         self._state.sample_id = sample_id
         self._state.pass_index = self._next_pass_index
         self._state.event_index = 0
