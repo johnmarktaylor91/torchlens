@@ -3114,7 +3114,7 @@ docs-md	docs/maintainers/where.md	310
 docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	314
-docs-md	docs/maintainers/where.md	31442
+docs-md	docs/maintainers/where.md	31458
 docs-md	docs/maintainers/where.md	3148
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
@@ -3442,7 +3442,7 @@ docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
-docs-md	docs/maintainers/where.md	677682
+docs-md	docs/maintainers/where.md	677698
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
@@ -11132,7 +11132,9 @@ test-docstrings	tests/test_validation_hardening.py	49,
 test-docstrings	tests/test_validation_hardening.py	50
 test-docstrings	tests/test_validation_key_forgery.py	11
 test-docstrings	tests/test_validation_key_forgery.py	51
+test-docstrings	tests/test_validation_perturbation_units.py	16
 test-docstrings	tests/test_validation_perturbation_units.py	21
+test-docstrings	tests/test_validation_perturbation_units.py	32
 test-docstrings	tests/test_validation_perturbation_units.py	64
 test-docstrings	tests/test_validation_perturbation_units.py	64_
 test-docstrings	tests/test_validation_pristine_ground_truth.py	14

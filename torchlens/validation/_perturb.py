@@ -17,6 +17,19 @@ from .._utils._sparse_parts import sparse_component_tensors, sparse_with_values
 # where the value space may be small (e.g., a single-element int tensor).
 MAX_PERTURB_ATTEMPTS = 100
 
+# The wide unsigned dtypes (torch 2.3+) have few kernels (no ``unique`` or ``randint`` on most
+# devices), so they are perturbed through a same-width signed view: a philox key (uint64) is a
+# value parent that is perturbed like any integer, never routed to the float branch.
+_UNSIGNED_AS_SIGNED: dict[torch.dtype, torch.dtype] = {
+    getattr(torch, unsigned): signed
+    for unsigned, signed in (
+        ("uint16", torch.int16),
+        ("uint32", torch.int32),
+        ("uint64", torch.int64),
+    )
+    if hasattr(torch, unsigned)
+}
+
 
 def _perturb_sparse_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
     """Perturb a sparse parent through its values, keeping layout, indices and shape.
@@ -76,6 +89,9 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         torch.int64,
     ]:
         perturbed_outs = _perturb_integer_outs(parent_outs)
+    elif parent_outs.dtype in _UNSIGNED_AS_SIGNED:
+        signed = parent_outs.view(_UNSIGNED_AS_SIGNED[parent_outs.dtype])
+        perturbed_outs = _perturb_integer_outs(signed).view(parent_outs.dtype)
     elif parent_outs.dtype == torch.bool:
         perturbed_outs = _perturb_bool_outs(parent_outs)
     elif parent_outs.is_complex():
