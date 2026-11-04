@@ -421,7 +421,7 @@
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
-        "n_ops_completed": 0,
+        "n_ops_committed": 0,
         "status": "complete",
         "stop_reason": null
       },
@@ -552,13 +552,13 @@
     }
   },
   "sha256_chunks": [
-    "13a3b96d",
-    "a7d7353d",
-    "256bde8f",
-    "924012f9",
-    "3713d7c6",
-    "ba467155",
-    "26bcfd2d",
-    "5d8c221d"
+    "75f1a0e1",
+    "ef4e2838",
+    "90d1a77b",
+    "8f897846",
+    "0c6d30e1",
+    "89973ca1",
+    "c3c6667d",
+    "219c585d"
   ]
 }

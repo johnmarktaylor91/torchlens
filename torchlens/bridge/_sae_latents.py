@@ -423,7 +423,7 @@ def register(name: str, sae: Any, *, site: Any) -> None:
 
     After ``tl.bridge.sae.register("res", sae, site="blocks.4")``,
     ``tl.facet("res").latent(3442)`` addresses latent 3442 wherever a
-    ``tl.head`` selector works (``attach_hooks``, ``do``,
+    ``tl.head`` selector works (``do`` on any engine,
     ``fork().do``), and ``trace["blocks.4"].facets["res[3442]"]`` reads it.
     Registration is process-wide and seen by traces captured before it.
 
@@ -602,7 +602,7 @@ def logged_splice_trace(
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(replayable=True))
+        logged = tl.trace(model, inputs)
     finally:
         handle.remove()
         del model._modules[child]

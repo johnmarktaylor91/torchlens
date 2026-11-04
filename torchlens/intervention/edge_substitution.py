@@ -309,7 +309,7 @@ def apply_edge_substitution_do(
             # PASS-QUALIFIED commit key (AUD-CODE 1.2): the bare
             # ``layer_label`` of a multi-pass child resolves to its LAST
             # pass, so an edge into pass k < N committed the new out and the
-            # FireRecord onto pass N while ``push_from`` then pushed pass k's
+            # FireRecord onto pass N while the replay then pushed pass k's
             # UNCHANGED captured out -- a silent no-op whose audit row still
             # claimed success. ``_replay_site_key`` is the engine's own key.
             child_key = replay_module._replay_site_key(child_op)
@@ -318,7 +318,7 @@ def apply_edge_substitution_do(
                 {child_key: new_out},
                 {child_key: [fire_record]},
             )
-            replay_module.push_from(trace, child_op)
+            replay_module.replay_from_op(trace, child_op)
             applied.append(
                 {
                     "edge_address": repr(tuple(address)),

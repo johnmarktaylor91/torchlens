@@ -44,9 +44,34 @@ def _carries_intervened_values(trace: Any) -> bool:
         if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
             return True
     return any(
-        isinstance(row, dict) and row.get("status") not in _VALUE_NEUTRAL_AUDIT_STATUSES
+        isinstance(row, dict) and _audit_row_records_fired_edit(row)
         for row in getattr(trace, "intervention_audit", None) or ()
     )
+
+
+def _audit_row_records_fired_edit(row: dict[str, Any]) -> bool:
+    """Return whether one persisted audit row records an edit that changed values.
+
+    Parameters
+    ----------
+    row:
+        One ``intervention_audit`` row.
+
+    Returns
+    -------
+    bool
+        EVENT rows carry a status: fired means changed values. Resolve-bearing
+        rows carry none: an ACT row lists the site keys its edit fired on (a
+        ``do()`` that only staged its hooks lists none), and EDGE and PARAM rows
+        exist only after a substitution replayed. An unknown shape fails closed.
+    """
+
+    status = row.get("status")
+    if status is not None:
+        return status not in _VALUE_NEUTRAL_AUDIT_STATUSES
+    if row.get("kind") == "ACT":
+        return bool(row.get("sites"))
+    return True
 
 
 def _session_spec_has_fired(trace: Any) -> bool:

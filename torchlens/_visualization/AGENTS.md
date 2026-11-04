@@ -75,7 +75,7 @@ run-fold legality), `collapse_estimator.py` ((U, W) admission estimator, budget,
 Backward and combined graph entrypoints live in `_render_entrypoints.py`. Their grad-function source
 normalizers produce the same `RenderIRNode`, `RenderIREdge`, and `RenderIRRegion` records as the forward
 pipeline, including backward-pass regions for unrolled graphs, and dispatch through the same renderer
-protocol and Graphviz backend. Experimental Dagua remains opt-in under `torchlens.experimental.dagua`.
+protocol and Graphviz backend.
 
 ## Key Internal Functions
 

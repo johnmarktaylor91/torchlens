@@ -778,6 +778,14 @@ _PROCESS_CACHES = frozenset(
         # deterministic derivation (base powers mod 2^64) re-computable at
         # any time; keyed by device string, never behavior-changing.
         ("torchlens/_data_substrate/digests.py", "_WEIGHTS_BY_DEVICE"),
+        # Record-overhead memos: lazily filled strong dicts, not immutable tables.
+        # The field-name tuple per frozen record class (bounded by the record
+        # classes) and the name-only shell function facet per function name (a
+        # frozen, tuple-valued FunctionCallRef with func=None, bounded by the
+        # distinct function names); both re-derivable at any time and never
+        # behavior-changing.
+        ("torchlens/_ir/refs.py", "_FROZEN_RECORD_FIELD_NAMES"),
+        ("torchlens/_capture/_sparse_shell.py", "_SHELL_FUNCTION_REFS"),
         ("torchlens/stats/_tensor_stats.py", "_STATS_CACHE"),
         ("torchlens/_io/bundle.py", "_NESTED_BLOB_KINDS"),
         ("torchlens/_io/payload_codec.py", "_CODECS"),
@@ -1280,7 +1288,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/experiment/_grid.py", "__all__"),
         ("torchlens/experiment/_head_sugar.py", "__all__"),
         ("torchlens/experimental/__init__.py", "__all__"),
-        ("torchlens/experimental/dagua/__init__.py", "__all__"),
         ("torchlens/experimental/node_styles.py", "__all__"),
         ("torchlens/export/__init__.py", "__all__"),
         ("torchlens/export/_graphs.py", "__all__"),
@@ -1602,6 +1609,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_operations.py", "__all__"),
         ("torchlens/bundle/_save.py", "__all__"),
         ("torchlens/intervention/_op_edits.py", "__all__"),
+        ("torchlens/intervention/_recipe_io.py", "__all__"),
         ("torchlens/intervention/_trace_edits.py", "__all__"),
         ("torchlens/intervention/_trace_hooks.py", "__all__"),
         ("torchlens/intervention/_trace_run.py", "__all__"),
@@ -1614,6 +1622,12 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_trace_summary.py", "__all__"),
         ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
+        ("torchlens/_utils/torchvision_weights.py", "__all__"),
+        ("torchlens/postprocessing/__init__.py", "__all__"),
+        ("torchlens/preprocessing/_declared_transform.py", "__all__"),
+        ("torchlens/recording/_generation_options.py", "__all__"),
+        ("torchlens/recording/_generation_stream.py", "__all__"),
+        ("torchlens/recording/reducers.py", "__all__"),
     }
 )
 

@@ -16,6 +16,9 @@ from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
 from torchlens.validation import validate_forward_pass
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _HAS_TORCH_FUNC = hasattr(torch, "func")
 
 

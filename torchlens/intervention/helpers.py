@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -12,16 +12,20 @@ from torch import nn
 from .._errors import InvalidArgumentError
 from ._helper_internals import (
     _align_direction,
+    _dim_outside_mean_vocabulary,
     _donor_facet_slice,
     _enqueue_nondeterminism_note,
     _first_non_executable_arg,
     _helper_spec,
     _make_generator,
     _mean_ablate_axes,
+    _members_dim_without_population,
     _non_executable_builtin_placeholder,
     _patch_source_identity,
+    _population_mean_spec,
     _resolve_patch_donor_site,
     _resolve_swap_value,
+    _source_mean_spec,
     _source_tensor_or_out,
     _splice_module_spec,
     _swap_with_spec,
@@ -34,11 +38,6 @@ from .errors import (
 )
 from .hooks import HookContext
 from .population import Population
-from .stochastic import (
-    _prove_event_geometry,
-    _record_sampling,
-    _resolve_over_axes,
-)
 from .types import Edit
 
 HELPER_REGISTRY_VERSION = "1"
@@ -107,15 +106,18 @@ def mean_ablate(
         and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
-        construction), and ``dim`` then names the further site axes.
+        construction), and ``dim`` then says how far that mean reduces.
     dim:
-        REQUIRED. ``None`` averages every axis of a tensor or self source to
-        one scalar; an int or tuple of ints averages those axes with
-        ``keepdim`` broadcast. For a ``Population``, ``None`` is the
-        elementwise across-member mean and axes reduce that mean further. A
-        semantic axis name refuses ``axis_semantics_unknown`` until axis-role
-        evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``is_batch_independent`` open).
+        REQUIRED. ``None`` averages every axis of the source to one scalar,
+        whatever the source (site, tensor, Op-like or ``Population``); an int
+        or tuple of ints averages those axes with ``keepdim`` broadcast (for a
+        ``Population``, the axes of its elementwise member mean).
+        ``"members"`` is the ``Population`` spelling for the elementwise
+        across-member mean itself, a fill with the members' shape; it refuses
+        ``intervention_over_invalid`` for any other source. A semantic axis
+        name refuses ``axis_semantics_unknown`` until axis-role evidence
+        exists; any other spelling refuses ``intervention_over_invalid`` at
+        construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -134,153 +136,16 @@ def mean_ablate(
     True
     """
 
+    if isinstance(dim, str) and dim == "members":
+        if not isinstance(source, Population):
+            raise _members_dim_without_population(source, dim)
+        return _population_mean_spec(source, axes="members", allow_shape_change=allow_shape_change)
     axes = _mean_ablate_axes(dim)
     if axes is None:
-        raise InvalidArgumentError(
-            f"mean_ablate(dim={dim!r}) is outside the mean vocabulary: dim=None "
-            "averages every axis, an int or tuple of ints names the axes to "
-            "average. Accepting another token would record a policy the hook "
-            "does not compute",
-            code="intervention_over_invalid",
-            remedy=(
-                "pass dim=None for the mean over all axes, or the explicit integer "
-                "axis (or tuple of axes) to average; pass source=<tensor> or "
-                "source=<Population> to average something other than the site"
-            ),
-            argument="dim",
-            received=repr(dim),
-        )
-    dim_kwarg: tuple[int, ...] | None = None if axes == "all" else axes
+        raise _dim_outside_mean_vocabulary(dim)
     if isinstance(source, Population):
-        return _population_mean_spec(source, axes=dim_kwarg, allow_shape_change=allow_shape_change)
+        return _population_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
     return _source_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
-
-
-def _source_mean_spec(
-    source: Any | None, *, axes: Literal["all"] | tuple[int, ...], allow_shape_change: bool
-) -> Edit:
-    """Build the ``mean_ablate`` spec for a self, tensor or Op-like source."""
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for mean ablation."""
-
-        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Return an out-shaped tensor filled with the source mean."""
-
-            values = _source_tensor_or_out(source, out).to(device=out.device, dtype=out.dtype)
-            if axes == "all":
-                return torch.zeros_like(out) + values.mean()
-            resolved = _resolve_over_axes(axes, values.ndim, verb="mean_ablate")
-            reduced = values.mean(dim=list(cast("tuple[int, ...]", resolved)), keepdim=True)
-            if source is None:
-                return torch.zeros_like(out) + reduced
-            return _broadcast_mean(reduced, out, argument="source").clone()
-
-        return _hook
-
-    # DERIVED, never tabled (edits memo D18): True only when the fill value
-    # provably never reads the traced batch. An external source qualifies;
-    # the self-mean reads every batch row and fails closed, and couples the
-    # rows (D34), so a chunked capture refuses it at attach.
-    batch_independent = source is not None
-    return _helper_spec(
-        "mean_ablate",
-        args=(source,),
-        kwargs={
-            "dim": None if axes == "all" else axes,
-            "allow_shape_change": allow_shape_change,
-        },
-        factory=factory,
-        signal="forward",
-        is_batch_independent=batch_independent,
-        is_compatible_with_append=not allow_shape_change,
-        metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
-    )
-
-
-def _population_mean_spec(
-    reference: Population, *, axes: tuple[int, ...] | None, allow_shape_change: bool
-) -> Edit:
-    """Build the ``mean_ablate`` spec whose source is a population.
-
-    The fill is computed eagerly at construction (populations are prepared
-    before hooks install, D10); the record says ``stochastic=False`` and no
-    seed is ever invented. ``axes=None`` is the elementwise across-member
-    mean, which must match the site's geometry exactly; explicit axes reduce
-    that mean further with ``keepdim`` and broadcast back to the site.
-    """
-
-    fill = reference.mean() if axes is None else reference.mean(axes)
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime population-mean fill hook."""
-
-        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Fill the site with the prepared population mean."""
-
-            prepared = fill.detach().to(device=out.device, dtype=out.dtype)
-            if axes is None:
-                _prove_event_geometry(prepared, out, verb="mean_ablate")
-                value = prepared
-            else:
-                value = _broadcast_mean(prepared, out, argument="source")
-            _record_sampling(
-                ctx,
-                "mean_ablate",
-                {
-                    "stochastic": False,
-                    "population_identity": reference.identity,
-                    "digest_kind": reference.digest_kind,
-                    "population_count": len(reference),
-                    "eligible_count": None,
-                    "base_seed": None,
-                    "derived_seed": None,
-                    "donor_group_id": None,
-                    "share_draw": None,
-                    "logical_firing_coordinate": (),
-                    "realized_draw_digest": None,
-                    "replacement_mode": "evidence_mean",
-                    "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
-                },
-            )
-            return value.clone()
-
-        return _hook
-
-    return _helper_spec(
-        "mean_ablate",
-        kwargs={
-            "dim": axes,
-            "allow_shape_change": allow_shape_change,
-            "population_identity": reference.identity,
-            "population_count": len(reference),
-        },
-        factory=factory,
-        portability="opaque_audit",
-        is_batch_independent=True,
-        is_compatible_with_append=not allow_shape_change,
-        metadata={"stochastic": False},
-    )
-
-
-def _broadcast_mean(fill: torch.Tensor, out: torch.Tensor, *, argument: str) -> torch.Tensor:
-    """Expand a reduced mean to the site's shape, refusing typed when it cannot."""
-
-    if fill.shape == out.shape:
-        return fill
-    try:
-        return fill.expand(out.shape)
-    except RuntimeError:
-        raise InvalidArgumentError(
-            f"mean_ablate mean of shape {tuple(fill.shape)!r} does not broadcast to "
-            f"the site shape {tuple(out.shape)!r}",
-            code="sampling_geometry_mismatch",
-            remedy=(
-                "build the source at this site's geometry, or reduce over axes that broadcast back"
-            ),
-            argument=argument,
-        ) from None
 
 
 def scramble_elements(
@@ -1419,7 +1284,7 @@ def patch_from(
     Examples
     --------
     >>> donor = tl.trace(model, torch.randn(1, 3, 8, 8))
-    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> fork = tl.trace(model, x).fork()
     >>> _ = fork.do("relu_1_2", tl.patch_from(donor))
     >>> torch.equal(fork["relu_1_2"].out, donor["relu_1_2"].out)
     True

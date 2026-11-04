@@ -1,7 +1,7 @@
 """Facet selectors at the finished-trace read doors: ``trace[...]``.
 
 ``tl.head(i, "q")`` and ``tl.facet(name).latent(k)`` already address a facet at
-the write doors (set_only ``do``, ``attach_hooks``, ``do``) and at the facet read
+the write doors (``do``, on any engine) and at the facet read
 door (``record.facets[...]``). On a finished trace, ``trace[selector]`` and
 ``trace.find_sites`` refuses them. ``trace[selector]`` returns the ``Facet`` the
 record's view serves, so its ``.value`` equals the read door's value and the
@@ -82,12 +82,11 @@ def _q_head(model: _AttnModel, x: torch.Tensor, head: int) -> torch.Tensor:
 
 
 def _set_door_value(trace: tl.Trace, selector) -> torch.Tensor:
-    """The activation the ``attach_hooks`` write door hands an edit for ``selector``."""
+    """The activation the ``do`` write door hands an edit for ``selector``."""
 
     seen: list[torch.Tensor] = []
     fork = trace.fork("door")
-    fork._attach_hooks(selector, _recording_hook(seen))
-    fork.push()
+    fork.do(selector, _recording_hook(seen))
     assert seen, "the write door never handed the edit a value"
     return seen[0]
 

@@ -356,8 +356,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
-    "push": "replay/push engine; execution, not presentation",
-    "push_from": "replay/push engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
@@ -367,7 +365,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {

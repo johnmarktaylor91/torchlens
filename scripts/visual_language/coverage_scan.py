@@ -132,11 +132,7 @@ def scanned_files() -> tuple[Path, ...]:
     """The renderer files the token and emission scans read."""
 
     def wanted(rel: str) -> bool:
-        return (
-            rel.startswith("torchlens/_visualization/")
-            or rel == "torchlens/_vocab/node_spec.py"
-            or rel.startswith("torchlens/experimental/dagua/")
-        )
+        return rel.startswith("torchlens/_visualization/") or rel == "torchlens/_vocab/node_spec.py"
 
     return tuple(path for path in _package_files() if wanted(_rel(path)))
 

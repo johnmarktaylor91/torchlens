@@ -125,8 +125,7 @@ class DryRun:
         return timeline_html(self)
 
     def filter(
-        self,
-        other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
+        self, other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None
     ) -> DryRun:
         """Return a new trace with decisions from a new op predicate.
 
@@ -222,6 +221,7 @@ _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("stop_after", "halt"),
     ("storage", "streaming"),
     ("narrate", "echo"),
+    ("lean", "lean"),
 )
 
 #: Value types a saved recording stores verbatim (bundle ``metadata.json``).
@@ -293,6 +293,8 @@ class RecordingSettings:
         The stop predicate from ``stop_after=``, if any.
     storage:
         The disk sink from ``storage=``, if any.
+    lean:
+        PROVISIONAL SPELLING. Whether only the kept events were journaled (``lean_omissions``).
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
@@ -328,6 +330,7 @@ class RecordingSettings:
     stop_after: HaltPredicateFn | None
     storage: StorageOptions | None
     narrate: Any | None
+    lean: bool | None
 
     @classmethod
     def _from_values(cls: type[RecordingSettings], values: Mapping[str, Any]) -> RecordingSettings:
@@ -369,7 +372,7 @@ class Recording(TraceLike):
     failures may include a skipped/partial current-call event. ``last_event_*``
     fields are best-effort details about the last captured event, not an
     authoritative description of the failing op. For reused multi-pass
-    recorders, ``n_ops_completed`` is the total count of op-kind events captured
+    recorders, ``n_ops_committed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
 
@@ -581,11 +584,7 @@ class Recording(TraceLike):
                 is_derived=True,
             )
         if status == "recovered":
-            return CaptureOutcome(
-                status=CaptureStatus.UNKNOWN,
-                is_recovered=True,
-                is_derived=True,
-            )
+            return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_recovered=True, is_derived=True)
         if status == "complete":
             return CaptureOutcome(status=CaptureStatus.UNATTESTED, is_derived=True)
         return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
@@ -675,21 +674,13 @@ class Recording(TraceLike):
 
         base = session._fastlog_recording
         object.__setattr__(base, "_capture_events", session.capture_events)
+        object.__setattr__(base, "_output_tensors", list(getattr(session, "output_tensors", [])))
         object.__setattr__(
-            base,
-            "_output_tensors",
-            list(getattr(session, "output_tensors", [])),
-        )
-        object.__setattr__(
-            base,
-            "_output_tensor_addresses",
-            list(getattr(session, "output_tensor_addresses", [])),
+            base, "_output_tensor_addresses", list(getattr(session, "output_tensor_addresses", []))
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(
-            base,
-            "_captured_run_cores",
-            tuple(getattr(session, "captured_run_cores", ())),
+            base, "_captured_run_cores", tuple(getattr(session, "captured_run_cores", ()))
         )
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
         object.__setattr__(
@@ -741,9 +732,16 @@ class Recording(TraceLike):
         object.__setattr__(self, "_records_built", True)
 
     @property
-    def lazy_trace(self) -> DryRun:
-        """Return a lazy trace projection over all capture events."""
+    def lean_omissions(self) -> tuple[str, ...]:
+        """PROVISIONAL SPELLING. What a lean recording left out; ``()`` for a default one."""
 
+        return self._lean_omissions()
+
+    @property
+    def lazy_trace(self) -> DryRun:
+        """Return a lazy trace projection over all capture events (refused when lean)."""
+
+        self._check_journal_read("lazy_trace")
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
 
@@ -799,6 +797,7 @@ class Recording(TraceLike):
 
         from .exceptions import RecorderStateError
 
+        self._check_journal_read("raw_metadata")
         if self.event_stream is None:
             raise RecorderStateError(
                 "this Recording no longer holds its raw capture event stream "
@@ -996,8 +995,8 @@ class Recording(TraceLike):
         if self.is_failed:
             return (
                 f"Recording(status={self.status!r}, n_passes={self.num_passes}, "
-                f"n_records={len(self)}, n_ops_completed={self.num_committed_ops}, "
-                "caveat='n_ops_completed counts op-kind events across completed "
+                f"n_records={len(self)}, n_ops_committed={self.num_committed_ops}, "
+                "caveat='n_ops_committed counts op-kind events across completed "
                 "passes in this recorder; user-op failures exclude the failing "
                 "call; TL-side capture failures may include a skipped/partial "
                 "current-call event.')"
@@ -1098,6 +1097,7 @@ class Recording(TraceLike):
             raw activation payload to bind as the output frontier.
         """
 
+        self._check_journal_read("to_trace")
         if self.is_failed:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
@@ -1180,10 +1180,7 @@ class Recording(TraceLike):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
-        trace._postprocess(
-            halt_output_tensors,
-            halt_output_addresses,
-        )
+        trace._postprocess(halt_output_tensors, halt_output_addresses)
 
         # Settle at the cook seam (settlement authority path 9): the cooked
         # Trace is a real product and must carry an attested outcome; a halted

@@ -21,7 +21,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.3"
+__version__ = "2.37.1"
 
 if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
@@ -215,12 +215,13 @@ _REDIRECTS: dict[str, str] = {
     "Macs": "use torchlens.types.Macs",
     "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
     "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
     "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
+    "do": "use torchlens.Trace.do (trace.do(site, edit, model=model, inputs=x)) -- do is a Trace method, not a root verb",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "show_bundle_graph": "use torchlens.Bundle.draw (bundle.draw(path)): the merged bundle graph",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
@@ -243,7 +244,7 @@ _REDIRECTS: dict[str, str] = {
     "ModuleAccessor": "use torchlens._data_classes.module.ModuleAccessor",
     "ModuleCall": "use torchlens.types.ModuleCall",
     "ModuleInputSnapshot": "use torchlens.types.ModuleInputSnapshot",
-    "NodeSpec": "use torchlens.experimental.dagua.NodeSpec",
+    "NodeSpec": "use torchlens.viz.NodeSpec",
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.types.PreHookEffect",
@@ -254,14 +255,16 @@ _REDIRECTS: dict[str, str] = {
     "render_graph": "use torchlens.Trace.draw (trace.draw())",
     "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
     "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
-    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
     "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
+    "push": "use torchlens.Trace.do (trace.do(site, edit)) -- push folded into do, which applies and propagates the edit",
+    "push_from": "use torchlens.Trace.do (trace.do(site, edit)) -- push_from folded into do, which applies and propagates the edit",
     "reset_naming_counter": "use torchlens.io.reset_naming_counter",
     "resolve_sites": "use torchlens.Trace indexing (trace[selector]) -- it returns every matching site as a torchlens.Selection",
     "load_extraction": "use torchlens.load(path) -- it detects a saved extraction directory",
+    "run": "use torchlens.Trace.run (trace.run(model, x)) -- run is a Trace method, not a root verb",
     "save": "use torchlens.Trace.save (trace.save(path)) -- objects save themselves; torchlens.load(path) reads a saved artifact back",
     "save_intervention": "use torchlens.io.save_intervention",
     "semantic": "use torchlens.facets for facet functions and torchlens.mechinterp for the logit lens -- the semantic package is private",
@@ -271,10 +274,10 @@ _REDIRECTS: dict[str, str] = {
     "SpecCompat": "use torchlens.types.SpecCompat",
     "StreamingOptions": "use torchlens.options.StorageOptions",
     "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
+    "swap_with": "use torchlens.intervention.helpers.swap_with (swap_with(other_label)) -- an edit helper under torchlens.intervention.helpers, not a root verb",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
     "TorchLensPostfuncError": "use torchlens.errors.UserTransformError",
-    "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
     "transformer": "import torchlens.transformer, then use torchlens.transformer.AttentionView and its siblings -- a submodule, not a root name; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",

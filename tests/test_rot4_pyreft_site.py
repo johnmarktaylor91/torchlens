@@ -48,10 +48,10 @@ def _remedy_runs(error: InvalidArgumentError, artifact: Any) -> None:
     positions[:, -1] = True
     fork = trace.fork()
     fork.do(artifact.subspace(trace[_SITE], positions=positions), artifact.edit)
-    by_site = fork.push()[_SITE].out
+    by_site = fork[_SITE].out
     fork = _ready().fork()
     fork.do(artifact.subspace(_SITE, positions=positions), artifact.edit)
-    assert torch.equal(by_site, fork.push()[_SITE].out)
+    assert torch.equal(by_site, fork[_SITE].out)
 
 
 def test_site_whose_trailing_axis_is_another_width_refuses_and_the_remedy_runs(
@@ -106,7 +106,7 @@ def test_site_that_fits_gives_the_same_edit_as_its_label(tmp_path: Path) -> None
         trace = _ready()
         fork = trace.fork()
         fork.do(artifact.subspace(trace[_SITE], positions=positions), artifact.edit)
-        by_site = fork.push()[_SITE].out
+        by_site = fork[_SITE].out
         fork = _ready().fork()
         fork.do(artifact.subspace(_SITE, positions=positions), artifact.edit)
-        assert torch.equal(by_site, fork.push()[_SITE].out)
+        assert torch.equal(by_site, fork[_SITE].out)

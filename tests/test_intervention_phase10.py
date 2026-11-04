@@ -40,6 +40,8 @@ from torchlens.intervention.types import (
 from torchlens.io import load_intervention_spec
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
+#: Stage sticky hooks on the trace without propagating them.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
 
 
 class _TanhModel(nn.Module):
@@ -595,6 +597,9 @@ def test_loaded_spec_tolerates_custom_key_without_import(
         }
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
+    # The model-free tlspec loader imports its own torchlens loader module on
+    # demand; only a module outside the package is an untrusted import.
+    real_import_module = importlib.import_module
 
     def fail_import(module_name: str) -> object:
         """Fail if loading attempts to import an untrusted custom module.
@@ -607,9 +612,11 @@ def test_loaded_spec_tolerates_custom_key_without_import(
         Returns
         -------
         object
-            This function always raises.
+            The torchlens module itself; any other module name raises.
         """
 
+        if module_name.startswith("torchlens."):
+            return real_import_module(module_name)
         raise AssertionError(f"unexpected import of {module_name}")
 
     with monkeypatch.context() as import_patch:
