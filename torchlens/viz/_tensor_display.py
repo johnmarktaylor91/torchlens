@@ -7,6 +7,7 @@ from typing import Any, Literal
 import torch
 
 from .._utils._multipass_access import is_multipass_layer
+from ._rgb_scale import rgb_unit_hwc
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
 HeatmapSigns = Literal["positive", "negative", "absolute_value", "all"]
@@ -231,8 +232,6 @@ def show_tensor(
         return fig
 
     if resolved_method == "rgb":
-        from ._rgb_scale import rgb_unit_hwc
-
         fig, ax = plt.subplots()
         ax.imshow(rgb_unit_hwc(data[0] if data.ndim == 4 else data).numpy(), **kwargs)
         ax.axis("off")
