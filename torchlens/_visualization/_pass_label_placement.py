@@ -7,10 +7,11 @@ Graphviz reserves no layout space for head and tail labels, and one
 placement keeps them off nodes, lines, arrowheads, other labels and module borders
 in every drawing and direction.  Head and tail labels never move nodes or edges,
 though, so one ``dot -Tjson`` pass gives the final geometry: each pass-labelled edge
-takes the candidate placement whose labels clear every obstacle and sit closest to
-their own nodes.  A label the shared pair still leaves colliding or far from its node
-moves on its own by blank padding on one side of its HTML table.  The choices are
-written onto the edge statement before the real render.
+takes the candidate placement whose labels clear every obstacle and sit at the end
+of their own edge, clearly nearer it than any other edge at that node.  A label the
+shared pair still leaves colliding, astray or ambiguous moves on its own by blank
+padding on one side of its HTML table.  The choices are written onto the edge
+statement before the real render.
 """
 
 from __future__ import annotations
@@ -43,7 +44,10 @@ _MIN_GAP = 0.5  # (pt) a label nearer than this to anything collides (the gate a
 _CLEAR_TARGET = 3.0  # clearance (pt) after which closeness to the node wins
 _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
 _REACH = 90.0  # (pt) the gap reported when there is nothing to measure against
-_NEAR_NODE = 14.0  # (pt) a label farther than this from its own node no longer reads as its
+_NEAR_END = 12.0  # (pt) a label farther than this from its own edge's end no longer touches it
+_ATTACH_REACH = 30.0  # (pt) the stretch of a label's own edge, from its end, it reads against
+_OTHER_REACH = 60.0  # (pt) other edges at the same node within this of the end compete for it
+_ATTACH_MARGIN = 4.0  # (pt) a label must be this much nearer its own edge than any other there
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
 _CHUNK = 12  # samples per indexed piece of a line, so a distant stretch is skipped whole
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
@@ -260,9 +264,7 @@ class _Scene:
             for start in range(0, max(1, len(line) - 1), _CHUNK)
             if (chunk := line[start : start + _CHUNK + 1])
         ]
-        self.indexed_nodes = {
-            name: [(_bounds(o), o) for o in outlines] for name, outlines in self.nodes.items()
-        }
+        self._attach_lines()
 
     def _add_edge(
         self, edge: dict[str, Any], names: dict[int, str], seen: dict[tuple[str, str], int]
@@ -270,8 +272,8 @@ class _Scene:
         tail, head = names.get(edge["tail"], ""), names.get(edge["head"], "")
         occurrence = seen.get((tail, head), 0)
         seen[(tail, head)] = occurrence + 1
-        for ctrl in _beziers(edge.get("_draw_")):
-            self.splines.append(_sample_bezier(ctrl))
+        samples = [p for ctrl in _beziers(edge.get("_draw_")) for p in _sample_bezier(ctrl)]
+        self.splines.extend(_sample_bezier(ctrl) for ctrl in _beziers(edge.get("_draw_")))
         for key in ("_hdraw_", "_tdraw_"):
             self.polygons.extend(_outlines(edge.get(key)))
         self.rects.extend(_label_lines(edge.get("_ldraw_")))
@@ -297,7 +299,31 @@ class _Scene:
                 )
             else:
                 self.rects.extend(lines)
-        self.edges.append({"tail": tail, "head": head, "occurrence": occurrence, "labels": labels})
+        self.edges.append(
+            {
+                "tail": tail,
+                "head": head,
+                "occurrence": occurrence,
+                "labels": labels,
+                "samples": samples,
+            }
+        )
+
+    def _attach_lines(self) -> None:
+        """Give each label its own edge's last stretch and the other edges at its node."""
+
+        for edge in self.edges:
+            for label in edge["labels"]:
+                end, node = label["end"], label["node"]
+                label["own_line"] = [
+                    p for p in edge["samples"] if math.dist(p, end) <= _ATTACH_REACH
+                ] or [end]
+                label["other_lines"] = [
+                    near
+                    for other in self.edges
+                    if other is not edge and node in (other["tail"], other["head"])
+                    if (near := [p for p in other["samples"] if math.dist(p, end) <= _OTHER_REACH])
+                ]
 
     def choose(self, edge: dict[str, Any]) -> tuple[tuple[float, float], list[Point]]:
         """Pick the edge's placement and record its labels as obstacles for later edges.
@@ -341,7 +367,7 @@ class _Scene:
 
         single = {"labels": [label]}
         best = (self._score(single, [lines], local, others), (0.0, 0.0))
-        if best[0][0] == 0.0 and not best[0][1]:
+        if best[0][0] == 0.0 and not best[0][1] and not best[0][2]:
             return best[1]
         (ex, ey), (x0, y0, x1, y1) = label["end"], _union(lines)
         for radius in _NUDGE_RADII:
@@ -371,25 +397,33 @@ class _Scene:
         boxes: list[list[Rect]],
         local: _Obstacles,
         extra: Sequence[Rect] = (),
-    ) -> tuple[float, bool, float, float]:
+    ) -> tuple[float, bool, bool, float, float]:
         """Rank one placement of an edge's labels; lower is better.
 
-        Collision depth first, then whether a label strays more than ``_NEAR_NODE`` from
-        its node, then clearance short of ``_CLEAR_TARGET`` (half-point steps), then the
-        farthest gap to the label's own node.
+        Collision depth first; then whether a label reads as belonging to another edge
+        at its node (it is not clearly nearer its own edge's last stretch than every
+        other edge there); then whether it is more than ``_NEAR_END`` from its own
+        edge's end; then clearance short of ``_CLEAR_TARGET`` (half-point steps); then
+        the farthest distance from a label to its own edge's end.
         """
 
-        depth, clearance, far = 0.0, math.inf, 0.0
+        depth, clearance, end_gap = 0.0, math.inf, 0.0
+        ambiguous = False
         for label, lines in zip(edge["labels"], boxes, strict=True):
             others = [r for other in boxes if other is not lines for r in other] + list(extra)
             for rect in lines:
                 gap = _clearance(rect, others, local)
                 depth += max(0.0, _MIN_GAP - gap)
                 clearance = min(clearance, gap)
-            own = self.indexed_nodes.get(label["node"], [])
-            far = max(far, min((_node_gap(r, o) for r in lines for o in own), default=0.0))
+            end_gap = max(end_gap, min(_point_rect_distance(label["end"], r) for r in lines))
+            own = min(_rect_line_gap(r, label["own_line"]) for r in lines)
+            rival = min(
+                (_rect_line_gap(r, line) for r in lines for line in label["other_lines"]),
+                default=math.inf,
+            )
+            ambiguous = ambiguous or rival < own + _ATTACH_MARGIN
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
-        return (round(depth, 3), far > _NEAR_NODE, shortfall, round(far, 3))
+        return (round(depth, 3), ambiguous, end_gap > _NEAR_END, shortfall, round(end_gap, 3))
 
     def add_fixed_labels(self, targeted: set[tuple[str, str, int]]) -> None:
         """Count the head/tail labels of edges that are not being placed as obstacles."""
@@ -419,13 +453,6 @@ def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
     gaps += [_rect_line_gap(rect, p) for b, p in local.lines if _overlaps(probe, b)]
     gaps += [_rect_rect_gap(rect, r) for r in (*local.rects, *extra) if _overlaps(probe, r)]
     return min(gaps, default=_CLEAR_TARGET)
-
-
-def _node_gap(rect: Rect, outline: tuple[Rect, list[Point]]) -> float:
-    """Gap from ``rect`` to a node outline; the bounds' gap stands in once it is far."""
-
-    bounds_gap = _rect_rect_gap(rect, outline[0])
-    return bounds_gap if bounds_gap > _NEAR_NODE else _rect_poly_gap(rect, outline[1])
 
 
 def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:

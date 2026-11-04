@@ -8,12 +8,16 @@ Graphviz reserves no room for head/tail labels and moves both ends of an edge wi
 ``labeldistance``/``labelangle``, so the renderer chooses each edge's pair after layout
 (``torchlens/_visualization/_pass_label_placement.py``), and a labelled straight edge
 keeps the two ranks of length its midpoint label used to reserve.  These tests pin that
-per direction on the README loop toy with the label-geometry audit the rolled gate uses.
+per direction on the README loop toy with the label-geometry audit the rolled gate uses,
+and check that each label touches the end of its own edge and is nearer that edge
+than any other edge at its node (JMT, 4 Nov 2026: a label beside the wrong edge
+reads as that edge's).
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -24,15 +28,20 @@ from support.label_geometry import audit_gv_source
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization._fonts import graphviz_font_env
 from torchlens._visualization._pass_label_placement import (
+    _beziers,
     _label_lines,
+    _sample_bezier,
     _shift_label,
     choose_pass_label_placements,
     has_pass_labels,
 )
 
-#: how far (pt) a pass label may sit from its own node and still read as that node's
-_NEAR_NODE_PT = 14.0
+#: how far (pt) a pass label may sit from its own edge's end and still touch it
+_NEAR_END_PT = 12.0
+#: how much nearer (pt) a pass label must be to its own edge than to any other edge at its node
+_ATTACH_MARGIN_PT = 4.0
 _DIRECTIONS = ("bottomup", "topdown", "leftright", "rightleft")
 
 
@@ -96,11 +105,78 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
 
     result = audit_gv_source(dot)
     assert result.hard_violation_count == 0, result.describe_violations(direction)
-    pass_labels = [rec for rec in result.labels if rec["kind"] in ("head", "tail")]
-    assert len(pass_labels) == 4, pass_labels
-    for rec in pass_labels:
-        gap = rec["metrics"]["gap_to_own_endpoint_node"]
-        assert gap is not None and gap <= _NEAR_NODE_PT, (direction, rec["text"], gap)
+    attachments = _attachments(dot)
+    assert sorted(text for text, *_ in attachments) == ["In 1", "In 2", "Out 1", "Out 2"]
+    for text, end_gap, own_gap, rival_gap in attachments:
+        assert end_gap <= _NEAR_END_PT, (direction, text, end_gap)
+        assert rival_gap >= own_gap + _ATTACH_MARGIN_PT, (direction, text, own_gap, rival_gap)
+
+
+def _attachments(dot: str) -> list[tuple[str, float, float, float]]:
+    """Per pass label: its gap to its own edge's end, to that edge's last 30 pt, and
+    to the nearest other edge at the same node (within 60 pt of the end)."""
+
+    layout = json.loads(
+        subprocess.run(
+            ["dot", "-Tjson"],
+            input=dot,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=graphviz_font_env(),
+        ).stdout
+    )
+    names = {obj["_gvid"]: obj["name"] for obj in layout["objects"]}
+    edges = [
+        (
+            names[edge["tail"]],
+            names[edge["head"]],
+            edge,
+            [p for ctrl in _beziers(edge.get("_draw_")) for p in _sample_bezier(ctrl)],
+        )
+        for edge in layout["edges"]
+    ]
+    found = []
+    for tail, head, edge, samples in edges:
+        for kind, node in (("head", head), ("tail", tail)):
+            texts = [op["text"] for op in edge.get(f"_{kind[0]}ldraw_", []) if op["op"] == "T"]
+            if not texts or not texts[0].startswith(("In ", "Out ")):
+                continue
+            boxes = _label_lines(edge[f"_{kind[0]}ldraw_"])
+            end = _end_point(edge["pos"], head=kind == "head")
+            own = [p for p in samples if math.dist(p, end) <= 30.0]
+            rivals = [
+                p
+                for other_tail, other_head, other, other_samples in edges
+                if other is not edge and node in (other_tail, other_head)
+                for p in other_samples
+                if math.dist(p, end) <= 60.0
+            ]
+            found.append(
+                (
+                    texts[0],
+                    min(_box_point_gap(b, end) for b in boxes),
+                    min(_box_point_gap(b, p) for b in boxes for p in own),
+                    min((_box_point_gap(b, p) for b in boxes for p in rivals), default=math.inf),
+                )
+            )
+    return found
+
+
+def _end_point(pos: str, *, head: bool) -> tuple[float, float]:
+    pieces = pos.split(";")
+    tokens = (pieces[-1] if head else pieces[0]).split()
+    flag = "e," if head else "s,"
+    marked = [t[2:] for t in tokens if t.startswith(flag)]
+    plain = [t for t in tokens if not t.startswith(("e,", "s,"))]
+    x, y = (float(v) for v in (marked[0] if marked else plain[-1 if head else 0]).split(","))
+    return x, y
+
+
+def _box_point_gap(box: tuple[float, float, float, float], point: tuple[float, float]) -> float:
+    dx = max(box[0] - point[0], 0.0, point[0] - box[2])
+    dy = max(box[1] - point[1], 0.0, point[1] - box[3])
+    return math.hypot(dx, dy)
 
 
 def test_chooser_moves_a_colliding_default_pair_clear(tmp_path: Path) -> None:
