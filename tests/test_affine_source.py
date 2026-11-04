@@ -119,7 +119,8 @@ def _remedy_runs(error: Any) -> None:
         tl.subspace(_SITE, rotation.T, origin=_ORIGIN),
         tl.intervention.set_affine_coordinates(weight, bias=bias),
     )
-    assert not torch.equal(fork[_SITE].out, _ready()[_SITE].out)
+    baseline = _ready()
+    assert not torch.equal(fork[_SITE].out, baseline[_SITE].out)
 
 
 def test_outside_a_subspace_refuses_at_do_and_the_remedy_runs() -> None:
@@ -191,7 +192,8 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
     assert torch.equal(inner.args[0], _W[:rank]) and torch.equal(
         dict(inner.kwargs)["bias"], _B[:rank]
     )
-    assert torch.equal(_apply(loaded)[_SITE].out, session[_SITE].out)
+    reapplied = _apply(loaded)
+    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
 
 
 @pytest.mark.parametrize("one_position", [False, True], ids=["every-position", "one-position"])
@@ -203,4 +205,5 @@ def test_affine_source_equals_the_hand_loreft_formula(rank: int, one_position: b
     assert torch.allclose(result, _hand(rank, one_position), rtol=0.0, atol=1e-12)
     if one_position:
         untouched = ~_one_position_mask()
-        assert torch.equal(result[untouched], _ready()[_SITE].out[untouched])
+        baseline = _ready()
+        assert torch.equal(result[untouched], baseline[_SITE].out[untouched])
