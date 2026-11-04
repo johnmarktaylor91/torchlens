@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import inspect
 import json
-import operator
 import platform
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -96,6 +95,12 @@ from .._utils._callable_safety import (
 )
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils._torch_symbols import (
+    ALLOWED_EXACT_ROOTS,
+    enumerated_torch_callable,
+    getattr_allowlisted,
+    torch_namespace,
+)
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
 from ..intervention.types import FunctionRegistryKey
@@ -103,36 +108,6 @@ from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr
 from .runnable_coherence import _callable_registry_contradiction
 
-_ALLOWED_EXACT_ROOTS: Mapping[str, Any] = {
-    "torch": torch,
-    "torch.Tensor": torch.Tensor,
-    "torch.nn.functional": torch.nn.functional,
-    "operator": operator,
-}
-_ENUMERATED_TORCH_NAMESPACES = frozenset(
-    {
-        "torch.fft",
-        "torch.linalg",
-        "torch.nested",
-        "torch.special",
-        "torch.nn.functional",
-        "torch.Tensor",
-        "torch._C._nn",
-        # ``torch.fft.<name>`` / ``torch.linalg.<name>`` ARE ``torch._C._fft.fft_<name>`` /
-        # ``torch._C._linalg.linalg_<name>`` (bound by ``_add_docstr``), so captured keys
-        # record the private module. Enumerating it resolves the recorded callable itself
-        # on every torch version, instead of relying on the producer-version-bounded
-        # private-to-public alias rows.
-        "torch._C._fft",
-        "torch._C._linalg",
-        "torch._C._special",
-        "torch._C._VariableFunctions",
-        "torch._C._VariableFunctionsClass",
-        "torch._C._TensorBase",
-        "torch._C.TensorBase",
-        "torch._VF",
-    }
-)
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
 # TorchLens-owned synthetic ops: a closed table resolved by in-memory reference.
 _TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable[..., Any]]] = {
@@ -2318,7 +2293,7 @@ def _resolve_registry_entry(
     )
     if alias is not None:
         namespace, qualname, provenance = alias
-        alias_func = _getattr_allowlisted(namespace, qualname)
+        alias_func = getattr_allowlisted(namespace, qualname)
         if alias_func is None:
             private = _is_private_path(stock_path or _key_display_path(key))
             code = (
@@ -2586,25 +2561,19 @@ def _resolve_exact_key(
     property_getter = _safe_tensor_property_getter(key)
     if property_getter is not None:
         return property_getter, f"torch.Tensor.{key.qualname}"
-    if key.namespace in _ALLOWED_EXACT_ROOTS:
+    if key.namespace in ALLOWED_EXACT_ROOTS:
         # r49 secF_1: resolve through the shared allowlisted reader, which special-cases the
         # top-level ``torch`` root to ``torch_attr`` (no PEP-562 lazy ``torch.__getattr__``
         # submodule import / deprecated ``replacement()``). The prior direct
-        # ``getattr(_ALLOWED_EXACT_ROOTS[key.namespace], ...)`` fired that lazy hazard on an
+        # ``getattr(ALLOWED_EXACT_ROOTS[key.namespace], ...)`` fired that lazy hazard on an
         # attacker qualname (``onnx`` / ``_dynamo``) at plain ``tl.load()`` -- the exact
         # subscript-aliased-root site the AST immunizer could not see.
-        func = _getattr_allowlisted(key.namespace, key.qualname)
+        func = getattr_allowlisted(key.namespace, key.qualname)
         if callable(func):
             return cast(Callable[..., Any], func), f"{key.namespace}.{key.qualname}"
     if stock_path is None:
         return None
-    namespace, _, qualname = stock_path.rpartition(".")
-    if namespace not in _ENUMERATED_TORCH_NAMESPACES:
-        return None
-    func = _getattr_allowlisted(namespace, qualname)
-    if func is None:
-        return None
-    return func, f"{namespace}.{qualname}"
+    return enumerated_torch_callable(stock_path)
 
 
 def _safe_tensor_property_getter(key: FunctionRegistryKey) -> Callable[..., Any] | None:
@@ -2626,48 +2595,6 @@ def _safe_tensor_property_getter(key: FunctionRegistryKey) -> Callable[..., Any]
     getter.__qualname__ = f"Tensor.{key.qualname}"
     getter.__module__ = "torch._tensor"
     return getter
-
-
-def _getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | None:
-    """Read a callable from one explicitly allowlisted in-memory namespace."""
-
-    if namespace in _ALLOWED_EXACT_ROOTS:
-        root = _ALLOWED_EXACT_ROOTS[namespace]
-    elif namespace in _ENUMERATED_TORCH_NAMESPACES:
-        root = _torch_namespace(namespace)
-    else:
-        return None
-    if root is None:
-        return None
-    # r42 secC_1: the PEP-562 lazy-submodule ``__getattr__`` hazard (unrequested
-    # ``_inductor``/``_dynamo``/``_export``/``onnx`` import + raw error leak) lives ONLY on the
-    # top-level ``torch`` module. Reading its ``__dict__`` directly never fires ``__getattr__``
-    # and still resolves every real ``torch.*`` callable. Class roots (``torch.Tensor`` /
-    # ``_VariableFunctions``) and the proxying ``torch._VF`` module expose inherited/proxied
-    # callables only through ``getattr`` and carry no lazy-import hazard (their enumerated
-    # namespaces are fixed, never attacker-chosen lazy submodules).
-    if root is torch:
-        value = torch_attr(qualname)
-    else:
-        value = getattr(root, qualname, None)
-    return cast(Callable[..., Any], value) if callable(value) else None
-
-
-def _torch_namespace(namespace: str) -> Any | None:
-    """Traverse an enumerated torch namespace without importing modules."""
-
-    parts = namespace.removeprefix("torch.").split(".")
-    # r49 secF_1: the FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
-    # ``__getattr__`` can fire a lazy submodule import; resolve it through ``torch_attr``
-    # (identifier-only ``torch.__dict__`` read -- proven behavior-preserving over all
-    # enumerated first-parts). Later hops are off submodule/class roots that carry no
-    # lazy-import hazard, so they stay on ``getattr``.
-    current: Any = torch_attr(parts[0])
-    for part in parts[1:]:
-        if current is None:
-            return None
-        current = getattr(current, part, None)
-    return current
 
 
 def _stock_path_from_key(key: FunctionRegistryKey) -> str | None:
@@ -2747,7 +2674,7 @@ def _reverse_index() -> Mapping[str, tuple[_ReverseCandidate, ...]]:
         if marker in seen:
             continue
         seen.add(marker)
-        root = _torch_namespace(namespace) if namespace != "torch" else torch
+        root = torch_namespace(namespace) if namespace != "torch" else torch
         if root is None:
             continue
         # r49 secF_1: reading a top-level torch qualname via ``getattr`` can fire the PEP-562

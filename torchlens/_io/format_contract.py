@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from ._field_policy import FieldPolicy as FieldPolicy
-from ._pre3_module_paths import PRE_3_MAJOR, pre_3_artifact_error
 from .format_errors import (
     ArtifactError,
     ArtifactTooNewError,
@@ -81,17 +81,19 @@ __tl_layer__ = "L1"
 # v11 (3.0 persisted record shape): every stored key follows its decided
 # public name (renames, removals and private stored fields in one bump); the
 # v10 contract of record stays frozen byte-for-byte beside the v11 one.
-TLSPEC_VERSION = 11
+# v12 (3.0 columnar records): ``Op.is_constant`` and ``Op.arg_expressions`` join the
+# op record; the v11 contract of record stays frozen byte-for-byte beside the v12 one.
+TLSPEC_VERSION = 12
 
 # Rehydration floor: this release reads only its own format. Every stamp below
-# the current one was written by torchlens 2.x and refuses with the one error in
-# ``_pre3_module_paths``. ``FIRST_FORMAT3_RELEASE`` is the first release that
-# writes the current format (tlspec 11): a manifest whose ``torchlens_version``
-# stamp is below it was written by an earlier release and refuses at the load
-# door (``raise_if_saved_by_older_major``). ``MIN_TORCHLENS_VERSION_TEXT`` is the
-# same floor release as stamped into the writer contract. The frozen v9 and v10
-# contracts keep their texts.
-MIN_TLSPEC_VERSION = 11
+# the current one was written by torchlens 2.37 and earlier and refuses with the one
+# error built by :func:`below_floor_error`. ``FIRST_FORMAT3_RELEASE`` is the first release
+# that writes the current format (tlspec 12): a manifest whose ``torchlens_version`` stamp
+# is below it was written by an earlier release and refuses at the load door
+# (``raise_if_saved_by_older_major``). ``MIN_TORCHLENS_VERSION_TEXT`` is the same floor
+# release as stamped into the writer contract. The frozen v9, v10 and v11 contracts keep
+# their texts.
+MIN_TLSPEC_VERSION = 12
 FIRST_FORMAT3_RELEASE = "2.38.0"
 MIN_TORCHLENS_VERSION_TEXT = FIRST_FORMAT3_RELEASE
 
@@ -123,27 +125,97 @@ RESERVED_STEP_SCORE_CREDIT = (
 )
 
 
+#: Top-level torchlens packages the 3.0 rename made private, renamed or folded away. A
+#: pickled module path under one of them was written by torchlens 2.x.
+_PRE_3_PACKAGES = frozenset(
+    [
+        "accessors",
+        "autoroute",
+        "brainpipe",
+        "capture",
+        "captured_run",
+        "constants",
+        "data_classes",
+        "ecosystem",
+        "fastlog",
+        "hash",
+        "ir",
+        "kernel_telemetry",
+        "merged",
+        "multi_trace",
+        "notebook",
+        "observability",
+        "observe",
+        "partial",
+        "postprocess",
+        "quantities",
+        "quickstart",
+        "runnable",
+        "selection",
+        "selection_compare",
+        "selection_graph",
+        "selection_subspace",
+        "selection_values",
+        "semantic",
+        "snoop",
+        "trace_slice",
+        "tviz",
+        "user_funcs",
+        "utils",
+        "visualization",
+    ]
+)
+
+#: Modules under ``torchlens._data_classes`` that held the 2.x record classes before they
+#: moved; nothing in 3 resolves them.
+_PRE_3_RECORD_MODULES = frozenset(
+    ["model_log", "layer_pass_log", "op_log", "module_log", "grad_fn_pass_log", "grad_fn_call_log"]
+)
+
+#: Individual globals whose module still exists but whose class name only 2.x wrote.
+_PRE_3_GLOBALS = frozenset(
+    {
+        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens._data_classes.op", "TensorLog"),
+    }
+)
+
+_REMEDY = (
+    'load it with torchlens 2.36.x or 2.37.x, which read it (pip install "torchlens<2.38"), '
+    "or capture the model again with this release and save that."
+)
+
+_MODELLOG_216_NOTE = (
+    "A portable ModelLog bundle of torchlens 2.16 (io_format_version 2) is the exception: "
+    "torchlens 2.36.x cannot read it either, and only torchlens 2.17.0 does (pip install "
+    "torchlens==2.17.0 in a separate environment)."
+)
+
+
 def below_floor_error(
     *,
     observed: str,
     path: str | None = None,
+    remedy_note: str = "",
     code: str = "artifact_version_below_floor",
 ) -> ArtifactTooOldError:
-    """Build the typed refusal for an artifact older than the supported format.
+    """Build the typed refusal for an artifact saved by torchlens 2.37 and earlier.
 
-    This release reads only the current format; anything older was saved by
-    torchlens 2.37 and earlier, so every below-floor site raises the one pre-2.38 refusal
-    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`) with a stable
-    ``fields["code"]``, the ``observed`` version, the floor, a ``remedy`` and the ``path``
+    This release reads only the current format; anything older was saved by torchlens 2.37
+    and earlier, so every below-floor site raises this one pre-2.38 refusal with a stable
+    ``fields["code"]``, the ``observed`` marker, the floor, a ``remedy`` and the ``path``
     when the caller has one.
 
     Parameters
     ----------
     observed:
-        Rendered source version (``"tlspec_version=N"`` or a description of an
-        unversioned state).
+        What marks the artifact as pre-2.38 (a pickled module path, a format stamp, a manifest
+        spelling), rendered as ``name=value`` text.
     path:
         Artifact path, when the caller has it in scope.
+    remedy_note:
+        One extra sentence appended to the remedy when the standard one is not enough for
+        this origin (the 2.16 ModelLog format).
     code:
         Always ``"artifact_version_below_floor"``; raise sites pass it
         explicitly so the S-17 census sees the code where the raise happens,
@@ -155,7 +227,90 @@ def below_floor_error(
         The typed refusal, ready to raise.
     """
 
-    return pre_3_artifact_error(observed, path=path)
+    remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
+    return ArtifactTooOldError(
+        f"This artifact was saved by torchlens 2.37 and earlier ({observed}); torchlens 2.38 "
+        f"does not read files saved by torchlens 2.37 and earlier. Remedy: {remedy}",
+        code=code,
+        observed=observed,
+        floor_tlspec_version=MIN_TLSPEC_VERSION,
+        floor_torchlens_version=FIRST_FORMAT3_RELEASE,
+        path=path,
+        remedy=remedy,
+    )
+
+
+def _guard_pre3_format(
+    tlspec_format: str, path: Path, observed_marker: Callable[[], str | None]
+) -> None:
+    """Refuse an identified legacy directory without probing current-format extras."""
+
+    if tlspec_format == "pre_3":
+        observed = observed_marker() or "2.x artifact markers"
+        raise below_floor_error(
+            observed=observed,
+            path=str(path),
+            remedy_note=(
+                _MODELLOG_216_NOTE
+                if observed.startswith("io_format_version=2, n_activation_blobs=")
+                else ""
+            ),
+            code="artifact_version_below_floor",
+        )
+
+
+def modellog_216_error(
+    path: str, *, code: str = "artifact_version_below_floor"
+) -> ArtifactTooOldError:
+    """Build the 2.x refusal for a portable ModelLog bundle of torchlens 2.16.
+
+    Parameters
+    ----------
+    path:
+        Artifact path.
+    code:
+        Always ``"artifact_version_below_floor"``, passed explicitly by each raise site.
+
+    Returns
+    -------
+    ArtifactTooOldError
+        The refusal, ready to raise; its remedy also names the one release that reads it.
+    """
+
+    return below_floor_error(
+        observed="the portable ModelLog format of torchlens 2.16",
+        path=path,
+        remedy_note=_MODELLOG_216_NOTE,
+        code=code,
+    )
+
+
+def refuse_pre_3_module_path(module: str, name: str = "") -> None:
+    """Refuse a pickled module path that only torchlens 2.37 and earlier wrote.
+
+    Parameters
+    ----------
+    module:
+        Pickled module path as written in the artifact.
+    name:
+        Pickled class or function name, when the caller has it.
+
+    Raises
+    ------
+    ArtifactTooOldError
+        When ``module`` lives under a package that left the public surface in 3.0, or
+        names a private module or class that only pre-2.38 wrote.
+    """
+
+    root, _, rest = module.partition(".")
+    if root == "torchlens" and (
+        rest.partition(".")[0] in _PRE_3_PACKAGES
+        or module.removeprefix("torchlens._data_classes.") in _PRE_3_RECORD_MODULES
+        or (module, name) in _PRE_3_GLOBALS
+    ):
+        raise below_floor_error(
+            observed=f"module_path={module}", code="artifact_version_below_floor"
+        )
 
 
 def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
@@ -215,13 +370,13 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_vers
     introduced: the saved field names and package paths changed in it, and no
     compatibility reader is carried. A manifest whose ``torchlens_version`` stamp
     is below that release was written by an earlier one. A stamp from the 2.x
-    line (2.37 and earlier) raises the one pre-format-11 refusal
-    (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`), worded like
-    every other door that recognises such a file; a stamp from an earlier major
-    raises the same error class naming the saving release and the two ways out
-    (that major's releases read the file, or capture again with this one).
-    Artifacts without a parseable ``torchlens_version`` stamp return untouched;
-    their own typed checks own that case.
+    line (2.37 and earlier) raises the one pre-2.38 refusal
+    (:func:`below_floor_error`), worded like every other door that recognises
+    such a file; a stamp from an earlier major raises the same error class naming
+    the saving release and the two ways out (that major's releases read the file,
+    or capture again with this one). Artifacts without a parseable
+    ``torchlens_version`` stamp return untouched; their own typed checks own
+    that case.
 
     Parameters
     ----------
@@ -244,9 +399,9 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_vers
     floor = _release_parts(FIRST_FORMAT3_RELEASE)
     if saved is None or floor is None or saved >= floor:
         return
-    if saved[0] == PRE_3_MAJOR:
-        raise pre_3_artifact_error(
-            f"torchlens_version={saved_version}",
+    if saved[0] == 2:
+        raise below_floor_error(
+            observed=f"torchlens_version={saved_version}",
             path=path,
             code="artifact_version_below_floor",
         )

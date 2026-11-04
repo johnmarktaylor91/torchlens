@@ -370,7 +370,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         )
         start = time.perf_counter()
         op_log = materialize_log_from_fields(fields_dict, op_store)
-        inputs.timing_sink("object_construction:op", time.perf_counter() - start)
+        inputs.timing_sink("object_construction_op", time.perf_counter() - start)
         local_registrations[event.label_raw] = op_log
     _drop_missing_buffer_sources(local_registrations)
     return Step0Result(

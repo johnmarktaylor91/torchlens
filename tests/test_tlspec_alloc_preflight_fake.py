@@ -22,7 +22,6 @@ nesting-depth guard (C4).
 from __future__ import annotations
 
 import copy
-import json
 import os
 import resource
 import types
@@ -35,6 +34,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
 import torchlens._runnable.call_arguments
@@ -103,13 +103,11 @@ def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> i
     ``literal_arguments`` tree (recursing through nested list/tuple/dict literals).
 
     Returns the number of atoms mutated (must be >= 1 for the tamper to be meaningful).
-    This edits ONLY the plaintext literal -- the recorded output slot shape is left
-    honest and small, which is exactly the literal-only tamper the recorded-output
-    bound cannot catch and the projection must.
+    This edits ONLY the plaintext literal in ``runnable/descriptor.json`` -- the recorded
+    output slot shape is left honest and small, which is exactly the literal-only tamper
+    the recorded-output bound cannot catch and the projection must.
     """
 
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
     count = 0
 
     def _walk(node: Any) -> bool:
@@ -124,11 +122,13 @@ def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> i
             return any(_walk(item) for item in node)
         return False
 
-    for call in manifest["run"]["calls"]:
-        for literal in call.get("literal_arguments", []):
-            if _walk(literal):
-                break
-    path.write_text(json.dumps(manifest))
+    def _edit(descriptor: dict[str, Any]) -> None:
+        for call in descriptor["calls"]:
+            for literal in call.get("literal_arguments", []):
+                if _walk(literal):
+                    break
+
+    mutate_runnable_descriptor(bundle, _edit)
     return count
 
 
@@ -523,15 +523,14 @@ def test_admitted_views_share_one_logical_ceiling(
 
 
 def _calls_by_op(run: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Index a manifest's calls by the op name of their first label."""
+    """Index a runnable descriptor's calls by the op name of their first label."""
 
     return {call["op_labels"][0].split("_")[0]: call for call in run["calls"]}
 
 
-def _read_median_through_alias(manifest: dict[str, Any]) -> None:
+def _read_median_through_alias(run: dict[str, Any]) -> None:
     """Point ``median`` at a crafted 1-element version alias of the ``expand`` view."""
 
-    run = manifest["run"]
     calls = _calls_by_op(run)
     view_id = calls["expand"]["output_slot_ids"][0]
     median = calls["median"]
@@ -557,10 +556,9 @@ def _read_median_through_alias(manifest: dict[str, Any]) -> None:
     run["tensor_slots"].append(alias)
 
 
-def _record_out_add_small(manifest: dict[str, Any]) -> None:
+def _record_out_add_small(run: dict[str, Any]) -> None:
     """Record every full-size slot but the ``expand`` view at a 4-element shape."""
 
-    run = manifest["run"]
     view_id = _calls_by_op(run)["expand"]["output_slot_ids"][0]
     for slot in run["tensor_slots"]:
         if slot["slot_id"] != view_id and slot["shape"] == [10**7, 4]:
@@ -675,10 +673,9 @@ def _alias_slot(slots: dict[str, dict[str, Any]], target_id: str, slot_id: str) 
     return alias
 
 
-def _alias_of_alias(manifest: dict[str, Any]) -> None:
+def _alias_of_alias(run: dict[str, Any]) -> None:
     """Hang a two-level version-alias chain off the ``expand`` view."""
 
-    run = manifest["run"]
     view_id = _calls_by_op(run)["expand"]["output_slot_ids"][0]
     slots = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     first = _alias_slot(slots, view_id, f"{view_id}:alias")

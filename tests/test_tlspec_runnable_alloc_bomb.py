@@ -2,7 +2,7 @@
 
 r54 ``free_1`` (HIGH): a taken-path op whose output size is a literal integer
 (``torch.arange(n)``/``zeros(n)``/...) let an attacker edit one plaintext
-``manifest.json`` integer to drive an ~8 TB allocation on the default
+``runnable/descriptor.json`` integer to drive an ~8 TB allocation on the default
 ``tl.load(path).run(inputs)`` path -- the r53 state-slot / arity gates did not sit
 on the op-execution literal-argument path. W3's two lane-owned layers:
 
@@ -30,6 +30,7 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
 from torchlens._runnable import (
@@ -60,10 +61,10 @@ def _build(tmp_path: Path, name: str) -> Path:
     return bundle
 
 
-def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
+def _recompute_runtime_fingerprints(descriptor: dict[str, Any]) -> None:
     """Rewrite each call's ``runtime_fingerprint`` per the loader recipe.
 
-    Naive manifest tampers are now caught at PARSE time by c9904d19's
+    Naive descriptor tampers are now caught at PARSE time by c9904d19's
     ``_verify_runtime_fingerprints`` check (sha256 over callable key, argument
     names, arity, output slot shapes/dtypes, and execution context), which
     would pre-empt the deeper gates this suite pins. Recomputing the
@@ -71,7 +72,7 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
     run-prep gates (``op_allocation_preflight`` etc.), which is their point.
     """
 
-    run = manifest["run"]
+    run = descriptor
     keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
     slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     for call in run["calls"]:
@@ -113,11 +114,11 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
 
 
 def _tamper(bundle: Path, mutate: Any) -> None:
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
-    mutate(manifest)
-    _recompute_runtime_fingerprints(manifest)
-    path.write_text(json.dumps(manifest))
+    def edit(descriptor: dict[str, Any]) -> None:
+        mutate(descriptor)
+        _recompute_runtime_fingerprints(descriptor)
+
+    mutate_runnable_descriptor(bundle, edit)
 
 
 @contextmanager
@@ -161,12 +162,12 @@ def _output_slot(shape: tuple[int, ...], dtype: str = "torch.float32") -> Tensor
 
 
 def test_literal_magnitude_bomb_degrades_to_analysis_only(tmp_path: Path) -> None:
-    """An over-int64 literal in a real manifest degrades the load to analysis-only."""
+    """An over-int64 literal in a real descriptor degrades the load to analysis-only."""
 
     bundle = _build(tmp_path, "literal.tlspec")
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for call in manifest["run"]["calls"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for call in descriptor["calls"]:
             for literal in call.get("literal_arguments", []):
                 atom = literal.get("value", {})
                 if atom.get("kind") == "int":
@@ -192,8 +193,8 @@ def test_output_slot_shape_bomb_refused_at_run(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "outbomb.tlspec")
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for slot in manifest["run"]["tensor_slots"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for slot in descriptor["tensor_slots"]:
             if slot.get("role") in {"output", "intermediate"}:
                 slot["shape"] = [10**9, 10**9]
                 slot["rank"] = 2

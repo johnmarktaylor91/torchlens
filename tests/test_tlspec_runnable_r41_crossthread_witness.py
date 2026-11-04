@@ -32,7 +32,6 @@ never a silent gap. Fail-closed always wins; the r39 no-over-trigger classes
 
 from __future__ import annotations
 
-import json
 import os
 import queue
 import shutil
@@ -47,6 +46,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -791,10 +791,8 @@ def test_live_non_divergent_native_failure_reraises_raw() -> None:
 
 
 def _tamper_device_qualname(bundle_path: Path) -> bool:
-    """Rewrite every ``torch.device(...)`` literal qualname in the manifest to garbage."""
+    """Rewrite every ``torch.device(...)`` literal qualname in the descriptor to garbage."""
 
-    manifest_path = bundle_path / "manifest.json"
-    data = json.loads(manifest_path.read_text())
     tampered = False
 
     def _walk(node: Any) -> None:
@@ -814,8 +812,7 @@ def _tamper_device_qualname(bundle_path: Path) -> bool:
             for item in node:
                 _walk(item)
 
-    _walk(data)
-    manifest_path.write_text(json.dumps(data))
+    mutate_runnable_descriptor(bundle_path, _walk)
     return tampered
 
 

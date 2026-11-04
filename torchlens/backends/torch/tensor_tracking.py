@@ -766,14 +766,14 @@ def _emit_tensor_grad_event(
     events = _ensure_backward_event_stream(trace)
     _record_phase_timing(
         trace,
-        "backward_grad_event:ensure_stream",
+        "backward_grad_event_ensure_stream",
         time.perf_counter() - stream_start,
     )
     pass_start = time.perf_counter()
     pass_index = _ensure_backward_pass_for_tensor_hook(trace)
     _record_phase_timing(
         trace,
-        "backward_grad_event:ensure_pass",
+        "backward_grad_event_ensure_pass",
         time.perf_counter() - pass_start,
     )
     payload_start = time.perf_counter()
@@ -783,7 +783,7 @@ def _emit_tensor_grad_event(
         payload, transformed_payload, built = _build_grad_payloads(trace, grad, final_label)
     _record_phase_timing(
         trace,
-        "backward_grad_event:payload",
+        "backward_grad_event_payload",
         time.perf_counter() - payload_start,
     )
     append_start = time.perf_counter()
@@ -801,7 +801,7 @@ def _emit_tensor_grad_event(
     )
     _record_phase_timing(
         trace,
-        "backward_grad_event:append",
+        "backward_grad_event_append",
         time.perf_counter() - append_start,
     )
     return payload, transformed_payload, built

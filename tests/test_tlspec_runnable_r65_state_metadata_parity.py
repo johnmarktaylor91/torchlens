@@ -37,6 +37,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+)
 from torchlens._io import runnable as io_runnable, runnable_load
 from torchlens._runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
 from torchlens._runnable.state import (
@@ -839,12 +842,7 @@ def _r69_save(tmp_path: Path, name: str) -> Path:
 
 
 def _r69_mutate(path: Path, fn) -> None:
-    import json
-
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    fn(manifest["run"])
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(path, fn)
 
 
 def _r69_assert_refused(path: Path) -> None:

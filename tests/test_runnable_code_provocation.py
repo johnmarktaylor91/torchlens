@@ -17,13 +17,13 @@ preflight message summary.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -77,12 +77,13 @@ def _save_branch_artifact(tmp_path: Path, name: str) -> Path:
 
 
 def _tamper_run_descriptor(path: Path, mutate: Callable[[dict[str, Any]], None]) -> None:
-    """Rewrite the artifact's sparse run descriptor JSON through ``mutate``."""
+    """Rewrite the artifact's run descriptor (``runnable/descriptor.json``) through ``mutate``.
 
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    mutate(manifest["run"])
-    manifest_path.write_text(json.dumps(manifest))
+    The manifest's digest row for the descriptor is restamped, so the tamper reaches the
+    runnable contract checks instead of the file-digest check in front of them.
+    """
+
+    mutate_runnable_descriptor(path, mutate)
 
 
 def _final_call_id(loaded: Any) -> str:

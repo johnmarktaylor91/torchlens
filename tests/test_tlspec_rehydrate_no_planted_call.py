@@ -21,18 +21,18 @@ without first calling the filter.
 from __future__ import annotations
 
 import ast
-import pickle
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, write_record
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens._io.rehydrate import _assign_rehydrated_field
 from torchlens._io.state_keys import (
     PortableStateKeyError,
@@ -59,13 +59,10 @@ def _build(tmp_path: Path) -> Path:
     return bundle
 
 
-def _repickle_metadata(bundle: Path, mutate) -> None:
-    with (bundle / "metadata.pkl").open("rb") as handle:
-        state = _RenameAwareUnpickler(handle).load()
-    assert isinstance(state, dict)
-    mutate(state)
-    with (bundle / "metadata.pkl").open("wb") as handle:
-        pickle.dump(state, handle)
+def _rewrite_trace_record(bundle: Path, mutate) -> None:
+    record = read_record(bundle, "trace")
+    mutate(record["fields"])
+    write_record(bundle, "trace", record)
 
 
 # --------------------------------------------------------------------------- #
@@ -102,10 +99,16 @@ def test_planted_key_refused_on_load(tmp_path: Path, planted_key: str) -> None:
     from torchlens._io import UnknownPersistedFieldError
 
     bundle = _build(tmp_path)
-    _repickle_metadata(bundle, lambda state: state.__setitem__(planted_key, numpy.dtype))
+    _rewrite_trace_record(
+        bundle, lambda state: state.__setitem__(planted_key, {"$tl": "type", "name": "numpy.dtype"})
+    )
 
-    with pytest.raises(UnknownPersistedFieldError) as excinfo:
-        tl.load(str(bundle))
+    with patch(
+        "torchlens._io.rehydrate._assign_rehydrated_field", wraps=_assign_rehydrated_field
+    ) as assign:
+        with pytest.raises(UnknownPersistedFieldError) as excinfo:
+            tl.load(str(bundle))
+        assign.assert_not_called()
     assert planted_key in excinfo.value.fields["unknown_fields"]
 
 

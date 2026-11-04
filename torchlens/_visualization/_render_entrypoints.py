@@ -279,7 +279,7 @@ def render_backward_graph(
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"
-    with _timed_phase(self, "render:graphviz:backward"):
+    with _timed_phase(self, "render_graphviz_backward"):
         try:
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
             report = GraphvizRenderer().render(render_ir, target)
@@ -560,7 +560,7 @@ def render_combined_graph(
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"
-    with _timed_phase(self, "render:graphviz:combined"):
+    with _timed_phase(self, "render_graphviz_combined"):
         try:
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
             report = GraphvizRenderer().render(render_ir, target)

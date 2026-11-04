@@ -399,9 +399,9 @@ def refuse_if_manifest_not_object(path: object, manifest: object) -> None:
 
 
 def refuse_if_unknown_tlspec_format(path: object, tlspec_format: object) -> None:
-    """Raise ``tlspec_format_unrecognized`` unless the format is the current unified layout."""
+    """Raise ``tlspec_format_unrecognized`` unless the format is the current saved format 3."""
 
-    if tlspec_format != "v2.0_unified":
+    if tlspec_format != "v3":
         raise InvalidArgumentError(
             f"Unrecognized TorchLens .tlspec format at {path}",
             code="tlspec_format_unrecognized",

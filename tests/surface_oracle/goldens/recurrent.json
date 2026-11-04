@@ -1984,8 +1984,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -2073,6 +2073,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -2337,8 +2338,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -2459,6 +2460,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -2751,8 +2753,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -2873,6 +2875,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -3165,8 +3168,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -3287,6 +3290,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -3539,8 +3543,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -3654,6 +3658,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -3905,8 +3910,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -4028,6 +4033,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -4275,8 +4281,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -4398,6 +4404,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -4645,8 +4652,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -4764,6 +4771,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -6152,7 +6160,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -8234,6 +8242,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -8620,6 +8629,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -9034,6 +9044,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -9448,6 +9459,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -9815,6 +9827,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -10189,6 +10202,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -10559,6 +10573,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -10925,6 +10940,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -12321,7 +12337,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -14403,6 +14419,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -14789,6 +14806,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15203,6 +15221,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15617,6 +15636,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15984,6 +16004,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -16358,6 +16379,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -16728,6 +16750,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -17094,6 +17117,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18420,7 +18444,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -20413,8 +20437,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -20502,6 +20526,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -20766,8 +20791,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -20888,6 +20913,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -21180,8 +21206,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -21302,6 +21328,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -21594,8 +21621,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -21716,6 +21743,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -21968,8 +21996,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -22083,6 +22111,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -22334,8 +22363,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -22457,6 +22486,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -22704,8 +22734,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -22827,6 +22857,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -23074,8 +23105,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -23193,6 +23224,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -24598,7 +24630,7 @@
     }
    ],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -25640,7 +25672,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -26220,7 +26252,7 @@
     "facets": "<raises InvalidArgumentError>",
     "forward_args": "<raises AttributeError>",
     "forward_args_summary": "<raises AttributeError>",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured raises AttributeError>",
     "forward_hooks": [],
@@ -26518,7 +26550,7 @@
   "ops": {
    "input_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "input_1_raw",
     "_layer_label_raw": "input_1_raw",
@@ -26669,6 +26701,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -26830,7 +26863,7 @@
    },
    "linear_1_1:1": {
     "_address_normalized": "cell",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -26855,7 +26888,11 @@
     "activation_transform": null,
     "address": "cell",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -27033,6 +27070,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -27222,7 +27260,7 @@
    },
    "linear_1_1:2": {
     "_address_normalized": "cell",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -27247,7 +27285,11 @@
     "activation_transform": null,
     "address": "cell",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -27425,6 +27467,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -27614,7 +27657,7 @@
    },
    "linear_1_1:3": {
     "_address_normalized": "cell",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -27639,7 +27682,11 @@
     "activation_transform": null,
     "address": "cell",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -27817,6 +27864,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -28006,7 +28054,7 @@
    },
    "output_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "output_1_raw",
     "_layer_label_raw": "output_1_raw",
@@ -28166,6 +28214,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -28325,7 +28374,7 @@
    },
    "tanh_1_2:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -28338,7 +28387,9 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "self.cell(state)"
+    ],
     "arg_names": [
      "input",
      "out"
@@ -28509,6 +28560,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -28675,7 +28727,7 @@
    },
    "tanh_1_2:2": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -28688,7 +28740,9 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "self.cell(state)"
+    ],
     "arg_names": [
      "input",
      "out"
@@ -28859,6 +28913,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -29025,7 +29080,7 @@
    },
    "tanh_1_2:3": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -29038,7 +29093,9 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "self.cell(state)"
+    ],
     "arg_names": [
      "input",
      "out"
@@ -29205,6 +29262,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -29388,7 +29446,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -29442,7 +29500,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -29512,7 +29570,7 @@
    "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
-   "_buffer_persistence": {},
+   "_buffer_persistence": null,
    "_by_pass": {
     "1": [
      0,
@@ -30144,7 +30202,7 @@
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
-   "_out_dedup_mode": null,
+   "_out_dedup_mode": "identity",
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
@@ -30247,8 +30305,8 @@
    "_tracing_finished": true,
    "_transform": null,
    "_visualizer_dir": null,
-   "_warned_direct_write": null,
-   "_warned_mutate_in_place": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
    "activation_payloads_by_raw_label": {
     "\"input_1_raw\"": {
      "__tensor__": true,
@@ -30522,7 +30580,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],

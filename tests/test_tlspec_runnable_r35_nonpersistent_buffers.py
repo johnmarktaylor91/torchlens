@@ -14,9 +14,11 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_manifest, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -49,9 +51,9 @@ def _save(model: nn.Module, x: Any, path: Path, **save_kwargs: Any) -> Path:
 
 
 def _fresh_warning() -> bool:
-    import torchlens._io.bundle as bundle
+    from torchlens._io import _save_gates
 
-    return not bundle._NONPERSISTENT_DISCLOSURE_WARNED
+    return not _save_gates._NONPERSISTENT_DISCLOSURE_WARNED
 
 
 def _null():
@@ -96,3 +98,55 @@ def test_r35_user_state_cannot_supply_nonpersistent_buffers(tmp_path: Path) -> N
         loaded.load_state_dict(
             {"shift": torch.tensor([1.0, 2.0, 3.0]), "scale": torch.tensor([5.0, 5.0, 5.0])}
         )
+
+
+def test_r35_mandatory_family_presence_and_tamper_rejection(tmp_path: Path) -> None:
+    """The family is present by default; a tampered blob fails load typed."""
+
+    model = _MixedBufferModel().eval()
+    x = torch.tensor([1.0, 2.0, 3.0])
+    path = _save(model, x, tmp_path / "family.tlspec")
+    manifest = read_manifest(path)
+    layer = read_runnable_descriptor(path)["payload_layers"]["nonpersistent_buffers"]
+    assert layer == {"present": True, "schema": "runnable_nonpersistent_buffer_v1"}
+    family = manifest["runnable"]
+    assert family["buffers_family"] == "runnable_nonpersistent_buffer_v1"
+    assert list(family["buffers_tensors"]) == ["scale"]
+    reference = family["buffers_tensors"]["scale"]
+    assert reference["blob"] == family["buffers"]
+    assert reference["blob"] in manifest["files"]
+    # Tamper the blob bytes: load must fail its checksum validation.
+    blob_path = path / reference["blob"]
+    blob_bytes = bytearray(blob_path.read_bytes())
+    blob_bytes[-1] ^= 0xFF
+    blob_path.write_bytes(bytes(blob_bytes))
+    with pytest.raises(ArtifactError, match="SHA-256 differs") as caught:
+        tl.load(str(path))
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
+def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None:
+    """A registered-but-UNUSED non-persistent buffer requires no payload."""
+
+    class _UnusedBufferModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("unused", torch.ones(4), persistent=False)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x + 1
+
+    x = torch.tensor([1.0, 2.0])
+    trace = tl.trace(
+        _UnusedBufferModel().eval(),
+        x,
+        capture=CaptureOptions(replayable=True, cache=False),
+    )
+    path = tmp_path / "unused.tlspec"
+    trace.save(str(path), level="runnable")
+    manifest = read_manifest(path)
+    descriptor = read_runnable_descriptor(path)
+    assert descriptor["payload_layers"]["nonpersistent_buffers"]["present"] is False
+    assert {"buffers", "buffers_family", "buffers_tensors"}.isdisjoint(manifest["runnable"])
+    result = tl.load(str(path)).run(inputs=x)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

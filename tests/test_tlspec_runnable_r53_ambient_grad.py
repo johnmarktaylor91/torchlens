@@ -14,16 +14,17 @@ pin.
 
 from __future__ import annotations
 
-import json
+import dataclasses
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
+from torchlens._runnable import AmbientExecutionContext, PathFaithfulness
 from torchlens.errors import RunnableTLSPECError
 from torchlens.options import CaptureOptions
 
@@ -59,8 +60,7 @@ def _save_runnable(model: nn.Module, x: torch.Tensor, path: Path, **save_kwargs:
 
 
 def _descriptor_ambient(path: Path) -> dict[str, Any]:
-    manifest = json.loads((path / "manifest.json").read_text())
-    return dict(manifest["run"]["ambient_context"])
+    return dict(read_runnable_descriptor(path)["ambient_context"])
 
 
 # Kept: the catch of its regression fault.
@@ -96,10 +96,7 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     # Value-free descriptor (no weights): the load surfaces the typed readiness
     # refusal instead of hard-failing on a missing parsed descriptor.
     path = _save_runnable(model, x, tmp_path / "tampered.tlspec")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["run"]["ambient_context"].pop(field)
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(path, lambda descriptor: descriptor["ambient_context"].pop(field))
 
     loaded = tl.load(path)  # analysis-only load must succeed
     readiness = loaded.readiness
@@ -111,3 +108,66 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     assert "context_parse_validation" in stages, stages
     with pytest.raises(RunnableTLSPECError):
         loaded.run(inputs=torch.randn(2, 3))
+
+
+@pytest.mark.parametrize("field", ("grad_enabled", "inference_mode"))
+def test_null_ambient_mode_is_a_typed_refusal_never_a_default(field: str, tmp_path: Path) -> None:
+    """``null`` is not a legal producer value for the global mode (every
+    supported torch exposes both queries): a nulled field is a typed refusal
+    through EITHER the descriptor schema preflight or the strict parser --
+    a defaulted-mode run is unreachable both ways."""
+
+    torch.manual_seed(0)
+    model = GradBranchModel().eval()
+    x = torch.randn(2, 3)
+    path = _save_runnable(model, x, tmp_path / "nulled.tlspec")
+    mutate_runnable_descriptor(
+        path, lambda descriptor: descriptor["ambient_context"].__setitem__(field, None)
+    )
+
+    try:
+        loaded = tl.load(path)
+    except Exception as exc:  # schema preflight refusal (typed IO error)
+        assert field in str(exc) or "ambient_context" in str(exc)
+        return
+    readiness = loaded.readiness
+    assert readiness is not None
+    assert readiness.status.value == "unavailable"
+    with pytest.raises(RunnableTLSPECError):
+        loaded.run(inputs=torch.randn(2, 3))
+
+
+def test_ambient_snapshot_covers_every_recorded_field() -> None:
+    """Whole-class immunizer: snapshot keys == AmbientExecutionContext fields
+    (minus the derived ``attestation_ineligible_context``). A future
+    result-affecting knob added to either side without the other FAILS here."""
+
+    from torchlens._utils._torch_compat import snapshot_ambient_execution_context
+
+    snapshot_keys = set(snapshot_ambient_execution_context())
+    recorded_fields = {field.name for field in dataclasses.fields(AmbientExecutionContext)} - {
+        "attestation_ineligible_context"
+    }
+    assert snapshot_keys == recorded_fields
+
+
+def test_live_grad_read_never_ceilings_or_degrades(tmp_path: Path) -> None:
+    """No-over-trigger pin: a model that merely READS ``torch.is_grad_enabled()``
+    stays VERIFIED (+ATTESTED with archive) -- reads are never witnessed."""
+
+    from torchlens._runnable import NumericAttestationStatus
+
+    torch.manual_seed(0)
+    model = GradBranchModel().eval()
+    x = torch.randn(2, 3)
+    path = _save_runnable(
+        model,
+        x,
+        tmp_path / "attest.tlspec",
+        include_weights=True,
+        include_activations=True,
+    )
+    report = tl.load(path).run(inputs=x.clone()).report
+    assert report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
+    assert report.nondeterministic_sources == ()

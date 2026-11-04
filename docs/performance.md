@@ -215,10 +215,11 @@ full `tl.trace` calls per mode followed four two-capture warmup batches; the per
 
 ### Phase timing buckets
 
-`trace._phase_timings` groups wall-clock timings by stable bucket names. Capture buckets include
-`ctx_build:*`, `dispatch:*`, `clone_save:*`, and `object_construction:op`. Postprocess buckets use
-`postprocess:Step N: ...`, matching the numbered postprocess pipeline. Graphviz rendering records
-`render:graphviz:forward`, `render:graphviz:backward`, or `render:graphviz:combined` when those
+`trace._phase_timings` groups wall-clock timings by stable snake_case bucket names. Capture
+buckets include `ctx_build_*`, `dispatch_*`, `clone_save_*`, `backward_grad_event_*` and
+`object_construction_op`. Postprocess buckets use the postprocess pipeline's step names
+(`add_output_layers` through `release_param_refs`). Graphviz rendering records
+`render_graphviz_forward`, `render_graphviz_backward`, or `render_graphviz_combined` when those
 render entrypoints run.
 
 ## Chunked forward capture

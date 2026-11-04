@@ -22,16 +22,16 @@ reason ``constant_parent_payload``. A constant with no readable buffer
 refuses ``constant_unrealizable`` naming the op; it is never recorded as a
 parentless op without a payload.
 
-How a constant is recognised. The op record carries no dedicated field yet
-(the format lanes own the field set; ``is_constant_layer`` rides their
-format bump), so :func:`is_constant_op` derives the answer from fields every
-record already has: ``func_name == "constant"`` for a closure constant, and
+How a constant is recognised. :func:`is_constant_op` derives the answer from
+fields every record already has, and the result is stamped on the record as
+``Op.is_constant`` (by :func:`apply_constants_rule` for backends that finalize
+through ``backends._finalize``, and by the torch layer build otherwise), so
+saved traces carry it: ``func_name == "constant"`` for a closure constant, and
 for a literal producer a parentless, non-input, non-buffer op with no
 unattributed or dropped tensor argument and no RNG-producing function name.
 A lost parent edge therefore never passes as a constant: the record names
 its unattributed tensor arguments, and that is a capture gap validation
-must still catch. When the record field lands, the two predicates below
-read it and nothing else changes.
+must still catch.
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -399,8 +399,7 @@ def _dtype_name(payload: Any) -> str | None:
 
 
 # ----------------------------------------------------------------------------
-# Recognising constants on a record (the one place that flips to the record
-# field ``is_constant_layer`` when the format lanes add it).
+# Recognising constants on a record (their answer is stamped as ``Op.is_constant``).
 
 
 def is_closure_constant_op(op: Any) -> bool:
@@ -505,7 +504,8 @@ def apply_constants_rule(
 
     Every recorded closure constant must be a source op (no parents, not an
     input or buffer) with payload evidence; every constant the ledger holds
-    must exist in the graph. Literal producers are counted, never altered.
+    must exist in the graph. Every constant found is stamped
+    ``is_constant=True``; literal producers are otherwise never altered.
 
     Parameters
     ----------
@@ -538,8 +538,10 @@ def apply_constants_rule(
         if is_closure_constant_op(op):
             _audit_closure_constant(op, label_raw, backend_name=backend_name, ledger=ledger)
             found.append(label_raw)
+            op.is_constant = True
         elif is_literal_producer_op(op):
             found.append(label_raw)
+            op.is_constant = True
     if ledger is not None:
         missing = [label for label in ledger.labels() if label not in raw_ops]
         if missing:

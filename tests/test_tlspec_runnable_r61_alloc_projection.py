@@ -56,6 +56,10 @@ import torchlens._runnable.call_arguments
 import torchlens._runnable.input_aliases
 import torchlens._runnable.input_metadata
 import torchlens._runnable.state as rstate
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._runnable.call_arguments import (
     _has_tensor_operand,
     _projection_required_by_arguments,
@@ -98,10 +102,10 @@ def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path
     return bundle
 
 
-def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
+def _recompute_runtime_fingerprints(run: dict[str, Any]) -> None:
     """Rewrite each call's ``runtime_fingerprint`` per the loader recipe.
 
-    Naive manifest tampers are now caught at PARSE time by c9904d19's
+    Naive descriptor tampers are now caught at PARSE time by c9904d19's
     ``_verify_runtime_fingerprints`` check (sha256 over callable key, argument
     names, arity, output slot shapes/dtypes, and execution context), which
     would pre-empt the deeper gates this suite pins. Recomputing the
@@ -109,7 +113,6 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
     run-prep gates (``op_allocation_preflight`` etc.), which is their point.
     """
 
-    run = manifest["run"]
     keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
     slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     for call in run["calls"]:
@@ -153,8 +156,7 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
 def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> int:
     """Replace the first ``(kind, value == target)`` literal atom in any call's tree."""
 
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
+    run = read_runnable_descriptor(bundle)
     count = 0
 
     def _walk(node: Any) -> bool:
@@ -169,27 +171,26 @@ def _tamper_literal(bundle: Path, kind: str, target: Any, replacement: Any) -> i
             return any(_walk(item) for item in node)
         return False
 
-    for call in manifest["run"]["calls"]:
+    for call in run["calls"]:
         for literal in call.get("literal_arguments", []):
             if _walk(literal):
                 break
-    _recompute_runtime_fingerprints(manifest)
-    path.write_text(json.dumps(manifest))
+    _recompute_runtime_fingerprints(run)
+    write_runnable(bundle, run)
     return count
 
 
 def _tamper_input_slot_shape(bundle: Path, shape: list[int]) -> int:
     """Inflate every model_input tensor-slot shape (the r60 corr_2 vector)."""
 
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
+    run = read_runnable_descriptor(bundle)
     count = 0
-    for slot in manifest["run"]["tensor_slots"]:
+    for slot in run["tensor_slots"]:
         if slot.get("role") == "model_input":
             slot["shape"] = list(shape)
             count += 1
-    _recompute_runtime_fingerprints(manifest)
-    path.write_text(json.dumps(manifest))
+    _recompute_runtime_fingerprints(run)
+    write_runnable(bundle, run)
     return count
 
 
@@ -198,15 +199,14 @@ def _tamper_slot_shapes(bundle: Path, old: list[int], new: list[int]) -> int:
     tamper: the literal AND its downstream intermediate slots agree, so the per-call
     shape witness passes and only the amplifier's own projection can refuse)."""
 
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
+    run = read_runnable_descriptor(bundle)
     count = 0
-    for slot in manifest["run"]["tensor_slots"]:
+    for slot in run["tensor_slots"]:
         if list(slot.get("shape", ())) == list(old):
             slot["shape"] = list(new)
             count += 1
-    _recompute_runtime_fingerprints(manifest)
-    path.write_text(json.dumps(manifest))
+    _recompute_runtime_fingerprints(run)
+    write_runnable(bundle, run)
     return count
 
 

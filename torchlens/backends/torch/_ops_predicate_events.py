@@ -300,7 +300,7 @@ def _predicate_output_context(
 ) -> RecordContext:
     """Build the predicate record context of one logged output."""
 
-    with _timed_phase(trace, "ctx_build:record_context"):
+    with _timed_phase(trace, "ctx_build_record_context"):
         return build_op_record_context(
             kind="op",
             label=label_raw,
