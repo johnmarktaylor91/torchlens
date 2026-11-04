@@ -4818,6 +4818,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_visualization/_edit_marks.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_visualization/_encoding.py",
   "has_default": false,
   "sites": 1,
@@ -10346,6 +10354,14 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
+  "file": "torchlens/validation/_crossing_perturbations.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
   "file": "torchlens/validation/_destination_coverage.py",
   "has_default": true,
   "sites": 1,
@@ -10397,6 +10413,14 @@
   "file": "torchlens/validation/_index_domain.py",
   "has_default": true,
   "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_influence_probes.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {

@@ -204,12 +204,25 @@ def _shown_kwargs(edit: Edit, constructor: Callable[..., Any] | None) -> list[st
     order = _parameter_order(constructor)
     parts: list[str] = []
     for key, value in sorted(edit.kwargs, key=lambda item: order.get(item[0], len(order))):
-        if key in _SILENT_KWARGS or value is None:
+        if key in _SILENT_KWARGS or value is None or not _takes_keyword(constructor, key):
             continue
         if constructor is not None and _is_signature_default(constructor, key, value):
             continue
         parts.append(f"{key}={_stand_in(value)}")
     return parts
+
+
+def _takes_keyword(constructor: Callable[..., Any] | None, key: str) -> bool:
+    """Return whether ``constructor`` takes ``key`` (a stored element mask it does not take)."""
+
+    if constructor is None:
+        return True
+    try:
+        parameters = inspect.signature(constructor).parameters
+    except (TypeError, ValueError):
+        return True
+    variadic = any(item.kind is inspect.Parameter.VAR_KEYWORD for item in parameters.values())
+    return variadic or key in parameters
 
 
 def _parameter_order(constructor: Callable[..., Any] | None) -> dict[str, int]:
