@@ -186,9 +186,11 @@ _JOURNAL_TRACE_FIELDS = (
     "state_history",
     "intervention_audit",
 )
-# Journaled by their stored key: the property in front of each refuses a value
-# a replay made stale (``trace.transformed_output``), and a rollback restores it.
-_JOURNAL_RAW_TRACE_FIELDS = ("transformed_output",)
+# Journaled by their stored key, held by reference: the property in front of
+# ``transformed_output`` refuses a value a replay made stale, and a commit
+# rebinds ``_decoded_output`` to rows re-derived from the rewritten outputs; a
+# rollback restores both.
+_JOURNAL_RAW_TRACE_FIELDS = ("transformed_output", "_decoded_output")
 
 
 def _journal_copy(value: Any) -> Any:
