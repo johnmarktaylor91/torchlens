@@ -28,6 +28,11 @@ class _Route:
     routers: frozenset[str]
 
 
+def _key(op: Op) -> str:
+    """Match the graph's parent-label convention for single and repeated calls."""
+    return op.layer_label if op.num_passes == 1 else op.label
+
+
 def _inside(op: Op, address: str) -> bool:
     """Test captured module-call membership, never a substring match."""
     return not address or any(label.rsplit(":", 1)[0] == address for label in op.modules)
@@ -76,7 +81,7 @@ def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
             if (
                 values.func_name == "gather"
                 and _last_axis(values, 1, None)
-                and indices.label in _ancestors(ops, values.label)
+                and _key(indices) in _ancestors(ops, _key(values))
             ):
                 pairs.append((values, indices))
     return pairs
@@ -87,10 +92,10 @@ def _weight_output(ops: dict[str, Op], values: Op) -> str | None:
     for label in values.parents:
         parent = ops.get(label)
         if parent is not None and parent.func_name == "softmax" and _last_axis(parent, 1, None):
-            return values.label
+            return _key(values)
     for op in ops.values():
-        if op.func_name == "softmax" and _last_axis(op, 1, None) and values.label in op.parents:
-            return op.label
+        if op.func_name == "softmax" and _last_axis(op, 1, None) and _key(values) in op.parents:
+            return _key(op)
     return None
 
 
@@ -102,13 +107,13 @@ def _routes(trace: Trace) -> list[_Route]:
     containers = _layouts(model)
     if not containers:
         return []
-    ops = {op.label: op for op in trace.ops}
+    ops = {_key(op): op for op in trace.ops}
     routes = []
     for values, indices in _selected_outputs(ops):
         weights = _weight_output(ops, values)
         if weights is None:
             continue
-        upstream = _ancestors(ops, values.label)
+        upstream = _ancestors(ops, _key(values))
         for layout in containers:
             if not _inside(values, layout.block):
                 continue
@@ -120,7 +125,7 @@ def _routes(trace: Trace) -> list[_Route]:
                     or not _feeds_experts(ops, indices, layout)
                 ):
                     continue
-                routers = gate_ops | {values.label, indices.label, weights}
+                routers = gate_ops | {_key(values), _key(indices), weights}
                 routers.update(
                     label
                     for label in upstream
@@ -133,7 +138,7 @@ def _routes(trace: Trace) -> list[_Route]:
                         layout.experts,
                         layout.count,
                         weights,
-                        indices.label,
+                        _key(indices),
                         frozenset(routers),
                     )
                 )
@@ -160,7 +165,7 @@ def _feeds_experts(ops: dict[str, Op], indices: Op, layout: _Layout) -> bool:
             if _inside(op, expert) and (not layout.block or block_calls.intersection(op.modules))
         ]
         if members:
-            called.append(any(indices.label in _ancestors(ops, op.label) for op in members))
+            called.append(any(_key(indices) in _ancestors(ops, _key(op)) for op in members))
     return (
         all(called)
         if called
@@ -177,10 +182,10 @@ def _feeds_fused(
             block_calls and not block_calls.intersection(op.modules)
         ):
             continue
-        upstream = _ancestors(ops, op.label)
-        if indices.label not in upstream:
+        upstream = _ancestors(ops, _key(op))
+        if _key(indices) not in upstream:
             continue
-        if _indexed_parameters(ops, upstream, indices.label, prefixes):
+        if _indexed_parameters(ops, upstream, _key(indices), prefixes):
             return True
     return False
 
@@ -204,7 +209,7 @@ def _indexed_parameters(
 def _identity(op: Op) -> tuple[bool, int | None]:
     """Derive the two identity facts without reading any activation."""
     routes = _routes(op.source_trace)
-    router = any(op.label in route.routers for route in routes)
+    router = any(_key(op) in route.routers for route in routes)
     for route in routes:
         for index, address in enumerate(route.experts):
             if _inside(op, address):
