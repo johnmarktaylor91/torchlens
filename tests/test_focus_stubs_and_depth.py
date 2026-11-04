@@ -206,7 +206,7 @@ def test_focus_on_a_module_called_twice_draws_both_passes(trace: tl.Trace, tmp_p
 def test_reading_notes_explain_from_and_to_when_asked(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "mixer", module="mixer", show_legend=True)
     header = dot[dot.index("label=<") : dot.index("labeljust")]
-    assert "from module, to module: the module outside this one" in header
+    assert "from module, to module: where an input comes from" in header
     plain = _dot(trace, tmp_path, "mixer_plain", module="mixer")
     assert "from module, to module" not in plain  # the reading key is opt-in
     whole = _dot(trace, tmp_path, "whole", show_legend=True)

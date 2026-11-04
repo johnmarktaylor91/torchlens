@@ -364,8 +364,8 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
     notes.append("(shape), size: the op's output tensor and its memory")
     if any(name.startswith("__module_focus_") for name in names):
         notes.append(
-            f"from module, to module: the module{under} outside this one that made its"
-            " input or takes its output, then that op's name"
+            "from module, to module: where an input comes from or an output goes,"
+            " then that op's name"
         )
     if any("params:" in text for text in texts):
         notes.append("params: the weights the op used (filled as the key shows)")
