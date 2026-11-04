@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections.abc
+import inspect
 import os
 from typing import Any
 
@@ -554,6 +555,36 @@ def _split_coerced_mapping(
     return [], merged
 
 
+def _input_owner(model: Any) -> Any:
+    """Return the object whose tokenizer and processors resolve ``model``'s inputs.
+
+    A bound method of a module (``tl.trace(model.generate, "text")``) and the
+    synthetic root TorchLens wraps it in both resolve through their owner
+    (``method.__self__``), so text, images and modality dicts reach
+    ``model.generate`` exactly as they reach ``model``: an attached
+    ``tokenizer``, a ``to_tokens`` method or the owner's ``name_or_path``.
+
+    Parameters
+    ----------
+    model:
+        Model, bound method of a module, or TorchLens's bound-method root.
+
+    Returns
+    -------
+    Any
+        The owning module for a bound method or its root; ``model`` otherwise.
+    """
+
+    # Duck-typed so this module adds no import edge to the backend layer: the
+    # root (``TLBoundMethodRoot``) exposes its owner as the ``tl_owner``
+    # property, and a bound method carries it as ``__self__``.
+    if isinstance(getattr(type(model), "tl_owner", None), property):
+        return model.tl_owner
+    if inspect.ismethod(model) and hasattr(model.__self__, "forward"):
+        return model.__self__
+    return model
+
+
 def _coerce_inputs(
     model: Any, input_args: Any, input_kwargs: dict[Any, Any] | None
 ) -> tuple[Any, dict[Any, Any] | None]:
@@ -578,7 +609,8 @@ def _coerce_inputs(
         merged: dict[Any, Any] = dict(input_args.input_kwargs or {})
         merged.update(input_kwargs or {})
         return input_args.input_args, merged
-    return _split_coerced_mapping(input_args, _coerce_input_args(model, input_args), input_kwargs)
+    owner = _input_owner(model)
+    return _split_coerced_mapping(input_args, _coerce_input_args(owner, input_args), input_kwargs)
 
 
 def _is_pil_image(x: Any) -> bool:
