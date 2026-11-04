@@ -42,27 +42,32 @@ def _count_container_ids(
     """
 
     cls = value.__class__
-    if cls is dict or cls is defaultdict:
+    if cls is dict or cls is defaultdict or cls is list:
         oid = id(value)
         id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value.values():
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is list:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value:
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
+        if depth >= 6 or oid in expanded_ids:
+            return
+        expanded_ids.add(oid)
+        members = value if cls is list else value.values()
     elif cls is set:
         oid = id(value)
         id_counts[oid] = id_counts.get(oid, 0) + 1
+        return
     elif cls is tuple and depth < 6 and id(value) not in expanded_ids:
         expanded_ids.add(id(value))
-        for member in value:
+        members = value
+    else:
+        return
+    # Recurse only into members this function acts on (an identity test on the
+    # class, as above); every other member would return at once.
+    walked = _WALKED_CLASS_IDS
+    for member in members:
+        if id(member.__class__) in walked:
             _count_container_ids(member, id_counts, expanded_ids, depth + 1)
+
+
+#: ``id`` of each class ``_count_container_ids`` counts or expands.
+_WALKED_CLASS_IDS = frozenset(map(id, (dict, defaultdict, list, set, tuple)))
 
 
 #: Cell classes the pooling sweep acts on (everything else is skipped).

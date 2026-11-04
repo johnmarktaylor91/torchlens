@@ -567,6 +567,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch plain escape belt: user-code data reads of source-less tensors (no op); "
         "popped by the provenance disclosure step and scrub-declared"
     ),
+    "_torch_file_loads": (
+        "torch wrappers: a torch.load call ran in the forward; popped by the provenance "
+        "disclosure step, which names the load in its warning, and scrub-declared"
+    ),
     "_unrecorded_operator_mutations": (
         "torch.ops recorder: mutating operator calls it could not record in place; popped by "
         "the provenance disclosure step and scrub-declared"

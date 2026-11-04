@@ -75,9 +75,9 @@ from ._foreign_data import FOREIGN_DATA_FUNC_NAME, HOST_CONSTRUCTOR_FUNC_NAMES, 
 from ._foreign_wrappers import rebase_buried_wrapper, warn_buried_sites
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
-    PLAIN_EXPORT_FUNC_NAMES,
+    BOUNDARY_NOTE_FUNC_NAMES,
     funcs_not_to_log,
-    note_function_export,
+    note_function_boundary,
     print_funcs,
     unlogged_wrapper_name,
 )
@@ -1144,7 +1144,7 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
-    is_export_func = func_name in PLAIN_EXPORT_FUNC_NAMES
+    is_boundary_func = func_name in BOUNDARY_NOTE_FUNC_NAMES  # an export or a file load
     is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
@@ -1328,8 +1328,8 @@ def torch_func_decorator(
             trace._wrapper_runtime_ws.current_func_barcode if is_barcode_transparent else 0
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
-        if is_export_func:
-            note_function_export(func_name, args)
+        if is_boundary_func:
+            note_function_boundary(func_name, args)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
                 wrapper_name = unlogged_wrapper_name(func_name)
