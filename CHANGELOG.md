@@ -5,6 +5,14 @@
 
 ### Fixed
 
+- **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
+  head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
+  `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
+  `mask_sha256` among its keywords (written through the tensor sidecar), and a reload applies
+  bit-identically. A malformed or tampered stored mask refuses
+  `intervention_helper_arguments_invalid` at load. An edit that needs user code still refuses
+  `intervention_spec_not_portable`. DOCUMENTED-UNSTABLE persisted form.
+
 - **capture**: `torch.get_rng_state` and `torch.random.get_rng_state` are recorded as source ops
   with no parents, so a forward that reads the RNG state and uses the bytes gets an attributed
   node and passes `tl.validate`. TorchLens's own RNG snapshots do not appear in the trace. The
