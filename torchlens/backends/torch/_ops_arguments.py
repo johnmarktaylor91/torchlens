@@ -111,14 +111,19 @@ _PERMANENT_C_CALLABLE_TYPES = (
 
 
 def _is_permanent_c_callable(func: Any) -> bool:
-    """Return whether ``func`` is a C callable owned by a module or class, never an instance."""
+    """Return whether ``func`` is a C callable owned by a module or class, never an instance.
+
+    A static C function (``torch.sin``: ``METH_STATIC`` on ``_VariableFunctionsClass``)
+    is bound to nothing, so its ``__self__`` is ``None``.
+    """
 
     func_type = type(func)
     if func_type in _PERMANENT_C_CALLABLE_TYPES:
         return True
-    return func_type is types.BuiltinFunctionType and isinstance(
-        getattr(func, "__self__", None), (types.ModuleType, type)
-    )
+    if func_type is not types.BuiltinFunctionType:
+        return False
+    owner = getattr(func, "__self__", None)
+    return owner is None or isinstance(owner, (types.ModuleType, type))
 
 
 def _derive_function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
