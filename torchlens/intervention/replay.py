@@ -1229,12 +1229,8 @@ def _commit_replay_updates(
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
-                # This push re-derived the site's value from capture truth
-                # through exactly these fires, so they REPLACE the site's
-                # replay-minted node-hook records (chaining two edits yields
-                # two records, never three). Live-door records (capture
-                # facts), edge records (tier-(ii) corroboration), and
-                # records on sites this push did not fire at survive.
+                # These fires REPLACE the site's replay-minted node-hook records
+                # (docstring); live-door and edge records survive.
                 old_records = list(site.edits or ())
                 surviving = [
                     record
@@ -1263,6 +1259,10 @@ def _commit_replay_updates(
     if new_digests:
         # Rebind, never mutate: the run context may be shared with a fork.
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
+    # The committed values may include the outputs: re-derive the decoded output from them.
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    refresh_decoded_output(log)
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
