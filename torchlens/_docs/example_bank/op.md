@@ -446,7 +446,7 @@ print("compute_record", op.compute_record)
 # macs_backward None
 # macs_total None
 # bytes_read 1.19 KiB
-# bytes_written 1 KiB
+# bytes_written 1.00 KiB
 # arithmetic_intensity 6.286
 # compute_record ComputeRecord(fma_macs=6912, other_flops=256, mac_applicability='mac', evidence='formula_exact', reason=None)
 ```
@@ -664,7 +664,7 @@ print("edge_replacement_stamps", op.edge_replacement_stamps)
 print("out_versions_by_child", op.out_versions_by_child)
 print("has_out_variations", op.has_out_variations)
 # Output:
-# edge_uses (edge relu_1_2 -> linear_2_3 (positional 0),)
+# edge_uses (EdgeUseRecord: positional argument 0,)
 # dropped_edge_tensor_args ()
 # unattributed_tensor_args ()
 # edge_substitutions None
@@ -1060,7 +1060,8 @@ print("transform_fn_source", op.transform_fn_source.func_name)
 
 ```python
 trace = tl.trace(model, x)
-edited = trace.fork().ops["relu_1_2"].do(tl.zero_ablate())
+fork = trace.fork()
+edited = fork.ops["relu_1_2"].do(tl.zero_ablate())
 op = edited.ops["relu_1_2"]
 print("is_edited", op.is_edited)
 print("edits", len(op.edits))

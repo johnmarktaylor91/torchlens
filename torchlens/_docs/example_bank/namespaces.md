@@ -467,6 +467,7 @@ Resolve a declared input normalization into a preprocessing record.
 - fixture: none
 
 ```python
+import torchlens.preprocessing
 resolution = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
 print(resolution.status, resolution.preprocessing.source)
 print(resolution.declared.mean)

@@ -1011,7 +1011,8 @@ Keep only the component of each channel vector along a direction.
 
 ```python
 edit = tl.project_onto(torch.ones(4), dim=1)
-out = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))["relu_1_2"].out
+edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+out = edited["relu_1_2"].out
 print(torch.allclose(out[:, 0], out[:, 1]))
 # Output:
 # True
@@ -1026,7 +1027,8 @@ Remove the component of each channel vector along a direction.
 
 ```python
 edit = tl.project_out(torch.ones(4), dim=1)
-out = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))["relu_1_2"].out
+edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+out = edited["relu_1_2"].out
 print(torch.allclose(out.sum(dim=1), torch.zeros(1, 8, 8), atol=1e-5))
 # Output:
 # True
@@ -1057,7 +1059,8 @@ Restrict an edit to chosen positions along one axis (token positions in a langua
 
 ```python
 edit = tl.positions(tl.zero_ablate(), [0, 1], axis=1)
-out = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))["relu_1_2"].out
+edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+out = edited["relu_1_2"].out
 print(bool((out[:, :2] == 0).all()), bool((out[:, 2:] != 0).any()))
 # Output:
 # True True

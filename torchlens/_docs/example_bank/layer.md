@@ -777,7 +777,8 @@ for layer in trace.layers:
 
 ```python
 trace = tl.trace(model, x)
-edited = trace.fork().layers["relu_1_2"].do(tl.zero_ablate())
+fork = trace.fork()
+edited = fork.layers["relu_1_2"].do(tl.zero_ablate())
 layer = edited.layers["relu_1_2"]
 print("is_edited", layer.is_edited)
 print("zeroed", float(layer.out.abs().sum()))

@@ -645,7 +645,7 @@ print("encoded differs", d.dot != base.dot, "overlay differs", o.dot != base.dot
 ```
 
 ### options-vis-buffers
-Show buffer nodes always, only when meaningful (BatchNorm's running statistics hidden, the registered `scale` kept), or never.
+Show buffer nodes always, only when meaningful (BatchNorm's running statistics hidden, the registered `scale` kept), or never; a hidden buffer is named in its consumer's "Hidden buffers" tooltip.
 
 - covers: `VisualizationOptions.show_buffers`
 - tasks: draw, buffers

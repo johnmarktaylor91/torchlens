@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-470 examples, 1219 public names, 147 tasks.
+472 examples, 1219 public names, 147 tasks.
 
 ## By task
 
@@ -13,7 +13,7 @@ By name lists the 3 most focused examples first;
 |---|---|
 | ablate | bundle.md#bundle-fork-do, layer.md#layer-do-ablate, namespaces.md#namespaces-experiment, namespaces.md#namespaces-mechinterp-ablation-controls, op.md#op-do-ablate, tasks.md#tasks-ablate, toplevel.md#toplevel-edit-zero-ablate, toplevel.md#toplevel-edit-mean-ablate, traps.md#traps-module-edit-read-op-wrong, traps.md#traps-module-edit-read-op-right, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-save-load-edited, workflows.md#workflows-bundle-rank-edits |
 | activations | module.md#module-outputs, module.md#modulecall-outputs, options.md#options-detach-saved, options.md#options-activation-transform, options.md#options-output-device-save-mode |
-| agent | namespaces.md#namespaces-agent, trace.md#trace-to-agent-json |
+| agent | bundle.md#bundle-to-agent-json, namespaces.md#namespaces-agent, trace.md#trace-to-agent-json |
 | agent-inspect | tasks.md#tasks-agent-inspect |
 | annotate | layer.md#layer-annotations, op.md#op-annotations, trace.md#trace-annotate |
 | appliances | namespaces.md#namespaces-appliances, trace.md#trace-using-appliance |
@@ -34,7 +34,7 @@ By name lists the 3 most focused examples first;
 | call-tree | module.md#module-call-tree-facts, module.md#module-call-tree-walk, module.md#module-show-call-tree, module.md#modulecall-children, module.md#modulecall-show-call-tree, trace.md#trace-call-tree-walk, trace.md#trace-show-call-tree |
 | capture | capture.md#capture-trace-read-op, capture.md#capture-trace-list-op-labels, capture.md#capture-save-selector, namespaces.md#namespaces-options, namespaces.md#namespaces-experimental, options.md#options-input-output-transform, options.md#options-save-args-rng, options.md#options-source-context, options.md#options-structure-only, options.md#options-keep-orphans, options.md#options-name-seed, options.md#options-chunk-size, options.md#options-carry-state, options.md#options-aten-ops, options.md#options-cache, tasks.md#tasks-capture, toplevel.md#toplevel-classes-trace-layer-op, toplevel.md#toplevel-trace-save-all, toplevel.md#toplevel-release-model |
 | compare | namespaces.md#namespaces-bundle, namespaces.md#namespaces-differential, namespaces.md#namespaces-fingerprint, selection.md#selection-align-to |
-| compare-runs | bundle.md#bundle-build-read, bundle.md#bundle-container-facts, bundle.md#bundle-ops-layers, bundle.md#bundle-at-site, bundle.md#bundle-modules-params-buffers, bundle.md#bundle-supergraph, bundle.md#bundle-add, bundle.md#bundle-remove, bundle.md#bundle-remove-except, bundle.md#bundle-clear, bundle.md#bundle-capacity-evicts, bundle.md#bundle-compare, bundle.md#bundle-rank-changes, bundle.md#bundle-comparability, bundle.md#bundle-stored-comparison, bundle.md#bundle-map, bundle.md#bundle-run, bundle.md#bundle-vary, bundle.md#bundle-show-repr, bundle.md#bundle-card-exports, bundle.md#bundle-relate-upstream-downstream, bundle.md#bundle-relation-grades, bundle.md#bundle-episode-status, tasks.md#tasks-compare-runs, toplevel.md#toplevel-changed, toplevel.md#toplevel-top-changed, workflows.md#workflows-bundle-several-inputs, workflows.md#workflows-bundle-rank-edits |
+| compare-runs | bundle.md#bundle-build-read, bundle.md#bundle-container-facts, bundle.md#bundle-ops-layers, bundle.md#bundle-at-site, bundle.md#bundle-modules-params-buffers, bundle.md#bundle-supergraph, bundle.md#bundle-add, bundle.md#bundle-remove, bundle.md#bundle-remove-except, bundle.md#bundle-clear, bundle.md#bundle-capacity-evicts, bundle.md#bundle-compare, bundle.md#bundle-rank-changes, bundle.md#bundle-comparability, bundle.md#bundle-stored-comparison, bundle.md#bundle-map, bundle.md#bundle-run, bundle.md#bundle-vary, bundle.md#bundle-show-repr, bundle.md#bundle-summary, bundle.md#bundle-to-pandas, bundle.md#bundle-to-agent-json, bundle.md#bundle-relate-upstream-downstream, bundle.md#bundle-relation-grades, bundle.md#bundle-episode-status, tasks.md#tasks-compare-runs, toplevel.md#toplevel-changed, toplevel.md#toplevel-top-changed, workflows.md#workflows-bundle-several-inputs, workflows.md#workflows-bundle-rank-edits |
 | compat | namespaces.md#namespaces-compat |
 | conditionals | layer.md#layer-conditional-test, layer.md#layer-conditional-body, layer.md#layer-conditional-children, op.md#op-conditional-test, op.md#op-conditional-body, op.md#op-conditional-children |
 | containers | op.md#op-containers |
@@ -53,7 +53,7 @@ By name lists the 3 most focused examples first;
 | examples | namespaces.md#namespaces-examples |
 | experiment | namespaces.md#namespaces-experiment |
 | explain | trace.md#trace-explain |
-| export | bundle.md#bundle-card-exports, layer.md#layer-to-pandas, namespaces.md#namespaces-export, op.md#op-to-pandas |
+| export | layer.md#layer-to-pandas, namespaces.md#namespaces-export, op.md#op-to-pandas |
 | export-html | tasks.md#tasks-export-html |
 | extract-dataset | namespaces.md#namespaces-dataset-extraction, namespaces.md#namespaces-neuro, tasks.md#tasks-extract-dataset, toplevel.md#toplevel-extract-dataset-memory |
 | extract-layers | capture.md#capture-extract-module-outputs, namespaces.md#namespaces-inventory, tasks.md#tasks-extract-layers, toplevel.md#toplevel-pluck-one-layer |
@@ -143,9 +143,9 @@ By name lists the 3 most focused examples first;
 | structure | options.md#options-structure-only, trace.md#trace-structure-only |
 | style | options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings |
 | subgraph | trace.md#trace-between, trace.md#trace-subgraph |
-| summary | tasks.md#tasks-summary, toplevel.md#toplevel-summary-text, trace.md#trace-facts-counts, trace.md#trace-summary, trace.md#trace-to-pandas, trace.md#trace-to-agent-json, trace.md#trace-explain, trace.md#trace-capabilities, trace.md#trace-bill-of-materials, trace.md#trace-narrate |
+| summary | bundle.md#bundle-summary, tasks.md#tasks-summary, toplevel.md#toplevel-summary-text, trace.md#trace-facts-counts, trace.md#trace-summary, trace.md#trace-to-pandas, trace.md#trace-to-agent-json, trace.md#trace-explain, trace.md#trace-capabilities, trace.md#trace-bill-of-materials, trace.md#trace-narrate |
 | sweep | bundle.md#bundle-why-provenance, bundle.md#bundle-effects, tasks.md#tasks-sweep, toplevel.md#toplevel-sweep-values |
-| table | bundle.md#bundle-card-exports, layer.md#layer-to-pandas, op.md#op-to-pandas, selection.md#selection-to-pandas, trace.md#trace-to-pandas |
+| table | bundle.md#bundle-to-pandas, layer.md#layer-to-pandas, op.md#op-to-pandas, selection.md#selection-to-pandas, trace.md#trace-to-pandas |
 | timing | grad_fn.md#grad-fn-calls, layer.md#layer-call-records, layer.md#layer-total-duration-loop, module.md#module-durations, module.md#modulecall-durations-context, op.md#op-call-environment |
 | to-disk | tasks.md#tasks-to-disk, toplevel.md#toplevel-to-disk-stream |
 | trackers | namespaces.md#namespaces-trackers |
@@ -241,10 +241,10 @@ By name lists the 3 most focused examples first;
 | `Bundle.store_comparison` | bundle.md#bundle-stored-comparison |
 | `Bundle.stored_comparison` | bundle.md#bundle-stored-comparison |
 | `Bundle.stored_comparison_names` | bundle.md#bundle-stored-comparison |
-| `Bundle.summary` | bundle.md#bundle-card-exports |
+| `Bundle.summary` | bundle.md#bundle-summary |
 | `Bundle.supergraph` | bundle.md#bundle-supergraph |
-| `Bundle.to_agent_json` | bundle.md#bundle-card-exports |
-| `Bundle.to_pandas` | bundle.md#bundle-card-exports |
+| `Bundle.to_agent_json` | bundle.md#bundle-to-agent-json |
+| `Bundle.to_pandas` | bundle.md#bundle-to-pandas |
 | `Bundle.token_divergence` | bundle.md#bundle-token-divergence |
 | `Bundle.token_pairs` | bundle.md#bundle-token-pairs |
 | `Bundle.upstream` | bundle.md#bundle-relate-upstream-downstream |
