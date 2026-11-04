@@ -1357,6 +1357,14 @@ expert contributions from routing indices alone.
   (payload-bounded, dormancy disclosed) and the `bertviz_tuple` parity oracle.
   FIX-H shipped in `tl.viz.heatmap`: nearest-neighbor discrete cells, separate
   `row_labels=`/`col_labels=`, omission marker computed AFTER final overlap selection.
+  Generation steps: `tl.transformer.attention_view(generation, layer, step=k)` takes a
+  generation recording (`tl.record(model, input_ids, save=tl.func("softmax"),
+  generate_kwargs={...})`, eager attention) and returns step `k`'s pattern (0 is the
+  prefill, `k` the k-th decode forward) over every position so far, assembled from the
+  rows each forward computed, nothing recomputed; `episode` names the step and
+  `tl.viz.attention` outlines the computed row. `step=` on a plain trace, a generation
+  without `step=`, or `query_tokens=`/`key_tokens=` with `step=` refuse
+  `tv_record_invalid`. Doc: `docs/field-guide/generation_attention.md`.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
 - MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming
   session): `torchlens.mechinterp` is the transformer analysis kit validated
@@ -1400,6 +1408,16 @@ expert contributions from routing indices alone.
   `torchlens.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
   log_scale=False)` (CPR) and `torchlens.mechinterp.circuit_model_difference(...)`
   (CMD) are the MIB trapezoidal areas under `f` and `|1 - f|`.
+  Ablation controls: `tl.mechinterp.ablation_controls(model, inputs, site, metric, *, axis,
+  baseline="zero", donors=None, direction=None, feature_axis=None, n_directions=20,
+  sites=None, seed=0, min_ratio=0.5, alpha=0.05)` reruns one ablation claim under the
+  zero, mean and resample baselines, against `n_directions` matched random directions
+  (when `direction=` is given) and at the neighbouring `sites=`, and returns a read-only
+  `tl.mechinterp.AblationControlsReport` (`clean`, `effect`, `baseline`, `rows`,
+  `families`, `direction_p`, `survives`; `print(report)` is the table). `axis` is the
+  site value's batch axis, required and never guessed. Example:
+  `report = tl.mechinterp.ablation_controls(model, x, tl.module("gain"), metric, axis=0)`
+  then `report.survives`.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
@@ -1925,6 +1943,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
 - `tl.facets.parameter_spec`: Facet spec over a named module parameter, for custom recipes.
+- `tl.mechinterp.AblationControlsReport`: Every control rerun of one ablation claim and the verdict per family.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
@@ -2077,7 +2096,7 @@ object's docstring):
 - `tl.transformer.MaskInfo`: Mask provenance for an attention view.
 - `tl.transformer.TokenAxis`: One labeled token axis (query and key stay separate records).
 - `tl.transformer.TokenScoreRow`: One labeled row of per-token scores (strip row).
-- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view.
+- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view; with `step=`, one step of a recorded generation.
 - `tl.transformer.circuitsvis_payload`: Build the CircuitsVis attention payload from typed views.
 - `tl.transformer.metric_strip`: Convert a metric record to a strip record for rendering.
 - `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).

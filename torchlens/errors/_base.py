@@ -63,6 +63,32 @@ def _message_from_payload(class_name: str, fields: dict[str, object]) -> str:
     return f"{class_name}: {rendered}."
 
 
+def _actionable_message(problem: str, remedy: str) -> str:
+    """Combine a refusal description with its required user remedy.
+
+    Parameters
+    ----------
+    problem:
+        Description of the rejected object or operation and its cause.
+    remedy:
+        Concrete action the caller can take to resolve the refusal.
+
+    Returns
+    -------
+    str
+        Stable human-readable message containing both clauses.
+    """
+
+    problem_clause = problem.rstrip()
+    if "\n  remedy " in problem_clause:
+        problem_clause, old_remedy = problem_clause.rsplit("\n  remedy", 1)
+        padding = old_remedy[: len(old_remedy) - len(old_remedy.lstrip())]
+        return f"{problem_clause}\n  remedy{padding}{remedy.rstrip()}"
+    if not problem_clause.endswith((".", "!", "?", ":", ";")):
+        problem_clause = f"{problem_clause}."
+    return f"{problem_clause} Remedy: {remedy.rstrip().rstrip('.')}."
+
+
 def _remedy_from_message(message: str) -> str | None:
     """Read the authored remedy from either supported display layout."""
 

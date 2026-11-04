@@ -45,6 +45,7 @@ from ...backends.registry import BackendName, BackendUnsupportedError, get_backe
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
 from ...validation.status import ValidationReplaySource, ValidationStatus
+from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -158,8 +159,7 @@ class GradOptions:
     ) -> None:
         """Initialize Paddle derived-gradient options."""
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "loss_fn", loss_fn)
         normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
         object.__setattr__(self, "input_grad_argnums", normalized)
