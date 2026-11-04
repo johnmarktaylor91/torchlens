@@ -30,7 +30,7 @@ from .save import load_intervention_spec
 from .types import Edit, HookSpec, InterventionSpec, TargetSpec
 
 #: Error code of a stored facet write the loaded trace no longer reproduces.
-_NOT_REPRODUCIBLE = "facet_write_not_reproducible"
+_NOT_REPRODUCIBLE = "bundle_load_failed"
 
 
 def load_trace_recipe_spec(path: str | Path, trace: Any = None) -> InterventionSpec:
