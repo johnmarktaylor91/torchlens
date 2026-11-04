@@ -44,6 +44,37 @@ the call.
 """
 
 
+STORAGE_CONTEXT_NEW_VIEW_FUNCS = frozenset({"_rev_view_func_unsafe"})
+"""View-function methods whose new view (positional argument 1) is saved with its whole storage.
+
+``_rev_view_func_unsafe`` maps its new view back to the base geometry; a reverse
+``select`` or ``slice`` is an ``as_strided`` over the new view's storage, so it reads
+bytes outside the new view's own elements and a compact clone cannot replay it.
+"""
+
+
+def storage_context_arg_index(func_name: str | None) -> int | None:
+    """Return the positional argument of ``func_name`` saved with its whole storage, if any.
+
+    Parameters
+    ----------
+    func_name:
+        Name of the captured function.
+
+    Returns
+    -------
+    int | None
+        ``0`` for a :data:`STORAGE_CONTEXT_RECEIVER_FUNCS` receiver, ``1`` for a
+        :data:`STORAGE_CONTEXT_NEW_VIEW_FUNCS` new view, else ``None``.
+    """
+
+    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS:
+        return 0
+    if func_name in STORAGE_CONTEXT_NEW_VIEW_FUNCS:
+        return 1
+    return None
+
+
 def holds_rebindable_storage(tensor: torch.Tensor) -> bool:
     """Return whether ``Tensor.set_`` can put ``tensor`` back on a recorded storage.
 

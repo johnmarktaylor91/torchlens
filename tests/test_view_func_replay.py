@@ -268,3 +268,41 @@ def test_compact_receiver_is_a_replay_error(method: str) -> None:
         assert "raised an exception" in failure.message
     finally:
         trace.cleanup()
+
+
+def _rev_view_func_two_step_trace() -> tuple[tl.Trace, torch.Tensor, object]:
+    """A trace of the reverse method on a ``t()[0]`` view, its ground truth and the op."""
+
+    model = _ViewFuncModel("_rev_view_func_unsafe", "transpose_row")
+    trace, ground_truth = _traced_with_args(model, _input_4x4())
+    return trace, ground_truth, _view_func_op(trace, "_rev_view_func_unsafe")
+
+
+def test_rev_view_func_new_view_keeps_its_storage() -> None:
+    """The reverse of ``select`` reads the new view's whole storage, so capture keeps it."""
+
+    trace, ground_truth, op = _rev_view_func_two_step_trace()
+    try:
+        new_view = op.saved_args[1]
+        assert new_view.numel() == 4
+        assert new_view.untyped_storage().nbytes() == 16 * new_view.element_size()
+        status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
+        assert status.state == "passed", get_validation_failure(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_compact_new_view_is_a_replay_error() -> None:
+    """A new view saved without its storage cannot be mapped back to the base: replay fails."""
+
+    trace, ground_truth, op = _rev_view_func_two_step_trace()
+    try:
+        op.saved_args = (op.saved_args[0], op.saved_args[1].detach().clone(), *op.saved_args[2:])
+        with pytest.warns(UserWarning, match="Validation replay raised an exception"):
+            status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        assert status.state == "failed"
+        failure = get_validation_failure(trace)
+        assert failure is not None and failure.op_label.split(":")[0] == op.layer_label
+        assert "raised an exception" in failure.message
+    finally:
+        trace.cleanup()

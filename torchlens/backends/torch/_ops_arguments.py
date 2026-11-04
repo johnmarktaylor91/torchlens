@@ -12,10 +12,10 @@ from ..._ir.container import (
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
 from ..._storage_bindings import (
-    STORAGE_CONTEXT_RECEIVER_FUNCS,
     VIEW_CONTEXT_RECEIVER_FUNCS,
     copy_with_storage_context,
     copy_with_view_context,
+    storage_context_arg_index,
 )
 from ..._utils._tensor_layout import CaptureLayout, layout_of
 from ..._utils.arg_handling import copy_arg_tree
@@ -542,32 +542,34 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 def _copy_saved_call_args(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], retained: bool = False
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Copy one call's arguments for ``save_arg_values``, receiver context included.
+    """Copy one call's arguments for ``save_arg_values``, storage and view context included.
 
-    The receiver (positional argument 0) of a
-    :data:`~torchlens._storage_bindings.STORAGE_CONTEXT_RECEIVER_FUNCS` call keeps
-    its whole storage, and that of a
+    The positional argument named by
+    :func:`~torchlens._storage_bindings.storage_context_arg_index` keeps its whole
+    storage, and the receiver (positional argument 0) of a
     :data:`~torchlens._storage_bindings.VIEW_CONTEXT_RECEIVER_FUNCS` call keeps its
     view relation; every other argument is copied as :func:`_copy_saved_arg_tree` does.
     """
 
-    receiver_copy = _receiver_copier(func_name)
+    copiers = _context_copiers(func_name)
     arg_copies = tuple(
-        _copy_saved_arg_tree(arg, retained, receiver_copy=receiver_copy if index == 0 else None)
+        _copy_saved_arg_tree(arg, retained, receiver_copy=copiers.get(index))
         for index, arg in enumerate(args)
     )
     kwarg_copies = {key: _copy_saved_arg_tree(value, retained) for key, value in kwargs.items()}
     return arg_copies, kwarg_copies
 
 
-def _receiver_copier(func_name: str) -> Callable[[torch.Tensor], torch.Tensor] | None:
-    """Return the copier that keeps a receiver's storage or view context, if ``func_name`` has one."""
+def _context_copiers(func_name: str) -> dict[int, Callable[[torch.Tensor], torch.Tensor]]:
+    """Map each positional argument of ``func_name`` saved with context to its copier."""
 
-    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS:
-        return copy_with_storage_context
+    copiers: dict[int, Callable[[torch.Tensor], torch.Tensor]] = {}
     if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
-        return copy_with_view_context
-    return None
+        copiers[0] = copy_with_view_context
+    index = storage_context_arg_index(func_name)
+    if index is not None:
+        copiers[index] = copy_with_storage_context
+    return copiers
 
 
 def _copy_saved_arg_tree(
