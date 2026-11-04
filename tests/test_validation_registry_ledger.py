@@ -940,6 +940,27 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         ),
     ),
     CustomCheckExemption(
+        func_name="autogradfunction",
+        check="check_foreign_kernel_dependence_exempt",
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "a known foreign kernel returning several tensors is one autogradfunction op per "
+            "output, each carrying the call's full parent set; the kernel table declares per "
+            "Function and output which positional arguments that output depends on (ruling: "
+            "declare per-output dependence per kernel in a table; FlashAttention 4's "
+            "log-sum-exp, output 1, depends on q and k at positions 0 and 1, not v at 2), and "
+            "a parent is excused for that output only when every position it occupies is "
+            "declared independent"
+        ),
+        refuses=(
+            "every parent of an output with no row (FlashAttention 4's attention output), an "
+            "op whose module, Function name or exit is not in the table, a parent at a "
+            "declared-dependent position or at a position outside the row, a keyword, nested "
+            "or unmapped parent, and an op that did not record multi_output_index"
+        ),
+    ),
+    CustomCheckExemption(
         func_name="expand",
         check="check_expand_pinned_size_exempt",
         contract=_C2,

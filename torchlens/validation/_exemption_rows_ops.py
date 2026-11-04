@@ -14,6 +14,7 @@ from ._exemption_schema import ExemptionRow
 _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
 _SLOTS = "tests/test_validation_structural_slots.py::"
+_KERNEL = "tests/test_foreign_kernel_dependence.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
 _EX = "torchlens.validation.exemptions:"
 _CORE = "torchlens.validation.core:"
@@ -442,6 +443,15 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         "the packed-sequence batch_sizes slot of a gru or rnn call",
         "batch_sizes is a structural length table the kernel indexes by, never a value input",
         _SLOTS + "test_packed_recurrence_data_slot_still_fails_when_frozen",
+    ),
+    _custom(
+        "autogradfunction",
+        "check_foreign_kernel_dependence_exempt",
+        "a perturbed parent of one output of a known foreign kernel's multi-output boundary "
+        "call, at a position the kernel table declares that output independent of",
+        "per-output dependence declared per kernel in a table (FlashAttention 4's log-sum-exp "
+        "depends on q and k, not v); undeclared kernels, outputs and positions stay strict",
+        _KERNEL + "test_undeclared_kernel_unmoved_sibling_output_still_fails",
     ),
     _custom(
         "expand",

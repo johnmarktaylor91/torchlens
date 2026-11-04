@@ -51,6 +51,9 @@ from ._exemption_table import (
     skip_perturbation_justifications,
     skip_validation_justifications,
 )
+from ._foreign_kernel_dependence import (  # noqa: F401  (resolved through globals())
+    check_foreign_kernel_dependence_exempt,
+)
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _index_domain_size,
@@ -1057,14 +1060,9 @@ def _check_zipped_sibling_exempt(
 ) -> bool:
     """Custom check: exempt only cross-member zipped-sibling perturbations.
 
-    Parameters
-    ----------
-    source_trace:
-        Trace being validated (unused; custom-check signature).
-    layer:
-        Zipped multi-output operation record.
-    layers_to_perturb:
-        Parent labels selected for perturbation.
+    ``source_trace`` is unused (custom-check signature); ``layer`` is one output's
+    op of a zipped multi-output op and ``layers_to_perturb`` the parent labels
+    selected for perturbation.
 
     Returns
     -------

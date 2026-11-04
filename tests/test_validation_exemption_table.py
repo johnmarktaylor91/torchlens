@@ -136,6 +136,7 @@ _CUSTOM_MEMBERS: dict[str, str] = {
     "rnn_tanh": "check_packed_rnn_batch_sizes_exempt",
     "rnn_relu": "check_packed_rnn_batch_sizes_exempt",
     "expand": "check_expand_pinned_size_exempt",
+    "autogradfunction": "check_foreign_kernel_dependence_exempt",
     "interpolate": "_check_interpolate_exempt",
     "scatter": "_check_scatter_or_index_domain_exempt",
     "scatter_": "_check_scatter_or_index_domain_exempt",
