@@ -260,9 +260,33 @@ def test_spsolve_arg_spec_extracts_both_operands() -> None:
 
 
 def test_portable_save_of_a_sparse_activation_refuses_with_a_code(tmp_path) -> None:
+    """A sparse activation has no saved-format payload: the save refuses, coded, with a remedy.
+
+    The saved format names this ``metadata_value_unportable`` (a tensor whose
+    payload codec the format does not write). A runnable save that includes
+    activations refuses the same tensor earlier, at its dense-payload gate,
+    with ``artifact_tensor_unsupported``.
+    """
+
     trace = tl.trace(_SparseInForward().eval(), [torch.randn(3, 4)])
     with pytest.raises(ArtifactError) as info:
         trace.save(tmp_path / "sparse.tlspec", level="portable")
-    assert info.value.fields["code"] == "artifact_tensor_unsupported"
+    assert info.value.fields["code"] == "metadata_value_unportable"
     assert "sparse_coo layout" in str(info.value)
     assert info.value.fields["remedy"]
+
+    replayable = tl.trace(
+        _SparseInForward().eval(),
+        [torch.randn(3, 4)],
+        save="all",
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    with pytest.raises(ArtifactError) as info:
+        replayable.save(
+            tmp_path / "sparse_runnable.tlspec",
+            level="runnable",
+            include_activations=True,
+            include_weights=True,
+        )
+    assert info.value.fields["code"] == "artifact_tensor_unsupported"
+    assert "tosparse" in str(info.value)

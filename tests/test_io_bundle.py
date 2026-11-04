@@ -530,7 +530,7 @@ def test_bundle_load_raises_on_missing_blob_file(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError, match=blob_path.name) as excinfo:
         load(bundle_path)
-    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert excinfo.value.fields["code"] == "bundle_blob_missing"
 
 
 def test_bundle_load_raises_on_truncated_safetensors(tmp_path: Path) -> None:
