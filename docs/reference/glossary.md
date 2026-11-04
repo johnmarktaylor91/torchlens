@@ -4285,7 +4285,7 @@ The sections above describe each surface in depth.
 | `tl.errors.AmbiguousCallError` | Raised when a module-level query has multiple executed calls |
 | `tl.errors.AmbiguousLabelError` | Raised when `Bundle.at` finds a label in multiple accessors |
 | `tl.errors.AmbiguousPassError` | Raised when a layer-level query has multiple executed passes |
-| `tl.errors.AmbiguousTargetError` | Raised when a projective query has more than one reachable target |
+| `tl.errors.AmbiguousTargetError` | Raised when a projective query has more than one reachable target and none is the primary output. When the other targets are caches (an output role with a path segment `past_key_values`, `presents` or `mems`, or one containing `cache`), a query with no `target=` answers the primary output instead: the role whose last segment is `logits`, else the first non-cache output in model output order. Two real outputs and no cache still raise; `target=` selects any role, caches included |
 | `tl.errors.AppendStreamingUnsupportedError` | Raised when append rerun would need to mutate active streamed activation blobs |
 | `tl.errors.ArtifactTooNewError` | Raised when an artifact declares a schema newer than this runtime's ceiling |
 | `tl.errors.ArtifactTooOldError` | Raised when an artifact predates the supported rehydration floor |
