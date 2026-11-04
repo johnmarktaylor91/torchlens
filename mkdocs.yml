@@ -109,6 +109,9 @@ exclude_docs: |
   /doors/neuroai.md
   /doors/vision.md
   /facets.md
+  /fields/debugging_and_training.md
+  /fields/mechanistic_interpretability.md
+  /fields/teaching.md
   /field-guide/acdc_ioi.md
   /field-guide/conditional_steering.md
   /field-guide/dissection.md

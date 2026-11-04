@@ -1,5 +1,29 @@
 # The NeuroAI feature-extraction journey
 
+## For neuroAI and computational neuroscience
+
+Comparing a model with brain or behaviour data needs per-layer features for a fixed stimulus set, extracted with the model's own preprocessing, in stimulus order, at a scale of thousands of images, and then handed to the analysis package (RSA, encoding models, shape metrics) that owns the brain side. TorchLens does the network side of that: it loads with your ecosystem's loader, verifies the input pipeline, addresses any layer precisely, extracts in batches to a self-describing artifact and connects to rsatoolbox, Brain-Score, himalaya and netrep. The journey below is the verified path through it; the links here are the shortest routes in.
+
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 02 reads an activation out, 04 keeps memory in check, 09 extracts over thousands of batches and 10 ends on a field experiment.
+- [Model RDM notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/5min/cog_neuro_rdm.ipynb): a compact representational dissimilarity matrix from one model in a few lines.
+- [Extract features for a stimulus set](../field-guide/extract_features.md): per-layer activations for every stimulus, written with the model's identity and preprocessing.
+- [Loading models for feature extraction](loaders.md): two lines per ecosystem (torchvision, timm, Hugging Face, CLIP and others), each with its matched preprocessing.
+- [Extract a dataset notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/5min/extract_dataset.ipynb): named-layer activations over a whole dataset in batches, in memory or on disk, and [seeded subsampling](../field-guide/seeded_subsample.md) for a reproducible subset.
+- [Cognitive neuroscience extraction notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/50min/cog_neuro_extraction.ipynb): per-layer extraction and an offline Brain-Score-style evaluation, end to end.
+- [CKA and RSA between two models notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/recipes/cka_rsa_two_models_recipe.ipynb) and the [streaming CKA notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/streaming_cka.ipynb): layer-by-layer similarity heatmaps, in constant memory on streamed data.
+- [torchlens.neuro](../reference/neuro.md) and [the brain-benchmarking seam](../reference/brain_benchmarking_seam.md): what TorchLens owns (the network) and what rsatoolbox and Brain-Score own (the brain and the hypothesis).
+- [TorchLens to himalaya](himalaya.md): banded ridge encoding models over a multi-site feature bank.
+- [TorchLens to netrep](netrep.md): shape metrics and the CCA family between representations.
+- [Bring your own alignment](byo_alignment.md): linear probes, Procrustes and learned transforms over exported features.
+- [Receptive and projective fields](../receptive_projective_fields.md): which input positions can affect a unit, and which outputs a unit can affect, on the graph that ran.
+- [Multi-GPU extraction](../migration/multi_gpu_extraction.md) and [streaming statistics](../reference/stats.md): extraction and dataset-level statistics when the data does not fit in memory.
+- [Connectors to other tools](../bridges.md): rsatoolbox, Brain-Score, xarray, Hugging Face and timm loaders, one entry each.
+- Coming from [thingsvision](../migration/from_thingsvision.md), [torchvision feature extraction](../migration/from_torchvision_feature_extraction.md), a [model zoo wrapper](../migration/from_model_zoos.md) or plain [forward hooks](../migration/from_hooks.md).
+- [NeuroAI demand ledger](demand_ledger.md): what the feature-extraction community has asked for in public issue trackers, and where TorchLens stands on each.
+
+## The journey
+
+
 Extracting features from models you did not train, to compare against brain
 or behaviour data, has one failure mode worse than any crash: plausible,
 finite, right-shaped features from a silently wrong pipeline. This journey is
