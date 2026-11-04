@@ -445,8 +445,8 @@ print("compute_record", op.compute_record)
 # macs_forward 6.91 KMACs
 # macs_backward None
 # macs_total None
-# bytes_read 1.2 KB
-# bytes_written 1.0 KB
+# bytes_read 1.19 KiB
+# bytes_written 1 KiB
 # arithmetic_intensity 6.286
 # compute_record ComputeRecord(fma_macs=6912, other_flops=256, mac_applicability='mac', evidence='formula_exact', reason=None)
 ```

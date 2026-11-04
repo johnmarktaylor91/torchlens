@@ -1023,7 +1023,7 @@ print("aten_gaps", type(trace.aten_gaps).__name__)
 # Output:
 # has_aten_ops True
 # aten_ops True
-# aten_gaps tuple
+# aten_gaps RecordTuple
 ```
 
 ### trace-logged-values
