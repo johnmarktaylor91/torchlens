@@ -8,11 +8,27 @@ parallel to the forward edge, so neither reads as a cycle.  A self-loop now
 leaves the output side and returns to the input side; a back edge leaves
 and re-enters on one flank; both read as one arc around the body (JMT, 3
 Nov 2026).
+
+Older Graphviz builds cannot always route those ports: 2.43, which CI and current
+Ubuntu ship, reports ``libpath/shortest.c:324: triangulation failed`` for the README
+loop's left-to-right return arc under the bundled font's metrics, while newer builds
+route it.  When the installed build reports such a router failure for the text an image
+is rendered from, the image is laid out again without the edges' compass ports
+(:func:`without_compass_ports`), and that layout is kept only when it routes cleanly
+(:func:`reports_route_failure`); the DOT a drawing returns or saves keeps its ports.
 """
 
 from __future__ import annotations
 
-__all__ = ["loop_edge_attrs", "pass_label_spacing", "self_loop_port_attrs"]
+import re
+
+__all__ = [
+    "loop_edge_attrs",
+    "pass_label_spacing",
+    "reports_route_failure",
+    "self_loop_port_attrs",
+    "without_compass_ports",
+]
 
 # self-loop: tail port (output side), head port (input side) per rank direction
 _LOOP_PORTS: dict[str, tuple[str, str]] = {
@@ -21,6 +37,17 @@ _LOOP_PORTS: dict[str, tuple[str, str]] = {
     "LR": ("ne", "nw"),
     "RL": ("nw", "ne"),
 }
+#: an edge's ``tailport``/``headport`` compass attribute, as the graphviz package writes it
+_PORT_ATTR = r'(?:tail|head)port="?(?:n|ne|e|se|s|sw|w|nw|c|_)"?'
+_COMPASS_PORT = re.compile(rf"[ \t]{_PORT_ATTR}(?=[ \t\]])|(?<=\[){_PORT_ATTR}(?:[ \t]+|(?=\]))")
+#: Graphviz's spline-router (pathplan) failures: the edge was routed by a fallback
+_ROUTE_FAILURES = (
+    "triangulation failed",
+    "source point not in any triangle",
+    "destination point not in any triangle",
+    "cannot find triangle path",
+    "Pshortestpath failed",
+)
 # back edge between two body nodes: the two inner corners on one flank (the tail's
 # corner nearest the head, the head's corner nearest the tail), so dot draws a short,
 # shallow arc past the middle node instead of a wide loop around both boxes (compared
@@ -82,3 +109,31 @@ def loop_edge_attrs(is_self_loop: bool, is_back_edge: bool, rankdir: str) -> dic
         tail_port, head_port = _BACK_EDGE_PORTS.get(rankdir, _BACK_EDGE_PORTS["BT"])
         return {"tailport": tail_port, "headport": head_port, "constraint": "false"}
     return {}
+
+
+def reports_route_failure(stderr: str | bytes | None) -> bool:
+    """Return whether Graphviz's ``stderr`` reports that its spline router failed."""
+
+    if not stderr:
+        return False
+    text = stderr.decode("utf-8", "replace") if isinstance(stderr, bytes) else stderr
+    return any(failure in text for failure in _ROUTE_FAILURES)
+
+
+def without_compass_ports(source: str) -> str:
+    """Return DOT ``source`` with the compass ports of its edge statements dropped.
+
+    Only ``tailport``/``headport`` attributes on edge lines go; node statements,
+    labels and ``node:port`` endpoints are untouched.
+    """
+
+    return "\n".join(_drop_ports(line) if "->" in line else line for line in source.split("\n"))
+
+
+def _drop_ports(line: str) -> str:
+    """Return one edge line without its compass ports (adjacent ports need a second pass)."""
+
+    dropped = 1
+    while dropped:
+        line, dropped = _COMPASS_PORT.subn("", line)
+    return line

@@ -38,12 +38,16 @@ def format_sig(value: float, digits: int = 4) -> str:
 
 
 def format_count(count: int) -> str:
-    """Compact counts with one decimal and unit rollover: ``15.4k``, ``124.4M``."""
+    """Compact counts with one decimal and unit rollover: ``15.4k``, ``124.4M``.
+
+    The one compact spelling for every count column (params, FLOPs, MACs,
+    values): lowercase ``k``, then ``M``, ``G`` and ``T``.
+    """
 
     magnitude = abs(count)
     if magnitude < 1000:
         return str(count)
-    for suffix, divisor in (("G", 1e9), ("M", 1e6), ("k", 1e3)):
+    for suffix, divisor in (("T", 1e12), ("G", 1e9), ("M", 1e6), ("k", 1e3)):
         if magnitude >= divisor * 0.99995:
             return f"{count / divisor:.1f}{suffix}"
     return str(count)

@@ -33,8 +33,14 @@ if TYPE_CHECKING:
 
 from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
-from .._debug_report import Report, table_report, trace_subject
-from ._common import _op_label, _require_pandas, _source_line, _tensor_unavailable_reason
+from .._debug_report import Report, _TableReport, trace_subject
+from ._common import (
+    _module_address,
+    _op_label,
+    _require_pandas,
+    _source_line,
+    _tensor_unavailable_reason,
+)
 from ._grad_scale_proof import PROVEN_UNSCALED, resolve_scale
 
 #: Column order shared by the rows core and the DataFrame view. The first
@@ -81,7 +87,7 @@ def _unavailable_row(
     label:
         Op label for the row.
     module:
-        Atomic module address for the row, if known.
+        Address of the module that ran the op (atomic or innermost), if known.
     reason:
         Why the gradient payload was unavailable.
     source_line:
@@ -263,7 +269,7 @@ def _collect_norm_rows(
     children_by_label: dict[str, tuple[str, ...]] = {}
     for op in saved_grad_ops:
         label = _op_label(op)
-        module = getattr(op, "atomic_module_address", None)
+        module = _module_address(op)
         source_line = _source_line(op)
         try:
             grad = op.grad_for(bwd=selected_bwd)
@@ -568,10 +574,9 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     measurable = _classify_rows(measurable_entries, ctx, counts)
     _mark_frontiers(rows, children_by_label)
 
+    # Flagged rows first (most severe, culprit frontier first), then graph order.
     sorted_rows = sorted(
-        rows,
-        key=lambda row: (int(row["severity"]), bool(row["is_frontier"]), str(row["op"])),
-        reverse=True,
+        rows, key=lambda row: (-int(row["severity"]), not bool(row["is_frontier"]))
     )
     attrs = _audit_attrs(
         trace, counts, ctx, bwd=selected_bwd, proof_note=proof_note, grad_scales=grad_scales
@@ -674,13 +679,43 @@ def _grad_health_report(trace: Trace, rows: list[dict[str, Any]], attrs: dict[st
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
-    return table_report(
-        "grad_health",
-        frame,
-        subject=trace_subject(trace),
+    return _TableReport(
+        helper="grad_health",
+        frame=frame,
+        subject_text=trace_subject(trace),
         finding_columns=("op", "module", "verdict", "grad_norm", "source_line"),
-        coverage=_scale_coverage(attrs, has_rows=bool(rows)),
+        coverage_text=_scale_coverage(attrs, has_rows=bool(rows)),
+        status_text=_health_status(rows) if rows else None,
+        severity_counts=tuple(_verdict_counts(rows).items()) if rows else (),
     )
+
+
+#: Verdicts that flag a gradient problem (the lead's ``flagged`` status).
+_FLAG_VERDICTS = ("dead", "exploding", "nonfinite", "vanishing")
+
+
+def _verdict_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Count the rows' verdicts for the lead: the three health flags always, others when present."""
+
+    counts = dict.fromkeys(("dead", "exploding", "vanishing"), 0)
+    for row in rows:
+        verdict = str(row.get("verdict"))
+        if verdict != "ok":
+            counts[verdict] = counts.get(verdict, 0) + 1
+    return counts
+
+
+def _health_status(rows: list[dict[str, Any]]) -> str:
+    """The lead's verdict token: ``flagged``, ``unknown`` (no proven scale) or ``clean``."""
+
+    verdicts = {str(row.get("verdict")) for row in rows}
+    if verdicts.intersection(_FLAG_VERDICTS):
+        status = "flagged"
+    elif "unknown" in verdicts:
+        status = "unknown"
+    else:
+        status = "clean"
+    return f"{status} ({len(rows)} ops)"
 
 
 def _scale_coverage(attrs: Mapping[str, Any], *, has_rows: bool) -> str | None:
