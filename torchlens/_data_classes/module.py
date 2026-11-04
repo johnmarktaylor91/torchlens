@@ -1664,10 +1664,7 @@ class Module(_ModuleRouting):
         if trace is None:
             return self.params
 
-        # One pass over the trace's params (iterating them restores live refs), grouped by
-        # owning module in trace order; the depth-first module order then picks each group.
-        # Scanning every param once per descendant module made the save's recursive-param
-        # columns quadratic in model size.
+        # Iterate the params once (each pass restores live refs); per-module scans were quadratic.
         params = list(trace._param_logs)
         params_by_module: dict[Any, list[Any]] = {}
         for param in params:
