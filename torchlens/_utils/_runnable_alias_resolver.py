@@ -20,7 +20,7 @@ from ._torch_symbols import torch_attr
 if TYPE_CHECKING:
     from ._runnable_torch_aliases import RunnableTorchAlias
 
-__all__ = ["resolve_runnable_torch_alias"]
+__all__ = ("resolve_runnable_torch_alias",)
 
 
 def _runtime_alias_target_exists(target_namespace: str, target_qualname: str) -> bool:
