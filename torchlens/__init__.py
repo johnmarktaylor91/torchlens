@@ -21,9 +21,7 @@ if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-#: The release version. python-semantic-release rewrites this literal together with
-#: ``torchlens/_vocab/_package_version.py`` (the copy the io modules read without
-#: importing this facade); ``tests/test_version_coherence.py`` pins the two equal.
+#: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
 __version__ = "2.37.1"
 
 if _typing.TYPE_CHECKING:
@@ -357,9 +355,11 @@ def __dir__() -> list[str]:
 def _suggest_layer_labels(trace: _typing.Any, query: str) -> list[str]:
     """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
 
+    from ._utils._display_errors import candidate_keys
+
     if not isinstance(trace, _resolve_top_level("Trace")):
         return []
-    return list(trace._suggest_layer_labels(str(query)))
+    return candidate_keys(list(trace._suggest_layer_labels(str(query))), trace._layer_dict_all_keys)
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -379,8 +379,14 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """
 
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+        from ._utils._display_errors import lookup_message
+
+        return lookup_message(
+            f"Layer {name!r} not found.",
+            suggestions,
+            "pass an in-range integer, a layer label, or a module address.",
+            query=name,
+        )
     return f"Layer {name!r} not found."
 
 
