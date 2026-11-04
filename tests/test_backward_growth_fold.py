@@ -108,6 +108,13 @@ def _projection_snapshot(trace: tl.Trace) -> dict[str, Any]:
     }
 
 
+def _reference_trace() -> tl.Trace:
+    """Trace the residual net saving live tensors, so saved outputs stay differentiable."""
+
+    model, x = _model_and_input()
+    return tl.trace(model, x, capture=CaptureOptions(save_mode="reference"))
+
+
 def _per_element_grads(trace: tl.Trace, calls: int) -> None:
     """Take one ``torch.autograd.grad`` per output element, like a saliency loop."""
 
@@ -115,13 +122,13 @@ def _per_element_grads(trace: tl.Trace, calls: int) -> None:
     flat = trace["blocks.2"].out.reshape(-1)
     for index in range(calls):
         torch.autograd.grad(flat[index], early, retain_graph=True)
+        assert len(trace.autograd.backward_passes) == index + 1
 
 
 def test_per_element_grad_calls_fold_new_nodes_like_a_scratch_rebuild() -> None:
     """Each call adds one indexing node; the fold appends it and equals a rebuild."""
 
-    model, x = _model_and_input()
-    trace = tl.trace(model, x)
+    trace = _reference_trace()
     rebuilds: list[int] = []
     real_impl = backward_mod._materialize_backward_projections_impl
 
@@ -149,8 +156,7 @@ def test_per_element_grad_call_work_stays_flat() -> None:
     grad-fn's op by scanning every op, so the reads grew with the calls taken.
     """
 
-    model, x = _model_and_input()
-    trace = tl.trace(model, x)
+    trace = _reference_trace()
     early = trace["blocks.0"].out
     flat = trace["blocks.2"].out.reshape(-1)
     torch.autograd.grad(flat[0], early, retain_graph=True)
