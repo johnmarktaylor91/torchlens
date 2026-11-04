@@ -175,6 +175,8 @@ def drawn_legend_roles(
                 roles.add("mutated parameter")
             continue
         for role, role_fills in fills.items():
+            if role == "buffer":
+                continue  # a buffer is cued by its cylinder, matched above, never by fill alone
             if fill in role_fills and not (role == "plain op" and shape == "box3d"):
                 roles.add(role)
     return frozenset(roles)
