@@ -155,11 +155,12 @@
       ],
       "release": null,
       "runtime_backend": "PyTorch eager (torch backend)",
-      "models": "GPT-2 small (the README first block)",
+      "models": "test models in the indexing suites",
       "evidence": [
-        "tests/test_quickstart_readme_gate.py"
+        "tests/test_indexing_coherence.py",
+        "tests/test_op_label_resolution.py"
       ],
-      "evidence_note": "Lookup by operation name, call number, module address and selector; the README's first block (now GPT-2) is the gate's subject.",
+      "evidence_note": "Lookup by operation name, name plus call number, module address and selector resolves to the same records.",
       "exclusions": "Ambiguous keys refuse with AmbiguousOpLookupError (for example a module with two output ops).",
       "date": "2026-11-04",
       "status": "train-only",
@@ -603,7 +604,6 @@
       "runtime_backend": "PyTorch eager (torch backend)",
       "models": "eager PyTorch modules and callables",
       "evidence": [
-        "tests/test_quickstart_readme_gate.py",
         "tests/classics_corpus/README.md"
       ],
       "evidence_note": "tl.trace takes the unmodified model and input; the classics corpus exercises that across architecture families.",
