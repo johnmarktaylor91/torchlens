@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1492 modules, 656056 lines, 0 modules without a docstring.
+83 packages, 1492 modules, 656114 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,7 +22,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10665 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 55 | 36013 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 55 | 36071 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11713 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5951 |
@@ -445,7 +445,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10665 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (55 modules, 36013 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (55 modules, 36071 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -463,9 +463,9 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_payload_codec_paddle` | Paddle place resolution for the payload codec. | 36 |
 | `_pickle_prescan` | Pre-scan for the restricted bundle unpickler: the plan the C machine enforces. | 773 |
 | `_portability_preflight` | Save-side portability preflight for ''metadata.pkl'' (AUD-CODE 2.20 / 3.11g). | 333 |
-| `_pre3_module_paths` | The one refusal for a file saved by torchlens 2.x. | 193 |
+| `_pre3_module_paths` | The one refusal for a file saved by torchlens 2.x. | 195 |
 | `_rehydrate_lazy_names` | Pure naming helpers mapping manifest blob kinds to lazy-reference fields. | 53 |
-| `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 110 |
+| `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 144 |
 | `_runnable_synthetic` | The closed table of TorchLens-owned synthetic callables a runnable artifact may name. | 51 |
 | `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1404 |
 | `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 288 |
@@ -481,7 +481,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 276 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1996 |
-| `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 563 |
+| `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 585 |
 | `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 164 |
 | `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 798 |
 | `lazy` | Lazy out reference placeholders for portable TorchLens bundles. | 256 |
