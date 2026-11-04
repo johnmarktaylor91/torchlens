@@ -122,6 +122,22 @@ def compact_rows() -> list[dict[str, Any]]:
     return rows
 
 
+def _bank_example(name: str) -> str | None:
+    """Return the first example-bank snippet that uses root name ``name``, if any.
+
+    The snippet starts with a comment naming its fixture (the setup it assumes, defined
+    in the bank's README beside it), so the record stays self-explanatory.
+    """
+
+    from ._example_bank import examples_for
+
+    found = examples_for(f"tl.{name}")
+    if not found:
+        return None
+    first = found[0]
+    return f"# example bank {first.id}, fixture {first.fixture}\n{first.text()}"
+
+
 def name_detail(name: str) -> dict[str, Any]:
     """Build the ONE detailed record for a named public spelling.
 
@@ -133,7 +149,8 @@ def name_detail(name: str) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Full normalized signature, docstring, canonical example, doc anchor.
+        Full normalized signature, docstring, canonical example (the curated one-liner,
+        else the first example-bank snippet that uses the name), doc anchor.
 
     Raises
     ------
@@ -163,7 +180,7 @@ def name_detail(name: str) -> dict[str, Any]:
         "signature": signature_text,
         "doc": doc[:4000],
         "doc_truncated": len(doc) > 4000,
-        "example": _EXAMPLES.get(name),
+        "example": _EXAMPLES.get(name) or _bank_example(name),
         # The SHIPPED resource, never a repo-relative path a wheel install
         # lacks (the v1 map's dead docs pointer, agent memo 3.10 item 1).
         "doc_anchor": "torchlens.agent.guide()",

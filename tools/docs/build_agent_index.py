@@ -61,6 +61,8 @@ INDEX_LIMIT_BYTES = 8 * 1024
 INDEX_PATH = Path("torchlens/_docs/AGENT_INDEX.md")
 ROUTER_PATH = Path("skills/torchlens/ROUTER.md")
 CAPABILITIES_PATH = Path("docs/reference/agent_capabilities.md")
+#: The example bank's index inside the installed package (``torchlens/_docs/example_bank``).
+EXAMPLE_BANK_INDEX = "torchlens/_docs/example_bank/INDEX.md"
 LLMS_PATH = Path("tools/docs/generated/llms.txt")
 
 TIERS: tuple[str, ...] = ("core", "kit", "advanced")
@@ -413,7 +415,8 @@ def render_index(card_set: CardSet, link_base: str, summary: str) -> str:
     lines += [
         "",
         f"Capabilities by name: {CAPABILITIES_PATH.as_posix()}. "
-        "Read-only tools over saved artifacts: `torchlens guide`.",
+        "Read-only tools over saved artifacts: `torchlens guide`. "
+        f"Tested examples by name and task: `{EXAMPLE_BANK_INDEX}` (installed package).",
     ]
     return "\n".join(lines) + "\n"
 

@@ -62,4 +62,4 @@ trace = tl.load("run.tlspec")
 | Fail a test when the architecture changes | `tl.fingerprint.assert_unchanged(model, x, expected=None)` | Comparing str(model), which misses changes inside forward. | docs/reference/hash.md |
 | Monitor activations on a production inference server | none: not a TorchLens task | Wrapping a server's forward in a capture. | docs/migration/cross_engine.md |
 
-Capabilities by name: docs/reference/agent_capabilities.md. Read-only tools over saved artifacts: `torchlens guide`.
+Capabilities by name: docs/reference/agent_capabilities.md. Read-only tools over saved artifacts: `torchlens guide`. Tested examples by name and task: `torchlens/_docs/example_bank/INDEX.md` (installed package).
