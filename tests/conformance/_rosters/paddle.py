@@ -166,7 +166,9 @@ def _fn_multi_output() -> tuple[Any, Any]:
 
         return v.sum(), v * 2.0
 
-    return multi, paddle.to_tensor(_X24)
+    # _LOOP_X is float32-exact with a nonzero sum; _X24 is symmetric, so its float32 sum is
+    # 0.0 or a few 1e-8 depending on summation order, against a zero oracle.
+    return multi, paddle.to_tensor(_LOOP_X)
 
 
 def _fn_loop3() -> tuple[Any, Any]:
@@ -459,7 +461,10 @@ def _fn_specs() -> tuple[_SpecTuple, ...]:
             "fn_multi_output",
             _fn_multi_output,
             ("input", "tensor.sum", "tensor.__mul__"),
-            {"tensor.sum": np.asarray(_X24.sum(), dtype=np.float32), "tensor.__mul__": _X24 * 2},
+            {
+                "tensor.sum": np.asarray(_LOOP_X.sum(), dtype=np.float32),
+                "tensor.__mul__": _LOOP_X * 2,
+            },
             False,
         ),
         (
