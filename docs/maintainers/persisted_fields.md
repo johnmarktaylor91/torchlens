@@ -5,9 +5,9 @@ the storage bindings or a record class changes and commit the result;
 `tests/test_persisted_fields_doc.py` fails when this page and the generator disagree.
 
 Contract of record: `torchlens/schemas/writer_contract_v12.json`, digest
-`48b94f52eece40241bc2a24c15db2e89161feb221387fb5b73c6df2c08f0b460`.
+`967286e62ed63058538e0e0da484d33a1a6fac05aac0ddf83c9d81518e0dc5e8`.
 Previous contract: `torchlens/schemas/writer_contract_v11.json`, digest
-`01ae886d4b9d5f41ae627728dd07ff953af158b8a08b8b3382f2cb6d89e25616` (tlspec 11).
+`25c9c0fb5503f91fd7f7dc27d709c936f7afb9fb7ae60bd9e90d58797d7271d5` (tlspec 11).
 Reader floor: tlspec 12.
 
 12 record contracts, 782 persisted keys.
@@ -41,8 +41,8 @@ manifest plus the component specs below, and the record tables that follow.
 
 | manifest schema | digest |
 | --- | --- |
-| `tlspec_manifest_v1.json` | `be0266e58ed12debf1e1964dc56838a48576c214fe32fdbc192e04ec66d19948` |
-| `tlspec_manifest_v2.json` | `b7b6604e74132fa580c708bf8dd63677cb14bab98a69806405af75ec93bc1286` |
+| `tlspec_manifest_v1.json` | `583398ee8527538be31bdca51861f5438c45ead7a99953529cf62283a0fc3f3f` |
+| `tlspec_manifest_v2.json` | `54f461249c41fb8ff64367b7dff0b6e2af66e2e2b833b9d9b8575adae7eebe59` |
 
 Writer identity fields: `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at`.
 Payload codecs: `torch_safetensors_v1`, `numpy_safetensors_v1`.
@@ -141,7 +141,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_has_direct_writes` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary` |
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
-| `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
+| `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 14 more |
 | `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
 | `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 7 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |
