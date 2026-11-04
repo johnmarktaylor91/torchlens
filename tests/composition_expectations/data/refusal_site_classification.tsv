@@ -326,7 +326,7 @@ torchlens.agent._stats:_reduced_rows:InvalidArgumentError::2	CONTRACTED	agent_re
 torchlens.agent._stats:_reduce_one:InvalidArgumentError::1	CONTRACTED	agent_reduction_invalid	agent surface (F29): malformed reduction mapping
 torchlens.agent._apimap:name_detail:InvalidArgumentError::1	CONTRACTED	agent_name_unknown	agent surface (F29): detail mode miss
 torchlens.agent._schemas:load_schema:InvalidArgumentError::1	CONTRACTED	agent_schema_unknown	agent surface (F29): unserved schema id
-torchlens._input_coerce:_reject_unrouted_forward_kwargs:ArgumentTypeError::1	CONTRACTED	trace_forward_kwargs_unrouted	agent surface (F29): typed HF entry recovery, never silent kwarg absorption (body moved out of user_funcs.trace for the R43 size ceiling)
+torchlens._unrouted_keywords:reject_unrouted_forward_kwargs:ArgumentTypeError::1	CONTRACTED	trace_forward_kwargs_unrouted	agent surface (F29): typed HF entry recovery, never silent kwarg absorption (body moved out of user_funcs.trace for the R43 size ceiling)
 torchlens.agent._query:validate_query:InvalidArgumentError:_query_invalid:1	CONTRACTED	agent_query_invalid	agent surface (F29): coded site-visibly through the factory (registry precedent); contract-doc row in the same change
 torchlens.agent._query:validate_query:InvalidArgumentError:_query_invalid:2	CONTRACTED	agent_query_invalid	agent surface (F29): coded site-visibly through the factory (registry precedent); contract-doc row in the same change
 torchlens.agent._query:_validate_combinator:InvalidArgumentError:_query_invalid:1	CONTRACTED	agent_query_invalid	agent surface (F29): coded site-visibly through the factory (registry precedent); contract-doc row in the same change
