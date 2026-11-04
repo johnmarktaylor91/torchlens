@@ -40,9 +40,9 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1568
+torchlens/_capture/projections.py	1560
 torchlens/_capture/projections.py::_build_record_context	81
-torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
+torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	104
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projections.py::sync_recording_grad_records_from_sidecar	62
@@ -132,7 +132,7 @@ torchlens/_extraction/engine.py::_consume_skipped_with_replay	63
 torchlens/_extraction/engine.py::_correct_envelope_positions	71
 torchlens/_extraction/engine.py::_layer_metadata	74
 torchlens/_extraction/engine.py::_process_one_batch	80
-torchlens/_extraction/engine.py::_store_batch	76
+torchlens/_extraction/engine.py::_store_batch	72
 torchlens/_extraction/engine.py::run_to_disk	90
 torchlens/_extraction/envelope.py::coerce_envelope	100
 torchlens/_extraction/envelope.py::resolve_tokenizer_once	72
@@ -1036,7 +1036,7 @@ torchlens/debug/_checks/_session.py::ChecksSession._raise_on_nonfinite_grads	81
 torchlens/debug/_checks/_session.py::ChecksSession.attach	64
 torchlens/debug/_determinism.py::check_determinism	138
 torchlens/debug/_dtype_range.py::dtype_range	117
-torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	155
+torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
 torchlens/debug/_gradients.py::grad_health	66
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	146
@@ -1116,7 +1116,7 @@ torchlens/intervention/_trace_edits.py::do_with_options	92
 torchlens/intervention/_trace_edits.py::set_site	68
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	80
-torchlens/intervention/_trace_run.py::run	360
+torchlens/intervention/_trace_run.py::run	354
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	62
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
@@ -1165,7 +1165,7 @@ torchlens/intervention/replay.py::_run_replay	153
 torchlens/intervention/rerun.py	1640
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
-torchlens/intervention/rerun.py::_chunked_rerun	78
+torchlens/intervention/rerun.py::_chunked_rerun	77
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
 torchlens/intervention/rerun.py::run	143
@@ -1304,9 +1304,9 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	75
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	142
-torchlens/recording/_recorder.py	839
+torchlens/recording/_recorder.py	838
 torchlens/recording/_recorder.py::Recorder.__init__	157
-torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
+torchlens/recording/_recorder.py::Recorder._run_unified_capture	148
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
