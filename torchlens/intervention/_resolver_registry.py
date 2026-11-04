@@ -24,10 +24,8 @@ from .._utils._callable_safety import (
     real_callable_module,
     unsafe_callable_reason,
 )
-from .._utils._torch_compat import (
-    get_variable_functions_class,
-    resolve_runnable_torch_alias,
-)
+from .._utils._runnable_alias_resolver import resolve_runnable_torch_alias
+from .._utils._torch_compat import get_variable_functions_class
 from .._utils._torch_symbols import (
     ALLOWED_EXACT_ROOTS,
     ENUMERATED_TORCH_NAMESPACES,

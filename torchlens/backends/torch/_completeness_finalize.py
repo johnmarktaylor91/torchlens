@@ -15,6 +15,7 @@ from ... import _state
 from ..._errors import CaptureGapWarning
 from ..._utils._package_frames import external_warning_stacklevel
 from ..._utils._torch_symbols import torch_attr
+from ._completeness_hop import register_witness_hop_rules
 from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -618,3 +619,7 @@ from .completeness_witness import (  # noqa: E402
     _DispatchCallsite,
     _WitnessState,
 )
+
+# Higher-order operators (``torch.cond``, ``while_loop``, ``map``, ``scan``) need a rule per
+# mode type; register the witness mode's rules once its class exists (see _completeness_hop).
+register_witness_hop_rules(_CompletenessDispatchMode)
