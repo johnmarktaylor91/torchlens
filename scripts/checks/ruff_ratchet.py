@@ -322,13 +322,18 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # signature, _retired_hook_event (torchlens/_utils/rng/monitor_state.py, the
     # retired host-RNG hook's six profile-callback inputs); site lists diffed.
     # Same pinned mode.
-    # 452 -> 456 (2026-11-04 C-154 walk rulings on train 7685d54f2, same JMT decision
-    # d-90086c50): measured 456 at the merged tree (pinned ruff, isolated mode,
-    # torchlens/ scope) = the train's 452 sites plus four new signatures, site lists
-    # diffed: Trace.run_transaction (names.11, _data_classes/trace.py) and the
+    # 454 (2026-11-04, same JMT d-90086c50): the C-149 viz merge's measured count
+    # on that train, + 1 for _focus_stubs._boundary_lines (trace, external_node,
+    # vis_mode, boundary_kind, tensor_row, prefix; _get_or_create_boundary_node
+    # moved from _render_flow into _focus_stubs and stays one count) and + 1 for
+    # loop-if's _render_edges._is_rolled_back_edge (parent_node, child_node,
+    # vis_mode, rolled_maps, parent_segment, child_segment). Same pinned mode.
+    # 458 (2026-11-04 C-154 on train ad84923742, same JMT d-90086c50): the train's
+    # 454 (C-149) plus the C-154 walk rulings' four new signatures, site lists diffed
+    # per file: Trace.run_transaction (names.11, _data_classes/trace.py) and the
     # names.5 feature door mechinterp/_feature.py visualize_feature, _optimize and
-    # _validate_settings.
-    "PLR0913": 456,
+    # _validate_settings. Measured with pinned ruff, isolated mode, torchlens/ scope.
+    "PLR0913": 458,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

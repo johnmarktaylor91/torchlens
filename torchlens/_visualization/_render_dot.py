@@ -21,7 +21,10 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
-from ._focus_scope import focus_address, reading_notes, strip_focus_ancestors
+from ._focus_relabel import strip_focus_ancestors
+from ._focus_scope import focus_address, focus_relative_depth, reading_notes
+from ._graph_shell import build_graphviz_shell
+from ._header_block import graph_caption_html
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -87,7 +90,7 @@ if TYPE_CHECKING:
     from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse
-    from .render_ir import RenderIR
+    from .render_ir import RenderIR, RenderIRRankGroup
     from .source_graph import SourceGraph
 
 
@@ -403,66 +406,6 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
     return resolve_pattern_request(fold_patterns)
 
 
-def _build_graphviz_shell(
-    trace: "Trace",
-    request: ResolvedRenderRequest,
-    target: RenderTarget,
-    theme: VisualizationTheme,
-    node_universe: "NodeUniverse",
-) -> tuple[str, graphviz.Digraph]:
-    """Build the caption and configured Graphviz graph shell.
-
-    Returns
-    -------
-    tuple
-        Graph caption and configured empty Graphviz graph.
-    """
-
-    from ._header_block import drawn_count_line, graph_caption_body
-
-    count_line = drawn_count_line(trace, node_universe, request.vis_mode)
-    caption_body = graph_caption_body(trace, count_line, request)
-    graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
-
-    dot = graphviz.Digraph(
-        name=trace._source_class_name,
-        comment="Computational graph for the feedforward sweep",
-        format=target.fileformat,
-    )
-    graph_args = {
-        "rankdir": direction_to_rankdir(request.direction),
-        "label": graph_caption,
-        "labelloc": "t",
-        "labeljust": "left",
-        "ordering": "out",
-    }
-    if request.collapse_fn is not None:
-        graph_args["newrank"] = "true"
-    # r-b6 R19-6 / T9: node images are RELATIVE to the trace scratch root, which
-    # Graphviz gets out of band (subprocess cwd), never as an in-source
-    # ``imagepath``: a baked temp path broke saved DOT once the dir was GC'd.
-    graph_args.update(
-        theme_graph_attrs(
-            theme,
-            font_size=request.font_size,
-            dpi=request.dpi,
-            fileformat=target.fileformat,
-        )
-    )
-    overrides = cast(VisualizationOverrides, request.overrides)
-    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
-        if callable(arg_val):
-            graph_args[arg_name] = str(arg_val(trace))
-        else:
-            graph_args[arg_name] = str(arg_val)
-    dot.graph_attr.update(graph_args)
-    dot.node_attr.update(
-        {"ordering": "out", **theme_node_attrs(theme, font_size=request.font_size)}
-    )
-    dot.edge_attr.update(theme_edge_attrs(theme, font_size=request.font_size))
-    return graph_caption, dot
-
-
 def _resolve_forward_context(
     trace: "Trace",
     request: ResolvedRenderRequest,
@@ -493,7 +436,6 @@ def _resolve_forward_context(
     )
     entries_to_plot = source_graph.entries_to_plot
     rankdir = direction_to_rankdir(request.direction)
-
     from ._rank_layout_internal.layout import (
         RANK_LAYOUT_COST_THRESHOLD,
         RANK_LAYOUT_NOTICE,
@@ -544,7 +486,8 @@ def _resolve_forward_context(
         f"Rendering {request.vis_mode} graph ({num_nodes} nodes, format={target.fileformat})",
     )
     _vprint(trace, f"Layout engine: {engine} (estimated cost={layout_cost})")
-    graph_caption, dot = _build_graphviz_shell(trace, request, target, theme, node_universe)
+    graph_caption = graph_caption_html(trace, node_universe, request, theme)
+    dot = build_graphviz_shell(trace, request, target, theme, graph_caption)
     return _ForwardRenderContext(
         request=request,
         target=target,
@@ -805,7 +748,7 @@ def _finalize_forward_ir(
         theme=context.theme,
     )
     forward_render_ir, flatten = strip_focus_ancestors(
-        forward_render_ir, work.module_clusters, request.module
+        trace, forward_render_ir, work.builder.calls, work.module_clusters, request.module
     )
     _setup_subgraphs(
         trace,
@@ -833,9 +776,10 @@ def _forward_header_label(
 
     ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
     channel disclosure when a channel is active and, on a ``module=`` focused
-    draw, the swatches and the reading key; ``False`` is honoured (the docs
-    state the encoding is then undisclosed). The key sits inside the header
-    label so both stay top left on every engine. A ``vis_graph_overrides``
+    draw, the swatches; ``True`` adds the reading key (the notes explaining
+    the picture's notation); ``False`` is honoured (the docs state the
+    encoding is then undisclosed). The key sits inside the header label so
+    both stay top left on every engine. A ``vis_graph_overrides``
     label (or a lens caption) stays the header.
     """
 
@@ -860,7 +804,8 @@ def _forward_header_label(
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
         )
-        notes = reading_notes(node_attrs, request.module)
+        if request.show_legend is True:
+            notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
     if request.encoding is not None and request.show_legend is not False:
         sections = encoding_sections(request.encoding)
@@ -873,6 +818,24 @@ def _forward_header_label(
             str(override(trace) if callable(override) else override), context.theme
         )
     return header_block_label(caption, swatches, sections, context.theme, notes=notes)
+
+
+def _emit_rank_groups(dot: Any, rank_groups: "tuple[RenderIRRankGroup, ...]") -> None:
+    """Emit the IR's rank groups as ``rank=`` subgraphs.
+
+    Stacking channel (L5 M3): rank=same groups span module clusters, so
+    newrank=true opts dot into global rank constraints (without it
+    cross-cluster rank=same is silently ignored, a dishonest no-op). A
+    focused draw's stub groups (rank=source/sink) need no newrank.
+    """
+
+    if any(group.rank == "same" for group in rank_groups):
+        dot.graph_attr.update({"newrank": "true"})
+    for rank_group in rank_groups:
+        with dot.subgraph() as rank_subgraph:
+            rank_subgraph.attr(rank=rank_group.rank)
+            for member in rank_group.members:
+                rank_subgraph.node(member)
 
 
 def _emit_and_finish_forward(
@@ -959,16 +922,7 @@ def _emit_and_finish_forward(
 
     dot = context.dot
     GraphvizRenderer().emit(forward_render_ir, dot)
-    if forward_render_ir.stack_rank_groups:
-        # Stacking channel (L5 M3): rank=same groups span module clusters,
-        # so newrank=true opts dot into global rank constraints (without it
-        # cross-cluster rank=same is silently ignored -- a dishonest no-op).
-        dot.graph_attr.update({"newrank": "true"})
-        for rank_group in forward_render_ir.stack_rank_groups:
-            with dot.subgraph() as rank_subgraph:
-                rank_subgraph.attr(rank="same")
-                for member in rank_group.members:
-                    rank_subgraph.node(member)
+    _emit_rank_groups(dot, forward_render_ir.stack_rank_groups)
     for overlay_edge in work.container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,
@@ -1351,7 +1305,7 @@ def draw(
         show_containers=show_containers,
         engine=vis_node_placement,
         skip_fn=skip_fn,
-        vis_call_depth=vis_call_depth,
+        vis_call_depth=focus_relative_depth(self, module, vis_call_depth),
         module=module,
         node_mode=node_mode,
         node_spec_fn=node_spec_fn,
