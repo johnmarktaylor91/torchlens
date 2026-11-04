@@ -140,6 +140,11 @@ exclude_docs: |
   /for-ai-agents.md
   /gallery/any_architecture.md
   /gallery/basis_grid.md
+  /gallery/causal_tracing.md
+  /gallery/cnn_fields.md
+  /gallery/index.md
+  /gallery/ioi_circuit.md
+  /gallery/neuro_rdms.md
   /gradient_contract.md
   /guides/fast_paths.md
   /maintainers/architecture.md

@@ -7,6 +7,7 @@ The attention backend (``register_attention``, ``record_attention``) lives in
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -14,6 +15,9 @@ import torch
 
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
+from torchlens._input_coerce import _is_modality_input
+from torchlens.bridge._hf_processor import _make_multimodal_transform, _resolve_hf_processor
+from torchlens.bridge._hf_refusals import _is_hf_pretrained_model
 from torchlens.bridge._image_preprocessing import accept_image_resolution
 from torchlens.bridge.hf_attention import (
     AttentionCall,
@@ -21,8 +25,6 @@ from torchlens.bridge.hf_attention import (
     record_attention,
     register_attention,
 )
-
-_MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
 
 
 def _is_hf_chat_message(item: Any) -> bool:
@@ -49,35 +51,6 @@ def _is_hf_chat_message(item: Any) -> bool:
         and isinstance(item.get("role"), str)
         and isinstance(item.get("content"), (str, list))
     )
-
-
-def _is_plausible_media_value(value: Any) -> bool:
-    """Return whether ``value`` is a plausible audio/video modality payload.
-
-    Conservative acceptance so ``None`` and arbitrary objects decline the
-    multimodal auto-route. Accepts tensors, raw bytes, non-empty sequences (raw
-    waveforms, frame lists), and array-like objects (e.g. NumPy arrays exposing
-    ``__array__``); everything else -- ``None``, bare objects, empty containers,
-    scalars -- is rejected.
-
-    Parameters
-    ----------
-    value:
-        Candidate value for an ``audio`` or ``videos`` modality key.
-
-    Returns
-    -------
-    bool
-        True only for a plausibly media-bearing value.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return True
-    if isinstance(value, (bytes, bytearray)):
-        return True
-    if isinstance(value, (list, tuple)):
-        return bool(value)
-    return hasattr(value, "__array__")
 
 
 def _is_hf_text_input(value: Any) -> bool:
@@ -190,33 +163,35 @@ def _is_hf_multimodal_input(value: Any) -> bool:
     -------
     bool
         True for a non-empty dict with modality keys and at least one plausible
-        modality value.
+        modality value (the shape test shared with input coercion).
     """
 
-    if not isinstance(value, dict) or not value:
-        return False
-    keys = set(value.keys())
-    if not (keys & _MODALITY_KEYS):
-        return False
-    for key, item in value.items():
-        if key in {"image", "images"}:
-            try:
-                from PIL.Image import Image as PILImage
-            except ImportError:
-                continue
-            if isinstance(item, PILImage):
-                return True
-            if isinstance(item, list) and item and isinstance(item[0], PILImage):
-                return True
-        if key == "text" and isinstance(item, str):
-            return True
-        if key in {"audio", "videos"} and _is_plausible_media_value(item):
-            return True
-    return False
+    return _is_modality_input(value)
+
+
+def _transformers_importable() -> bool:
+    """Return whether ``transformers`` is loaded or installed (no import, no I/O)."""
+
+    try:
+        return importlib.util.find_spec("transformers") is not None
+    except ValueError:
+        # Raised only for a module already loaded without a ``__spec__``
+        # (a test stub): loaded is importable.
+        return True
 
 
 def _can_resolve_hf_processor(model: Any) -> bool:
-    """Return whether a Hugging Face ``AutoProcessor`` resolves for ``model``.
+    """Return whether the multimodal auto-route can claim ``model``.
+
+    A ``transformers`` ``PreTrainedModel`` with a ``name_or_path`` is claimed
+    on shape alone, with no Hub or cache I/O, like the text route:
+    :func:`trace_multimodal` then resolves the ``AutoProcessor`` (cache first,
+    then the Hub unless offline) and refuses typed ``preprocessing_unresolved``
+    when it cannot, so a modality dict never reaches an HF forward as a
+    positional ``input_ids``. Any other model with a ``name_or_path`` is
+    claimed only when its processor is already in the local cache (never a
+    download); otherwise it keeps the plain path, since its own forward may
+    accept such a dict.
 
     Parameters
     ----------
@@ -226,22 +201,19 @@ def _can_resolve_hf_processor(model: Any) -> bool:
     Returns
     -------
     bool
-        True when ``transformers.AutoProcessor`` can load a processor for the
-        model name/path.
+        True when the route should claim the model.
     """
 
     name_or_path = _model_name_or_path(model)
-    if name_or_path is None:
+    if name_or_path is None or not _transformers_importable():
         return False
+    if _is_hf_pretrained_model(model):
+        return True
     try:
         from transformers import AutoProcessor
 
-        # Detection must never trigger live Hub network I/O (a plain offline
-        # trace would otherwise block through a multi-retry download loop inside
-        # routing). Probe the local cache only; an uncached model simply declines
-        # the auto-route, matching compat's offline-first stance.
         AutoProcessor.from_pretrained(name_or_path, local_files_only=True)
-    except Exception:
+    except Exception:  # a cache miss of any kind declines the route
         return False
     return True
 
@@ -401,6 +373,12 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
 
+    Raises
+    ------
+    InvalidArgumentError
+        ``preprocessing_unresolved`` when no ``AutoProcessor`` loads for the
+        model (uncached offline, no processor config).
+
     Examples
     --------
     >>> try:
@@ -410,31 +388,12 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     no processor resolvable
     """
 
-    from transformers import AutoProcessor
-
     import torchlens as tl
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
         raise ValueError("Could not auto-resolve AutoProcessor for this model.")
-    processor = AutoProcessor.from_pretrained(name_or_path)
-
-    def transform(raw_dict: dict[str, Any]) -> Any:
-        """Apply the resolved multimodal processor.
-
-        Parameters
-        ----------
-        raw_dict:
-            User-provided modality dict.
-
-        Returns
-        -------
-        Any
-            Processor output, usually a mapping of tensors.
-        """
-
-        return processor(**raw_dict, return_tensors="pt")
-
+    processor = _resolve_hf_processor(model, name_or_path)
     record = ResolvedPreprocessing(
         source="hf_auto_processor",
         identifier=name_or_path,
@@ -444,7 +403,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     )
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
-        input_transform=transform,
+        input_transform=_make_multimodal_transform(processor),
     )
     log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
     log._provenance_input_preprocessor = record

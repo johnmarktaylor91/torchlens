@@ -1915,3 +1915,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7ee51b024960278d35a949593ed91cde9114b150 (clean)
 recorded: 2026-11-03T23:33:02.814774+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:40:59.896517+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:41:00.863612+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:41:02.075261+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:41:03.119914+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:41:04.335355+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: census-order d539ad65d: Op.gpu_kernels is now declared on its class (OpAtenMixin in torchlens/_data_classes/_op_aten.py, resolving torchlens._kernel_telemetry by name only when read), so it exists in every process; before, it existed only after a save or load had imported the telemetry module, and these goldens were recorded without it. Only change: every op row gains gpu_kernels, one KernelLaunch (attribution_status=unavailable on CPU, never an empty tuple)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f229dff89cf702d8e85761577e3b58de54b85bca (dirty)
+recorded: 2026-11-03T23:41:05.434507+00:00

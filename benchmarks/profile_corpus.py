@@ -34,6 +34,10 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from benchmarks.artifact_size import artifact_size_bytes  # noqa: E402
 
 # (label, corpus module stem or "synthetic:<depth>")
 DEFAULT_MODELS: tuple[tuple[str, str], ...] = (
@@ -167,7 +171,7 @@ def _run_phases(spec: str, out_dir: Path, profile: bool) -> dict[str, Any]:
             rows[phase]["top"] = _top_entries(profiler)
     rows["num_ops"] = len(state["trace"].ops)
     rows["num_layers"] = len(list(state["trace"].layers))
-    rows["spec_bytes"] = spec_path.stat().st_size
+    rows["spec_bytes"] = artifact_size_bytes(spec_path)
     rows["validate_ok"] = bool(getattr(state["verdict"], "ok", state["verdict"]))
     return rows
 
