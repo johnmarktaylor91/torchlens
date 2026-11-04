@@ -38,9 +38,9 @@ from ._param_fingerprint import (
 )
 from ._replay_cone import (
     _disclosure_label,
-    _label_key_map,
     _replay_cone_and_maps,
     _resolve_single_origin,
+    _shared_label_key_map,
     cone_of_effect,
 )
 from ._replay_context import (
@@ -666,7 +666,7 @@ def _reconstruct_args_from_template(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     args = tuple(
         _resolve_arg_component(
             component,
@@ -766,7 +766,7 @@ def _boundary_slot_parent_op(
             f"{len(parents)} ({', '.join(repr(parent) for parent in parents)})."
         )
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
@@ -855,7 +855,7 @@ def _resolve_arg_component(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
         if parent_label not in trace._layer_dict_all_keys:
