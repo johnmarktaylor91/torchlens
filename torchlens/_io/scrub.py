@@ -24,6 +24,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
+from .._output_slot import saved_transformed_output
 from .._utils._display_bounded import RecordTuple, short_dataclass_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
@@ -1403,21 +1404,20 @@ def _scrub_field(
 ) -> Any:
     """Scrub one object field according to its effective field policy.
 
-    r69 E: an effective ``DROP``/``WEAKREF_STRIP`` wins BEFORE every field-specific
-    serializer. The sparse-runnable effective policy lists ``raw_input``/``raw_output``
-    in its DROP set, so a runnable save always scrubs both to ``None`` -- including
-    when the ordinary ``save_raw_input``/``save_transformed_output`` policy is ``True`` or
-    ``"small"``. Pre-r69 the Trace raw-value special case ran first and the generic
-    small-value policy retained a nested tensor inside the sparse core, firing the
-    (unchanged) ``assert_sparse_core_has_no_tensor_payload`` tripwire on a fully
-    witnessed nested-string capture (r68 hon1-F5). Ordinary analysis saves are
-    unaffected: their effective raw-field policy is never ``DROP`` here.
+    An effective ``DROP``/``WEAKREF_STRIP`` wins before every field-specific
+    serializer (r69 E): the sparse-runnable effective policy drops ``input`` and
+    ``transformed_output``, so a runnable save scrubs both to ``None`` whatever the
+    ``save_raw_input``/``save_transformed_output`` policy says, and no nested tensor
+    reaches the sparse core (``assert_sparse_core_has_no_tensor_payload``). Otherwise
+    a Trace raw value goes through its save policy; a ``transformed_output`` a replay
+    made stale (the getter refuses) saves as ``None``.
     """
 
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
     if isinstance(owner, Trace) and field_name in {"input", "transformed_output"}:
-        return _scrub_raw_value_for_save(owner, field_name, field_value, walk)
+        stored = saved_transformed_output(field_value)  # a stale transform result saves as None
+        return _scrub_raw_value_for_save(owner, field_name, stored, walk)
     if policy == FieldPolicy.STRINGIFY:
         return _stringify_value(field_value)
     if policy == FieldPolicy.BLOB:
