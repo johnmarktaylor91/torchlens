@@ -9,6 +9,8 @@ cross-dtype comparison in ``compare`` and ``first_divergence``.
 from __future__ import annotations
 
 import os
+import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -334,10 +336,14 @@ class _ProjBlock(nn.Module):
         return torch.tanh(self.proj(x))
 
 
-def _position(label: str) -> int:
-    """The op's position in the graph, from its ``name_k_N:pass`` label."""
+def _positions(labels: Iterable[str]) -> list[int]:
+    """Graph positions from ``name_k_N:pass`` labels.
 
-    return int(label.split(":")[0].rsplit("_", 1)[1])
+    Input and output labels (``input_1:1``) carry no position and are skipped.
+    """
+
+    found = (re.fullmatch(r"\w+?_\d+_(\d+):\d+", label) for label in labels)
+    return [int(match.group(1)) for match in found if match]
 
 
 def test_grad_health_card_leads_with_counts_and_lists_rows_in_order() -> None:
@@ -359,8 +365,8 @@ def test_grad_health_card_leads_with_counts_and_lists_rows_in_order() -> None:
     assert len(in_proj) >= 3
     assert set(in_proj["module"]) == {"proj"}
     assert "module=nan" not in str(report)
-    positions = [_position(label) for label in frame["op"]]
-    assert positions == sorted(positions)
+    positions = _positions(frame["op"])
+    assert len(positions) >= 4 and positions == sorted(positions), list(frame["op"])
 
 
 def test_grad_health_lists_flagged_rows_first() -> None:
