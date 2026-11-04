@@ -4523,3 +4523,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 0d58cdefabbf248a5a28645a3c9b8bdfbc29170a (dirty)
 recorded: 2026-11-03T19:26:12.025764+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-146 remerge: memory-lifetime extractions (_prehook_state.py, recording/_validation.py, _capture/_forward_helpers.py) meet the train record-overhead and record-lazy read sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 14e908ba96b5bae18bf8708f2619f22f6abfa90e (dirty)
+recorded: 2026-11-04T02:40:37.080881+00:00
