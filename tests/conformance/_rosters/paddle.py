@@ -31,8 +31,24 @@ GROUP_ECOSYSTEM = "ecosystem"
 _X24 = np.linspace(-1.0, 1.0, 8, dtype=np.float32).reshape(2, 4)
 _W44 = np.linspace(-0.5, 0.5, 16, dtype=np.float32).reshape(4, 4)
 _B4 = np.array([0.1, -0.2, 0.3, 0.0], dtype=np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+_LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+_LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+_LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 _IMG = np.linspace(-1.0, 1.0, 36, dtype=np.float32).reshape(1, 1, 6, 6)
-_VOL = np.linspace(-1.0, 1.0, 64, dtype=np.float32).reshape(1, 1, 4, 4, 4)
+# mod_conv3d's volume, kernel and bias are multiples of 1/16 or coarser, so all 27-term window
+# sums are exact in float32 and every summation order gives the oracle's bits.
+_VOL = ((np.arange(64) % 9 - 4) / 4).astype(np.float32).reshape(1, 1, 4, 4, 4)
 _SEQ = np.linspace(-1.0, 1.0, 16, dtype=np.float32).reshape(1, 2, 8)
 
 
@@ -158,8 +174,8 @@ def _fn_loop3() -> tuple[Any, Any]:
 
     import paddle
 
-    weight = paddle.to_tensor(_W44)
-    bias = paddle.to_tensor(_B4)
+    weight = paddle.to_tensor(_LOOP_W)
+    bias = paddle.to_tensor(_LOOP_B)
 
     def loop(v: Any) -> Any:
         """Apply the shared affine-relu step three times."""
@@ -174,12 +190,12 @@ def _fn_loop3() -> tuple[Any, Any]:
 def _loop3_intermediates() -> dict[str, list[np.ndarray]]:
     """Expected intermediates of the fn_loop3 row, one list per op kind."""
 
-    value = _X24
+    value = _LOOP_X
     matmuls: list[np.ndarray] = []
     relus: list[np.ndarray] = []
     for _ in range(3):
-        matmuls.append(value @ _W44)
-        value = _relu(matmuls[-1] + _B4)
+        matmuls.append(value @ _LOOP_W)
+        value = _relu(matmuls[-1] + _LOOP_B)
         relus.append(value)
     return {"matmul": matmuls, "functional.relu": relus}
 
@@ -361,7 +377,8 @@ def _nested_intermediates() -> dict[str, np.ndarray]:
 
 
 _CONV1_W, _CONV1_B = _param((3, 2, 3)), _param((3,), 0.1)
-_CONV3_W, _CONV3_B = _param((2, 1, 3, 3, 3), 0.2), _param((2,), 0.1)
+_CONV3_W = ((np.arange(54) % 5 - 2) / 8).astype(np.float32).reshape(2, 1, 3, 3, 3)
+_CONV3_B = np.array([0.0625, -0.125], dtype=np.float32)
 
 
 def _conv_layer_model(rank: int) -> tuple[Any, Any]:
