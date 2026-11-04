@@ -300,7 +300,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # the recording-parity work's 5 (PredicateOpIdentity.for_call,
     # _predicate_output_context, _predicate_equivalence_class, Recording.do,
     # Recording.save). Same pinned mode.
-    "PLR0913": 446,
+    # 447 (2026-11-04, same JMT d-90086c50): the C-149 viz merge's measured count,
+    # +1 for _focus_stubs._boundary_lines (trace, external_node, vis_mode,
+    # boundary_kind, tensor_row, prefix); _get_or_create_boundary_node moved
+    # from _render_flow into _focus_stubs and stays one count. Same pinned mode.
+    "PLR0913": 447,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f
