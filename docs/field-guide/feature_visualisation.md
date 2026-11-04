@@ -9,6 +9,7 @@ initial value. This CPU example optimizes channel 0 of a tiny convolution:
 import torch
 from torch import nn
 import torchlens as tl
+import torchlens.mechinterp
 
 model = nn.Sequential(nn.Conv2d(1, 2, 1, bias=False)).eval()
 with torch.no_grad():
@@ -67,6 +68,7 @@ import torch
 import torchvision
 
 import torchlens as tl
+import torchlens.mechinterp
 
 torch.manual_seed(0)
 model = torchvision.models.resnet18(weights=None).eval()
@@ -92,6 +94,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.mechinterp
 
 rows, cols = torch.meshgrid(torch.arange(5), torch.arange(5), indexing="ij")
 stripes = torch.where(((rows + cols) // 2) % 2 == 0, 1.0, -1.0)

@@ -30,7 +30,11 @@ def _starting_input(
     if (inputs is None) == (input_shape is None):
         _invalid("Pass exactly one of inputs= and input_shape=.")
     if inputs is None:
-        if not input_shape or any(type(dim) is not int or dim <= 0 for dim in input_shape):
+        if (
+            not isinstance(input_shape, tuple)
+            or not input_shape
+            or any(type(dim) is not int or dim <= 0 for dim in input_shape)
+        ):
             _invalid("input_shape must contain positive integer dimensions.")
         reference = next(model.parameters(), next(model.buffers(), torch.empty(0)))
         dtype = reference.dtype if reference.is_floating_point() else torch.float32
@@ -164,8 +168,7 @@ def visualize_feature(
     Parameters
     ----------
     model : torch.nn.Module
-        Model to run. Use eval mode for a deterministic objective. Model mode,
-        parameter values and existing parameter gradients are left as supplied;
+        Model to run (use eval for determinism). Mode, parameters and gradients stay;
         forward side effects such as training-mode buffer updates still occur.
     site : str or selector
         Module address, op label, or a selector accepted by ``tl.when``. An op
@@ -207,8 +210,9 @@ def visualize_feature(
     Examples
     --------
     >>> import torch.nn as nn
+    >>> from torchlens.mechinterp import visualize_feature
     >>> net = nn.Sequential(nn.Linear(3, 2)).eval()
-    >>> image, values = tl.mechinterp.visualize_feature(
+    >>> image, values = visualize_feature(
     ...     net, "0", input_shape=(1, 3), unit=0, steps=3)
     >>> tuple(image.shape), len(values), values[-1] > values[0]
     ((1, 3), 4, True)

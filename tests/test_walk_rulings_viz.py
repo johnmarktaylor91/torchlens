@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import mechinterp
 from torchlens._visualization._edge_shapes import _with_edge_shapes
 from torchlens._visualization.render_ir import build_render_ir
 from torchlens._visualization.request import RenderContext
@@ -123,9 +124,7 @@ def test_visualize_feature_increases_channel_and_preserves_parameters():
     model[0].weight.grad = torch.ones_like(model[0].weight)
     inputs = torch.zeros(1, 1, 3, 3)
     before = model[0].weight.detach().clone()
-    image, values = tl.mechinterp.visualize_feature(
-        model, "0", inputs=inputs, unit=0, steps=4, lr=0.1
-    )
+    image, values = mechinterp.visualize_feature(model, "0", inputs=inputs, unit=0, steps=4, lr=0.1)
     assert len(values) == 5 and values[-1] > values[0] + 0.1
     assert not image.requires_grad
     assert torch.equal(inputs, torch.zeros_like(inputs))
@@ -143,7 +142,7 @@ def test_visualize_feature_op_label_and_sae():
     model = SourceModel()
     trace = tl.trace(model, torch.ones(1, 3))
     relu = next(op for op in trace.ops if op.func_name == "relu")
-    image, values = tl.mechinterp.visualize_feature(
+    image, values = mechinterp.visualize_feature(
         model, relu.label, inputs=torch.ones(1, 3), sae=Encoder(), unit=0, steps=3
     )
     assert values[-1] > values[0]
@@ -154,10 +153,10 @@ def test_visualize_feature_seed_and_unit_tuple():
     """Local noise seeds reproduce the input and tuple units address non-batch axes."""
     model = nn.Sequential(nn.Identity())
     rng = torch.get_rng_state().clone()
-    image, values = tl.mechinterp.visualize_feature(
+    image, values = mechinterp.visualize_feature(
         model, "0", input_shape=(1, 2, 3), unit=(0, 1), seed=21, steps=2
     )
-    other, repeated = tl.mechinterp.visualize_feature(
+    other, repeated = mechinterp.visualize_feature(
         model, "0", input_shape=(1, 2, 3), unit=(0, 1), seed=21, steps=2
     )
     assert torch.equal(image, other) and values == repeated
@@ -169,10 +168,71 @@ def test_visualize_feature_refuses_invalid_settings(kwargs):
     """Malformed settings refuse before any model execution."""
     model = nn.Sequential(nn.Identity())
     with pytest.raises(tl.errors.InvalidArgumentError) as caught:
-        tl.mechinterp.visualize_feature(model, "0", inputs=torch.ones(1, 2), **kwargs)
+        mechinterp.visualize_feature(model, "0", inputs=torch.ones(1, 2), **kwargs)
     assert caught.value.fields["code"] == "feature_visualization_invalid"
 
 
 def test_visualize_feature_export():
     """The analysis kit advertises the new callable."""
-    assert "visualize_feature" in tl.mechinterp.__all__
+    assert "visualize_feature" in mechinterp.__all__
+
+
+def test_source_annotated_roundtrip_and_source_privacy(tmp_path):
+    """Embedded source annotates after load; opt-out artifacts refuse with the same code."""
+    trace = tl.trace(SourceModel(), torch.ones(1, 3))
+    source_path = tmp_path / "with-source.tlspec"
+    trace.save(source_path)
+    loaded = tl.load(source_path)
+    assert loaded.source.annotated() == trace.source.annotated()
+    private_path = tmp_path / "without-source.tlspec"
+    trace.save(private_path, include_source=False)
+    with pytest.raises(tl.errors.InvalidArgumentError) as caught:
+        tl.load(private_path).source.annotated()
+    assert caught.value.fields["code"] == "source_unavailable"
+
+
+def test_edge_shape_option_group_and_lens_use_the_same_channel():
+    """Grouped draw translation and the established debug recipe preserve the flag."""
+    from torchlens._options_validation import visualization_to_render_kwargs
+    from torchlens._visualization.lenses._roster import COMPOSITIONS
+
+    options = tl.options.VisualizationOptions(show_edge_shapes=True)
+    assert visualization_to_render_kwargs(options)["show_edge_shapes"] is True
+    copied = tl.options.VisualizationOptions.from_values(
+        options.to_dict(), frozenset({"show_edge_shapes"})
+    )
+    assert copied.show_edge_shapes and copied.is_field_explicit("show_edge_shapes")
+    assert COMPOSITIONS["debug_edge_shapes"]["show_edge_shapes"] is True
+
+
+def test_visualize_feature_rejects_disconnected_objective_and_cleans_hooks():
+    """A constant target is a typed failure and leaves no binding hooks installed."""
+
+    class Constant(nn.Module):
+        def forward(self, x):
+            return x.detach()
+
+    model = nn.Sequential(Constant()).train()
+    with pytest.raises(tl.errors.InvalidArgumentError) as caught:
+        mechinterp.visualize_feature(model, "0", inputs=torch.ones(1, 2), steps=1)
+    assert caught.value.fields["code"] == "feature_visualization_invalid"
+    assert model.training and model[0].training
+    assert not model[0]._forward_hooks and not model[0]._forward_pre_hooks
+
+
+def test_visualize_feature_rejects_multiple_fires():
+    """A reused module must be narrowed instead of optimizing an arbitrary occurrence."""
+
+    class Twice(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.act = nn.ReLU()
+
+        def forward(self, x):
+            return self.act(self.act(x))
+
+    model = Twice()
+    with pytest.raises(tl.errors.InvalidArgumentError) as caught:
+        mechinterp.visualize_feature(model, "act", inputs=torch.ones(1, 2), steps=1)
+    assert caught.value.fields["code"] == "feature_visualization_invalid"
+    assert not model.act._forward_hooks and not model.act._forward_pre_hooks

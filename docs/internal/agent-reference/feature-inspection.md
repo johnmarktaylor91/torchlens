@@ -10,6 +10,7 @@ composition use the same channel. Backward gradient edges have no forward tensor
 import torch
 from torch import nn
 import torchlens as tl
+import torchlens.mechinterp
 
 model = nn.Sequential(nn.Linear(3, 2), nn.ReLU()).eval()
 x = torch.ones(1, 3)
