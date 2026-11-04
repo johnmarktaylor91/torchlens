@@ -106,7 +106,7 @@ def test_replay_digests_capture_payloads_without_copying_them(
 
     monkeypatch.setattr(_replay_values, "hashlib", SimpleNamespace(sha256=sha256))
     _patched_logits(italy, france, 1, 0)
-    assert inputs["ndarray"] > 0, inputs
+    assert inputs["memoryview"] > 0, inputs
     assert inputs["bytes"] == 0, inputs
 
 

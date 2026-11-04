@@ -144,7 +144,7 @@ def tensor_content_digest(value: torch.Tensor) -> str:
     raw = flat.view(torch.uint8)
     # hashlib reads the unit-stride uint8 array through the buffer protocol;
     # ``tobytes()`` would first copy every payload byte into a bytes object.
-    return hashlib.sha256(raw.numpy()).hexdigest()
+    return hashlib.sha256(memoryview(raw.numpy())).hexdigest()
 
 
 def rollback_snapshot(site: Op) -> dict[str, Any]:
