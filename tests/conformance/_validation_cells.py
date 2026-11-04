@@ -53,9 +53,17 @@ def validation_capture_options(protocol: Any) -> dict[str, Any]:
 
     name = str(getattr(protocol, "name", ""))
     if name in _SAVED_ARGS_VALIDATION_BACKENDS:
-        return {"capture": CaptureOptions(save_args=True)}
+        return {"capture": CaptureOptions(save_args=True, seed=_VALIDATION_CAPTURE_SEED)}
     return {}
 
+
+#: Fixed seed for torch's validation-ready capture, so a roster row whose
+#: forward draws randomness (``random_forward``: training-mode dropout) computes
+#: the same cells on every run. An unseeded capture took a fresh automatic seed,
+#: so its 8-element dropout mask matched the direct run's about one run in 256
+#: and flipped the recorded parity and validation cells. The direct run has its
+#: own, different seed (``_adapters._REFERENCE_SEED``).
+_VALIDATION_CAPTURE_SEED = 1
 
 #: Backends whose replay validation reads saved arguments.
 _SAVED_ARGS_VALIDATION_BACKENDS: frozenset[str] = frozenset({"torch"})
