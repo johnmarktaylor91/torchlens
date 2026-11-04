@@ -18,7 +18,7 @@ import copy
 import threading
 import weakref
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from functools import cache, partial
 from math import prod
 from typing import Any, Literal, cast, get_args
@@ -822,8 +822,7 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         return torch.cat([left, right], dim=0)
 
 
-@contextmanager
-def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
+def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[Any]:
     """Pause TorchLens dispatch modes around a strict-subclass ``clone()``, when needed.
 
     Torch's default ``__torch_function__`` subclass-return conversion calls
@@ -844,10 +843,11 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
     x:
         Tensor about to be cloned with its own type preserved.
 
-    Yields
-    ------
-    None
-        The ``clone()`` call this brackets.
+    Returns
+    -------
+    AbstractContextManager[Any]
+        The bracket for the ``clone()`` call: a no-op ``nullcontext`` unless a
+        pause is needed, so the common case enters no generator per payload copy.
     """
 
     if (
@@ -855,15 +855,13 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
         or type(x) is torch.Tensor
         or type(x) is torch.nn.Parameter
     ):
-        yield
-        return
+        return nullcontext()
     # Deferred: backends.torch is upward of utils in the layer map (C01 item
     # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
     # `import torchlens` never pays for it.
     from ..backends.torch._modes import pause_own_dispatch_modes
 
-    with pause_own_dispatch_modes():
-        yield
+    return pause_own_dispatch_modes()
 
 
 # Memory format for every payload copy. ``preserve_format`` gives a

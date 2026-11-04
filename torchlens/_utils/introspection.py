@@ -22,7 +22,7 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
-from ._quiet_property import read_attr_quietly
+from ._quiet_property import _QuietPropertyLogs, read_attr_quietly
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -289,7 +289,7 @@ def get_vars_of_type_from_obj(
     )
     # BFS: each iteration processes one depth level.
     # Hoist warnings context manager to avoid ~77K per-attribute entries.
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
         for _ in range(search_depth):
             this_stack = _search_stack_for_vars_of_type(
@@ -421,7 +421,7 @@ def _get_tensors_and_params_from_obj(
     params: list[torch.nn.Parameter] = []
     found_ids: set[int] = set()
     expanded_ids: set[int] | None = None if allow_repeats else set()
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
         for _ in range(search_depth):
             this_stack = _search_stack_for_tensors_and_params(
@@ -692,7 +692,7 @@ def _extend_search_stack_from_item(
         # Opaque object that refuses introspection -> treat as a leaf.
         return
 
-    # warnings.catch_warnings() is hoisted to get_vars_of_type_from_obj; log records: read_attr_quietly
+    # warnings.catch_warnings() and the log mute scope are hoisted to the walkers' entry points
     for attr_name in filtered_attrs:
         try:
             attr = read_attr_quietly(item, attr_name)

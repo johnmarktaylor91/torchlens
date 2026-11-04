@@ -9,8 +9,7 @@ modules feed.
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
-from contextlib import contextmanager
+from typing import Any
 
 from ... import _state
 
@@ -20,8 +19,35 @@ _internal_read_state = threading.local()
 """Per-thread depth counter for the explicit TorchLens internal-scalar-read marker."""
 
 
-@contextmanager
-def internal_scalar_read() -> Iterator[None]:
+class _InternalScalarRead:
+    """The context manager :func:`internal_scalar_read` returns.
+
+    A slotted class rather than a ``@contextmanager`` generator: capture enters this
+    marker tens of thousands of times per trace, and the generator protocol costs a
+    generator, a helper object and a ``StopIteration`` per entry. Same order and
+    restores as the generator it replaced: depth up, then the fingerprint hold;
+    on exit (also on an exception, never suppressed) the hold is released, then the
+    depth restored.
+    """
+
+    __slots__ = ("_depth", "_counted")
+
+    def __enter__(self) -> None:
+        depth = getattr(_internal_read_state, "depth", 0)
+        self._depth = depth
+        _internal_read_state.depth = depth + 1
+        # An internal read is not a model call: keep it out of the ordered call
+        # fingerprint under the same owner-thread rule as ``pause_logging()``.
+        self._counted = _state.hold_fingerprint()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        try:
+            _state.release_fingerprint(self._counted)
+        finally:
+            _internal_read_state.depth = self._depth
+
+
+def internal_scalar_read() -> _InternalScalarRead:
     """Mark a region as a genuine TorchLens capture-internal scalar/comparison read.
 
     TorchLens itself reads a scalar/bool from a tensor during capture -- extracting a
@@ -40,15 +66,4 @@ def internal_scalar_read() -> Iterator[None]:
     with the marker inactive and is always recorded.
     """
 
-    depth = getattr(_internal_read_state, "depth", 0)
-    _internal_read_state.depth = depth + 1
-    # An internal read is not a model call: keep it out of the ordered call
-    # fingerprint under the same owner-thread rule as ``pause_logging()``.
-    counted = _state.hold_fingerprint()
-    try:
-        try:
-            yield
-        finally:
-            _state.release_fingerprint(counted)
-    finally:
-        _internal_read_state.depth = depth
+    return _InternalScalarRead()
