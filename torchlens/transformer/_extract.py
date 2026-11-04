@@ -130,6 +130,19 @@ def _masked_positions(
         # isinf-keyed detector silently finds nothing.
         floor = torch.finfo(work.dtype).min
         masked = work <= floor / 2
+    return _fit_grid(masked, n_dst, n_src, batch_index)
+
+
+def _fit_grid(
+    masked: torch.Tensor, n_dst: int, n_src: int, batch_index: int
+) -> torch.Tensor | None:
+    """Return ``masked`` as a ``[n_dst, n_src]`` grid, broadcasting singleton axes.
+
+    A key-padding mask arrives as ``[batch, 1, 1, src]`` (transformers 4.x
+    eager BERT's extended mask) and a full mask as ``[batch, 1, dst, src]``;
+    both reduce to the grid. ``None`` when the shape cannot broadcast.
+    """
+
     masked = _squeeze_to_grid(masked, batch_index)
     if masked.shape[-2:] != (n_dst, n_src):
         try:
@@ -197,10 +210,11 @@ def _additive_mask_from_parent(
     filled = value <= floor / 2
     if not bool(filled.any()):
         return None
-    masked = _squeeze_to_grid(filled, batch_index)
-    if masked.shape != (n_dst, n_src):
+    if filled.ndim < 2 or filled.shape[-1] != n_src:
+        # Only a per-key operand is a mask: a scalar fill would broadcast to
+        # "every cell masked".
         return None
-    return masked.contiguous()
+    return _fit_grid(filled, n_dst, n_src, batch_index)
 
 
 def _gqa_info(module: Any, n_heads: int) -> GqaInfo | None:

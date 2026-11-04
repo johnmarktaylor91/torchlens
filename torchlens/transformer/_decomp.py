@@ -121,10 +121,13 @@ def score_decomposition(  # noqa: PLR0913 -- one keyword per addressed coordinat
     additive: dict[str, float] = {}
     dot_term = float(products.sum()) / scale
     remainder = reference - dot_term
-    if abs(remainder) > tolerance * max(1.0, abs(reference)):
+    if not math.isfinite(reference) or abs(remainder) > tolerance * max(1.0, abs(reference)):
         # One additive-mask term may close the gap exactly (an additively
         # masked position); anything else stays open and refuses inside the
-        # record constructor.
+        # record constructor. A score that overflowed to -inf (two
+        # finfo.min masks summed, as transformers 4.x eager GPT-2 does) is a
+        # masked position too: its remainder is -inf, and the relative
+        # threshold above would be infinite, so it is tested first.
         floor = torch.finfo(torch.float32).min
         if remainder <= floor / 4:
             additive["mask"] = remainder
