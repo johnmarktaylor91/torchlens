@@ -4908,6 +4908,7 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
+| `Trace.routing_table` | Lazy list of routing rows across structurally recognized MoE blocks; each row carries token expert indices, gate weights, counts and assignment load fractions; empty for non-MoE traces |
 | `Trace.__enter__` | Context-manager entry; returns the Trace itself so `with trace:` binds the same object |
 | `Trace.__exit__` | Context-manager exit; detaches the sticky hooks the last `do()` inside the scope staged |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
@@ -4996,6 +4997,8 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
+| `Op.is_router` | Lazy bool identifying gate, normalization and selection ops on a structurally proven expert-routing path; no stored per-op field |
+| `Op.expert` | Lazy zero-based expert number in homogeneous container registration order, or `None` outside an individually executed routed expert, including fused expert ops |
 | `Op.activation_transform` | The callable applied to this Op's output before it is saved, or `None` |
 | `Op.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
 | `Op.arg_names` | Names of the arguments in this Op's function call |
@@ -5333,6 +5336,7 @@ example.
 
 | Spelling | Meaning |
 | --- | --- |
+| `Module.routing_table` | Lazy list of routing rows for this MoE block alone, or `None` when routing does not apply; saved raw routing outputs are required |
 | `Module.address_children` | Addresses of the modules directly nested under this module in the static module tree |
 | `Module.address_depth` | Depth of this module's address in the static module tree, with the root at 0 |
 | `Module.address_parent` | Address of this module's parent in the static module tree, or `None` for the root |
