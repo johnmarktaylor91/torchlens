@@ -954,7 +954,7 @@
     {
       "id": "readme-artifact-window-pointer",
       "category": "capability",
-      "wording": "Artifact compatibility: the 2.x floor and the conditional five-year window",
+      "wording": "Artifact compatibility: the pre-2.38 floor and the conditional five-year window",
       "locations": [
         {
           "file": "README.md"
@@ -966,7 +966,7 @@
       "evidence": [
         "MIGRATIONS.md"
       ],
-      "evidence_note": "A README docs-table row pointing at MIGRATIONS.md, which states the 2.x floor and the conditions under which the five-year window becomes a promise.",
+      "evidence_note": "A README docs-table row pointing at MIGRATIONS.md, which states the pre-2.38 floor and the conditions under which the five-year window becomes a promise.",
       "exclusions": "The five-year window is conditional, not a current guarantee.",
       "date": "2026-11-03",
       "status": "train-only",

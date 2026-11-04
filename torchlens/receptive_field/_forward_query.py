@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, cast
 from . import _engine
 from ._engine_forward import _ProjectiveFieldSolution
 from ._engine_geometry import _Affine, _as_tuple, _Mapped, _select_full_axes, _transpose_mapped
-from ._errors import AmbiguousTargetError, ReceptiveFieldError
-from ._path import forward_index_image
+from ._errors import ReceptiveFieldError
+from ._path import _select_target_descriptor, forward_index_image
 from ._query import (
     _AxisSets,
     _build_box,
@@ -34,7 +34,7 @@ from ._query_causal import EXTENDED_KINDS, map_extended_to_child
 from ._query_maps import _call_interval_callback, map_transposed_convolution_index_set
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
-from ._types import ReceptiveField, ReceptiveFieldBox, ReceptiveFieldDirection
+from ._types import ReceptiveFieldBox, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -80,7 +80,7 @@ def box_for_source_unit(
         raise ReceptiveFieldError(
             f"No projective-field solution is available from source {op.label!r}."
         )
-    descriptor = _select_target_descriptor(descriptors, target)
+    descriptor = _select_target_descriptor(descriptors, target, solution.target_labels)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
@@ -109,44 +109,6 @@ def box_for_source_unit(
         direction=ReceptiveFieldDirection.PROJECTIVE,
         unit_shape=tuple(op.shape),
     )
-
-
-def _target_identities(target: Any) -> tuple[str, ...]:
-    """The op labels a projective target names.
-
-    A string or an Op names itself; a Module or ModuleCall (what ``trace[...]``
-    gives for a module address) names its output ops.
-    """
-
-    if isinstance(target, str):
-        return (target,)
-    if type(target).__name__ in {"Module", "ModuleCall"}:
-        return tuple(map(str, target.output_ops))
-    return (str(target.label),)
-
-
-def _select_target_descriptor(
-    descriptors: Mapping[str, ReceptiveField], target: Any
-) -> ReceptiveField:
-    """Resolve one projective result descriptor without choosing silently.
-
-    A target naming several ops (a multi-output module) must reach exactly one
-    of them from this source, else the query refuses with the reachable roles.
-    """
-
-    names = None if target is None else _target_identities(target)
-    matched = [
-        (role, descriptor)
-        for role, descriptor in descriptors.items()
-        if names is None or {role, descriptor.input_op_label} & set(names)
-    ]
-    if names is not None and not matched:
-        shown = names[0] if len(names) == 1 else ", ".join(names)
-        raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
-    if len(matched) != 1 and (names is None or len(names) != 1):
-        roles = ", ".join(role for role, _ in matched)
-        raise AmbiguousTargetError(f"Select one reachable target; available target roles: {roles}.")
-    return matched[0][1]
 
 
 def _labels_reaching(

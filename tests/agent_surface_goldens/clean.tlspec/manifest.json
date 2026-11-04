@@ -1,10 +1,10 @@
 {
   "tlspec_version": 11,
-  "torchlens_version": "2.36.3",
+  "torchlens_version": "2.38.0",
   "torch_version": "2.13.0+cpu",
   "python_version": "3.10.19",
   "platform": "linux-x86_64",
-  "created_at": "2026-11-03T08:49:26Z",
+  "created_at": "2026-11-04T06:07:09Z",
   "bundle_format": "directory",
   "n_layers": 9,
   "n_out_blobs": 3,
@@ -91,11 +91,11 @@
       ]
     },
     "rng_state_digests": {
-      "torch": "46020999f660fb1b0e8288d5df217429241808ec2aed2c6a7fbd89844ce8b606"
+      "torch": "9d00de645505f92f8593d5ff53385ebc581b54646fa9bcf5b15ebe0c989f09c9"
     },
     "input_hash": "unavailable:PayloadUnavailableError",
     "model_structure_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
-    "git_commit_hash": "db45c6f02c3e49ccd4d66606edd0f913c2847c07"
+    "git_commit_hash": "6bcdf48bc4056016a9ce553ad87f839d5cc874a1"
   },
   "custom_attributes_disclosure": {
     "included": true,
@@ -122,7 +122,7 @@
     "class_qualname": "test_agent_surface_helpers.RepeatedBlockNet",
     "extra_metadata": {
       "model_class_name": "RepeatedBlockNet",
-      "graph_shape_hash": "dffe4d652ec201519de8c84fac345b8604878df523b4d7f85a2c790fe78e6154",
+      "graph_shape_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
       "input_signature_hash": "8bb3ca7fdae3c7b870594d8554adfa80fbd708e58499721e09ee661d29eb5078"
     }
   },
