@@ -16,13 +16,13 @@ statement before the real render.
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import subprocess
 from collections.abc import Iterable, Sequence
 from typing import Any, NamedTuple
 
+from .._io._json import loads_bounded
 from ..errors import GraphvizUnavailableError
 from . import _render_utils
 
@@ -89,7 +89,7 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
     if not targets:
         return list(body)
     try:
-        layout = json.loads(layout_json)
+        layout = loads_bounded(layout_json)
         scene = _Scene(layout)
     except (ValueError, KeyError, TypeError, IndexError):
         return list(body)
@@ -148,7 +148,7 @@ def place_forward_pass_labels(
     """
 
     source = source_override if source_override is not None else dot.source
-    cwd = getattr(trace, "_visualizer_dir", None)
+    cwd = trace._visualizer_dir
     return place_pass_labels(
         source, engine=dot.engine, timeout=timeout, cwd=str(cwd) if cwd else None
     )
