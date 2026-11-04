@@ -114,10 +114,14 @@ _UNREAD_KEYS = frozenset(
     }
 )
 
-# Most keys any one op's frozen fields dict holds on the tiny GPT-2 generate.
-_MAX_KEYS_PER_OP = 0
-# Python calls into TorchLens code per op while capture runs (postprocess excluded).
-_MAX_TORCHLENS_CALLS_PER_OP = 0.0
+# Most keys any one function-call op's frozen fields dict holds on the tiny GPT-2
+# generate: 91 (it was 167 while the unread keys were built).
+_MAX_KEYS_PER_OP = 91
+# Python calls into TorchLens code per function-call op while capture runs
+# (postprocess excluded). Measured 1074.2 (1090.9 while the unread keys were built);
+# the pin sits between the two so it holds across torch versions and still fails
+# if the unread-key work returns.
+_MAX_TORCHLENS_CALLS_PER_OP = 1082.0
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
 
 
