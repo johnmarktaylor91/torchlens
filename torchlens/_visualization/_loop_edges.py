@@ -1,0 +1,58 @@
+"""Ports that make a rolled recurrence read as a loop.
+
+A rolled drawing folds a repeated op into one node, so the flow from one
+pass into the next becomes either a self-loop (a one-op body) or a back
+edge from the body's last op to its first (a longer body).  Without ports
+a self-loop is a small curl and a back edge is a second line almost
+parallel to the forward edge, so neither reads as a cycle.  Both now leave
+the output side of their tail and return to the input side of their head
+on the same flank, as one tall arc around the body (JMT, 3 Nov 2026).
+"""
+
+from __future__ import annotations
+
+__all__ = ["loop_edge_attrs", "self_loop_port_attrs"]
+
+# tail port (output side), head port (input side) per rank direction
+_LOOP_PORTS: dict[str, tuple[str, str]] = {
+    "BT": ("ne", "se"),
+    "TB": ("se", "ne"),
+    "LR": ("ne", "nw"),
+    "RL": ("nw", "ne"),
+}
+
+
+def self_loop_port_attrs(rankdir: str) -> dict[str, str]:
+    """Return the tail and head ports for a recurrence self-loop."""
+
+    tail_port, head_port = _LOOP_PORTS.get(rankdir, _LOOP_PORTS["BT"])
+    return {"tailport": tail_port, "headport": head_port}
+
+
+def loop_edge_attrs(is_self_loop: bool, is_back_edge: bool, rankdir: str) -> dict[str, str]:
+    """Return the DOT attributes that draw a rolled recurrence edge as a loop.
+
+    Parameters
+    ----------
+    is_self_loop:
+        The edge's tail and head are the same rendered node.
+    is_back_edge:
+        The edge carries a value from a later-placed op back to an earlier
+        one of the same loop body (an earlier pass feeding a later pass).
+    rankdir:
+        Graphviz rank direction of the drawing.
+
+    Returns
+    -------
+    dict[str, str]
+        Empty for an ordinary edge.  A self-loop gets its ports.  A back edge
+        gets the same ports plus ``constraint=false``, so dot ranks the body
+        by its forward edges alone and routes the return as an arc around the
+        body's flank instead of a near-parallel second line.
+    """
+
+    if is_self_loop:
+        return self_loop_port_attrs(rankdir)
+    if is_back_edge:
+        return {**self_loop_port_attrs(rankdir), "constraint": "false"}
+    return {}

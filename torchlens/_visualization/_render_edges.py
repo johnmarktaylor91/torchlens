@@ -17,6 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
+from ._loop_edges import loop_edge_attrs
 from ._pass_marks import pass_label_fits, with_branch
 from ._render_common import *
 from ._render_leaf import *
@@ -1179,6 +1180,9 @@ def _add_edges_for_node(
             edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
+        edge_is_back_edge = not edge_is_self_loop and _is_rolled_back_edge(
+            parent_node, child_node, vis_mode, rolled_maps, parent_segment, child_segment
+        )
         if edge_is_self_loop and (parent_segment is not None or child_segment is not None):
             continue
         edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, repeat_folds, vis_mode)
@@ -1219,8 +1223,7 @@ def _add_edges_for_node(
         }
         if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
             edge_dict["minlen"] = "2"
-        if edge_is_self_loop:
-            edge_dict.update(_self_loop_port_attrs(rankdir))
+        edge_dict.update(loop_edge_attrs(edge_is_self_loop, edge_is_back_edge, rankdir))
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%
@@ -1283,7 +1286,7 @@ def _add_edges_for_node(
                     metadata_base_for_pass,
                     parent_base_for_pass,
                     edge_dict,
-                    is_self_loop=edge_is_self_loop,
+                    is_self_loop=edge_is_self_loop or edge_is_back_edge,
                     rankdir=rankdir,
                     allow_midpoint_merge=pass_label_fits(edge_dict) and not arg_labeler_may_fire,
                     rolled_maps=rolled_maps,
@@ -1551,6 +1554,26 @@ def _is_rolled_loop_carried_self_edge(
         child_pass > parent_pass
         for parent_pass, child_pass in zip(parent_passes, child_passes, strict=False)
     )
+
+
+def _is_rolled_back_edge(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+    vis_mode: str,
+    rolled_maps: "_RolledEdgeMaps | None",
+    parent_segment: Optional[OpSegment],
+    child_segment: Optional[OpSegment],
+) -> bool:
+    """Return whether a rolled edge between two different nodes closes a loop body.
+
+    The last op of a multi-op loop body feeds its first op from pass ``k``
+    into pass ``k + 1``: the self-loop test on two endpoints.  Segment-projected
+    endpoints never count.
+    """
+
+    if parent_segment is not None or child_segment is not None:
+        return False
+    return _is_rolled_loop_carried_self_edge(parent_node, child_node, vis_mode, rolled_maps)
 
 
 def _self_loop_is_single_op_module(trace: "Trace", node: GraphNode) -> bool:
@@ -1898,27 +1921,6 @@ def _space_from_reverse_edge(
 #: Self-loop ports by rank direction: the loop leaves the node's downstream
 #: side and comes back on its upstream side, so it draws as a tall D-shaped
 #: arrow beside the node instead of Graphviz's default small curl.
-_SELF_LOOP_PORTS: dict[str, tuple[str, str]] = {
-    "BT": ("ne", "se"),
-    "TB": ("se", "ne"),
-    "LR": ("ne", "nw"),
-    "RL": ("nw", "ne"),
-}
-
-
-def _self_loop_port_attrs(rankdir: str) -> dict[str, str]:
-    """Return the tail and head ports that make a recurrence self-loop read as a loop.
-
-    A self-loop with no ports is a small curl on one side of the node that is
-    easy to miss next to a stack of straight arrows; anchoring it from the
-    output side back to the input side spans the node's height, so the loop
-    is unmistakable (JMT, 3 Nov 2026).
-    """
-
-    tail_port, head_port = _SELF_LOOP_PORTS.get(rankdir, _SELF_LOOP_PORTS["BT"])
-    return {"tailport": tail_port, "headport": head_port}
-
-
 def _label_rolled_call_indexs(
     child_node: "Layer",
     parent_node: "Layer",

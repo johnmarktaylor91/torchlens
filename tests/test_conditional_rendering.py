@@ -263,24 +263,32 @@ def _find_node_line(dot_source: str, layer_label: str) -> str:
     raise AssertionError(f"Could not find node line for {layer_label!r}")
 
 
-def test_elif_ladder_tests_name_if_then_elif_on_the_test_node() -> None:
-    """The leading test node reads ``IF:`` and each later test ``ELIF:``.
+def test_elif_ladder_names_if_then_elif_on_the_test_node_and_its_entry_edge() -> None:
+    """The leading test reads ``IF`` and each later test ``ELIF``, on the node and on the edge.
 
-    Distinct from the arm-entry labels (THEN/ELIF N/ELSE) on edges: the test kind sits on
-    the test itself, and the edges entering each condition subgraph carry no ``IF`` label.
+    Distinct from the arm-entry labels (THEN/ELIF N/ELSE): the test kind sits on the test
+    node's value row, and the edge entering each condition subgraph carries the same kind,
+    so a reader sees where the branch starts (the released behaviour).
     """
     dot_source, trace = _render_dot_source(ElifLadderModel(), torch.tensor([[0.25]]))
     try:
         bool_layers = trace.graph.conditional_records[0].bool_layers
+        expected_by_bool = {bl: ("IF" if i == 0 else "ELIF") for i, bl in enumerate(bool_layers)}
         for index, bool_label in enumerate(bool_layers):
             node_line = _find_node_line(dot_source, bool_label)
             expected = "IF:" if index == 0 else "ELIF:"
             assert expected in node_line, f"{bool_label} -> expected {expected}: {node_line}"
             if index == 0:
                 assert "ELIF" not in node_line
+        # the mean feeding each bool is that test's condition-entry child
+        kinds = []
         for parent_label, child_label in trace.graph.conditional_branch_edges:
+            expected = expected_by_bool[trace[child_label].children[0]]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
-            assert "<u>IF</u>" not in edge_line and "<u>ELIF</u>" not in edge_line
+            assert f"<u>{expected}</u>" in edge_line, f"{child_label}: {edge_line}"
+            kinds.append(expected)
+        assert kinds.count("IF") == 1
+        assert kinds.count("ELIF") == len(kinds) - 1
     finally:
         trace.cleanup()
 
@@ -323,6 +331,12 @@ def test_loop_repeated_if_tests_remain_if() -> None:
         )
         node_lines = [_find_node_line(dot_source, label) for label in event.bool_layers]
         assert all("IF:" in line and "ELIF" not in line for line in node_lines)
+        edge_lines = [
+            _find_edge_line(dot_source, parent_label, child_label)
+            for parent_label, child_label in trace.graph.conditional_branch_edges
+        ]
+        assert len(edge_lines) == 4
+        assert all("<u>IF</u>" in line and "ELIF" not in line for line in edge_lines)
     finally:
         trace.cleanup()
 
