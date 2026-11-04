@@ -689,12 +689,17 @@ def _scrub_intervention_fields_after_removal(
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]
-        layer_entry.args_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "args_template", None), labels_to_remove
-        )
-        layer_entry.kwargs_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "kwargs_template", None), labels_to_remove
-        )
+        # Rebuild a template only when it names a removed parent: an
+        # untouched template keeps its object (every removal runs before the
+        # step-9 rename, which rebuilds each template into a fresh copy).
+        args_template = getattr(layer_entry, "args_template", None)
+        if _template_mentions_removed_parent(args_template, labels_to_remove):
+            args_template = _replace_removed_parent_refs(args_template, labels_to_remove)
+        layer_entry.args_template = args_template
+        kwargs_template = getattr(layer_entry, "kwargs_template", None)
+        if _template_mentions_removed_parent(kwargs_template, labels_to_remove):
+            kwargs_template = _replace_removed_parent_refs(kwargs_template, labels_to_remove)
+        layer_entry.kwargs_template = kwargs_template
         interventions = [
             record
             for record in getattr(layer_entry, "edits", [])
@@ -745,6 +750,30 @@ def _scrub_intervention_spec_after_removal(self: Any, labels_to_remove: set[str]
 
     if spec_mutated and hasattr(self, "_mark_intervention_spec_mutated"):
         self._mark_intervention_spec_mutated()
+
+
+def _template_mentions_removed_parent(value: Any, labels_to_remove: set[str]) -> bool:
+    """Return whether ``_replace_removed_parent_refs`` would replace any leaf.
+
+    Walks the same nodes in the same way (tuples, lists, dict values, set
+    dataclass fields) without building anything.
+    """
+
+    if isinstance(value, ParentRef) and value.parent_label in labels_to_remove:
+        return True
+    if isinstance(value, (tuple, list)):
+        return any(_template_mentions_removed_parent(item, labels_to_remove) for item in value)
+    if isinstance(value, dict):
+        return any(
+            _template_mentions_removed_parent(item, labels_to_remove) for item in value.values()
+        )
+    if is_dataclass(value) and not isinstance(value, type):
+        return any(
+            _template_mentions_removed_parent(getattr(value, field.name), labels_to_remove)
+            for field in fields(value)
+            if hasattr(value, field.name)
+        )
+    return False
 
 
 def _replace_removed_parent_refs(value: Any, labels_to_remove: set[str]) -> Any:
