@@ -1,5 +1,9 @@
 # TorchLens Architecture
 
+Older detailed map, kept for its module census. For orientation read `docs/how-it-works.md`
+(the narrative guide to the internals) and `docs/maintainers/architecture.md` (the maintainer
+map); where this file disagrees with them or with the code, they win.
+
 ## Module Map
 
 High-altitude roles and load-bearing files per package. The complete per-module census

@@ -1,5 +1,9 @@
 ## Architecture Overview
 
+For orientation read [How TorchLens works](../../../how-it-works.md) and the
+[Architecture map](../../../maintainers/architecture.md); this page keeps the import-surface
+notes agents need when editing the package root.
+
 ```
 import torchlens
   |- exposes 87 top-level public names in __all__

@@ -8,12 +8,17 @@ line; this page names only what you need before editing. Testing is in
 [testing.md](testing.md), the review rules in [review_checklist.md](review_checklist.md),
 setup and gates in [CONTRIBUTING.md](https://github.com/johnmarktaylor91/torchlens/blob/main/CONTRIBUTING.md) at the repository root.
 
+For the narrative version, read [How TorchLens works](../how-it-works.md) first: it follows one
+capture from wrapping torch to a finished `Trace` and through lookups, gradients, edits, drawing,
+saving and backends. This page is its maintainer companion and adds the boundaries, sizes and test
+locations you need before changing the code.
+
 Two notes on currency. A consolidation into about 12 internal packages is planned, not
 landed; nothing below describes that target. Today's layer separations are already enforced
 by the import-linter contracts in `.importlinter` (`python scripts/checks/run_all.py`). The
 second-round moves have landed: the former fastlog package is `torchlens.recording`, and the
 capture, user_funcs, captured_run, semantic and visualization packages are private
-(`_capture/`, `_user_funcs/`, `_captured_run/`, `_semantic/`, `_visualization/`); the
+(`_capture/`, `_user_funcs.py`, `_captured_run.py`, `_semantic/`, `_visualization/`); the
 generated index reflects them.
 
 ## Size
@@ -38,7 +43,7 @@ ones freely. Imports placed inside functions cross the layers in both directions
 | --- | --- | --- |
 | 0. Foundation | Global toggle state, constants, errors, literals, torch compatibility probes, stateless helpers | `_state.py`, `_constants.py`, `errors/`, `_errors.py`, `_literals.py`, `_vocab/`, `types.py`, `_quantities.py`, `options.py`, `_utils/` (`_utils/_torch_compat.py` is the only home for fragile torch-private probes) |
 | 1. Records | The product types and the internal record shapes | `_data_classes/` (`Trace`, `Op`, `Layer`, `Module`, `ModuleCall`, `Param`, `Buffer`), `_ir/` (`OpEvent`, `OpRecord`, selectors, containers), `_trace_core/` (typed column store), `appliances/` |
-| 2. Capture | Wrapping torch, running the forward pass, logging ops | `backends/` (registry and the torch backend in `backends/torch/`; previews for JAX, TensorFlow, MLX, Paddle, tinygrad), `capture/` (backend-neutral runner, predicates, halt, outcome), `_capture_*.py`, `_chunking.py`, `_input_*.py`, `_robustness.py`, `fastlog/` (sparse predicate recording behind `tl.record`), `distributed/`, `_partial/` |
+| 2. Capture | Wrapping torch, running the forward pass, logging ops | `backends/` (registry and the torch backend in `backends/torch/`; previews for JAX, TensorFlow, MLX, Paddle, tinygrad), `_capture/` (backend-neutral runner, predicates, halt, outcome), `_capture_*.py`, `_chunking.py`, `_input_*.py`, `_robustness.py`, `recording/` (sparse predicate recording behind `tl.record`), `distributed/`, `_partial/` |
 | 3. Postprocess | Turning the raw log into a finished graph | `_postprocess/` (steps 0 to 20 plus fractional inserts, order derived from declared read and write contracts) |
 | 4. Persistence and replay | Saving, loading, replaying | `_io/` (bundle writer and reader, `.tlspec` manifest, loaders), `io/` (public administration helpers), `schemas/`, `_runnable/` (the frozen runnable vocabulary in its `__init__.py` and the sparse replay modules behind `Trace.run`), `captured_run.py`, `bundle/` |
 | 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/` (training checks in `debug/_checks/`), `_snoop/` (live narration), `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `_observe/`, `_observability/`, `trackers/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `differential.py` |
@@ -73,7 +78,7 @@ tl.validate(model, x)                    validation/consolidated.py -> validatio
 
 The sparse path shares the front half: `tl.record(model, x, save=...)` runs the same wrappers
 but emits `OpEvent` rows through `_capture/projections.py` into a `Recording`
-(`fastlog/`); `Recording.to_trace()` materialises a `Trace` through the same postprocess.
+(`recording/`); `Recording.to_trace()` materialises a `Trace` through the same postprocess.
 
 Key types crossing layer boundaries: `Trace` (one captured forward pass), `Op` (one executed
 call, the graph's node), `Layer` (ops grouped across recurrent passes), `Module` and
@@ -89,7 +94,7 @@ tests; `tests/AGENTS.md` has the full area table.
 
 | Feature | Public entry | Implementing package | Tests |
 | --- | --- | --- | --- |
-| Eager capture | `tl.trace` | `user_funcs.py`, `capture/`, `backends/torch/` | `test_toy_models.py`, `test_capture_*.py`, `capture_oracle/`, `classics_corpus/` |
+| Eager capture | `tl.trace` | `_user_funcs.py`, `_capture/`, `backends/torch/` | `test_toy_models.py`, `test_capture_*.py`, `capture_oracle/`, `classics_corpus/` |
 | Backend registry and previews | `tl.trace(backend=...)`, `tl.backends` | `backends/` and `backends/<name>/` | `backends/`, `backend_conformance/`, `backend_parity/` |
 | Sparse recording | `tl.record`, `Recording` | `recording/`, `_capture/projections.py`, `_ir/events.py` | `test_fastlog/`, `test_record_*.py` |
 | Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors) | `test_selection_*.py`, `test_capture_*.py` |
@@ -123,7 +128,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
 | Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |
-| Episode capture | `tl.options.EpisodeOptions` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
+| Episode capture | `tl.options.EpisodeOptions` | `_episode_spec.py`, `_capture/`, `bundle/` | `test_episode*.py` |
 | Kernel telemetry | `torchlens._kernel_telemetry` | `_kernel_telemetry.py` | `test_kernel_telemetry*.py` |
 
 ## Known tangles
@@ -174,7 +179,7 @@ the generated index gives each one's first docstring line.
 ## Where to read next
 
 - A module's one-line purpose and size: [where.md](where.md).
-- Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
+- Step order and contracts in postprocess: `torchlens/_postprocess/_pipeline.py`.
 - The invariants a change must keep: `docs/internal/agent-reference/critical-invariants.md`.
 - The saved-file contract: `torchlens/schemas/writer_contract_v11.json` and
   `docs/reference/runnable_tlspec_contract.md`.
