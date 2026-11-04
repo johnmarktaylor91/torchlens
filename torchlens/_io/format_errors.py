@@ -31,9 +31,9 @@ class ArtifactError(CompatibilityError, RuntimeError):
 
 
 class ArtifactTooOldError(ArtifactError):
-    """Raised when an artifact was saved by torchlens 2.x, which this release does not read.
+    """Raised when an artifact was saved by torchlens 2.37 and earlier, which this release does not read.
 
-    Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
+    Any stamp older than the current ``tlspec_version``, any pickled pre-2.38 module path and the
     2.16 ModelLog format refuse with this error rather than being partially reconstructed;
     the remedy is to load the file with torchlens 2.36.x or capture the model again.
 

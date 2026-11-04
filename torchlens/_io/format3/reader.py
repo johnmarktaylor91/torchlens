@@ -1,4 +1,4 @@
-"""The 3.0 reader: manifest first, then every record validated against the contract.
+"""The 2.38 reader: manifest first, then every record validated against the contract.
 
 Contract: ``docs/maintainers/saved_format_3.md``. The reader is fail-closed:
 it opens the manifest, checks the format and record versions, verifies every
