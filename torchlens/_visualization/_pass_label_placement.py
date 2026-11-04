@@ -18,7 +18,7 @@ import math
 import re
 import subprocess
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import _render_utils
 
@@ -43,12 +43,13 @@ _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
 _REACH = 90.0  # obstacles farther than this from a label are ignored
 _NEAR_NODE = 14.0  # (pt) a label farther than this from its own node no longer reads as its
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
+_MAX_DISTANCE = 5.0
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
 _CANDIDATES: tuple[tuple[float, float], ...] = tuple(
-    (distance, float(angle))
-    for distance in (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0)
-    for angle in range(-165, 166, 15)
-    if abs(angle) > 15
+    (quarter / 4, float(angle))
+    for quarter in range(3, int(_MAX_DISTANCE * 4) + 1)
+    for angle in range(-170, 171, 10)
+    if abs(angle) > 10
 )
 
 
@@ -254,14 +255,28 @@ class _Scene:
         trusted from this layout.
         """
 
-        placements = (
+        placements = [
             ((distance, angle), [self._placed(label, distance, angle) for label in edge["labels"]])
             for distance, angle in _CANDIDATES
-        )
-        choice, boxes = min(placements, key=lambda item: self._score(edge, item[1]))
+        ]
+        local = self._near(_union([r for _, boxes in placements for b in boxes for r in b]))
+        choice, boxes = min(placements, key=lambda item: self._score(edge, item[1], local))
         for lines in boxes:
             self.rects.extend(lines)
         return choice
+
+    def _near(self, region: Rect) -> _Obstacles:
+        """Return the obstacles within reach of ``region``, lines cropped to it."""
+
+        grown = _grow(region, _REACH)
+        polygons = [p for p in self.polygons if _overlaps(grown, _bounds(p))]
+        lines = [
+            cropped
+            for line in (*self.splines, *self.borders)
+            if (cropped := [p for p in line if _inside_rect(p, grown)])
+        ]
+        rects = [r for r in self.rects if _overlaps(grown, r)]
+        return _Obstacles(polygons, lines, rects)
 
     def _placed(self, label: dict[str, Any], distance: float, angle: float) -> list[Rect]:
         """Return the label's text boxes for one ``labeldistance``/``labelangle`` pair."""
@@ -273,7 +288,7 @@ class _Scene:
         return [(cx + o[0], cy + o[1], cx + o[2], cy + o[3]) for o in label["offsets"]]
 
     def _score(
-        self, edge: dict[str, Any], boxes: list[list[Rect]]
+        self, edge: dict[str, Any], boxes: list[list[Rect]], local: _Obstacles
     ) -> tuple[float, bool, float, float]:
         """Rank one placement of an edge's labels; lower is better.
 
@@ -286,7 +301,7 @@ class _Scene:
         for label, lines in zip(edge["labels"], boxes, strict=True):
             others = [r for other in boxes if other is not lines for r in other]
             for rect in lines:
-                gap = self._clearance(rect, others)
+                gap = _clearance(rect, others, local)
                 depth += max(0.0, -gap - _PEN_EPS)
                 clearance = min(clearance, gap)
             own = self.nodes.get(label["node"], [])
@@ -294,20 +309,43 @@ class _Scene:
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
         return (round(depth, 3), far > _NEAR_NODE, shortfall, round(far, 3))
 
-    def _clearance(self, rect: Rect, extra: Iterable[Rect]) -> float:
-        near = _grow(rect, _REACH)
-        gaps = [_rect_poly_gap(rect, p) for p in self.polygons if _overlaps(near, _bounds(p))]
-        gaps += [_rect_line_gap(rect, s) for s in self.splines if _overlaps(near, _bounds(s))]
-        gaps += [_rect_line_gap(rect, b) for b in self.borders if _overlaps(near, _bounds(b))]
-        gaps += [_rect_rect_gap(rect, r) for r in (*self.rects, *extra) if _overlaps(near, r)]
-        return min(gaps, default=_REACH)
-
     def add_fixed_labels(self, targeted: set[tuple[str, str, int]]) -> None:
         """Count the head/tail labels of edges that are not being placed as obstacles."""
 
         for edge in self.edges:
             if (edge["tail"], edge["head"], edge["occurrence"]) not in targeted:
                 self.rects.extend(r for label in edge["labels"] for r in label["default"])
+
+
+class _Obstacles(NamedTuple):
+    """Obstacles near one edge's candidate labels."""
+
+    polygons: list[list[Point]]
+    lines: list[list[Point]]
+    rects: list[Rect]
+
+
+def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
+    """Smallest gap from ``rect`` to any obstacle (negative: penetration)."""
+
+    near = _grow(rect, _REACH)
+    gaps = [_rect_poly_gap(rect, p) for p in local.polygons if _overlaps(near, _bounds(p))]
+    gaps += [_rect_line_gap(rect, line) for line in local.lines]
+    gaps += [_rect_rect_gap(rect, r) for r in (*local.rects, *extra) if _overlaps(near, r)]
+    return min(gaps, default=_REACH)
+
+
+def _union(rects: Sequence[Rect]) -> Rect:
+    return (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
+
+
+def _inside_rect(point: Point, rect: Rect) -> bool:
+    return rect[0] <= point[0] <= rect[2] and rect[1] <= point[1] <= rect[3]
 
 
 def _bb(text: str) -> Rect:
