@@ -188,12 +188,12 @@ def _trace_mlx_model(
     if capture_options.input_transform is not None:
         raw_input = input_args
         transformed_input = capture_options.input_transform(input_args)
+        # As on the torch door: the caller's ``input_kwargs`` survive the transform.
         if isinstance(transformed_input, collections.abc.Mapping):
             model_input_args = []
-            model_input_kwargs = dict(transformed_input)
+            model_input_kwargs = {**dict(transformed_input), **(input_kwargs or {})}
         else:
             model_input_args = transformed_input
-            model_input_kwargs = None
     from ...backends.mlx import MLXBackend
 
     backend = MLXBackend()

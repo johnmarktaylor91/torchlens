@@ -22,6 +22,7 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
+from ._quiet_property import read_attr_quietly
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -691,17 +692,16 @@ def _extend_search_stack_from_item(
         # Opaque object that refuses introspection -> treat as a leaf.
         return
 
-    # warnings.catch_warnings() is hoisted to get_vars_of_type_from_obj
+    # warnings.catch_warnings() is hoisted to get_vars_of_type_from_obj; log records: read_attr_quietly
     for attr_name in filtered_attrs:
         try:
-            attr = getattr(item, attr_name)
+            attr = read_attr_quietly(item, attr_name)
         except Exception:
             # getattr can fail for many reasons (missing C-level attr,
             # property that raises, etc.) — skip gracefully.
             continue
         attr_cls = type(attr)
-        # Leaf types — can't contain tensors.
-        if attr_cls in _NON_CONTAINER_LEAF_TYPES:
+        if attr_cls in _NON_CONTAINER_LEAF_TYPES:  # leaf types cannot contain tensors
             continue
         # Skip callables (custom_methods, functions) UNLESS they're nn.Modules,
         # which are callable but may hold tensor attributes.

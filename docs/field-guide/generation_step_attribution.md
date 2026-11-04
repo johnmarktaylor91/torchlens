@@ -6,8 +6,8 @@ before it with the token-attribution two-liner,
 generated text. For the token at position `t`, the target is the logit that
 predicted it: `target=(t - 1, token_t)`. Step scores with the names inseq uses
 (`probability`, `entropy`, `contrast_prob_diff`) come straight from the same
-logits. TorchLens has no packaged generation-attribution call; for a
-maintained one, use inseq.
+logits. TorchLens has no packaged generation-attribution call of its own; for a
+maintained one, use inseq, which TorchLens runs through `tl.bridge.inseq.attribute`.
 
 The example uses a two-layer GPT-2 with random weights and a word-level
 tokenizer so it runs offline. With a real checkpoint, load the model and

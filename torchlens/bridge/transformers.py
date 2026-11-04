@@ -7,6 +7,7 @@ The attention backend (``register_attention``, ``record_attention``) lives in
 from __future__ import annotations
 
 import contextlib
+import inspect
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -124,6 +125,7 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
 
     # hostile __getattr__ hooks on foreign model objects must never crash the
     # probe; any attribute-read failure simply declines the auto-route
+    model = _metadata_owner(model)
     direct = None
     with contextlib.suppress(Exception):
         direct = getattr(model, "name_or_path", None)
@@ -134,6 +136,21 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
         config = getattr(model, "config", None)
         via_config = getattr(config, "name_or_path", None) if config is not None else None
     return isinstance(via_config, str) and bool(via_config)
+
+
+def _metadata_owner(model: Any) -> Any:
+    """Return the module behind a bound method of one (``model.generate``), else ``model``."""
+    owner = getattr(model, "__self__", None) if inspect.ismethod(model) else None
+    return owner if isinstance(owner, torch.nn.Module) else model
+
+
+def _attaches_output_tokenizer(model: Any, structure_only: bool) -> bool:
+    """Whether ``trace_text`` attaches its tokenizer for the ``hf_text`` output detector.
+
+    Not for a structure-only capture (no outputs to decode) nor a bound method such as
+    ``model.generate``, whose return is token ids rather than logits.
+    """
+    return not structure_only and _metadata_owner(model) is model
 
 
 def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
@@ -322,18 +339,17 @@ def trace_text(
         capture=kwargs.pop("capture", None),
         input_transform=transform,
     )
-    # The attached tokenizer fires the automatic ``hf_text`` output detector; a
-    # structure-only capture holds no outputs to decode, so it stays detached.
-    had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
+    attach = _attaches_output_tokenizer(model, structure_only)
+    had_tokenizer = attach and hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-    if not structure_only:
+    if attach:
         model._torchlens_output_tokenizer = tok
     try:
         log = _trace_text_capture(model, text, capture, structure_only, kwargs)
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
-        elif not structure_only:
+        elif attach:
             delattr(model, "_torchlens_output_tokenizer")
     log._provenance_input_preprocessor = _tokenizer_preprocessing_record(
         tok,
@@ -623,6 +639,7 @@ def _model_name_or_path(model: Any) -> str | None:
         Non-empty model name/path, otherwise None.
     """
 
+    model = _metadata_owner(model)
     name_or_path = getattr(model, "name_or_path", None) or getattr(
         getattr(model, "config", None), "name_or_path", None
     )

@@ -493,12 +493,12 @@ def _open_door_state(
     if input_transform is not None:
         raw_input = input_args
         transformed_input = input_transform(input_args)
+        # The caller's own ``input_kwargs`` survive the transform and win on a shared key.
         if isinstance(transformed_input, collections.abc.Mapping):
             input_args = []
-            input_kwargs = dict(transformed_input)
+            input_kwargs = {**dict(transformed_input), **(input_kwargs or {})}
         else:
             input_args = transformed_input
-            input_kwargs = None
     else:
         original_input_args = input_args
         input_args = _coerce_input_args(model, input_args)
