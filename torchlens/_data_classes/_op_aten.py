@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import RecordTuple
 from ._trace_aten import _require_aten_profile
 
 if TYPE_CHECKING:
@@ -40,10 +41,14 @@ class OpAtenMixin:
         record: Any = self
         profile = _require_aten_profile(record.source_trace, what="Op.aten_ops")
         label = record.layer_label
-        return tuple(
-            row
-            for row in profile.primitive_ops
-            if any(ref.op_label == label for ref in row.parent_op_refs)
+        return RecordTuple(
+            (
+                row
+                for row in profile.primitive_ops
+                if any(ref.op_label == label for ref in row.parent_op_refs)
+            ),
+            "AtenOps",
+            "calls",
         )
 
     @property
