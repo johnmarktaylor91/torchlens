@@ -209,7 +209,7 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
         "status_not_bool",
         refusals.refuse_status_not_bool,
         TypeError,
-        "validation_status_bool_before_run",
+        "validation_status_has_no_truth_value_before_run",
     ),
     (
         "region_provenance",

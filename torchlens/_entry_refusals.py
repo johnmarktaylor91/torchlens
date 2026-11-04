@@ -51,7 +51,7 @@ class _DependencyIncompatibleError(_ActionableErrorMixin, CompatibilityError, Ru
 
 
 def refuse_aliasing_parent_not_in_call_args() -> NoReturn:
-    """Raise ``aliasing_parent_not_in_call_args``: an aliasing parent is absent from the call args."""
+    """Raise ``aliasing_parent_not_in_call_args``: a contract parent is not a call argument."""
 
     raise _InternalInvariantError(
         "Parent layer not found in function arguments",
@@ -423,12 +423,12 @@ def refuse_validation_scope(scope: str, valid_scopes: Collection[str]) -> NoRetu
 
 
 def refuse_status_not_bool() -> NoReturn:
-    """Raise ``validation_status_bool_before_run`` for ``bool()`` of a status that never ran."""
+    """Raise ``validation_status_has_no_truth_value_before_run``: ``bool()`` of an unrun status."""
 
     raise ArgumentTypeError(
         "ValidationStatus is not a boolean pass/fail result unless replay validation "
         "has actually run",
-        code="validation_status_bool_before_run",
+        code="validation_status_has_no_truth_value_before_run",
         remedy="read status.state, or run replay validation first and then read status.passed",
     )
 

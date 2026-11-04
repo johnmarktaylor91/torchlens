@@ -336,7 +336,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `intervention_result_invalid` | An intervention returned something other than an `mx.array`, or changed the output's shape or dtype (mlx) | Return an `mx.array` with the same shape and dtype as the hooked output |
 | `validation_replay_unsupported` | `validate=` replay was requested on a backend that declares no replay validation | Capture with `validate=False`, or use a backend that declares `has_validation_replay` |
 | `validation_scope_invalid` | `validate(scope=...)` named an unknown scope | Pass one of the scopes the message lists |
-| `validation_status_bool_before_run` | A `ValidationStatus` was used as a boolean before replay validation ran | Read `status.state`, or run replay validation first |
+| `validation_status_has_no_truth_value_before_run` | A `ValidationStatus` was used as a boolean before replay validation ran | Read `status.state`, or run replay validation first |
 | `viz_array_shape_invalid` | A plotting primitive got an array of the wrong shape | Pass the shape the message names |
 | `viz_images_too_few` | `image_scatter` got fewer images than points it draws | Pass enough images or lower `max_items` |
 | `viz_input_empty` | A plotting primitive got nothing to draw | Pass at least one item |
