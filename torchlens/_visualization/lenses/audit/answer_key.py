@@ -15,7 +15,7 @@ from ...._errors import InvalidArgumentError
 from .._families import scalar_or_none
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ...._data_classes.trace import Trace
 
 __all__ = ["AnswerKey", "KeyQuestion", "generate_answer_key"]
 

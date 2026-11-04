@@ -4875,3 +4875,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 2fd53282ce2c1ea976a16cd2b411abe4bcae4c66 (dirty)
 recorded: 2026-11-04T15:52:34.647608+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-173 small-correctness-1104: modules_with_facet refusal via Module._single_call_or_error, capture outcome model-error and missing-batch sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f1c83a7e963312ece49cc70fbc86068bc9467a14 (dirty)
+recorded: 2026-11-04T18:50:30.920924+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-173 small-correctness-1104: modules_with_facet refusal via Module._single_call_or_error, capture outcome model-error and missing-batch sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f1c83a7e963312ece49cc70fbc86068bc9467a14 (dirty)
+recorded: 2026-11-04T18:50:37.406584+00:00

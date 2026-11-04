@@ -128,7 +128,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "metric_name_invalid",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
-        "module_call_ambiguous",
         "module_focus_empty",
         "op_lookup_pass_required",
         # option_group_type_invalid: row DELETED (shrink-only lock-in) -- the

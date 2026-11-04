@@ -145,10 +145,34 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     """
 
     origins = _validated_cone_origins(origins)
-    all_keys = trace._layer_dict_all_keys
+    return _cone_from_maps(trace, origins, _label_key_map(trace), _func_call_groups(trace))
+
+
+def _replay_cone_and_maps(
+    trace: Trace, origins: Iterable[Op]
+) -> tuple[list[Op], dict[str, tuple[str, ...]], dict[int | None, tuple[Op, ...]]]:
+    """Return :func:`cone_of_effect` with the label map and call groups it walked.
+
+    Saved-DAG replay needs both maps for its own pass; taking them from the
+    cone walk keeps one replay at one build of each instead of two.
+    """
+
     label_keys = _label_key_map(trace)
-    final_keys = _final_label_key_map(trace)
     call_groups = _func_call_groups(trace)
+    cone = _cone_from_maps(trace, _validated_cone_origins(origins), label_keys, call_groups)
+    return cone, label_keys, call_groups
+
+
+def _cone_from_maps(
+    trace: Trace,
+    origins: Sequence[Op],
+    label_keys: dict[str, tuple[str, ...]],
+    call_groups: dict[int | None, tuple[Op, ...]],
+) -> list[Op]:
+    """Walk :func:`cone_of_effect` over prebuilt label map and call groups."""
+
+    all_keys = trace._layer_dict_all_keys
+    final_keys = _final_label_key_map(trace)
     visited: set[str] = set()
     frontier: deque[str] = deque()
     for origin in origins:
