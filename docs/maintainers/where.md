@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1499 modules, 656990 lines, 0 modules without a docstring.
+83 packages, 1499 modules, 656991 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -68,7 +68,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10738 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 4026 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
-| `torchlens.errors` | Public TorchLens exception classes. | 5 | 1392 |
+| `torchlens.errors` | Public TorchLens exception classes. | 5 | 1393 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2045 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 369 |
@@ -1568,11 +1568,11 @@ Distributed capture opt-in: arming, group lifetime identity, and evidence. (6 mo
 
 ### `torchlens.errors`
 
-Public TorchLens exception classes. (5 modules, 1392 lines)
+Public TorchLens exception classes. (5 modules, 1393 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Public TorchLens exception classes. | 471 |
+| `__init__` | Public TorchLens exception classes. | 472 |
 | `_base` | Shared TorchLens exception and warning base classes. | 340 |
 | `_quiet` | ''tl.errors.quiet'': the one switch that silences TorchLens warnings. | 92 |
 | `episode` | Episode-capture and bundle-relation exception families (L2 core). | 288 |
