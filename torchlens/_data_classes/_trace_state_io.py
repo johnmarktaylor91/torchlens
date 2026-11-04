@@ -423,9 +423,8 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
-        # "_build_state" is the pre-M10 flat scratchpad key; the three
-        # workspace keys are its dissolved successors. All transient,
-        # all dropped on restore.
+        # "_build_state": the pre-M10 flat scratchpad; the three workspace keys are its
+        # dissolved successors. All transient, all dropped on restore.
         "_build_state",
         "_raw_graph_ws",
         "_module_capture_ws",
@@ -510,13 +509,10 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         }
     if state["_options_backward_ready"] is None:
         state["_options_backward_ready"] = False
-    # The 3.0 writer stores an empty derived-gradient accessor as its member list ``[]``;
-    # load gives the accessor back, as a live trace holds it.
-    if state.get("_autograd_derived_grads") == []:
+    if state.get("_autograd_derived_grads") == []:  # 3.0 writes an empty accessor as []
         state["_autograd_derived_grads"] = DerivedGradAccessor()
-    # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never
-    # re-records, so load restores the default and the queryable record falls
-    # back to the saved-payload basis).
+    # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never re-records, so load
+    # restores the default and the queryable record falls back to the saved-payload basis).
     for knob in _SESSION_BOOL_KNOBS:
         if state.get(knob) is None:
             state[knob] = False

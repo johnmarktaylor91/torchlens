@@ -1886,11 +1886,10 @@ class Module:
             "training": True,
         }
         default_fill_state(state, defaults=module_setstate_defaults)
-        # Repair present-but-wrong-typed container fields from legacy states.
-        # `default_fill_state` only fills absent keys; this closes the same
-        # gap `Trace`/`Op` already close for their own fields. `ops`/`params`/
-        # `recursive_params` are accessor classes handled separately below,
-        # not plain containers, so they are intentionally absent from
+        # Repair present-but-wrong-typed container fields from legacy states. `default_fill_state`
+        # only fills absent keys; this closes the same gap `Trace`/`Op` already close for their
+        # own fields. `ops`/`params`/`recursive_params` are accessor classes handled separately
+        # below, not plain containers, so they are intentionally absent from
         # `_MODULE_CONTAINER_DEFAULTS`.
         coerce_container_typed_state(state, module_setstate_defaults)
         from .._io.state_keys import refuse_callable_shadowing_state_keys

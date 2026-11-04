@@ -856,10 +856,9 @@ class Param:
             "_grad_records": [],  # DROP: a 3.0 row has no column; grads reads it
         }
         default_fill_state(state, defaults=param_setstate_defaults)
-        # Repair present-but-wrong-typed container fields from legacy states
-        # (e.g. `co_parent_params` serialized as a `set` where a `list` is now
-        # declared). `default_fill_state` only fills absent keys; this closes
-        # the same gap `Trace`/`Op` already close for their own fields.
+        # Repair present-but-wrong-typed legacy container fields (e.g. `co_parent_params` stored
+        # as a `set` where a `list` is now declared). `default_fill_state` only fills absent keys;
+        # this closes the same gap `Trace`/`Op` already close for their own fields.
         coerce_container_typed_state(state, param_setstate_defaults)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
