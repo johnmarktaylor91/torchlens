@@ -1,6 +1,7 @@
 """``Recipe.save(path)`` writes a ``kind: "recipe"`` artifact that ``tl.load`` returns as a Recipe.
 
-The artifact holds the authored rules alone: no trace, model or fire records.
+The artifact holds the authored rules alone: no trace, model or fire records,
+in the 3.0 saved format (``intervention.json`` plus ``blobs/recipe-<nnnn>``).
 A rule whose WHERE term is a predicate has no portable form and refuses below
 the audit level; an audit record is not loadable and says so typed.
 """
@@ -14,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from example_models import TinyLinearRelu
 
 import torchlens as tl
@@ -42,10 +44,11 @@ def test_recipe_round_trips_through_tlspec(tmp_path: Path) -> None:
 
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["kind"] == "recipe"
-    spec_json = json.loads((path / "spec.json").read_text(encoding="utf-8"))
-    assert spec_json["executable"] is True
-    assert len(spec_json["recipe"]["rules"]) == 2
-    assert len(manifest["tensor_entries"]) == 1, "the steer direction travels as a sidecar"
+    document = json.loads((path / "intervention.json").read_text(encoding="utf-8"))
+    assert document["executable"] is True
+    assert len(document["rules"]) == 2
+    recipe_chunks = list((path / "blobs").glob("recipe-*.safetensors"))
+    assert len(recipe_chunks) == 1, "the steer direction travels as a recipe chunk"
 
     loaded = tl.load(path)
     assert isinstance(loaded, tl.Recipe)
@@ -79,8 +82,8 @@ def test_predicate_rule_is_not_portable_and_audit_record_is_not_loadable(tmp_pat
 
     audit_path = tmp_path / "audit.tlspec"
     recipe.save(audit_path, level="audit")
-    spec_json = json.loads((audit_path / "spec.json").read_text(encoding="utf-8"))
-    assert spec_json["executable"] is False
+    document = json.loads((audit_path / "intervention.json").read_text(encoding="utf-8"))
+    assert document["executable"] is False
     with pytest.raises(ReplayPreconditionError) as excinfo:
         tl.load(audit_path)
     assert excinfo.value.fields["code"] == "recipe_audit_only"
@@ -89,12 +92,9 @@ def test_predicate_rule_is_not_portable_and_audit_record_is_not_loadable(tmp_pat
 @pytest.mark.parametrize(
     ("file_name", "edit"),
     [
-        pytest.param("spec.json", lambda data: data.pop("recipe"), id="no_rules_list"),
+        pytest.param("intervention.json", lambda data: data.pop("rules"), id="no_rules_list"),
         pytest.param(
-            "spec.json", lambda data: data["recipe"]["rules"].append("not a rule"), id="bad_rule"
-        ),
-        pytest.param(
-            "manifest.json", lambda data: data.update(tensor_entries={}), id="entries_not_list"
+            "intervention.json", lambda data: data["rules"].append("not a rule"), id="bad_rule"
         ),
     ],
 )
@@ -109,6 +109,7 @@ def test_hand_edited_recipe_record_refuses_typed(
     data = json.loads(target.read_text(encoding="utf-8"))
     edit(data)
     target.write_text(json.dumps(data), encoding="utf-8")
+    redigest(path, file_name)
     with pytest.raises(ReplayPreconditionError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "recipe_record_malformed"

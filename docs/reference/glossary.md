@@ -767,10 +767,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Recipe.save and tl.load of a recipe** *(spelling documented-unstable)*
 : `Recipe.save(path, level="portable", overwrite=False)` writes the authored rules alone as a
   `.tlspec` directory whose manifest carries `kind: "recipe"` (no trace, model or fire records;
-  tensor arguments travel as sidecars), and `tl.load(path)` returns a `tl.Recipe` whose rule
+  tensor arguments travel in `blobs/recipe-<nnnn>.safetensors`), and `tl.load(path)` returns a `tl.Recipe` whose rule
   identities (`Recipe.digest`) equal the saved ones. A predicate WHERE term or an opaque callable
   edit has no portable form: it refuses below `"audit"` (`OpaqueCallableError`), and an audit
-  record, which stores it by repr, refuses `tl.load` with `recipe_audit_only`; a hand-edited or foreign record refuses with `recipe_record_malformed`. `level="runnable"`
+  record, which stores it as a callable placeholder, refuses `tl.load` with `recipe_audit_only`; a hand-edited or foreign record refuses with `recipe_record_malformed`. `level="runnable"`
   refuses `artifact_save_level_unsupported`: a recipe carries no model to run. The saved
   intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is the lowered,
   capture-bound form and still loads as an `InterventionSpec`.

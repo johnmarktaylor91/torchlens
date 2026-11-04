@@ -35,7 +35,9 @@ safetensors payload codecs, the writer identity stamp and the writer contract di
 
 A bundle is `manifest.json` with `kind: "bundle"`, `members/<index>-<name>/` holding one trace
 artifact each, and `relations.json`. A recipe saved on its own by `save_intervention` is
-`manifest.json` with `kind: "intervention"`, `intervention.json` and its `blobs/`.
+`manifest.json` with `kind: "intervention"`, `intervention.json` and its `blobs/`. An authored
+`tl.Recipe` saved by `Recipe.save` is `manifest.json` with `kind: "recipe"`, `intervention.json`
+holding one rule per clause (section 5) and its `blobs/`.
 
 ### manifest.json
 

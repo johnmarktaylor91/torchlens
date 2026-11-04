@@ -2,15 +2,18 @@
 
 A recipe is the AUTHORED intervention: ``tl.when(selector, edit)`` clauses that
 have not been lowered against any capture. It is saved on its own, with no
-trace, model or fire records: ``spec.json`` carries one ``{"target", "edit"}``
-payload per rule in the same codec the intervention-spec artifact uses, tensor
-arguments go to ``tensors/`` sidecars, and ``manifest.json`` stamps
-``kind: "recipe"`` so ``tl.load`` returns a :class:`Recipe`.
+trace, model or fire records, in the 3.0 saved format: ``manifest.json`` stamps
+``kind: "recipe"``, ``intervention.json`` carries one rule per clause in the
+intervention-recipe grammar (the selector and the built-in ``Edit`` identity;
+``docs/maintainers/saved_format_3.md``, section 5), and tensor arguments go to
+``blobs/recipe-<nnnn>.safetensors``. ``tl.load`` returns a :class:`Recipe`.
 
-Rules with runtime-only WHERE terms (bare predicates, ``tl.where``) and opaque
-callable edits have no portable form: they refuse at the ``"portable"`` level
-through the shared codec and are recorded as audit-only opaque payloads at
-``"audit"``, which ``tl.load`` then refuses typed (``recipe_audit_only``).
+Rules with runtime-only WHERE terms (bare predicates, ``tl.where``) and user
+callable edits have no portable form: a user callable is never written, it is a
+``callable_placeholder``, so such a recipe refuses at the ``"portable"`` level
+and is recorded with ``executable`` false at ``"audit"`` and
+``"executable_with_callables"``, which ``tl.load`` then refuses typed
+(``recipe_audit_only``).
 """
 
 from __future__ import annotations
@@ -21,65 +24,64 @@ import uuid
 import warnings
 from collections.abc import Collection
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from .._errors import InvalidArgumentError
-from .._io.manifest import TensorEntry
+from .._io._durability import fsync_tree
+from .._io.format3.contract import INTERVENTION_FILE
+from .._io.format3.payloads import PayloadStore
+from .._io.format3.reader import validate_artifact
+from .._io.format3.recipe import RecipeHeader, build_recipe, read_recipe, write_recipe
+from .._io.format3.writer import EnvelopeSpec, envelope_fields
 from .._io.tlspec import _TlSpecWriter
 from .._ir.selector_eval import selector_from_spec
 from .._selection.selector_base import BaseSelector
 from .._selection.selectors import where
-from ._spec_codec import (
-    _SPEC_FILE,
-    TLSPEC_FORMAT_VERSION,
-    _target_spec_from_json,
-    _target_spec_to_json,
-    _validate_format_version,
-)
-from ._spec_values import (
-    SaveLevel,
-    _coerce_save_level,
-    _deserialize_value,
-    _serialize_value,
-    _SerializedState,
-)
+from ._rerun_predicate import spec_from_recipe
+from ._spec_values import SaveLevel, _coerce_save_level
 from .errors import ReplayPreconditionError
-from .helpers import HELPER_REGISTRY_VERSION
-from .save import (
-    _MANIFEST_FILE,
-    _README_FILE,
-    _TENSOR_DIR,
-    _collect_helpers,
-    _fsync_directory,
-    _load_tensor_refs,
-    _read_json_file,
-    _reject_symlink_path,
-    _spec_has_opaque,
-    _write_json_file,
-    _write_tensor_sidecars,
-    _write_text_file,
-)
+from .save import _MANIFEST_FILE, _fsync_directory, _read_json_file, _reject_symlink_path
 from .spec import Recipe, Rule
 
-#: Name of the rule-list object inside ``spec.json`` for a recipe artifact.
-_RECIPE_KEY = "recipe"
+
+class _RuleHook(NamedTuple):
+    """One authored rule in the staged-hook shape the recipe grammar encodes."""
+
+    site_target: Any
+    helper: Any
+    hook: Any
+    metadata: dict[str, Any]
+
+
+class _RecipeRules(NamedTuple):
+    """The authored rules of a recipe in the staged-spec shape the grammar reads."""
+
+    hook_specs: tuple[_RuleHook, ...]
+    target_value_specs: tuple[Any, ...] = ()
+
+
+def _rule_hook(rule: Any) -> _RuleHook:
+    """Return one rule as its target spec and edit."""
+
+    target = rule.target if isinstance(rule.target, BaseSelector) else where(rule.target)
+    return _RuleHook(target.to_target_spec(), rule.edit, rule.edit, {})
 
 
 def _write_recipe_manifest(
     *,
     path: Path,
     recipe: Recipe,
-    spec_json: dict[str, Any],
-    tensor_entries: list[TensorEntry],
+    document: dict[str, Any],
+    envelope: dict[str, Any],
 ) -> None:
     """Write the unified manifest of a standalone recipe (``kind: "recipe"``).
 
     The recipe carries no model and no sites, so the manifest's model fields
-    describe the recipe class itself; the save level is read from ``spec_json``
-    and the manifest's ``format_version`` is the intervention codec version.
+    describe the recipe class itself; the save level is read from the recipe
+    document and the 3.0 envelope fields are written last.
     """
 
-    save_level = str(spec_json["save_level"])
+    save_level = str(document["save_level"])
     if save_level == "runnable":
         raise InvalidArgumentError(
             "Recipe artifacts do not support save_level='runnable': a recipe "
@@ -89,61 +91,46 @@ def _write_recipe_manifest(
             artifact_kind="recipe",
         )
     compat = {
-        "format_version": spec_json.get("format_version"),
-        "helper_registry_version": spec_json.get("helper_registry_version"),
-        "executable": bool(spec_json.get("executable", False)),
-        "digest": spec_json.get("digest"),
+        "format_version": document.get("format_version"),
+        "helper_registry_version": document.get("helper_registry_version"),
+        "executable": bool(document.get("executable", False)),
+        "digest": recipe.digest,
     }
-    manifest = {
-        "format_version": TLSPEC_FORMAT_VERSION,
-        "tensor_entries": [entry.to_dict() for entry in tensor_entries],
-    }
-    manifest.update(
-        _TlSpecWriter.build_manifest(
-            kind="recipe",
-            source=recipe,
-            tensor_entries=tensor_entries,
-            save_level=save_level,
-            spec_compat_info=compat,
-            intervention_compat_metadata=None,
-        )
+    manifest = _TlSpecWriter.build_manifest(
+        kind="recipe",
+        source=recipe,
+        tensor_entries=[],
+        save_level=save_level,
+        spec_compat_info=compat,
+        intervention_compat_metadata=None,
     )
+    manifest.pop("tensor_entries", None)
+    manifest.update(envelope)
     _TlSpecWriter.write_json(path, manifest)
 
 
-def _write_recipe_tree(
-    tmp_path: Path,
-    recipe: Recipe,
-    save_level: SaveLevel,
-    state: _SerializedState,
-    tensor_entries: list[TensorEntry],
-) -> None:
-    """Fill the temporary ``.tlspec`` directory: tensors, spec, manifest, README, fsync."""
+def _write_recipe_tree(tmp_path: Path, recipe: Recipe, save_level: SaveLevel) -> None:
+    """Fill the temporary ``.tlspec`` directory: recipe, tensors, manifest, fsync."""
 
     tmp_path.mkdir(parents=True)
-    (tmp_path / _TENSOR_DIR).mkdir()
-    rules = [_serialize_rule(rule, save_level, state) for rule in recipe.rules]
-    _write_tensor_sidecars(tmp_path, state.tensor_refs, tensor_entries, write_tensor_blob_fn=None)
-    payload = {_RECIPE_KEY: {"rules": rules}}
-    spec_json = {
-        "format_version": TLSPEC_FORMAT_VERSION,
-        "helper_registry_version": HELPER_REGISTRY_VERSION,
-        "save_level": save_level.value,
-        "executable": save_level != SaveLevel.AUDIT and not _spec_has_opaque(payload),
-        "helpers": _collect_helpers(payload),
-        "digest": recipe.digest,
-        **payload,
-    }
-    _write_json_file(tmp_path / _SPEC_FILE, spec_json)
+    store = PayloadStore(tmp_path)
+    rules = _RecipeRules(tuple(_rule_hook(rule) for rule in recipe.rules))
+    document, disclosures = build_recipe(
+        rules, store=store, header=RecipeHeader(save_level=save_level.value)
+    )
+    entry = write_recipe(tmp_path, document)
+    store.close()
+    envelope = envelope_fields(
+        tmp_path,
+        EnvelopeSpec("recipe", save_level.value, codecs=store.codecs, disclosures=disclosures),
+    )
     _write_recipe_manifest(
         path=tmp_path / _MANIFEST_FILE,
         recipe=recipe,
-        spec_json=spec_json,
-        tensor_entries=tensor_entries,
+        document=document,
+        envelope={**envelope, "intervention": entry},
     )
-    _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-    _fsync_directory(tmp_path / _TENSOR_DIR)
-    _fsync_directory(tmp_path)
+    fsync_tree(tmp_path)
 
 
 def _restore_after_failed_save(tmp_path: Path, target_path: Path, backup_path: Path | None) -> None:
@@ -188,7 +175,7 @@ def save_recipe(
     Raises
     ------
     OpaqueCallableError
-        A predicate WHERE term or an opaque callable edit below ``"audit"``.
+        A predicate WHERE term or a user callable edit at ``"portable"``.
     FileExistsError
         The path exists and ``overwrite`` is ``False``.
     """
@@ -198,12 +185,10 @@ def save_recipe(
     _reject_symlink_path(target_path, context="recipe target")
     tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
     backup_path: Path | None = None
-    tensor_entries: list[TensorEntry] = []
-    state = _SerializedState(tensor_entries=tensor_entries, tensor_refs={})
     try:
         if target_path.exists() and not overwrite:
             raise FileExistsError(f"Recipe path already exists: {target_path}")
-        _write_recipe_tree(tmp_path, recipe, save_level, state, tensor_entries)
+        _write_recipe_tree(tmp_path, recipe, save_level)
         if target_path.exists():
             if not overwrite:
                 raise FileExistsError(f"Recipe path already exists: {target_path}")
@@ -225,40 +210,26 @@ _MALFORMED_REMEDY = (
 
 
 def _audit_only_recipe(spec_path: Path, save_level: object) -> ReplayPreconditionError:
-    """The typed refusal for a recipe record whose payloads cannot be rebuilt."""
+    """The typed refusal for a recipe record whose rules cannot be rebuilt."""
 
     return ReplayPreconditionError(
         f"{spec_path} is an audit-only recipe record (save_level={save_level!r}): a "
-        "predicate WHERE term or an opaque callable edit was recorded by repr and cannot "
-        "be rebuilt into a Recipe. Read spec.json for the record; to make a loadable "
-        "recipe, express every WHERE term as a selector (tl.func / tl.in_module / tl.site "
-        "/ tl.label) and every edit as a helper, then save at level 'portable'.",
+        "predicate WHERE term or a user callable edit was recorded as a callable "
+        "placeholder and cannot be rebuilt into a Recipe. Read intervention.json for the "
+        "record; to make a loadable recipe, express every WHERE term as a selector "
+        "(tl.func / tl.in_module / tl.site / tl.label) and every edit as a helper, then "
+        "save at level 'portable'.",
         code="recipe_audit_only",
     )
 
 
-def _manifest_tensor_entries(spec_path: Path) -> list[TensorEntry]:
-    """Read the manifest's tensor entries, refusing a malformed list with the file named."""
-
-    manifest = _read_json_file(spec_path / _MANIFEST_FILE)
-    manifest_entries = manifest.get("tensor_entries", [])
-    if not isinstance(manifest_entries, list):
-        raise ReplayPreconditionError(
-            f"{spec_path / _MANIFEST_FILE} field 'tensor_entries' must be a list, "
-            f"got {type(manifest_entries).__name__}",
-            code="recipe_record_malformed",
-            remedy=_MALFORMED_REMEDY,
-        )
-    return [TensorEntry.from_dict(e) for e in manifest_entries]
-
-
 def _require_rule_object(rule_payload: Any, index: int, spec_path: Path) -> None:
-    """Refuse a recipe rule that is not an object carrying ``target`` and ``edit``."""
+    """Refuse a recipe rule that is not an object carrying ``selector`` and ``edit``."""
 
-    if not isinstance(rule_payload, dict) or "target" not in rule_payload:
+    if not isinstance(rule_payload, dict) or not {"selector", "edit"} <= set(rule_payload):
         raise ReplayPreconditionError(
-            f"{spec_path / _SPEC_FILE} recipe rule {index} must be an object with "
-            "'target' and 'edit'",
+            f"{spec_path / INTERVENTION_FILE} recipe rule {index} must be an object with "
+            "'selector' and 'edit'",
             code="recipe_record_malformed",
             remedy=_MALFORMED_REMEDY,
         )
@@ -275,12 +246,10 @@ def load_recipe(
     Parameters
     ----------
     path:
-        Directory containing ``spec.json``, ``manifest.json`` and ``tensors/``.
-    trust_custom_callables:
-        Explicit permission to import custom callables recorded in an
-        ``"executable_with_callables"`` save when no allowlist is supplied.
-    allowed_custom_callable_modules:
-        Optional allowlist of custom callable module names.
+        Directory containing ``manifest.json``, ``intervention.json`` and ``blobs/``.
+    trust_custom_callables, allowed_custom_callable_modules:
+        Accepted for the ``tl.load`` model-free door; a 3.0 recipe never carries a
+        callable, so neither changes what loads.
 
     Returns
     -------
@@ -290,79 +259,51 @@ def load_recipe(
     Raises
     ------
     ReplayPreconditionError
-        ``recipe_audit_only`` for audit-only opaque payloads (a predicate WHERE term
-        or an opaque edit); ``recipe_record_malformed`` for a malformed file, named.
+        ``recipe_audit_only`` for a record holding a callable placeholder (a
+        predicate WHERE term or a user callable edit); ``recipe_record_malformed``
+        for a malformed rule list, named.
     """
 
+    del trust_custom_callables, allowed_custom_callable_modules
     spec_path = Path(path)
     _reject_symlink_path(spec_path, context="recipe path")
-    _reject_symlink_path(spec_path / _SPEC_FILE, context="recipe spec.json")
+    _reject_symlink_path(spec_path / INTERVENTION_FILE, context="recipe intervention.json")
     _reject_symlink_path(spec_path / _MANIFEST_FILE, context="recipe manifest.json")
-    data = _read_json_file(spec_path / _SPEC_FILE)
-    _validate_format_version(data.get("format_version"), path=spec_path)
+    validate_artifact(spec_path, expect_kind="recipe")
+    data = _read_json_file(spec_path / INTERVENTION_FILE)
     rules_payload = _recipe_rules_payload(data, spec_path)
     if not bool(data.get("executable", False)):
         raise _audit_only_recipe(spec_path, data.get("save_level"))
-    tensors = _load_tensor_refs(spec_path, _manifest_tensor_entries(spec_path))
-    rules: list[Rule] = []
     for index, rule_payload in enumerate(rules_payload):
         _require_rule_object(rule_payload, index, spec_path)
-        target = _target_spec_from_json(rule_payload["target"])
-        selector = selector_from_spec(
-            target.selector_kind, target.selector_value, target.metadata, lifecycle="capture"
+    spec = spec_from_recipe(read_recipe(spec_path))
+    rules = tuple(
+        Rule(
+            selector_from_spec(
+                hook.site_target.selector_kind,
+                hook.site_target.selector_value,
+                hook.site_target.metadata,
+                lifecycle="capture",
+            ),
+            hook.helper,
         )
-        edit = _deserialize_value(
-            rule_payload.get("edit"),
-            tensors,
-            trust_custom_callables=trust_custom_callables,
-            allowed_custom_callable_modules=allowed_custom_callable_modules,
-        )
-        rules.append(Rule(selector, edit))
-    return Recipe(rules=tuple(rules))
-
-
-def _serialize_rule(rule: Any, save_level: SaveLevel, state: _SerializedState) -> dict[str, Any]:
-    """Serialize one rule as its target spec and edit payload."""
-
-    target = rule.target if isinstance(rule.target, BaseSelector) else where(rule.target)
-    return {
-        "rule_id": rule.rule_id,
-        "target": _target_spec_to_json(target.to_target_spec(), save_level),
-        "edit": _serialize_value(rule.edit, save_level, state),
-    }
+        for hook in spec.hook_specs
+    )
+    return Recipe(rules=rules)
 
 
 def _recipe_rules_payload(data: dict[str, Any], spec_path: Path) -> list[Any]:
-    """Return the rule list of a recipe ``spec.json``, refusing malformed shapes."""
+    """Return the rule list of a recipe ``intervention.json``, refusing malformed shapes."""
 
-    recipe_payload = data.get(_RECIPE_KEY)
-    if not isinstance(recipe_payload, dict) or not isinstance(recipe_payload.get("rules"), list):
+    rules = data.get("rules")
+    if not isinstance(rules, list):
         raise ReplayPreconditionError(
-            f"{spec_path / _SPEC_FILE} is missing its 'recipe.rules' list; the file is "
+            f"{spec_path / INTERVENTION_FILE} is missing its 'rules' list; the file is "
             "not a TorchLens recipe or was hand-edited",
             code="recipe_record_malformed",
             remedy=_MALFORMED_REMEDY,
         )
-    return list(recipe_payload["rules"])
-
-
-def _readme_text(spec_json: dict[str, Any], tensor_entries: list[TensorEntry]) -> str:
-    """Render the human-readable README for a recipe artifact."""
-
-    rules = spec_json[_RECIPE_KEY]["rules"]
-    lines = [
-        "# TorchLens recipe",
-        "",
-        f"Format version: {spec_json['format_version']}",
-        f"Save level: {spec_json['save_level']}",
-        f"Executable: {spec_json['executable']}",
-        f"Rules: {len(rules)}",
-        f"Tensor sidecars: {len(tensor_entries)}",
-        "",
-        "Load with `torchlens.load(path)`; the result is a `torchlens.Recipe`.",
-        "",
-    ]
-    return "\n".join(lines)
+    return list(rules)
 
 
 __all__ = ["load_recipe", "save_recipe"]
