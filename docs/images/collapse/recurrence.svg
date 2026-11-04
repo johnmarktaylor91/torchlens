@@ -15,7 +15,7 @@
 <!-- input_1 -->
 <g id="node1" class="node">
 <title>input_1</title>
-<ellipse fill="#009e73" stroke="black" cx="73.75" cy="-47.55" rx="53.39" ry="47.55"/>
+<ellipse fill="#98fb98" stroke="black" cx="73.75" cy="-47.55" rx="53.39" ry="47.55"/>
 <text xml:space="preserve" text-anchor="start" x="49.75" y="-62.88" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
 <text xml:space="preserve" text-anchor="start" x="46" y="-42.13" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text xml:space="preserve" text-anchor="start" x="46.75" y="-22.38" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
@@ -23,7 +23,7 @@
 <!-- linear_1_1 -->
 <g id="node2" class="node">
 <title>linear_1_1</title>
-<polygon fill="#c0c0c0" stroke="black" points="147.5,-252.86 0,-252.86 0,-146.11 147.5,-146.11 147.5,-252.86"/>
+<polygon fill="#d9d9d9" stroke="black" points="147.5,-252.86 0,-252.86 0,-146.11 147.5,-146.11 147.5,-252.86"/>
 <text xml:space="preserve" text-anchor="start" x="26.88" y="-234.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_1 (x4)</text>
 <text xml:space="preserve" text-anchor="start" x="46" y="-213.81" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text xml:space="preserve" text-anchor="start" x="32.5" y="-194.06" font-family="Helvetica,sans-Serif" font-size="14.00">in_features=4</text>
@@ -48,7 +48,7 @@
 <!-- output_1 -->
 <g id="node3" class="node">
 <title>output_1</title>
-<ellipse fill="#d55e00" stroke="black" cx="73.75" cy="-351.41" rx="54.45" ry="47.55"/>
+<ellipse fill="#ff9999" stroke="black" cx="73.75" cy="-351.41" rx="54.45" ry="47.55"/>
 <text xml:space="preserve" text-anchor="start" x="45.25" y="-366.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text xml:space="preserve" text-anchor="start" x="46" y="-345.98" font-family="Helvetica,sans-Serif" font-size="14.00">(4,), 16 B</text>
 <text xml:space="preserve" text-anchor="start" x="47.88" y="-326.23" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
