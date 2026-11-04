@@ -763,3 +763,25 @@ def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
     events = _fork_events(_capture())
     assert events <= _FORK_EVENT_BAR, events
     assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
+
+
+def test_fork_stays_cheap_while_a_deferred_capture_is_alive() -> None:
+    """A live capture with deferred payloads adds nothing a later fork pays for.
+
+    The registry is armed for as long as any capture holding deferred payloads is
+    alive, as it is whenever an earlier test in the same process keeps one. A fork's
+    tensor deep copies once searched the armed registry on every ``set_``, which put
+    the fork over the bar only when it ran after such a test. Holding the capture
+    here makes that a plain red in any order.
+    """
+
+    before = set(tensor_utils._DEFER_PENDING)
+    held = tl.trace(_Paramless(), torch.ones(4, 4))
+    try:
+        minted = _pending_keys(alive=True) - before
+        assert minted, "the held capture must keep live deferred keys"
+        events = _fork_events(_capture())
+    finally:
+        del held
+        gc.collect()
+    assert events <= _FORK_EVENT_BAR, events
