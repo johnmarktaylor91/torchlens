@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1585 modules, 678455 lines, 0 modules without a docstring.
+83 packages, 1585 modules, 678456 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5418 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 74 | 31902 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 74 | 31903 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4767 |
 
 ## Modules by package
@@ -2166,7 +2166,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (74 modules, 31902 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (74 modules, 31903 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2217,7 +2217,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_norm_zero_weight_proof` | Value proof for a normalization input annihilated by an all-zero affine weight. | 146 |
 | `_operand_value_proofs` | Value proofs for calls whose perturbed operand provably cannot reach the output. | 472 |
 | `_output_walk` | Validation-owned independent output-tensor traversal ( R74/75-1). | 98 |
-| `_perturb` | Validation perturbations: a random wrong value per dtype for the replay tripwire. | 248 |
+| `_perturb` | Validation perturbations: a random wrong value per dtype for the replay tripwire. | 249 |
 | `_posthoc_decision` | The structured decision every posthoc perturbation predicate returns. | 29 |
 | `_pre_replay` | Pre-replay verdicts: ops validation settles before any replay is attempted. | 148 |
 | `_pristine` | Pristine-torch context for wrap-state-independent validation oracles. | 145 |
