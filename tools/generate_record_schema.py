@@ -86,6 +86,12 @@ _GROUP_FIELDS = {"equivalent_ops", "recurrent_ops"}
 #: result depends on whether the backend module is imported.
 _OVERLAY_EDGE_FIELDS = {"input_ancestors", "output_descendants"}
 
+#: Stored fields fronted by a property that reads the stored slot back (the
+#: ``Trace.transformed_output`` getter refuses a stale replay marker). The
+#: value is stored data, not derived, so it classifies by its policy like
+#: any stored field instead of as COMPUTED.
+_STORED_BEHIND_PROPERTY_FIELDS = {"transformed_output"}
+
 #: Copy-on-read alias-barrier fields (FORK-1 default: fresh copies).
 _COPY_ON_READ_FIELDS = {"equivalent_ops", "recurrent_ops"}
 
@@ -249,7 +255,8 @@ def _classify(
         return "BITSET", "mutable_container"
     if name in _GROUP_FIELDS:
         return "GROUP", "mutable_container"
-    if _is_property(cls, name) and name not in _OVERLAY_EDGE_FIELDS:
+    stored = name in _OVERLAY_EDGE_FIELDS or name in _STORED_BEHIND_PROPERTY_FIELDS
+    if _is_property(cls, name) and not stored:
         return "COMPUTED", "immutable"
     if policy.portable_policy is FieldPolicy.DROP:
         return "RUNTIME", "immutable"

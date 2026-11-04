@@ -2396,7 +2396,7 @@ docs-md	docs/maintainers/docstring_examples_census.md	1062
 docs-md	docs/maintainers/docstring_examples_census.md	11
 docs-md	docs/maintainers/docstring_examples_census.md	12
 docs-md	docs/maintainers/docstring_examples_census.md	14
-docs-md	docs/maintainers/docstring_examples_census.md	1495.
+docs-md	docs/maintainers/docstring_examples_census.md	1496.
 docs-md	docs/maintainers/docstring_examples_census.md	16
 docs-md	docs/maintainers/docstring_examples_census.md	19
 docs-md	docs/maintainers/docstring_examples_census.md	20
@@ -3138,9 +3138,9 @@ docs-md	docs/maintainers/where.md	339
 docs-md	docs/maintainers/where.md	34
 docs-md	docs/maintainers/where.md	340
 docs-md	docs/maintainers/where.md	341
-docs-md	docs/maintainers/where.md	34150
 docs-md	docs/maintainers/where.md	3418
 docs-md	docs/maintainers/where.md	342
+docs-md	docs/maintainers/where.md	34243
 docs-md	docs/maintainers/where.md	343
 docs-md	docs/maintainers/where.md	344
 docs-md	docs/maintainers/where.md	346
@@ -3196,7 +3196,7 @@ docs-md	docs/maintainers/where.md	392
 docs-md	docs/maintainers/where.md	393
 docs-md	docs/maintainers/where.md	394
 docs-md	docs/maintainers/where.md	395
-docs-md	docs/maintainers/where.md	39523
+docs-md	docs/maintainers/where.md	39570
 docs-md	docs/maintainers/where.md	397
 docs-md	docs/maintainers/where.md	398
 docs-md	docs/maintainers/where.md	399
@@ -6117,7 +6117,6 @@ package-docstrings	torchlens/_io/scrub.py	10
 package-docstrings	torchlens/_io/scrub.py	1041
 package-docstrings	torchlens/_io/scrub.py	2026
 package-docstrings	torchlens/_io/scrub.py	3.0
-package-docstrings	torchlens/_io/scrub.py	68
 package-docstrings	torchlens/_io/scrub.py	69
 package-docstrings	torchlens/_io/sidecar.py	0.25
 package-docstrings	torchlens/_io/sidecar.py	1048576
