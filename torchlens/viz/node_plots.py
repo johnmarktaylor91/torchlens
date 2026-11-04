@@ -9,6 +9,8 @@ from typing import Any, TypeAlias, cast
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .. import _entry_refusals as _refusals
+
 # Historical import homes: the axis-selection internals moved to
 # _heatmap_axes.py in the file-size split; existing tests import them here.
 from ._heatmap_axes import (
@@ -129,11 +131,10 @@ def heatmap(
     """
 
     _validate_size(width, height)
-    if max_axis_items < 1:
-        raise ValueError("max_axis_items must be at least 1.")
+    _refusals.refuse_if_below("max_axis_items", max_axis_items, 1)
     array = np.asarray(_as_numpy(data), dtype=np.float64)
     if array.ndim != 2:
-        raise ValueError("heatmap expects a 2D array.")
+        _refusals.refuse_viz_shape("heatmap expects a 2D array")
 
     normalized = _normalize_finite(array, vmin, vmax)
     colors = _apply_colormap(normalized, cmap)
@@ -270,13 +271,13 @@ def lineplot(
     if values.ndim == 1:
         values = values[np.newaxis, :]
     if values.ndim != 2 or values.shape[1] == 0:
-        raise ValueError("render_lineplot expects shape [K] or [S, K] with K > 0.")
+        _refusals.refuse_viz_shape("render_lineplot expects shape [K] or [S, K] with K > 0")
     n_series, n_points = values.shape
     xs: np.ndarray[Any, np.dtype[np.float64]] = np.arange(n_points, dtype=np.float64)
     if x_values is not None:
         xs = np.asarray(_as_numpy(x_values), dtype=np.float64)
         if xs.ndim != 1 or xs.shape[0] != n_points:
-            raise ValueError("x_values must have shape [K].")
+            _refusals.refuse_viz_shape("x_values must have shape [K]")
 
     # A point is drawable only when BOTH its x and y are finite. Checking the
     # two axes independently accepted inputs with finite y's and finite x's at
@@ -285,14 +286,14 @@ def lineplot(
     finite_x = xs[finite_x_mask]
     finite_pairs = np.isfinite(values) & finite_x_mask[np.newaxis, :]
     if not np.any(finite_pairs):
-        raise ValueError("render_lineplot requires at least one finite (x, y) point.")
+        _refusals.refuse_viz_nonfinite("render_lineplot requires at least one finite (x, y) point")
     # The auto y-range must reflect only points that will actually be drawn, so
     # a y-value sitting at a non-finite x column does not stretch the axis.
     plotted_y = values[finite_pairs]
     low_y = float(np.min(plotted_y)) if y_min is None else float(y_min)
     high_y = float(np.max(plotted_y)) if y_max is None else float(y_max)
     if not np.isfinite(low_y) or not np.isfinite(high_y):
-        raise ValueError("y_min and y_max must be finite when provided.")
+        _refusals.refuse_viz_nonfinite("y_min and y_max must be finite when provided")
     if high_y < low_y:
         low_y, high_y = high_y, low_y
     if high_y == low_y:
@@ -448,21 +449,17 @@ def image_scatter(
     (200, 200)
     """
 
-    if max_items < 1:
-        raise ValueError("max_items must be at least 1.")
-    if thumbnail_size < 4:
-        raise ValueError("thumbnail_size must be at least 4.")
-    if canvas_size <= thumbnail_size * 2:
-        raise ValueError("canvas_size must be larger than twice thumbnail_size.")
+    _refusals.refuse_if_below("max_items", max_items, 1)
+    _refusals.refuse_if_below("thumbnail_size", thumbnail_size, 4)
+    _refusals.refuse_if_canvas_too_small(canvas_size, thumbnail_size)
     array = np.asarray(_as_numpy(coords), dtype=np.float64)
     if array.ndim != 2 or array.shape[1] != 2:
-        raise ValueError("render_image_scatter expects coords with shape [N, 2].")
+        _refusals.refuse_viz_shape("render_image_scatter expects coords with shape [N, 2]")
     if array.shape[0] == 0:
-        raise ValueError("render_image_scatter requires at least one coordinate.")
+        _refusals.refuse_viz_empty("render_image_scatter requires at least one coordinate")
     if not np.all(np.isfinite(array)):
-        raise ValueError("coords must contain only finite values.")
-    if images is not None and len(images) < min(max_items, array.shape[0]):
-        raise ValueError("images must contain at least the number of drawn coordinates.")
+        _refusals.refuse_viz_nonfinite("coords must contain only finite values")
+    _refusals.refuse_if_too_few_images(images, min(max_items, array.shape[0]))
 
     shown_count = min(max_items, array.shape[0])
     margin = thumbnail_size / 2.0 + _SCATTER_CAPTION_RESERVE

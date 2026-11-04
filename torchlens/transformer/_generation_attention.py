@@ -16,8 +16,10 @@ the cells to its right are keys that did not exist yet. They hold zero, and
 the view carries no mask source unless the caller passes ``mask=`` (D6:
 zero-valued cells are never read as a mask).
 
-Spellings are private until the naming ruling (the generation door is
-documented-unstable).
+The public door is ``tl.transformer.attention_view(generation, layer, step=k)``,
+which calls :func:`generation_attention_view`. The every-layer form
+:func:`generation_attention_views` has no public spelling yet (the generation door
+is documented-unstable).
 """
 
 from __future__ import annotations
