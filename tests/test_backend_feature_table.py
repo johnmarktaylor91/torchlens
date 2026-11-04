@@ -454,7 +454,9 @@ def _save_and_load(subject: _Subject, tmp_path: Path) -> None:
     op = _act_op(trace, subject.act_func)
     path = tmp_path / "trace.tlspec"
     trace.save(str(path))
-    np.testing.assert_allclose(_np(tl.load(str(path))[op.label].out), _np(op.out))
+    # Hold the loaded Trace while reading its op: an op does not keep its trace alive.
+    loaded = tl.load(str(path))
+    np.testing.assert_allclose(_np(loaded[op.label].out), _np(op.out))
 
 
 def _gradients(subject: _Subject, tmp_path: Path) -> None:

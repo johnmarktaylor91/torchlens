@@ -10,7 +10,7 @@
 <title>Loop</title>
 <polygon fill="white" stroke="none" points="-4,4 -4,-308.01 1362.2,-308.01 1362.2,4 -4,4"/>
 <text xml:space="preserve" text-anchor="start" x="8" y="-287.71" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">Loop</text>
-<text xml:space="preserve" text-anchor="start" x="8" y="-273.71" font-family="Helvetica,sans-Serif" font-size="14.00">8 layers (101 B)</text>
+<text xml:space="preserve" text-anchor="start" x="8" y="-273.71" font-family="Helvetica,sans-Serif" font-size="14.00">8 layers (11 ops, 149 B)</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-259.71" font-family="Helvetica,sans-Serif" font-size="14.00">40 params (160 B, all trainable)</text>
 <!-- input_1 -->
 <g id="node1" class="node">

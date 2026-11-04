@@ -254,6 +254,23 @@ CANONICAL_PAGES = (
     "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
+
+#: README fences are advertisements: one fence may mix setups or lean on names it
+#: never defines. The README's setup lives here, in the test, never in README
+#: markers. ``README_PRELUDE`` supplies the imports the loop fence elides; the
+#: ViT fence reads ``cat.jpg``, which the test writes as a plain synthetic image.
+README_PRELUDE = "import torch\nfrom torch import nn\n"
+#: README statements that need a model the page's shared namespace does not hold
+#: (the ResNet-18 line in the GPT-2 selection fence). Each is compiled, not run,
+#: and names the test that executes the same API spelling for real:
+#: (statement as written, covering test file, spelling the covering test must use).
+README_ILLUSTRATIVE_STATEMENTS: tuple[tuple[str, str, str], ...] = (
+    (
+        'trace["conv1"].projective_field.of(units, within=["layer1", "layer2"])',
+        "tests/test_field_view_of_resnet.py",
+        'trace["conv1"].projective_field.of(',
+    ),
+)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 
 
@@ -358,8 +375,33 @@ def _canonical_ambient() -> dict[str, Any]:
     return namespace
 
 
+def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
+    """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
+
+    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
+    if importlib.util.find_spec("PIL") is None:
+        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    from PIL import Image
+
+    Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
+    exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
+
+
+def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
+    """Return whether one README statement is in README_ILLUSTRATIVE_STATEMENTS."""
+
+    return page_name == "README.md" and any(
+        ast.unparse(node) == ast.unparse(ast.parse(statement).body[0])
+        for statement, _, _ in README_ILLUSTRATIVE_STATEMENTS
+    )
+
+
 @pytest.mark.heavy
-@pytest.mark.parametrize("page_name", CANONICAL_PAGES)
+@pytest.mark.parametrize(
+    "page_name",
+    # The README runs real pretrained GPT-2 and ViT fences (a 144-run patching sweep included).
+    [pytest.param(p, marks=pytest.mark.slow) if p == "README.md" else p for p in CANONICAL_PAGES],
+)
 def test_canonical_page_python_blocks_execute(
     page_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -367,10 +409,12 @@ def test_canonical_page_python_blocks_execute(
 
     Fences run cumulatively in one shared namespace, statement by statement.
     The only tolerated non-executions are (a) fences whose first line carries an
-    explicit ``API sketch`` comment marker (compile-gated) and (b) statements
+    explicit ``API sketch`` comment marker (compile-gated), (b) statements
     that read a declared OPTIONAL ambient name (``tf_model``/``tf_x``) on a box
-    without the TensorFlow preview dependency. Any other failure is a
-    documentation bug or a harness gap and fails the gate.
+    without the TensorFlow preview dependency and (c) the README statements in
+    ``README_ILLUSTRATIVE_STATEMENTS`` (compiled; each names the test that runs
+    its spelling). Any other failure is a documentation bug or a harness gap
+    and fails the gate.
 
     Parameters
     ----------
@@ -387,6 +431,8 @@ def test_canonical_page_python_blocks_execute(
     blocks = BLOCK_RE.findall(page.read_text(encoding="utf-8"))
     assert blocks, f"{page_name} has no python fences"
     namespace = _canonical_ambient()
+    if page_name == "README.md":
+        _readme_setup(namespace, tmp_path)
     executed_statements = 0
     for block_index, code in enumerate(blocks, start=1):
         source_name = f"{page_name}:python-block-{block_index}"
@@ -394,6 +440,8 @@ def test_canonical_page_python_blocks_execute(
             compile(code, source_name, "exec")
             continue
         for node in ast.parse(code, filename=source_name).body:
+            if _is_readme_illustrative(page_name, node):
+                continue
             loads = {
                 name.id
                 for name in ast.walk(node)
@@ -413,6 +461,31 @@ def test_canonical_page_python_blocks_execute(
             exec(compile(statement, source_name, "exec"), namespace)
             executed_statements += 1
     assert executed_statements > 0, f"{page_name}: nothing executed"
+
+
+def test_readme_illustrative_statements_are_live_and_covered() -> None:
+    """Every README statement the page test skips is still in the README and covered.
+
+    A row whose statement left the README is stale; a row whose covering test
+    no longer exercises the same API spelling would leave that spelling unrun.
+    """
+
+    root = _docs_dir().parent
+    readme_statements = {
+        ast.unparse(node)
+        for code in BLOCK_RE.findall((root / "README.md").read_text(encoding="utf-8"))
+        for node in ast.parse(code).body
+    }
+    for statement, covering_test, spelling in README_ILLUSTRATIVE_STATEMENTS:
+        assert ast.unparse(ast.parse(statement).body[0]) in readme_statements, (
+            f"stale README_ILLUSTRATIVE_STATEMENTS row: {statement!r} is no longer in README.md"
+        )
+        assert spelling in statement, f"{statement!r} does not use its spelling {spelling!r}"
+        covering = root / covering_test
+        assert covering.is_file(), f"{covering_test} no longer exists"
+        assert spelling in covering.read_text(encoding="utf-8"), (
+            f"{covering_test} no longer runs {spelling!r}"
+        )
 
 
 #: Peer libraries the nightly peer leg installs beside TorchLens (the recipe

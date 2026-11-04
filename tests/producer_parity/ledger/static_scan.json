@@ -4004,7 +4004,7 @@
   "field": "kind",
   "file": "torchlens/_selection/do_plan.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {

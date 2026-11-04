@@ -261,8 +261,8 @@ def steer(
     strength:
         Scalar multiplier.
     dim:
-        Required when a vector direction must be aligned with an out
-        axis, avoiding silent batch/position assumptions.
+        Out axis a vector direction lies along. Omitted, it is inferred when exactly one
+        out axis has the direction's length; else ``AmbiguousAxisError`` (pass ``dim=``).
     allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -293,7 +293,7 @@ def steer(
         def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, out, dim=dim)
+            aligned = _align_direction(direction, out, dim=dim, infer=True)
             return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook

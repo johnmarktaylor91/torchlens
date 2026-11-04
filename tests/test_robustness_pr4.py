@@ -10,6 +10,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 import warnings
 from collections.abc import Generator
 from pathlib import Path
@@ -303,11 +304,29 @@ def test_limitations_doc_exists() -> None:
 
 
 def test_readme_links_to_limitations_doc() -> None:
-    """README must link to the limitations doc so users can find it."""
-    readme = (_repo_root() / "README.md").read_text()
-    assert "docs/LIMITATIONS.md" in readme, (
-        "README.md should link to docs/LIMITATIONS.md so users can discover "
-        "supported / unsupported contexts."
+    """README must lead to the limitations catalog so users can find it.
+
+    The catalog counts as reachable when README.md links it directly or links a
+    repo doc that does (one hop, e.g. README -> docs/faq.md -> the catalog).
+    """
+    root = _repo_root()
+    readme = (root / "README.md").read_text()
+    canonical = "reference/limitations.md"
+    if canonical in readme or "docs/LIMITATIONS.md" in readme:
+        return
+    linked = {
+        target.split("#", 1)[0]
+        for target in re.findall(r"\]\(([^)\s]+\.md(?:#[^)\s]*)?)\)", readme)
+        if "://" not in target
+    }
+    hops = sorted(
+        target
+        for target in linked
+        if (root / target).is_file() and canonical in (root / target).read_text()
+    )
+    assert hops, (
+        "README.md should link docs/reference/limitations.md, or a doc that links it, "
+        "so users can discover supported / unsupported contexts."
     )
 
 

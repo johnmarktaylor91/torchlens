@@ -493,12 +493,91 @@ def test_axis_i_log_registry_uses_weakref_cleanup() -> None:
 
 
 def test_helper_axis_ambiguity_uses_catalog_error() -> None:
-    """Vector helpers fail with ``AmbiguousAxisError`` when dim is omitted."""
+    """``tl.steer`` without dim fails with ``AmbiguousAxisError`` when two axes match."""
 
     hook = tl.steer(torch.ones(3))()
 
-    with pytest.raises(terrors.AmbiguousAxisError, match="dim"):
-        hook(torch.ones(2, 3), ctx=None)
+    with pytest.raises(terrors.AmbiguousAxisError, match=r"matches dims \[0, 1\].*pass dim="):
+        hook(torch.ones(3, 3), ctx=None)
+
+
+@pytest.mark.parametrize(
+    ("shape", "axis"),
+    [((2, 5, 6), 2), ((2, 6, 5), 1), ((6, 4), 0)],
+)
+def test_steer_infers_the_only_axis_matching_the_direction_length(
+    shape: tuple[int, ...], axis: int
+) -> None:
+    """A vector direction lands on the one out axis whose size equals its length."""
+
+    direction = torch.arange(6, dtype=torch.float32)
+    out = torch.randn(*shape)
+    view = [1] * len(shape)
+    view[axis] = 6
+
+    inferred = tl.steer(direction, 4.0)()(out, ctx=None)
+    explicit = tl.steer(direction, 4.0, dim=axis)()(out, ctx=None)
+
+    assert torch.equal(inferred, out + 4.0 * direction.reshape(view))
+    assert torch.equal(inferred, explicit)
+
+
+def test_steer_inference_runs_inside_a_trace() -> None:
+    """``tl.steer(direction, m)`` on a ``[batch, seq, d_model]`` site needs no dim."""
+
+    model = torch.nn.Sequential(torch.nn.Linear(8, 8))
+    x = torch.randn(2, 3, 8)
+    direction = torch.linspace(-1.0, 1.0, 8)
+    with torch.no_grad():
+        clean = model(x)
+
+    edited = tl.trace(model, x, intervene=tl.when(tl.module("0"), tl.steer(direction, 4.0)))
+
+    assert torch.allclose(edited.output_ops[0].out, clean + 4.0 * direction)
+
+
+@pytest.mark.parametrize(
+    ("shape", "dims"),
+    [((6, 6), "[0, 1]"), ((2, 6, 6), "[1, 2]"), ((6, 3, 6), "[0, 2]")],
+)
+def test_steer_refuses_to_guess_between_matching_axes(shape: tuple[int, ...], dims: str) -> None:
+    """Two or more axes with the direction's length refuse and name every matching dim."""
+
+    hook = tl.steer(torch.ones(6), 4.0)()
+
+    with pytest.raises(terrors.AmbiguousAxisError) as info:
+        hook(torch.zeros(*shape), ctx=None)
+
+    message = str(info.value)
+    assert f"matches dims {dims} of out shape {shape}" in message
+    assert "pass dim=" in message
+
+
+def test_steer_explicit_dim_chooses_between_matching_axes() -> None:
+    """``dim=`` still resolves an out where the inference would refuse."""
+
+    direction = torch.arange(3, dtype=torch.float32)
+    out = torch.zeros(3, 3)
+
+    rows = tl.steer(direction, 1.0, dim=0)()(out, ctx=None)
+    cols = tl.steer(direction, 1.0, dim=1)()(out, ctx=None)
+
+    assert torch.equal(rows, direction.reshape(3, 1).expand(3, 3))
+    assert torch.equal(cols, direction.reshape(1, 3).expand(3, 3))
+
+
+def test_steer_refuses_when_no_axis_matches_the_direction_length() -> None:
+    """A direction whose length matches no out axis refuses and says to pass dim=."""
+
+    hook = tl.steer(torch.ones(768), 4.0)()
+
+    with pytest.raises(terrors.AmbiguousAxisError) as info:
+        hook(torch.zeros(2, 5, 7), ctx=None)
+
+    message = str(info.value)
+    assert "length 768" in message
+    assert "matches no dim of out shape (2, 5, 7)" in message
+    assert "pass dim=" in message
 
 
 def test_bundle_member_error_raised_for_missing_bundle_site() -> None:

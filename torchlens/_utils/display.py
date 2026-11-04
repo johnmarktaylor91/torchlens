@@ -4,6 +4,7 @@ Formatting helpers used by the display/print paths of Trace and Layer,
 plus environment checks (Jupyter detection, parallel-processing guard).
 """
 
+import importlib.util
 import multiprocessing as mp
 import os
 import re
@@ -459,7 +460,9 @@ def progress_bar(
     if not enabled or total is None or total <= threshold:
         return iterable
     try:
-        if in_notebook():
+        # tqdm's notebook bar needs ipywidgets; without it tqdm.notebook raises mid-construction
+        # and the half-built bar prints "Exception ignored in tqdm.__del__" when collected.
+        if in_notebook() and importlib.util.find_spec("ipywidgets") is not None:
             from tqdm.notebook import tqdm
 
             return cast(Iterable[_T], tqdm(iterable, total=total, desc=desc))

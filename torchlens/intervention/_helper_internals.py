@@ -303,11 +303,51 @@ def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
     raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
 
 
+def _resolve_vector_axis(
+    direction: torch.Tensor,
+    out: torch.Tensor,
+    *,
+    infer: bool,
+) -> tuple[int | None, str]:
+    """Infer the out axis of a 1-D direction, or explain why it cannot be.
+
+    Parameters
+    ----------
+    direction:
+        1-D direction tensor.
+    out:
+        Activation tensor with two or more axes.
+    infer:
+        Whether the caller infers an omitted ``dim`` (``tl.steer``).
+
+    Returns
+    -------
+    tuple[int | None, str]
+        The only axis of ``out`` whose size equals the direction's length and an
+        empty message; or ``None`` and the ``AmbiguousAxisError`` message, which
+        names the matching dims (two or more, or none) when ``infer`` is set.
+    """
+
+    if not infer:
+        return None, "vector directions require explicit dim to avoid axis ambiguity"
+    length = int(direction.shape[0])
+    shape = tuple(out.shape)
+    matches = [axis for axis, size in enumerate(shape) if size == length]
+    if len(matches) == 1:
+        return matches[0], ""
+    found = f"matches dims {matches} of" if matches else "matches no dim of"
+    return None, (
+        f"cannot infer the axis for a direction of length {length}: it {found} "
+        f"out shape {shape}; pass dim= to name the axis the direction lies along"
+    )
+
+
 def _align_direction(
     direction: torch.Tensor,
     out: torch.Tensor,
     *,
     dim: int | None,
+    infer: bool = False,
 ) -> torch.Tensor:
     """Align a direction tensor with an out tensor.
 
@@ -319,6 +359,10 @@ def _align_direction(
         Activation tensor.
     dim:
         Axis receiving a vector direction.
+    infer:
+        Infer an omitted ``dim`` for a vector direction when exactly one out
+        axis has its length (``tl.steer``); otherwise an omitted ``dim``
+        refuses.
 
     Returns
     -------
@@ -330,9 +374,9 @@ def _align_direction(
         return direction
     if direction.ndim == 1 and out.ndim > 1:
         if dim is None:
-            raise AmbiguousAxisError(
-                "vector directions require explicit dim to avoid axis ambiguity"
-            )
+            dim, refusal = _resolve_vector_axis(direction, out, infer=infer)
+            if dim is None:
+                raise AmbiguousAxisError(refusal)
         normalized_axis = dim % out.ndim
         if direction.shape[0] != out.shape[normalized_axis]:
             raise HookValueError(

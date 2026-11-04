@@ -90,6 +90,30 @@ def test_belt_restore_preserves_user_reassignment() -> None:
         belt.restore_belt_references()
 
 
+class _RaisingStub:
+    """A module global whose every attribute read raises (shap.plots without matplotlib)."""
+
+    def __getattribute__(self, item: str) -> Any:
+        raise ImportError("plotting is not available")
+
+
+def test_belt_sweep_skips_a_global_whose_attribute_reads_raise() -> None:
+    """A raising stub beside a stale ref neither aborts the sweep nor hides the ref."""
+
+    original, wrapper = _original_and_wrapper("from_numpy")
+    mod = types.ModuleType("_tl_belt_raising_stub_check")
+    mod.plots = _RaisingStub()
+    mod.op = original
+    sys.modules[mod.__name__] = mod
+    try:
+        assert belt.sweep_stale_belt_references() >= 1
+        assert mod.op is wrapper
+    finally:
+        sys.modules.pop(mod.__name__, None)
+        belt.restore_belt_references()
+    assert mod.op is original
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
     """The O(new) pre-filter never turns a reused id into a silent skip.

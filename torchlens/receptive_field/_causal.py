@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._capture.arg_positions import _normalize_func_name
-from ._rules import ReceptiveFieldRuleContext
+from ._rules import ReceptiveFieldRuleContext, operand_shapes
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -142,7 +142,8 @@ def causal_weights_source(op: Op) -> int | None:
     if not op.parents:
         return None
     label = op.parents[0]
-    shape = tuple(op.input_shapes[0]) if op.input_shapes and op.input_shapes[0] else None
+    shapes = operand_shapes(op)
+    shape = tuple(shapes[0]) if shapes and shapes[0] else None
     for _ in range(_MAX_WEIGHT_HOPS):
         parent = _trace_op(op, label)
         if parent is None:
