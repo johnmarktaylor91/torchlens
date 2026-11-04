@@ -1024,15 +1024,15 @@ class MLXBackend:
         fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
-        # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
-        # root, backends/_finalize.py new_preview_function_trace's for a function root.
+        # Root identity (C07X item (iv)), spelled as tf and new_preview_function_trace do; the
+        # qualname is also the saved root module record's class_qualname (a declared str).
         if module_tree is not None:
-            root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
+            qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+            trace._provenance_root_entry_point = f"module_call:{qualname}.__call__"
         else:
-            trace._provenance_root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
-            )
+            qualname = getattr(model, "__qualname__", trace._source_class_name)
+            trace._provenance_root_entry_point = f"function_call:{qualname}"
+        trace._source_class_qualname = qualname
         _disclose_compiled_attributes(trace, compiled_attribute_paths)
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []

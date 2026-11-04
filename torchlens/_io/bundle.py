@@ -88,6 +88,7 @@ from ._save_gates import (
 )
 from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
+from ._tlspec_identity import _preflight_schema_v2_runtime
 from .format3 import (
     contract as format3_contract,
     reader as format3_reader,
@@ -985,6 +986,12 @@ def _finish_format3_trace(
     """Rehydrate one decoded 3.0 trace artifact: tensors, accessors, provenance, recipe."""
 
     root, manifest = artifact.root, artifact.manifest
+    if (
+        manifest.get("backend", format3_contract.DEFAULT_BACKEND)
+        != format3_contract.DEFAULT_BACKEND
+    ):
+        # The runtime fingerprint stays fail-closed (a tf trace loads only on its TF release).
+        _preflight_schema_v2_runtime(manifest, backend_name=manifest["backend"])
     state = artifact.trace_state(ModuleAccessor)
     has_blobs = (root / format3_contract.BLOBS_DIR).is_dir()
     blobs_dir = resolve_bundle_blobs_dir(root) if has_blobs else None
@@ -2003,43 +2010,6 @@ def _preflight_unified_trace_body_index(
             missing_blob_ids.append(str(tensor_entry.get("blob_id", "<unknown>")))
     if missing_blob_ids:
         refuse_missing_blobs(missing_blob_ids)
-
-
-def _preflight_schema_v2_runtime(
-    manifest: dict[str, Any],
-    *,
-    backend_name: str,
-) -> None:
-    """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
-
-    from torchlens.backends.registry import BackendRuntimeCompatibilityError
-
-    runtime = manifest["backend_runtime"]
-    spec = get_backend_spec(backend_name)
-    expected_runtime_name = spec.serialization_policy.runtime_name or backend_name
-    runtime_name = runtime.get("name")
-    if runtime_name != expected_runtime_name:
-        raise BackendRuntimeCompatibilityError(
-            f"Manifest backend runtime name {runtime_name!r} does not match expected "
-            f"{expected_runtime_name!r} for backend {backend_name!r}."
-        )
-    if expected_runtime_name != "tf":
-        return
-
-    try:
-        import tensorflow as tf
-    except ImportError as exc:
-        raise BackendRuntimeCompatibilityError(
-            "Portable TensorFlow trace loading requires the tensorflow runtime."
-        ) from exc
-
-    saved_version = runtime.get("version")
-    current_version = str(getattr(tf, "__version__", ""))
-    if saved_version != current_version:
-        raise BackendRuntimeCompatibilityError(
-            "Manifest TensorFlow runtime version "
-            f"{saved_version!r} does not match installed tensorflow {current_version!r}."
-        )
 
 
 def _preflight_torch_entry_logical_backends(
