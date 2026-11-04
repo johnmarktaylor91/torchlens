@@ -482,7 +482,11 @@ def _wrapped_callable_replacement(value: Any, member_map: dict[int, Any] | None)
 
     if member_map and (member := member_map.get(id(value))) is not None:
         return member
-    if isinstance(value, type) or not callable(value):
+    # ``issubclass(type(value), ...)`` reads the real type slot; ``isinstance``
+    # falls back to ``value.__class__``, which a module-global stub whose
+    # ``__getattribute__`` always raises turns into an aborted wrap (shap
+    # without matplotlib binds ``shap.plots`` to such an object).
+    if issubclass(type(value), type) or not callable(value):
         return None
     decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
     wrapper = orig_to_decorated.get(id(value))
