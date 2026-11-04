@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 676001 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 676067 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,10 +15,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26636 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26668 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39357 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39406 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2032 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10847 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10832 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 5 | 1428 |
@@ -212,7 +212,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (52 modules, 26636 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (52 modules, 26668 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -247,13 +247,13 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_structure_only_bridge` | Structure-only -> runnable bridge: entry-dark L7b wave-1 machinery. | 236 |
 | `_structure_only_entry` | Structure-only Layer-0 entry contract (L7a sec 1.3/2.2). | 228 |
 | `_structure_only_facts` | Pure trace-fact readers for the structure-only discharge preflight and comparison. | 38 |
-| `_trace_capture_error` | Build the exception a capture door raises when the forward fails. | 203 |
+| `_trace_capture_error` | Build the exception a capture door raises when the forward fails. | 225 |
 | `_weightsfree_admission` | Scoped meta admission for weights-free capture (weightsfree ). | 497 |
 | `arg_positions` | O(1) tensor/parameter extraction from torch function arguments via lookup table. | 2638 |
 | `compute_record` | The two-term compute record (A5/A6): true MACs, never flops // 2. | 525 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
-| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 752 |
+| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 762 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe ). | 402 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
 | `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 556 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (102 modules, 39357 lines)
+Core data structures for representing a logged forward pass. (102 modules, 39406 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -354,7 +354,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39357
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
 | `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 598 |
-| `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 540 |
+| `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 544 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 360 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 493 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 840 |
@@ -376,7 +376,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39357
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 690 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 176 |
-| `_trace_views` | Trace group-view and field-derived accessor functions. | 713 |
+| `_trace_views` | Trace group-view and field-derived accessor functions. | 758 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_modules` | Bounded module and module-call record displays. | 106 |
@@ -1566,7 +1566,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2032 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (26 modules, 10847 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (26 modules, 10832 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1583,7 +1583,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_flops_vs_dispatch` | PyTorch dispatch-formula FLOP cross-check (torchnative 6.4 / ). | 326 |
 | `_grad_fn_walk` | Post-hoc ''grad_fn'' walker (approved diagnostic, R grad_fn ruling). | 424 |
 | `_grad_scale_proof` | Prove from a trace that a backward ran without loss scaling. | 189 |
-| `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 723 |
+| `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 708 |
 | `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 796 |
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 470 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
