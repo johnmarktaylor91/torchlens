@@ -1,18 +1,21 @@
 """Work done by one ``trace.save`` on the default portable path, as deterministic counters.
 
-The save-time baseline the 3.0 format writer is measured against. Counters gate; wall
+The save path is saved format 3 (``docs/maintainers/saved_format_3.md``): typed JSON
+record tables plus safetensors chunks, no pickle at any level. Counters gate; wall
 clock is context only (perf doctrine: counters, never wall clock, gate).
 
 Counters for one save of a fixed capture:
 
-``metadata_pickle_dumps``
-    ``dump_canonical_metadata`` passes over the scrubbed state (the pure-Python
-    canonical pickler is the dominant save cost, so a second pass doubles it).
-``pickler_save_calls``
-    ``save`` calls inside the canonical pickler (objects the walk visits).
+``metadata_writes``
+    ``write_trace_envelope`` calls: the one pass that encodes the scrubbed state into
+    the record tables and writes them with the manifest (a second pass doubles the
+    dominant save cost).
+``encoder_calls``
+    ``ValueEncoder.encode`` calls inside that pass (cells and nested values the
+    encoder visits).
 ``verify_reloads``
-    Restricted-unpickler ``load`` calls during the save: the write/read-symmetry dry
-    run of the exact metadata bytes before they are written.
+    ``preflight_reload`` calls during the save: the late.21 read-back of the staged
+    record tables through the bounded JSON reader and typed decoder before publish.
 ``fsync_calls``
     ``os.fsync`` calls (every written file, then the directories, then the parent
     after the publish rename).
@@ -22,7 +25,8 @@ Counters for one save of a fixed capture:
     they appear in the byte counters.
 ``files_written`` / ``bytes_written``
     Files in the published bundle and their total size; ``bytes_by_part`` splits the
-    size into ``manifest``, ``metadata``, ``blobs`` and ``other``.
+    size into ``manifest``, ``metadata`` (the ``records/`` tables), ``blobs`` and
+    ``other``.
 
 ``python_calls`` (total calls under ``cProfile``) and the wall time of two unprofiled
 saves (an A/A pair) are reported as information and never gate.
@@ -56,8 +60,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 GATED_COUNTERS = (
-    "metadata_pickle_dumps",
-    "pickler_save_calls",
+    "metadata_writes",
+    "encoder_calls",
     "verify_reloads",
     "fsync_calls",
     "read_opens",
@@ -114,16 +118,17 @@ def _open_counter(
 def counting(root: Path) -> Iterator[Counter[str]]:
     """Count save-path work while the block runs; opens are counted only under ``root``."""
 
-    from torchlens._io import _canonical_pickle
-    from torchlens._io.bundle import _RenameAwareUnpickler
+    from torchlens._io import bundle
+    from torchlens._io.format3.values import ValueEncoder
 
     counts: Counter[str] = Counter()
-    pickler = _canonical_pickle._CanonicalMetadataPickler
     with ExitStack() as stack:
-        stack.enter_context(_patched(pickler, "dump", _counting(counts, "metadata_pickle_dumps")))
-        stack.enter_context(_patched(pickler, "save", _counting(counts, "pickler_save_calls")))
         stack.enter_context(
-            _patched(_RenameAwareUnpickler, "load", _counting(counts, "verify_reloads"))
+            _patched(bundle, "write_trace_envelope", _counting(counts, "metadata_writes"))
+        )
+        stack.enter_context(_patched(ValueEncoder, "encode", _counting(counts, "encoder_calls")))
+        stack.enter_context(
+            _patched(bundle, "preflight_reload", _counting(counts, "verify_reloads"))
         )
         stack.enter_context(_patched(os, "fsync", _counting(counts, "fsync_calls")))
         stack.enter_context(_patched(builtins, "open", _open_counter(counts, root)))
@@ -134,7 +139,7 @@ def counting(root: Path) -> Iterator[Counter[str]]:
 def _part(relative: Path) -> str:
     if relative.name == "manifest.json":
         return "manifest"
-    if relative.name == "metadata.pkl":
+    if relative.parts and relative.parts[0] == "records":
         return "metadata"
     if relative.parts and relative.parts[0] == "blobs":
         return "blobs"
@@ -161,8 +166,8 @@ def build_capture() -> Any:
     """Capture the benchmark's ``tinynet`` cell (the ``aux_save`` row's model and input).
 
     The capture's seed and name are pinned. An unseeded capture draws a random seed,
-    and pickle writes a seed below 2**31 in 4 bytes but one above it in 5 bytes plus a
-    length byte, so ``metadata`` bytes would move by 2 between processes. The
+    and the record tables write the seed as decimal text, so ``metadata`` bytes would
+    move with its digit count between processes. The
     automatic name counts captures in the process (``tinynet_1``, ``tinynet_12``), so
     its length depends on what ran before. Pinning both leaves the save path as is.
     """
@@ -218,7 +223,7 @@ def run() -> dict[str, Any]:
             "wall_ms_aa_pair": [_wall_ms(trace, workdir, "1"), _wall_ms(trace, workdir, "2")],
         }
     return {
-        "schema": "torchlens.save_path_counters.v1",
+        "schema": "torchlens.save_path_counters.v2",
         "model": "tinynet",
         "torch": torch.__version__,
         "python": sys.version.split()[0],

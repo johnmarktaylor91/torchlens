@@ -1,13 +1,13 @@
 """Pin the save-time counters of one ``trace.save`` (the baseline the next format writer is measured against).
 
-``benchmarks/save_path_counters.py`` counts the work one save of the ``tinynet`` capture does:
-canonical-pickler passes and ``save`` calls, verifying re-reads, ``fsync`` calls, Python-level
-opens, files and bytes. The pinned values live beside the ``aux_save`` row of
+``benchmarks/save_path_counters.py`` counts the work one saved-format-3 save of the ``tinynet``
+capture does: record-table write passes and encoder calls, verifying re-reads, ``fsync`` calls,
+Python-level opens, files and bytes. The pinned values live beside the ``aux_save`` row of
 ``benchmarks/perf_baselines/linux-cpu-provisional.json`` under
 ``metadata.save_path_counters``. Counters gate by exact equality; the recorded wall clock is
 information only and is never read here.
 
-Counters that depend only on the save path's structure gate everywhere. The pickler call
+Counters that depend only on the save path's structure gate everywhere. The encoder call
 count and the byte counts also depend on the torch build (module docstrings and attributes
 are part of the metadata), so they gate only when torch and the Python minor version match
 the pinned environment.
@@ -35,7 +35,7 @@ _BASELINE = (
 
 # Structure of the save path: the same on every torch build.
 STRUCTURAL_COUNTERS = (
-    "metadata_pickle_dumps",
+    "metadata_writes",
     "verify_reloads",
     "fsync_calls",
     "read_opens",
@@ -43,7 +43,7 @@ STRUCTURAL_COUNTERS = (
     "files_written",
 )
 # Depend on the torch build as well as the save path.
-BUILD_KEYED_COUNTERS = ("pickler_save_calls", "bytes_written")
+BUILD_KEYED_COUNTERS = ("encoder_calls", "bytes_written")
 
 
 def _pinned() -> dict[str, Any]:
@@ -76,7 +76,7 @@ def test_pinned_record_names_every_gated_counter() -> None:
     pinned = _pinned()
     assert set(pinned["counters"]) == set(spc.GATED_COUNTERS) | {"bytes_by_part"}
     assert set(STRUCTURAL_COUNTERS) | set(BUILD_KEYED_COUNTERS) == set(spc.GATED_COUNTERS)
-    assert pinned["schema"] == "torchlens.save_path_counters.v1"
+    assert pinned["schema"] == "torchlens.save_path_counters.v2"
 
 
 def test_save_counters_repeat_exactly(measured: tuple[dict[str, Any], dict[str, Any]]) -> None:
@@ -89,21 +89,21 @@ def test_save_counters_repeat_exactly(measured: tuple[dict[str, Any], dict[str, 
 def test_structural_save_counters_hold_exactly(
     measured: tuple[dict[str, Any], dict[str, Any]],
 ) -> None:
-    """One pickler pass, one verifying re-read, and the pinned fsync, open and file counts."""
+    """One metadata write, one verifying re-read, and the pinned fsync, open and file counts."""
 
     pinned = _pinned()["counters"]
     first, _ = measured
     assert {key: first[key] for key in STRUCTURAL_COUNTERS} == {
         key: pinned[key] for key in STRUCTURAL_COUNTERS
     }
-    assert first["metadata_pickle_dumps"] == 1
+    assert first["metadata_writes"] == 1
     assert first["verify_reloads"] == 1
 
 
 def test_build_keyed_save_counters_hold_exactly(
     measured: tuple[dict[str, Any], dict[str, Any]],
 ) -> None:
-    """Pickler calls and bytes per part hold exactly on the pinned torch and Python."""
+    """Encoder calls and bytes per part hold exactly on the pinned torch and Python."""
 
     pinned = _pinned()
     python_minor = ".".join(sys.version.split()[0].split(".")[:2])
