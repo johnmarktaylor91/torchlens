@@ -95,7 +95,7 @@ torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	837
-torchlens/_data_classes/interface.py::_getitem_after_pass	113
+torchlens/_data_classes/interface.py::_getitem_after_pass	111
 torchlens/_data_classes/layer.py	1767
 torchlens/_data_classes/module.py	2618
 torchlens/_data_classes/module.py::Module.__init__	210
@@ -1277,7 +1277,7 @@ torchlens/receptive_field/_gradient.py::_select_inputs	71
 torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
-torchlens/receptive_field/_path.py::resolve_graph_point	65
+torchlens/receptive_field/_path.py::resolve_graph_point	61
 torchlens/receptive_field/_query.py	925
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64

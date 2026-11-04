@@ -29,9 +29,8 @@ from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
+from torchlens._utils._display_errors import lookup_message
 from torchlens._utils.torchvision_weights import match_torchvision_weights
-
-from .._utils._display_errors import lookup_message
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
 #: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
@@ -461,8 +460,6 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         Always, with code ``decode_style_unknown``.
     """
 
-    import difflib
-
     if style is None:
         raise DecodeStyleUnknownError(
             "no output detector resolved a decode style from the retained outputs. "
@@ -471,12 +468,12 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
             remedy=f"pass {STYLE_KW}= a built-in style or a registered custom style",
             argument=STYLE_KW,
         )
-    close = difflib.get_close_matches(str(style), BUILTIN_OUTPUT_STYLES, n=1)
     raise DecodeStyleUnknownError(
         lookup_message(
             f"unknown {STYLE_KW}={style!r}; no built-in or registered custom output detector resolved it.",
-            [*close, *(item for item in BUILTIN_OUTPUT_STYLES if item not in close)],
+            list(BUILTIN_OUTPUT_STYLES),
             "pass a built-in style, or register a custom output detector.",
+            query=str(style),
         ),
         code="decode_style_unknown",
         remedy=(

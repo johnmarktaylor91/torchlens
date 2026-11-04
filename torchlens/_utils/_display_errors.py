@@ -30,9 +30,14 @@ def _edit_distance(left: str, right: str) -> int:
 
 
 def lookup_message(
-    problem: str, candidates: Sequence[str], remedy: str, *, query: str | None = None
+    problem: str,
+    candidates: Sequence[str],
+    remedy: str,
+    *,
+    query: str | None = None,
+    note: str = "",
 ) -> str:
-    """Rank choices before the five-candidate cut, keeping the remedy last."""
+    """Rank choices before the five-candidate cut; an optional note row, then the remedy last."""
 
     ranked = (
         sorted(candidates, key=lambda key: _edit_distance(query, key))
@@ -40,6 +45,7 @@ def lookup_message(
         else candidates
     )
     rows = [("candidates", candidates_text(ranked))] if ranked else []
+    rows.append(("note", note))
     rows.append(("remedy", remedy))
     return render_card(problem, rows)
 
@@ -78,7 +84,7 @@ def module_lookup_message(key: str, module: Any, matches: Sequence[str]) -> str:
     )
 
 
-def ambiguous_substring_message(key: str, records: Sequence[Any]) -> str:
+def ambiguous_substring_message(key: str, records: Sequence[Any], *, note: str = "") -> str:
     """Keep a substring refusal and its resolved candidate ranking together."""
 
     return lookup_message(
@@ -86,4 +92,5 @@ def ambiguous_substring_message(key: str, records: Sequence[Any]) -> str:
         [display_key(record) for record in records],
         "Use a more specific key.",
         query=key,
+        note=note,
     )
