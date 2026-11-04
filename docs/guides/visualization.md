@@ -266,7 +266,8 @@ The shading is drawn into SVG directly; for PNG and PDF output it needs the opti
 
 `highlight="interventions"` draws the full record of every edit: each edited node is marked
 (a solid border is a recorded fact, a dashed one an inferred attribution), and the caption
-lists each edit, how it was applied and the audit record behind it.
+lists each edit, how it was applied and the audit record behind it. The full record is also
+written beside the image as `<path>.census.txt`.
 
 ![The intervention view, with its caption](../images/visualization/interventions.png)
 
@@ -352,7 +353,7 @@ adds the norm and largest absolute value of each captured gradient.
 `theme=` restyles the whole drawing: `"torchlens"` (the default), `"paper"`, `"dark"`,
 `"colorblind"` and `"high_contrast"`.
 
-| `theme='paper'` | `theme='dark'` | `theme='high_contrast'` |
+| `trace.draw(theme='paper')` | `trace.draw(theme='dark')` | `trace.draw(theme='high_contrast')` |
 |---|---|---|
 | ![paper](../images/visualization/theme_paper.png){ width="240" } | ![dark](../images/visualization/theme_dark.png){ width="240" } | ![high contrast](../images/visualization/theme_high_contrast.png){ width="240" } |
 
@@ -381,4 +382,5 @@ These keywords of `Trace.draw` are not pictured above:
 | `node_spec_fn`, `collapsed_node_spec_fn`, `backward_node_spec_fn` | a function that restyles each node |
 | `graph_overrides`, `node_overrides`, `edge_overrides`, `module_overrides` | raw Graphviz attributes for the graph, edges and module boxes |
 
-The [glossary](../reference/glossary.md) lists every keyword with its accepted values.
+The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
+lists every keyword with its accepted values.

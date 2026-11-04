@@ -318,6 +318,30 @@ def _refuse_dropped_features(caught: list[warnings.WarningMessage]) -> None:
             raise RuntimeError(str(item.message))
 
 
+def _move_sidecars(figure: Figure, dot_dir: Path | None) -> None:
+    """Keep only images in the image folder.
+
+    ``highlight="interventions"`` also writes the full edit record as
+    ``<name>.census.txt`` beside the image. It moves to ``dot_dir`` when one is
+    given and is deleted otherwise (the page shows the caption, not the file).
+
+    Parameters
+    ----------
+    figure:
+        The row just rendered.
+    dot_dir:
+        Folder for non-image outputs, or ``None``.
+    """
+
+    sidecar = OUTPUT_DIR / f"{figure.name}.census.txt"
+    if not sidecar.exists():
+        return
+    if dot_dir is not None:
+        sidecar.replace(dot_dir / sidecar.name)
+    else:
+        sidecar.unlink()
+
+
 def render(figure: Figure, dot_dir: Path | None) -> Path:
     """Trace ``figure``'s model and write its PNG.
 
@@ -359,6 +383,7 @@ def render(figure: Figure, dot_dir: Path | None) -> Path:
         if dot_dir is not None:
             dot_dir.mkdir(parents=True, exist_ok=True)
             (dot_dir / f"{figure.name}.gv").write_text(drawing.dot, encoding="utf-8")
+        _move_sidecars(figure, dot_dir)
         return OUTPUT_DIR / figure.filename
     finally:
         if target is not trace:

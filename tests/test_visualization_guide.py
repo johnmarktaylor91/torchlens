@@ -49,7 +49,9 @@ def test_every_page_image_has_a_figure_and_a_file() -> None:
     names = {figure.filename for figure in figures.FIGURES}
     referenced = set(re.findall(r"\.\./images/visualization/([\w.-]+)", PAGE_TEXT))
     assert referenced == names
-    on_disk = {path.name for path in IMAGES.iterdir() if path.is_file()}
+    on_disk = {
+        path.name for path in IMAGES.iterdir() if path.is_file() and path.suffix in {".png", ".svg"}
+    }
     assert on_disk == names, "committed images and the figure table differ"
 
 
