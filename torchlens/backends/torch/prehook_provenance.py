@@ -177,7 +177,6 @@ def install_prehook_provenance(
             scope="global",
         )
         _refresh_observers(ledger)
-        _ensure_root_forward_binder(ledger)  # the root object, in its tree walk or not
     except Exception:
         rollback_prehook_provenance(trace)
         raise
@@ -505,6 +504,8 @@ def _ensure_observer(ledger: PreHookProvenanceLedger, module: nn.Module) -> None
             observed_call_impl,
         )
     )
+    if module is ledger.model:
+        _ensure_root_forward_binder(ledger)
 
 
 def _ensure_root_forward_binder(ledger: PreHookProvenanceLedger) -> None:
