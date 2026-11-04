@@ -388,7 +388,7 @@ class Bytes(_IntQuantity):
     --------
     >>> size = Bytes(2048)
     >>> str(size)
-    '2 KiB'
+    '2.00 KiB'
     >>> format(size, "raw")
     '2048'
     >>> size == 2048
