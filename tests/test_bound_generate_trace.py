@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._errors import AmbiguousOpLookupError
 from torchlens.errors import InvalidArgumentError, ScalarEscapeWarning
 
 N_NEW = 3
@@ -177,6 +178,21 @@ def test_unknown_key_lookup_names_no_wrapper_spelling() -> None:
     with pytest.raises((KeyError, InvalidArgumentError)) as excinfo:
         gen["no_such_module"]
     assert "owner" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("key", ["head:", "embed:"])
+def test_empty_call_index_lookup_suggests_no_wrapper_spelling(key: str) -> None:
+    """A module address with an empty call index is refused like any ambiguous key.
+
+    The removed bound-owner hint suggested ``owner.<address>:`` here, itself not a key.
+    """
+    model = _ToyGenerator().eval()
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    with pytest.raises(AmbiguousOpLookupError) as excinfo:
+        gen[key]
+    message = str(excinfo.value)
+    assert "owner" not in message
+    assert message.endswith("Please use a more specific key.")
 
 
 class _CacheWithLoggedProperty:
