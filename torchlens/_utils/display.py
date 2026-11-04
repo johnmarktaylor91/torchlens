@@ -119,8 +119,29 @@ def _record_phase_timing(trace: "Trace", bucket: str, elapsed_s: float) -> None:
     bucket_stats["count"] += 1
 
 
-@contextmanager
-def _timed_phase(trace: "Trace", bucket: str) -> Iterator[None]:
+class _TimedPhase:
+    """The context manager :func:`_timed_phase` returns.
+
+    A slotted class rather than a ``@contextmanager`` generator: capture times
+    two phases per op, and the generator protocol costs a generator, a helper
+    object and a ``StopIteration`` per entry. The sample is recorded on exit,
+    also when the body raises; exceptions are never suppressed.
+    """
+
+    __slots__ = ("_trace", "_bucket", "_start")
+
+    def __init__(self, trace: "Trace", bucket: str) -> None:
+        self._trace = trace
+        self._bucket = bucket
+
+    def __enter__(self) -> None:
+        self._start = time.perf_counter()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        _record_phase_timing(self._trace, self._bucket, time.perf_counter() - self._start)
+
+
+def _timed_phase(trace: "Trace", bucket: str) -> _TimedPhase:
     """Record elapsed time for a capture or postprocess phase.
 
     Parameters
@@ -130,17 +151,13 @@ def _timed_phase(trace: "Trace", bucket: str) -> Iterator[None]:
     bucket:
         Stable timing bucket name.
 
-    Yields
-    ------
-    None
-        Context body.
+    Returns
+    -------
+    _TimedPhase
+        Context manager timing its body.
     """
 
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        _record_phase_timing(trace, bucket, time.perf_counter() - start)
+    return _TimedPhase(trace, bucket)
 
 
 def identity(x: Any) -> Any:
