@@ -5,6 +5,8 @@
   "torchlens/_postprocess/graph_traversal.py": 1,
   "torchlens/backends/_finalize.py": 1,
   "torchlens/backends/jax/backend.py": 1,
+  "torchlens/backends/mlx/interventions.py": 1,
+  "torchlens/backends/paddle/interventions.py": 1,
   "torchlens/backends/tf/interventions.py": 1,
   "torchlens/backends/tinygrad/backend.py": 1,
   "torchlens/backends/torch/_ops_retention.py": 1,

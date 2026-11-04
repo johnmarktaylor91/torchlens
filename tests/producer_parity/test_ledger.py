@@ -74,6 +74,8 @@ EXPECTED_APPEND_AMENDMENT_CALLER_FILES = {
     # one shared site instead of three per-backend copies.
     "torchlens/backends/_finalize.py",  # preview_output_parent_mark (hoisted)
     "torchlens/backends/tf/interventions.py",  # module_exit_intervention (site fire)
+    "torchlens/backends/mlx/interventions.py",  # module_exit_intervention (site fire)
+    "torchlens/backends/paddle/interventions.py",  # module_exit_intervention (site fire)
     "torchlens/backends/jax/backend.py",  # preview_output_parent_rebind
     "torchlens/backends/tinygrad/backend.py",  # preview_output_parent_rebind
     "torchlens/_ir/capture_events.py",  # concat lane transport (re-append)
