@@ -28,6 +28,8 @@ import torch
 import torchlens as tl
 from torchlens.errors import TorchLensError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 NOT_PERSISTED = "run_intervention_spec_not_persisted"
 #: Validators the save preflight reload (late.21) runs before an artifact is published.
 SAVE_VALIDATORS = frozenset({"preflight_reload", "reload_check", "validate_artifact"})
@@ -248,7 +250,7 @@ _DOORS: dict[str, Callable[[Any, _Toy, torch.Tensor], Any]] = {
         tl.scale(2.0),
         model=model,
         inputs=inputs,
-        intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="rerun"),
     ),
     "fork_run": lambda trace, model, inputs: trace.fork().run(model, inputs),
     "bundle_run": lambda trace, model, inputs: tl.Bundle([trace]).run(model, inputs),

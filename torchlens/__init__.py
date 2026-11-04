@@ -21,11 +21,10 @@ if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
+    from ._data_classes.trace import Trace
+
 #: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
 __version__ = "2.38.0"
-
-if _typing.TYPE_CHECKING:
-    from ._data_classes.trace import Trace
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former

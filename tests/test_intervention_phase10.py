@@ -139,7 +139,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     path = tmp_path / "mylog.tlspec"
 
