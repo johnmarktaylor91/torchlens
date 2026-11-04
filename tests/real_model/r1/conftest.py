@@ -50,6 +50,12 @@ _HEAD_CLASS_BY_ARTIFACT = {
     "r1-videomae-small-kinetics": "VideoMAEForVideoClassification",
     "r1-pythia-70m": "AutoModelForCausalLM",
     "r2-tiny-random-llama": "AutoModelForCausalLM",
+    "r1-esm2-t6-8m-ur50d": "EsmForMaskedLM",
+}
+#: Extra ``from_pretrained`` arguments per row. ESM-2 loads with eager attention so each
+#: layer's attention probabilities are an ordinary softmax the trace captures.
+_LOAD_KWARGS_BY_ARTIFACT: dict[str, dict[str, Any]] = {
+    "r1-esm2-t6-8m-ur50d": {"attn_implementation": "eager"},
 }
 #: Rows with no tokenizer (pixel or video inputs, or a row pinned without its
 #: tokenizer files); the loader returns ``None``.
@@ -101,7 +107,9 @@ def r1_loader(artifact_registry: Registry):
             # The forks.3 / video rows are pinned and measured in float32; Switch's
             # config says bfloat16, which transformers 5 would load by default.
             dtype = {"dtype": torch.float32} if artifact_id in _HEAD_CLASS_BY_ARTIFACT else {}
-            model = load_hub_model(row, head, **dtype)
+            model = load_hub_model(
+                row, head, **dtype, **_LOAD_KWARGS_BY_ARTIFACT.get(artifact_id, {})
+            )
             tokenizer = (
                 None
                 if artifact_id in _NO_TOKENIZER
