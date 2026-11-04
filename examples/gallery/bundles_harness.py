@@ -162,11 +162,7 @@ def clean_and_ablated(model: nn.Module, x: Any, site: str, kwargs: dict) -> tl.B
         capture=tl.options.CaptureOptions(replayable=True),
     )
     ablated = clean.fork("ablated")
-    ablated.do(
-        tl.module(site),
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
-    )
+    ablated.do(tl.module(site), tl.zero_ablate())
     return tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
 
 
