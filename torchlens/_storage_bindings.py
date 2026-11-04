@@ -16,10 +16,12 @@ the original storage alive and remembers the offset, size and stride, and
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Any
+
 import torch
 from torch import nn
-
-from ._utils._torch_compat import get_force_original_view_tracking
 
 STORAGE_CONTEXT_RECEIVER_FUNCS = frozenset({"as_strided_", "resize_", "resize_as_"})
 """In-place storage-geometry calls whose receiver is saved with its whole storage.
@@ -233,7 +235,10 @@ def has_view_geometry_of(rebuilt: torch.Tensor, recorded: torch.Tensor) -> bool:
     )
 
 
-def copy_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
+def copy_with_view_context(
+    tensor: torch.Tensor,
+    force_tracking: Callable[[bool], AbstractContextManager[Any]] | None,
+) -> torch.Tensor:
     """Copy a view together with a private copy of its base, keeping the view relation.
 
     The base is copied with its whole storage (:func:`copy_with_storage_context`)
@@ -242,13 +247,17 @@ def copy_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
     later ``_view_func`` or ``_rev_view_func_unsafe`` call. A receiver without a
     view chain (a ``None`` from torch) or one whose chain does not rebuild its
     geometry gets a compact detached clone, which replay refuses. So does every
-    view when torch lacks original-view tracking (``HAS_ORIGINAL_VIEW_TRACKING``
-    reads ``False``): replay then fails loudly instead of running without it.
+    receiver when ``force_tracking`` is ``None`` (torch lacks original-view
+    tracking): replay then fails loudly instead of running without it.
 
     Parameters
     ----------
     tensor:
         The receiver of a :data:`VIEW_CONTEXT_RECEIVER_FUNCS` call.
+    force_tracking:
+        Autograd's original-view-tracking context manager, which the caller
+        takes from the capability accessor ``get_force_original_view_tracking``
+        (``None`` when ``HAS_ORIGINAL_VIEW_TRACKING`` reads ``False``).
 
     Returns
     -------
@@ -256,8 +265,7 @@ def copy_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
         The rebuilt view, or a compact detached clone as described above.
     """
 
-    force_tracking = get_force_original_view_tracking() if tensor._is_view() else None
-    if force_tracking is not None and tensor._base is not None:
+    if force_tracking is not None and tensor._is_view() and tensor._base is not None:
         base_copy = copy_with_storage_context(tensor._base.detach())
         with force_tracking(True):
             rebuilt = tensor._view_func_unsafe(base_copy)

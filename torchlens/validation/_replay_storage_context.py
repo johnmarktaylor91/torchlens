@@ -26,6 +26,7 @@ from .._storage_bindings import (
     storage_context_arg_index,
     views_part_of_its_storage,
 )
+from .._utils._torch_compat import get_force_original_view_tracking
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
 
@@ -70,7 +71,7 @@ def _restore_receiver_view_context(layer: Any, input_args: dict[str, Any]) -> No
         return
     saved = saved_args[0]
     if isinstance(saved, torch.Tensor) and saved._is_view():
-        args[0] = copy_with_view_context(saved)
+        args[0] = copy_with_view_context(saved, get_force_original_view_tracking())
 
 
 def check_view_context_receiver(layer: Any, input_args: dict[str, Any]) -> None:

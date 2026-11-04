@@ -18,6 +18,7 @@ from ..._storage_bindings import (
     storage_context_arg_index,
 )
 from ..._utils._tensor_layout import CaptureLayout, layout_of
+from ..._utils._torch_compat import get_force_original_view_tracking
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     safe_copy,
@@ -565,11 +566,16 @@ def _context_copiers(func_name: str) -> dict[int, Callable[[torch.Tensor], torch
 
     copiers: dict[int, Callable[[torch.Tensor], torch.Tensor]] = {}
     if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
-        copiers[0] = copy_with_view_context
+        copiers[0] = _copy_receiver_with_view_context
     index = storage_context_arg_index(func_name)
     if index is not None:
         copiers[index] = copy_with_storage_context
     return copiers
+
+
+def _copy_receiver_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
+    """Copy a view-function receiver with its view context, under original-view tracking."""
+    return copy_with_view_context(tensor, get_force_original_view_tracking())
 
 
 def _copy_saved_arg_tree(
@@ -596,7 +602,7 @@ def _copy_saved_arg_tree(
         if receiver_copy is not None and isinstance(arg, torch.Tensor):
             return _copy_receiver_with_context(receiver_copy, arg)
         return copy_arg_tree(arg)
-    if isinstance(arg, torch.Tensor) and receiver_copy is copy_with_view_context:
+    if isinstance(arg, torch.Tensor) and receiver_copy is _copy_receiver_with_view_context:
         # A parameter alias is not a view, so a view-function receiver is always copied.
         return _copy_receiver_with_context(receiver_copy, arg)
     if isinstance(arg, torch.Tensor):
