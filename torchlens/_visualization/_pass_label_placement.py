@@ -23,8 +23,8 @@ import subprocess
 from collections.abc import Iterable, Sequence
 from typing import Any, NamedTuple
 
+from ..errors import GraphvizUnavailableError
 from . import _render_utils
-from ._render_common import GraphvizUnavailableError
 
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
