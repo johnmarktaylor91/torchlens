@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -34,6 +35,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._selection.resolver import _label_index_scope
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._do_target_doors import apply_region_target_do, lift_trace_slice
 from ._edit_guards import (
@@ -376,7 +378,6 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     when ``engine="rerun"``.
     """
     engine_value = intervention_options.engine
-    strict_value = intervention_options.strict
 
     if engine_value not in {"auto", "replay", "rerun", "set_only"}:
         raise InvalidArgumentError(
@@ -406,6 +407,42 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         value_specs_before=len(ensure_intervention_spec(trace).target_value_specs),
     )
     pre_state = (trace.state, recipe_is_clean(trace))
+    # A replay transaction never adds, removes or relabels an op, so every site
+    # resolution inside it (hook validation, attachment, the replay's origin
+    # and hook-target passes) shares ONE label index instead of rebuilding it
+    # per pass. A rerun re-captures (labels can change), so it gets no scope.
+    scope = _label_index_scope() if selected_engine == "replay" else nullcontext()
+    with scope:
+        return _run_do_transaction(
+            trace,
+            site,
+            value_or_hook,
+            txn=txn,
+            pre_state=pre_state,
+            selected_engine=selected_engine,
+            engine_value=engine_value,
+            model=model,
+            x=x,
+            intervention_options=intervention_options,
+        )
+
+
+def _run_do_transaction(  # noqa: PLR0913 - the transaction's state, threaded from do_with_options
+    trace: Trace,
+    site: Any,
+    value_or_hook: Any,
+    *,
+    txn: _DoTransaction,
+    pre_state: tuple[Any, bool],
+    selected_engine: str,
+    engine_value: str,
+    model: nn.Module | None,
+    x: Any,
+    intervention_options: InterventionOptions,
+) -> Trace:
+    """Apply one ``do()`` mutation and propagate it; returns the edited trace."""
+
+    strict_value = intervention_options.strict
     try:
         mutation_kind, attached_handles = apply_do_mutation(
             trace,

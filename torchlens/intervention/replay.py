@@ -39,6 +39,7 @@ from ._param_fingerprint import (
 from ._replay_cone import (
     _disclosure_label,
     _label_key_map,
+    _replay_cone_and_maps,
     _resolve_single_origin,
     cone_of_effect,
 )
@@ -46,7 +47,6 @@ from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
-    _func_call_groups,
     _group_for_site,
     _group_representative,
     _record_capture_digest,
@@ -498,12 +498,12 @@ def _run_replay(
         run_ctx.pop("frontier", None)
     run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
     log.last_run = run_ctx
-    cone = cone_of_effect(log, origins)
+    cone, label_keys, call_groups = _replay_cone_and_maps(log, origins)
     state = _ReplayPass(
         log=log,
         origins=tuple(origins),
         origin_keys=frozenset(_replay_site_key(origin) for origin in origins),
-        label_keys=_label_key_map(log),
+        label_keys=label_keys,
         hook_targets=_hook_targets_by_label(log, hook_entries, strict=strict),
         preserve_origins=preserve_origins,
         strict=strict,
@@ -514,7 +514,6 @@ def _run_replay(
             state.overlay[_replay_site_key(origin)] = origin.out
 
     executed_call_ids: set[int] = set()
-    call_groups = _func_call_groups(log)
     cone_keys = {_replay_site_key(member) for member in cone}
     errors_non_fatal = 0
     loaded = bool(log.__dict__.get("_loaded_from_bundle", False))

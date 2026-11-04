@@ -145,7 +145,9 @@ def tensor_content_digest(value: torch.Tensor) -> str:
         # a unit stride. Materialize a dense copy only in that case.
         flat = flat.clone(memory_format=torch.contiguous_format)
     raw = flat.view(torch.uint8)
-    return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
+    # hashlib reads the unit-stride uint8 array through the buffer protocol;
+    # ``tobytes()`` would first copy every payload byte into a bytes object.
+    return hashlib.sha256(raw.numpy().data).hexdigest()
 
 
 def rollback_snapshot(site: Op) -> dict[str, Any]:
