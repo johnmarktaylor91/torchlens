@@ -2,7 +2,7 @@
 
 The plain door ``trace[key]`` returns the kind the key names (a module address
 its Module, ``address:N`` its ModuleCall, a parameter or buffer address its
-record, a label its Op). A typed door (``trace.ops``, ``trace.layers``,
+record, a bare layer label its Layer, ``label:N`` its Op). A typed door (``trace.ops``, ``trace.layers``,
 ``trace.modules``, ``trace.module_calls``, ``trace.params``, ``trace.buffers``,
 ``trace.autograd.grad_fns``) always returns its own kind, converting a key
 that names exactly one such object and refusing a key that names several with
@@ -24,7 +24,8 @@ from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
-from torchlens._errors import AmbiguousOpLookupError
+from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
+from torchlens._selection.errors import AmbiguousSiteError
 
 FC1 = "linear_1_4"
 SHARED = "linear_2_6"
@@ -102,9 +103,9 @@ def test_plain_door_other_kinds(trace: tl.Trace) -> None:
     assert trace["shared:1"] is trace.module_calls["shared:1"]
     assert isinstance(trace["fc1.weight"], Param)
     assert isinstance(trace["bn.running_mean"], Buffer)
-    assert isinstance(trace[FC1], Op)
+    assert isinstance(trace[FC1], Layer)
     assert isinstance(trace[f"{SHARED}:2"], Op)
-    grad_fn_label = trace[FC1].grad_fn_label
+    grad_fn_label = trace[f"{FC1}:1"].grad_fn_label
     assert isinstance(trace[grad_fn_label], GradFn)
 
 
@@ -114,6 +115,73 @@ def test_plain_door_buffer_version_key_gives_the_version_op(trace: tl.Trace) -> 
     version = trace["bn.running_mean:1"]
     assert isinstance(version, Op)
     assert version is trace.buffers["bn.running_mean"].versions[0]
+
+
+# --------------------------------------------------------------------------- #
+# Layer labels at the plain door: a layer label names a Layer (lanes.1, 3 Nov 2026).
+# --------------------------------------------------------------------------- #
+
+
+def test_plain_door_bare_layer_label_gives_the_layer(trace: tl.Trace) -> None:
+    """A bare layer label gives the Layer, single- or multi-pass."""
+
+    assert trace[FC1] is trace.layers[FC1]
+    assert trace[SHARED] is trace.layers[SHARED]
+    assert trace[SHARED].num_passes == 2
+
+
+def test_plain_door_pass_qualified_label_gives_the_op(trace: tl.Trace) -> None:
+    """``label:N`` and ``label:last`` give one Op; ``label:all`` the Selection."""
+
+    assert isinstance(trace[f"{FC1}:1"], Op)
+    assert trace[f"{SHARED}:2"] is trace.ops[f"{SHARED}:2"]
+    assert trace[f"{SHARED}:last"] is trace.ops[f"{SHARED}:2"]
+    assert not isinstance(trace[f"{SHARED}:all"], Op | Layer)
+    assert len(trace[f"{SHARED}:all"]) == 2
+
+
+def test_single_pass_layer_passes_reads_through_to_its_op(trace: tl.Trace) -> None:
+    """``trace[label].out`` and ``.shape`` on a single-pass Layer read its Op."""
+
+    layer, op = trace[FC1], trace[f"{FC1}:1"]
+    assert torch.equal(layer.out, op.out)
+    assert layer.shape == op.shape
+    assert layer.label == op.label
+
+
+def test_multi_pass_layer_refuses_single_reads_with_pass_spellings(trace: tl.Trace) -> None:
+    """``trace[label].out`` on a multi-pass Layer refuses naming ``label:1`` and ``label:last``."""
+
+    with pytest.raises(InvalidArgumentError) as refusal:
+        trace[SHARED].out
+    assert refusal.value.code == "layer_pass_ambiguous"
+    assert f"trace['{SHARED}:1'].out" in str(refusal.value)
+    assert f"trace['{SHARED}:last'].out" in str(refusal.value)
+
+
+def test_ops_door_keeps_the_bare_multi_pass_refusal(trace: tl.Trace) -> None:
+    """A door that must give one Op still refuses a bare multi-pass label."""
+
+    with pytest.raises(AmbiguousOpLookupError):
+        trace.ops[SHARED]
+    with pytest.raises(AmbiguousSiteError) as refusal:
+        trace[tl.label(SHARED)]
+    assert refusal.value.code == "multipass_bare_label_ambiguous"
+    assert f"trace[{SHARED!r}]" in str(refusal.value)
+
+
+def test_do_on_a_bare_multi_pass_label_edits_every_pass() -> None:
+    """``trace[label].do(...)`` on a multi-pass Layer edits each pass."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(DoorModel().eval(), torch.randn(3, 4))
+    try:
+        edited = captured[SHARED].do(lambda out, *, ctx: torch.zeros_like(out))
+        for label in (f"{SHARED}:1", f"{SHARED}:2"):
+            assert torch.count_nonzero(edited[label].out) == 0
+        assert torch.count_nonzero(edited[f"{FC1}:1"].out) > 0
+    finally:
+        captured.cleanup()
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +321,7 @@ def test_grad_fns_door_converts_op_labels_and_refuses_several(trace: tl.Trace) -
 
 
 def test_module_door_gives_the_kind_the_key_names(trace: tl.Trace) -> None:
-    """Inside a module: a layer label gives its Op, a descendant address its Module."""
+    """Inside a module: a layer label gives its Layer, a descendant address its Module."""
 
     root = trace.modules["self"]
     assert root[FC1] is trace[FC1]
