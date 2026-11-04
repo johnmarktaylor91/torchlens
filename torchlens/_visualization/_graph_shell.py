@@ -78,7 +78,7 @@ def _graph_attrs(
             fileformat=target.fileformat,
         )
     )
-    overrides = cast(VisualizationOverrides, request.overrides)
+    overrides = cast("VisualizationOverrides", request.overrides)
     for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
         if callable(arg_val):
             graph_args[arg_name] = str(arg_val(trace))
