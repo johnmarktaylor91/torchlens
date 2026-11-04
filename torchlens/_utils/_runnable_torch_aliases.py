@@ -1,8 +1,8 @@
 """Monotonic torch callable moves for sparse runnable reattachment (a data-only leaf).
 
-The resolver in ``torchlens._utils._torch_compat`` (``resolve_runnable_torch_alias``)
-reads this table; it lives apart so the compat chokepoint stays within its size
-row. This module imports nothing from torch or TorchLens.
+The resolver in ``torchlens._utils._runnable_alias_resolver``
+(``resolve_runnable_torch_alias``) reads this table; it lives apart so the resolver
+module stays logic-only. This module imports nothing from torch or TorchLens.
 """
 
 from __future__ import annotations

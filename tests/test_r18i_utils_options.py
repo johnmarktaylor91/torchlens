@@ -19,7 +19,7 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens._utils import _torch_compat
+from torchlens._utils import _runnable_alias_resolver, _torch_compat
 from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens._utils.display import _non_torch_array_summary
 from torchlens.options import CaptureOptions
@@ -32,12 +32,18 @@ from torchlens.options import CaptureOptions
 def test_m15_helper_reports_target_presence() -> None:
     """The capability probe resolves live targets and rejects absent ones."""
 
-    assert _torch_compat._runtime_alias_target_exists("torch.nn.functional", "linear") is True
-    assert _torch_compat._runtime_alias_target_exists("torch.special", "gammaln") is True
-    assert _torch_compat._runtime_alias_target_exists("torch", "add") is True
-    assert _torch_compat._runtime_alias_target_exists("torch.Tensor", "add") is True
-    assert _torch_compat._runtime_alias_target_exists("torch.special", "nonexistent_fn___") is False
-    assert _torch_compat._runtime_alias_target_exists("numpy", "linear") is False
+    assert (
+        _runnable_alias_resolver._runtime_alias_target_exists("torch.nn.functional", "linear")
+        is True
+    )
+    assert _runnable_alias_resolver._runtime_alias_target_exists("torch.special", "gammaln") is True
+    assert _runnable_alias_resolver._runtime_alias_target_exists("torch", "add") is True
+    assert _runnable_alias_resolver._runtime_alias_target_exists("torch.Tensor", "add") is True
+    assert (
+        _runnable_alias_resolver._runtime_alias_target_exists("torch.special", "nonexistent_fn___")
+        is False
+    )
+    assert _runnable_alias_resolver._runtime_alias_target_exists("numpy", "linear") is False
 
 
 def test_m15_dead_target_alias_skipped() -> None:
@@ -51,13 +57,15 @@ def test_m15_dead_target_alias_skipped() -> None:
     # recorded_version=None bypasses the version bounds (documented legacy
     # behavior); only the target-existence gate stops a dead alias here.
     assert (
-        _torch_compat.resolve_runnable_torch_alias(
+        _runnable_alias_resolver.resolve_runnable_torch_alias(
             "torch._C._special.special_nonexistent_fn___", None
         )
         is None
     )
     assert (
-        _torch_compat.resolve_runnable_torch_alias("torch._C._fft.fft_nonexistent___", "not-a-ver")
+        _runnable_alias_resolver.resolve_runnable_torch_alias(
+            "torch._C._fft.fft_nonexistent___", "not-a-ver"
+        )
         is None
     )
 
@@ -65,12 +73,14 @@ def test_m15_dead_target_alias_skipped() -> None:
 def test_m15_live_target_alias_still_resolves() -> None:
     """Real private->public redirections with live targets must keep firing."""
 
-    assert _torch_compat.resolve_runnable_torch_alias(
+    assert _runnable_alias_resolver.resolve_runnable_torch_alias(
         "torch._C._special.special_gammaln", None
     ) == ("torch.special", "gammaln", "private_to_public:_C._special.special_*->torch.special.*")
     # A present internal builtin is still intentionally routed to its public
     # wrapper (target exists) -- redirection is not blocked by the gate.
-    assert _torch_compat.resolve_runnable_torch_alias("torch._C._nn.linear", "2.5.0") == (
+    assert _runnable_alias_resolver.resolve_runnable_torch_alias(
+        "torch._C._nn.linear", "2.5.0"
+    ) == (
         "torch.nn.functional",
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
