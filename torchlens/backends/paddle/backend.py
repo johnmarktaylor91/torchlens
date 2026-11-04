@@ -303,7 +303,7 @@ class PaddleBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -340,7 +340,6 @@ class PaddleBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -408,7 +407,7 @@ class PaddleBackend:
         layer_visualizers = _default_if_missing(layer_visualizers, None)
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
-        save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
@@ -435,7 +434,7 @@ class PaddleBackend:
             )
         reject_unsupported_trace_options(
             {
-                "layers_to_save": layers_to_save,
+                "save": layers_to_save,
                 "save_grads": save_grads,
                 "output_device": output_device,
                 "activation_transform": activation_transform,

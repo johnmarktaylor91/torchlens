@@ -902,7 +902,7 @@ class MLXBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None = "all",
+        save: str | list[Any] | None = "all",
         keep_orphans: bool = False,
         output_device: str = "same",
         activation_transform: object | None = None,
@@ -936,7 +936,7 @@ class MLXBackend:
 
         reject_unsupported_trace_options(
             {
-                "layers_to_save": layers_to_save,
+                "save": save,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
                 "save_args": save_args,

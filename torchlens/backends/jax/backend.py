@@ -430,7 +430,7 @@ class JAXBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -475,8 +475,8 @@ class JAXBackend:
             Positional arguments for the callable.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; JAX preview is full-save only.
+        save
+            ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -559,7 +559,7 @@ class JAXBackend:
             Captured JAX trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
@@ -575,7 +575,6 @@ class JAXBackend:
         # distinguishable from ``MISSING`` for them.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,

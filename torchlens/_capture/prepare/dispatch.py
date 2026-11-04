@@ -201,7 +201,7 @@ def _trace_mlx_model(
         model,
         model_input_args,
         model_input_kwargs,
-        layers_to_save=capture_options._layers_to_save,
+        save=capture_options._layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         activation_transform=save_options.activation_transform,
