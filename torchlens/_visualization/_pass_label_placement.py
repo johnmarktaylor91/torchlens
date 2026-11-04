@@ -463,9 +463,14 @@ def _rect_poly_gap(rect: Rect, ring: Sequence[Point]) -> float:
     """Gap from ``rect`` to a closed, densely sampled outline; negative when they overlap."""
 
     gap = _rect_line_gap(rect, ring)
-    if gap > 0.0 and _inside(((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2), ring):
-        return -min(rect[2] - rect[0], rect[3] - rect[1]) / 2  # wholly inside a node
-    return gap
+    corners = ((rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3]))
+    inner = [c for c in corners if _inside(c, ring)]
+    if not inner:
+        return gap
+    # A corner inside the shape: the penetration is how far that corner lies from
+    # the outline, which can exceed how far the outline reaches into the box.
+    depth = max(min(math.hypot(c[0] - p[0], c[1] - p[1]) for p in ring) for c in inner)
+    return -max(depth, -gap)
 
 
 def _inside(point: Point, poly: Sequence[Point]) -> bool:
