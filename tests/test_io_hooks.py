@@ -14,7 +14,6 @@ import torchlens.postprocessing
 import torchlens.preprocessing
 from torchlens._autoroute import input as input_registry, output as output_registry
 from torchlens._autoroute._builtin_output import output_decoders_cache_key
-from torchlens.errors import PayloadUnavailableError
 from torchlens.postprocessing import ResolvedPostprocessing
 
 
@@ -199,8 +198,10 @@ def test_output_decoder_applies_to_next_trace_only() -> None:
     assert [row["batch_item"] for row in after.decode_output(k=1)["rows"]] == [0, 1]
     assert after.provenance.output_postprocessor.identifier == "three_labels"
     assert before.provenance.output_postprocessor is None
-    with pytest.raises(PayloadUnavailableError):
-        before.decode_output()
+    # A read-time decode consults the registry as it is now; the record the
+    # earlier capture stored stays unchanged.
+    before.decode_output()
+    assert before.provenance.output_postprocessor is None
 
     tl.postprocessing.unregister("three_labels")
     assert tl.trace(model, x).provenance.output_postprocessor is None

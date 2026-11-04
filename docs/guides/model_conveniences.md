@@ -10,8 +10,9 @@ live. Three registries let you teach it the same things about your own model:
 | Read class labels instead of logit indices | `tl.postprocessing.register` | decodes the output into labelled top-k rows |
 | Address a named piece of a module, such as attention heads | `tl.facets.register` | serves it as `trace.modules[...].facets[name]` |
 
-Each registers a plain function and affects future traces only: a trace made
-before you register keeps what it had. `unregister(name)` (or `tl.facets.reset()`)
+Each registers a plain function and affects future traces only: what a trace
+recorded before you registered stays as it was (a later read-time
+`decode_output()` call reads the registry as it is then). `unregister(name)` (or `tl.facets.reset()`)
 removes it again. The two processing namespaces load on import:
 `import torchlens.preprocessing` and `import torchlens.postprocessing`.
 
