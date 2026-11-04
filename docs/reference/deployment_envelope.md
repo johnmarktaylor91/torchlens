@@ -91,7 +91,8 @@ import torchlens as tl
 model_id, revision = "Qwen/Qwen2.5-0.5B-Instruct", "main"  # the id and revision you serve
 twin = transformers.AutoModelForCausalLM.from_pretrained(model_id, revision=revision).eval()
 tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, revision=revision)
-trace = tl.trace(twin, (), dict(tokenizer("The capital of France is", return_tensors="pt")))
+inputs = dict(tokenizer("The capital of France is", return_tensors="pt"))
+trace = tl.trace(twin, (), input_kwargs=inputs)
 ```
 
 ## NOT yet verified (gated on the GPU campaign)
