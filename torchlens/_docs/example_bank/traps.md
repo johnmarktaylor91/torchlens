@@ -272,8 +272,10 @@ In a right-padded batch, `[:, -1]` reads a padding position for the shorter rows
 ```python
 batch = torch.tensor([[5, 17, 42, 8, 3], [9, 4, 11, 0, 0]])
 mask = torch.tensor([[1, 1, 1, 1, 1], [1, 1, 1, 0, 0]])
-hidden = tl.trace(lm, batch, input_kwargs={"attention_mask": mask})["transformer.ln_f"].out
-alone = tl.trace(lm, batch[1:, :3])["transformer.ln_f"].out[0, -1]
+padded = tl.trace(lm, batch, input_kwargs={"attention_mask": mask})
+hidden = padded["transformer.ln_f"].out
+short = tl.trace(lm, batch[1:, :3])
+alone = short["transformer.ln_f"].out[0, -1]
 print(torch.allclose(hidden[1, -1], alone, atol=1e-5))
 # Output:
 # False
@@ -291,8 +293,10 @@ Pass the mask with `input_kwargs` and read each row's last real token.
 ```python
 batch = torch.tensor([[5, 17, 42, 8, 3], [9, 4, 11, 0, 0]])
 mask = torch.tensor([[1, 1, 1, 1, 1], [1, 1, 1, 0, 0]])
-hidden = tl.trace(lm, batch, input_kwargs={"attention_mask": mask})["transformer.ln_f"].out
-alone = tl.trace(lm, batch[1:, :3])["transformer.ln_f"].out[0, -1]
+padded = tl.trace(lm, batch, input_kwargs={"attention_mask": mask})
+hidden = padded["transformer.ln_f"].out
+short = tl.trace(lm, batch[1:, :3])
+alone = short["transformer.ln_f"].out[0, -1]
 last = mask.sum(dim=1) - 1
 print(torch.allclose(hidden[1, last[1]], alone, atol=1e-5))
 # Output:
