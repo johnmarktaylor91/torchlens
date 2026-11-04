@@ -438,6 +438,7 @@ a key that names exactly one such object; several matches refuse `ambiguous_op_l
 naming the `:N` spellings (glossary: *Indexing coherence*).
 
 ```python
+# API sketch: illustrative addresses
 trace["encoder.mlp"]             # Module (called once or many times)
 trace["encoder.mlp:2"]           # ModuleCall
 trace["linear_3_7"]              # Op; trace["linear_3_7"] of a multi-pass layer refuses
