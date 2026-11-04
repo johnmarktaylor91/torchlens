@@ -96,7 +96,7 @@ from ..intervention.types import (
     Unsupported,
 )
 from . import ArtifactError
-from ._save_gates import intervention_replay_diagnostics
+from ._replay_diagnostics import intervention_replay_diagnostics
 
 
 @dataclass(slots=True)
