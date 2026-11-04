@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 import torch.nn as nn
 
-from ..intervention.types import CapturedArgTemplate, LiteralValue
 from ._moe_layouts import _Layout, _layouts
 from ._runtime_handles import source_model_from_trace
 
@@ -50,12 +49,12 @@ def _ancestors(ops: dict[str, Op], label: str) -> set[str]:
 def _last_axis(op: Op, position: int, default: int, rank: int | None = None) -> bool:
     """Require a statically recorded expert-axis reduction/selection."""
     template = op.args_template
-    if not isinstance(template, CapturedArgTemplate):
+    if template is None:
         return False
     args = template.args
     kwargs = dict(template.kwargs)
-    dim = kwargs.get("dim", args[position] if len(args) > position else LiteralValue(default))
-    dim = dim.value if isinstance(dim, LiteralValue) else None
+    component = kwargs.get("dim", args[position] if len(args) > position else None)
+    dim = default if component is None else getattr(component, "value", None)
     rank = len(op.shape) if rank is None else rank
     return isinstance(dim, int) and rank > 0 and -rank <= dim < rank and dim % rank == rank - 1
 
