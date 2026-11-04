@@ -21,11 +21,13 @@ v2.38.0 was tagged but never published to PyPI: its release checks failed. 2.38.
   `selection_trace_mismatch`.
 - **intervention**: `tl.steer` infers `dim` when exactly one axis of the site matches the
   direction's length.
-- **io**: receptive-field reads work on loaded traces.
+- **receptive field**: validating or querying a loaded trace that contains a matmul or attention
+  op no longer fails; operand shapes fall back to the recorded shapes.
 - **backends**: PaddlePaddle and MLX traces record the root module's class name; TensorFlow
   parameter addresses no longer carry the Keras root-model prefix; loading a saved TensorFlow
   trace refuses again when the TensorFlow runtime does not match; the JAX root module lists its
-  children, and Equinox `Sequential` parameters are named by position.
+  children, and a parameter held in an Equinox `Sequential` is named by its path from the owning
+  module (`layers.0.weight`), so the trace saves.
 - **docs**: the learn notebooks use `trace.ops[name]`; the FAQ's version answers are factual.
 
 ## v2.38.0 (2026-11-04)
