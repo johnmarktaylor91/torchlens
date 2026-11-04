@@ -12,6 +12,7 @@ docs-md	AGENTS.md	2.15
 docs-md	AGENTS.md	20
 docs-md	AGENTS.md	20,039
 docs-md	AGENTS.md	20,787
+docs-md	AGENTS.md	20,894
 docs-md	AGENTS.md	2026
 docs-md	AGENTS.md	26.04
 docs-md	AGENTS.md	28
@@ -2332,8 +2333,7 @@ docs-md	docs/maintainers/architecture.md	860.
 docs-md	docs/maintainers/architecture.md	900
 docs-md	docs/maintainers/architecture.md	91
 docs-md	docs/maintainers/docstring_examples_census.md	10
-docs-md	docs/maintainers/docstring_examples_census.md	1059
-docs-md	docs/maintainers/docstring_examples_census.md	1060
+docs-md	docs/maintainers/docstring_examples_census.md	1061
 docs-md	docs/maintainers/docstring_examples_census.md	11
 docs-md	docs/maintainers/docstring_examples_census.md	12
 docs-md	docs/maintainers/docstring_examples_census.md	14
@@ -2746,7 +2746,7 @@ docs-md	docs/maintainers/where.md	1281
 docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
-docs-md	docs/maintainers/where.md	1295
+docs-md	docs/maintainers/where.md	1292
 docs-md	docs/maintainers/where.md	13
 docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
@@ -2758,7 +2758,6 @@ docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1341
 docs-md	docs/maintainers/where.md	1345
-docs-md	docs/maintainers/where.md	1347
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1360
@@ -2810,7 +2809,7 @@ docs-md	docs/maintainers/where.md	152
 docs-md	docs/maintainers/where.md	1523
 docs-md	docs/maintainers/where.md	153
 docs-md	docs/maintainers/where.md	154
-docs-md	docs/maintainers/where.md	1541
+docs-md	docs/maintainers/where.md	1546
 docs-md	docs/maintainers/where.md	155
 docs-md	docs/maintainers/where.md	1556
 docs-md	docs/maintainers/where.md	1560
@@ -2855,7 +2854,10 @@ docs-md	docs/maintainers/where.md	17539
 docs-md	docs/maintainers/where.md	17518
 docs-md	docs/maintainers/where.md	1750
 docs-md	docs/maintainers/where.md	17500
+docs-md	docs/maintainers/where.md	17545
 docs-md	docs/maintainers/where.md	176
+docs-md	docs/maintainers/where.md	1761
+docs-md	docs/maintainers/where.md	1762
 docs-md	docs/maintainers/where.md	1768
 docs-md	docs/maintainers/where.md	177
 docs-md	docs/maintainers/where.md	1772
@@ -2863,12 +2865,10 @@ docs-md	docs/maintainers/where.md	1776
 docs-md	docs/maintainers/where.md	1774
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	17843
-docs-md	docs/maintainers/where.md	1786
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
 docs-md	docs/maintainers/where.md	180
 docs-md	docs/maintainers/where.md	181
-docs-md	docs/maintainers/where.md	1813
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
@@ -3066,10 +3066,9 @@ docs-md	docs/maintainers/where.md	306
 docs-md	docs/maintainers/where.md	307
 docs-md	docs/maintainers/where.md	308
 docs-md	docs/maintainers/where.md	309
-docs-md	docs/maintainers/where.md	30996
 docs-md	docs/maintainers/where.md	31
 docs-md	docs/maintainers/where.md	310
-docs-md	docs/maintainers/where.md	31014
+docs-md	docs/maintainers/where.md	31008
 docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	314
@@ -3090,7 +3089,6 @@ docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
 docs-md	docs/maintainers/where.md	333
 docs-md	docs/maintainers/where.md	334
-docs-md	docs/maintainers/where.md	33592
 docs-md	docs/maintainers/where.md	336
 docs-md	docs/maintainers/where.md	337
 docs-md	docs/maintainers/where.md	338
@@ -3099,6 +3097,7 @@ docs-md	docs/maintainers/where.md	34
 docs-md	docs/maintainers/where.md	340
 docs-md	docs/maintainers/where.md	341
 docs-md	docs/maintainers/where.md	34163
+docs-md	docs/maintainers/where.md	34159
 docs-md	docs/maintainers/where.md	342
 docs-md	docs/maintainers/where.md	3421
 docs-md	docs/maintainers/where.md	3429
@@ -3130,12 +3129,11 @@ docs-md	docs/maintainers/where.md	364
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
 docs-md	docs/maintainers/where.md	367
-docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	369
 docs-md	docs/maintainers/where.md	36953
 docs-md	docs/maintainers/where.md	36975
+docs-md	docs/maintainers/where.md	36973
 docs-md	docs/maintainers/where.md	36999
-docs-md	docs/maintainers/where.md	36942
 docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
@@ -3347,8 +3345,6 @@ docs-md	docs/maintainers/where.md	593
 docs-md	docs/maintainers/where.md	594
 docs-md	docs/maintainers/where.md	595
 docs-md	docs/maintainers/where.md	596
-docs-md	docs/maintainers/where.md	598
-docs-md	docs/maintainers/where.md	5966
 docs-md	docs/maintainers/where.md	597
 docs-md	docs/maintainers/where.md	599
 docs-md	docs/maintainers/where.md	6.3
@@ -3404,8 +3400,8 @@ docs-md	docs/maintainers/where.md	662
 docs-md	docs/maintainers/where.md	660874
 docs-md	docs/maintainers/where.md	664
 docs-md	docs/maintainers/where.md	667
-docs-md	docs/maintainers/where.md	668348
 docs-md	docs/maintainers/where.md	669
+docs-md	docs/maintainers/where.md	669913
 docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
 docs-md	docs/maintainers/where.md	672
@@ -3428,6 +3424,7 @@ docs-md	docs/maintainers/where.md	692
 docs-md	docs/maintainers/where.md	693
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	695
+docs-md	docs/maintainers/where.md	6956
 docs-md	docs/maintainers/where.md	698
 docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
@@ -3471,8 +3468,8 @@ docs-md	docs/maintainers/where.md	752
 docs-md	docs/maintainers/where.md	754
 docs-md	docs/maintainers/where.md	755
 docs-md	docs/maintainers/where.md	756
-docs-md	docs/maintainers/where.md	7560
 docs-md	docs/maintainers/where.md	757
+docs-md	docs/maintainers/where.md	7573
 docs-md	docs/maintainers/where.md	76
 docs-md	docs/maintainers/where.md	760
 docs-md	docs/maintainers/where.md	762
@@ -3488,7 +3485,6 @@ docs-md	docs/maintainers/where.md	776
 docs-md	docs/maintainers/where.md	779
 docs-md	docs/maintainers/where.md	78
 docs-md	docs/maintainers/where.md	780
-docs-md	docs/maintainers/where.md	781
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	783
 docs-md	docs/maintainers/where.md	785
@@ -3537,7 +3533,6 @@ docs-md	docs/maintainers/where.md	86
 docs-md	docs/maintainers/where.md	862
 docs-md	docs/maintainers/where.md	866
 docs-md	docs/maintainers/where.md	863
-docs-md	docs/maintainers/where.md	8669
 docs-md	docs/maintainers/where.md	8663
 docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	870
@@ -3555,6 +3550,7 @@ docs-md	docs/maintainers/where.md	9135
 docs-md	docs/maintainers/where.md	9103
 docs-md	docs/maintainers/where.md	914
 docs-md	docs/maintainers/where.md	9102
+docs-md	docs/maintainers/where.md	914
 docs-md	docs/maintainers/where.md	92
 docs-md	docs/maintainers/where.md	922
 docs-md	docs/maintainers/where.md	923
