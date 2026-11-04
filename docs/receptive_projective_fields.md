@@ -124,6 +124,22 @@ forward_between = early.projective_field.at((3, 3), target=late)
 result grid. The `unit` always belongs to the view owner: the target for receptive queries and
 the source for projective queries.
 
+A projective query with no `target=` needs one reachable model output. When the source also
+reaches cache tensors, as a decoder with `use_cache=True` returns its `past_key_values`, the
+query answers the primary output: the output role whose last segment is `logits`, else the first
+non-cache output in model output order. An output role counts as a cache when a path segment is
+`past_key_values`, `presents` or `mems`, or contains `cache`. Two real outputs and no cache still
+raise `AmbiguousTargetError`, and `target=` selects any role, a cache tensor included:
+
+```python
+# GPT-2 with use_cache=True returns output.logits and every cached key and value.
+logits_side = op.projective_field.at((3, 0))                       # same as target="output.logits"
+cached_side = op.projective_field.at((3, 0), target="output.past_key_values.layers.1.keys")
+```
+
+Through causal attention the logits answer is the window refusal that points at `probe_grad()`,
+since a causal sequence axis is not a uniform window; `.of()` and `.status` answer per target.
+
 Trace tables are geometric and do not invoke backward:
 
 ```python

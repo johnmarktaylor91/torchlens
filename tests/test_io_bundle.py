@@ -411,11 +411,12 @@ def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Pa
             "does not read files saved by torchlens 0.x",
         ),
         (
-            # An older writer of the same major release loads and is logged.
+            # An older writer at or above the format-11 floor (a pre-release of
+            # the floor release) loads and is logged.
             "torchlens_older_supported",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.36.1"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.38.0rc1"),
             "info_log",
-            "2.36.1",
+            "2.38.0rc1",
         ),
         (
             "python_major_mismatch",

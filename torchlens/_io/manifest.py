@@ -517,7 +517,7 @@ class Manifest:
         ------
         ArtifactTooOldError
             If the manifest predates the current ``tlspec_version`` (torchlens
-            2.x saved it). Checked before the remaining required fields so a
+            2.37 or earlier saved it). Checked before the remaining required fields so a
             genuinely old manifest (which also lacks newer required fields)
             refuses with the floor named instead of a missing-field error.
         ArtifactError
@@ -909,7 +909,7 @@ def enforce_version_policy(manifest: Manifest) -> None:
     ------
     ArtifactTooOldError
         If the bundle's ``tlspec_version`` is older than the current format, which
-        means torchlens 2.x saved it.
+        means torchlens 2.37 or earlier saved it.
     ArtifactError
         If the bundle targets a newer I/O format or an incompatible torch
         major version.

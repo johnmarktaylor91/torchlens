@@ -4,8 +4,8 @@ The ecosystem surface packages the entry-point provider machinery:
 :mod:`torchlens._ecosystem.plugins` is the entry-point provider surface, with
 metadata-only discovery and explicit distribution-scoped activation.
 
-The artifact compatibility window and ``tl.migrate`` left with the 2.x saved-file
-readers: torchlens 3 reads no file saved by torchlens 2.x.
+The artifact compatibility window and ``tl.migrate`` left with the pre-2.38 saved-file
+readers: torchlens 2.38 reads no file saved by torchlens 2.37 and earlier.
 """
 
 from __future__ import annotations
