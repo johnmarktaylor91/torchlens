@@ -446,21 +446,21 @@ def _select_target_descriptor(
         if primary is not None:
             return descriptors[primary]
         roles = ", ".join(descriptors)
-        prefix = "This source" if source_label is None else f"Source {source_label!r}"
-        raise AmbiguousTargetError(
-            f"{prefix} has multiple reachable targets: {roles}. "
-            "Select one with view[target_op] or target=<io_role>."
-        )
-    names = _target_identities(target)
-    matched = [
-        (role, descriptor)
-        for role, descriptor in descriptors.items()
-        if {role, descriptor.input_op_label} & set(names)
-    ]
-    if not matched:
-        shown = names[0] if len(names) == 1 else ", ".join(names)
-        raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
-    if len(matched) != 1 and len(names) != 1:
-        roles = ", ".join(role for role, _ in matched)
-        raise AmbiguousTargetError(f"Select one reachable target; available target roles: {roles}.")
-    return matched[0][1]
+    else:
+        names = _target_identities(target)
+        matched = [
+            role
+            for role, descriptor in descriptors.items()
+            if {role, descriptor.input_op_label} & set(names)
+        ]
+        if not matched:
+            shown = names[0] if len(names) == 1 else ", ".join(names)
+            raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
+        if len(matched) == 1 or len(names) == 1:
+            return descriptors[matched[0]]
+        roles = ", ".join(matched)  # a multi-output module reaches several of its outputs
+    prefix = "This source" if source_label is None else f"Source {source_label!r}"
+    raise AmbiguousTargetError(
+        f"{prefix} has multiple reachable targets: {roles}. "
+        "Select one with view[target_op] or target=<io_role>."
+    )
