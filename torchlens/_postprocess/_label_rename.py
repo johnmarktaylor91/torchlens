@@ -28,7 +28,7 @@ _FieldCache = dict[type, Any]
 
 
 def _rename_template_parent_refs(
-    value: Any, mapping: dict[str, str], parent_ref_cls: type, cache: _FieldCache | None = None
+    value: Any, mapping: dict[str, str], parent_ref_cls: type[Any], cache: _FieldCache | None = None
 ) -> Any:
     """Rename ``ParentRef.parent_label`` leaves in replay templates.
 
@@ -53,28 +53,25 @@ def _rename_template_parent_refs(
         return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
     if cache is None:
         cache = {}
-    if isinstance(value, tuple):
-        return tuple(
-            [_rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value]
-        )
-    if isinstance(value, list):
-        return [
+    if isinstance(value, (tuple, list)):
+        items = [
             _rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value
         ]
+        return tuple(items) if isinstance(value, tuple) else items
     if isinstance(value, dict):
         return {
             key: _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
             for key, item in value.items()
         }
     names = dataclass_field_names(value, cache)
-    if names is None:
-        return value
-    updates = {}
-    for name in names:
-        item = getattr(value, name, _ABSENT)
-        if item is not _ABSENT:
-            updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
-    return replace(value, **updates)
+    if names is not None:
+        updates = {}
+        for name in names:
+            item = getattr(value, name, _ABSENT)
+            if item is not _ABSENT:
+                updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
+        value = replace(value, **updates)
+    return value
 
 
 def _rename_label_dataclass(
@@ -131,7 +128,7 @@ def _rename_replay_fields(
     mapping: dict[str, str],
     set_entry_field: Callable[[str, Any], None],
     cache: _FieldCache,
-    parent_ref_cls: type,
+    parent_ref_cls: type[Any],
 ) -> None:
     """Rename labels in one Op's edge uses, replay templates and edit records.
 
