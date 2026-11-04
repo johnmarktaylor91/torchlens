@@ -673,7 +673,7 @@ tests/test_hon_summary_honesty.py,2,0.06,0.04,unmarked
 tests/test_hook_handle_remove_mid_rerun.py,6,1.40,0.50,unmarked
 tests/test_hybrid_registered_container_kind.py,3,0.01,0.01,unmarked
 tests/test_identity_shims.py,14,2.00,0.48,unmarked
-tests/test_ignored_torch_capture.py,55,3.59,0.31,unmarked
+tests/test_ignored_torch_capture.py,57,7.00,0.61,unmarked
 tests/test_implicit_boundary_tightening.py,8,0.32,0.07,unmarked
 tests/test_import_hygiene.py,25,34.83,3.88,heavy
 tests/test_indexing_coherence.py,27,0.46,0.28,unmarked
