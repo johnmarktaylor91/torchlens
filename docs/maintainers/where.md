@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1511 modules, 659692 lines, 0 modules without a docstring.
+83 packages, 1511 modules, 659684 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 78 | 36946 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 78 | 36942 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1935 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5401 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 69 | 31000 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 69 | 30996 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4767 |
 
 ## Modules by package
@@ -1658,7 +1658,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (78 modules, 36946 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (78 modules, 36942 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1739,7 +1739,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 339 |
 | `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1420 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 560 |
-| `types` | (syntax error at line 10) | 862 |
+| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 858 |
 
 ### `torchlens.intervention._super`
 
@@ -2097,7 +2097,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (69 modules, 31000 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (69 modules, 30996 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2169,7 +2169,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `diagnostics` | Structured replay-failure diagnostics for forward validation. | 577 |
 | `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2832 |
 | `invariants` | Metadata invariant checks for ''Trace'' and its sub-objects. | 490 |
-| `status` | (syntax error at line 9) | 702 |
+| `status` | Replay-validation status objects. | 698 |
 
 ### `torchlens.viz`
 
