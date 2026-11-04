@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1565 modules, 672845 lines, 0 modules without a docstring.
+83 packages, 1565 modules, 672868 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 36999 |
-| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8961 |
+| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8990 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11736 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
@@ -55,8 +55,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 18 | 6959 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8662 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6861 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6367 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6858 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6364 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8512 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 117 | 55728 |
@@ -520,7 +520,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8961 lines)
+The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8990 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -532,7 +532,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25
 | `_record_refs` | Resolve the closed record-reference and pending-value grammar. | 60 |
 | `_tables` | Record tables of the 3.0 saved format: reading, digest checks and the column contract. | 298 |
 | `carried` | Shapes of the tlspec 11 fields a 3.0 manifest still carries. | 208 |
-| `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 142 |
+| `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 170 |
 | `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 326 |
 | `contract` | Constants of the 2.38 saved format, pinned against the persisted-field contract. | 330 |
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 757 |
@@ -546,7 +546,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 285 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 122 |
-| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 798 |
+| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 799 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 677 |
 | `writer` | The 2.38 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 699 |
 
@@ -1250,7 +1250,7 @@ JAX backend preview exports. (10 modules, 8662 lines)
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (17 modules, 6861 lines)
+Technical-preview MLX backend for TorchLens. (17 modules, 6858 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1262,7 +1262,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6861 lines)
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
 | `_replay_frames` | Module-call frames for the MLX AD replay observers. | 51 |
 | `_tap_observers` | MLX intermediate-gradient tap observers and the array helpers they share. | 552 |
-| `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2515 |
+| `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2512 |
 | `capabilities` | Registry-backed capability exports for the technical-preview MLX backend. | 38 |
 | `external_arrays` | Arrays a forward can reach from outside itself: the closure-constant census. | 147 |
 | `interventions` | Static-label live interventions for the technical-preview MLX backend. | 363 |
@@ -1274,14 +1274,14 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6861 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6367 lines)
+Paddle backend preview. (14 modules, 6364 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Paddle backend preview. | 7 |
 | `_capture_helpers` | Private helpers the Paddle backend's capture path calls (file cap split). | 74 |
 | `_param_writes` | Paddle parameter-write guard for the preview capture. | 106 |
-| `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2754 |
+| `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2751 |
 | `capabilities` | Registry-backed capability exports for the Paddle backend preview. | 38 |
 | `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
