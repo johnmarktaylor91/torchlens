@@ -1,14 +1,17 @@
 """Typed, coded refusals raised by the framework backends' public entry points.
 
 Same contract as ``torchlens._entry_refusals``: one stable code per helper, a concrete
-remedy, and a class that subclasses the builtin (``ValueError``) the site raised before.
+remedy, and a class that subclasses the builtin the site raised before (``ValueError``, or
+``RuntimeError`` for the torch build check, which lives here because only the torch backend
+reads that private class).
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
-from typing import NoReturn
+from typing import Any, NoReturn
 
+from .._entry_refusals import _DependencyIncompatibleError
 from .._errors import InvalidArgumentError
 from ._errors import BackendRegistryError, BackendUnsupportedError
 
@@ -179,3 +182,16 @@ def refuse_tf_replay_diverged() -> NoReturn:
             "training=False), then capture again"
         ),
     )
+
+
+def require_tensorbase_class(tensorbase_cls: type[Any] | None) -> type[Any]:
+    """Return ``tensorbase_cls``; raise ``torch_tensorbase_unavailable`` when it is ``None``."""
+
+    if tensorbase_cls is None:
+        raise _DependencyIncompatibleError(
+            "TorchLens requires torch._C.TensorBase / _TensorBase (torch >= 2.1) for the "
+            "completeness witness originals; this torch build exposes neither",
+            code="torch_tensorbase_unavailable",
+            remedy="install torch 2.1 or newer",
+        )
+    return tensorbase_cls

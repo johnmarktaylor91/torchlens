@@ -58,7 +58,6 @@ import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __c
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._entry_refusals import require_tensorbase_class
 from ..._errors import CaptureGapWarning
 from ..._utils import _exception_notes, _torch_compat
 from ..._utils._callable_safety import private_c_forward_op_module_names
@@ -68,6 +67,7 @@ from ..._utils._torch_compat import (
 )
 from ..._utils._torch_symbols import torch_attr
 from ...errors import ScalarEscapeWarning
+from .._entry_refusals import require_tensorbase_class
 from ._completeness_audited import (
     _EXPECTED_OPAQUE_WRAPPERS,
     AUDITED_COMPLETENESS_BOUNDARIES,

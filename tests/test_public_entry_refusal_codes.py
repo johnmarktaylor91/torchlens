@@ -46,7 +46,7 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
     ),
     (
         "tensorbase",
-        lambda: refusals.require_tensorbase_class(None),
+        lambda: backend_refusals.require_tensorbase_class(None),
         RuntimeError,
         "torch_tensorbase_unavailable",
     ),
@@ -353,7 +353,6 @@ def _assert_coded(exc: BaseException, builtin: type[BaseException], code: str) -
     assert isinstance(remedy, str) and remedy.strip()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("thunk", "builtin", "code"),
     [case[1:] for case in HELPER_CASES],
@@ -369,7 +368,6 @@ def test_entry_refusal_helper_is_coded(
     _assert_coded(exc_info.value, builtin, code)
 
 
-@pytest.mark.smoke
 def test_internal_invariant_class_keeps_both_builtins() -> None:
     """The internal-invariant class answers both former ``except`` spellings."""
 
@@ -380,7 +378,6 @@ def test_internal_invariant_class_keeps_both_builtins() -> None:
     assert type(as_value.value) is type(as_runtime.value)
 
 
-@pytest.mark.smoke
 def test_public_entry_tap_signal() -> None:
     """``observers.tap`` refuses an unknown signal with ``observer_signal_invalid``."""
 
@@ -389,7 +386,6 @@ def test_public_entry_tap_signal() -> None:
     _assert_coded(exc_info.value, ValueError, "observer_signal_invalid")
 
 
-@pytest.mark.smoke
 def test_public_entry_log_value_outside_trace() -> None:
     """``observers.log_value`` outside a capture refuses ``capture_context_required``."""
 
@@ -398,7 +394,6 @@ def test_public_entry_log_value_outside_trace() -> None:
     _assert_coded(exc_info.value, RuntimeError, "capture_context_required")
 
 
-@pytest.mark.smoke
 def test_public_entry_validate_tlspec_file(tmp_path: Path) -> None:
     """``validate_tlspec`` on a file refuses ``tlspec_path_not_directory``."""
 
@@ -411,7 +406,6 @@ def test_public_entry_validate_tlspec_file(tmp_path: Path) -> None:
     _assert_coded(exc_info.value, ValueError, "tlspec_path_not_directory")
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("manifest_text", "code"),
     [("{", "manifest_unreadable"), (json.dumps([1, 2]), "manifest_not_json_object")],
@@ -432,7 +426,6 @@ def test_public_entry_validate_tlspec_manifest(
     _assert_coded(exc_info.value, ValueError, code)
 
 
-@pytest.mark.smoke
 def test_public_entry_attribute_walk_segment() -> None:
     """``experimental.attribute_walk`` refuses a malformed segment."""
 
@@ -443,7 +436,6 @@ def test_public_entry_attribute_walk_segment() -> None:
     _assert_coded(exc_info.value, ValueError, "attribute_walk_segment_invalid")
 
 
-@pytest.mark.smoke
 def test_public_entry_auto_capture_every(monkeypatch: pytest.MonkeyPatch) -> None:
     """``experimental.auto_capture`` refuses a non-positive ``every``."""
 
@@ -457,7 +449,6 @@ def test_public_entry_auto_capture_every(monkeypatch: pytest.MonkeyPatch) -> Non
     _assert_coded(exc_info.value, ValueError, "auto_capture_every_invalid")
 
 
-@pytest.mark.smoke
 def test_public_entry_text_table_limit() -> None:
     """``viz.batch_summary.text_table`` refuses ``max_n`` below one."""
 
@@ -468,7 +459,6 @@ def test_public_entry_text_table_limit() -> None:
     _assert_coded(exc_info.value, ValueError, "viz_limit_invalid")
 
 
-@pytest.mark.smoke
 def test_public_entry_backend_register_duplicate() -> None:
     """``backends.register`` refuses a name that is already registered."""
 

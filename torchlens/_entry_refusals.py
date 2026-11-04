@@ -82,19 +82,6 @@ def refuse_if_foreign_workspace(owner: object, trace_state: object) -> None:
         )
 
 
-def require_tensorbase_class(tensorbase_cls: type[Any] | None) -> type[Any]:
-    """Return ``tensorbase_cls``; raise ``torch_tensorbase_unavailable`` when it is ``None``."""
-
-    if tensorbase_cls is None:
-        raise _DependencyIncompatibleError(
-            "TorchLens requires torch._C.TensorBase / _TensorBase (torch >= 2.1) for the "
-            "completeness witness originals; this torch build exposes neither",
-            code="torch_tensorbase_unavailable",
-            remedy="install torch 2.1 or newer",
-        )
-    return tensorbase_cls
-
-
 def refuse_if_exemptions_over_budget(count: int, budget: int) -> None:
     """Raise ``escape_exemption_budget_exceeded`` when ``count`` exceeds ``budget``."""
 
