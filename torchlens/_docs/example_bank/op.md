@@ -1060,7 +1060,8 @@ print("transform_fn_source", op.transform_fn_source.func_name)
 
 ```python
 trace = tl.trace(model, x)
-edited = trace.fork().ops["relu_1_2"].do(tl.zero_ablate())
+fork = trace.fork()
+edited = fork.ops["relu_1_2"].do(tl.zero_ablate())
 op = edited.ops["relu_1_2"]
 print("is_edited", op.is_edited)
 print("edits", len(op.edits))
