@@ -423,7 +423,12 @@ print(sorted(shown), type(shown["clean"]).__name__)
 bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)}, baseline="clean")
 print(bundle.summary())
 # Output:
-# TODO
+# Bundle(n_members=2, names=['clean', 'shifted'], baseline='clean', structurally_consistent=True)
+#   members (2): clean (baseline), shifted
+#   outcomes: complete=2
+#   baseline: 'clean'
+#   relations: 0
+#   structurally consistent: True
 ```
 
 ### bundle-to-pandas
@@ -439,7 +444,8 @@ frame = bundle.to_pandas()
 print(len(frame), list(frame.columns)[:2])
 print(frame.groupby("member").size().to_dict())
 # Output:
-# TODO
+# 10 ['member', 'layer_label']
+# {'clean': 5, 'shifted': 5}
 ```
 
 ### bundle-to-agent-json
@@ -456,7 +462,9 @@ print(dump["schema"], dump["member_count"], dump["baseline_name"])
 print(dump["outcome"], dump["structurally_consistent"])
 print(sorted(dump["members"]), sorted(dump["members"]["clean"])[:3])
 # Output:
-# TODO
+# torchlens.agent_bundle.v1 2 clean
+# {'complete': 2} True
+# ['clean', 'shifted'] ['capture', 'counts', 'guide']
 ```
 
 ## Relations between members

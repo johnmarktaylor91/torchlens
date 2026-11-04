@@ -452,7 +452,7 @@ print(type(report).__name__)
 print(str(report).splitlines()[0])
 # Output:
 # HealthReport
-# HealthReport: no issues found; 3 checks run, 7 skipped
+# HealthReport: 0 findings, 3 checks run, 7 skipped
 ```
 
 ### trace-capabilities
@@ -897,10 +897,20 @@ print(status.message)
 print("metadata", trace.check_metadata_invariants())
 print("validation_replay_status", trace.validation_replay_status)
 # Output:
-# forward ValidationStatus('unverified', backend='torch', source='live', reason='region_not_per_op_replayable'; read .message)
+# forward ValidationStatus: unverified, torch, live, 1 replayed, 0 failed
+#   available available
+#   reason    region_not_per_op_replayable
+#   message   Replay validation partially verified this trace: 1 nodes replayed, 0 pure nodes unverified, 0 effect regions unverified, 3 legacy regions unverified, 0 failures.
+#   replay    1 replayed, 3 unverified, 0 failed
+#   more      .decisions  .unverified_reason_counts  .exempted_reason_counts
 # Replay validation partially verified this trace: 1 nodes replayed, 0 pure nodes unverified, 0 effect regions unverified, 3 legacy regions unverified, 0 failures.
 # metadata True
-# validation_replay_status ValidationStatus('unverified', backend='torch', source='live', reason='region_not_per_op_replayable'; read .message)
+# validation_replay_status ValidationStatus: unverified, torch, live, 1 replayed, 0 failed
+#   available available
+#   reason    region_not_per_op_replayable
+#   message   Replay validation partially verified this trace: 1 nodes replayed, 0 pure nodes unverified, 0 effect regions unverified, 3 legacy regions unverified, 0 failures.
+#   replay    1 replayed, 3 unverified, 0 failed
+#   more      .decisions  .unverified_reason_counts  .exempted_reason_counts
 ```
 
 ## Rebuilding outputs
@@ -1023,7 +1033,7 @@ print("aten_gaps", type(trace.aten_gaps).__name__)
 # Output:
 # has_aten_ops True
 # aten_ops True
-# aten_gaps tuple
+# aten_gaps RecordTuple
 ```
 
 ### trace-logged-values
