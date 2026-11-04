@@ -9866,6 +9866,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/transformer/_generation_attention.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/transformer/_records.py",
   "has_default": false,
   "sites": 4,

@@ -4595,3 +4595,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0
 source: 33689a4385095cbcd31708b783e19d5e5cb1247a (dirty)
 recorded: 2026-11-04T03:03:43.073143+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-148 owner merge: the gen-views consumer read generation.steps[step].kind in transformer/_generation_attention.py was missing from static_scan.json; regenerated
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a859ad3151a071b8ce00f43aacc9a845d48a4146 (dirty)
+recorded: 2026-11-04T05:07:20.241022+00:00
