@@ -66,16 +66,16 @@ class CallBoundModule:
         return getattr(self._module, name)
 
     @property
-    def calls(self) -> tuple[Any, ...]:
-        """The bound call, as the only call."""
+    def calls(self) -> Any:
+        """The bound call, as the only call, in the Module's own call accessor type."""
 
-        return (self._call,)
+        return type(self._module.calls)({self._call.call_index: self._call})
 
     @property
-    def ops(self) -> tuple[Any, ...]:
+    def ops(self) -> Any:
         """The bound call, as the only per-call entry (``Module.ops`` holds calls)."""
 
-        return (self._call,)
+        return self.calls
 
     @property
     def num_calls(self) -> int:
@@ -126,7 +126,7 @@ def bound_child(subject: CallBoundModule, child: Any) -> Any | None:
     """
 
     children = set(getattr(subject._call, "call_children", ()) or ())
-    inside = [call for call in child.calls if getattr(call, "label", None) in children]
+    inside = [call for call in child.calls.values() if getattr(call, "label", None) in children]
     if len(inside) == 1:
         return CallBoundModule(child, inside[0])
     if not inside and child.num_calls == 1 and subject._module.num_calls == 1:

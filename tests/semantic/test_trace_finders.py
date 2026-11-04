@@ -125,7 +125,8 @@ def test_module_call_facets_read_each_pass_of_a_shared_layer() -> None:
 
     assert shared.num_calls == 2
     q_values = []
-    for index, call in enumerate(shared.calls):
+    for index in range(shared.num_calls):
+        call = shared.calls[index]
         assert call.facets.has("q")
         assert call.facets.declared()["q"].status == "available_now"
         q_value = call.facets.q.value
@@ -146,5 +147,5 @@ def test_module_call_facets_match_the_module_view_for_a_single_call() -> None:
 
     assert torch.equal(attn.calls[0].facets.q.value, attn.facets.q.value)
     assert torch.equal(attn.calls[0].facets.v.value, attn.facets.v.value)
-    for call in log.modules["dropout"].calls:
+    for call in log.modules["dropout"].calls.values():
         assert not call.facets.has("q")
