@@ -52,7 +52,7 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
     selection = trace[tl.func("relu")]
     objects = [
         trace.event_stream,
-        trace.event_stream.op_events,
+        trace.op_events,
         trace.aten_ops,
         *trace.aten_ops,
         trace.autograd.grad_fns[0],
