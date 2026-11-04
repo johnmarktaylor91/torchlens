@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Final, cast
 
 from ._deprecations import MISSING, MissingType
+from ._utils._display_options import _OptionsDisplay
 
 
 def _explicit_fields(instance: object) -> frozenset[str]:
@@ -114,8 +115,8 @@ _ECHO_FIELDS: Final[tuple[str, ...]] = (
 )
 
 
-@dataclass(frozen=True, init=False)
-class NarrationOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class NarrationOptions(_OptionsDisplay):
     """Grouped live-narration options for ``narrate=`` (lane F28, snoop memo D1).
 
     ``narrate=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``

@@ -31,6 +31,7 @@ from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._display_errors import ambiguous_substring_message, candidate_keys, lookup_message
 from . import _doors
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -76,9 +77,12 @@ def _raise_ambiguous_lookup_key(self: "Trace", requested_key: str, stored_key: s
 
     matches = _ambiguous_lookup_match_labels(self, stored_key)
     raise AmbiguousOpLookupError(
-        f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops: "
-        f"{', '.join(matches[:10])}{'...' if len(matches) > 10 else ''}. "
-        "Use an exact raw/op label or a more specific key."
+        lookup_message(
+            f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops.",
+            candidate_keys(matches, self._layer_dict_all_keys),
+            "Use an exact op label or a more specific key.",
+            query=requested_key,
+        )
     )
 
 
@@ -277,57 +281,17 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if len(entries_with_substr) == 1:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
-            matches = [entry.layer_label for entry in entries_with_substr.values()]
-            matches_str = ", ".join(str(k) for k in matches[:10])
-            suffix = (
-                f" (and {len(entries_with_substr) - 10} more)"
-                if len(entries_with_substr) > 10
-                else ""
-            )
-            raise AmbiguousOpLookupError(
-                f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
-                f"{matches_str}{suffix}. Please use a more specific key.{_bound_owner_hint(self, ix)}"
-            )
+            raise _ambiguous_substring_error(ix, list(entries_with_substr.values()))
 
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
 
 
-def _bound_owner_hint(self: "Trace", ix: str) -> str:
-    """Name the ``owner.``-prefixed address when ``ix`` is a module of a bound-method root.
+def _ambiguous_substring_error(ix: Any, records: list[Any]) -> AmbiguousOpLookupError:
+    """The substring refusal card."""
 
-    ``tl.trace(model.generate, ...)`` registers ``model`` as the ``owner`` submodule
-    of a TorchLens-authored root, so its modules read ``owner.<address>``. A reader
-    who types the plain module address gets that spelling named in the error.
-
-    Parameters
-    ----------
-    self:
-        Trace being queried.
-    ix:
-        The lookup key, with or without a ``:N`` call suffix.
-
-    Returns
-    -------
-    str
-        A sentence naming ``owner.<ix>``, or ``""`` when it does not apply.
-    """
-
-    root_fact = self.provenance.root_entry_point
-    if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
-        return ""
-    module_logs = self._module_logs
-    owner_key = f"owner.{ix}"
-    # ``_module_logs`` is ``None`` inside the pickle-restore window; no modules means no hint.
-    if not module_logs or (
-        owner_key.rsplit(":", 1)[0] not in module_logs and owner_key not in module_logs
-    ):
-        return ""
-    return (
-        " This trace's root is a bound method (e.g. model.generate), so the model's "
-        f"modules read 'owner.<address>': use '{owner_key}'."
-    )
+    return AmbiguousOpLookupError(ambiguous_substring_message(str(ix), records))
 
 
 def _layer_label_lookup(self: "Trace", ix: str) -> Any:
