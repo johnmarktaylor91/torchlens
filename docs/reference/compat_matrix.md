@@ -19,7 +19,7 @@ version table, the limitations catalog) lives in
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | `test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks (torch-native sharding) |
 | `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn-4 4.0.0b37 | pass under `torch.no_grad()`: exact output, each attention call one `autogradfunction` boundary op (exit `flash_attn.cute`), forward validation passes, witnessed trace verified; with autograd enabled the call's second output (log-sum-exp) validates through the kernel table's declared per-output dependence (q and k only) |
 | `flash_attention_4` | `test_flash_attention_4_capture_and_validate`, `test_flash_attention_4_boundary_owns_every_dispatch` | 2.13.0+cu126 | 5.18.0 | 3.10.19 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn-4 4.0.0b37 | pass (the pinned CI versions on a GPU): same shape as the row above; with autograd enabled the log-sum-exp output validates through the kernel table's declared per-output dependence. transformers 5.18.0's flash-attention wrapper tests a Python value first and a tensor bool in its `elif`, which exposed a TorchLens conditional-record gap (the `elif` arm carried no terminal bool, failing invariant 15); fixed in this release, with a CPU regression test |
-| `flash_attention_2` | `test_flash_attention_2_captures_exactly`, `test_flash_attention_2_validates`, `test_flash_attention_2_witness_sees_no_gap` | 2.8.0+cu126 | 5.18.0 | 3.10.19 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn 2.8.3.post2 | capture exact and natively recorded (the kernel is a torch custom op: four sibling ops per attention call, no boundary op, no warning), witnessed trace verified; forward validation fails on the unconsumed siblings' v edge (strict expected failure: the kernel table's per-output dependence speaks only for boundary ops recorded with a declared kernel's exit, and this kernel has no boundary op and no row). The flash-attn project ships wheels for torch 2.4 to 2.8 only, so the row could not run on torch 2.13 or 2.14 |
+| `flash_attention_2` | `test_flash_attention_2_captures_exactly`, `test_flash_attention_2_validates`, `test_flash_attention_2_witness_sees_no_gap` | 2.8.0+cu126 | 5.18.0 | 3.10.19 | Linux x86_64, one NVIDIA L40S (compute capability 8.9), flash-attn 2.8.3.post2 | capture exact and natively recorded (the kernel is a torch custom op: four sibling ops per attention call, no boundary op, no warning), witnessed trace verified; forward validation passes through the kernel table's declared per-output dependence for the custom op (log-sum-exp and dropout mask read q and k, the rng state none of q, k, v; the attention output's every edge tested). The flash-attn project ships wheels for torch 2.4 to 2.8 only, so the row could not run on torch 2.13 or 2.14 |
 | Router-logit outputs | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host (CPU tensors) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
 | Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
@@ -112,15 +112,14 @@ ops sharing one `func_call_id` (index 0 the bfloat16 attention output that feeds
 next op; the float32 log-sum-exp, the dropout mask and the int64 rng state, which
 nothing consumes), each with the projected q, k and v as parents. On the measured GPU
 the trace returns the exact logits under `torch.no_grad()` and with autograd enabled.
-Forward validation fails: the log-sum-exp depends on q and k only and the rng state on
-nothing, so the perturbation check reports a sibling's v edge as insensitive. That
-failure is correct about the edge and is pinned as a strict expected failure
-(`test_flash_attention_2_validates`); the kernel table that declares the FlashAttention 4
-log-sum-exp's per-output dependence speaks only for boundary ops recorded with a declared
-kernel's exit, and these native sibling ops have no row, so nothing is exempted to hide it. The dated gap
-`flash-attention-2-impl` in the real-model suite therefore stays open, and its sentinel
-test now checks on a capable venue that validation still fails rather than that the
-forward refuses.
+Forward validation passes (`test_flash_attention_2_validates`): the unconsumed siblings
+do not read every parent the call carries (the log-sum-exp and the dropout mask read q and
+k, the rng state none of q, k and v), and the kernel table declares that per-output
+dependence for the custom op `flash_attn::_flash_attn_forward` (ruling: "(b) Declare
+per-output dependence per kernel in a table."), so the perturbation check excuses exactly
+those edges. The attention output has no row and keeps every edge tested; another
+operator under the same name, a parent at any other position or a keyword stays strict.
+The dated gap `flash-attention-2-impl` in the real-model suite is closed.
 
 ## Model Explorer with adapter 0.2.x
 
