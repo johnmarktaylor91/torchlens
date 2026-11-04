@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from .._utils._display_bounded import RecordTuple
 from ._inline_tensor import reduce_inline_tensor
 
 __all__ = ["dump_canonical_metadata"]
@@ -44,6 +45,8 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     sidecar of a bundle (tensor payloads ride safetensors blobs), so the
     slower Python walk is a save-time-only, determinism-buying cost.
     """
+
+    dispatch = {**pickle._Pickler.dispatch, RecordTuple: pickle._Pickler.dispatch[tuple]}
 
     def reducer_override(self, obj: Any) -> Any:
         """Return the canonical reduction for set/frozenset, Enum members and plain tensors.

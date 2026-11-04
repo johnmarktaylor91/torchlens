@@ -54,7 +54,7 @@ def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     """ONE code path: a single-pass layer renders the Op card."""
 
     html = recurrent_log._layer_logs["linear_2_3"]._repr_html_()
-    assert "TorchLens Op" in html
+    assert "Layer linear_2:" in html
     assert "card unavailable" not in html
 
 
@@ -63,7 +63,7 @@ def test_op_card_unsaved_value_discloses(recurrent_log) -> None:
 
     log = tl.trace(_Recurrent(), torch.randn(2, 4), save=tl.func("linear"))
     html = log["relu_1_2:1"]._repr_html_()
-    assert "value not saved" in html
+    assert "(not saved)" in html
     assert '<table class="tl-grid-table"' not in html
 
 

@@ -8,13 +8,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
+from .._capture.structure_only import claim_status_for
+from .._data_classes._nonfinite import (
+    _unmaterialized_disk_payload_count,
+    coverage_gap_note,
+    first_nonfinite_layer,
+)
+from .._data_classes._value_state import LAZY_DISK
 from .._data_classes.func_call_location import display_frame
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
-from ._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
+from .._utils._display_card import REPR_COLS, TRACE_CARD_MAX_ROWS, one_line, render_card
+from .._utils._display_numbers import (
+    format_count,
+    format_duration,
+    format_exact_count,
+    format_iec_bytes,
+    plural,
+)
+from .._utils.fail_open import fail_open
+from ._factcore import capture_fingerprint
+from ._health import _parse_persisted
+from ._notebook.cards import trace_repr_html
 from ._summary_config import resolve_config
-from ._summary_report import SummaryReport
 from ._summary_result import build_rebuilt_summary
 
 if TYPE_CHECKING:
@@ -75,17 +91,7 @@ def first_nonfinite(trace: Trace, link_format: Literal["terminal", "html", "text
 def repr_html(trace: Trace) -> str:
     """Body of ``Trace._repr_html_``; the method docstring is the contract."""
 
-    card = trace_repr_html(trace)
-    if card == BRIDGE_SENTINEL_HTML:
-        return card
-    if not trace._tracing_finished:
-        return card
-    try:
-        report = trace.summary()
-        summary_html = report._repr_html_() if isinstance(report, SummaryReport) else ""
-    except Exception:  # noqa: BLE001 - a repr must never raise; the card still renders
-        summary_html = ""
-    return card + summary_html
+    return trace_repr_html(trace)
 
 
 def _refuse_one_call_only(**one_call_only: Any) -> None:
@@ -183,3 +189,207 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
 
 
 __all__ = ["first_nonfinite", "repr_html", "summary"]
+
+
+_MORE = (".summary()", ".modules", ".layers", ".ops", ".params")
+
+
+def _stored_facts(trace: Any) -> Any:
+    """Read a previously settled health record; never derive or persist one."""
+
+    payload = getattr(trace, "annotations", {}).get("health_facts")
+    if payload is None:
+        return None
+    revision = capture_fingerprint(trace)
+    facts = _parse_persisted(payload, revision)
+    return facts if facts.capture_revision == revision else None
+
+
+def _stored_verdict(trace: Any) -> str:
+    """Read a previously settled verdict; never derive or persist a health record."""
+
+    facts = _stored_facts(trace)
+    return "not_checked" if facts is None else facts.verdict
+
+
+def _coverage_text(trace: Any) -> str:
+    """After a settled partial scan: what it examined and why the rest was not.
+
+    The gap note is the one ``explain()`` and ``first_nonfinite()`` print, counted
+    from payload metadata; no payload is read and nothing is scanned here.
+    """
+
+    facts = fail_open(lambda: _stored_facts(trace), lambda _error: None)
+    if facts is None or facts.verdict != "not_checked" or facts.basis == "persisted_invalid":
+        return ""
+    note = coverage_gap_note(trace, kind="saved").strip()
+    if not note:
+        return ""
+    checked = facts.num_checked_ops
+    examined = f"{plural(checked, 'op')} examined, none non-finite" if checked else "no op examined"
+    return f"{examined} {note}"
+
+
+def _saved_text(trace: Any) -> str:
+    """Saved outputs and their bytes; disk-backed payloads keep the record cards' token."""
+
+    saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
+    text = (
+        f"{format_exact_count(saved)} of {format_exact_count(len(trace._layer_list))} layer outputs, "
+        f"{format_iec_bytes(trace._cost_saved_activation_memory)}"
+    )
+    disk = fail_open(
+        lambda: _unmaterialized_disk_payload_count(trace, kind="saved"), lambda _error: 0
+    )
+    return f"{text} {LAZY_DISK}" if disk else text
+
+
+def _health_text(trace: Any) -> str:
+    """NaN/Inf health in words from the stored verdict, never running a check."""
+
+    verdict = fail_open(lambda: _stored_verdict(trace), lambda _error: "not_checked")
+    return {
+        "checked_and_clean": "no NaN/Inf (exact)",
+        "found": "NaN/Inf FOUND (.nonfinite_ops)",
+    }.get(verdict, "NaN/Inf not checked")
+
+
+def _state_tokens(trace: Any) -> list[str]:
+    """Non-default states remain visible even when optional counts do not fit."""
+
+    tokens: list[str] = []
+    outcome = getattr(trace, "outcome", None)
+    status = getattr(getattr(outcome, "status", None), "value", None)
+    if status and status != "complete":
+        boundary = getattr(outcome, "boundary_label", None)
+        detail = f": stopped at {boundary}" if boundary else ""
+        tokens.append(f"({status}{detail})")
+    state = getattr(getattr(trace, "state", None), "name", "PRISTINE")
+    if trace.is_pristine is False:
+        tokens.append("(edited)")
+    if state != "PRISTINE":
+        tokens.append(f"({state.lower()})")
+    if trace._options_structure_only:
+        # Existing claim property is metadata-only; never execute a probe.
+        tokens.append(f"(structure_only={claim_status_for(trace).value.upper()})")
+    if trace._provenance_verified is False:
+        tokens.append("(capture unverified; counts are lower bounds)")
+    armed = fail_open(trace._armed_summary_line, lambda _error: None)
+    if armed:
+        tokens.append(f"({armed})")
+    return tokens
+
+
+def _trace_honesty_suffix(trace: Any) -> str:
+    """The non-default state tokens followed by the health text."""
+
+    return " ".join((*_state_tokens(trace), _health_text(trace)))
+
+
+def _trace_repr(trace: Any) -> str:
+    """One-line identity and cached health; safe on partial and cleaned traces."""
+
+    return fail_open(lambda: _identity(trace), lambda _error: "Trace (metadata unavailable)")
+
+
+def _identity(trace: Any) -> str:
+    """Build the Trace repr line, dropping model and counts before any state or health marker."""
+
+    if trace.__dict__.get("_tl_cleaned_up", False):
+        return f"Trace {getattr(trace, 'name', None) or 'unnamed'}: (freed)"
+    name = getattr(trace, "name", None) or "unnamed"
+    model = trace._source_class_name or "model unknown"
+    states = " ".join(_state_tokens(trace))
+    identity = f"Trace {name}"
+    health = _health_text(trace)
+    progress = "(capture in progress)" if not trace._tracing_finished else ""
+    # Drop optional metadata in order, keeping every honesty marker visible.
+    required = [progress, states, health]
+    counts = _count_facts(trace)
+    for optional in ([model, *counts], counts, []):
+        line = one_line(identity, [*optional, *required])
+        if len(line) <= REPR_COLS or not optional:
+            return line
+    return identity
+
+
+def _count_facts(trace: Any) -> list[str]:
+    """Layer and op counts for a finished trace, or the op event count while capture runs."""
+
+    if not trace._tracing_finished:
+        return [plural(len(trace.event_stream.op_events), "op event")]
+    return [
+        f"{format_count(len(trace._layer_logs))} layers",
+        f"{format_count(trace._num_ops)} ops",
+    ]
+
+
+def _trace_rows(trace: Any) -> list[tuple[str, str]]:
+    """The shared text/HTML rows; all reads are metadata-only."""
+
+    if trace.__dict__.get("_tl_cleaned_up", False):
+        return []
+    if not trace._tracing_finished:
+        return [("captured", f"{plural(len(trace.event_stream.op_events), 'op event')} so far")]
+    exact = format_exact_count
+    modules = max(0, len(trace._module_logs) - 1)
+    params = exact(getattr(trace, "num_params", 0))
+    param_ops = exact(trace._num_layers_with_params)
+    duration = float(trace._provenance_duration)
+    compute = float(trace._cost_func_calls_duration)
+    rows = [
+        (
+            "model",
+            f"{trace._source_class_name}, {exact(modules)} modules, {params} params in {param_ops} param ops",
+        ),
+        (
+            "captured",
+            f"{format_duration(duration)} ({format_duration(duration - compute)} of it logging), seed {trace._options_seed}",
+        ),
+        ("graph", _graph_text(trace)),
+        ("saved", _saved_text(trace)),
+        ("coverage", _coverage_text(trace)),
+        ("outputs", plural(len(trace.output_layers), "output site")),
+        ("flops", "MACs reported as FLOPs // 2"),
+    ]
+    if trace._provenance_verified is False:
+        rows.insert(
+            0,
+            (
+                "capture",
+                f"unverified: {trace._provenance_verification_reason or 'reason unavailable'}; counts are lower bounds",
+            ),
+        )
+    return rows
+
+
+def _graph_text(trace: Any) -> str:
+    """Graph topology in words: recurrence and its pass count, branching, conditional branching."""
+
+    graph = trace.graph
+    topology = "feedforward"
+    if graph.is_recurrent:
+        passes = fail_open(lambda: int(graph.max_ops_per_layer), lambda _error: 0)
+        topology = (
+            f"recurrent (up to {format_exact_count(passes)} passes)" if passes > 1 else "recurrent"
+        )
+    if trace._provenance_verified is False:
+        topology = "structure unverified"
+    branching = "with branching" if graph.is_branching else "no branching"
+    conditional = (
+        "with conditional branching"
+        if graph.has_conditional_branching
+        else "no conditional branching"
+    )
+    return f"{topology}, {branching}, {conditional}"
+
+
+def _trace_text(trace: Any) -> str:
+    """Trace card: the repr line over the shared rows; the repr replaces it on failure."""
+
+    return fail_open(
+        lambda: render_card(
+            _trace_repr(trace), _trace_rows(trace), more=_MORE, max_rows=TRACE_CARD_MAX_ROWS
+        ),
+        lambda _error: _trace_repr(trace),
+    )
