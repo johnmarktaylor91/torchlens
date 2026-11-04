@@ -1117,6 +1117,19 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "private ReplayPreconditionError subclass; contracted by its code "
         "replay_param_changed_since_capture, caught as ReplayPreconditionError"
     ),
+    # Public-entry refusals that were plain builtins: private carriers of the coded fields,
+    # kept private until the public spellings are ruled (the raised builtin lineage and
+    # the codes are the contract; callers catch the builtin or TorchLensError).
+    "torchlens._entry_refusals._InternalInvariantError": (
+        "private TorchLensError for internal-invariant refusals that were plain "
+        "RuntimeError/ValueError; subclasses both, contracted by codes such as "
+        "module_metadata_missing and contract_parent_missing"
+    ),
+    "torchlens._entry_refusals._DependencyIncompatibleError": (
+        "private CompatibilityError for an installed dependency missing an API that was a "
+        "plain RuntimeError; contracted by torch_tensorbase_unavailable and "
+        "lovely_formatter_unavailable"
+    ),
     # Forward-validation copy-failure disclosure: a coded TorchLensWarning
     # (S-18 contract row validation_model_copy_failed) private to validation.
     "torchlens._validation_state_snapshot._ValidationCopyFailedWarning": (
