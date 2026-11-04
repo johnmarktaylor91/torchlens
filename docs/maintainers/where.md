@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1470 modules, 657041 lines, 0 modules without a docstring.
+83 packages, 1470 modules, 657038 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10643 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 60 | 36847 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8954 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8951 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11676 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 14 | 5996 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
@@ -499,7 +499,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8954 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8951 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -511,7 +511,7 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 
 | `_record_refs` | Resolve the closed record-reference and pending-value grammar. | 60 |
 | `_tables` | Record tables of the 3.0 saved format: reading, digest checks and the column contract. | 298 |
 | `carried` | Shapes of the tlspec 11 fields a 3.0 manifest still carries. | 208 |
-| `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 145 |
+| `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 142 |
 | `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 326 |
 | `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 330 |
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 757 |
