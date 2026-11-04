@@ -282,7 +282,9 @@ def render_result_html(payload: RebuiltPayload) -> str:
     footer_lines = tuple(
         line
         for line in payload.ascii_text.rsplit("\n", 10)[-10:]
-        if line.startswith(("Params", "Compute", "Memory", "Graph", "Capture", "More:", "*", "^"))
+        if line.startswith(
+            ("Params", "Compute", "Memory", "Graph", "Capture", "more", "Legend", "*", "^")
+        )
     )
     return render_html(
         payload.view,

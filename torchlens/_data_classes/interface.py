@@ -31,6 +31,7 @@ from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._display_errors import ambiguous_substring_message, candidate_keys, lookup_message
 from . import _doors
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -76,9 +77,12 @@ def _raise_ambiguous_lookup_key(self: "Trace", requested_key: str, stored_key: s
 
     matches = _ambiguous_lookup_match_labels(self, stored_key)
     raise AmbiguousOpLookupError(
-        f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops: "
-        f"{', '.join(matches[:10])}{'...' if len(matches) > 10 else ''}. "
-        "Use an exact raw/op label or a more specific key."
+        lookup_message(
+            f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops.",
+            candidate_keys(matches, self._layer_dict_all_keys),
+            "Use an exact op label or a more specific key.",
+            query=requested_key,
+        )
     )
 
 
@@ -277,16 +281,9 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if len(entries_with_substr) == 1:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
-            matches = [entry.layer_label for entry in entries_with_substr.values()]
-            matches_str = ", ".join(str(k) for k in matches[:10])
-            suffix = (
-                f" (and {len(entries_with_substr) - 10} more)"
-                if len(entries_with_substr) > 10
-                else ""
-            )
             raise AmbiguousOpLookupError(
-                f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
-                f"{matches_str}{suffix}. Please use a more specific key.{_bound_owner_hint(self, ix)}"
+                ambiguous_substring_message(str(ix), list(entries_with_substr.values()))
+                + _bound_owner_hint(self, ix)
             )
 
     # Step 7: nothing matched — give a helpful error

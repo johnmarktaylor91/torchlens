@@ -12,6 +12,7 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens._utils._display_errors import lookup_message
 from torchlens.attribution._result import AttributionError
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section Site targets."
@@ -311,11 +312,13 @@ def _resolve_site(model: Module, target: SiteTarget) -> _SiteRoute:
     close = difflib.get_close_matches(target.module_address, names, n=1)
     suggestion = close[0] if close else (names[0] if names else "")
     fixed = SiteTarget(suggestion, call=target.call)
-    shown = ", ".join(names[:8]) or "<no named child modules>"
     raise AttributionError(
-        f"SiteTarget layer {target.module_address!r} is not a module of this model (modules include: "
-        f"{shown}). Remedy: name a module from dict(model.named_modules()), e.g. "
-        f"target={_spelling(fixed)}. {_DOCS_POINTER}",
+        lookup_message(
+            f"SiteTarget layer {target.module_address!r} is not a module of this model.",
+            names,
+            f"Name a module from dict(model.named_modules()), e.g. "
+            f"target={_spelling(fixed)}. {_DOCS_POINTER}",
+        ),
         code="attribution_site_not_found",
     )
 
