@@ -74,8 +74,9 @@ def test_patch_tripwire_names_and_unwraps_a_left_wrapper() -> None:
 
     run_entry._run_resolved_request = left_behind
     try:
-        leaks = leaked_internal_patches()
-        assert (run_entry, "_run_resolved_request", left_behind) in leaks
+        door = (("torchlens._capture.run_entry", "_run_resolved_request"),)
+        assert leaked_internal_patches(door) == [(run_entry, "_run_resolved_request", left_behind)]
+        assert (run_entry, "_run_resolved_request", left_behind) in leaked_internal_patches()
         assert _unwrapped(left_behind) is original
     finally:
         run_entry._run_resolved_request = original

@@ -187,35 +187,66 @@ def _threads_stopped_after_test() -> Iterator[None]:
 #: as a ``torchlens`` module attribute is a test patch of a TorchLens internal.
 _TESTS_ROOT = os.path.dirname(os.path.abspath(__file__)) + os.sep
 
+#: The internals test helpers wrap (pass doors, producer and ingest seams),
+#: checked after every test; the whole-package scan runs after every module.
+_WRAPPED_INTERNALS: tuple[tuple[str, str], ...] = (
+    ("torchlens._capture.run_entry", "_run_resolved_request"),
+    ("torchlens.intervention.replay", "_run_replay"),
+    ("torchlens._postprocess", "materialize_from_events"),
+    ("torchlens._postprocess._materialize", "materialize_from_events"),
+    ("torchlens._postprocess._materialize", "ingest_op_records"),
+    ("torchlens.backends.torch._ops_capture_records", "set_capture_producer_policy"),
+    ("torchlens._ir.op_record_scatter", "scatter_record_to_cells"),
+)
+
 
 def _is_test_patch(value: object) -> bool:
     """Return whether ``value`` is a function defined in test code or a ``unittest.mock`` object."""
 
     kind = type(value)
     if kind is FunctionType:
-        return os.path.abspath(value.__code__.co_filename).startswith(_TESTS_ROOT)  # type: ignore[attr-defined]
+        # The code's file, never ``__module__``: ``functools.wraps`` copies the
+        # wrapped function's ``__module__`` onto the wrapper.
+        filename = value.__code__.co_filename  # type: ignore[attr-defined]
+        if not os.path.isabs(filename):
+            filename = os.path.abspath(filename)
+        return filename.startswith(_TESTS_ROOT)
     return kind.__module__ == "unittest.mock"
 
 
-def leaked_internal_patches() -> list[tuple[ModuleType, str, object]]:
-    """Return every ``torchlens`` module attribute currently bound to a test patch.
+def _torchlens_modules() -> list[ModuleType]:
+    return [
+        module
+        for name, module in list(sys.modules.items())
+        if module is not None and (name == "torchlens" or name.startswith("torchlens."))
+    ]
 
-    A helper that wraps a TorchLens internal (``_run_resolved_request``,
-    ``_run_replay``, ``materialize_from_events``) must restore it before its
-    test ends; a wrapper left installed changes every later capture on the
-    worker (an extra frame, a stale recorder) and makes results depend on test
-    order.
+
+def leaked_internal_patches(
+    names: tuple[tuple[str, str], ...] | None = None,
+) -> list[tuple[ModuleType, str, object]]:
+    """Return the ``torchlens`` module attributes currently bound to a test patch.
+
+    ``names`` limits the check to those ``(module, attribute)`` pairs; without
+    it every loaded ``torchlens`` module is scanned. A helper that wraps a
+    TorchLens internal must restore it before its test ends: a wrapper left
+    installed changes every later capture on the worker (an extra frame, a
+    stale recorder) and makes results depend on test order.
     """
 
-    leaks: list[tuple[ModuleType, str, object]] = []
-    for name, module in list(sys.modules.items()):
-        if module is None or not (name == "torchlens" or name.startswith("torchlens.")):
-            continue
-        leaks.extend(
-            (module, attr, value)
-            for attr, value in list(vars(module).items())
-            if _is_test_patch(value)
-        )
+    if names is not None:
+        pairs = [
+            (sys.modules[module_name], attr)
+            for module_name, attr in names
+            if sys.modules.get(module_name) is not None
+        ]
+    else:
+        pairs = [(module, attr) for module in _torchlens_modules() for attr in list(vars(module))]
+    leaks = []
+    for module, attr in pairs:
+        value = vars(module).get(attr)
+        if _is_test_patch(value):
+            leaks.append((module, attr, value))
     return leaks
 
 
@@ -229,17 +260,9 @@ def _unwrapped(value: object) -> object | None:
     return value
 
 
-@pytest.fixture(autouse=True)
-def _internals_unpatched_after_test() -> Iterator[None]:
-    """Patch tripwire: no test may leave a TorchLens internal wrapped by test code.
+def _fail_on_patches(leaks: list[tuple[ModuleType, str, object]]) -> None:
+    """Unwrap what can be unwrapped (one leak fails one test, not the rest), then fail."""
 
-    Patches made through ``monkeypatch`` are undone before this check runs. A
-    leaked wrapper fails the test that leaked it and is unwrapped (when it
-    carries ``__wrapped__``) so one leak fails one test instead of cascading.
-    """
-
-    yield
-    leaks = leaked_internal_patches()
     if not leaks:
         return
     for module, attr, value in leaks:
@@ -248,6 +271,25 @@ def _internals_unpatched_after_test() -> Iterator[None]:
             setattr(module, attr, original)
     named = ", ".join(f"{module.__name__}.{attr}" for module, attr, _ in leaks)
     pytest.fail(f"test code left TorchLens internals patched: {named}", pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _internals_unpatched_after_test() -> Iterator[None]:
+    """Patch tripwire: no test may leave a wrapped TorchLens internal behind.
+
+    Patches made through ``monkeypatch`` are undone before this check runs.
+    """
+
+    yield
+    _fail_on_patches(leaked_internal_patches(_WRAPPED_INTERNALS))
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _torchlens_unpatched_after_module() -> Iterator[None]:
+    """Patch tripwire over every loaded ``torchlens`` module, once per test module."""
+
+    yield
+    _fail_on_patches(leaked_internal_patches())
 
 
 #: ``(owner, method_name, default_basename)`` for every ``Trace`` draw
