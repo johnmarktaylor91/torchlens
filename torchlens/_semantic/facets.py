@@ -30,6 +30,7 @@ from .._ir.container import (
 )
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
+from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
 from .coverage import facet_coverage as coverage
 
@@ -288,7 +289,7 @@ class TransformPrimitive:
         if self.kind == "getitem":
             result = value[self.args[0]]
         elif self.kind == "heads":
-            n_heads, d_head = self.args
+            n_heads, d_head = _heads_geometry(value, *self.args)
             result = value.reshape(*value.shape[:-1], n_heads, d_head)
         elif self.kind == "split":
             sections, dim, index = self.args
@@ -510,8 +511,8 @@ class FacetSpec(_SelectionOperand):
 
         return self._append(TransformPrimitive("getitem", (key,), capability_class="selection"))
 
-    def heads(self, num_heads: int, d_head: int) -> FacetSpec:
-        """Append a projection-to-heads reshape primitive."""
+    def heads(self, num_heads: int, d_head: int | None = None) -> FacetSpec:
+        """Append a projection-to-heads reshape; ``d_head=None`` infers it from the last axis."""
 
         return self._append(
             TransformPrimitive("heads", (num_heads, d_head), capability_class="bijective_view")
@@ -745,67 +746,6 @@ class FacetSpec(_SelectionOperand):
             raise RuntimeError(
                 f"Facet intervention refused for home {label!r}: facet is not write-capable."
             )
-
-
-def _ensure_scatter_capable(primitive: TransformPrimitive) -> None:
-    """Raise if a primitive is not scatter-back capable.
-
-    Parameters
-    ----------
-    primitive:
-        Transform primitive to validate.
-
-    Returns
-    -------
-    None
-        Raises when the primitive is not write-safe.
-    """
-
-    if primitive.capability_class == "aliasing_selection":
-        raise RuntimeError("aliasing_selection scatter_update requires an explicit alias policy.")
-    if primitive.capability_class in {"computed", "codec"} or not primitive.flags.write:
-        raise RuntimeError(f"Primitive {primitive.kind!r} is not scatter-back capable.")
-
-
-def _copy_scatter_value(target: torch.Tensor, edited_slice: torch.Tensor, *, mode: str) -> None:
-    """Copy an edited value into a scatter target after metadata checks.
-
-    Parameters
-    ----------
-    target:
-        View into the cloned full home tensor.
-    edited_slice:
-        Edited value returned by a facet hook.
-    mode:
-        Scatter mode, currently ``"replace"`` or ``"add"``.
-
-    Returns
-    -------
-    None
-        ``target`` is updated in place.
-    """
-
-    if target.dtype != edited_slice.dtype:
-        raise TypeError(
-            f"Facet scatter_update dtype mismatch: expected {target.dtype}, got {edited_slice.dtype}."
-        )
-    if target.device != edited_slice.device:
-        raise TypeError(
-            f"Facet scatter_update device mismatch: expected {target.device}, got "
-            f"{edited_slice.device}."
-        )
-    if tuple(target.shape) != tuple(edited_slice.shape):
-        raise ValueError(
-            f"Facet scatter_update shape mismatch: expected {tuple(target.shape)}, "
-            f"got {tuple(edited_slice.shape)}."
-        )
-    if mode == "replace":
-        target.copy_(edited_slice)
-        return
-    if mode == "add":
-        target.add_(edited_slice)
-        return
-    raise ValueError("Facet scatter_update mode must be 'replace' or 'add'.")
 
 
 class MissingFacet:
@@ -1685,8 +1625,13 @@ def describe(class_name: str) -> dict[str, builtins.list[str]]:
     return {"functions": functions, "facets": facets}
 
 
+#: Recipe-authoring helpers served lazily as ``tl.facets.<name>`` (their module
+#: imports this one, so they cannot be imported at module top).
+_RECIPE_HELPER_NAMES = frozenset({"child_output_spec", "config_value", "parameter_spec"})
+
+
 def __getattr__(name: str) -> Any:
-    """Lazily expose facet submodules.
+    """Lazily expose facet submodules and recipe-authoring helpers.
 
     Parameters
     ----------
@@ -1703,6 +1648,11 @@ def __getattr__(name: str) -> Any:
         module = importlib.import_module("torchlens._semantic.patching")
         globals()[name] = module
         return module
+    if name in _RECIPE_HELPER_NAMES:
+        helpers = importlib.import_module("torchlens._semantic.recipes._helpers")
+        value = getattr(helpers, name)
+        globals()[name] = value
+        return value
     raise AttributeError(f"module 'torchlens._semantic.facets' has no attribute {name!r}")
 
 
@@ -2149,4 +2099,7 @@ __all__ = [
     "snapshot",
     "transformer_lens_aliases_enabled",
     "adding",
+    "child_output_spec",  # noqa: F822 -- resolved by __getattr__
+    "config_value",  # noqa: F822 -- resolved by __getattr__
+    "parameter_spec",  # noqa: F822 -- resolved by __getattr__
 ]

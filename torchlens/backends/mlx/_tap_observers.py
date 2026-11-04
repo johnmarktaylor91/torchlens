@@ -155,7 +155,7 @@ class _MLXIntermediateTapObserver:
             Original output with eligible array leaves replaced by identity taps.
         """
 
-        pushed = self.module_frames.push(module_address)
+        pushed = self.module_frames.enter(module_address)
         try:
             if op_name is None or self.depth > 0:
                 return original(*args, **kwargs)
@@ -167,7 +167,7 @@ class _MLXIntermediateTapObserver:
             return self._tap_output(op_name, args, kwargs, output)
         finally:
             if pushed:
-                self.module_frames.pop()
+                self.module_frames.leave()
 
     def _tap_output(
         self,
@@ -311,7 +311,7 @@ class _MLXBoundaryReplacementObserver:
             Output tree with the target boundary replaced when matched.
         """
 
-        pushed = self.module_frames.push(module_address)
+        pushed = self.module_frames.enter(module_address)
         try:
             if op_name is None or self.depth > 0:
                 return original(*args, **kwargs)
@@ -323,7 +323,7 @@ class _MLXBoundaryReplacementObserver:
             return self._replace_output(op_name, args, kwargs, output)
         finally:
             if pushed:
-                self.module_frames.pop()
+                self.module_frames.leave()
 
     def _replace_output(
         self,

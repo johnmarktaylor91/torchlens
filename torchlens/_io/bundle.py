@@ -57,6 +57,7 @@ from . import (
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
+from ._load_validators import MODEL_FREE_TLSPEC_KINDS, load_model_free_tlspec
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
@@ -98,6 +99,7 @@ if TYPE_CHECKING:
         StateByteDigest,
     )
     from ..bundle import Bundle
+    from ..intervention.spec import Recipe
     from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
@@ -1236,7 +1238,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object with eager tensor materialization.
 
     Parameters
@@ -1254,7 +1256,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1272,7 +1274,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
     Parameters
@@ -1290,7 +1292,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1307,7 +1309,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
     Parameters
@@ -1341,7 +1343,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by ``manifest.kind`` for unified files, or
         by legacy format detection for older files.
 
@@ -1477,7 +1479,7 @@ def _load_trace_payload(
     sparse_run: Mapping[str, Any] | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a portable Trace payload after manifest dispatch.
 
     Parameters
@@ -2036,7 +2038,7 @@ def _load_unified_tlspec(
     allowed_custom_callable_modules: Collection[str] | None,
     bundle_visited: frozenset[Path] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
@@ -2059,7 +2061,7 @@ def _load_unified_tlspec(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Loaded object selected by unified manifest kind.
 
     Raises
@@ -2074,16 +2076,14 @@ def _load_unified_tlspec(
     _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
     _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
-    # `kind` predates the "bundle"/"intervention" discriminator on some older
-    # unified manifests (ledgered legacy-manifest tolerance,
-    # test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS): an absent `kind` means a
-    # plain trace, the only kind that existed before the discriminator was
-    # introduced, never an unsupported-kind refusal.
+    # `kind` predates the "bundle"/"intervention" discriminator on some older unified
+    # manifests (ledgered legacy-manifest tolerance, test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS):
+    # an absent `kind` means a plain trace, the only kind that existed before the
+    # discriminator was introduced, never an unsupported-kind refusal.
     kind = manifest.get("kind", "trace")
-    if kind == "intervention":
-        from ..intervention.save import load_intervention_spec
-
-        return load_intervention_spec(
+    if isinstance(kind, str) and kind in MODEL_FREE_TLSPEC_KINDS:
+        return load_model_free_tlspec(
+            kind,
             bundle_path,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,

@@ -302,10 +302,10 @@ def _resolve_facet_sites(
 ) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
-    The facets are the ones the write doors (``attach_hooks``,
-    ``do``) resolve for the same selector, each the ``Facet`` that
+    The facets are the ones the write door (``do``, on any engine)
+    resolves for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
-    those doors receives (a head's slice, an SAE latent's encoder activation).
+    that door receives (a head's slice, an SAE latent's encoder activation).
     A selector that matches several facets keeps its broadcast; the caller's
     fan-out check and multi-match count report apply to them as to op sites.
 

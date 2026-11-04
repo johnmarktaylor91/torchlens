@@ -34,7 +34,7 @@
     },
     "kind": {
       "type": "string",
-      "enum": ["intervention", "trace", "bundle"]
+      "enum": ["intervention", "trace", "bundle", "recipe"]
     },
     "schema_version": {
       "type": "integer",

@@ -7,10 +7,10 @@ and how many lack a runnable `Examples` section. Regenerate with
 
 | package | public functions and classes | missing examples |
 |---|---|---|
-| _autoroute | 1 | 0 |
+| _autoroute | 7 | 0 |
 | _capture | 7 | 0 |
 | _captured_run | 1 | 0 |
-| _data_classes | 26 | 0 |
+| _data_classes | 27 | 0 |
 | _debug_report | 1 | 0 |
 | _distributed | 1 | 0 |
 | _doctor_types | 2 | 0 |
@@ -32,7 +32,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _runnable | 9 | 0 |
 | _save_budget | 1 | 0 |
 | _selection | 53 | 0 |
-| _semantic | 24 | 0 |
+| _semantic | 27 | 0 |
 | _snoop | 3 | 0 |
 | _state | 1 | 0 |
 | _trace_slice | 1 | 0 |
@@ -69,7 +69,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | options | 6 | 0 |
 | preprocessing | 16 | 0 |
 | receptive_field | 32 | 0 |
-| recording | 19 | 0 |
+| recording | 21 | 0 |
 | repgeom | 20 | 0 |
 | report | 45 | 0 |
 | stats | 27 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1043** | **0** |
+| **total** | **1055** | **0** |
 
-Public callable members of those classes (methods and properties): 1480.
+Public callable members of those classes (methods and properties): 1479.

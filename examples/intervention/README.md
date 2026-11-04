@@ -7,7 +7,8 @@ small local PyTorch model unless noted otherwise.
 2. `02_exact_site_after_discovery.py` - discover labels with `find_sites`, then target an exact site.
 3. `03_activation_patching_paired_prompt.py` - clean-versus-corrupted activation patching.
 4. `04_sticky_hooks_multiple_engines.py` - reuse sticky hooks with replay and rerun.
-5. `05_set_vs_sticky_hooks.py` - static `set` replacements versus sticky hook recipes.
+5. `05_set_vs_sticky_hooks.py` - static `do(site, tensor)` replacements versus sticky
+   `do(site, hook)` recipes.
 6. `06_chunked_batching.py` - append compatible chunks for memory-constrained evaluation.
 7. `07_bundle_comparison.py` - compare multiple `Trace` objects in a `Bundle`.
 8. `08_live_post_hooks_during_capture.py` - run hooks during the original capture.

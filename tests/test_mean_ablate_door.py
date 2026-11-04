@@ -44,6 +44,29 @@ def _apply(log: tl.Trace, edit: object) -> torch.Tensor:
     return fork[_SITE].out.detach().clone()
 
 
+def test_door_population_dim_none_is_the_scalar_mean() -> None:
+    """``dim=None`` means every axis for every source: one scalar over the member mean."""
+
+    log = _toy_trace()
+    baseline = log[_SITE].out
+    donors = population(torch.randn(4, *baseline.shape), origin="pop")
+    scalar = donors.mean().mean()
+    assert torch.equal(
+        _apply(log, tl.mean_ablate(donors, dim=None)), torch.zeros_like(baseline) + scalar
+    )
+    assert dict(tl.mean_ablate(donors, dim=None).kwargs)["dim"] is None
+    assert dict(tl.mean_ablate(donors, dim="members").kwargs)["dim"] == "members"
+
+
+def test_door_members_spelling_needs_a_population() -> None:
+    """``dim='members'`` names a Population's member axis; other sources refuse typed."""
+
+    for source in (None, torch.ones(4)):
+        with pytest.raises(Exception) as excinfo:
+            tl.mean_ablate(source, dim="members")
+        assert excinfo.value.fields["code"] == "intervention_over_invalid"
+
+
 def test_door_equals_mean_fill_population_axis() -> None:
     log = _toy_trace()
     baseline = log[_SITE].out

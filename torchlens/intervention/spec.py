@@ -30,13 +30,16 @@ runtime-only predicate (:func:`refuse_unreplayable_rules`).
 from __future__ import annotations
 
 import hashlib
+import importlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
+from pathlib import Path
 from typing import Any, Literal
 
 import torch
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._ir.selector_eval import selector_contains_kind
 from .._selection.selectors import BaseSelector, CompositeSelector
 from ._content_identity import (
     collect_tensors,
@@ -52,6 +55,7 @@ from ._site_signal import (
     is_gradient_site as is_gradient_site,
     site_signal,
 )
+from .hooks import normalize_hook_plan
 from .predicates import as_intervention_decision
 from .types import Edit, InterventionDecision
 
@@ -123,8 +127,6 @@ def classify_where(target: Any) -> AddressClass:
     """
 
     if isinstance(target, BaseSelector):
-        from .._ir.selector_eval import selector_contains_kind
-
         if selector_contains_kind(target, "predicate", unwrap=True):
             return "value_dependent"
         worst: AddressClass = "structural"
@@ -596,6 +598,13 @@ class Recipe:
                 worst = rule.address_class
         return worst  # type: ignore[return-value]
 
+    def save(self, path: str | Path, *, level: str = "portable", overwrite: bool = False) -> None:
+        """Write the rules alone as a ``kind: "recipe"`` tlspec that ``tl.load`` returns as a Recipe;
+        ``level="audit"`` admits predicate WHERE terms (loads then refuse ``recipe_audit_only``)."""
+
+        recipe_io = importlib.import_module("torchlens.intervention._recipe_io")
+        recipe_io.save_recipe(self, path, level=level, overwrite=overwrite)
+
     def merge(self, *others: Recipe) -> Recipe:
         """Return the multi-clause spec joining this spec's rules and others'.
 
@@ -756,10 +765,6 @@ def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
     list
         ``NormalizedHookEntry`` rows in rule order.
     """
-
-    from dataclasses import replace as dc_replace
-
-    from .hooks import normalize_hook_plan
 
     refuse_unreplayable_rules(spec, door=door)
     entries: list[Any] = []

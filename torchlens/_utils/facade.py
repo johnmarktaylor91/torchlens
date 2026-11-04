@@ -123,6 +123,31 @@ def _plain_missing(
     return AttributeError(message)
 
 
+def removed_set_remedy(owner: str, receiver: str, args: str) -> str:
+    """Return the ``facade_redirect`` remedy for a removed ``<owner>.set`` member.
+
+    ``set`` applied a callable once; the ``set_only`` engine of ``do`` stages a
+    callable as a sticky hook that stays until detached, so the remedy says both.
+
+    Parameters
+    ----------
+    owner:
+        Public class name (``"Trace"``, ``"Layer"``, ``"Op"``).
+    receiver:
+        Variable name used in the example call (``"trace"``, ``"layer"``, ``"op"``).
+    args:
+        Positional arguments of the example call (``"site, value"``, ``"value"``).
+    """
+
+    return (
+        f"use {receiver}.do({args}, intervention=tl.options.InterventionOptions("
+        f"engine='set_only')) to stage a value or tensor -- {owner}.set was replaced by the "
+        "set_only engine of do; a callable passed that way becomes a sticky hook that stays "
+        "attached for every later do and run until trace.clear_edits(site) detaches it "
+        f"({owner}.set applied a callable once)"
+    )
+
+
 def refuse_removed_member(owner: str, name: str, removed: Mapping[str, str]) -> None:
     """Raise the typed redirect when ``name`` is a removed public member of ``owner``.
 

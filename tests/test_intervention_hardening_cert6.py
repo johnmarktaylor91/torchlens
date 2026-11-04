@@ -35,7 +35,7 @@ from torchlens.intervention._spec_values import (
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
 from torchlens.intervention.save import SaveLevel
-from torchlens.options import ReplayOptions
+from torchlens.options import InterventionOptions
 
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -84,8 +84,10 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     original_annotations = {"user": {"data": {"owner": "original"}}}
     assert parent_op.annotations == original_annotations
 
-    fork = log.push(
-        replay=ReplayOptions(hooks={tl.func("relu"): _identity_hook}, differentiable=True)
+    fork = log.do(
+        tl.func("relu"),
+        _identity_hook,
+        intervention=InterventionOptions(differentiable=True, confirm_mutation=True),
     )
     # ``input_1`` is outside the replay cone -> it goes through the shallow-fork path.
     fork.annotate("input_1", data={"owner": "fork-only"})

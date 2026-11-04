@@ -1610,6 +1610,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_operations.py", "__all__"),
         ("torchlens/bundle/_save.py", "__all__"),
         ("torchlens/intervention/_op_edits.py", "__all__"),
+        ("torchlens/intervention/_recipe_io.py", "__all__"),
         ("torchlens/intervention/_trace_edits.py", "__all__"),
         ("torchlens/intervention/_trace_hooks.py", "__all__"),
         ("torchlens/intervention/_trace_run.py", "__all__"),
@@ -1622,6 +1623,12 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_trace_summary.py", "__all__"),
         ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
+        ("torchlens/_utils/torchvision_weights.py", "__all__"),
+        ("torchlens/postprocessing/__init__.py", "__all__"),
+        ("torchlens/preprocessing/_declared_transform.py", "__all__"),
+        ("torchlens/recording/_generation_options.py", "__all__"),
+        ("torchlens/recording/_generation_stream.py", "__all__"),
+        ("torchlens/recording/reducers.py", "__all__"),
     }
 )
 
