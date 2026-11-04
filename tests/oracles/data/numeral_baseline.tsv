@@ -2806,6 +2806,7 @@ docs-md	docs/maintainers/where.md	155
 docs-md	docs/maintainers/where.md	1556
 docs-md	docs/maintainers/where.md	1560
 docs-md	docs/maintainers/where.md	1562
+docs-md	docs/maintainers/where.md	1566
 docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
@@ -2877,6 +2878,7 @@ docs-md	docs/maintainers/where.md	1915
 docs-md	docs/maintainers/where.md	1916
 docs-md	docs/maintainers/where.md	192
 docs-md	docs/maintainers/where.md	1923
+docs-md	docs/maintainers/where.md	1924
 docs-md	docs/maintainers/where.md	193
 docs-md	docs/maintainers/where.md	1942
 docs-md	docs/maintainers/where.md	195
@@ -3071,6 +3073,7 @@ docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
 docs-md	docs/maintainers/where.md	334
 docs-md	docs/maintainers/where.md	336
+docs-md	docs/maintainers/where.md	337
 docs-md	docs/maintainers/where.md	338
 docs-md	docs/maintainers/where.md	339
 docs-md	docs/maintainers/where.md	34
@@ -3209,6 +3212,7 @@ docs-md	docs/maintainers/where.md	462
 docs-md	docs/maintainers/where.md	463
 docs-md	docs/maintainers/where.md	464
 docs-md	docs/maintainers/where.md	465
+docs-md	docs/maintainers/where.md	46522
 docs-md	docs/maintainers/where.md	466
 docs-md	docs/maintainers/where.md	4669
 docs-md	docs/maintainers/where.md	469
@@ -3372,6 +3376,7 @@ docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
 docs-md	docs/maintainers/where.md	672
 docs-md	docs/maintainers/where.md	673
+docs-md	docs/maintainers/where.md	673464
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
@@ -6969,6 +6974,7 @@ package-docstrings	torchlens/_visualization/_render_dot.py	94
 package-docstrings	torchlens/_visualization/_render_edges.py	1,3
 package-docstrings	torchlens/_visualization/_render_edges.py	14
 package-docstrings	torchlens/_visualization/_render_edges.py	2,4
+package-docstrings	torchlens/_visualization/_render_edges.py	2026
 package-docstrings	torchlens/_visualization/_render_edges.py	25
 package-docstrings	torchlens/_visualization/_render_edges.py	27
 package-docstrings	torchlens/_visualization/_render_entrypoints.py	13
@@ -9915,6 +9921,7 @@ test-docstrings	tests/test_log_injections_s2_forgery.py	2026
 test-docstrings	tests/test_log_injections_s2_nested_matrix.py	40
 test-docstrings	tests/test_loop_module_rolling.py	1_1
 test-docstrings	tests/test_loop_module_rolling.py	1_2
+test-docstrings	tests/test_loop_module_rolling.py	2026
 test-docstrings	tests/test_loop_recurrence_hardening.py	34
 test-docstrings	tests/test_loop_recurrence_hardening.py	38
 test-docstrings	tests/test_lovely_containers_reprs.py	10
@@ -10429,6 +10436,8 @@ test-docstrings	tests/test_robustness_pr2.py	13
 test-docstrings	tests/test_robustness_pr2.py	65
 test-docstrings	tests/test_robustness_pr2.py	67
 test-docstrings	tests/test_robustness_pr4.py	6896
+test-docstrings	tests/test_rolled_pass_label_placement.py	30
+test-docstrings	tests/test_rolled_pass_label_placement.py	60
 test-docstrings	tests/test_rulings_names_1103.py	10
 test-docstrings	tests/test_rulings_names_1103.py	12
 test-docstrings	tests/test_run_inputs_staged_spec.py	1_1
