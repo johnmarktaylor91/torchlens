@@ -67,8 +67,7 @@ conditionals, backward, buffers, equivalence, modules/params), `exemptions.py`
 ### `torchlens/_visualization/`
 Graphviz rendering pipeline (`_render_dot.py` orchestrates; nodes/edges/leaf/common split
 across `_render_*.py`), smart collapse v2 (`auto_collapse.py`, `collapse_plan.py`,
-`collapse_optimizer.py`), `renderers/` (graphviz backend), and the dagua bridge — the
-dagua renderer itself is explicit opt-in via `torchlens.experimental.dagua`.
+`collapse_optimizer.py`) and `renderers/` (graphviz backend).
 
 ### `torchlens/_utils/`
 Helpers shared by two or more packages: `_torch_compat.py` (the ONLY home for fragile
@@ -181,8 +180,7 @@ metadata but must match the exhaustive path's operation ordering exactly.
 ### Rendering Large Graphs (visualization/)
 The Graphviz DOT pipeline is the shipped renderer; readability of large graphs is
 governed by smart collapse v2 (`collapse="none"|"auto"|"max"|t`) rather than an
-alternative layout engine. The dagua renderer (`torchlens.experimental.dagua`) is the
-experimental opt-in alternative.
+alternative layout engine.
 
 ### Circular References (data_classes/)
 Record types hold back-references to their owning `Trace` (`Trace` ↔ `Op`, `Trace` ↔
@@ -215,7 +213,6 @@ Unsupported / source-unavailable cases:
 - monkey-patched `forward` implementations
 
 Deferred:
-- dagua conditional-edge rendering
 - while-loop body attribution
 
 ### DeviceContext Bypass (backends/torch/wrappers.py)
@@ -303,7 +300,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `stats/` | Streaming statistics for out aggregation |
 | `utils/` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display |
 | `validation/` | Validation subpackage: saved outs, backward capture, and metadata invariants (the tripwire) |
-| `visualization/` | Computational graph visualization via Graphviz (DOT rendering, smart collapse, dagua renderer dispatch) |
+| `visualization/` | Computational graph visualization via Graphviz (DOT rendering, smart collapse) |
 | `viz/` | Visualization convenience namespace: activation/tensor plots (montage, heatmaps, feature-map evolution) plus `bundle_diff` re-export |
 
 ### Dual homes (pending adjudication)
@@ -318,7 +315,7 @@ decide it.
   and `reset_naming_counter`, intervention-spec save) that delegates to `_io` and
   `user_funcs`.
 - `torchlens/viz` + `torchlens/_visualization`: `visualization/` is the graph-rendering
-  engine (Graphviz DOT emission, smart collapse, dagua renderer dispatch) behind `draw` and
+  engine (Graphviz DOT emission, smart collapse) behind `draw` and
   `show_model_graph`; `viz/` is a user-facing convenience namespace for
   activation/tensor plotting (montage, text tables, feature-map evolution, heatmaps,
   image scatter, line plots) and re-exports `bundle_diff` from `visualization/`.

@@ -53,5 +53,4 @@ not emit confident branch attribution.
 
 Not yet supported:
 
-- dagua conditional-edge rendering
 - while-loop body attribution
