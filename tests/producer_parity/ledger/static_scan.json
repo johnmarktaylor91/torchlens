@@ -6705,6 +6705,62 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/torch/_grad_fn_graph.py",
+  "has_default": false,
+  "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/torch/_grad_fn_growth.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_grad_fn_membership.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_grad_fn_membership.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/torch/_grad_fn_membership.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/torch/_grad_fn_membership.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/backends/torch/_grad_fn_membership.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/torch/_held_refs.py",
   "has_default": false,
@@ -7176,44 +7232,12 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/backward.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/backward.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/torch/backward.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/backends/torch/backward.py",
   "has_default": false,
-  "sites": 24,
+  "sites": 19,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "raw_index",
-  "file": "torchlens/backends/torch/backward.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -7228,7 +7252,7 @@
   "field": "step_index",
   "file": "torchlens/backends/torch/backward.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -8874,6 +8898,22 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/mechinterp/_interp_engine.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/mechinterp/_interp_engine.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/mechinterp/_kv_heads.py",
   "has_default": false,
   "sites": 2,
@@ -10397,6 +10437,14 @@
   "file": "torchlens/validation/_invariants_conditional_modules.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/validation/_invariants_conditionals.py",
+  "has_default": false,
+  "sites": 5,
   "via_getattr": false
  },
  {
