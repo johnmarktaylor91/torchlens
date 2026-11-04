@@ -1060,6 +1060,8 @@ docs-md	docs/faq.md	18
 docs-md	docs/faq.md	18.
 docs-md	docs/faq.md	2.0
 docs-md	docs/faq.md	2.0_
+docs-md	docs/faq.md	2.37
+docs-md	docs/faq.md	2.38
 docs-md	docs/faq.md	2.6
 docs-md	docs/faq.md	2023
 docs-md	docs/faq.md	224
@@ -4518,6 +4520,7 @@ docs-md	docs/reference/glossary.md	2.0
 docs-md	docs/reference/glossary.md	2.0,
 docs-md	docs/reference/glossary.md	2.1.5
 docs-md	docs/reference/glossary.md	2.31
+docs-md	docs/reference/glossary.md	2.37
 docs-md	docs/reference/glossary.md	2.38
 docs-md	docs/reference/glossary.md	2.5
 docs-md	docs/reference/glossary.md	20
@@ -8136,6 +8139,7 @@ package-docstrings	torchlens/intervention/types.py	11.
 package-docstrings	torchlens/intervention/types.py	1_2
 package-docstrings	torchlens/intervention/types.py	2.0
 package-docstrings	torchlens/intervention/types.py	75
+package-docstrings	torchlens/io/__init__.py	2.37
 package-docstrings	torchlens/mechinterp/_aliases.py	16
 package-docstrings	torchlens/mechinterp/_appliance.py	2026
 package-docstrings	torchlens/mechinterp/_compose.py	16,
@@ -8823,6 +8827,7 @@ package-docstrings	torchlens/transforms/_srp_hash.py	40
 package-docstrings	torchlens/transforms/_srp_hash.py	62
 package-docstrings	torchlens/transforms/_srp_hash.py	63
 package-docstrings	torchlens/transforms/_srp_hash.py	64
+package-docstrings	torchlens/validation/__init__.py	2.37
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
 package-docstrings	torchlens/validation/_destination_coverage.py	256
