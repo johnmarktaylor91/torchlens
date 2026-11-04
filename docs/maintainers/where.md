@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1538 modules, 667593 lines, 0 modules without a docstring.
+83 packages, 1538 modules, 667598 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 36940 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8956 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8961 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11718 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
@@ -513,7 +513,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8956 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8961 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -540,7 +540,7 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (25 
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 122 |
 | `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 798 |
-| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 672 |
+| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 677 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 699 |
 
 ### `torchlens._ir`
