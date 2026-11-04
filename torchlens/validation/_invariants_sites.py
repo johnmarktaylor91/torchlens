@@ -40,7 +40,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
     if not any(getattr(op, "site_key", None) is not None for op in ops):
         return  # legacy artifact: out of the invariant's declared domain
     _check_site_key_totality(ops, name)
-    _check_site_key_uniqueness(ops, name, _root_call_instances(ml))
+    _check_site_key_uniqueness(ops, name)
     _check_layer_site_coherence(ml, name)
 
 
@@ -75,52 +75,9 @@ def _check_site_key_totality(ops: list, name: str) -> None:
                 )
 
 
-def _root_call_instances(ml: Trace) -> dict[str, str]:
-    """Map op labels to the root call that ran them, when the root ran more than once.
-
-    A plain module root runs once per capture, so an op outside every submodule
-    sits in the one root instance. A bound-method root's module runs once per
-    call of the bound method (``self:1`` .. ``self:N``); those ops carry no root
-    frame (their containment facts read as under a plain trace), so each root
-    ModuleCall's op roster names their pass-qualified innermost call instance.
-    """
-    if "self" not in ml.modules:
-        return {}
-    root_calls = list(ml.modules["self"].ops.values())
-    if len(root_calls) < 2:
-        return {}
-    return {str(op_label): str(call.label) for call in root_calls for op_label in call.ops}
-
-
-def _call_instance(
-    op: object, equivalence_counts: dict[object, int], root_call_of: dict[str, str]
-) -> object:
-    """The pass-qualified innermost call instance an op's site key must be unique within."""
-    stack = tuple(getattr(op, "module_call_stack", ()) or ())
-    if stack:
-        return stack[-1]
-    root_call = root_call_of.get(str(getattr(op, "label", "")))
-    if root_call is not None:
-        return root_call
-    equivalence_class = getattr(op, "equivalence_class", None)
-    if equivalence_counts.get(equivalence_class, 0) > 1:
-        # A genuine multi-occurrence group (recurring passes of one
-        # site): differentiate siblings by their unique raw label so
-        # the designed sharing never falsely collides.
-        return (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", getattr(op, "label", None)))
-    # A singleton occurrence: no legitimate reason to share a
-    # site_key with anything else, so keep the strict coarse
-    # identity that catches a forged collision.
-    return ROOT_CALL_INSTANCE
-
-
-def _check_site_key_uniqueness(
-    ops: list, name: str, root_call_of: dict[str, str] | None = None
-) -> None:
+def _check_site_key_uniqueness(ops: list, name: str) -> None:
     """I-S2: (site_key, pass-qualified innermost call instance) unique.
 
-    An op in no submodule takes the root call that ran it when the root ran
-    more than once (a bound-method root; ``_root_call_instances``).
     Without a module stack (a bare ``function_root`` capture, e.g. JAX's
     source-path-based scan/while recurrence), there is no call-stack frame to
     tell passes apart. Site keys are INTENTIONALLY shared across recurring
@@ -156,7 +113,21 @@ def _check_site_key_uniqueness(
 
     seen: dict[tuple[str, object], str] = {}
     for op in ops:
-        call_instance = _call_instance(op, equivalence_counts, root_call_of or {})
+        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        if stack:
+            call_instance: object = stack[-1]
+        else:
+            equivalence_class = getattr(op, "equivalence_class", None)
+            if equivalence_counts.get(equivalence_class, 0) > 1:
+                # A genuine multi-occurrence group (recurring passes of one
+                # site): differentiate siblings by their unique raw label so
+                # the designed sharing never falsely collides.
+                call_instance = (ROOT_CALL_INSTANCE, getattr(op, "_label_raw", op.label))
+            else:
+                # A singleton occurrence: no legitimate reason to share a
+                # site_key with anything else, so keep the strict coarse
+                # identity that catches a forged collision.
+                call_instance = ROOT_CALL_INSTANCE
         identity = (str(op.site_key), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
