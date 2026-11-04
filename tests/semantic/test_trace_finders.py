@@ -113,4 +113,38 @@ def test_modules_with_facet_refuses_a_shared_layer_that_declares_the_facet() -> 
     with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' has 2 calls") as info:
         list(log.modules_with_facet("q"))
     assert info.value.fields["code"] == "module_call_ambiguous"
+    assert "trace.modules['shared'].calls[N].facets.q" in str(info.value)
     assert list(log.modules_with_facet("normalized")) == []
+
+
+def test_module_call_facets_read_each_pass_of_a_shared_layer() -> None:
+    """Each call of a shared attention layer has its own q facet, read from that pass."""
+
+    log = trace_fn(_AlbertStyleModel(), torch.randn(2, 3, 8))
+    shared, q_lin = log.modules["shared"], log.modules["shared.q_lin"]
+
+    assert shared.num_calls == 2
+    q_values = []
+    for index, call in enumerate(shared.calls):
+        assert call.facets.has("q")
+        assert call.facets.declared()["q"].status == "available_now"
+        q_value = call.facets.q.value
+        expected = q_lin.calls[index].out
+        assert q_value.numel() == expected.numel()
+        assert torch.allclose(q_value.sum(), expected.sum())
+        q_values.append(q_value)
+    assert not torch.equal(q_values[0], q_values[1])
+    by_label = log.module_calls["shared:2"].facets.q.value
+    assert torch.equal(by_label, q_values[1])
+
+
+def test_module_call_facets_match_the_module_view_for_a_single_call() -> None:
+    """A module called once reads the same facet through its Module and its one call."""
+
+    log = trace_fn(_VitStyleModel(), torch.randn(2, 3, 8))
+    attn = log.modules["attn"]
+
+    assert torch.equal(attn.calls[0].facets.q.value, attn.facets.q.value)
+    assert torch.equal(attn.calls[0].facets.v.value, attn.facets.v.value)
+    for call in log.modules["dropout"].calls:
+        assert not call.facets.has("q")
