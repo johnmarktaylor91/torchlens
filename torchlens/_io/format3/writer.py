@@ -48,7 +48,7 @@ from .decode import decode_value
 from .payloads import PayloadStore
 from .recipe import RecipeHeader, build_recipe, write_recipe
 from .schema import LiveCells, level_columns, record_kind_of, record_schema
-from .values import ValueEncoder, record_type_table, tagged
+from .values import ValueEncoder, plain_cell, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
@@ -202,11 +202,7 @@ def encode_tables(
     encoder: ValueEncoder = encoder_factory(tables.reference)
     schema = record_schema("trace")
     fields = {
-        name: encoder.encode(
-            cells.cell("trace", state, state, name),
-            f"trace.{name}",
-            payload=name in schema and schema[name].storage == "payload",
-        )
+        name: _encode_trace_cell(encoder, cells.cell("trace", state, state, name), name, schema)
         for name in _write_columns("trace", payload_policy)
     }
     files: dict[str, dict[str, Any]] = {
@@ -222,6 +218,22 @@ def encode_tables(
                 "columns": columns[kind],
             }
     return files, encoder.disclosures
+
+
+def _is_payload(schema: Mapping[str, Any], name: str) -> bool:
+    """Whether column ``name`` stores payload tensors (decides how the encoder treats tensors)."""
+
+    return name in schema and schema[name].storage == "payload"
+
+
+def _encode_trace_cell(
+    encoder: ValueEncoder, value: Any, name: str, schema: Mapping[str, Any]
+) -> Any:
+    """Encode one trace cell; a plain JSON scalar is written as it is (no encoder call)."""
+
+    if plain_cell(value):
+        return value
+    return encoder.encode(value, f"trace.{name}", payload=_is_payload(schema, name))
 
 
 # Complexity: fixed-point row discovery must encode newly referenced rows before the same pass ends.
@@ -250,16 +262,18 @@ def _encode_record_rows(
             if kind == "trace":
                 continue
             schema = record_schema(kind)
+            payload_columns = {name: _is_payload(schema, name) for name in names[kind]}
             while done[kind] < len(tables.rows[kind]):
                 row = done[kind]
                 record = tables.rows[kind][row]
                 state = dict(state_items(record))
                 for name in names[kind]:
+                    value = cells.cell(kind, record, state, name)
                     columns[kind][name].append(
-                        encoder.encode(
-                            cells.cell(kind, record, state, name),
-                            f"{kind}[{row}].{name}",
-                            payload=name in schema and schema[name].storage == "payload",
+                        value
+                        if plain_cell(value)
+                        else encoder.encode(
+                            value, f"{kind}[{row}].{name}", payload=payload_columns[name]
                         )
                     )
                 done[kind] += 1
