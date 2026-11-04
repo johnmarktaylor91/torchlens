@@ -4835,3 +4835,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 6f7dc5e1e64a585f76be5c4f0aa34375fbed4956 (dirty)
 recorded: 2026-11-04T08:37:26.156693+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: relfix-fork-selection: do() rebinds a parent-trace selection by site identity
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2fd53282ce2c1ea976a16cd2b411abe4bcae4c66 (dirty)
+recorded: 2026-11-04T15:52:34.647608+00:00
