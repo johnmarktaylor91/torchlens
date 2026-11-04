@@ -110,7 +110,7 @@
       "id": "landscape-page-current",
       "doc": "docs/migration/landscape.md",
       "kind": "current",
-      "receipt": "Comparable-tools page with a checked date and source per row (TransformerLens 4.x and TransformerBridge, nnsight 0.8, interp-engine, vllm-lens, EasySteer, VLM-Lens, pyvene and pyreft idle, penzai archived, treescope idle, SAELens), a serving-scale section and a discovery-versus-monitoring section; statuses are pinned by the comparison-landscape-currency lint row in _claims.json.",
+      "receipt": "Comparable-tools page with a checked date and source per row (TransformerLens 4.x and TransformerBridge, nnsight 0.8, interp-engine, vllm-lens, EasySteer, EasyEdit2, VLM-Lens, pyvene and pyreft idle, penzai archived, treescope idle, SAELens), a serving-scale section and a discovery-versus-monitoring section; statuses are pinned by the comparison-landscape-currency lint row in _claims.json.",
       "status": "current",
       "verified_at": "2026-11-03 (repository and release metadata checked the same day)",
       "owner_next": "re-check the status column at the claims gate"

@@ -41,7 +41,9 @@ short summaries; check each tool's own documentation before relying on them.
   graph is the record of one run, not a pruning plan.
 - EasyEdit and other knowledge-editing toolkits (ROME, MEMIT): TorchLens implements no
   model-editing method. It can apply a weight change "as if" on a fork
-  (`fork.do(tl.param(name), edit)`) and show what the change moved.
+  (`fork.do(tl.param(name), edit)`) and show what the change moved. EasyEdit2, the project's
+  steering framework, is a row in the [landscape](migration/landscape.md): a steering vector
+  built and checked in TorchLens can be applied there.
 - DAAM and diffusers hooks: TorchLens ships no diffusion-specific views, such as per-token
   cross-attention maps, and does not drive a denoising loop.
 - `torch_geometric.explain`: graph-neural-network explainers belong to PyTorch Geometric.
