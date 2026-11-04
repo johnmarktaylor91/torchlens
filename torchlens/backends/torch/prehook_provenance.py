@@ -24,6 +24,7 @@ from ..._data_classes.prehook import (
     TensorInputObservation,
     TypedInputPath,
 )
+from ..._utils._display_bounded import short_dataclass_repr
 from ._tl import get_tensor_label
 
 if TYPE_CHECKING:
@@ -64,6 +65,8 @@ class _StateObservation:
 @dataclass
 class _InvocationToken:
     """Mutable correlation token for one re-entrant module invocation."""
+
+    __repr__ = short_dataclass_repr
 
     module: nn.Module
     args: tuple[Any, ...]
@@ -132,7 +135,6 @@ def install_prehook_provenance(
     | None = None,
 ) -> PreHookProvenanceLedger:
     """Install the complete reversible pre-hook provenance transaction.
-
     Parameters
     ----------
     trace:
@@ -142,12 +144,10 @@ def install_prehook_provenance(
     forward_hook_wrapper_factory:
         Existing TorchLens output-replacement wrapper factory. Supplying it
         migrates forward-hook wrapping into the same restoration transaction.
-
     Returns
     -------
     PreHookProvenanceLedger
         Installed transaction ledger.
-
     Raises
     ------
     Exception

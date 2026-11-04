@@ -20,6 +20,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Duration
+from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
 from ._runtime_handles import runtime_handle_from_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -288,6 +289,9 @@ class GradFn:
     >>> _ = trace.backward(trace[trace.output_layers[0]].out.sum())
     >>> "ReluBackward0" in [grad_fn.class_name for grad_fn in trace.autograd.grad_fns]
     True"""
+
+    __repr__ = backward_repr
+    __str__ = backward_str
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "grad_fn_object_id": FieldPolicy.KEEP,
@@ -838,12 +842,5 @@ class GradFnAccessor(Accessor[GradFn]):
         return list(self._dict.keys())[:10]
 
     def __repr__(self) -> str:
-        """Format the accessor as a compact label summary."""
-        if len(self) == 0:
-            return "GradFnAccessor({})"
-        items = [
-            f"  '{grad_fn_handle.label}': {grad_fn_handle.class_name} "
-            f"(ops={grad_fn_handle.num_calls}, has_op={grad_fn_handle.has_op})"
-            for grad_fn_handle in self._list
-        ]
-        return f"GradFnAccessor({len(self)} grad_fns):\n" + "\n".join(items)
+        """Use the shared count-only accessor display."""
+        return super().__repr__()
