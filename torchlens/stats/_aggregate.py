@@ -468,7 +468,7 @@ def _rng_snapshot() -> tuple[Any, Any, Any, Any] | None:
             numpy_state = None
         return (
             random.getstate(),
-            torch.random.get_rng_state().clone(),
+            torch.default_generator.get_state().clone(),
             cuda_states,
             numpy_state,
         )

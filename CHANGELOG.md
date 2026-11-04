@@ -5,6 +5,14 @@
 
 ### Fixed
 
+- **capture**: `torch.get_rng_state` and `torch.random.get_rng_state` are recorded as source ops
+  with no parents, so a forward that reads the RNG state and uses the bytes gets an attributed
+  node and passes `tl.validate`. TorchLens's own RNG snapshots do not appear in the trace. The
+  private Tensor methods `_to_sparse`, `_to_sparse_csr`, `_to_sparse_csc`, `_to_sparse_bsr`,
+  `_to_sparse_bsc`, `_conj`, `_conj_physical`, `_neg_view`, `_lazy_clone`, `_addmm_activation`,
+  `_is_all_true` and `_is_any_true` are recorded like their `torch.*` twins. Before, each
+  result reached its consumer with no provenance and validation failed.
+
 - **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
   `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes
   `tl.validate(scope="forward")`. Each attention call is four native sibling ops that all
