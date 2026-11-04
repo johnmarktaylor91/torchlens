@@ -16,6 +16,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization._loop_edges import loop_edge_attrs
+from torchlens._visualization._pass_marks import _BRANCH_LABEL
+from torchlens._visualization._render_leaf import (
+    BRANCH_EDGE_LABEL_PAD,
+    _format_branch_edge_label_html,
+)
 from torchlens.options import CaptureOptions
 
 
@@ -34,13 +39,16 @@ class Loop(nn.Module):
         return x
 
 
-def _dot(rolled: bool) -> str:
+def _dot(rolled: bool, direction: str = "bottomup") -> str:
     torch.manual_seed(0)
     trace = tl.trace(Loop(), torch.randn(1, 4), capture=CaptureOptions(save_source_context=True))
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             return trace.draw(
-                rolled=rolled, path=os.path.join(tmpdir, "loop"), file_format="dot"
+                rolled=rolled,
+                direction=direction,
+                path=os.path.join(tmpdir, "loop"),
+                file_format="dot",
             ).dot
     finally:
         trace.cleanup()
@@ -94,3 +102,24 @@ def test_branch_entry_edge_is_labelled_if_in_both_modes() -> None:
         assert "<u>IF</u>" in entry[0], entry[0]
         then = _edge_lines(dot_source, "input_1", "neg_")
         assert len(then) == 1 and "THEN" in then[0], then
+
+
+def test_branch_edge_label_is_padded_clear_of_its_edge() -> None:
+    """IF/THEN words sit in a one-row table with a transparent cell on each side."""
+    label = _format_branch_edge_label_html("IF")
+    pad = f'<TD WIDTH="{BRANCH_EDGE_LABEL_PAD}"></TD>'
+    assert BRANCH_EDGE_LABEL_PAD >= 6
+    assert label.startswith(
+        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR>'
+    )
+    assert label.count(pad) == 2 and label.index(pad) < label.index("<u>IF</u>") < label.rindex(pad)
+    assert _BRANCH_LABEL.fullmatch(label), label
+    for rolled in (True, False):
+        for direction in ("bottomup", "topdown"):
+            (if_edge,) = _edge_lines(_dot(rolled, direction), "input_1", "sum_")
+            assert (
+                f'{pad}<TD><FONT POINT-SIZE="' in if_edge
+                and "<u>IF</u></b></FONT></TD>" + pad in if_edge
+            ), if_edge
+            (then_edge,) = _edge_lines(_dot(rolled, direction), "input_1", "neg_")
+            assert "<u>THEN</u></b></FONT></TD>" + pad in then_edge, then_edge

@@ -1985,8 +1985,19 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
     return 10**9
 
 
+#: Transparent margin (points) on each side of a branch-edge label (IF, THEN, ELSE, ELIF).
+#: dot reserves the label's box beside the edge midpoint but draws the spline right along the
+#: box's edge, so an unpadded word gets crossed by its own line; the side cells push the text
+#: clear of the line on whichever side dot places the label (any ``rankdir``).
+BRANCH_EDGE_LABEL_PAD = 8
+
+
 def _format_branch_edge_label_html(label_text: str) -> str:
     """Wrap plain branch-label text in the Graphviz HTML used by TorchLens.
+
+    The word sits in the middle cell of a borderless one-row table whose outer cells are
+    ``BRANCH_EDGE_LABEL_PAD`` points wide, so the edge line passes beside the word instead
+    of through it. ``_pass_marks._BRANCH_LABEL`` recognizes this shape.
 
     Args:
         label_text:
@@ -1997,7 +2008,12 @@ def _format_branch_edge_label_html(label_text: str) -> str:
     str
         Graphviz HTML edge-label string.
     """
-    return f'<<FONT POINT-SIZE="{edge_emphasis_pt()}"><b><u>{label_text}</u></b></FONT>>'
+    pad = f'<TD WIDTH="{BRANCH_EDGE_LABEL_PAD}"></TD>'
+    word = f'<FONT POINT-SIZE="{edge_emphasis_pt()}"><b><u>{label_text}</u></b></FONT>'
+    return (
+        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
+        f"<TR>{pad}<TD>{word}</TD>{pad}</TR></TABLE>>"
+    )
 
 
 def _container_component_role(component: OutputPathComponent) -> str:
