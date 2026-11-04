@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture._lazy_contexts import lazy_history_of
 from ..._capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ..._capture.projections import (
     _build_record_context,
@@ -40,6 +41,7 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
+from ._sources_lazy import log_source_tensor_lazy
 from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
@@ -116,7 +118,13 @@ def log_source_tensor(
     if self._options_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self._options_mode == "predicate":
-        log_source_tensor_predicate(self, t, source, extra_address)
+        history = lazy_history_of(get_active_recording_state())
+        if history is None:
+            log_source_tensor_predicate(self, t, source, extra_address)
+        else:
+            label = log_source_tensor_lazy(self, history, t, source, extra_address)
+            if source == "buffer":
+                self._raw_graph_ws.buffer_version_keys[label] = buffer_version_key(t)
 
 
 def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
@@ -178,7 +186,6 @@ def log_source_tensor_predicate(
     self._raw_graph_ws.layer_counter += 1
     self._raw_graph_ws.raw_layer_type_counter[source] += 1
     state.event_index += 1
-    raw_index = self._raw_graph_ws.layer_counter
     type_index = self._raw_graph_ws.raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
@@ -192,7 +199,7 @@ def log_source_tensor_predicate(
             "label": tensor_label,
             "raw_label": tensor_label,
             "_label_raw": tensor_label,
-            "raw_index": raw_index,
+            "raw_index": self._raw_graph_ws.layer_counter,
             "type": source,
             "type_index": type_index,
             "func_name": "none",  # the exhaustive source spelling (``log_source_tensor_exhaustive``)
@@ -230,8 +237,7 @@ def log_source_tensor_predicate(
                 )
             spec = decision
             if spec.save_out or spec.save_metadata:
-                disk_payload = None
-                transformed_disk_payload = None
+                disk_payload = transformed_disk_payload = None
                 if spec.save_out:
                     (
                         ram_payload,
@@ -250,17 +256,18 @@ def log_source_tensor_predicate(
                             transformed_disk_payload=transformed_disk_payload,
                         )
                     )
-        append_projected_event(
-            self,
-            ctx,
-            spec,
-            tensor=t,
-            ram_payload=ram_payload,
-            transformed_ram_payload=transformed_ram_payload,
-            predicate_matched=spec.save_out or spec.save_metadata,
-        )
-        # Echo narrator slot (snoop D1, source seam): once per committed
-        # input/buffer event, after the append.
+        source_kept = spec.save_out or spec.save_metadata
+        if source_kept or not state.options.lean:  # lean: no shell event for an unkept source
+            append_projected_event(
+                self,
+                ctx,
+                spec,
+                tensor=t,
+                ram_payload=ram_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                predicate_matched=source_kept,
+            )
+        # Echo narrator slot (snoop D1, source seam): once per committed event, after the append.
         _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
     except StopSignal:
@@ -275,7 +282,8 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
-        if not halt_only and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
+        fallback = not halt_only and not state.options.lean
+        if fallback and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
             append_projected_event(
                 self,
                 ctx,

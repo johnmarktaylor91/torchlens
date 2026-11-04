@@ -124,6 +124,7 @@ _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("stop_after", "halt"),
     ("storage", "streaming"),
     ("narrate", "echo"),
+    ("lean", "lean"),
 )
 
 #: Value types a saved recording stores verbatim (bundle ``metadata.json``).
@@ -195,6 +196,8 @@ class RecordingSettings:
         The stop predicate from ``stop_after=``, if any.
     storage:
         The disk sink from ``storage=``, if any.
+    lean:
+        PROVISIONAL SPELLING. Whether only the kept events were journaled (``lean_omissions``).
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
@@ -230,6 +233,7 @@ class RecordingSettings:
     stop_after: HaltPredicateFn | None
     storage: StorageOptions | None
     narrate: Any | None
+    lean: bool | None
 
     @classmethod
     def _from_values(cls: type[RecordingSettings], values: Mapping[str, Any]) -> RecordingSettings:
@@ -493,11 +497,7 @@ class Recording(TraceLike):
                 is_derived=True,
             )
         if status == "recovered":
-            return CaptureOutcome(
-                status=CaptureStatus.UNKNOWN,
-                is_recovered=True,
-                is_derived=True,
-            )
+            return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_recovered=True, is_derived=True)
         if status == "complete":
             return CaptureOutcome(status=CaptureStatus.UNATTESTED, is_derived=True)
         return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
@@ -587,21 +587,13 @@ class Recording(TraceLike):
 
         base = session._fastlog_recording
         object.__setattr__(base, "_capture_events", session.capture_events)
+        object.__setattr__(base, "_output_tensors", list(getattr(session, "output_tensors", [])))
         object.__setattr__(
-            base,
-            "_output_tensors",
-            list(getattr(session, "output_tensors", [])),
-        )
-        object.__setattr__(
-            base,
-            "_output_tensor_addresses",
-            list(getattr(session, "output_tensor_addresses", [])),
+            base, "_output_tensor_addresses", list(getattr(session, "output_tensor_addresses", []))
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(
-            base,
-            "_captured_run_cores",
-            tuple(getattr(session, "captured_run_cores", ())),
+            base, "_captured_run_cores", tuple(getattr(session, "captured_run_cores", ()))
         )
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
         object.__setattr__(
@@ -653,9 +645,16 @@ class Recording(TraceLike):
         object.__setattr__(self, "_records_built", True)
 
     @property
-    def lazy_trace(self) -> DryRun:
-        """Return a lazy trace projection over all capture events."""
+    def lean_omissions(self) -> tuple[str, ...]:
+        """PROVISIONAL SPELLING. What a lean recording left out; ``()`` for a default one."""
 
+        return self._lean_omissions()
+
+    @property
+    def lazy_trace(self) -> DryRun:
+        """Return a lazy trace projection over all capture events (refused when lean)."""
+
+        self._check_journal_read("lazy_trace")
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
             from ._dry_run import DryRun
@@ -712,6 +711,7 @@ class Recording(TraceLike):
 
         from .exceptions import RecorderStateError
 
+        self._check_journal_read("raw_metadata")
         if self.event_stream is None:
             raise RecorderStateError(
                 "this Recording no longer holds its raw capture event stream "
@@ -1015,6 +1015,7 @@ class Recording(TraceLike):
         module: ``trace["linear_1_1:2"]`` is the second pass's op.
         """
 
+        self._check_journal_read("to_trace")
         if self.is_failed:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
@@ -1096,10 +1097,7 @@ class Recording(TraceLike):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
-        trace._postprocess(
-            halt_output_tensors,
-            halt_output_addresses,
-        )
+        trace._postprocess(halt_output_tensors, halt_output_addresses)
 
         from ._cook_settle import _settle_cooked_trace
 

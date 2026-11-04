@@ -1,5 +1,6 @@
 """Predicate event records and graph relationship fields."""
 
+import time
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,6 +10,11 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture._lazy_contexts import (
+    LazyContextHistory,
+    lazy_contexts_eligible,
+    tensor_fields,
+)
 from ..._capture.arg_positions import (
     DYNAMIC_SPEC_UNCACHEABLE,
     FUNC_ARG_SPECS,
@@ -23,10 +29,14 @@ from ..._capture.plan import EnrichmentLevel
 from ..._capture.predicates import (
     _evaluate_keep_op,
     _is_halt_only_capture,
+    _module_capture_spec,
+    _plain_module_union,
     build_op_record_context,
 )
 from ..._capture.projections import (
     LiveOpView,
+    _build_record_context,
+    active_recording_state_or_none,
     append_projected_event,
     get_active_recording_state,
 )
@@ -43,18 +53,23 @@ from ..._ir.events import (
 )
 from ..._ir.predicate import RecordContext, RetroactiveCaptureDecision
 from ..._ir.refs import ParamRef
+from ..._ir.selector_eval import module_union_matches
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils._call_site import call_site_class
 from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
-    _get_code_context,
     _get_tensors_and_params_from_obj,
 )
 from ...recording._halt import StopSignal
 from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
+)
+from ._ops_predicate_identity import (
+    _predicate_call_site_chain,
+    _predicate_equivalence_class,
+    _prepared_param_refs,
 )
 from ._tl import (
     get_label_list,
@@ -64,11 +79,8 @@ from ._tl import (
     set_tensor_label,
 )
 from .tensor_tracking import (
-    _append_module_suffix_to_equivalence_class,
     _get_ancestors_from_parents,
-    _get_equivalence_class,
     _locate_parent_tensors_in_args,
-    _make_raw_param_group_barcode,
     _process_parent_param_ops,
 )
 
@@ -82,6 +94,8 @@ __all__ = (
     "_extract_arg_tensors_and_params",
     "_build_param_fields",
     "_build_module_context_fields",
+    "_emit_lazy_predicate_operation_events",
+    "install_lazy_record_contexts",
 )
 
 
@@ -198,22 +212,22 @@ def _emit_predicate_operation_events(
             if demanded is EnrichmentLevel.PAYLOAD:
                 ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             else:
-                ram_payload = None
-                transformed_ram_payload = None
-            append_projected_event(
-                self,
-                ctx,
-                spec,
-                tensor=out,
-                ram_payload=ram_payload,
-                transformed_ram_payload=transformed_ram_payload,
-                predicate_matched=spec.save_out or spec.save_metadata,
-                backend_semantics=backend_semantics,
-                function=function_ref,
-                container_path=container_path,
-                equivalence_class=identity.equivalence_class(ctx, output_index),
-                params=identity.param_refs,
-            )
+                ram_payload = transformed_ram_payload = None
+            if not (state.options.lean and demanded is EnrichmentLevel.SHELL):  # lean: no shell
+                append_projected_event(
+                    self,
+                    ctx,
+                    spec,
+                    tensor=out,
+                    ram_payload=ram_payload,
+                    transformed_ram_payload=transformed_ram_payload,
+                    predicate_matched=spec.save_out or spec.save_metadata,
+                    backend_semantics=backend_semantics,
+                    function=function_ref,
+                    container_path=container_path,
+                    equivalence_class=identity.equivalence_class(ctx, output_index),
+                    params=identity.param_refs,
+                )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except StopSignal:
             raise
@@ -236,7 +250,8 @@ def _emit_predicate_operation_events(
         finally:
             if not halt_only:
                 capture_events = getattr(self, "capture_events", None)
-                if capture_events is None or _label_raw not in capture_events.op_event_by_label_raw:
+                idx = None if capture_events is None else capture_events.op_event_by_label_raw
+                if not state.options.lean and (idx is None or _label_raw not in idx):
                     append_projected_event(
                         self,
                         ctx,
@@ -244,11 +259,10 @@ def _emit_predicate_operation_events(
                         tensor=out,
                         predicate_matched=False,
                     )
-                # Echo narrator slot (snoop D1): exactly once per committed
-                # event, after the append, outside the predicate-failure
-                # pipeline (a narrator failure warns-and-disables inside the
-                # session; only the typed stats-budget refusal propagates).
-                # Duck-typed session read: the hot path imports nothing.
+                # Echo narrator slot (snoop D1): exactly once per committed event, after the
+                # append, outside the predicate-failure pipeline (a narrator failure
+                # warns-and-disables inside the session; only the typed stats-budget refusal
+                # propagates). Duck-typed session read: the hot path imports nothing.
                 echo_session = self.__dict__.get("_echo_session")
                 if echo_session is not None:
                     committed_event = (
@@ -643,100 +657,118 @@ class PredicateOpIdentity:
         )
 
 
-def _predicate_call_site_chain(trace: "Trace") -> tuple[Any, ...]:
-    """Return the call-site chain of the torch call being recorded.
+def install_lazy_record_contexts(trace: "Trace") -> None:
+    """Defer this pass's record contexts when its lean module read allows it.
 
-    The same frame walk exhaustive capture runs for its code context
-    (``_ops_shared_fields``), asked only for the chain: no source lines, no
-    column offsets, and the per-capture anchor in ``trace._code_context_cache``
-    stops the walk at the capture call. Empty when no Python frame lies
-    inside the innermost module call. The key and class string it feeds are
-    the ones exhaustive capture mints (``_ops_activations``), so the cooked
-    Trace groups by call site (``callsite_v1``) with the same result.
-    """
-
-    context_cache = trace._code_context_cache
-    call_site_out: list[Any] = []
-    _get_code_context(
-        0,
-        source_loading_enabled=False,
-        disable_col_offset=True,
-        context_cache=context_cache,
-        call_site_out=call_site_out,
-    )
-    return call_site_out[0] if call_site_out else ()
-
-
-def _prepared_param_refs(
-    state: Any,
-    arg_parameters: list[torch.nn.Parameter],
-) -> tuple[ParamRef, ...]:
-    """Resolve the Parameters an op read to their prep-time identities.
+    Runs once per pass where the producer policy is set. An eligible pass (see
+    ``lazy_contexts_eligible``; the save selector must also be a plain
+    ``tl.module`` union) gets a ``LazyContextHistory`` and the deferring op
+    producer; any other pass is left exactly as it was.
 
     Parameters
     ----------
-    state
-        Active recording state holding ``prepared_param_refs``.
-    arg_parameters
-        Parameters found among the call's arguments.
-
-    Returns
-    -------
-    tuple[ParamRef, ...]
-        One ref per prepared parameter occurrence, in argument order. A
-        Parameter the prep never saw (created inside the forward) has no
-        identity and is skipped, as exhaustive capture skips unstamped ones.
+    trace
+        Predicate-mode trace about to run its forward pass.
     """
 
-    if not arg_parameters:
-        return ()
-    registry = state.prepared_param_refs
-    if not registry:
-        return ()
-    return tuple(ref for param in arg_parameters if (ref := registry.get(id(param))) is not None)
+    state = active_recording_state_or_none()
+    if state is None or state.event_index != 0:  # only at a pass start, before any event
+        return
+    options = state.options
+    addresses = _plain_module_union(options.keep_op)
+    if addresses is None or not lazy_contexts_eligible(
+        options, _module_capture_spec(options), state.no_tensor_capture
+    ):
+        return
+    state.history = LazyContextHistory(
+        state,
+        build=_build_record_context,
+        window=options.history_size,
+        module_addresses=addresses,
+        matches=module_union_matches,
+    )
+    trace._capture_producer_policy = CaptureProducerPolicy(
+        "predicate", _emit_lazy_predicate_operation_events
+    )
 
 
-def _predicate_equivalence_class(
-    state: Any,
-    ctx: RecordContext,
+def _emit_lazy_predicate_operation_events(
+    self: "Trace",
+    func: Callable[..., Any],
+    func_name: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-    param_refs: tuple[ParamRef, ...],
-    *,
-    func_name: str,
-    layer_type: str,
-    output_index: int,
-    in_multi_output: bool,
-    is_inplace_dunder: Callable[[str], bool],
-) -> str:
-    """Build the loop-grouping fingerprint of one predicate-mode op output.
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+    out_orig: Any,
+    exec_ctx: FuncExecutionContext,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> None:
+    """Label a lean module read's op outputs and defer their record contexts.
 
-    The same two fingerprints exhaustive capture mints (``_ops_activations``):
-    parameterized ops key on ``layer_type`` plus the sorted parameter barcodes,
-    parameter-free ops on ``layer_type`` plus a hash of the non-tensor
-    arguments, both suffixed with the output slot of a multi-output call and
-    the module stack.
+    Matches ``_emit_predicate_operation_events`` on a pass that
+    ``install_lazy_record_contexts`` admitted: the plain ``tl.module`` union
+    answers False for every op context (none has a module-output candidate),
+    halt is off and a lean journal appends no shell event for an unkept op, so
+    the eager emitter's only lasting effects are the counters, the tensor
+    labels and the appended context, which this one defers with the same
+    inputs.
     """
 
-    _frames, modules = state.module_fields_for(ctx)
-    if param_refs:
-        barcodes = [ref.barcode for ref in param_refs]
-        base = _make_raw_param_group_barcode(
-            barcodes, layer_type, output_index=output_index if in_multi_output else None
-        )
-        return _append_module_suffix_to_equivalence_class(base, modules)
-    is_inplace_output = is_inplace_dunder(func_name) or (
-        func_name.endswith("_") and not func_name.startswith("__")
-    )
-    equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
-    base = _get_equivalence_class(
-        args,
-        kwargs,
-        output_index,
-        equivalence_layer_type,
-        {"in_multi_output": in_multi_output, "module": modules[-1] if modules else None},
-    )
-    return _append_module_suffix_to_equivalence_class(base, modules)
+    del arg_copies, kwarg_copies, exec_ctx, func_call_id
+    state = get_active_recording_state()
+    layer_type = _normalize_func_name(func_name)
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    call_fields = {
+        "type": layer_type,
+        "func_name": func_name,
+        "parent_labels": tuple(get_label_list(arg_tensors)),
+        "is_bottom_level_func": is_bottom_level_func,
+        "is_transform": bool(getattr(func, "__tl_is_transform_boundary__", False))
+        or func_name in TRANSFORM_FUNC_NAMES,
+        "transform_kind": getattr(func, "__tl_transform_kind__", None)
+        or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
+    }
+    out_iter = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
+    for position, (out, container_path, _container_spec) in enumerate(out_iter):
+        output_index = _live_output_index(container_path) or position
+        _defer_lazy_op_output(self, state, out, output_index, call_fields)
+
+
+def _defer_lazy_op_output(
+    trace: "Trace", state: Any, out: Any, output_index: int, call_fields: dict[str, Any]
+) -> None:
+    """Count, label and defer one op output (the per-output body of the lazy emitter)."""
+
+    graph_ws = trace._raw_graph_ws
+    layer_type = call_fields["type"]
+    graph_ws.layer_counter += 1
+    graph_ws.raw_layer_type_counter[layer_type] += 1
+    state.op_counts[layer_type] = state.op_counts.get(layer_type, 0) + 1
+    state.step_index += 1
+    state.event_index += 1
+    raw_index = graph_ws.layer_counter
+    type_index = graph_ws.raw_layer_type_counter[layer_type]
+    label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
+    set_tensor_label(out, label_raw)
+    frame = state.module_stack[-1] if state.module_stack else None
+    data = {
+        **call_fields,
+        "label": label_raw,
+        "raw_label": label_raw,
+        "_label_raw": label_raw,
+        "raw_index": raw_index,
+        "type_index": type_index,
+        "output_index": output_index,
+        "address": frame.address if frame else None,
+        "module_type": frame.module_type if frame else None,
+        "module_pass_number": frame.pass_number if frame else None,
+        **tensor_fields(out),
+    }
+    elapsed = time.time() - trace._provenance_start_time
+    history = cast(LazyContextHistory, state.history)
+    history.defer("op", data, state.event_index, state.step_index, elapsed)
 
 
 # Late imports: the split modules of this package import one another (cycles), so each
@@ -757,4 +789,5 @@ from ._ops_predicates import (  # noqa: E402
 )
 from .ops import (  # noqa: E402
     TRANSFORM_FUNC_NAMES,
+    CaptureProducerPolicy,
 )

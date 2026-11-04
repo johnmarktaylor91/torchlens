@@ -4494,6 +4494,30 @@ recorded: 2026-10-29T04:14:24.023243+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-lazy: new consumer sites in torchlens/_capture/_lazy_contexts.py (deferred record contexts read RecordContext.kind, raw_label and RecordingState fields)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 86d11a4530d288b8fbefb94d932db005740b4c9b (dirty)
+recorded: 2026-11-03T22:16:58.251869+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-lazy: new consumer sites in torchlens/_capture/_lazy_contexts.py (deferred record contexts read RecordContext.kind, raw_label and RecordingState fields)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 86d11a4530d288b8fbefb94d932db005740b4c9b (dirty)
+recorded: 2026-11-03T22:17:05.084713+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-139: sources.py split moved the lazy source logger read sites into backends/torch/_sources_lazy.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bf91cb47363834b8ac761eff53e13a888ef2659f (dirty)
+recorded: 2026-11-04T00:36:49.313181+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: the experimental alternate renderer package and its bridge read sites are removed (JMT ruling 3 Nov 2026)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
