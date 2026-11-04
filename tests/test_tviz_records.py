@@ -257,6 +257,45 @@ class TestScoreDecomposition:
             )
         assert _code(excinfo) == "tv_decomposition_unclosed"
 
+    @pytest.mark.parametrize("reference", [float("-inf"), float("nan")])
+    def test_non_finite_score_refuses_a_finite_total(self, reference: float) -> None:
+        """An infinite or nan score never closes against finite terms."""
+
+        q = torch.randn(8)
+        k = torch.randn(8)
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
+            tviz.ScoreDecomposition(
+                layer="blk.0.attn",
+                head=0,
+                destination=1,
+                source=0,
+                query_vector=q,
+                key_vector=k,
+                products=q * k,
+                scale=8**0.5,
+                reference_score=reference,
+            )
+        assert _code(excinfo) == "tv_decomposition_unclosed"
+
+    def test_overflowed_mask_closes_exactly(self) -> None:
+        """A -inf score closes through an exact -inf additive mask term."""
+
+        q = torch.randn(8)
+        k = torch.randn(8)
+        record = tviz.ScoreDecomposition(
+            layer="blk.0.attn",
+            head=0,
+            destination=1,
+            source=0,
+            query_vector=q,
+            key_vector=k,
+            products=q * k,
+            scale=8**0.5,
+            additive_terms={"mask": float("-inf")},
+            reference_score=float("-inf"),
+        )
+        assert record.total == float("-inf")
+
 
 class TestTokenScores:
     """Strip records: alignment, N/A cells, the attribution door (D28)."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._output_slot import read_output, read_transformed_output
+from .._output_slot import fork_output_refusal, read_output, read_transformed_output
 from ._moe_views import _TraceRouting
 
 
@@ -33,12 +33,13 @@ class TraceOutputMixin(_TraceRouting):
         Raises
         ------
         PayloadUnavailableError
-            ``output_not_stored`` when loaded, unpickled, or built without a
-            live forward; ``output_capture_stopped`` when ``stop_after=``
+            ``output_not_stored`` when loaded, unpickled, forked (the reason
+            names the fork), or built without a live forward; ``output_capture_stopped`` when ``stop_after=``
             ended the capture before the model returned.
         """
 
-        return read_output(self._output_slot, owner="Trace")
+        missing = fork_output_refusal(self.__dict__.get("_parent_run") is not None)
+        return read_output(self._output_slot, owner="Trace", missing=missing)
 
     @property
     def transformed_output(self: Any) -> Any:
