@@ -12,7 +12,7 @@ treescope is installed. Upstream treescope is idle (last release v0.1.10 on
 2025-08-08, last push 2026-06-18, checked 2026-11-03); the bridge keeps working against
 that release and the cards do not depend on it.
 
-## The four cards
+## Notebook cards
 
 Print any of these in a notebook cell and the card renders — stdlib-only
 generation, no IPython or notebook extra required, readable with JavaScript
@@ -21,22 +21,30 @@ disabled:
 | Object | Card |
 |---|---|
 | `Trace` | model/backend/counts, save coverage, outcome badge, NaN/Inf disclosure, params/FLOPs, budgeted foldable index of copyable lookup keys |
-| `Layer` | header + one row PER PASS (per-pass facts read via `ops[k]`; a single-pass layer degenerates to the Op card) |
-| `Op` | identity (function, pass k/N, module, site key), stats line, budgeted array grid with truncation-mask motifs, grad stats when captured, graph neighbors as copyable keys, cost wrappers untouched |
+| `Layer` | the text card's first line and rows; repeated layers show up to three per-pass value summaries |
+| `Op` | short key, tensor geometry, value words, position, module, output size, graph, function and source location |
+| `Param` | live tensor geometry, trainability, basis and version, size, cached values, consuming sites and gradient facts |
 | `PartialTrace` | failure-first: FAILED CAPTURE banner, phase/reason, escaped exception, committed prefix and frontier, what remains safe to inspect |
 
-Every card carries the **PROOF row** — capture outcome, verification badge,
+Trace and failed-capture cards carry the **PROOF row** — capture outcome, verification badge,
 nonfinite coverage basis, save policy. A TorchLens card asserts "this is a
 verified execution", not "this is an object".
 
 Hard rules: a card never raises (internal failures degrade to a one-line
 `card unavailable: <reason>`); honesty states are never folded; display paths
-never materialize disk payloads, never do unbounded device transfers, and
-never recompute stats.
+never materialize disk payloads and never do unbounded device transfers.
+
+Op, Layer and Param notebook cards show the same first line and labelled
+rows as `str(record)`, with at most 10 body rows and no automatic tensor
+preview. Saved CPU activations under the sampling gate may compute statistics
+once, cached by version; live parameters and device tensors only reuse valid
+cached statistics. Missing evidence reads `values    not computed`.
+Multi-pass Layer cards show up to three individual passes, never a pooled
+statistic. A record card stays below 20 KB.
 
 ### Copy-expression roots
 
-Card keys are executable access expressions (`log['conv2d_1_1']`). The root
+Trace index keys are executable access expressions (`log['conv2d_1_1']`). The root
 name resolves through a ladder: an explicit `root=` wins; nested treescope
 renders use treescope's own path; in a live notebook an identity scan of the
 user namespace picks the shortest non-underscore binding (IPython history

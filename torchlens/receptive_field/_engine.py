@@ -1,5 +1,4 @@
 """Whole-graph geometric receptive-field solver.
-
 The engine deliberately contains no operation-family registrations.  It interprets the
 local geometry emitted by :mod:`torchlens.receptive_field._rules` and composes that geometry
 over the captured DAG using exact rational arithmetic.
@@ -23,6 +22,7 @@ from .._capture.arg_positions import (
     _schema_arg_is_parent_candidate,
 )
 from .._record_type import record_type
+from .._utils._display_bounded import short_dataclass_repr
 from ..backends import TORCH_BACKEND_NAME
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
@@ -66,6 +66,8 @@ _SOURCE_SOLUTION_CACHE_SIZE = 8
 class _ReceptiveFieldSolution:
     """Immutable whole-trace geometric solution and its cache identity."""
 
+    __repr__ = short_dataclass_repr
+
     registry_epoch: int
     graph_revision: tuple[object, ...]
     descriptors: Mapping[tuple[str, str], ReceptiveField]
@@ -76,6 +78,8 @@ class _ReceptiveFieldSolution:
 @dataclass(frozen=True)
 class _BranchState:
     """Geometry state plus whether ancestry reaches only through a control edge."""
+
+    __repr__ = short_dataclass_repr
 
     state: _InputState
     geometry_neutral: bool
@@ -127,12 +131,10 @@ def _is_input_seed(op: Op) -> bool:
 
 def solve(trace: Trace) -> _ReceptiveFieldSolution:
     """Solve geometric receptive fields for every operation and reachable model input.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
-
     Returns
     -------
     _ReceptiveFieldSolution
@@ -158,14 +160,12 @@ def solve(trace: Trace) -> _ReceptiveFieldSolution:
 
 def solve_from(trace: Trace, source: Op) -> _ReceptiveFieldSolution:
     """Solve geometric receptive fields seeded at one captured source operation.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
     source:
         Operation whose output grid is the receptive-field source.
-
     Returns
     -------
     _ReceptiveFieldSolution

@@ -29,6 +29,7 @@ from .._data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from .._ir.workspaces import _init_module_hierarchy_data
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.display import _record_phase_timing
@@ -55,7 +56,6 @@ _EMPTY_INGEST_EXTRAS = _IngestExtras()
 
 def materialize_log_from_fields(fields_dict: dict[str, object], store: object | None = None) -> Op:
     """Construct the live log object for one captured operation.
-
     Parameters
     ----------
     fields_dict
@@ -64,7 +64,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
         The owning trace's ``OpRowStore`` (the M5 builder ingress): the op is
         appended as a shared columnar row. ``None`` constructs a detached
         single-row op (legacy/preview callers).
-
     Returns
     -------
     Op
@@ -97,7 +96,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
 
 def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
     """Remove streaming-only pending blob ids before Op construction.
-
     Parameters
     ----------
     fields_dict
@@ -144,6 +142,8 @@ class _ModuleSideChannel:
     Built LOCALLY by ingest from journal lanes; the orchestrator applies it
     onto the trace's ``ModuleCaptureWorkspace`` after ingest returns.
     """
+
+    __repr__ = short_dataclass_repr
 
     module_build_data: dict[str, Any]
     module_metadata: dict[str, Any]

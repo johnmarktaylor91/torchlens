@@ -16,6 +16,7 @@ from .._io import (
 from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
+from ._aten_display import bind_owner_keys
 from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
@@ -574,8 +575,8 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         from ..validation._invariants_primitive_ops import validate_loaded_primitive_profile
 
         validate_loaded_primitive_profile(trace)
-    # Event streams never serialize (FieldPolicy.DROP), but a restored
-    # trace remains a supported backward-capture target within the live
+        bind_owner_keys(trace)
+    # Event streams never serialize; a restored trace supports backward capture in the live
     # process, so restore installs a fresh stream EXPLICITLY here rather
     # than letting backward capture fabricate one silently on demand.
     # The stream is DETACHED, not blank: it records the restored
