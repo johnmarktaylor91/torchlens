@@ -415,6 +415,8 @@ def test_finished_trace_reads_match_facade_field_by_field(branchy_trace: tl.Trac
     names = [name for name in _OP_SLOT_NAMES if name not in {"out", "grad"}]
     getters = {name: columns.getter(name) for name in names}
 
+    # Grade C (radon counts each assert and comprehension filter): the per-field
+    # decision lives in ``_field_mismatch``; what remains is the fixture walk.
     mismatches = []
     fork_owned = set()
     for ops in zip(facade_ops, column_ops, control_ops, strict=True):
