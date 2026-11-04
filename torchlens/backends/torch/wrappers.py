@@ -1279,6 +1279,10 @@ def torch_func_decorator(
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
+        # A higher-order op's Autograd kernel fake-traces its branches before the
+        # eager run that is recorded; that pass is not the model's (_tracing_pass).
+        if inside_tracing_tensor_pass(args, kwargs):
+            return call_inside_tracing_pass(func, args, kwargs)
         # Skip logging inside vmap/functorch transforms — internal TorchLens
         # operations (safe_copy, torch.equal, .item()) don't have vmap batching
         # rules and will crash. The original function is already vmap-compatible.
@@ -1295,10 +1299,6 @@ def torch_func_decorator(
         # is its boundary: log the eager source; torch.compile internals untraced.
         if _is_inside_dynamo_compilation():
             return _call_inside_dynamo_region(trace, func, args, kwargs)
-        # A higher-order op's Autograd kernel fake-traces its branches before the
-        # eager run that is recorded; that pass is not the model's (_tracing_pass).
-        if inside_tracing_tensor_pass(args, kwargs):
-            return call_inside_tracing_pass(func, args, kwargs)
 
         # F20 lazy-module completion: torch's materialization plumbing on a
         # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
