@@ -330,7 +330,16 @@ def test_hop_capture_validates_true(hop: str) -> None:
     assert _validate(_Forward(fn)) is True
 
 
-@pytest.mark.parametrize("hop", sorted(_HOP_FORWARDS))
+_HOP_DISPATCHED = sorted(set(_HOP_FORWARDS) - {"associative_scan"})
+"""Forwards whose HOP reaches the dispatcher on CPU.
+
+Generic-mode ``associative_scan`` on CPU runs its combine loop in Python without
+dispatching ``associative_scan_op`` (its capture validates True with no witness
+rule at all), so its planted drop says nothing about the HOP rules.
+"""
+
+
+@pytest.mark.parametrize("hop", _HOP_DISPATCHED)
 def test_hop_planted_dropped_op_is_named_by_the_witness(
     hop: str, raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
 ) -> None:
