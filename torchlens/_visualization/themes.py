@@ -31,13 +31,34 @@ from .._errors import InvalidArgumentError
 from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 
+#: The default ``torchlens`` skin's palette: the released look, ruled on
+#: 3 Nov 2026 to stay exactly as released. Pale green input, salmon output,
+#: grey weights (trainable lighter than frozen) and every other node white:
+#: a branch test and a buffer fill like an ordinary op (the test's outcome is
+#: on its label, the buffer's cylinder is its cue). It does not pass the CVD
+#: gate (input~params_frozen and params_generic~params_trainable collide under
+#: every simulation); the ``colorblind`` skin is the accessible choice.
+RELEASED_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
+    {
+        "input": "#98FB98",
+        "output": "#ff9999",
+        "params_generic": "#E6E6E6",
+        "params_trainable": "#D9D9D9",
+        "params_frozen": "#B0B0B0",
+        "params_gradient": "#D9D9D9:#B0B0B0",
+        "boolean": "white",
+        "buffer": "white",
+        "intervention": "#CC79A7",
+    }
+)
+
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set) with the
 #: ruled grey weights (no blue in any skin: trainable light grey, frozen dark
 #: grey, generic a paler neutral grey). Each grey pair sits at least 40 apart
 #: under every colour-vision simulation; the frozen grey keeps black ink
 #: legible (5.3:1) so the trainable/frozen split fill reads with one ink; the
-#: generic grey sits 13 dE from the white page. The default ``torchlens`` skin
-#: and the ``colorblind`` skin render it; the CVD accessibility gate measures it.
+#: generic grey sits 13 dE from the white page. The ``colorblind`` skin renders
+#: it; the CVD accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
@@ -194,7 +215,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_fill="white",
         default_border="black",
         default_font="black",
-        semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
+        semantic_palette=RELEASED_SEMANTIC_PALETTE,
         ramp=LIGHT_WARM_RAMP,
         neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
@@ -418,11 +439,16 @@ def _skin_fill_for(spec_fill: str | None, theme: VisualizationTheme) -> str | No
     roles = [_CONSTANT_ROLES.get(color) for color, _, _ in segments]
     if not any(roles):
         return None
-    translated = [
-        (_role_fill(theme, role, color) if role is not None else color) + sep + weight
-        for role, (color, sep, weight) in zip(roles, segments, strict=True)
+    colors = [
+        _role_fill(theme, role, color) if role is not None else color
+        for role, (color, _, _) in zip(roles, segments, strict=True)
     ]
-    return ":".join(translated)
+    if len(colors) > 1 and len({_hex_rgb(color) or color for color in colors}) == 1:
+        # Both tones landed on one colour (the default skin's white test): one fill.
+        return colors[0]
+    return ":".join(
+        color + sep + weight for color, (_, sep, weight) in zip(colors, segments, strict=True)
+    )
 
 
 #: Share of the boolean colour in a False test's fill (the rest is white).

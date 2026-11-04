@@ -9,6 +9,7 @@ from __future__ import annotations
 from torchlens._visualization.themes import (
     LEGACY_SEMANTIC_PALETTE,
     OKABE_ITO_SEMANTIC_PALETTE,
+    RELEASED_SEMANTIC_PALETTE,
     THEME_PRESETS,
 )
 
@@ -40,8 +41,19 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
         "buffer": "#E69F00",
         "intervention": "#CC79A7",
     }
+    assert dict(RELEASED_SEMANTIC_PALETTE) == {
+        "input": "#98FB98",
+        "output": "#ff9999",
+        "params_generic": "#E6E6E6",
+        "params_trainable": "#D9D9D9",
+        "params_frozen": "#B0B0B0",
+        "params_gradient": "#D9D9D9:#B0B0B0",
+        "boolean": "white",
+        "buffer": "white",
+        "intervention": "#CC79A7",
+    }
     expected = {
-        "torchlens": (OKABE_ITO_SEMANTIC_PALETTE, "white", "black", "black"),
+        "torchlens": (RELEASED_SEMANTIC_PALETTE, "white", "black", "black"),
         "paper": (LEGACY_SEMANTIC_PALETTE, "#F7F7F7", "#222222", "#111111"),
         "high_contrast": (LEGACY_SEMANTIC_PALETTE, "white", "black", "black"),
     }

@@ -32,7 +32,11 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import KEY_TABLE_ID, drawn_module_marks, key_swatches
 from torchlens._visualization._label_format import binary_size, format_memory
-from torchlens._visualization.themes import OKABE_ITO_SEMANTIC_PALETTE, resolve_theme
+from torchlens._visualization.themes import (
+    OKABE_ITO_SEMANTIC_PALETTE,
+    RELEASED_SEMANTIC_PALETTE,
+    resolve_theme,
+)
 from torchlens.errors import ArgumentConflictError
 
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
@@ -300,10 +304,11 @@ def test_each_module_mark_gets_its_own_key_entry() -> None:
 
 
 def test_frozen_weights_take_dark_grey_with_black_ink(tmp_path: Path) -> None:
-    # No skin draws weights in blue: trainable is light grey, frozen dark grey. Frozen stays
-    # at #808080 so one black ink reads on both halves of the gradient split (5.3:1).
+    # No skin draws weights in blue: trainable is light grey, frozen darker grey, and black
+    # ink reads on both (the default skin keeps the released #D9D9D9 / #B0B0B0).
+    assert RELEASED_SEMANTIC_PALETTE["params_frozen"] == "#B0B0B0"
+    assert RELEASED_SEMANTIC_PALETTE["params_trainable"] == "#D9D9D9"
     assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#808080"
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_trainable"] == "#C0C0C0"
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     model[0].requires_grad_(False)
     captured = tl.trace(model, torch.randn(1, 4))
@@ -311,6 +316,6 @@ def test_frozen_weights_take_dark_grey_with_black_ink(tmp_path: Path) -> None:
         dot = captured.draw(str(tmp_path / "frozen.svg")).dot
     finally:
         captured.cleanup()
-    frozen = [line for line in dot.splitlines() if "#808080" in line and "[label=<" in line]
+    frozen = [line for line in dot.splitlines() if "#B0B0B0" in line and "[label=<" in line]
     assert frozen, dot
     assert not any("#FFFFFF" in line.upper() or "fontcolor=white" in line for line in frozen)

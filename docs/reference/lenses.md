@@ -92,12 +92,12 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   77-99% of real-model nodes into the bottom decile. Degenerate domains
   (min == max) render UNENCODED with a note, never mid-ramp.
 - **Skins are live (N4).** Semantic role colours resolve through the
-  active skin's palette at the one theme seam. The default `torchlens` skin and the
-  `colorblind` skin render the Okabe-Ito set with grey weights (green input, vermillion
-  output, light grey trainable and dark grey frozen weights; no skin draws blue), the set
-  with CVD evidence attached; `paper` and
-  `high_contrast` keep the legacy role colours (light green input, light red output, light and
-  dark grey weights) and `dark` its dark remap.
+  active skin's palette at the one theme seam. The default `torchlens` skin keeps the
+  released look: light green input, salmon output, light grey trainable and darker grey
+  frozen weights, and every other node white (a branch test reads `IF: TRUE` on its label).
+  The `colorblind` skin renders the Okabe-Ito set with grey weights (green input, vermillion
+  output), the set with CVD evidence attached; `paper` and `high_contrast` keep the legacy
+  role colours and `dark` its dark remap. No skin draws blue.
   Each skin carries a 3-anchor ramp and the N17 neutral "aggregate, not
   encoded" fill for collapsed boxes under an active channel.
 

@@ -85,6 +85,10 @@ def test_mixed_if_test_splits_hard_in_pass_order_in_every_skin() -> None:
     assert reverse == f"{true_fill};0.67:{BOOL_FALSE_NODE_COLOR}"
     for skin in sorted(THEME_PRESETS):
         painted = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=fill), resolve_theme(skin))
+        if THEME_PRESETS[skin].semantic_palette["boolean"] == "white":
+            # The default skin fills every test like an ordinary op: one plain fill.
+            assert painted.fillcolor == "white", skin
+            continue
         assert re.fullmatch(r"#[0-9A-Fa-f]{6};0\.67:#[0-9A-Fa-f]{6}", str(painted.fillcolor)), skin
         assert not any(_is_blue(color) for color in _hexes(painted.fillcolor)), skin
         contrast = _worst_contrast(str(painted.fontcolor), str(painted.fillcolor))
@@ -100,8 +104,8 @@ def test_no_skin_draws_blue(skin: str) -> None:
     assert not blues, (skin, blues)
 
 
-def test_default_palette_passes_every_cvd_gate_with_grey_weights() -> None:
-    """The default palette clears all four CVD checks; weights are greys, frozen darker."""
+def test_colorblind_palette_passes_every_cvd_gate_with_grey_weights() -> None:
+    """The colorblind skin's palette clears all four CVD checks; weights grey, frozen darker."""
 
     findings = palette_distinguishability(dict(OKABE_ITO_SEMANTIC_PALETTE))
     assert all(finding.passed for finding in findings), [
@@ -121,16 +125,64 @@ def test_dark_skin_weights_collide_with_no_role() -> None:
             assert "params" not in str(pair), (finding.check, pair)
 
 
-# Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.
-def test_default_skin_renders_the_okabe_ito_palette() -> None:
-    """The default skin translates every legacy constant to its Okabe-Ito role colour."""
+def test_colorblind_skin_renders_the_okabe_ito_palette() -> None:
+    """The colorblind skin translates every legacy constant to its Okabe-Ito role colour."""
 
-    theme = resolve_theme("torchlens")
+    theme = resolve_theme("colorblind")
     assert theme.semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
     for role, constant in LEGACY_SEMANTIC_PALETTE.items():
         spec = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=constant), theme)
         assert spec.fillcolor == OKABE_ITO_SEMANTIC_PALETTE[role], role
-    assert resolve_theme("colorblind").semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
+
+
+class _FrozenBranch(nn.Module):
+    """A frozen layer, a trainable layer and a data-dependent ``if``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.frozen = nn.Linear(3, 3).requires_grad_(False)
+        self.trainable = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.frozen(x)
+        if y.sum() > -100:
+            y = self.trainable(y)
+        return torch.relu(y)
+
+
+#: The default skin's node fills, as released. Changing any of these is a palette decision
+#: for the maintainer: edit this table on purpose, never to make a drawing pass.
+_RELEASED_DEFAULT_FILLS = {
+    "input": "#98FB98",
+    "output": "#ff9999",
+    "params_generic": "#E6E6E6",
+    "params_trainable": "#D9D9D9",
+    "params_frozen": "#B0B0B0",
+}
+
+
+def test_default_skin_fills_are_the_released_palette_edit_deliberately(tmp_path: Any) -> None:
+    """A plain forward drawing in the default skin uses only white and the released fills.
+
+    Input pale green, output salmon, weights grey (trainable lighter than frozen), and
+    every other node, the branch test included, white.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(_FrozenBranch(), torch.ones(1, 3))
+    try:
+        dot = trace.draw(path=str(tmp_path / "released"), file_format="dot").dot
+    finally:
+        trace.cleanup()
+    fills = {
+        value.strip('"').lower()
+        for value in re.findall(r'(?:fillcolor|BGCOLOR)=("[^"]*"|[^\s\]>]+)', dot)
+    }
+    released = {value.lower() for value in _RELEASED_DEFAULT_FILLS.values()}
+    allowed = released | {"white", "#ffffff", "#d9d9d9:#b0b0b0"}
+    assert fills <= allowed, sorted(fills - allowed)
+    for role in ("input", "output", "params_trainable", "params_frozen"):
+        assert _RELEASED_DEFAULT_FILLS[role].lower() in fills, (role, sorted(fills))
 
 
 # Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.

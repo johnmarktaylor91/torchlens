@@ -228,7 +228,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Green: the input, named @input.<argument>", "node(fillcolor={input_color})"),
             Key("Arrows point from producer to consumer", "edge(style=solid)"),
-            Key("Vermillion: the output, at the top", "node(fillcolor={output_color})"),
+            Key("Salmon: the output, at the top", "node(fillcolor={output_color})"),
         ),
         footnote="A caption under the graph names the model and counts tensors, memory and "
         "parameters; bold warning lines join it when a capture was poisoned or unverified.",
@@ -447,12 +447,11 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="branches",
         title="Branches: which arm ran",
-        rule="The gold IF test is the comparison that chose the arm (pale gold when FALSE); it has "
-        "no outgoing arrow because it steered Python, not tensors.",
+        rule="The IF test is the comparison that chose the arm; its first row reads IF: TRUE or "
+        "IF: FALSE. It has no outgoing arrow because it steered Python, not tensors.",
         panels=(Panel("a", "Branch"),),
         keys=(
-            Key("Gold boolean, a dead end", "node(fillcolor={bool_color})"),
-            Key("IF on the test, with its outcome", "node(text~IF)"),
+            Key("IF on the test, with its outcome; a dead end", "node(text~IF)"),
             Key("THEN into the first op of the arm that ran", "edge(text~THEN)"),
             Key("The arm that did not run is absent", None),
         ),
@@ -686,12 +685,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="focus",
         title="Focus on one module: module=",
-        rule="Only the module's own ops; green and vermillion ovals stand for the outside. "
+        rule="Only the module's own ops; green and salmon ovals stand for the outside. "
         'trace.modules["blocks.0"].draw() is the same.',
         panels=(Panel("a", "Stack", kwargs={"module": "blocks.0"}),),
         keys=(
             Key("Green: where data enters", "node(fillcolor={input_color})"),
-            Key("Vermillion: where data leaves", "node(fillcolor={output_color})"),
+            Key("Salmon: where data leaves", "node(fillcolor={output_color})"),
             Key("Only the module's own ops", "node(text~relu)"),
         ),
         rows=("VN15", "VR08"),
@@ -1498,7 +1497,6 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("not from the input", "dashed", "a", "node(style^dashed, text~sigmoid)"),
             ("buffer", "buffers", "a", "node(shape=cylinder)"),
             ("fed by hidden buffers", "buffers", "a", "node(peripheries=2)"),
-            ("boolean that chose a branch", "branches", "a", "node(fillcolor={bool_color})"),
             ("IF test and its outcome", "branches", "a", "node(text~IF)"),
             ("whole module", "depth", "a", "node(shape=box3d)"),
             ("run of ops (segment)", "collapse-max", "a", "node(style^rounded)"),

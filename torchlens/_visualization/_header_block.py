@@ -349,7 +349,7 @@ def key_swatches(
 
     Both weight greys are listed whenever any weighted node is drawn, so a
     reader can tell trainable from frozen weights. Plain operations get no
-    entry. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
+    entry, nor does an oval mark the skin fills like one. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
     an entry drawn like it; ``has_module=True`` alone means a module frame.
     An edited node adds ``edited`` (the ringed oval) and, with the downstream
     highlighter drawn, ``changed by the edit``.
@@ -381,21 +381,29 @@ def key_swatches(
         ("true/false test", "oval", BOOL_NODE_COLOR, "boolean" in drawn),
     )
     swatches = [
-        _entry_swatch(theme, text, shape, fill) for text, shape, fill, shown in entries if shown
+        swatch
+        for swatch in (_entry_swatch(theme, *entry[:3]) for entry in entries if entry[3])
+        if swatch is not None
     ]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
 
 
-def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch:
-    """Return one key entry with the skin's fill and border for its mark."""
+def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch | None:
+    """Return one key entry with the skin's fill and border for its mark.
+
+    ``None`` for an oval the skin fills like a plain op (the default skin's
+    branch test): a swatch identical to every function call teaches nothing.
+    """
 
     from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
+    from .themes import _hex_rgb, apply_theme_to_spec
 
     if shape == "frame":
         return _module_frame_swatch(theme)
     themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
+    if shape == "oval" and _hex_rgb(str(themed.fillcolor)) == _hex_rgb(theme.default_fill):
+        return None
     return KeySwatch(
         text=text,
         shape=shape,

@@ -3029,9 +3029,11 @@ deprecation shim owed*
 : The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
-  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` and
-  `colorblind` render the Okabe-Ito set with grey weights (green input, vermillion output, light grey trainable and dark grey frozen weights; no skin draws blue), `paper`
-  and `high_contrast` the legacy set (light green input, light red output, grey weights). The functional form with grouped options reads it from
+  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` keeps the
+  released set (light green input, salmon output, light and darker grey weights, every other node
+  white), `colorblind` renders the Okabe-Ito set with grey weights (green input, vermillion output),
+  `paper` and `high_contrast` the legacy set (light green input, light red output, grey weights);
+  no skin draws blue. The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
 **theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
