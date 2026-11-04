@@ -251,3 +251,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a0c99814229af1eb3df0776f660b11013d173269 (dirty)
 recorded: 2026-11-04T01:08:44.906550+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: no-blue: default skin is main's released palette (green input, salmon output, grey weights, yellow branch tests, other nodes white); IF named on the test node with per-pass outcomes; rolled edge ends labelled only for a strict subset of passes; 0-d nodes read scalar with their saved value; no skin draws blue; edge annotations 13 pt (JMT 3 Nov 2026 5:23-6:11 PM PT)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d1c07ec426758fe45c7a7001c672a94f9356f7a3 (dirty)
+recorded: 2026-11-04T02:35:17.113352+00:00
+---
+generator: tests/test_rank_render_ir_semantic_goldens.py
+flag: TORCHLENS_UPDATE_RANK_RENDER_IR=1
+reason: no-blue: default skin is main's released palette (green input, salmon output, grey weights, yellow branch tests, other nodes white); IF named on the test node with per-pass outcomes; rolled edge ends labelled only for a strict subset of passes; 0-d nodes read scalar with their saved value; no skin draws blue; edge annotations 13 pt (JMT 3 Nov 2026 5:23-6:11 PM PT)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d1c07ec426758fe45c7a7001c672a94f9356f7a3 (dirty)
+recorded: 2026-11-04T02:35:47.238364+00:00
