@@ -222,8 +222,13 @@ PLANTED: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "The menagerie is 100% verified.",
             "All 11,670 menagerie architectures are algorithmically verified.",
             "The menagerie catalog holds 9,200 entries.",
+            "The menagerie catalog holds 8,500+ rows across ~3,600 families.",
+            "The Model Menagerie holds over 7,100 networks.",
         ),
-        ("The menagerie catalog holds 8,500+ rows across ~3,600 families, measured 2026-08-16.",),
+        (
+            "TorchLens is tested on a growing Model Menagerie of over 6,400 networks. "
+            "More than 6,300 models have been verified in this way so far.",
+        ),
     ),
     "verified-capture-scope": (
         (
