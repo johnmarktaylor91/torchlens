@@ -1120,7 +1120,7 @@ torchlens/intervention/helpers.py::patch_from	110
 torchlens/intervention/helpers.py::scramble_elements	88
 torchlens/intervention/helpers.py::splice_module	81
 torchlens/intervention/helpers.py::swap_with	69
-torchlens/intervention/hooks.py	1707
+torchlens/intervention/hooks.py	1706
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63

@@ -233,7 +233,8 @@ def _facet_rule_parts(
 
     helper = getattr(hook_spec, "helper", None)
     request = hook_spec.metadata.get("facet_selector")
-    if not _is_edit(helper) or helper.portability != "builtin" or not isinstance(request, dict):
+    builtin = _is_edit(helper) and getattr(helper, "portability", None) == "builtin"
+    if not builtin or not isinstance(request, dict):
         return selector, _placeholder_edit(index, getattr(hook_spec, "hook", None), encoder)
     facet = {**selector, "selector_kind": "facet"}
     facet["selector_value"] = encoder.encode(dict(request), f"{index}.selector.selector_value")

@@ -855,7 +855,7 @@ def expand_facet_hook_entries(
             attention = selector.name in {"pattern", "scores", "z", "result"}
             raise SiteResolutionError(
                 f"facet selector {selector!r} matched no write-capable real tensor facets. "
-                + _fused_attention_write_remedy(selector.name)
+                + _fused_attention_write_remedy(selector.name or "")
                 if attention
                 else f"facet selector {selector!r} matched 0 write-capable facets."
             )
@@ -1456,9 +1456,8 @@ def _reproduced_facet_entry(log: Any, rule: HookSpec) -> tuple[NormalizedHookEnt
     if not isinstance(mask, torch.Tensor) or _mask_digest(mask) != digest:
         return None, "the stored write mask is missing or does not match its sha256"
     try:
-        plan = normalize_hook_plan(
-            rule.site_target, rule.helper, allow_replay_only_site_targets=True
-        )
+        site = _facet_selector_from_target(rule.site_target)
+        plan = normalize_hook_plan(site, rule.helper, allow_replay_only_site_targets=True)
         entries = expand_facet_hook_entries(log, plan)
     except SiteResolutionError as exc:
         return None, f"the facet selector no longer resolves ({exc})"
