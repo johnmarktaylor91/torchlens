@@ -85,4 +85,4 @@ def _carry_unchanged_text(rows: list[dict[str, Any]], previous: Any) -> list[dic
     ]
 
 
-__all__ = ["refresh_decoded_output"]
+__all__ = ("refresh_decoded_output",)
