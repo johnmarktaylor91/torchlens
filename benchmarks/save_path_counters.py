@@ -96,6 +96,10 @@ TIMING_FLOAT_PATHS: dict[str, tuple[str, ...]] = {
         "fields._cost_forward_duration.fields.value",
         "fields._cost_func_calls_duration.fields.value",
         "fields._phase_timings.*.total_s",
+        "fields._provenance_setup_duration.fields.value",
+        "fields._provenance_cleanup_duration.fields.value",
+        "fields._provenance_start_time",
+        "fields._provenance_end_time",
     ),
 }
 #: Bytes each timing float counts for (a binary double's width).
