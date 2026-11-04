@@ -488,8 +488,13 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
     def forward(layer: Any, *args: Any, **kwargs: Any) -> Any:
         """Run the layer forward and emit one layer-level convolution op."""
 
+        observer = _ACTIVE_TAP_OBSERVER
+        if observer is not None and conv_layer_input(args, kwargs) is not None:
+            # Derived-grad replay observes the same single layer-level op capture records.
+            layer_forward = functools.partial(original, layer)
+            return cast(Any, observer).call(layer_forward, op_name, args, kwargs)
         trace, logging_enabled = _state.active_capture()
-        if not logging_enabled or trace is None or _ACTIVE_TAP_OBSERVER is not None:
+        if not logging_enabled or trace is None or observer is not None:
             return original(layer, *args, **kwargs)
         depth = int(trace._paddle_capture_depth)
         x = conv_layer_input(args, kwargs)
