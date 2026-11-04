@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+<!-- version list -->
+
+## v2.38.0 (2026-11-04)
+
+Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; install
+`torchlens<2.38` to read them (`pip install "torchlens<2.38"`), or capture the model again.
+
 ### Behavior changes
 
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
@@ -15,7 +22,7 @@
   merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
   `tl.validation.validate_tlspec` and the extraction readers) with one error,
   `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
-  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
+  origin and the remedy: load the file with torchlens 2.36.x or 2.37.x (`pip install "torchlens<2.38"`) or
   capture the model again with this release. Nothing migrates a 2.x file, and there is no
   `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
   withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
@@ -865,8 +872,6 @@
 
 - A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
   on any skip.
-
-<!-- version list -->
 
 ## v2.37.1 (2026-11-03)
 
