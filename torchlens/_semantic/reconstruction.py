@@ -489,26 +489,11 @@ def _allclose_sdpa(
 
 
 def _output_projection(module: Any) -> Any | None:
-    """Return a common output-projection child module record.
+    """Return the attention module's output-projection Module record, or ``None``."""
 
-    Parameters
-    ----------
-    module:
-        Attention module record.
+    from .recipes._helpers import output_projection_child  # lazy: _helpers imports this module
 
-    Returns
-    -------
-    Any | None
-        Child module record when present.
-    """
-
-    from .recipes._helpers import child_module
-
-    for name in ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o"):
-        child = child_module(module, name)
-        if child is not None:
-            return child
-    return None
+    return output_projection_child(module)
 
 
 def _result_or_missing(module: Any, z: torch.Tensor, sdpa_op: Any) -> torch.Tensor | MissingFacet:
