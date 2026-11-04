@@ -226,7 +226,7 @@ def test_fused_parameter_bank_and_existing_unit_selection() -> None:
     assert fused.expert is None
     mask = (torch.tensor(row["expert_indices"]) == 1).unsqueeze(-1).expand(fused.shape)
     selected = trace[tl.units(fused.layer_label, mask)]
-    assert selected.labels == (fused.layer_label,)
+    assert selected.labels == (fused.label,)
     assert torch.equal(selected[0].mask, mask)
 
 

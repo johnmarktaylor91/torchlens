@@ -66,6 +66,7 @@ def _last_axis(op: Op, position: int, default: int | None, rank: int | None = No
 
 def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
     """Pair top-k outputs or top-one softmax gathers by recorded dependency."""
+    # Essential selection proof: both encodings must bind saved values to their own indices.
     calls: dict[Any, dict[int, Op]] = {}
     for op in ops.values():
         if op.func_name == "topk" and _last_axis(op, 2, -1):
@@ -101,6 +102,7 @@ def _weight_output(ops: dict[str, Op], values: Op) -> str | None:
 
 def _routes(trace: Trace) -> list[_Route]:
     """Prove routing solely on demand; never register capture hooks or fields."""
+    # Essential joint proof: layout, gate ancestry, expert width and index flow must all agree.
     model = source_model_from_trace(trace)
     if not isinstance(model, nn.Module):
         return []
@@ -194,6 +196,7 @@ def _indexed_parameters(
     ops: dict[str, Op], labels: set[str], indices: str, prefixes: tuple[str, ...]
 ) -> bool:
     """Prove that the routing indices select expert parameters before batched math."""
+    # Essential dataflow proof: every expert parameter prefix must precede the same indexing op.
     for label in labels:
         if ops[label].func_name not in {"__getitem__", "getitem", "gather", "index_select"}:
             continue

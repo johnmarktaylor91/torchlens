@@ -23,6 +23,7 @@ class _Layout:
 
 def _layouts(model: nn.Module) -> list[_Layout]:
     """Find homogeneous module collections and expert-batched parameter arrays."""
+    # Essential structural proof: keep block, sibling-gate and container checks together.
     found = []
     for address, block in model.named_modules():
         children = tuple(block.named_children())
