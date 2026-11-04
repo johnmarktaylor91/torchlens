@@ -84,28 +84,26 @@ def _fake_tensor_mode_active() -> bool:
     return any(isinstance(mode, fake_mode_cls) for mode in stack)
 
 
-_OPERATOR_CALL_FRAMES = frozenset({"__call__", "dispatch"})
-"""Code names of the ``HigherOrderOperator`` frames whose ``self`` is the operator."""
-
-
 def _inside_unsupported_grad_operator() -> bool:
     """Return whether the running tracing pass belongs to a grad-requiring ``map``.
 
     Returns
     -------
     bool
-        ``True`` when a ``HigherOrderOperator.__call__`` or ``dispatch`` frame
-        of ``map_impl`` is on the Python stack. Its eager autograd result
-        differs from the untraced call under the capture stance (see the
-        module docstring), so that pass is not passed through.
+        ``True`` when a frame of the module defining ``map_impl`` is on the
+        Python stack: the ``map`` entry point compiling its body, the operator's
+        autograd kernel, or its eager kernel. Its eager autograd result differs
+        from the untraced call under the capture stance (see the module
+        docstring), so that pass is not passed through.
     """
 
     map_impl = get_higher_order_operator("map", "map_impl")
     if map_impl is None:
         return False
+    map_module = type(map_impl).__module__
     frame = sys._getframe(1)
     while frame is not None:
-        if frame.f_code.co_name in _OPERATOR_CALL_FRAMES and frame.f_locals.get("self") is map_impl:
+        if frame.f_globals.get("__name__") == map_module:
             return True
         frame = frame.f_back
     return False
