@@ -7,7 +7,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.viz._tensor_images import rgb_unit_hwc
+from torchlens.viz._rgb_scale import rgb_unit_hwc
 
 
 def _pixels(picture) -> np.ndarray:

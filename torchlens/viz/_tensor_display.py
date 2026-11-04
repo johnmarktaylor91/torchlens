@@ -231,7 +231,7 @@ def show_tensor(
         return fig
 
     if resolved_method == "rgb":
-        from ._tensor_images import rgb_unit_hwc
+        from ._rgb_scale import rgb_unit_hwc
 
         fig, ax = plt.subplots()
         ax.imshow(rgb_unit_hwc(data[0] if data.ndim == 4 else data).numpy(), **kwargs)
