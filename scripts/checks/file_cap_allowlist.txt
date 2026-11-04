@@ -709,7 +709,7 @@ torchlens/attribution/_text.py	1089
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	284
-torchlens/attribution/graph/_build.py	831
+torchlens/attribution/graph/_build.py	827
 torchlens/attribution/graph/_build.py::build_graph	92
 torchlens/attribution/graph/_neuronpedia_upload.py::upload_to_neuronpedia	77
 torchlens/attribution/graph/_result.py::AttributionGraph.to_neuronpedia	82
