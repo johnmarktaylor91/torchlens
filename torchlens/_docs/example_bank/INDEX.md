@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-472 examples, 1219 public names, 147 tasks.
+472 examples, 1220 public names, 147 tasks.
 
 ## By task
 
@@ -846,6 +846,7 @@ By name lists the 3 most focused examples first;
 | `Op.is_buffer` | op.md#op-buffer-writes |
 | `Op.is_buffer_source` | op.md#op-buffer-writes |
 | `Op.is_compute_op` | op.md#op-io-role |
+| `Op.is_constant` | op.md#op-internal-source |
 | `Op.is_edited` | op.md#op-do-ablate, workflows.md#workflows-save-load-edited |
 | `Op.is_final_output` | op.md#op-io-role |
 | `Op.is_in_conditional` | op.md#op-conditional-body |

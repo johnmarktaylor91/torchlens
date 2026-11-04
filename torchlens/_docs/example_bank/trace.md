@@ -84,7 +84,7 @@ print("profile_enabled", trace.profile_enabled)
 # model_name Toy
 # state TraceState.PRISTINE
 # state_history []
-# tlspec_version 11
+# tlspec_version 12
 # profile_enabled False
 ```
 
