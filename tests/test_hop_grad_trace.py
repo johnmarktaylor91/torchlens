@@ -34,6 +34,7 @@ import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch import rescue, wrappers
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 _hop_cond = pytest.importorskip("torch._higher_order_ops.cond").cond
@@ -461,12 +462,13 @@ def test_map_grad_operand_capture_fails_loudly() -> None:
     """A grad-requiring ``map`` fails capture instead of returning per-row outputs.
 
     Under the capture stance torch's eager ``map`` autograd returns one tensor
-    per row; recording that would silently differ from the untraced call.
+    per row; recording that would silently differ from the untraced call, so
+    the capture keeps the base failure, raised as TorchLens's capture error.
     """
 
     torch.manual_seed(0)
     x = torch.randn(3, 4).requires_grad_(True)
-    with pytest.raises(AttributeError, match="fake_mode"):
+    with pytest.raises(TraceCaptureError, match="fake_mode"):
         tl.trace(_MapModel(), x)
 
 
