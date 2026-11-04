@@ -96,7 +96,8 @@ def test_payload_read_refuses_with_working_spelling() -> None:
     assert info.value.fields["code"] == "activation_reduced_to_stats"
     assert "tl.stats.site_stats(trace)[label]" in str(info.value)
     assert tl.stats.site_stats(trace)[label].compute().numel > 0
-    assert isinstance(tl.trace(model, x, save="all")[label].out, torch.Tensor)
+    full = tl.trace(model, x, save="all")
+    assert isinstance(full[label].out, torch.Tensor)
 
 
 def test_validation_and_replay_refuse() -> None:

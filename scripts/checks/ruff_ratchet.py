@@ -317,7 +317,12 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # JMT decision d-90086c50): measured at b2e1a3cc2 (fellows q5c143-plr-3, pinned ruff,
     # isolated mode, torchlens/ scope) = the train's 446 sites (q5c143-plr-train-3) plus
     # C-143's five field-transformers signatures named above; site lists diffed.
-    "PLR0913": 451,
+    # 452 (2026-11-03, same JMT d-90086c50): the measured count of the C-146
+    # merged tree = the train's 451 sites plus memory-lifetime's one new long
+    # signature, _retired_hook_event (torchlens/_utils/rng/monitor_state.py, the
+    # retired host-RNG hook's six profile-callback inputs); site lists diffed.
+    # Same pinned mode.
+    "PLR0913": 452,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f
