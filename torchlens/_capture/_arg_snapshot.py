@@ -14,12 +14,15 @@ so the common scalar argument costs one type lookup.
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-__all__ = ("snapshot_mutable_arg",)
+__all__ = ("snapshot_mutable_arg", "split_non_tensor_args")
 
 # Exact types whose values never need a copy: the scalar arguments most ops pass.
-_ATOMIC_TYPES = frozenset({int, float, bool, str, bytes, type(None), complex})
+_ATOMIC_TYPES = frozenset(
+    {int, float, bool, str, bytes, type(None), complex, slice, type(Ellipsis)}
+)
 # Exact container types whose own ``copy`` method keeps the type.
 _PLAIN_CONTAINERS = frozenset({list, dict, set})
 
@@ -37,6 +40,38 @@ def snapshot_mutable_arg(value: Any) -> Any:
     if type(value) in _ATOMIC_TYPES:
         return value
     return _snapshot(value, None)
+
+
+def split_non_tensor_args(
+    args: Sequence[Any],
+    kwargs: Mapping[str, Any],
+    is_tensor: Callable[[Any], bool],
+) -> tuple[list[Any], dict[str, Any]]:
+    """Return the snapshotted non-tensor positional and keyword arguments of one call.
+
+    Every backend that records ``non_tensor_pos_args`` / ``non_tensor_kwargs``
+    builds them here, so each stores op-time copies of mutable containers.
+
+    Args:
+        args: Positional arguments as the caller passed them.
+        kwargs: Keyword arguments as the caller passed them.
+        is_tensor: The backend's predicate for arguments that are graph tensors.
+
+    Returns:
+        ``(positional, keyword)``: the non-tensor arguments in call order, each
+        passed through ``snapshot_mutable_arg``.
+    """
+    # The exact-type test is inlined so the common scalar argument costs no extra call.
+    atomic = _ATOMIC_TYPES
+    positional = [
+        arg if type(arg) in atomic else _snapshot(arg, None) for arg in args if not is_tensor(arg)
+    ]
+    keyword = {
+        key: value if type(value) in atomic else _snapshot(value, None)
+        for key, value in kwargs.items()
+        if not is_tensor(value)
+    }
+    return positional, keyword
 
 
 def _snapshot(value: Any, memo: dict[int, Any] | None) -> Any:
@@ -81,9 +116,10 @@ def _copy_container(
     # ``list.copy`` on a list subclass returns a plain list; ``copy.copy`` keeps the subclass.
     copied = value.copy() if type(value) in _PLAIN_CONTAINERS else copy.copy(value)
     memo[id(value)] = copied
-    if isinstance(copied, list):
-        copied[:] = [_snapshot(item, memo) for item in value]
-    elif isinstance(copied, dict):
+    if isinstance(value, list):
+        atomic = _ATOMIC_TYPES
+        copied[:] = [item if type(item) in atomic else _snapshot(item, memo) for item in value]
+    elif isinstance(value, dict):
         for key, item in value.items():
             copied[key] = _snapshot(item, memo)
     # Set members are hashable, so they hold no list, dict or set to copy.
@@ -100,12 +136,13 @@ def _snapshot_tuple(value: tuple[Any, ...], memo: dict[int, Any] | None) -> tupl
     Returns:
         ``value`` when no item needed a copy, else a tuple of the same type.
     """
-    items = [_snapshot(item, memo) for item in value]
+    atomic = _ATOMIC_TYPES
+    items = [item if type(item) in atomic else _snapshot(item, memo) for item in value]
     if all(new is old for new, old in zip(items, value)):
         return value
     if type(value) is tuple:
         return tuple(items)
     make = getattr(type(value), "_make", None)
     if callable(make):
-        return make(items)  # type: ignore[no-any-return]
+        return make(items)
     return type(value)(items)

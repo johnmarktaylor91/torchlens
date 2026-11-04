@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
-from ..._capture._arg_snapshot import snapshot_mutable_arg
+from ..._capture._arg_snapshot import split_non_tensor_args
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
@@ -1554,10 +1554,8 @@ class PaddleBackend:
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
-        # Snapshot caller-owned mutable containers so a later mutation cannot
-        # rewrite the call-time arguments this record keeps.
-        non_tensor_pos_args = tuple(
-            snapshot_mutable_arg(arg) for arg in func_event_input.args if not self.is_tensor(arg)
+        pos_args, kw_args = split_non_tensor_args(
+            func_event_input.args, func_event_input.kwargs, self.is_tensor
         )
         return OpEvent(
             kind=kind,
@@ -1586,13 +1584,9 @@ class PaddleBackend:
                 num_args_total=len(func_event_input.args) + len(func_event_input.kwargs),
                 num_pos_args=len(func_event_input.args),
                 num_kwargs=len(func_event_input.kwargs),
-                non_tensor_pos_args=non_tensor_pos_args,
-                non_tensor_kwargs=tuple(
-                    (key, snapshot_mutable_arg(value))
-                    for key, value in func_event_input.kwargs.items()
-                    if not self.is_tensor(value)
-                ),
-                func_non_tensor_args=non_tensor_pos_args,
+                non_tensor_pos_args=tuple(pos_args),
+                non_tensor_kwargs=tuple(kw_args.items()),
+                func_non_tensor_args=tuple(pos_args),
                 is_inplace=False,
                 func_config=(),
             ),
