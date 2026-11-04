@@ -1056,7 +1056,7 @@ torchlens/debug/_infer_input_shape.py::_run_search	383
 torchlens/debug/_infer_input_shape.py::_run_search.finalize	106
 torchlens/debug/_infer_input_shape.py::_shape_from_prior	138
 torchlens/debug/_infer_input_shape.py::_verified_result	65
-torchlens/debug/_nan.py::bisect_nan	63
+torchlens/debug/_nan.py::bisect_nan	61
 torchlens/debug/_nan.py::find_nan	93
 torchlens/debug/_nan.py::nonfinite_origin	91
 torchlens/debug/_nan_backward.py::bisect_nan_backward	86
