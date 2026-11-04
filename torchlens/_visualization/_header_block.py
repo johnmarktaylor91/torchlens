@@ -137,10 +137,32 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
             node = trace.ops[module_call.output_ops[-1]]
         except (KeyError, IndexError, AttributeError, TypeError):
             pass
+    return _node_memory(node)
+
+
+def _node_memory(node: Any) -> int | None:
+    """Return the node's activation size in bytes, or ``None`` when unknown."""
+
     value = getattr(node, "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)
+
+
+def _unit_passes(trace: Trace, unit: Any) -> tuple[int, int]:
+    """Return ``(op passes, bytes over those passes)`` for one rolled layer node.
+
+    A rolled node is a layer: every pass of one operation. Its passes are the
+    layer's ops; a node without them counts as one pass of its own size.
+    """
+
+    emission = unit.emission
+    node = emission.node if emission.node is not None else next(iter(unit.source_nodes), None)
+    values = getattr(getattr(node, "ops", None), "values", None)
+    if not callable(values):
+        return 1, _unit_memory(trace, unit) or 0
+    passes = list(values())
+    return len(passes), sum(_node_memory(op) or 0 for op in passes)
 
 
 def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str:
@@ -153,24 +175,28 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
     the size of the tensor it brings, made outside); nor are repeat-fold
     ellipses, segment capsules and container summaries. The noun names what is counted: ``ops`` in the
     unrolled view and ``layers`` in the rolled one when every counted node is
-    an operation, ``nodes`` when collapsed module boxes are among them.
+    an operation, ``nodes`` when collapsed module boxes are among them. A
+    rolled layer stands for every pass of its operation, so the rolled line
+    also counts those passes and sums the size over all of them
+    (``8 layers (11 ops, 149 B)``); the size then equals the unrolled
+    header's for the same trace.
     """
 
-    count = 0
-    total = 0
-    has_module_box = False
-    for unit in universe.units:
-        if unit.kind not in _COUNTED_UNIT_KINDS:
-            continue
-        count += 1
-        has_module_box = has_module_box or unit.kind == "module_box"
-        total += _unit_memory(trace, unit) or 0
+    counted = [unit for unit in universe.units if unit.kind in _COUNTED_UNIT_KINDS]
+    count = len(counted)
+    has_module_box = any(unit.kind == "module_box" for unit in counted)
+    if vis_mode == "rolled" and not has_module_box:
+        rolled = [_unit_passes(trace, unit) for unit in counted]
+        ops = sum(passes for passes, _ in rolled)
+        size = format_memory(sum(memory for _, memory in rolled))
+        layer_noun = "layer" if count == 1 else "layers"
+        op_noun = "op" if ops == 1 else "ops"
+        return f"{count:,} {layer_noun} ({ops:,} {op_noun}, {size})"
     if has_module_box:
         noun = "node" if count == 1 else "nodes"
-    elif vis_mode == "rolled":
-        noun = "layer" if count == 1 else "layers"
     else:
         noun = "op" if count == 1 else "ops"
+    total = sum(_unit_memory(trace, unit) or 0 for unit in counted)
     return f"{count:,} {noun} ({format_memory(total)})"
 
 
