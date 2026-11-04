@@ -12,7 +12,7 @@ import importlib
 #: ``torch._compile``/``torch._dynamo`` cascade draws host entropy at module-exec
 #: time, ``torch.backends.opt_einsum`` is imported inside ``torch.einsum``, and
 #: TorchLens's producer-version parser and runnable alias table are imported inside
-#: ``resolve_runnable_torch_alias``, which the first wrapped op reaches in-window.
+#: ``_runnable_alias_resolver.resolve_runnable_torch_alias``, which the first wrapped op reaches in-window.
 _FIRST_CAPTURE_LAZY_MODULES: tuple[str, ...] = (
     "torch._compile",
     "torch._dynamo",
