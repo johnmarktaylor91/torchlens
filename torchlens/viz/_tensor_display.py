@@ -231,14 +231,10 @@ def show_tensor(
         return fig
 
     if resolved_method == "rgb":
-        image = data[0]
-        image = image.permute(1, 2, 0)
-        image = image - image.min()
-        max_value = image.max()
-        if max_value > 0:
-            image = image / max_value
+        from ._tensor_images import rgb_unit_hwc
+
         fig, ax = plt.subplots()
-        ax.imshow(image.numpy(), **kwargs)
+        ax.imshow(rgb_unit_hwc(data[0] if data.ndim == 4 else data).numpy(), **kwargs)
         ax.axis("off")
         return fig
 

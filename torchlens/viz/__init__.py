@@ -14,6 +14,7 @@ from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
 from ._drawing import Drawing
+from ._tensor_images import chans, rgb
 from .batch_summary import montage
 from .feature_maps import feature_maps
 from .node_plots import heatmap, image_scatter, lineplot
@@ -23,12 +24,14 @@ __all__ = [
     "NodeSpec",
     "bundle_diff",
     "causal_trace_heatmap",
+    "chans",
     "feature_maps",
     "heatmap",
     "image_scatter",
     "lineplot",
     "montage",
     "nodes",
+    "rgb",
     # Transformer and watch-history renderers, resolved by __getattr__ below.
     "ablation_grid",  # noqa: F822 -- resolved by __getattr__
     "attention",  # noqa: F822 -- resolved by __getattr__
