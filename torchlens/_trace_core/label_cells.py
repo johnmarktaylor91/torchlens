@@ -21,8 +21,8 @@ materializes each answer from the caller's own ops.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from sys import modules as _loaded_modules
 from typing import Any
 
 from .op_store import _MISSING, OpRowStore, OpStoreView, PooledCell, _SealedRowMajorOpRowStore
@@ -65,7 +65,7 @@ _OP_MODULE = "torchlens._data_classes.op"
 def _op_class() -> type | None:
     """Return the ``Op`` facade class, or ``None`` before it is imported."""
 
-    module = sys.modules.get(_OP_MODULE)
+    module = _loaded_modules.get(_OP_MODULE)
     return getattr(module, "Op", None)
 
 
