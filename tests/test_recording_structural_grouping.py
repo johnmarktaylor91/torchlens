@@ -1,10 +1,11 @@
-"""The structural grouper (``grouper_v1``) on the public recording path.
+"""Layer grouping on the public recording path.
 
 Torch exhaustive captures carry call-site classes and group by call site
-(``callsite_v1``). A recording cooked with ``Recording.to_trace()`` carries
-none (predicate-mode ops record no call-site chain), so step 7 runs the
-backend-neutral structural grouper on it and stamps ``grouper_v1``. These
-tests pin that public stamp and the pass numbering it leaves behind.
+(``callsite_v1``). Predicate records mint the same call-site classes, so a
+recording cooked with ``Recording.to_trace()`` groups by call site too and
+stamps ``callsite_v1`` (RC-50/272); the backend-neutral structural grouper
+(``grouper_v1``) is for captures without that evidence. These tests pin the
+cooked stamp and the pass numbering it leaves behind.
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ def _pass_indices(trace: Any) -> dict[str, tuple[int, list[int]]]:
     [example_models.RecurrentParamsSimple, example_models.InterleavedSharedParamLoops],
 )
 def test_cooked_recording_stamps_structural_grouper_and_numbers_passes(model_cls: type) -> None:
-    """Cooking a recording runs ``grouper_v1``; the exhaustive capture of the same model runs
+    """Cooking a recording and the exhaustive capture of the same model both run
     ``callsite_v1``; every layer's passes are numbered 1..n with no gap or repeat."""
 
     torch.manual_seed(0)
@@ -52,7 +53,7 @@ def test_cooked_recording_stamps_structural_grouper_and_numbers_passes(model_cls
     cooked = _cooked(model_cls(), x)
     exhaustive = tl.trace(model_cls().eval(), x)
 
-    assert cooked.options.grouping_policy["detector"] == "grouper_v1"
+    assert cooked.options.grouping_policy["detector"] == "callsite_v1"
     assert cooked.options.grouping_policy["requested"] == "structural"
     assert exhaustive.options.grouping_policy["detector"] == "callsite_v1"
     passes = _pass_indices(cooked)

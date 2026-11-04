@@ -9,8 +9,11 @@ has one; on every other core those facts are dead weight that grows with the
 pass count. A ``generate()`` forward returns its KV cache among its outputs,
 so a recorder that kept every pass's output tensors held every earlier decode
 step's cache: quadratic in generated tokens, gigabytes for a few megabytes of
-saved activations. Each pass therefore trims the facts the previous cores no
-longer serve, keeping the projection identical.
+saved activations. A generation recorder therefore trims, at each pass, the
+facts the previous cores no longer serve for it. Any other multi-pass recorder
+keeps every core whole: its multi-pass fold (``fold_pass_cores``) reads every
+pass's outputs, one output layer per pass as ``tl.trace`` gives, and every
+pass's capture-events journal for its post-seal amendment refusal.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ def _without_facts(core: CapturedRunCore, names: tuple[str, ...], empty: Any) ->
     return dataclasses.replace(core, projection_facts=MappingProxyType(facts))
 
 
-def retain_run_core(cores: list[Any], core: CapturedRunCore | None) -> None:
+def retain_run_core(cores: list[Any], core: CapturedRunCore | None, trim: bool) -> None:
     """Append one pass's sealed core, trimming facts earlier cores no longer serve.
 
     Parameters
@@ -45,11 +48,13 @@ def retain_run_core(cores: list[Any], core: CapturedRunCore | None) -> None:
         The recorder's cores in pass order; mutated in place.
     core:
         The pass's sealed core, or ``None`` when the pass sealed nothing.
+    trim:
+        Whether to trim (a generation recorder); False keeps every core whole.
     """
 
     if core is None:
         return
-    if cores:
+    if trim and cores:
         cores[-1] = _without_facts(cores[-1], _LAST_CORE_FACTS, ())
         if any(earlier.projection_facts.get("capture_events") is not None for earlier in cores[:1]):
             core = _without_facts(core, ("capture_events",), None)
