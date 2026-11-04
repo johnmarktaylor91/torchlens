@@ -1,5 +1,64 @@
 ## Current 2.x Surface
 
+### MoE routing identity and tables
+
+`Op.is_router` and `Op.expert` are lazy structural identity facts, with no
+stored per-op fields or capture hooks. Recognition requires a live source
+model, a homogeneous `ModuleList` or `ModuleDict` of experts (or an indexed
+bank of expert matrices), a sibling gate, and captured expert-index dataflow
+from softmax/top-k or argmax/gather into expert computation. A top-k over
+logits followed by softmax is supported too. ModuleDict expert numbers follow
+registration order. A repeated
+module collection or an unrelated top-k calculation alone proves nothing.
+Expert writer coordinates use the existing `expert` kind and expert number.
+
+`Module.routing_table` returns rows for that MoE block, or `None` for an
+unrecognized/non-MoE module. `Trace.routing_table` returns all blocks' rows,
+or `[]`. Rows are plain dictionaries containing `module`, `router`, `call`,
+`token_shape`, `expert_indices`, `gate_weights`, `tokens_per_expert` and `load`.
+Token axes flatten in row-major order; load divides each expert's assignments
+by the total assignments. Each router invocation has its own row. The numbers
+come from saved router outputs; `moe_routing_activation_missing` names a
+missing activation and teaches `save='all'`. Identity needs no activations.
+Fused batched expert math has `Op.expert is None` and still uses its router's
+table. A model whose live structure is no longer available is unrecognized.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+class Routed(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate = nn.Linear(4, 4)
+        self.experts = nn.ModuleList([nn.Linear(4, 4) for _ in range(4)])
+
+    def forward(self, x):
+        weights, indices = self.gate(x).softmax(-1).topk(2, dim=-1)
+        output = torch.zeros_like(x)
+        for number, expert in enumerate(self.experts):
+            token, slot = torch.where(indices == number)
+            output.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+        return output
+
+model = Routed().eval()
+trace = tl.trace(model, torch.randn(3, 4), save='all')
+router_ops = [op for op in trace.ops if op.is_router]
+expert_one = trace[tl.where(lambda op: op.expert == 1)]
+rows = trace.modules['self'].routing_table
+assert rows == trace.routing_table
+assert sum(rows[0]['tokens_per_expert']) == 6
+```
+
+For fused expert outputs whose token and selected-slot axes are retained,
+use the routing record with the existing unit selector. If `fused` is an
+`Op` with output shape `[tokens, selected_slots, channels]`, the expert-one
+selection is `trace[tl.units(fused.layer_label,
+(torch.tensor(rows[0]['expert_indices']) == 1).unsqueeze(-1).expand(fused.shape))]`.
+After an operation sums the expert axis, its output cannot be split into
+expert contributions from routing indices alone.
+
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
