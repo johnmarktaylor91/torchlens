@@ -95,7 +95,7 @@ torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	837
-torchlens/_data_classes/interface.py::_getitem_after_pass	113
+torchlens/_data_classes/interface.py::_getitem_after_pass	111
 torchlens/_data_classes/layer.py	1767
 torchlens/_data_classes/module.py	2617
 torchlens/_data_classes/module.py::Module.__init__	210
