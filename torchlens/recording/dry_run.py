@@ -9,6 +9,7 @@ from torch import nn
 from .._input_coerce import _coerce_input_args
 from ..options import CaptureOptions
 from ._recorder import Recorder
+from .exceptions import refuse_recorder_uninitialized
 from .options import PredicateFn
 from .types import DryRun
 
@@ -65,9 +66,9 @@ def dry_run(
 
     with recorder_cm as recorder:
         if recorder._state is None:  # noqa: SLF001
-            raise RuntimeError("Recorder state was not initialized")
+            refuse_recorder_uninitialized("Recorder state was not initialized")
         if recorder._capture_events is None:  # noqa: SLF001
-            raise RuntimeError("Recorder capture events were not initialized")
+            refuse_recorder_uninitialized("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
         recorder(inputs, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001

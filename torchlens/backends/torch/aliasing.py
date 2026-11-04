@@ -8,6 +8,7 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._entry_refusals import refuse_contract_parent_missing
 from ..._ir.intervention import FunctionEventInput
 from ..._ir.semantics import BackendSemantics
 from ..._utils.collections import index_nested
@@ -426,4 +427,4 @@ def get_parent_contents_for_contract_position(
     for position, label in parent_arg_positions["kwargs"].items():
         if label == parent_label:
             return index_nested(kwarg_copies, position)
-    raise ValueError("Parent layer not found in function arguments.")
+    refuse_contract_parent_missing()

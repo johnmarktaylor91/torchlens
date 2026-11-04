@@ -78,6 +78,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
@@ -199,8 +200,7 @@ class GradOptions:
             Hard cap on saved op boundaries for the zero-tap producer and oracle.
         """
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
@@ -653,10 +653,7 @@ class JAXBackend:
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
-        if jax_control_flow not in {"reject", "unroll", "region"}:
-            raise ValueError("jax_control_flow must be 'reject', 'unroll', or 'region'")
-        if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
-            raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
+        refuse_if_bad_jax_control_flow(jax_control_flow, jax_max_control_flow_unroll)
         eqx_tree = discover_equinox_module_tree(model)
         nnx_tree = discover_nnx_module_tree(model) if eqx_tree is None else None
         module_tree = eqx_tree or nnx_tree

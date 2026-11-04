@@ -23,6 +23,7 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
@@ -160,8 +161,7 @@ AUDITED_ESCAPE_EXEMPTIONS: tuple[AuditedEscapeExemption, ...] = (
 )
 """Reviewable exact exemptions; additions require a regression test and reason."""
 
-if len(AUDITED_ESCAPE_EXEMPTIONS) > MAX_AUDITED_EXEMPTIONS:
-    raise RuntimeError("TorchLens callable escape exemption budget exceeded.")
+refuse_if_exemptions_over_budget(len(AUDITED_ESCAPE_EXEMPTIONS), MAX_AUDITED_EXEMPTIONS)
 
 
 @dataclass(frozen=True)

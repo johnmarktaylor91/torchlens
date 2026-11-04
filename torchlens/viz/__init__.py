@@ -10,6 +10,7 @@ from typing import Any
 
 import torch
 
+from .._entry_refusals import refuse_viz_shape
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
@@ -147,7 +148,7 @@ def causal_trace_heatmap(
 
     data = torch.as_tensor(np.asarray(scores), dtype=torch.float32)
     if data.ndim != 2:
-        raise ValueError("causal_trace_heatmap expects a 2D score array.")
+        refuse_viz_shape("causal_trace_heatmap expects a 2D score array")
     data = _prepare_signed_data(data, signs=signs)  # type: ignore[arg-type]
     data = _clip_outliers(data, outlier_perc)
     if ax is None:

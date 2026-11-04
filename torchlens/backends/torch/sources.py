@@ -25,6 +25,7 @@ from ..._capture.projections import (
     append_projected_event,
     get_active_recording_state,
 )
+from ..._entry_refusals import refuse_source_kind
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
@@ -181,7 +182,7 @@ def log_source_tensor_predicate(
     """Predicate-mode source tensor logging for inputs and buffers."""
 
     if source not in {"input", "buffer"}:
-        raise ValueError("source must be either 'input' or 'buffer'")
+        refuse_source_kind(source, "input", "buffer")
     state = get_active_recording_state()
     self._raw_graph_ws.layer_counter += 1
     self._raw_graph_ws.raw_layer_type_counter[source] += 1
@@ -475,7 +476,7 @@ def log_source_tensor_exhaustive(
         input_ancestors = set()
         equivalence_class = f"{CONSTANT_SOURCE}_{type_index}"
     else:
-        raise ValueError("source must be 'input', 'buffer' or 'constant'")
+        refuse_source_kind(source, "input", "buffer", "constant")
 
     modules = _snapshot_exhaustive_module_stack(self)
     base_equivalence_class = equivalence_class

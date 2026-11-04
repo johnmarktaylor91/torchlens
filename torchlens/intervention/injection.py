@@ -48,6 +48,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._entry_refusals import refuse_unfinalized_injected_rows
 from .._errors import InvalidArgumentError
 
 __all__ = [
@@ -448,10 +449,7 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
     if state.get("pending_loaded_rows"):
         # Internal invariant: rehydrate_trace finalizes every split row; a
         # pending row here means a load path bypassed the finalize seam.
-        raise RuntimeError(
-            "loaded injected-op rows were split but never finalized; this "
-            "artifact was loaded through a path that skipped rehydrate_trace"
-        )
+        refuse_unfinalized_injected_rows()
     records = state.get("records") or ()
     if not records:
         return ()

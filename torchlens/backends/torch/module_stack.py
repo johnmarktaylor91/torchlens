@@ -10,6 +10,11 @@ from typing import Any, cast
 
 import torch.nn as nn
 
+from ..._entry_refusals import (
+    refuse_module_stack_mismatch,
+    refuse_module_stack_underflow,
+    refuse_module_unprepared,
+)
 from ...recording.types import ModuleStackFrame
 from ._tl import get_module_meta
 
@@ -40,7 +45,7 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
     trace._module_capture_ws.mod_call_index[module_id] += 1
     module_meta = get_module_meta(module)
     if module_meta is None:
-        raise RuntimeError("Module is missing TorchLens metadata; was it prepared?")
+        refuse_module_unprepared()
     frame = ModuleStackFrame(
         address=cast(str, module_meta.address),
         module_type=cast(str, module_meta.module_type),
@@ -75,10 +80,10 @@ def pop_frame(stack: list[ModuleStackFrame], frame: ModuleStackFrame) -> None:
         indicates a re-entrancy / exception-safety bug upstream.
     """
     if not stack:
-        raise RuntimeError(f"pop_frame called on empty module stack; expected frame {frame!r}")
+        refuse_module_stack_underflow(frame)
     top = stack[-1]
     if top is not frame:
-        raise RuntimeError(f"module stack top mismatch: expected {frame!r}, got {top!r}")
+        refuse_module_stack_mismatch(frame, top)
     stack.pop()
 
 

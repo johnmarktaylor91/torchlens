@@ -22,6 +22,8 @@ from torchlens.bridge.hf_attention import (
     register_attention,
 )
 
+from .._entry_refusals import refuse_processor_unresolved
+
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
 
 
@@ -416,7 +418,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
-        raise ValueError("Could not auto-resolve AutoProcessor for this model.")
+        refuse_processor_unresolved()
     processor = AutoProcessor.from_pretrained(name_or_path)
 
     def transform(raw_dict: dict[str, Any]) -> Any:

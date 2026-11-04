@@ -137,7 +137,9 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # output_sink_conflict: row DELETED (shrink-only lock-in) -- the REM1
         # test_io_streaming migration to the typed ArgumentConflictError now
         # provokes it.
-        "recording_events_not_retained",
+        # recording_events_not_retained: row DELETED (shrink-only lock-in) -- the
+        # public-entry refusal provocations (test_public_entry_refusal_codes) now
+        # provoke it.
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",
         "recording_multipass_not_convertible",

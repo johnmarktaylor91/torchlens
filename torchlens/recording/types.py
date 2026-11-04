@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, cast
 import torch
 
 from .._captured_run import TraceLike
+from .._entry_refusals import refuse_if_no_replay_events, refuse_recording_projection_missing
 from .._errors import CaptureNotActiveError
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
@@ -768,7 +769,7 @@ class Recording(TraceLike):
             )
         trace = self._recording_trace
         if trace is None:
-            raise RuntimeError("recording_trace projection was not initialized")
+            refuse_recording_projection_missing()
         return trace
 
     def raw_metadata(self) -> tuple[dict[str, Any], ...]:
@@ -1127,8 +1128,7 @@ class Recording(TraceLike):
         from .options import _RecordingConfig
 
         projection = RecordingProjector().project(self._captured_run_cores)
-        if projection.capture_events is None:
-            raise RuntimeError("Recording.to_trace() core has no replay event facts.")
+        refuse_if_no_replay_events(projection.capture_events)
 
         trace = Trace(model_class_name="RecordedModel")
         # capture_mode drives exhaustive-style postprocess behavior for the

@@ -4404,6 +4404,7 @@ error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/_capture/prepare/cache.py	600
 error-strings	torchlens/_capture/prepare/resolve.py	1024
 error-strings	torchlens/_data_substrate/digests.py	256
+error-strings	torchlens/_entry_refusals.py	2.1
 error-strings	torchlens/_extraction/dtype_policy.py	16
 error-strings	torchlens/_extraction/engine.py	25.6
 error-strings	torchlens/_extraction/engine.py	41.6
@@ -4473,7 +4474,6 @@ error-strings	torchlens/attribution/onebackward/_accessor.py	2.4
 error-strings	torchlens/attribution/onebackward/_targets.py	1_2
 error-strings	torchlens/backends/default_specs.py	2.16
 error-strings	torchlens/backends/tinygrad/backend.py	0.13.0
-error-strings	torchlens/backends/torch/completeness_witness.py	2.1
 error-strings	torchlens/bridge/brain_score.py	3.11
 error-strings	torchlens/bridge/captum.py	4.1.
 error-strings	torchlens/bridge/depyf.py	0.18

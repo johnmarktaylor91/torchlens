@@ -12,6 +12,7 @@ from torch import nn
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
+from ..._entry_refusals import refuse_if_foreign_workspace
 from ..._ir import BufferWriteEvent
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
@@ -1345,8 +1346,7 @@ def reconcile_buffer_writes(trace: Trace, trace_state: RawGraphWorkspace) -> Non
         If the protocol state is not the active Trace-owned build state.
     """
 
-    if trace._raw_graph_ws is not trace_state:
-        raise RuntimeError("Torch backend received a foreign raw-graph workspace owner.")
+    refuse_if_foreign_workspace(trace._raw_graph_ws, trace_state)
 
     tracker = peek_buffer_write_tracker(trace)
     if isinstance(tracker, BufferWriteTracker):

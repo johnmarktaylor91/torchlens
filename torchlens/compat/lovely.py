@@ -7,6 +7,8 @@ from typing import Any
 
 import torch
 
+from .._entry_refusals import refuse_lovely_formatter
+
 
 def _tensor_from(obj: Any) -> torch.Tensor:
     """Extract a tensor from a TorchLens object or tensor.
@@ -67,12 +69,7 @@ def lovely(obj: Any, *args: Any, **kwargs: Any) -> Any:
         # mutation of torch.Tensor.__repr__, as a side effect of a value-formatting
         # call, and silently dropped the caller's args/kwargs. Refuse to mutate
         # global state from a formatter; fail loud instead.
-        raise RuntimeError(
-            "The installed lovely_tensors does not expose a lovely() formatter. "
-            "torchlens.compat.lovely will not call the global monkey_patch() to "
-            "work around this. Upgrade lovely-tensors to a version exposing "
-            "lovely(), or call lovely_tensors directly if you want global patching."
-        )
+        refuse_lovely_formatter()
     return formatter(tensor, *args, **kwargs)
 
 
