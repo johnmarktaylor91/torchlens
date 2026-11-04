@@ -210,7 +210,7 @@ def test_comparison_tensor_decodes_bfloat16_storage_bits() -> None:
     expected = torch.tensor([0.0, -2.0, 1.5], dtype=torch.bfloat16)
     for backend in ("tf", "paddle"):
         codec = SimpleNamespace(
-            to_numpy=lambda value: SimpleNamespace(
+            to_numpy=lambda value, backend=backend: SimpleNamespace(
                 array=value, logical_dtype=f"{backend}.bfloat16", codec_metadata={}
             )
         )

@@ -29,9 +29,8 @@ from ..._ir.selector_eval import (
     module_union_addresses,
     selector_contains_kind,
 )
-from ..._selection.selectors import BaseSelector, FuncSelector
+from ..._selection.selectors import BaseSelector
 from ...intervention.predicates import as_intervention_decision
-from ...intervention.spec import when
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
 from ...recording.exceptions import PredicateError
 from .._protocols.paddle import (
@@ -507,6 +506,9 @@ def _copy_leaf(tensor: Any) -> Any:
 
 def _emit_module_leaf(trace: Any, runtime: Any, tensor: Any) -> Any:
     """Record a declared replacement through Paddle's existing replay machinery."""
+
+    from ..._selection.selectors import FuncSelector  # deferred: L4 vocabulary
+    from ...intervention.spec import when
 
     backend = runtime._backend
     label = backend.tensor_store.get_label(tensor)

@@ -29,7 +29,7 @@ from ..._ir.selector_eval import (
     selector_contains_kind,
 )
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
-from ..._selection.selectors import BaseSelector, FuncSelector
+from ..._selection.selectors import BaseSelector
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
@@ -427,6 +427,8 @@ def _copy_leaf(tensor: Any) -> Any:
 
 def _emit_module_leaf(trace: Any, backend: Any, plan: Any, tensor: Any) -> Any:
     """Use the existing op intervention/replay path for the boundary replacement."""
+
+    from ..._selection.selectors import FuncSelector  # deferred: L4 vocabulary
 
     label = backend.tensor_store.get_label(tensor)
     # A separate identity boundary preserves the original producer's replay
