@@ -215,6 +215,18 @@ def test_family_identity_and_singular_counts():
     assert str(rows).endswith("  more      .count()  .index()")
 
 
+def test_member_lines_name_each_record_once(trace):
+    """A member whose repr already leads with its key is not prefixed again."""
+
+    members = str(trace.aten_ops).splitlines()[1:]
+    shown = [line for line in members if "AtenOp " in line]
+    assert shown
+    for line in shown:
+        key = line.split("AtenOp ", 1)[1].split(":", 1)[0]
+        assert line.count(key + ":") == 1, line
+        assert line.lstrip().startswith("AtenOp "), line
+
+
 def test_aten_inputs_have_separate_rows(trace):
     row = next(row for row in trace.aten_ops if len(row.input_tensor_facts) >= 3)
     original = row.input_tensor_facts

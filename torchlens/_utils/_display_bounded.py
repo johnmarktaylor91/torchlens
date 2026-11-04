@@ -122,9 +122,10 @@ def _member_line(item: Any) -> str:
     def render() -> str:
         line = repr(item).replace("\n", " ")
         key = _member_key(item)
-        if key != "?":
-            if type(item).__name__ == "OpRecord":
-                line = f"kind {item.kind}, sequence {item.seq}"
+        if type(item).__name__ == "OpRecord" and key != "?":
+            line = f"{key}: kind {item.kind}, sequence {item.seq}"
+        elif key != "?" and not line.split(":", 1)[0].endswith(f" {key}"):
+            # A record repr already leads with ``Kind key:``; only bare reprs get the key.
             line = f"{key}: {line}"
         return line if len(line) <= REPR_COLS else line[: REPR_COLS - 3] + "..."
 
