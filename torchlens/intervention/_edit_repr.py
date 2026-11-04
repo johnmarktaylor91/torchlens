@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -54,7 +53,7 @@ def _edit_repr(spec: Edit) -> str:
     if public is not None:
         path, target = public
         parts = [_render_value(value) for value in spec.args]
-        order = list(_signature(target).parameters)
+        order = list(inspect.signature(target).parameters)
         keyed = sorted(
             spec.kwargs, key=lambda item: order.index(item[0]) if item[0] in order else len(order)
         )
@@ -136,20 +135,13 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
         ``True`` when printing the keyword would only restate its default.
     """
 
-    parameter = _signature(target).parameters.get(key)
+    parameter = inspect.signature(target).parameters.get(key)
     if parameter is None or parameter.default is inspect.Parameter.empty:
         return False
     default = parameter.default
     if isinstance(value, torch.Tensor) or isinstance(default, torch.Tensor):
         return False
     return type(default) is type(value) and bool(default == value)
-
-
-@lru_cache(maxsize=128)
-def _signature(target: Callable[..., Any]) -> inspect.Signature:
-    """Inspect each helper signature once, including repeated default lookups."""
-
-    return inspect.signature(target)
 
 
 _render_value = value_text

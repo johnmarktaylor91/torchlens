@@ -11,7 +11,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._selection.resolver import _SiteTable
 from torchlens._utils._display_errors import candidate_keys, lookup_message
-from torchlens.intervention import _edit_repr
 from torchlens.intervention.types import CapturedArgTemplate, FrozenInterventionSpec, LiteralTensor
 from torchlens.options import (
     CaptureOptions,
@@ -94,23 +93,6 @@ def test_tensor_printouts_never_read_elements(monkeypatch: pytest.MonkeyPatch) -
         assert len(repr(obj)) <= 100
         assert "display unavailable" not in str(obj)
         assert "<tensor float32 [4] on cpu>" in str(obj)
-
-
-def test_edit_signatures_are_cached(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Repeated rendering inspects a constructor signature only once."""
-
-    _edit_repr._signature.cache_clear()
-    original = _edit_repr.inspect.signature
-    calls = []
-
-    def signature(target: object):
-        calls.append(target)
-        return original(target)
-
-    monkeypatch.setattr(_edit_repr.inspect, "signature", signature)
-    edit = tl.clip_norm(1.0)
-    assert repr(edit) == repr(edit) == "tl.clip_norm(1.0)"
-    assert len(calls) == 1
 
 
 def test_selection_and_site_table_bound_before_rendering() -> None:
