@@ -278,8 +278,9 @@ def _build_root_module_log(
     )
 
     if not recorded_calls:
-        root_module.ops[1] = _synthesized_root_call(self, mbd, root_meta)
-        pass_dict["self:1"] = root_module.ops[1]
+        root_pass = _synthesized_root_call(self, mbd, root_meta)
+        root_module.ops[1] = root_pass  # int keys read positionally: keep the object
+        pass_dict["self:1"] = root_pass
     root_module._sync_boundary_fields_from_calls()
     return root_module
 
