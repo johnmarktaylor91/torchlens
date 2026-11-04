@@ -106,18 +106,16 @@ class CallBoundModule:
         return f"CallBoundModule({getattr(self._call, 'label', '?')!r})"
 
 
-def call_subject(call: Any) -> CallBoundModule:
-    """Return ``call`` bound to its owning Module for recipe evaluation."""
+def call_subject(call: Any) -> Any:
+    """Return ``call`` bound to its owning Module for recipe evaluation.
 
+    A call detached from its trace has no Module to bind; it is returned as is,
+    so its view keeps the structural facets alone.
+    """
+
+    if getattr(call, "_source_trace", None) is None:
+        return call
     return CallBoundModule(call.module, call)
-
-
-def call_facet_view(call: Any) -> Any:
-    """Return the facet view of one ModuleCall, evaluated for that call alone."""
-
-    from .facets import FacetView
-
-    return FacetView(call_subject(call))
 
 
 def bound_child(subject: CallBoundModule, child: Any) -> Any | None:

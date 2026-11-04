@@ -955,9 +955,9 @@ class ModuleCall:
 
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from .._semantic._call_subject import call_facet_view
+            from .._semantic import _call_subject, facets
 
-            cache = call_facet_view(self)
+            cache = facets.FacetView(_call_subject.call_subject(self))
             self.__dict__["_facets_cache"] = cache
         return cache
 
