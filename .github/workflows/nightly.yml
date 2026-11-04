@@ -2485,12 +2485,14 @@ jobs:
       - name: Install torch, TorchLens and the notebook kernel
         run: |
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
-          # The [test] extra carries nbclient and ipykernel.
+          # The [test] extra carries nbclient and ipykernel; [tlens-oracle] carries
+          # the pinned transformer_lens that
+          # examples/methods/attribution_graph_transcoders_recipe.ipynb imports.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
-            -e ".[dev,test,tabular,viz]" \
+            -e ".[dev,test,tabular,viz,tlens-oracle]" \
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu" \
             "transformers==5.18.0"
