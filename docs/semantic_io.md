@@ -124,7 +124,13 @@ rows = trace.decode_output(style="my_labels")
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
 and unregister a temporary detector with
-`tl.postprocessing.unregister("my_labels")`.
+`tl.postprocessing.unregister("my_labels")`. Raw input has the matching door,
+`tl.preprocessing.register(...)` and `tl.preprocessing.unregister(...)`: an input
+detector receives `(model, payload, **kwargs)` before routing and claims the
+call by re-entering `tl.trace` with what `forward` takes. The guide
+[Adding conveniences for your model](guides/model_conveniences.md) walks
+through an input detector, an output decoder and a custom
+[facet](facets.md) on one model.
 
 ## Image Inputs
 
@@ -396,6 +402,8 @@ core flow runs without downloading external model weights.
 - `tl.postprocessing.info(...)`
 - `tl.postprocessing.snapshot()`
 - `torchlens.postprocessing.ResolvedPostprocessing`
+- `tl.preprocessing.register(...)`
+- `tl.preprocessing.unregister(...)`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.input`
 - `Trace.provenance.input_preprocessor`
