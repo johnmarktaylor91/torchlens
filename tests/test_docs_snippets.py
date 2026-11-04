@@ -376,8 +376,12 @@ def _canonical_ambient() -> dict[str, Any]:
 def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
     """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
 
-    image = pytest.importorskip("PIL.Image")
-    image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
+    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
+    if importlib.util.find_spec("PIL") is None:
+        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    from PIL import Image
+
+    Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
     exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
 
 
