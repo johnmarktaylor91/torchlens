@@ -316,10 +316,12 @@ def _bound_owner_hint(self: "Trace", ix: str) -> str:
     root_fact = self.provenance.root_entry_point
     if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
         return ""
-    # ``_module_logs`` is ``None`` only inside the pickle-restore window; read it as empty.
-    module_logs = self._module_logs or {}
+    module_logs = self._module_logs
     owner_key = f"owner.{ix}"
-    if owner_key.rsplit(":", 1)[0] not in module_logs and owner_key not in module_logs:
+    # ``_module_logs`` is ``None`` inside the pickle-restore window; no modules means no hint.
+    if not module_logs or (
+        owner_key.rsplit(":", 1)[0] not in module_logs and owner_key not in module_logs
+    ):
         return ""
     return (
         " This trace's root is a bound method (e.g. model.generate), so the model's "
