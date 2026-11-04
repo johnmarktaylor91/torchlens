@@ -84,18 +84,29 @@ class GuessInputShapeReport(FoundReport):
     _subject_text = "input shape"
 
     def __repr__(self) -> str:
-        """One line: found, shape, dtype, flexible dims and constraining module.
+        """One line: found, dtype and shape, flexible dims and constraining module.
 
-        Never prints tensor values (``example_input`` stays out); ``print(report)``
-        shows the card with the message.
+        ``GuessInputShapeReport: found float32 [1, 3, 224, 224], flexible dims (2, 3),
+        constrained by conv1``. Never prints tensor values (``example_input``
+        stays out); ``print(report)`` shows the card with the message.
         """
 
-        dtype = None if self.dtype is None else str(self.dtype).removeprefix("torch.")
-        shape = f"shape={self.shape}" if self.shapes is None else f"shapes={self.shapes}"
-        parts = [f"found={self.found}", shape, f"dtype={dtype}"]
-        parts.append(f"flexible_dims={self.flexible_dims}")
-        parts.append(f"constraining_module={self.constraining_module!r}")
+        head = "GuessInputShapeReport: "
         if not self.found:
-            parts.append(f"reason={self.reason!r}")
-        text = f"GuessInputShapeReport({', '.join(parts)})"
-        return text if len(text) <= REPR_COLS else text[: REPR_COLS - 4] + "...)"
+            return f"{head}not found ({self.reason})"
+        shapes = (self.shape,) if self.shapes is None else self.shapes
+        shape_text = ", ".join(
+            "[" + ", ".join(str(size) for size in shape) + "]" for shape in shapes if shape
+        )
+        dtype = "" if self.dtype is None else str(self.dtype).removeprefix("torch.") + " "
+        facts = [f"found {dtype}{shape_text or 'no shape'}"]
+        flexible = f"flexible dims {self.flexible_dims}" if self.flexible_dims else None
+        constrained = (
+            f"constrained by {self.constraining_module}" if self.constraining_module else None
+        )
+        # Width ladder (house style A1): drop the flexible dims first, then cut.
+        for optional in ((flexible, constrained), (constrained,)):
+            text = head + ", ".join(facts + [part for part in optional if part])
+            if len(text) <= REPR_COLS:
+                return text
+        return text[: REPR_COLS - 3] + "..."

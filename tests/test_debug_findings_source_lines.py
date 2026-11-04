@@ -353,7 +353,7 @@ def test_grad_health_card_leads_with_counts_and_lists_rows_in_order() -> None:
 
     assert set(frame["verdict"]) <= {"ok", "unavailable"}
     assert f"status=clean ({len(frame)} ops)" in lead
-    assert "dead=0 exploding=0 vanishing=0" in lead
+    assert "[dead=0, exploding=0, " in lead and "vanishing=0]" in lead
     assert repr(report).startswith("grad_health(_ProjBlock) status=clean (")
     in_proj = frame[frame["op"].str.match(r"(view|addmm)_")]
     assert len(in_proj) >= 3

@@ -696,7 +696,8 @@ def test_report_repr_is_one_line_without_tensor_values() -> None:
 
     assert report.found
     assert "\n" not in text and len(text) <= 100, text
-    assert text.startswith("GuessInputShapeReport(found=True, shape=("), text
-    assert "dtype=float32" in text and "flexible_dims=" in text, text
-    assert "constraining_module=" in text, text
+    shape = ", ".join(str(size) for size in report.shape)
+    assert text.startswith(f"GuessInputShapeReport: found float32 [{shape}]"), text
+    assert f"flexible dims {report.flexible_dims}" in text, text
+    assert f"constrained by {report.constraining_module}" in text, text
     assert "tensor(" not in text and "example_input" not in text, text
