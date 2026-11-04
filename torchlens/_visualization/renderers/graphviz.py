@@ -8,7 +8,11 @@ from typing import Any
 import graphviz
 
 from .. import _render_utils
-from .._pass_label_placement import choose_pass_label_placements, has_pass_labels
+from .._pass_label_placement import (
+    choose_pass_label_placements,
+    has_pass_labels,
+    pass_label_layout,
+)
 from ..render_execution import atomic_render_target, surface_layout_stderr
 from ..render_ir import RenderIR, RenderIRDotStatement
 from ..request import RenderTarget
@@ -94,12 +98,9 @@ class GraphvizRenderer:
 
         if not has_pass_labels(dot.body):
             return
-        completed = _render_utils.run_bounded_subprocess(
-            [dot.engine, "-Tjson"], input=dot.source.encode("utf-8"), timeout=target.timeout
-        )
-        stdout = completed.stdout
-        layout = stdout.decode("utf-8", "replace") if isinstance(stdout, bytes) else str(stdout)
-        dot.body[:] = choose_pass_label_placements(dot.body, layout)
+        layout = pass_label_layout(dot.source, engine=dot.engine, timeout=target.timeout)
+        if layout is not None:
+            dot.body[:] = choose_pass_label_placements(dot.body, layout)
 
     def _emit_statements(
         self,

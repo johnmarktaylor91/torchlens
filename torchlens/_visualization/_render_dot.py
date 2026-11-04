@@ -23,6 +23,7 @@ from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
 from ._graph_shell import build_graphviz_shell
 from ._header_block import graph_caption_html
+from ._pass_label_placement import place_forward_pass_labels
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -963,9 +964,8 @@ def _emit_and_finish_forward(
             # layout (a dot 16 init_rank error or crash), so render the plain one.
             source_override = _strip_sibling_rank_groups(dot.source)
             _warn_sibling_order_fallback_once(exc)
-    final_source = source_override if source_override is not None else dot.source
-
     render_timeout = 120
+    final_source = place_forward_pass_labels(dot, source_override, trace, render_timeout)
     if in_notebook() and not target.save_only:
         try:
             from IPython.display import SVG, display  # #72: lazy import

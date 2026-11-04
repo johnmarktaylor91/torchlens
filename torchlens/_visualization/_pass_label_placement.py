@@ -17,10 +17,19 @@ from __future__ import annotations
 import json
 import math
 import re
+import subprocess
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-__all__ = ["choose_pass_label_placements", "has_pass_labels"]
+from . import _render_utils
+
+__all__ = [
+    "choose_pass_label_placements",
+    "place_forward_pass_labels",
+    "has_pass_labels",
+    "pass_label_layout",
+    "place_pass_labels",
+]
 
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
@@ -97,6 +106,68 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
         if choice is not None:
             new_body[line_index] = _with_placement(new_body[line_index], choice)
     return new_body
+
+
+def place_pass_labels(source: str, *, engine: str, timeout: float, cwd: str | None = None) -> str:
+    """Return ``source`` with each rolled pass label pair placed clear of the drawing.
+
+    Parameters
+    ----------
+    source:
+        Complete DOT source about to be rendered.
+    engine:
+        Graphviz layout engine of the render.
+    timeout:
+        Seconds the extra layout may take.
+    cwd:
+        Working directory of the render (relative image paths resolve against it).
+
+    Returns
+    -------
+    str
+        ``source`` unchanged when it has no pass labels or the layout fails (the real
+        render then reports the failure); otherwise with placement attributes added.
+    """
+
+    lines = source.splitlines(keepends=True)
+    if not has_pass_labels(lines):
+        return source
+    layout = pass_label_layout(source, engine=engine, timeout=timeout, cwd=cwd)
+    if layout is None:
+        return source
+    return "".join(choose_pass_label_placements(lines, layout))
+
+
+def place_forward_pass_labels(
+    dot: Any, source_override: str | None, trace: Any, timeout: float
+) -> str:
+    """Return the forward render's final source with its pass labels placed.
+
+    ``source_override`` is the sibling-ordering verifier's source when it rewrote
+    the graph; Graphviz runs in the trace's visualizer directory, so the extra
+    layout resolves relative image paths the same way the render does.
+    """
+
+    source = source_override if source_override is not None else dot.source
+    cwd = getattr(trace, "_visualizer_dir", None)
+    return place_pass_labels(
+        source, engine=dot.engine, timeout=timeout, cwd=str(cwd) if cwd else None
+    )
+
+
+def pass_label_layout(
+    source: str, *, engine: str, timeout: float, cwd: str | None = None
+) -> str | None:
+    """Return ``engine -Tjson`` output for ``source``, or ``None`` when the layout fails."""
+
+    try:
+        completed = _render_utils.run_bounded_subprocess(
+            [engine, "-Tjson"], input=source.encode("utf-8"), timeout=timeout, cwd=cwd
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    stdout = completed.stdout
+    return stdout.decode("utf-8", "replace") if isinstance(stdout, bytes) else str(stdout)
 
 
 def has_pass_labels(body: Iterable[str]) -> bool:
