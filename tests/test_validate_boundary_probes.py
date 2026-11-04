@@ -16,6 +16,7 @@ operand) that must validate False:
 from __future__ import annotations
 
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -25,6 +26,11 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
 from torchlens.validation import last_validation_failure
+from torchlens.validation._crossing_perturbations import (
+    integer_clamp_crossing_values,
+    integer_extrema_crossing_values,
+    isclose_tolerance_crossing_values,
+)
 
 PAD = 50256
 BIG = 50000
@@ -201,3 +207,59 @@ def test_integer_saturation_planted_bug_fails(
         verdict = tl.validate(_IdSaturate(form).eval(), _ids(), scope="forward", seed=0)
 
     _assert_planted_bug_fails(planted_labels, verdict, func_name)
+
+
+def _fake_layer(func_name: str, args: tuple[Any, ...], slots: dict[Any, str], **kwargs: Any) -> Any:
+    arg_slots = {k: v for k, v in slots.items() if isinstance(k, int)}
+    kwarg_slots = {k: v for k, v in slots.items() if isinstance(k, str)}
+    return SimpleNamespace(
+        func_name=func_name,
+        saved_args=args,
+        saved_kwargs=kwargs,
+        parent_arg_positions={"args": arg_slots, "kwargs": kwarg_slots},
+    )
+
+
+@pytest.mark.parametrize("slot", [0, 1, "other"])
+def test_isclose_crossing_flips_every_closeness(slot: Any) -> None:
+    near = torch.tensor([2.5, 2.5 + 1e-7, 4.0, -3.0])
+    ref = torch.tensor([2.5, 2.5, 1.0, 7.0])
+    if slot == "other":
+        layer = _fake_layer("isclose", (near,), {"other": "p"}, other=ref, atol=1e-3)
+        parent, close = ref, lambda v: torch.isclose(near, v, atol=1e-3)
+    elif slot == 1:
+        layer = _fake_layer("isclose", (near, ref), {1: "p"})
+        parent, close = ref, lambda v: torch.isclose(near, v)
+    else:
+        layer = _fake_layer("isclose", (near, ref), {0: "p"})
+        parent, close = near, lambda v: torch.isclose(v, ref)
+
+    crossed = isclose_tolerance_crossing_values(layer, "p", parent)
+
+    assert crossed is not None and crossed.shape == parent.shape
+    assert bool((close(crossed) != close(parent)).all())
+
+
+@pytest.mark.parametrize(
+    ("lower", "upper"), [(float(BIG), None), (None, float(-BIG)), (0.0, float(BIG))]
+)
+def test_integer_clamp_crossing_values_cross_each_edge(
+    lower: float | None, upper: float | None
+) -> None:
+    ids = torch.tensor([464, -70000, 60000, 3139])
+    crossed = integer_clamp_crossing_values(ids, lower, upper)
+
+    assert crossed is not None and crossed.dtype == ids.dtype
+    assert bool((torch.clamp(crossed, lower, upper) != torch.clamp(ids, lower, upper)).all())
+
+
+@pytest.mark.parametrize("func_name", ["maximum", "minimum"])
+def test_integer_extrema_crossing_values_win_every_element(func_name: str) -> None:
+    ids, bound = torch.tensor([464, 3139, 70000]), torch.tensor([BIG, BIG, BIG])
+    layer = _fake_layer(func_name, (ids, bound), {0: "p"})
+    func = getattr(torch, func_name)
+
+    crossed = integer_extrema_crossing_values(layer, "p", ids)
+
+    assert crossed is not None and crossed.dtype == ids.dtype
+    assert bool((func(crossed, bound) != func(ids, bound)).all())
