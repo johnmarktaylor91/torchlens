@@ -52,7 +52,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: a file's duration tier is its loosest tier marker, and `serial` is not one. |
-| (none) | Unmarked tests — a majority (15,036/18,941, 79%, measured 2026-11-03) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
+| (none) | Unmarked tests — a majority (15,048/18,952, 79%, measured 2026-11-03) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
 | `backend_parity` | Active backend-substrate parity gate. |
