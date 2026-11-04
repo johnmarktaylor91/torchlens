@@ -249,6 +249,86 @@ t3 = tl.trace(model, torch.randn(4, 8), save=tl.func("relu"))
 suspects = tl.dead([t2, t3])                # the verdict door, multi-sample
 ```
 
+## Attention sinks and outlier residual dimensions (the `capture.hooks` seam)
+
+> Pending spelling: the sink probe is implemented privately as
+> `torchlens.debug._checks._sinks.SinkProbe` until its public name, check names and
+> finding codes are ruled. It reports statistics and flags, never a `CheckFinding`.
+
+Two facts most trained transformers share, measured on the same zero-op seam as the
+range probe:
+
+- **Attention sinks**: heads whose queries put most of their attention mass on one key
+  position, usually the first token.
+- **Outlier residual dimensions**: residual-stream features whose mean absolute value is
+  many times the typical feature's.
+
+```python
+from torchlens.debug._checks._sinks import SinkProbe
+
+
+class TinyLayer(nn.Module):
+    """One causal attention head over an 8-wide residual stream."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.query, self.key, self.write = nn.Linear(8, 8), nn.Linear(8, 8), nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        scores = (self.query(x) @ self.key(x).transpose(-1, -2)).unsqueeze(1) / 8**0.5
+        causal = torch.ones(x.shape[1], x.shape[1], dtype=torch.bool).tril()
+        probs = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
+        return x + self.write((probs @ x.unsqueeze(1)).squeeze(1))
+
+
+tiny = nn.Sequential()
+tiny.add_module("layer", TinyLayer())
+probe = SinkProbe(attention=[tl.func("softmax")], residual=[tl.module("layer")])
+trace = tl.trace(tiny, torch.randn(2, 6, 8),
+                 capture=tl.options.CaptureOptions(hooks=probe.hook_plan()))
+probe.sink_heads      # SinkHead(label, head, position, mass) per flagged head
+probe.outlier_dims    # OutlierDim(label, dim, factor) per flagged dimension
+print(probe.facts())  # per-site statistics; "skipped" says why a site was not scored
+```
+
+On a language model the sites are its attention probabilities and its block outputs, for
+GPT-2 small `tl.func("softmax")` and `tl.module(f"transformer.h.{i}")` for `i` in 0 to 11.
+
+Conventions, stated rather than guessed:
+
+| Convention | Default | Meaning |
+| --- | --- | --- |
+| Attention layout | `(..., heads, queries, keys)` | the site's value must be probabilities: non-negative rows summing to 1 within 1e-3, else the site is reported as skipped |
+| `mass_threshold` | `0.5` | a head is a sink when its largest mean mass on one key, averaged over the batch and the kept queries, reaches this |
+| `skip_positions` | `1` | leading query positions left out of the sink average (under a causal mask query 0 sees only itself) and leading positions left out of the outlier statistic (the first token carries the massive activations) |
+| `query_mask` | none | `batch x queries` booleans; padded queries are left out of the sink average. Masked keys already carry no probability |
+| Residual layout | `(..., positions, features)`, `feature_axis=-1` | each feature's mean absolute value over the kept rows, divided by the median feature's |
+| `outlier_factor` | `10.0` | a feature is an outlier at or above this ratio |
+
+Sinks and outlier dimensions are normal in trained language models, so these are
+statistics to look at, not failures. A sink head's attention pattern says little about
+what the head reads; an outlier dimension dominates norms, cosine similarities and
+naive quantization ranges.
+
+**GPT-2 small** (pinned revision, float32, eager attention; the 14-token prompt "When
+Mary and John went to the store, John gave a drink to"; `tl.func("softmax")` and the
+12 block outputs; defaults):
+
+| Measure | Result |
+| --- | --- |
+| Sink heads per layer, layers 0 to 11 | 0, 5, 3, 6, 8, 12, 10, 12, 12, 11, 12, 9 (100 of 144) |
+| Sink position | 0 for every flagged head |
+| Sink heads at `mass_threshold` 0.3 / 0.7 | 127 / 65 of 144 |
+| Outlier dimensions per block, blocks 0 to 11 | 7, 6, 6, 5, 4, 4, 3, 4, 4, 3, 4, 11 |
+| Dimension present in every block | 447 (26 to 43 times the median feature) |
+| Other recurring dimensions | 373, 64, 266, 481, 496 |
+| Outlier dimensions per block at `outlier_factor` 20 | 4, 4, 3, 3, 1, 1, 1, 1, 1, 3, 3, 8 |
+| Trace ops, bare and probed | 623 and 623 |
+
+The `s_aux` sink logits some models pass to attention are a different thing: a learned
+extra column of the softmax. `tl.bridge.transformers.record_attention(check_sdpa=True)`
+skips its SDPA cross-check for those calls; this probe measures the emergent sinks.
+
 ## Severity and action (two axes, never conflated)
 
 Severity (`critical/warning/info`) describes evidence; action

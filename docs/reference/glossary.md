@@ -3612,7 +3612,9 @@ deprecation shim owed*
   `check_sdpa=True` also runs `scaled_dot_product_attention` on each call
   and refuses `hf_attention_sdpa_mismatch` beyond the semantic SDPA
   reconstruction tolerance (doubles the attention cost; calls with dropout,
-  softcapping or attention sinks are left unchecked and say so). Retained
+  softcapping or learned sink logits (`s_aux`) are left unchecked and say so;
+  emergent attention sinks in trained heads are measured by the checks kit's
+  sink probe, see docs/reference/checks_kit.md). Retained
   memory is `batch * heads * q_len * kv_len * itemsize` bytes per call: for
   a Llama-2-7B shape (32 layers, 32 heads) at 4096 tokens in bfloat16, 1 GiB
   per layer and 32 GiB per sequence.
@@ -6088,7 +6090,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `channels=` | keyword of `tl.debug.guess_input_shape` (keyword-only; default `None`): Optional channel count override for convolutional inputs; keyword of `tl.viz.feature_maps` (keyword-only; default `None`): Channel selection. `None` stores one channel-aggregate map per stimulus, a sequence stores explicit channels, and `"top"` stores per-stimulus top channels by mean absolute activation |
 | `chat_template=` | keyword of `tl.bridge.transformers.trace_text` (keyword-only; default `False`): When True and text is a chat-message list, apply the tokenizer's chat template before tokenization |
 | `check_name=` | keyword of `TagGrammar.check` (required) |
-| `check_sdpa=` | keyword of `tl.bridge.transformers.record_attention` (keyword-only; default `False`): Also run `scaled_dot_product_attention` on each call's inputs and refuse (`hf_attention_sdpa_mismatch`) when the outputs disagree beyond the semantic SDPA reconstruction tolerance. Calls with dropout, softcapping or attention sinks are not checked (`AttentionCall.sdpa_checked` says which .. |
+| `check_sdpa=` | keyword of `tl.bridge.transformers.record_attention` (keyword-only; default `False`): Also run `scaled_dot_product_attention` on each call's inputs and refuse (`hf_attention_sdpa_mismatch`) when the outputs disagree beyond the semantic SDPA reconstruction tolerance. Calls with dropout, softcapping or learned sink logits (`s_aux`) are not checked (`AttentionCall.sdpa_checked` says which .. |
 | `checks=` | keyword of `tl.preprocessing.diagnose` (keyword-only; default `('nonfinite', 'dtype_regime', 'layout')`): Which checks to run. Default is the intrinsic set (`nonfinite` / `dtype_regime` / `layout`); the measured-weak `"confinement"` arm must be requested explicitly |
 | `checksums=` | keyword of `tl.extract_dataset` (keyword-only; default `'fast'`): The integrity level: `"fast"` (final-file CRC-32 plus the on-device value reduction; default), `"crypto"` (blake2b file digests), `"none"` (recorded opt-out; verification refuses) |
 | `child=` | constructor keyword of `tl.intervention.RegionEdge` (required): Pass-qualified label of the consuming op; keyword of `tl.observers.register_tensor_connection` (required): Child tensor already tagged by TorchLens |
