@@ -20,6 +20,44 @@ if TYPE_CHECKING:
     from ._query import _IndexSet
 
 
+def _op_by_name(trace: Trace, handle: str) -> Op:
+    """Resolve a label, or the IO role that field status reports, to one operation.
+
+    Parameters
+    ----------
+    trace:
+        Trace against which the name is resolved.
+    handle:
+        Exact pass-qualified label, or an IO role such as ``"output.logits"``.
+
+    Returns
+    -------
+    Op
+        The uniquely resolved operation.
+
+    Raises
+    ------
+    ReceptiveFieldError
+        If the name matches no operation, or an IO role matches several.
+    """
+
+    matches = [op for op in trace._layer_list if op.label == handle]
+    if len(matches) == 1:
+        return matches[0]
+    detail = f"No operation with exact pass-qualified label {handle!r} exists in this trace."
+    if not matches:
+        by_role = [op for op in trace._layer_list if str(op.io_role or "") == handle]
+        if len(by_role) == 1:
+            return by_role[0]
+        if by_role:
+            spellings = ", ".join(op.label for op in by_role)
+            detail = (
+                f"IO role {handle!r} names several operations ({spellings}); "
+                "select one by its pass-qualified label."
+            )
+    raise ReceptiveFieldError(detail)
+
+
 def resolve_graph_point(trace: Trace, handle: object) -> Op:
     """Resolve one supported graph-point handle to a pass-qualified operation.
 
@@ -28,7 +66,8 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     trace:
         Trace against which the handle is resolved.
     handle:
-        Exact pass-qualified label, ``Op``, ``Layer``, ``ModuleCall``, or ``Module``.
+        Exact pass-qualified label, IO role as field status reports it, ``Op``,
+        ``Layer``, ``ModuleCall``, or ``Module``.
 
     Returns
     -------
@@ -53,12 +92,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str):
-        matches = [op for op in trace._layer_list if op.label == handle]
-        if len(matches) != 1:
-            raise ReceptiveFieldError(
-                f"No operation with exact pass-qualified label {handle!r} exists in this trace."
-            )
-        return matches[0]
+        return _op_by_name(trace, handle)
 
     if isinstance(handle, Op):
         _require_trace_owner(trace, handle.source_trace, handle.label)
