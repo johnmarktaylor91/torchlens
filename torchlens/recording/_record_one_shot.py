@@ -26,7 +26,7 @@ from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._generation_options import GenerationOptions
 from ._recorder import Recorder
-from ._validation import validate_postprocess
+from ._validation import refuse_episode_on_record, validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .types import Recording
 
@@ -181,6 +181,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    episode: Any | None = None,
     lean: bool = False,
     generation: GenerationOptions | None = None,
 ) -> Recording | GenerationRecording:
@@ -226,24 +227,20 @@ def record(
         Optional predicate evaluated after each event's save decision. Returning
         ``True`` stops the active forward pass and marks the recording stopped.
     CaptureOptions fields read by ``record``:
-        ``activation_transform`` is applied to each retained out copy after
-        dtype/device transforms (errors propagate as
-        :class:`torchlens.UserTransformError`); ``save_raw_activations=False``
-        with a transform keeps only transformed payloads. ``backward_ready=True``
-        promotes omitted defaults to keep-grad capture specs.
-        ``detach_saved_activations`` (DOCUMENTED-UNSTABLE; ``record`` default
-        ``True``) detaches retained activations; ``False`` keeps graph-connected
-        copies wherever the recorded tensor carries autograd history (a spec with
-        ``save_grad=True`` stays attached either way; disk payloads are always
-        detached; ``backward_ready=True`` refuses an explicit ``True``).
-        ``save_grads``, ``default_grad`` (a ``RecordingOptions`` field),
-        ``grad_transform`` and ``save_raw_grads`` configure a later
-        ``Recording.backward()``: gradient hooks are installed only when
-        ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given;
-        without one, ``backward()`` refuses with code
-        ``recording_backward_not_requested``, and a record made under
-        ``torch.no_grad()`` or ``torch.inference_mode()`` implies
-        ``inference_only=True`` (``recording_backward_inference_only``).
+        ``activation_transform`` is applied to each retained out copy after dtype/device transforms
+        (errors propagate as :class:`torchlens.UserTransformError`); ``save_raw_activations=False``
+        with a transform keeps only transformed payloads. ``backward_ready=True`` promotes omitted
+        defaults to keep-grad capture specs. ``detach_saved_activations`` (DOCUMENTED-UNSTABLE;
+        ``record`` default ``True``) detaches retained activations; ``False`` keeps graph-connected
+        copies wherever the recorded tensor carries autograd history (a spec with ``save_grad=True``
+        stays attached either way; disk payloads are always detached; ``backward_ready=True``
+        refuses an explicit ``True``). ``save_grads``, ``default_grad`` (a ``RecordingOptions``
+        field), ``grad_transform`` and ``save_raw_grads`` configure a later
+        ``Recording.backward()``: gradient hooks are installed only when ``backward_ready=True``,
+        ``save_grads=`` or ``default_grad=`` is given; without one, ``backward()`` refuses with code
+        ``recording_backward_not_requested``, and a record made under ``torch.no_grad()`` or
+        ``torch.inference_mode()`` implies ``inference_only=True``
+        (``recording_backward_inference_only``).
     narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
@@ -252,27 +249,26 @@ def record(
         Optional backend selector. ``tl.record`` is torch-only in backend v1;
         non-torch backends raise a canonical unsupported error.
     generate_kwargs:
-        DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run
-        the model's own ``generate(*inputs, **input_kwargs,
-        **generate_kwargs)`` once instead of one forward, and record the
-        selected sites at every forward it runs (the prefill, then each decode
-        step) while the KV cache is on, so each decode step records only its
-        new position. Returns a :class:`GenerationRecording` (step and absolute
-        position of every forward, the token sequences, the settings that
-        decide the tokens). Beam search, more than one return sequence, batched
-        prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
-        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
-        code ``record_generation_unsupported``.
+        DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run the model's own
+        ``generate(*inputs, **input_kwargs, **generate_kwargs)`` once instead of one forward, and
+        record the selected sites at every forward it runs (the prefill, then each decode step)
+        while the KV cache is on, so each decode step records only its new position. Returns a
+        :class:`GenerationRecording` (step and absolute position of every forward, the token
+        sequences, the settings that decide the tokens). Beam search, more than one return sequence,
+        batched prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
+        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with code
+        ``record_generation_unsupported``.
+    episode:
+        Refused typed (``record_episode_unsupported``); episode capture runs on ``tl.trace``.
     lean:
         PROVISIONAL SPELLING. ``True`` journals only the events the selection keeps;
         ``Recording.lean_omissions`` names what it omitted and the reads that refuse
         (``recording_lean_omitted``). Default ``False`` is unchanged.
     generation:
-        DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions` widening
-        the generation door: per-token ``reducers=``, ``kv_sites=``, a ``keep_last=``
-        ring buffer with ``spill=``, and the ``max_saved_bytes=`` guard. Read the
-        per-token values with ``GenerationRecording.series(name)``. Needs
-        ``generate_kwargs=``.
+        DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions` widening the generation
+        door: per-token ``reducers=``, ``kv_sites=``, a ``keep_last=`` ring buffer with ``spill=``,
+        and the ``max_saved_bytes=`` guard. Read the per-token values with
+        ``GenerationRecording.series(name)``. Needs ``generate_kwargs=``.
 
     Returns
     -------
@@ -293,6 +289,7 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
+    refuse_episode_on_record(episode)
     knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
