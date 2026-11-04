@@ -216,7 +216,8 @@ RESULT = [
 ### A rotation learned elsewhere
 
 TorchLens applies a rotation you trained elsewhere (distributed alignment search, ReFT); it does
-not fit one. The first `k` rows of the learned rotation `R` are the basis, so
+not fit one. [Fit a causal basis on GPT-2 small](field-guide/das_gpt2.md) fits one with a plain
+PyTorch loop over captured activations and applies it with the builtin edit. The first `k` rows of the learned rotation `R` are the basis, so
 `do(tl.subspace(site, R[:k], origin=...), edit)` edits the learned subspace. With a builtin verb
 the staged edit is the builtin `subspace_edit`, which stores the verb, the float64 orthonormal rows
 it applies, the bound axis, the rows' sha256 and the basis provenance (`origin`, `method`, the
