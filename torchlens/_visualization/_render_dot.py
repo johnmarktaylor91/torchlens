@@ -1565,8 +1565,7 @@ def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
         if bool(getattr(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
-    # Dropped orphans leave no husk ops, only their recorded labels.
-    if not orphan_logs and (orphan_husks or self._orphan_labels):
+    if not orphan_logs and (orphan_husks or self._orphan_labels):  # dropped: labels, no husks
         _warn_render_omission(
             "orphans were dropped from this capture; re-trace with keep_orphans=True"
         )
