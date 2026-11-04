@@ -293,7 +293,7 @@ torchlens/_ir/op_record.py::op_record_from_event	144
 torchlens/_ir/op_record_scatter.py::scatter_record_to_cells	202
 torchlens/_ir/selector_eval.py	1676
 torchlens/_kernel_telemetry.py::_payload_from_events	86
-torchlens/_merged/_artifact.py	1065
+torchlens/_merged/_artifact.py	1032
 torchlens/_merged/_artifact.py::_cached_join_refs	86
 torchlens/_merged/_artifact.py::_check_degraded_cache_coherence	140
 torchlens/_merged/_artifact.py::load_merged	296
