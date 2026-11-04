@@ -315,6 +315,7 @@ class Recorder:
         self._output_tensors: list[torch.Tensor] = []
         self._output_tensor_addresses: list[str] = []
         self._captured_run_cores: list[Any] = []
+        self._trim_pass_cores = False  # a generation recorder sets it (_run_cores)
         self._entered = False
         self._exited = False
         self._failed = False
@@ -485,7 +486,7 @@ class Recorder:
                 )
         except StopSignal as halt_exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            retain_run_core(self._captured_run_cores, captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
             self._absorb_pass_events(trace)
             object.__setattr__(
                 self._state.recording,
@@ -503,7 +504,7 @@ class Recorder:
             return output
         except Exception as exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            retain_run_core(self._captured_run_cores, captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if self._echo_session is not None:
                 # Crash tail (snoop D5 tail 2): flush synchronously, extend the
@@ -542,7 +543,7 @@ class Recorder:
         output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
         output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
         captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-        retain_run_core(self._captured_run_cores, captured_run_core)
+        retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
         if output_tensors is None or output_tensor_addresses is None:
             # Defensive fallback only; the postprocess=False branch above always
             # populates these on a normal return.

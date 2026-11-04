@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1466 modules, 653150 lines, 0 modules without a docstring.
+83 packages, 1466 modules, 653157 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2751 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 27 | 7532 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 27 | 7539 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -1861,7 +1861,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 15
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (27 modules, 7532 lines)
+Lightweight predicate-recording namespace for TorchLens. (27 modules, 7539 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1869,17 +1869,17 @@ Lightweight predicate-recording namespace for TorchLens. (27 modules, 7532 lines
 | `_capture_door` | The capture door shared by ''tl.record'' and ''Recorder''. | 94 |
 | `_cook_settle` | Settle a Trace cooked from a Recording at the cook seam (settlement path 9). | 54 |
 | `_dry_run` | The payload-free dry-run view of a predicate pass (''tl.recording.DryRun''). | 120 |
-| `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 668 |
+| `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 669 |
 | `_generation_options` | Grouped options of the streaming generation recorder (DOCUMENTED-UNSTABLE spellings). | 121 |
 | `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 487 |
 | `_halt` | Fastlog early-abort control signal and the halted-state writer for a frozen Recording. | 106 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_lean` | The lean recording contract: what ''lean=True'' skips, refuses and reports. | 77 |
 | `_record_one_shot` | One-shot public fastlog recording API. | 318 |
-| `_recorder` | Public Recorder context manager for fastlog sessions. | 814 |
+| `_recorder` | Public Recorder context manager for fastlog sessions. | 815 |
 | `_recorder_config` | Resolved stop, capture and identity configuration for one predicate recording pass. | 52 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
-| `_run_cores` | Retention of sealed run cores across the passes of one Recorder. | 56 |
+| `_run_cores` | Retention of sealed run cores across the passes of one Recorder. | 61 |
 | `_storage_resolver` | Storage resolution for fastlog tensor payloads. | 456 |
 | `_types_ancestry` | Ancestry backfill for cook-owned recording replay projections. | 103 |
 | `_validation` | Validation helpers for public fastlog APIs. | 136 |
