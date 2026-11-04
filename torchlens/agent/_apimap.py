@@ -13,6 +13,8 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+from ._example_bank import examples_for
+
 #: Result schema id (v2: compact rows + capabilities + detail mode).
 API_MAP_SCHEMA = "torchlens.agent.api_map.v2"
 
@@ -128,8 +130,6 @@ def _bank_example(name: str) -> str | None:
     The snippet starts with a comment naming its fixture (the setup it assumes, defined
     in the bank's README beside it), so the record stays self-explanatory.
     """
-
-    from ._example_bank import examples_for
 
     found = examples_for(f"tl.{name}")
     if not found:

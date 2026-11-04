@@ -23,7 +23,7 @@ By name lists the 3 most focused examples first;
 | attribution | namespaces.md#namespaces-attribution, tasks.md#tasks-attribution |
 | audit | trace.md#trace-intervention-audit |
 | autograd | layer.md#layer-grad-fn, layer.md#layer-grad-fn-after-backward, op.md#op-grad-fn, op.md#op-grad-fn-after-backward |
-| backends | namespaces.md#namespaces-backends, options.md#options-backend-only, options.md#options-backend-only-refused-wrong |
+| backends | namespaces.md#namespaces-backends, options.md#options-backend-only, options.md#options-backend-only-refused |
 | backward | grad_fn.md#grad-fn-list, grad_fn.md#grad-fn-class-facts, grad_fn.md#grad-fn-neighbours, grad_fn.md#grad-fn-forward-op, grad_fn.md#grad-fn-calls, grad_fn.md#grad-fn-builtin-source, grad_fn.md#grad-fn-custom-node, grad_fn.md#grad-fn-higher-order, grad_fn.md#grad-fn-to-pandas, layer.md#layer-grad-fn-after-backward, layer.md#layer-grad-facts, layer.md#layer-grad-loop, op.md#op-grad-fn-after-backward, op.md#op-grad-facts, op.md#op-grads-per-backward, options.md#options-save-grads, options.md#options-vis-backward-graph, trace.md#trace-backward-saved-grads, trace.md#trace-capture-backward |
 | branch | layer.md#layer-conditional-test, layer.md#layer-conditional-body, layer.md#layer-conditional-children, op.md#op-conditional-test, op.md#op-conditional-body, op.md#op-conditional-children |
 | bridge | namespaces.md#namespaces-bridge |
@@ -102,7 +102,7 @@ By name lists the 3 most focused examples first;
 | neuro-compare | tasks.md#tasks-neuro-compare |
 | nonfinite | options.md#options-on-nonfinite |
 | observe | namespaces.md#namespaces-observers, trace.md#trace-logged-values |
-| options | namespaces.md#namespaces-options, options.md#options-session-knobs, options.md#options-replay-knobs, options.md#options-bundle-policies, options.md#options-backend-only, options.md#options-backend-only-refused-wrong, options.md#options-as-dict, options.md#options-vis-object |
+| options | namespaces.md#namespaces-options, options.md#options-session-knobs, options.md#options-replay-knobs, options.md#options-bundle-policies, options.md#options-backend-only, options.md#options-backend-only-refused, options.md#options-as-dict, options.md#options-vis-object |
 | output | namespaces.md#namespaces-postprocessing, trace.md#trace-output-labels-decode, trace.md#trace-reconstruct-output, trace.md#trace-reconstruct-container |
 | pandas | grad_fn.md#grad-fn-to-pandas, module.md#module-to-pandas, module.md#modulecall-to-pandas, params.md#params-to-pandas, params.md#params-buffer-to-pandas |
 | params | layer.md#layer-params-facts, layer.md#layer-param-objects, module.md#module-param-counts, module.md#module-recursive-params, module.md#modulecall-params, op.md#op-params-facts, op.md#op-param-objects, params.md#params-identity, params.md#params-shape-facts, params.md#params-usage, params.md#params-value, params.md#params-grad, params.md#params-shared, params.md#params-optimizer, params.md#params-to-pandas, trace.md#trace-params-buffers |
@@ -268,7 +268,7 @@ By name lists the 3 most focused examples first;
 | `CaptureOptions.input_transform` | options.md#options-input-output-transform |
 | `CaptureOptions.jax_control_flow` | options.md#options-backend-only |
 | `CaptureOptions.jax_max_control_flow_unroll` | options.md#options-backend-only |
-| `CaptureOptions.jax_static_argnums` | options.md#options-backend-only, options.md#options-backend-only-refused-wrong |
+| `CaptureOptions.jax_static_argnums` | options.md#options-backend-only-refused, options.md#options-backend-only |
 | `CaptureOptions.keep_orphans` | options.md#options-keep-orphans |
 | `CaptureOptions.layer_visualizers` | options.md#options-bundle-policies |
 | `CaptureOptions.log_injections` | options.md#options-replay-knobs |

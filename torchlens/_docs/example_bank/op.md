@@ -1052,7 +1052,7 @@ print("transform_fn_source", op.transform_fn_source.func_name)
 ## Interventions and annotations
 
 ### op-do-ablate
-`Op.do` edits this op through its trace; the edited op records the edit.
+`Op.do` edits this op through its trace; the edited op records the edit. Edit a fork (on the root trace it warns).
 
 - covers: `Op.do`, `Op.is_edited`, `Op.edits`
 - tasks: intervene, ablate
@@ -1060,7 +1060,7 @@ print("transform_fn_source", op.transform_fn_source.func_name)
 
 ```python
 trace = tl.trace(model, x)
-edited = trace.ops["relu_1_2"].do(tl.zero_ablate())
+edited = trace.fork().ops["relu_1_2"].do(tl.zero_ablate())
 op = edited.ops["relu_1_2"]
 print("is_edited", op.is_edited)
 print("edits", len(op.edits))

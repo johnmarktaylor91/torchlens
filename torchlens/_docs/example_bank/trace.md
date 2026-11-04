@@ -1217,7 +1217,7 @@ print(type(drawing).__name__)
 ```
 
 ### trace-show
-The notebook-friendly render dispatcher.
+The notebook-friendly render dispatcher; run as a script it also writes `<Model>.pdf` and prints its path.
 
 - covers: `Trace.show`
 - tasks: draw
@@ -1228,8 +1228,7 @@ trace = tl.trace(model, x)
 shown = trace.show()
 print(type(shown).__name__)
 # Output:
-# TorchLens graph written to modelgraph.pdf
-# Drawing
+# ...Drawing
 ```
 
 ### trace-preview-fastlog
@@ -1244,8 +1243,7 @@ trace = tl.trace(model, x)
 preview = trace.preview_fastlog(predicate=lambda ctx: ctx.func_name == "relu")
 print(type(preview).__name__)
 # Output:
-# TorchLens graph written to modelgraph.pdf
-# Drawing
+# ...Drawing
 ```
 
 ### trace-load-state-dict

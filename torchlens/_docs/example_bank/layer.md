@@ -769,7 +769,7 @@ for layer in trace.layers:
 ## Interventions and annotations
 
 ### layer-do-ablate
-`Layer.do` edits this layer through its trace and returns the edited trace.
+`Layer.do` edits this layer through its trace and returns the edited trace; edit a fork (on the root trace it warns).
 
 - covers: `Layer.do`, `Layer.is_edited`
 - tasks: intervene, ablate
@@ -777,7 +777,7 @@ for layer in trace.layers:
 
 ```python
 trace = tl.trace(model, x)
-edited = trace.layers["relu_1_2"].do(tl.zero_ablate())
+edited = trace.fork().layers["relu_1_2"].do(tl.zero_ablate())
 layer = edited.layers["relu_1_2"]
 print("is_edited", layer.is_edited)
 print("zeroed", float(layer.out.abs().sum()))

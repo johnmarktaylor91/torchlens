@@ -464,13 +464,12 @@ print("grad_options", opts.grad_options)
 # grad_options None
 ```
 
-### options-backend-only-refused-wrong
+### options-backend-only-refused
 Passing a backend-only field to a torch capture is refused.
 
 - covers: `CaptureOptions.jax_static_argnums`
 - tasks: backends, options
 - fixture: toy
-- kind: wrong
 - raises: TorchLensError
 
 ```python
