@@ -261,8 +261,7 @@ class TestRefusals:
             )
         assert self._code(excinfo) == "attribution_graph_site_not_found"
         message = str(excinfo.value)
-        assert "'softmax_99_999:1'" in message
-        assert "neither a module nor an addressable op of this capture" in message
+        assert "The frozen= entry 'softmax_99_999:1' names neither a module nor an op" in message
         assert "[str(op.label) for op in trace]" in message
 
 

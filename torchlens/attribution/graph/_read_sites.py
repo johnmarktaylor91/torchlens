@@ -55,24 +55,28 @@ def is_module(trace: Any, name: str) -> bool:
         return False
 
 
-def frozen_op_label(index: ReadEdgeIndex, name: str) -> str:
-    """Return the edge label of a ``frozen=`` name that is not a module, or refuse.
+def _require_op(index: ReadEdgeIndex, name: str, subject: str, remedy: str) -> None:
+    """Refuse ``name``, which is not a module, unless it is an addressable op label.
 
-    A name of neither a module nor an addressable op (a typo, or an op label
-    taken from another capture, whose op counts differ) refuses naming both
-    readings, as a transcoder key does (``op_read_label``).
+    A typo, or an op label taken from another capture (whose op counts before
+    it differ), names neither reading; the refusal says both.
     """
 
     if name not in index.edges and f"{name}:1" not in index.edges:
-        example = next(iter(index.edges), "softmax_1_3:1")
+        example = next(iter(index.edges), "mul_1_3:1")
         raise _site_refusal(
-            f"frozen= holds {name!r}, which names neither a module nor an addressable op "
-            "of this capture. Remedy: name a module from dict(model.named_modules()) whose "
-            "output is held, or an op label of this capture (for example "
-            f"{example!r}; list them with [str(op.label) for op in trace]). An op label "
-            "counts the ops before it, so take it from this capture.",
+            f"{subject} {name!r} names neither a module nor an op of this capture. Remedy: "
+            f"{remedy}, or by an op label of this capture (for example {example!r}; list "
+            "them with [str(op.label) for op in trace]).",
             code="attribution_graph_site_not_found",
         )
+
+
+def frozen_op_label(index: ReadEdgeIndex, name: str) -> str:
+    """Return the edge label of a ``frozen=`` name that is not a module, or refuse."""
+
+    remedy = "name what to hold by a module from dict(model.named_modules())"
+    _require_op(index, name, "The frozen= entry", remedy)
     return resolve_site_edge(index, name, role="frozen").label
 
 
@@ -84,15 +88,8 @@ def op_read_label(index: ReadEdgeIndex, reader: Reader) -> str:
     """
 
     site = reader.site
-    if site not in index.edges and f"{site}:1" not in index.edges:
-        example = next(iter(index.edges), "mul_1_3:1")
-        raise _site_refusal(
-            f"The transcoder read site {site!r} names neither a module nor an op of this "
-            "capture. Remedy: key the transcoder by the MLP module it replaces, from "
-            "dict(model.named_modules()), or by an op label of this capture (for example "
-            f"{example!r}; list them with [str(op.label) for op in trace]).",
-            code="attribution_graph_site_not_found",
-        )
+    remedy = "key the transcoder by the MLP module it replaces, from dict(model.named_modules())"
+    _require_op(index, site, "The transcoder read site", remedy)
     if any(write == site for write, _decoder in reader.decoders):
         raise _site_refusal(
             f"The transcoder keyed by the op label {site!r} gives W_dec as one tensor, "
