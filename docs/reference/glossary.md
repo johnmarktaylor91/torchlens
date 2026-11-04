@@ -5328,6 +5328,8 @@ example.
 | `Conditional.has_else` | Whether the source has an `else` block; a `fallthrough` arm never counts as one |
 | `Conditional.num_arms` | Number of arms, the `fallthrough` arm included |
 | `Conditional.outcome` | Which way the conditional went, derived from its arms and never persisted: `then`, `elif`, `else` or `fallthrough` when that arm fired or its witnessed test selected it with no tensor op in it, `skipped` when every test was witnessed false and there is no `else` or `fallthrough` arm, `multiple` when more than one arm fired across passes, `unknown` when no evidence decides it |
+| `ConditionalArm.bool_value_at_run` | Value the arm's test took when the capture ran, with a `not` in the test applied, so it never contradicts `fired`; `None` for an `else` or `fallthrough` arm (no test of its own) and for a compound `and`/`or` test, where no single bool decides the arm |
+| `ConditionalArm.evaluation_ops` | Labels of the ops that hold the `evaluation` role in this arm: the ops computing its test; always empty for an `else` or `fallthrough` arm, which has no test |
 | `ConditionalArm.execution_ops` | Labels of the ops that hold the `body` role in this arm: the ops its entry edges feed |
 | `ConditionalArm.kind` | Arm kind: `then`, `elif`, `else` or `fallthrough` |
 | `ConditionalRoleRef.arm_kind` | Kind of the arm the role is in: `then`, `elif`, `else` or `fallthrough` |

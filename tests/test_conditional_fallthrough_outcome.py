@@ -515,6 +515,21 @@ def test_witnessed_false_test_with_empty_else_reports_else() -> None:
         trace.cleanup()
 
 
+def test_else_arm_records_no_evaluation_ops_or_bool_value() -> None:
+    """An else arm has no test of its own: no evaluation ops and no bool_value_at_run."""
+
+    for x in (_POS, _NEG):
+        trace = _validated_trace(ElseWithoutTensorOp(), x)
+        try:
+            then_arm, else_arm = _only_conditional(trace).arms
+            assert then_arm.evaluation_ops
+            assert else_arm.kind == "else"
+            assert else_arm.evaluation_ops == []
+            assert else_arm.bool_value_at_run is None
+        finally:
+            trace.cleanup()
+
+
 def test_ternary_arms_never_gain_a_fallthrough() -> None:
     for x in (_POS, _NEG):
         trace = _validated_trace(TernaryModel(), x)
