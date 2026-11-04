@@ -16,11 +16,11 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | Framework | Select | Extract | Inspect | Visualize | Intervene | Compare | Debug | Save and load | Gradients |
 |---|---|---|---|---|---|---|---|---|---|
 | PyTorch | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (7) | No (10) | No (11) | Yes | Partial (13) |
-| TensorFlow | Partial (1) | Partial (2) | Partial (4) | No (6) | Partial (8) | No (10) | No (11) | Yes | Yes |
-| MLX | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (9) | No (10) | No (12) | Yes | Yes |
-| PaddlePaddle | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (9) | No (10) | No (11) | Yes | Partial (14) |
-| tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (7) | No (10) | No (11) | Yes | Yes |
+| JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Partial (9) |
+| TensorFlow | Partial (1) | Partial (2) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| MLX | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| PaddlePaddle | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
    later units a given unit can reach) works only on PyTorch.
@@ -31,23 +31,15 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 4. Each operation's values, shape, function and module are recorded, but not the line of source
    code that ran it.
 5. The forward graph draws, including the collapsed overview. There is no backward pass to draw.
-6. Drawing a Keras model currently fails with an internal error, and there is no backward pass
-   to draw.
-7. Edits are not available yet; asking for one raises an error.
-8. Edits work during a new run, on operations chosen by function or module before the run. You
-   cannot edit a finished trace or patch in activations from another run.
-9. Edits work during a new run, on operations chosen by function before the run. You cannot edit
-   a finished trace or patch in activations from another run, and an edit aimed at a module
-   currently changes nothing.
-10. Comparing runs does not work yet: the ranking of changes comes back empty and the difference
-    drawing shows no change, even between runs that differ.
-11. The debugging tools do not work yet. The NaN finder reports no NaN even when the model
-    produces one, so do not rely on it with this framework.
-12. The debugging tools do not work yet; the NaN finder raises an error.
-13. Gradients of a loss with respect to inputs, weights and each operation work when the model
-    is a plain function of its weights. Flax modules refuse them for now.
-14. Gradients of a loss with respect to inputs and weights work. Gradients for each operation
-    failed on the test model, a small convolutional network with a flatten layer.
+6. Edits are not available yet; asking for one raises an error.
+7. Edits work during a new run, on operations chosen by function or module before the run. You
+   cannot edit a finished trace or patch in activations from another run; asking for either
+   raises an error that names the framework.
+8. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
+   PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
+   `dim`.
+9. Gradients of a loss with respect to inputs, weights and each operation work when the model
+   is a plain function of its weights. Flax modules refuse them for now.
 
 Checked with PyTorch 2.13, JAX 0.10.2 (Flax 0.12.8), TensorFlow 2.21 (Keras 3.15), MLX 0.26.3,
 PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions the preview test jobs pin.
@@ -383,8 +375,11 @@ MLX supports static-label live interventions and `stop_after=`. `trace(intervene
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(stop_after=static_selector)` finalizes an honest partial trace at
 the matched frontier (`trace.is_stopped`, `trace.stop_reason`; parameter accounting is restricted to
-the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
-`tl.label_contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
+the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.in_module`,
+`tl.label_contains`, and boolean composites; these are checked at each operation. `tl.module(...)`
+selects a module call's outputs, so it fires once at the call's exit on its output arrays; a union
+of `tl.module` terms works, and mixing `tl.module` with another selector kind (`&`, a mixed `|`, or
+`~`) refuses typed before the forward runs. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
 `tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate(dim=None)` (self form), `tl.replace_with(...)`,
 and callable transforms written against `mx.array`; other helpers build torch-only hooks and refuse
 by name. Hooks must preserve shape and dtype; violations refuse typed at fire time. Replay
@@ -454,7 +449,9 @@ callables (the eager `RecordContext` carries real `tensor_requires_grad` / `is_s
 `bool_value`), `stop_after=` finalizes an honest partial trace at the matched frontier without executing
 past it, and `facets=` attaches per-trace facet recipes. `grad_options` cannot combine with
 `intervene=`/`stop_after=` because the derived-gradient replay re-runs the forward without
-interventions.
+interventions. `tl.module(...)` selects a layer call's outputs and fires once at the call's exit; a
+union of `tl.module` terms works, and mixing `tl.module` with another selector kind refuses typed
+before the forward runs.
 
 Paddle validation is a live preview guard, not a completeness proof for arbitrary Paddle releases.
 Each wrapped op emits an independent capture record, replay reconstructs argument templates and

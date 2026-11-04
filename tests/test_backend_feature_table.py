@@ -9,7 +9,6 @@ their framework marker, so each backend's CI job runs its own row on the pinned 
 
 from __future__ import annotations
 
-import importlib
 import os
 import re
 import sys
@@ -161,13 +160,12 @@ def _act_op(trace: Any, func_name: str) -> Any:
 
 
 def _grad_options(backend: str) -> Any:
-    """The preview's ``GradOptions`` class.
+    """The preview's ``GradOptions`` class, through ``tl.backends.<name>``.
 
-    ``tl.backends.<name>`` exists only once that backend's module is imported (a first
-    capture imports it), so a fresh process imports it by its full module name.
+    The backend packages resolve lazily, so this works in a fresh process before any capture.
     """
 
-    return importlib.import_module(f"torchlens.backends.{backend}").GradOptions
+    return getattr(tl.backends, backend).GradOptions
 
 
 def _with_nan(array: np.ndarray, index: tuple[int, ...]) -> np.ndarray:
@@ -268,7 +266,11 @@ def _tf_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        _grad_options("tf")(loss_fn=lambda out: tf.reduce_sum(out * out), input_grad_argnums=(0,)),
+        _grad_options("tf")(
+            loss_fn=lambda out: tf.reduce_sum(out * out),
+            input_grad_argnums=(0,),
+            intermediate_grads=True,
+        ),
     )
     return subject
 
@@ -306,7 +308,9 @@ def _mlx_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        _grad_options("mlx")(loss_fn=lambda out: mx.sum(out * out), input_grad_argnums=(0,)),
+        _grad_options("mlx")(
+            loss_fn=lambda out: mx.sum(out * out), input_grad_argnums=(0,), intermediate_grads=True
+        ),
     )
     return subject
 
@@ -332,7 +336,11 @@ def _paddle_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        _grad_options("paddle")(loss_fn=lambda out: paddle.sum(out * out), input_grad_argnums=(0,)),
+        _grad_options("paddle")(
+            loss_fn=lambda out: paddle.sum(out * out),
+            input_grad_argnums=(0,),
+            intermediate_grads=True,
+        ),
     )
     return subject
 
@@ -368,14 +376,19 @@ def _tinygrad_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        _grad_options("tinygrad")(loss_fn=lambda out: (out * out).sum(), input_grad_argnums=(0,)),
+        _grad_options("tinygrad")(
+            loss_fn=lambda out: (out * out).sum(), input_grad_argnums=(0,), intermediate_grads=True
+        ),
     )
     return subject
 
 
 def _derived_gradients(subject: _Subject, options: Any) -> None:
+    """Loss gradients reach the inputs, the weights and each saved op."""
+
     trace = subject.trace(capture=CaptureOptions(grad_options=options))
     assert len(trace.autograd.derived_grads) > 0
+    assert len(trace.autograd.intermediate_derived_grads) > 0, "no per-op gradients"
 
 
 _SUBJECTS: dict[str, Callable[[], _Subject]] = {
