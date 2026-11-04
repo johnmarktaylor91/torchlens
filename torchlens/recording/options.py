@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, get_args
 
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
@@ -305,16 +305,15 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass an integer history_size between 0 and 1024",
             argument="history_size",
         )
-    # R64: the record surface carries its OWN codes (recording_*) so one
-    # documented code never maps to two catchable builtins -- the tl.trace
-    # twins keep TypeError lineage under the unprefixed codes, this surface
-    # keeps its historical ValueError lineage (the F1/F3/F4 split pattern).
+    # Predicate misuse raises the same code and class on tl.record and tl.trace
+    # (``_capture/prepare/resolve.py::_refuse_predicate_shapes``): one catch for both.
     if intervene is not None and not callable(intervene):
-        raise InvalidArgumentError(
-            f"intervene must be callable or None; received {type(intervene).__name__}",
-            code="recording_intervention_predicate_type_invalid",
-            remedy="pass tl.when(...), another predicate, or None",
+        raise ArgumentTypeError(
+            f"intervene received non-callable type {type(intervene).__name__}",
+            code="intervention_predicate_type_invalid",
+            remedy="pass a predicate callable such as tl.when(...) or None",
             argument="intervene",
+            received_type=type(intervene).__name__,
         )
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise InvalidArgumentError(
@@ -378,11 +377,12 @@ def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
             argument="lookback_payload_policy",
         )
     if halt is not None and not callable(halt):
-        raise InvalidArgumentError(
-            f"halt must be callable or None; received {type(halt).__name__}",
-            code="recording_halt_predicate_type_invalid",
-            remedy="pass a halt predicate or None",
+        raise ArgumentTypeError(
+            f"halt received non-callable type {type(halt).__name__}",
+            code="halt_predicate_type_invalid",
+            remedy="pass a predicate callable or None",
             argument="halt",
+            received_type=type(halt).__name__,
         )
     if activation_transform is not None and not callable(activation_transform):
         raise InvalidArgumentError(

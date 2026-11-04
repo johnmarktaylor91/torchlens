@@ -372,7 +372,7 @@ class Recording(TraceLike):
     failures may include a skipped/partial current-call event. ``last_event_*``
     fields are best-effort details about the last captured event, not an
     authoritative description of the failing op. For reused multi-pass
-    recorders, ``n_ops_completed`` is the total count of op-kind events captured
+    recorders, ``n_ops_committed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
 
@@ -995,8 +995,8 @@ class Recording(TraceLike):
         if self.is_failed:
             return (
                 f"Recording(status={self.status!r}, n_passes={self.num_passes}, "
-                f"n_records={len(self)}, n_ops_completed={self.num_committed_ops}, "
-                "caveat='n_ops_completed counts op-kind events across completed "
+                f"n_records={len(self)}, n_ops_committed={self.num_committed_ops}, "
+                "caveat='n_ops_committed counts op-kind events across completed "
                 "passes in this recorder; user-op failures exclude the failing "
                 "call; TL-side capture failures may include a skipped/partial "
                 "current-call event.')"

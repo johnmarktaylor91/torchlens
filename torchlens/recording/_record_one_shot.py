@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import ArgumentTypeError
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
@@ -24,6 +24,7 @@ from ..backends.registry import (
 from ..intervention.predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
+from ._generation_options import GenerationOptions
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
@@ -102,6 +103,20 @@ def _read_recording_options(recording: RecordingOptions | None) -> dict[str, Any
     }
 
 
+def _require_generate_kwargs(
+    generation: GenerationOptions | None, generate_kwargs: Mapping[str, Any] | None
+) -> None:
+    """Refuse ``generation=`` without ``generate_kwargs=``."""
+
+    if generation is not None and generate_kwargs is None:
+        raise InvalidArgumentError(
+            "tl.record(generation=GenerationOptions(...)) needs generate_kwargs=: the per-token "
+            "options describe a recorded generation",
+            code="record_generation_options_invalid",
+            remedy="pass generate_kwargs={} (the model's defaults) or drop generation=",
+        )
+
+
 def _require_torch_fastlog_backend(backend: Any) -> None:
     """Refuse unless the resolved backend binds the torch one-shot Recorder as fastlog."""
 
@@ -138,18 +153,18 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
         )
 
 
-def _record_generation_door(
-    model: nn.Module,
-    inputs: Any,
-    input_kwargs: dict[str, Any] | None,
-    generate_kwargs: Mapping[str, Any],
-    door: dict[str, Any],
-) -> GenerationRecording:
-    """Run ``tl.record(generate_kwargs=...)`` and attach ``generate()``'s own return value."""
+def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> Any:
+    """Coerce ``inputs`` and run trace()'s up-front tensor-variant guard on them.
 
-    output, generation = record_generation(model, inputs, input_kwargs, generate_kwargs, door)
-    object.__setattr__(generation.recording, "_output", output_returned(output))
-    return generation
+    Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
+    storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
+    record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
+    instead of crashing deep in capture with an opaque torch error.
+    """
+
+    coerced = _coerce_input_args(model, inputs)
+    check_model_and_input_variants(model, coerced, input_kwargs)
+    return coerced
 
 
 def record(
@@ -167,6 +182,7 @@ def record(
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
     lean: bool = False,
+    generation: GenerationOptions | None = None,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
@@ -248,15 +264,15 @@ def record(
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
     lean:
-        PROVISIONAL SPELLING (behaviour ruled, name pending). ``True`` journals
-        only the events the selection keeps, skipping the shell event, record and
-        replay clone of every unkept op and module boundary. The result names
-        what it omitted (``Recording.lean_omissions``) and refuses the reads that
-        need the full journal (``event_stream``, ``op_events``, ``lazy_trace``,
-        ``raw_metadata()``, ``to_trace()``) with ``recording_lean_omitted``;
-        ``records`` and the other retained-record reads are complete. Gradient
-        capture, ``intervene=``, ``narrate=`` and partial forward-error modes
-        refuse with ``record_lean_unsupported``. Default ``False`` is unchanged.
+        PROVISIONAL SPELLING. ``True`` journals only the events the selection keeps;
+        ``Recording.lean_omissions`` names what it omitted and the reads that refuse
+        (``recording_lean_omitted``). Default ``False`` is unchanged.
+    generation:
+        DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions` widening
+        the generation door: per-token ``reducers=``, ``kv_sites=``, a ``keep_last=``
+        ring buffer with ``spill=``, and the ``max_saved_bytes=`` guard. Read the
+        per-token values with ``GenerationRecording.series(name)``. Needs
+        ``generate_kwargs=``.
 
     Returns
     -------
@@ -280,13 +296,9 @@ def record(
     knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
-    inputs = _coerce_input_args(model, inputs)
-    # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
-    # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
-    # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
-    # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, inputs, input_kwargs)
-    door = {
+    inputs = _checked_inputs(model, inputs, input_kwargs)
+    _require_generate_kwargs(generation, generate_kwargs)
+    recorder_kwargs: dict[str, Any] = {
         **knobs,
         "save": save,
         "intervene": intervene,
@@ -296,9 +308,12 @@ def record(
         "capture": capture,
     }
     if generate_kwargs is not None:
-        generation = _record_generation_door(model, inputs, input_kwargs, generate_kwargs, door)
-        return enrich_generation(generation, postprocess)
-    with Recorder(model, **door) as recorder:
+        output, generated = record_generation(
+            model, (inputs, input_kwargs), generate_kwargs, recorder_kwargs, generation
+        )
+        object.__setattr__(generated.recording, "_output", output_returned(output))
+        return enrich_generation(generated, postprocess)
+    with Recorder(model, **recorder_kwargs) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
