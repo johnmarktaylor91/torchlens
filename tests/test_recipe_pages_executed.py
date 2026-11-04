@@ -62,6 +62,9 @@ PAGES: dict[str, str] = {
     "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
     "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
     "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
@@ -155,6 +158,9 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/clip_head_attention_recipe.ipynb",
         "examples/methods/clip_text_decomposition_recipe.ipynb",
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )
 

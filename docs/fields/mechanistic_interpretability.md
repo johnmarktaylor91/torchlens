@@ -36,6 +36,9 @@ The lists below are in the order most people want them: see one site, edit it, t
 - [Function vectors notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/function_vectors_recipe.ipynb): score every head's causal indirect effect and sum the top heads into a task vector.
 - [DAS causal basis notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/das_causal_basis_recipe.ipynb): distributed alignment search through a bound hook, tested against a random basis.
 - [Measure faithfulness notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/measure_faithfulness_recipe.ipynb): ranked removal, output drop and locality checks on an attribution.
+- [EAP-IG circuit notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/eap_ig_circuit_recipe.ipynb): edge attribution patching with integrated gradients on GPT-2 small's IOI task, with the circuit's faithfulness replayed by `patch_edges`.
+- [Vision logit lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/vision_logit_lens_recipe.ipynb): per-block class votes of a ViT classifier and CLIP's open-vocabulary readout of every vision block.
+- [LEACE concept erasure notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/leace_concept_erasure_recipe.ipynb): scrub grammatical number from every GPT-2 small block with bound `tl.when` rules and watch subject-verb agreement collapse.
 - [Layer-wise relevance propagation for transformers](../field-guide/lrp_transformers_lxt.md) and the [epsilon-LRP litmus test](../field-guide/lrp_epsilon_litmus.md).
 - [Conditional steering with a per-token audit](../field-guide/conditional_steering.md): steer only when a condition direction crosses a threshold.
 - [Transformer pictures](../reference/tviz.md): token-labelled attention heatmaps and grids, the attention atlas, coloured tokens.
