@@ -367,7 +367,7 @@ class ValueEncoder:
 
         if id(value) in self._active:
             raise ArtifactError(
-                f"The 3.0 writer met a self-referencing value at {at}.",
+                f"The saved format 3 writer met a self-referencing value at {at}.",
                 code="metadata_value_unportable",
                 remedy="break the cycle in the value before saving",
             )

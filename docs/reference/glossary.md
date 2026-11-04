@@ -924,7 +924,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
   `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
   params are a
-  closed set; rows persist in the bundle artifact (`relations.json` in the 3.0 format) and every
+  closed set; rows persist in the bundle artifact (`relations.json` in saved format 3) and every
   load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
@@ -1225,7 +1225,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   must use `replayable=True`: the flag records the runnable apparatus (callable registry keys,
   state snapshots, alias topology, escape records), which no default capture keeps; the per-op
   argument templates that `trace.do(site, edit)` replays are recorded on every capture.
-  In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
+  In saved format 3 the descriptor is `runnable/descriptor.json` and the state is
   safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
   pickled (the maintainer contract `docs/maintainers/saved_format_3.md`, section 7; not on the site).
 
@@ -1855,12 +1855,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 `tl.io.detect_tlspec_format(path)`
 : Inspects a saved-artifact directory without loading its payloads. Returns `"v3"` when the
-  root manifest names the 3.0 format, `"pre_3"` for TorchLens 2.x save markers, or `"unknown"`
+  root manifest names saved format 3, `"pre_3"` for save markers of torchlens 2.37 and earlier, or `"unknown"`
   when no TorchLens save markers are present. Symlinked metadata paths refuse. Detection does
   not validate the artifact; use `tl.validation.validate_tlspec(path)` for validation.
 
 `tl.types.UnencodableValue`
-: The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
+: The stand-in a loaded saved format 3 artifact carries where the save met a value outside the saved
   format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
   with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
   and `at` (the record, row and column it sat in). The load attaches one advisory,

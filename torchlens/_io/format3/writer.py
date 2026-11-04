@@ -54,7 +54,7 @@ from .values import ValueEncoder, record_type_table, tagged
 #: staging sentinel that comes off right before publish.
 _UNDIGESTED_ROOT_FILES = frozenset({MANIFEST_FILE, "PARTIAL"})
 #: Prefix of the unbuilt-door refusal message (``contract.refuse_*_not_built``).
-_UNBUILT_DOOR_PREFIX = "The 3.0 saved-format door "
+_UNBUILT_DOOR_PREFIX = "The 2.38 saved-format door "
 #: Trace state keys that hold each record kind in live container order; rows
 #: found only by reference follow in discovery order.
 _SEED_KEYS: tuple[tuple[str, str], ...] = (
@@ -499,7 +499,7 @@ def _refuse_reload(detail: str, *, code: str) -> ArtifactError:
     """Return the save refusal for a staged artifact that does not read back."""
 
     return ArtifactError(
-        f"The 3.0 writer produced an artifact that does not read back: {detail}",
+        f"The saved format 3 writer produced an artifact that does not read back: {detail}",
         code=code,
         remedy="report this; the writer and the reader disagree",
     )

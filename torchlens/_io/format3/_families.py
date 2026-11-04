@@ -64,7 +64,7 @@ def cell_error(at: str, detail: str, *, code: str = CELL_CODE) -> ArtifactError:
     if field is not None:
         fields.update(field=field, reason="not_a_string" if "peak_memory" in code else "schema")
     subject = f"{field} at record cell {at}" if field else f"Record cell {at}"
-    message = f"{subject} does not satisfy the 3.0 saved-format contract: {detail}."
+    message = f"{subject} does not satisfy the saved format 3 contract: {detail}."
     if field is not None:
         message += f" Remedy: {remedy}."
     return ArtifactError(message, code=code, remedy=remedy, **fields)

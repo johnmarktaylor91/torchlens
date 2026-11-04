@@ -32,7 +32,7 @@ def validate_tlspec(
     *,
     allow_unsupported_runnable_versions: bool = False,
 ) -> None:
-    """Validate a 3.0 artifact; refuse saves written by TorchLens 2.x.
+    """Validate a saved format 3 artifact; refuse saves written by torchlens 2.37 and earlier.
 
     Parameters
     ----------

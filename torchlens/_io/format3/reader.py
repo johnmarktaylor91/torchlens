@@ -174,7 +174,7 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
         return
     shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
     raise artifact_error(
-        f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
+        f"Artifact manifest {manifest_path} fails the saved format 3 manifest schema: {shown}.",
         code=_CODES["manifest_invalid"],
         remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
         file_path=str(manifest_path),
@@ -649,7 +649,7 @@ def _hook(kind: str, root: Path) -> Callable[..., Any]:
         return _LOAD_HOOKS[kind]
     except KeyError:
         raise artifact_error(
-            f"The 3.0 {kind} loader's rehydration step is not installed; {root} was validated "
+            f"The saved format 3 {kind} loader's rehydration step is not installed; {root} was validated "
             "but not loaded.",
             code=_CODES["blob_missing"],
             remedy="import torchlens (its load door installs the step) and load again",

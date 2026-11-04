@@ -111,7 +111,7 @@ class ChunkWriter:
     ) -> None:
         if codec not in PAYLOAD_CODEC_IDS:
             raise ArtifactError(
-                f"Unknown payload codec {codec!r}; the 3.0 format writes {PAYLOAD_CODEC_IDS}.",
+                f"Unknown payload codec {codec!r}; saved format 3 writes {PAYLOAD_CODEC_IDS}.",
                 code="metadata_value_unportable",
                 remedy="save the tensor with a supported codec",
             )
