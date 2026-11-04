@@ -69,7 +69,8 @@ class Accessor(Generic[T]):
 
     Examples
     --------
-    >>> layers = tl.trace(model, x).layers
+    >>> trace = tl.trace(model, x)
+    >>> layers = trace.layers
     >>> isinstance(layers, Accessor), len(layers)
     (True, 5)
     >>> "relu_1_2" in layers, layers[2].func_name

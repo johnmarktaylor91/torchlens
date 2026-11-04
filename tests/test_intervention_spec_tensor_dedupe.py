@@ -122,7 +122,8 @@ def test_sticky_steer_hook_reloads_to_the_live_outputs(tmp_path: Path) -> None:
         intervention=InterventionOptions(confirm_mutation=True),
     )
     assert torch.equal(fresh[label].out, live[label].out)
-    assert torch.equal(fresh[label].out, _capture()[label].out + direction)
+    unedited = _capture()
+    assert torch.equal(fresh[label].out, unedited[label].out + direction)
 
 
 def test_codec_keys_sidecar_ids_on_the_tensor_object() -> None:

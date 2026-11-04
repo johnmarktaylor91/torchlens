@@ -24,6 +24,7 @@ from packaging.version import InvalidVersion, Version
 
 from .._vocab._package_version import __version__ as TORCHLENS_VERSION
 from ..errors._base import TorchLensWarning
+from .format_contract import FIRST_FORMAT3_RELEASE
 from .format_errors import ArtifactError, ArtifactRuntimeIncompatibleError, ArtifactTooOldError
 
 __all__ = ["check_runtime_identity", "parse_pep440", "runtime_python_version"]
@@ -31,10 +32,11 @@ __all__ = ["check_runtime_identity", "parse_pep440", "runtime_python_version"]
 LOGGER = logging.getLogger(__name__)
 
 _TORCH_REMEDY = "load the bundle under a torch runtime with the recorded major version"
-# The first TorchLens release whose writer produces saved format 3. A format 3 manifest
-# stamped by an older writer is an impossible pairing and refuses below the floor, before
-# the identity advisories; dev builds of the floor release count as the release.
-_FIRST_FORMAT3_WRITER = Version("2.36.3")
+# The first TorchLens release whose writer produces saved format 3 (the 2.38.0 saved-file
+# floor). A format 3 manifest stamped by an older writer is an impossible pairing and
+# refuses below the floor, before the identity advisories; dev builds of the floor release
+# count as the release.
+_FIRST_FORMAT3_WRITER = Version(FIRST_FORMAT3_RELEASE)
 
 
 def parse_pep440(

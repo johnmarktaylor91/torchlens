@@ -1,4 +1,4 @@
-"""Reader of the 3.0 saved format: manifest first, digests, record tables, records.
+"""Reader of the 2.38 saved format: manifest first, digests, record tables, records.
 
 Every step refuses typed before the next opens a file: manifest (2.x test, schema, version
 window), listed files' digests, record tables (envelope, columns, one typed decode per cell),

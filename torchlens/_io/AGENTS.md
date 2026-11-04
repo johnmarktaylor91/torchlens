@@ -10,7 +10,9 @@ hostile input, and every load path here is fail-closed.
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
 - `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
-  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
+  their root manifest before `load()` parses a trace manifest. Merged, fastlog and current-format
+  manifests first pass the release floor (`raise_if_saved_by_older_major`: a `torchlens_version`
+  stamp below `FIRST_FORMAT3_RELEASE` refuses); extraction takes it in `load_extraction`.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors

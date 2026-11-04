@@ -22,7 +22,7 @@ if _typing.TYPE_CHECKING:
     from torch import nn as _nn
 
 #: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
-__version__ = "2.37.1"
+__version__ = "2.38.0"
 
 if _typing.TYPE_CHECKING:
     from ._data_classes.trace import Trace

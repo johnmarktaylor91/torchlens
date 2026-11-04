@@ -159,7 +159,7 @@ _EXTRACTION_V1 = _LEGACY / "extraction_v1"
 
 def _assert_extraction_v1_refusal(error: ArtifactTooOldError, path: Path) -> None:
     message = str(error)
-    assert "saved by torchlens 2.x" in message, message
+    assert "saved by torchlens 2.37 and earlier" in message, message
     assert "load it with torchlens 2.36.x" in message, message
     assert error.fields["code"] == "artifact_version_below_floor"
     assert error.fields["observed"] == "extraction manifest schema=tl_extract_manifest_v1"
@@ -206,13 +206,12 @@ def test_resuming_an_extraction_into_a_v1_artifact_refuses_as_2x(tmp_path: Path)
     assert sorted(p.name for p in work.iterdir()) == ["manifest.json"], "nothing written"
 
 
-def test_v2_extraction_saved_by_2x_refuses_at_every_reader_under_3(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_v2_extraction_saved_by_2x_refuses_at_every_reader(tmp_path: Path) -> None:
     """A v2 extraction manifest stamped by torchlens 2.x refuses at the direct readers too.
 
     ``tl.load`` refuses it at the root manifest; the extraction readers share
-    ``load_manifest``, which raises the same one 2.x refusal once the running release is 3.
+    ``load_manifest``, which raises the same one 2.x refusal for any stamp below the
+    first format-11 release.
     """
 
     manifest = json.loads((_EXTRACTION_V1 / "manifest.json").read_text(encoding="utf-8"))
@@ -221,13 +220,12 @@ def test_v2_extraction_saved_by_2x_refuses_at_every_reader_under_3(
     work = tmp_path / "extraction_v2_saved_by_2x"
     work.mkdir()
     (work / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    monkeypatch.setattr(tl, "__version__", "3.0.0")
 
     for reader in (load_extraction, open_extraction):
         with pytest.raises(ArtifactTooOldError) as excinfo:
             reader(work)
         message = str(excinfo.value)
-        assert "saved by torchlens 2.x" in message, message
+        assert "saved by torchlens 2.37 and earlier" in message, message
         assert "load it with torchlens 2.36.x" in message, message
         assert excinfo.value.fields["code"] == "artifact_version_below_floor"
         assert excinfo.value.fields["observed"] == "torchlens_version=2.36.3"

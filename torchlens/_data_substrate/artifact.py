@@ -611,9 +611,9 @@ class ArtifactWriter:
 def refuse_2x_manifest(
     manifest: Mapping[str, Any], *, container: Path, running_version: str
 ) -> None:
-    """Refuse an extraction artifact torchlens 2.x wrote, at every reader that loads it.
+    """Refuse an extraction artifact torchlens 2.37 and earlier wrote, at every reader that loads it.
 
-    Two marks say torchlens 2.x wrote it: the v1 schema (torchlens 2.34 and earlier) and a
+    Two marks say torchlens 2.37 and earlier wrote it: the v1 schema (torchlens 2.34 and earlier) and a
     v2 manifest whose ``torchlens_version`` names an earlier major release than the running
     one, which is how ``tl.load`` decides at the root manifest.
 
@@ -630,8 +630,8 @@ def refuse_2x_manifest(
     Raises
     ------
     ArtifactTooOldError
-        When either mark is present. This release reads no file saved by torchlens 2.x
-        and migrates nothing in place; the one 2.x error names the remedy.
+        When either mark is present. This release reads no file saved by torchlens 2.37 and earlier
+        and migrates nothing in place; the one pre-2.38 error names the remedy.
     """
 
     from .._io.format_contract import below_floor_error, raise_if_saved_by_older_major

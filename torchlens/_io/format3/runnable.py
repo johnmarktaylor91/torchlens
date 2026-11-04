@@ -1,4 +1,4 @@
-"""The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle.
+"""The 2.38 runnable component: descriptor JSON plus safetensors state, no pickle.
 
 Contract: ``docs/maintainers/saved_format_3.md``, section 7 "Runnable" and the
 runnable example of section 8. A runnable save adds one directory,

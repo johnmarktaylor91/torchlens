@@ -94,6 +94,16 @@ __all__ = (
 )
 
 
+def _demanded_level(spec: CaptureSpec) -> EnrichmentLevel:
+    """Map a capture decision to the enrichment level it demands."""
+
+    if spec.save_out:
+        return EnrichmentLevel.PAYLOAD
+    if spec.save_metadata:
+        return EnrichmentLevel.METADATA
+    return EnrichmentLevel.SHELL
+
+
 def _emit_predicate_operation_events(
     self: "Trace",
     func: Callable[..., Any],
@@ -157,6 +167,7 @@ def _emit_predicate_operation_events(
             is_bottom_level_func=is_bottom_level_func,
             module_frame=module_frame,
         )
+        selected = True  # a halt or a predicate error before the decision keeps the context
         try:
             halt_only = _is_halt_only_capture(state.options)
             if halt_only:
@@ -175,12 +186,8 @@ def _emit_predicate_operation_events(
                     "Remedy: use tl.trace(save=...) for followed_by retroactive capture.",
                     code="followed_by_unsupported",
                 )
-            if spec.save_out:
-                demanded = EnrichmentLevel.PAYLOAD
-            elif spec.save_metadata:
-                demanded = EnrichmentLevel.METADATA
-            else:
-                demanded = EnrichmentLevel.SHELL
+            demanded = _demanded_level(spec)
+            selected = demanded is not EnrichmentLevel.SHELL
             bulk_default_ram = bool(
                 demanded is EnrichmentLevel.PAYLOAD
                 and capture_session_for(self) is not None
@@ -271,7 +278,7 @@ def _emit_predicate_operation_events(
                         trace=self,
                         intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
-                state.append_context(ctx)
+                state.append_context(ctx, selected=selected)
 
 
 def _predicate_output_context(

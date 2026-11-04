@@ -99,7 +99,8 @@ def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_pat
     kwargs = dict(again.hook_specs[0].helper.kwargs)
     assert torch.equal(kwargs["mask"], _mask(3))
     assert [key for key, _ in again.hook_specs[0].helper.kwargs].count("mask") == 1
-    assert torch.equal(_apply(again)[_SITE].out, staged[_SITE].out)
+    reapplied = _apply(again)
+    assert torch.equal(reapplied[_SITE].out, staged[_SITE].out)
 
 
 def _stored(mask: Any, digest: Any) -> dict[str, Any]:
@@ -135,9 +136,8 @@ def _remedy_runs(error: Any, tmp_path: Path) -> None:
     assert "tl.io.save_intervention(fork, path, level='portable')" in error.fields["remedy"]
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     staged = session
-    assert torch.equal(
-        _apply(_save_load(session, tmp_path / "resaved.tlspec"))[_SITE].out, staged[_SITE].out
-    )
+    reapplied = _apply(_save_load(session, tmp_path / "resaved.tlspec"))
+    assert torch.equal(reapplied[_SITE].out, staged[_SITE].out)
 
 
 @pytest.mark.parametrize("case", sorted(_MALFORMED))

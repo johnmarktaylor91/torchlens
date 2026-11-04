@@ -1,4 +1,4 @@
-"""The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks.
+"""The 2.38 writer: a trace or bundle to typed JSON record tables plus safetensors chunks.
 
 Contract: ``docs/maintainers/saved_format_3.md``; design:
 ``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 5, 6, 8, 9).
@@ -577,7 +577,7 @@ def write_trace(
     overwrite: bool = False,
     payload_policy: dict[str, bool] | None = None,
 ) -> None:
-    """Write one trace as a 3.0 artifact directory.
+    """Write one trace as a 2.38 artifact directory.
 
     This is ``trace.save``: the save chokepoint writes the 3.0 envelope.
 
