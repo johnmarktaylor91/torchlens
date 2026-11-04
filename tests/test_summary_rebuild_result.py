@@ -140,3 +140,15 @@ def test_compute_footer_does_not_upgrade_estimated_evidence() -> None:
     assert "formula-exact" not in footer
     assert "formula-exact" not in report.render("html")
     trace.cleanup()
+
+
+def test_compute_pointer_shows_only_when_macs_are_absent() -> None:
+    """The footer points to view='compute' only while the table lacks a macs column."""
+
+    trace = tl.trace(_Toy(), torch.ones(2, 8))
+    overview = str(trace.summary()).splitlines()[-1]
+    compute = trace.summary(view="compute")
+    assert "view='compute' for per-row MACs" in overview
+    assert str(compute).splitlines()[-1] == "more     result.details() | docs/reference/summary.md"
+    assert "per-row MACs" not in compute.render("html")
+    trace.cleanup()

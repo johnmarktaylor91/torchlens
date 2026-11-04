@@ -543,11 +543,17 @@ def render_summary_pair(
     capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
     lines.extend(_legend_lines(rows, columns, config.flop_convention))
-    lines.append(
-        "more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
-    )
+    lines.append(_more_line(columns))
     unicode_text = assert_no_escape_bytes("\n".join(lines))
     return degrade(unicode_text), unicode_text
+
+
+def _more_line(columns: tuple[ColumnSpec, ...]) -> str:
+    """The footer's exits; the compute pointer shows only while no macs column is shown."""
+
+    has_macs = any(column.name == "macs" for column in columns)
+    compute_hint = "" if has_macs else " | view='compute' for per-row MACs"
+    return f"more     result.details(){compute_hint} | docs/reference/summary.md"
 
 
 def _shape_str(shape: tuple[int, ...]) -> str:
