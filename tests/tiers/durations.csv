@@ -51,7 +51,7 @@ tests/oracles/test_legacy_peak_rss_units.py,2,0.01,0.00,unmarked
 tests/oracles/test_legacy_quantity_doors.py,7,0.17,0.05,unmarked
 tests/oracles/test_legacy_timing_bounds.py,8,2.24,0.86,unmarked
 tests/oracles/test_oracle_w0_deprecation.py,8,0.03,0.01,unmarked
-tests/oracles/test_oracle_w0_lints.py,14,5.62,5.53,heavy
+tests/oracles/test_oracle_w0_lints.py,14,6.64,6.53,heavy
 tests/oracles/test_oracle_w0_registry.py,24,0.46,0.34,unmarked
 tests/oracles/test_oracle_w0_skeleton.py,5,0.02,0.01,unmarked
 tests/oracles/test_oracle_w0_surface.py,12,0.91,0.76,unmarked
@@ -62,7 +62,7 @@ tests/oracles/test_proofnet_purity.py,15,0.74,0.28,unmarked
 tests/oracles/test_proofnet_quantities.py,1,0.19,0.19,unmarked
 tests/packaging_install/test_clean_install.py,24,293.47,37.01,slow
 tests/producer_parity/test_fastlog_late_buffer_probe.py,1,0.05,0.05,heavy
-tests/producer_parity/test_ledger.py,12,14.80,11.19,heavy
+tests/producer_parity/test_ledger.py,12,15.16,11.26,heavy
 tests/producer_parity/test_op_lane_inplace_writers.py,2,2.66,2.65,heavy
 tests/producer_parity/test_p1_record_types.py,8,4.54,1.85,heavy
 tests/producer_parity/test_p2_consumer_migration.py,3,1.81,1.77,heavy
@@ -1626,12 +1626,13 @@ tests/test_tvscope_preprocessing.py,15,0.06,0.01,heavy
 tests/test_two_pass_inplace_fix.py,9,9.16,8.55,slow
 tests/test_type_checking_imports.py,1,6.29,6.29,unmarked
 tests/test_unhide_surfaces.py,5,0.89,0.80,heavy
-tests/test_union_merge_integrity.py,29,0.82,0.08,unmarked
+tests/test_union_merge_integrity.py,29,1.03,0.11,unmarked
 tests/test_unpickle_c_path.py,2,0.04,0.04,smoke
 tests/test_unpickle_c_security.py,8,6.83,4.14,unmarked
 tests/test_user_docs_currency.py,43,0.19,0.09,unmarked
 tests/test_utility_validation_runner_regressions.py,13,1.81,0.48,unmarked
 tests/test_utils_iter_tensors.py,1,0.00,0.00,unmarked
+tests/test_validate_boundary_probes.py,26,5.86,0.56,unmarked
 tests/test_validate_consolidated.py,7,2.56,0.67,unmarked
 tests/test_validate_deep_chain.py,4,0.52,0.38,unmarked
 tests/test_validate_isin_membership.py,13,69.88,48.18,slow
