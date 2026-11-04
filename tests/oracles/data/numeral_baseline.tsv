@@ -2870,7 +2870,7 @@ docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
-docs-md	docs/maintainers/where.md	1583
+docs-md	docs/maintainers/where.md	1585
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
@@ -3040,6 +3040,7 @@ docs-md	docs/maintainers/where.md	2592
 docs-md	docs/maintainers/where.md	260
 docs-md	docs/maintainers/where.md	2608
 docs-md	docs/maintainers/where.md	261
+docs-md	docs/maintainers/where.md	2615
 docs-md	docs/maintainers/where.md	262
 docs-md	docs/maintainers/where.md	2638
 docs-md	docs/maintainers/where.md	264
@@ -3066,7 +3067,6 @@ docs-md	docs/maintainers/where.md	28
 docs-md	docs/maintainers/where.md	280
 docs-md	docs/maintainers/where.md	281
 docs-md	docs/maintainers/where.md	283
-docs-md	docs/maintainers/where.md	2830
 docs-md	docs/maintainers/where.md	2831
 docs-md	docs/maintainers/where.md	284
 docs-md	docs/maintainers/where.md	2847
@@ -3118,6 +3118,7 @@ docs-md	docs/maintainers/where.md	31459
 docs-md	docs/maintainers/where.md	3148
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
+docs-md	docs/maintainers/where.md	31902
 docs-md	docs/maintainers/where.md	32
 docs-md	docs/maintainers/where.md	320
 docs-md	docs/maintainers/where.md	321
@@ -3186,6 +3187,7 @@ docs-md	docs/maintainers/where.md	379
 docs-md	docs/maintainers/where.md	38
 docs-md	docs/maintainers/where.md	380
 docs-md	docs/maintainers/where.md	381
+docs-md	docs/maintainers/where.md	383
 docs-md	docs/maintainers/where.md	384
 docs-md	docs/maintainers/where.md	385
 docs-md	docs/maintainers/where.md	386
@@ -3444,6 +3446,7 @@ docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	677912
 docs-md	docs/maintainers/where.md	678
+docs-md	docs/maintainers/where.md	678355
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
@@ -9008,6 +9011,7 @@ package-docstrings	torchlens/transforms/_srp_hash.py	64
 package-docstrings	torchlens/validation/__init__.py	2.37
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
+package-docstrings	torchlens/validation/_crossing_perturbations.py	0..10
 package-docstrings	torchlens/validation/_destination_coverage.py	256
 package-docstrings	torchlens/validation/_destination_coverage.py	43
 package-docstrings	torchlens/validation/_domain_perturbations.py	17
