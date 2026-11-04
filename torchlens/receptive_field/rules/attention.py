@@ -95,7 +95,7 @@ def _per_operand_attention(
     """Per-operand fused-attention relations, or ``None`` when shapes are not usable."""
 
     parents = tuple(context.op.parents)
-    shapes = context.parent_shapes
+    shapes = context._parent_shapes
     if len(parents) < 3 or len(shapes) < 3:
         return None
     raw_query, raw_key, raw_value = shapes[:3]
@@ -155,7 +155,7 @@ def scaled_dot_product_attention(context: ReceptiveFieldRuleContext) -> _RuleRes
             return per_operand
     base_axes = (-2, -1)
     axes_by_parent: dict[str, tuple[int, ...]] = {"default": base_axes}
-    input_shapes = context.parent_shapes
+    input_shapes = context._parent_shapes
     if len(input_shapes) >= 3 and input_shapes[0] is not None:
         query_shape = tuple(int(e) for e in input_shapes[0])
         gqa = context.arg("enable_gqa", False) is True

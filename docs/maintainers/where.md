@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1565 modules, 672797 lines, 0 modules without a docstring.
+83 packages, 1565 modules, 672813 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4149 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 31 | 14045 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 31 | 14061 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7651 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -1896,12 +1896,12 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14045 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14061 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 453 |
-| `_causal` | Structural causal-mask detection for attention receptive-field rules. | 174 |
+| `_causal` | Structural causal-mask detection for attention receptive-field rules. | 175 |
 | `_display` | Bounded choices for receptive-field endpoint refusals. | 34 |
 | `_engine` | Whole-graph geometric receptive-field solver. | 1579 |
 | `_engine_causal` | Engine support for per-parent rule results and causal sequence windows. | 255 |
@@ -1923,7 +1923,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14045
 | `_query_causal` | Per-unit index-set mapping for causal attention windows. | 179 |
 | `_query_maps` | Index-set maps for the geometry-specific window families. | 232 |
 | `_reshape_blocks` | Block decomposition of general reshapes for the receptive-field engines. | 233 |
-| `_rules` | Extensible receptive-field operation-rule registry. | 537 |
+| `_rules` | Extensible receptive-field operation-rule registry. | 552 |
 | `_set_query` | Index-set seeded geometric queries: one walk for a whole block of units. | 221 |
 | `_table` | Tabular summaries of trace-wide receptive-field solutions. | 380 |
 | `_trace_tables` | Trace receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 65 |

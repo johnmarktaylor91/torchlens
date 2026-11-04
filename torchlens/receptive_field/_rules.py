@@ -127,7 +127,7 @@ class ReceptiveFieldRuleContext:
         self.op = op
 
     @property
-    def parent_shapes(self) -> tuple[Any, ...]:
+    def _parent_shapes(self) -> tuple[Any, ...]:
         """Return input shapes in ``parents`` order, ``None`` where unavailable."""
 
         return operand_shapes(self.op)
@@ -136,7 +136,7 @@ class ReceptiveFieldRuleContext:
     def in_shapes(self) -> tuple[tuple[int, ...], ...]:
         """Return captured input shapes, omitting unavailable inputs."""
 
-        return tuple(tuple(shape) for shape in self.parent_shapes if shape is not None)
+        return tuple(tuple(shape) for shape in self._parent_shapes if shape is not None)
 
     @property
     def out_shape(self) -> tuple[int, ...]:
