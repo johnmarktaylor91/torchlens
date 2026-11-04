@@ -125,7 +125,7 @@ torchlens/_distributed.py::_walk_attribute_values	67
 torchlens/_ecosystem/plugins.py::activate	104
 torchlens/_ecosystem/plugins.py::activate_configured	65
 torchlens/_extraction/dtype_policy.py::cast_for_store	80
-torchlens/_extraction/engine.py	1847
+torchlens/_extraction/engine.py	1848
 torchlens/_extraction/engine.py::_apply_ragged_gate	65
 torchlens/_extraction/engine.py::_capture_outputs	73
 torchlens/_extraction/engine.py::_consume_skipped_with_replay	63
@@ -709,7 +709,7 @@ torchlens/attribution/_text.py	1089
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	284
-torchlens/attribution/graph/_build.py	831
+torchlens/attribution/graph/_build.py	828
 torchlens/attribution/graph/_build.py::build_graph	92
 torchlens/attribution/graph/_neuronpedia_upload.py::upload_to_neuronpedia	77
 torchlens/attribution/graph/_result.py::AttributionGraph.to_neuronpedia	82
@@ -1229,7 +1229,7 @@ torchlens/neuro/_compare.py::compare	115
 torchlens/neuro/_datasets.py::_build_dataset	67
 torchlens/neuro/_datasets.py::datasets	86
 torchlens/neuro/_datasets.py::single_dataset	94
-torchlens/neuro/_handoff.py	845
+torchlens/neuro/_handoff.py	846
 torchlens/neuro/_handoff.py::enumerate_extraction_sites	97
 torchlens/neuro/_handoff.py::enumerate_trace_sites	86
 torchlens/neuro/_handoff.py::resolve_stimulus_ids	76

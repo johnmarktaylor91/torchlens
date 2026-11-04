@@ -594,13 +594,6 @@ def _extract_with_facets(
     return trace, outputs, views
 
 
-def _view_for(trace: Trace, key: str) -> _Any:
-    """The record ``extract`` reports for ``key``: a module address names its output Op."""
-
-    view = trace[key]
-    return trace.ops[key] if type(view).__name__ in {"Module", "ModuleCall"} else view
-
-
 def _extract_layers_with_trace(
     model: _nn.Module,
     x: _Any,
@@ -633,8 +626,8 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
+    from ._data_classes._lookup_kinds import _record_view
     from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
-    from ._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -649,7 +642,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = _view_for(trace, canonical_module_site_key(trace, pattern) or pattern)
+            views[label] = _record_view(trace, pattern)  # the plain door canonicalizes the name
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -659,7 +652,7 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = _view_for(trace, match)
+            views[match] = _record_view(trace, match)
     return trace, outputs, views
 
 

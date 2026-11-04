@@ -193,6 +193,21 @@ def output_op(trace: Any, key: str) -> Any:
     return ops[0] if ops else None
 
 
+def _record_view(trace: Any, key: str) -> Any:
+    """``trace[key]``, except that a Module or ModuleCall gives its output Op.
+
+    The Op comes from ``trace.ops`` under the record's own address or call
+    label, so every spelling the plain door accepts (alias, flattened name)
+    reaches it and a module called several times keeps the ops door's refusal.
+    """
+
+    view = trace[key]
+    kind = type(view).__name__
+    if kind == "Module":
+        return trace.ops[view.address]
+    return trace.ops[view.label] if kind == "ModuleCall" else view
+
+
 def layer_for_key(trace: Any, key: str) -> Any:
     """The Layer a module, module-call or buffer key names, else ``None``.
 
