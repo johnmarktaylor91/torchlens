@@ -113,7 +113,7 @@ def cleanup(self: "Trace") -> None:
         _clear_entry_attributes(tensor_log_entry)
     # Then delete all Trace attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
-        if hasattr(self, attr):
+        if attr in self.__dict__ or hasattr(self, attr):  # stored first: a getter may refuse
             delattr(self, attr)
     # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
     # These hold back-references (e.g. _module_logs -> Module -> _source_trace)
