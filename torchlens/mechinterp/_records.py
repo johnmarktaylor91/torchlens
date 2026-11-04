@@ -36,7 +36,7 @@ __all__ = [
 StackGrading = Literal["complete", "closed_constant", "closed_unresolved"]
 
 #: Row-kind vocabulary for spine writers and constants. ``expert`` is carried
-#: from day one for future MoE per-expert rows (mikit plumbing ledger).
+#: by structurally recognized MoE per-expert writers.
 RowKind = Literal[
     "embedding",
     "attention",

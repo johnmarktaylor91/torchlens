@@ -46,7 +46,7 @@ def _ancestors(ops: dict[str, Op], label: str) -> set[str]:
     return seen
 
 
-def _last_axis(op: Op, position: int, default: int, rank: int | None = None) -> bool:
+def _last_axis(op: Op, position: int, default: int | None, rank: int | None = None) -> bool:
     """Require a statically recorded expert-axis reduction/selection."""
     template = op.args_template
     if template is None:
@@ -70,12 +70,12 @@ def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
         input_rank = max(
             (len(ops[label].shape) for label in indices.parents if label in ops), default=0
         )
-        if indices.func_name != "argmax" or not _last_axis(indices, 1, -1, input_rank):
+        if indices.func_name != "argmax" or not _last_axis(indices, 1, None, input_rank):
             continue
         for values in ops.values():
             if (
                 values.func_name == "gather"
-                and _last_axis(values, 1, -1)
+                and _last_axis(values, 1, None)
                 and indices.layer_label in _ancestors(ops, values.layer_label)
             ):
                 pairs.append((values, indices))
@@ -86,10 +86,14 @@ def _weight_output(ops: dict[str, Op], values: Op) -> str | None:
     """Recognize softmax-before-topk or softmax of selected logits."""
     for label in values.parents:
         parent = ops.get(label)
-        if parent is not None and parent.func_name == "softmax" and _last_axis(parent, 1, -1):
+        if parent is not None and parent.func_name == "softmax" and _last_axis(parent, 1, None):
             return values.layer_label
     for op in ops.values():
-        if op.func_name == "softmax" and _last_axis(op, 1, -1) and values.layer_label in op.parents:
+        if (
+            op.func_name == "softmax"
+            and _last_axis(op, 1, None)
+            and values.layer_label in op.parents
+        ):
             return op.layer_label
     return None
 

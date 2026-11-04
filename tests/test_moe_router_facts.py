@@ -159,13 +159,15 @@ def test_fused_experts_keep_table_without_single_expert_identity() -> None:
     assert fused and all(op.expert is None for op in fused)
 
 
-def test_argmax_with_saved_probability_gather() -> None:
+@pytest.mark.parametrize("keepdim", [False, True])
+def test_argmax_with_saved_probability_gather(keepdim: bool) -> None:
     """Top-one routing takes probabilities from the saved gather output."""
 
     class TopOne(_ToyMoE):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             probabilities = self.chooser(x).softmax(-1)
-            indices = probabilities.argmax(dim=-1, keepdim=True)
+            selected = probabilities.argmax(dim=-1, keepdim=keepdim)
+            indices = selected if keepdim else selected.unsqueeze(-1)
             weights = probabilities.gather(-1, indices)
             result = torch.zeros_like(x)
             for number, expert in enumerate(self.bank):
@@ -178,6 +180,28 @@ def test_argmax_with_saved_probability_gather() -> None:
     (row,) = trace.routing_table
     assert row["expert_indices"] == [[0], [1], [2], [3]]
     assert row["tokens_per_expert"] == [1, 1, 1, 1]
+
+
+def test_selected_logits_then_softmax() -> None:
+    """Routing can normalize the selected logits instead of the whole bank."""
+
+    class SelectedLogits(_ToyMoE):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            logits, indices = self.chooser(x).topk(2, dim=-1)
+            weights = logits.softmax(-1)
+            result = torch.zeros_like(x)
+            for number, expert in enumerate(self.bank):
+                token, slot = torch.where(indices == number)
+                result.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+            return result
+
+    model = SelectedLogits()
+    x = _input()
+    logits, indices = model.chooser(x).topk(2, dim=-1)
+    trace = tl.trace(model, x)
+    (row,) = trace.routing_table
+    assert row["expert_indices"] == indices.tolist()
+    torch.testing.assert_close(torch.tensor(row["gate_weights"]), logits.softmax(-1))
 
 
 def test_fused_parameter_bank_and_existing_unit_selection() -> None:
