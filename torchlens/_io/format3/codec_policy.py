@@ -19,8 +19,11 @@ from collections.abc import Mapping
 from functools import cache
 from typing import Any
 
+from ..._data_classes._backend_capability_guards import (
+    backend_materializes_payloads,
+    registered_backend_named,
+)
 from ..._data_classes.field_policy import StorageKind
-from ...backends.registry import registered_backend_specs
 from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
@@ -112,7 +115,7 @@ def known_backend(name: str) -> bool:
 
     if name in contract.BACKENDS:
         return True
-    return any(spec.name == name for spec in registered_backend_specs())
+    return registered_backend_named(name)
 
 
 def backend_materializes(backend: str) -> bool:
@@ -120,10 +123,7 @@ def backend_materializes(backend: str) -> bool:
 
     if backend == contract.DEFAULT_BACKEND:
         return True
-    return any(
-        spec.name == backend and spec.capabilities.payload_materialization
-        for spec in registered_backend_specs()
-    )
+    return backend_materializes_payloads(backend)
 
 
 _BACKEND_HINT_FIELDS = (
