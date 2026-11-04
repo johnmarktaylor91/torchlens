@@ -40,6 +40,7 @@ from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
+from ..._errors import TorchLensWarning
 from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -3809,8 +3810,6 @@ def _warn_buried_autograd_sites(buried_sites: list[str]) -> None:
 
     if not buried_sites:
         return
-    from ..._errors import TorchLensWarning
-
     warnings.warn(
         "uninstall of TorchLens autograd wrappers left "
         f"{len(buried_sites)} slot(s) holding a third-party patch layered over "
@@ -3954,39 +3953,37 @@ def install_autograd_wrappers() -> None:
     _AUTOGRAD_WRAPPERS_INSTALLED = True
 
 
-def uninstall_autograd_wrappers() -> None:
+def uninstall_autograd_wrappers(buried_sites: list[str] | None = None) -> None:
     """Restore original global autograd entry points when installed.
 
-    Returns
-    -------
-    None
-        PyTorch autograd functions are restored in place.
+    ``buried_sites`` collects the slots left holding a foreign patch so the
+    caller reports them once its whole teardown is complete (a raised warning
+    must not abort it); without a collector this function warns itself.
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
     from ._function_boundary import uninstall_function_apply_wrapper
 
-    buried_sites: list[str] = []
-    _uninstall_saved_tensors_hooks_scope(buried_sites)
+    collected = buried_sites if buried_sites is not None else []
+    _uninstall_saved_tensors_hooks_scope(collected)
     uninstall_function_apply_wrapper()
-    if not _AUTOGRAD_WRAPPERS_INSTALLED:
-        _warn_buried_autograd_sites(buried_sites)
-        return
-    for attr_name, installed, original in (
-        ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
-        ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
-    ):
-        buried = _restore_slot_identity_checked(
-            torch.autograd,
-            attr_name,
-            installed,
-            original,
-            f"torch.autograd.{attr_name}",
-        )
-        if buried is not None:
-            buried_sites.append(buried)
-    _AUTOGRAD_WRAPPERS_INSTALLED = False
-    _warn_buried_autograd_sites(buried_sites)
+    if _AUTOGRAD_WRAPPERS_INSTALLED:
+        for attr_name, installed, original in (
+            ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
+            ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
+        ):
+            buried = _restore_slot_identity_checked(
+                torch.autograd,
+                attr_name,
+                installed,
+                original,
+                f"torch.autograd.{attr_name}",
+            )
+            if buried is not None:
+                collected.append(buried)
+        _AUTOGRAD_WRAPPERS_INSTALLED = False
+    if buried_sites is None:
+        _warn_buried_autograd_sites(collected)
 
 
 def _finalize_grad_streaming(trace: Any) -> None:

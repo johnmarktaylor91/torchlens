@@ -2,8 +2,8 @@
 
 What this demonstrates
 ----------------------
-Capture a tiny recurrent loop that emits several steps, then attach a
-post-hoc intervention and rerun the model. Real language-model generation uses
+Capture a tiny recurrent loop that emits several steps, then apply a
+post-hoc intervention with ``do`` on the rerun engine. Real language-model generation uses
 the same intervention idea, but this example avoids external dependencies.
 
 How to run

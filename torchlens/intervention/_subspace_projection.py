@@ -133,7 +133,7 @@ _REFUSALS: dict[str, tuple[str, str]] = {
     "set_direction_mean": (
         _NESTED_WHY,
         "set the component to the population mean with "
-        "fork.do(tl.subspace(site, basis, origin=...), tl.mean_ablate(population, dim=None))",
+        "fork.do(tl.subspace(site, basis, origin=...), tl.mean_ablate(population, dim='members'))",
     ),
     **dict.fromkeys(
         sorted(_NESTED_PROJECTIONS - {"set_direction_mean"}),

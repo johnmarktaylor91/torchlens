@@ -1179,12 +1179,12 @@ forward. Analysis-level saves of halted captures remain allowed; the refusal sur
 `RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
 `user_intervention_unsupported` is also the RUN-time ceiling diagnostic (stage
-`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
-fast=True)` on a live trace that applies its staged hooks or value replacements returns an
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...)`,
+fast or not, on a live trace that applies its staged hooks or value replacements returns an
 edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
 `unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
-nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
-would not apply (`run_staged_spec_unapplied`).
+nothing staged keeps its verdict; only `run(inputs=)` on a loaded artifact (sparse or analysis
+provider) refuses staged edits it cannot apply (`run_staged_spec_unapplied`).
 
 `user_intervention_unsupported` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one

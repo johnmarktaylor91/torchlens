@@ -96,6 +96,7 @@ from ..intervention.types import (
     Unsupported,
 )
 from . import ArtifactError
+from ._save_gates import intervention_replay_diagnostics
 
 
 @dataclass(slots=True)
@@ -363,32 +364,16 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     ops = list(trace._layer_list)
 
-    # Deephunt F1: a user intervention REPLACED at least one op's value during this
-    # capture, so the archived provenance (activations, downstream taken path) reflects
-    # the intervened computation while the descriptor's callable registry can only
-    # replay the ORIGINAL functions. A runnable replay would silently recompute the
-    # un-intervened function -- a different computation than the artifact's provenance
-    # -- so the producer refuses with a named diagnostic instead of shipping a
-    # permanently-unverifiable artifact whose cause is unfindable from the report.
-    # Zero-fire selectors leave every op unreplaced and stay runnable.
-    intervention_replaced_labels = tuple(
-        str(op.label) for op in ops if bool(getattr(op, "is_edited", False))
-    )
-    if intervention_replaced_labels:
-        diagnostics.append(
-            _diagnostic(
-                RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE,
-                "This capture carries "
-                f"{len(intervention_replaced_labels)} user-intervention-replaced op(s); "
-                "the replacement value has no traceable function, so a sparse runnable "
-                "replay would recompute the UN-intervened computation -- a different "
-                "function than the captured provenance. Runnable save is refused; save "
-                "the intervention spec separately and re-apply it at capture time, or "
-                "use an analysis-level save for the intervened artifact.",
-                affected_ops=intervention_replaced_labels,
-                detection_stage="producer_user_intervention",
-            )
+    # Deephunt F1: a value a user intervention REPLACED has no traceable function, and a
+    # value patched from another run (tl.patch_from) belongs to the donor run's inputs, so
+    # a sparse replay would recompute a different computation than the captured
+    # provenance; the producer refuses with a named diagnostic. Zero-fire selectors
+    # leave every op unreplaced and stay runnable.
+    diagnostics.extend(
+        intervention_replay_diagnostics(
+            ops, diagnostic=_diagnostic, code=RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE
         )
+    )
 
     op_by_alias = _op_alias_index(trace, ops)
     slot_drafts, slot_for_op = _build_op_slot_drafts(trace, ops, diagnostics)

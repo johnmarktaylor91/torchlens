@@ -9,9 +9,9 @@ from typing import Any
 
 import graphviz
 
-from ._render_common import _EDGE_LABEL_FONT_SIZE
+from ._pass_marks import stack_labels
 from ._render_utils import html_escape
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import edge_annotation_pt
 
 __all__ = [
     "_ARG_LABEL_MIDPOINT_FANIN",
@@ -28,8 +28,8 @@ __all__ = [
 # the same one-cell-table idiom as the head/tail builders measured the gpt2
 # depth-1 audit entry 11 -> 0 violations at +0.0% width (vizmech D9).
 _MULTIPLICITY_LABEL_PAD = 2
-# Sourced from the one typography record (vizmech D29).
-_MULTIPLICITY_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
+# Sized from the active edge typography (vizmech D29): the draw's edge font
+# setting when one is given, else the theme's annotation size.
 
 
 def _html_multiplicity_edge_label(text: str) -> str:
@@ -38,7 +38,7 @@ def _html_multiplicity_edge_label(text: str) -> str:
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" '
         f'CELLPADDING="{_MULTIPLICITY_LABEL_PAD}">'
-        f'<TR><TD><FONT POINT-SIZE="{_MULTIPLICITY_LABEL_FONT_SIZE}">'
+        f'<TR><TD><FONT POINT-SIZE="{edge_annotation_pt()}">'
         f"{html_escape(text)}</FONT></TD></TR></TABLE>>"
     )
 
@@ -126,11 +126,17 @@ def _bump_deduped_edge_multiplicity(
 # every multi-input op. Padding 6 / 8 pt / non-bold measured the corpus label
 # audit 433 -> 139 violations with zero regressions and +0.0% width.
 _ARG_EDGE_LABEL_PAD = 6
-_ARG_EDGE_LABEL_PREFIX = (
+_ARG_EDGE_LABEL_TABLE = (
     f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{_ARG_EDGE_LABEL_PAD}">'
-    f'<TR><TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">'
 )
 _ARG_EDGE_LABEL_SUFFIX = "</FONT></TD></TR></TABLE>>"
+
+
+def _arg_edge_label_prefix() -> str:
+    """Return the argument-label opening, sized by the active edge typography."""
+
+    return f'{_ARG_EDGE_LABEL_TABLE}<TR><TD><FONT POINT-SIZE="{edge_annotation_pt()}">'
+
 
 #: Visible fan-in at/above which a child op's argument labels relocate from
 #: ``headlabel`` to a midpoint ``label`` (FIXD03-F13, D03-R4). Graphviz
@@ -175,14 +181,15 @@ def _html_argument_edge_label(rows: list[str]) -> str:
     """
 
     text = "<BR/>".join(html_escape(row) for row in rows)
-    return f"{_ARG_EDGE_LABEL_PREFIX}{text}{_ARG_EDGE_LABEL_SUFFIX}"
+    return f"{_arg_edge_label_prefix()}{text}{_ARG_EDGE_LABEL_SUFFIX}"
 
 
 def _argument_edge_label_rows_text(arg_label: str) -> str | None:
     """Return the inner row text of a builder-shaped argument label, else ``None``."""
 
-    if arg_label.startswith(_ARG_EDGE_LABEL_PREFIX) and arg_label.endswith(_ARG_EDGE_LABEL_SUFFIX):
-        return arg_label[len(_ARG_EDGE_LABEL_PREFIX) : -len(_ARG_EDGE_LABEL_SUFFIX)]
+    prefix = _arg_edge_label_prefix()
+    if arg_label.startswith(prefix) and arg_label.endswith(_ARG_EDGE_LABEL_SUFFIX):
+        return arg_label[len(prefix) : -len(_ARG_EDGE_LABEL_SUFFIX)]
     return None
 
 
@@ -202,9 +209,15 @@ def _set_argument_edge_label(
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.
 
+    A head slot already taken (a rolled ``In 2-3`` pass range) moves both labels,
+    stacked, to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
+    layout space for the midpoint, while head labels and xlabels are painted over
+    whatever sits there, and one stack keeps the edge's argument and passes together.
+
     Returns:
-        The channel the label landed on: ``"label"``, ``"headlabel"``, or
-        ``"xlabel"``.
+        The channel the label landed on: ``"label"``, ``"headlabel"``,
+        ``"midpoint"`` (the free midpoint after a taken head slot; not merged with
+        same-pair parallel edges, whose head labels differ), or ``"xlabel"``.
     """
     if prefer_midpoint and "label" not in edge_dict:
         edge_dict["label"] = arg_label
@@ -212,6 +225,9 @@ def _set_argument_edge_label(
     if "headlabel" not in edge_dict:
         edge_dict["headlabel"] = arg_label
         return "headlabel"
+    if "label" not in edge_dict:
+        edge_dict["label"] = stack_labels(arg_label, str(edge_dict.pop("headlabel")))
+        return "midpoint"
     if "xlabel" not in edge_dict:
         edge_dict["xlabel"] = arg_label
         return "xlabel"
@@ -224,7 +240,7 @@ def _set_argument_edge_label(
     new_rows = _argument_edge_label_rows_text(arg_label)
     if existing_rows is not None and new_rows is not None:
         edge_dict["xlabel"] = (
-            f"{_ARG_EDGE_LABEL_PREFIX}{existing_rows}<BR/>{new_rows}{_ARG_EDGE_LABEL_SUFFIX}"
+            f"{_arg_edge_label_prefix()}{existing_rows}<BR/>{new_rows}{_ARG_EDGE_LABEL_SUFFIX}"
         )
         return "xlabel"
     edge_dict["xlabel"] = edge_dict["xlabel"][:-1] + "<br/>" + arg_label[1:]
@@ -311,7 +327,7 @@ def _merge_parallel_arg_midpoint(
     add_rows = [row for row in new_rows.split("<BR/>") if row not in seen_rows]
     if add_rows:
         merged = "<BR/>".join(seen_rows + add_rows)
-        entry["edge_dict"]["label"] = f"{_ARG_EDGE_LABEL_PREFIX}{merged}{_ARG_EDGE_LABEL_SUFFIX}"
+        entry["edge_dict"]["label"] = f"{_arg_edge_label_prefix()}{merged}{_ARG_EDGE_LABEL_SUFFIX}"
         if entry["body_index"] is not None:
             _rewrite_emitted_edge(graphviz_graph, entry["body_index"], entry["edge_dict"])
     return True

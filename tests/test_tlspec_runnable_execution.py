@@ -796,7 +796,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
     with pytest.raises(PoisonedRunError):
         tl.debug.compare(poisoned, poisoned)
     with pytest.raises(PoisonedRunError):
-        poisoned.push_from(poisoned._layer_list[0])
+        poisoned.do(poisoned._layer_list[0], tl.scale(1.0))
     with pytest.raises(PoisonedRunError):
         poisoned.save_intervention(tmp_path / "poisoned-intervention.tlspec")
 

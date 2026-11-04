@@ -26,6 +26,9 @@ from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _EncoderModel(nn.Module):
     """Small model with module-scoped ReLU and intervening backward nodes."""
@@ -307,7 +310,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace._attach_hooks(
+    trace.do(
         tl.grad_output() & tl.grad_fn(name="relu"),
         _helper_spec(
             "count_grad_output",
@@ -315,7 +318,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
+        intervention=_STAGE,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
@@ -354,7 +357,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace._attach_hooks(
+    trace.do(
         tl.grad_fn(name="relu") & tl.in_backward_pass(2),
         _helper_spec(
             "count_second_pass",
@@ -362,7 +365,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
+        intervention=_STAGE,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)

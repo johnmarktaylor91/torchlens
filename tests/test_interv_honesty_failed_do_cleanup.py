@@ -5,8 +5,8 @@ A hook that raises at fire time used to stay in the sticky spec after the
 failed ``do()``, so every LATER push (including unrelated edits) re-fired it.
 ``do()`` is transactional about its own attachments: engine failure detaches
 exactly the hooks that call attached; a refused site mid-selection-plan rolls
-back the earlier sites' attachments. Hooks attached through the explicit
-``attach_hooks`` door stay sticky by contract (the caller holds the handle).
+back the earlier sites' attachments. Hooks staged by an earlier ``do`` (a
+``set_only`` mapping) stay sticky by contract: only ``clear_edits`` removes them.
 """
 
 from __future__ import annotations
@@ -81,14 +81,17 @@ def test_failed_do_keeps_prior_healthy_hooks() -> None:
     assert torch.allclose(fork["relu_1_2"].out, 2.0 * log["relu_1_2"].out)
 
 
-def test_explicit_attach_hooks_stays_sticky_by_contract() -> None:
-    """The manual door keeps its semantics: the caller owns the handle."""
+def test_staged_hook_stays_sticky_when_a_later_do_fails() -> None:
+    """A staged hook outlives a failed later do; the caller clears it by site."""
 
     log = _log()
     fork = log.fork()
-    handle = fork._attach_hooks(tl.func("relu"), _bad_hook, confirm_mutation=True)
+    fork.do(
+        {tl.func("relu"): _bad_hook},
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
     with pytest.raises(RuntimeError, match="boom"):
-        fork.push()
+        fork.do("conv2d_1_1", tl.scale(1.0))
     assert _hook_count(fork) == 1
-    fork.clear_edits(handle=handle, confirm_mutation=True)
+    fork.clear_edits(tl.func("relu"))
     assert _hook_count(fork) == 0

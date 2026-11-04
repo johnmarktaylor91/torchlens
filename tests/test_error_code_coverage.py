@@ -106,7 +106,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "container_selector_requires_registry",
         "container_selector_unresolved",
         "container_value_source_invalid",
-        "dagua_renderer_not_opted_in",
         "decoded_output_not_classification",
         "fsdp_capture_unsupported",
         "gradient_not_saved",
@@ -140,7 +139,9 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "recording_events_not_retained",
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",
-        "recording_multipass_not_convertible",
+        # recording_multipass_not_convertible: row DELETED (shrink-only lock-in);
+        # tests/test_record_to_trace_multipass.py asserts the halted multi-pass
+        # refusal by code.
         # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
         # run_legacy_options_conflict, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins

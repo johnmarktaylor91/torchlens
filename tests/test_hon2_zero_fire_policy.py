@@ -29,6 +29,9 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _POLICIES = ("warn", "error", "disclose")
 
 

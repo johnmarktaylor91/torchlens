@@ -83,7 +83,7 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
 | Lightweight context manager only | No exact equivalent | TorchLens creates a persistent `Trace`; lightweight tracing is deferred to v2.x. |
 | Causal tracing utilities | Build with `Bundle`, helpers, and metrics | Turnkey causal-tracing dashboards are deferred to v2.x. |
 | Save edited trace recipe | `save_intervention(..., level=...)` | TorchLens has first-class recipe persistence. |
-| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, reconstruction_ready=True)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
+| Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
 
 Editing an activation after capture, the TorchLens spelling of baukit's `edit_output`: capture,
 fork, apply an edit at the site, and read the downstream output.
@@ -118,7 +118,7 @@ RESULT = (
 - Intervention during capture: `tl.trace(model, x, intervene=tl.when(site, helper))`.
 - Recipes saved as `.tlspec/` directories (`save_intervention(..., level=...)`).
 - Eager-attention captured ops and, on fused attention, reconstructed read-only facets
-  (`tl.trace(model, x, reconstruction_ready=True)`, `docs/facets.md`).
+  (`tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))`, `docs/facets.md`).
 
 ## What baukit does that TorchLens does not
 

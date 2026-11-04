@@ -73,38 +73,6 @@ DOCS: dict[str, str] = {
             pristine reading; otherwise ``True``.
         """
     ),
-    "push": (
-        """Push the edit downstream through the recorded graph (DAG replay).
-        
-        Parameters
-        ----------
-        replay:
-            Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``,
-            ``differentiable``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
-    "push_from": (
-        """Push downstream from a pre-mutated site.
-        
-        Parameters
-        ----------
-        site:
-            Layer pass or selector resolving to one origin. The origin's
-            current out is preserved and used as the override.
-        replay:
-            Grouped replay options (``ReplayOptions``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
     "run": (
         """Execute this Trace through its live or loaded provider.
         
@@ -116,8 +84,9 @@ DOCS: dict[str, str] = {
             available -- the trace holds it weakly, so this requires the
             caller to have kept a strong reference (see Raises).
         x:
-            Forward input. If ``model`` is omitted, the first positional argument
-            is treated as the new user input.
+            Forward input, in every form ``tl.trace`` takes: a tensor, a positional
+            list or tuple, and for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it. If ``model`` is omitted, the
+            first positional argument is treated as the new user input.
         inputs:
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.

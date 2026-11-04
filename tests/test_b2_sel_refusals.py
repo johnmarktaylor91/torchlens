@@ -24,6 +24,9 @@ import torchlens as tl
 from torchlens import errors
 from torchlens.appliances import _appliances
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _Net(nn.Module):
     def __init__(self) -> None:

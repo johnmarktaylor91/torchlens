@@ -96,3 +96,30 @@ def _iter_item_batches(stimuli: Any, batch_size: int) -> Iterator[Any]:
             batch = []
     if batch:
         yield batch
+
+
+def _snapshot(tensor: torch.Tensor, *, host_copy: bool) -> torch.Tensor:
+    """Detach one stored payload into its contiguous snapshot.
+
+    Disk mode (``host_copy=True``) takes the CPU copy the shard writer
+    consumes; memory mode (``host_copy=False``) keeps the payload on the
+    device the model produced it on, so in-memory results follow the
+    model's device like :func:`torchlens.extract` results do.
+
+    Parameters
+    ----------
+    tensor:
+        The stored payload after pool/postprocess/cast.
+    host_copy:
+        Whether the snapshot moves to the host.
+
+    Returns
+    -------
+    torch.Tensor
+        The detached, contiguous snapshot.
+    """
+
+    detached = tensor.detach()
+    if host_copy:
+        detached = detached.cpu()
+    return detached.contiguous()

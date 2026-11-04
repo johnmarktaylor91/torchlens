@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
@@ -339,11 +340,9 @@ def _run_live_candidate(
     from ..intervention.errors import SelectorCapabilityError
 
     try:
-        import time as _time
-
         member = baseline.fork(name=candidate.candidate_id)
         member._attach_hooks(spec)
-        started = _time.monotonic()
+        started = time.monotonic()
         member.run(model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"

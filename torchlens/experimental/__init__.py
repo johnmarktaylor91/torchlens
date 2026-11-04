@@ -13,7 +13,7 @@ from torch import nn
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
-_LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
+_LAZY_SUBMODULE_EXPORTS = {"node_styles"}
 
 
 def __getattr__(name: str) -> Any:
@@ -356,7 +356,6 @@ __all__ = [
     "Session",
     "attribute_walk",
     "auto_capture",
-    "dagua",
     "freeze_module",
     "node_styles",
     "stop_after",

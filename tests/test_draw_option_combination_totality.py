@@ -110,7 +110,7 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "open_viewer": (HARNESS, "False everywhere (the default): no display side effects"),
     "file_format": (HARNESS, '"dot" everywhere: no graphviz binary cost'),
     # -- default-only ---------------------------------------------------------
-    "renderer": (DEFAULT_ONLY, 'non-default "dagua" needs the optional dagua runtime'),
+    "renderer": (DEFAULT_ONLY, '"graphviz" is the only built-in renderer'),
     "graph": (DEFAULT_ONLY, "backward and combined graphs need a captured backward pass"),
     "bwd": (DEFAULT_ONLY, "backward and combined graphs only"),
     "show_module_paths": (DEFAULT_ONLY, "backward graph only"),

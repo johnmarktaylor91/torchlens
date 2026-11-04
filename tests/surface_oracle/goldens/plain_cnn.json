@@ -1933,6 +1933,9 @@
     "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
     "fx_qualpath": "conv.conv2d",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2306,6 +2309,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2636,6 +2642,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3010,6 +3019,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3856,7 +3868,7 @@
    "_provenance_cleanup_duration": "<measured>",
    "_provenance_distributed_scope": null,
    "_provenance_end_time": "<measured>",
-   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_fingerprint": "87c9b53f53910bae996077c003ca5a653696314985fcadf5767d316c323ca791",
    "_provenance_forward_memory_backend": "<measured>",
    "_provenance_input_annotations": {},
    "_provenance_input_object_id": "<measured>",
@@ -6103,6 +6115,9 @@
     "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
     "fx_qualpath": "conv.conv2d",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -6476,6 +6491,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -6806,6 +6824,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -7180,6 +7201,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -8026,7 +8050,7 @@
    "_provenance_cleanup_duration": "<measured>",
    "_provenance_distributed_scope": null,
    "_provenance_end_time": "<measured>",
-   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_fingerprint": "87c9b53f53910bae996077c003ca5a653696314985fcadf5767d316c323ca791",
    "_provenance_forward_memory_backend": "<measured>",
    "_provenance_input_annotations": {},
    "_provenance_input_object_id": "<measured>",
@@ -10275,6 +10299,9 @@
     "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
     "fx_qualpath": "conv.conv2d",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10648,6 +10675,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10978,6 +11008,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -11352,6 +11385,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -12138,7 +12174,7 @@
    "_provenance_cleanup_duration": "<measured>",
    "_provenance_distributed_scope": null,
    "_provenance_end_time": "<measured>",
-   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_fingerprint": "87c9b53f53910bae996077c003ca5a653696314985fcadf5767d316c323ca791",
    "_provenance_forward_memory_backend": "<measured>",
    "_provenance_input_annotations": {},
    "_provenance_input_object_id": "<measured>",
@@ -14379,6 +14415,9 @@
     "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
     "fx_qualpath": "conv.conv2d",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14752,6 +14791,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15082,6 +15124,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15456,6 +15501,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16302,7 +16350,7 @@
    "_provenance_cleanup_duration": "<measured>",
    "_provenance_distributed_scope": null,
    "_provenance_end_time": "<measured>",
-   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_fingerprint": "87c9b53f53910bae996077c003ca5a653696314985fcadf5767d316c323ca791",
    "_provenance_forward_memory_backend": "<measured>",
    "_provenance_input_annotations": {},
    "_provenance_input_object_id": "<measured>",
@@ -18555,6 +18603,9 @@
     "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
     "fx_qualpath": "conv.conv2d",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18908,6 +18959,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19235,6 +19289,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19576,6 +19633,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -20342,7 +20402,7 @@
    "_provenance_cleanup_duration": "<measured>",
    "_provenance_distributed_scope": null,
    "_provenance_end_time": "<measured>",
-   "_provenance_fingerprint": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
+   "_provenance_fingerprint": "87c9b53f53910bae996077c003ca5a653696314985fcadf5767d316c323ca791",
    "_provenance_forward_memory_backend": "<measured>",
    "_provenance_input_annotations": {},
    "_provenance_input_object_id": "<measured>",

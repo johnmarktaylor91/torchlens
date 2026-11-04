@@ -41,6 +41,9 @@ from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCalla
 from torchlens.intervention.save import load_intervention_spec
 from torchlens.intervention.types import FunctionRegistryKey, InterventionSpec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
     """Write a module whose IMPORT writes ``sentinel`` (the RCE payload)."""

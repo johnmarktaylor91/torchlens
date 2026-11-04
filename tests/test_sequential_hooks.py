@@ -1,4 +1,4 @@
-"""Phase 5a tests for sequential hook composition and handles."""
+"""Phase 5a tests for sequential hook composition and clearing staged hooks."""
 
 from __future__ import annotations
 
@@ -83,8 +83,8 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
     assert torch.equal(rerun_log[rerun_log.output_layers[0]].out, (torch.relu(x) + 1) * 2)
 
 
-def test_hook_handle_remove_and_context_manager_cleanup() -> None:
-    """Hook handles should remove specs explicitly and on context exit."""
+def test_clear_edits_removes_the_staged_hook_specs() -> None:
+    """``clear_edits(site)`` removes the sticky hook specs a staged ``do`` added."""
 
     log = tl.trace(
         ReluModel(),
