@@ -102,14 +102,14 @@ torchlens/_data_classes/module.py	2625
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3440
+torchlens/_data_classes/op.py	3438
 torchlens/_data_classes/op.py::Op.__getattribute__	79
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1080
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3413
+torchlens/_data_classes/trace.py	3407
 torchlens/_data_classes/trace.py::Trace.__init__	360
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
