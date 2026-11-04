@@ -7,7 +7,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 ## Start here
 
 - [See the graph and inspect any operation](../field-guide/see_and_inspect.md): one call draws every operation the forward ran, including ones no module returns; one lookup gives any operation's output, module and arguments.
-- [Visualize notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/5min/visualize.ipynb): render a model graph and learn to read the layer labels.
+- [Visualize notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/visualize.ipynb): render a model graph and learn to read the layer labels.
 - [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models, each one rung up from the last. Notebook 01 is "capture and look", 02 reads one activation like a dict, 03 draws the graph when the summary is too long to read. They run on a laptop CPU in about a minute each, or in the browser on Colab, so they work as lab exercises.
 - [TorchLens in 10 minutes](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/torchlens_in_10_minutes.ipynb): trace, intervene, run a backward pass, see control flow drawn as IF, THEN and ELSE, and compare two traces.
 
@@ -33,8 +33,8 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 ## Hands-on exercises
 
 - [Change and rerun](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/05_change_and_rerun.ipynb): does this layer matter? Zero it and watch the output change.
-- [Intervention notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/5min/intervention.ipynb): zero-ablate one layer and replay the downstream computation, in a few lines.
-- [Pluck your first activation](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/5min/pluck.ipynb): one activation out of a model in three lines.
+- [Intervention notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/intervention.ipynb): zero-ablate one layer and replay the downstream computation, in a few lines.
+- [Pluck your first activation](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/pluck.ipynb): one activation out of a model in three lines.
 - [Compare two runs](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/07_compare_runs.ipynb): the same model on two inputs, diffed operation by operation.
 - [Hugging Face tutorial notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/huggingface_tutorial.ipynb): trace a real pretrained transformer and draw it.
 
