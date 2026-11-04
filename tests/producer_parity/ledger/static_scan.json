@@ -872,6 +872,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_data_classes/_lookup_kinds.py",
+  "has_default": false,
+  "sites": 6,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_data_classes/_lookup_kinds.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/_data_classes/_op_aten.py",
@@ -1100,7 +1116,7 @@
   "field": "modules",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -1108,7 +1124,7 @@
   "field": "params",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -5196,7 +5212,7 @@
   "field": "modules",
   "file": "torchlens/attribution/graph/_build.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {

@@ -4507,3 +4507,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: fc7ac6f3fa7701948e18a22f56a5687c2e9c9624 (dirty)
 recorded: 2026-11-03T23:34:25.035645+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: indexing coherence round 2: internal trace[label] reads moved to trace.ops[label]; train 801bd8dbd merged
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1247d81a6dbb094c5e32ee6713aa6d46c7be5dbc (dirty)
+recorded: 2026-11-04T03:04:19.774206+00:00
