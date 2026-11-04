@@ -82,7 +82,8 @@ def _objective(value: Any, unit: int | tuple[int, ...] | None, sae: Any) -> torc
             # Native channels use N,C,...; SAE latents use the encoder's last axis.
             value = value.select(-1 if sae is not None or value.ndim < 2 else 1, unit)
         elif unit is not None:
-            value = value[(slice(None), *unit)]
+            indices: tuple[slice | int, ...] = (slice(None), *unit)
+            value = value[indices]
     except (IndexError, RuntimeError) as error:
         _invalid(f"unit does not index this site's shape: {error}")
     if value.numel() == 0 or not torch.isfinite(value).all():
