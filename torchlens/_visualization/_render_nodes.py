@@ -658,7 +658,7 @@ def _build_layer_node(
     elif node.is_output:
         raw_output_attrs = _render_raw_output(self._decoded_output)
         if raw_output_attrs is None:
-            raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
+            raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_name(node, vis_mode)
