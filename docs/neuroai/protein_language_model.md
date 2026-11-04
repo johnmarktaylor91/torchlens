@@ -96,7 +96,8 @@ RESULT = (tuple(contacts.shape), torch.allclose(contacts, reference, atol=1e-6))
 
 The top panel is the per-residue score, with the four positions where the model prefers a
 different amino acid marked in red. The bottom panel is the contact map from the captured
-attention.
+attention. Pairs fewer than six residues apart are masked, as is usual for contact maps,
+since neighbours in the chain are always close.
 
 ```python
 # recipe-test: tool=esm expected=True
@@ -104,41 +105,55 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+n = len(UBIQUITIN)
 fig, (top, bottom) = plt.subplots(
-    2, 1, figsize=(7, 8.6), gridspec_kw={"height_ratios": [1, 3.4]}, layout="constrained"
+    2, 1, figsize=(7, 8.9), gridspec_kw={"height_ratios": [1, 3.4]}, layout="constrained"
 )
-positions = torch.arange(1, len(UBIQUITIN) + 1)
+fig.suptitle("ESM-2 (8M) on human ubiquitin: both panels read from one TorchLens trace",
+             fontsize=12)
 colors = ["#B0B0B0" if hit else "#c0392b" for hit in recovered.tolist()]
-top.bar(positions, native_logp.detach(), color=colors, width=0.85)
-top.set_xlim(0.5, len(UBIQUITIN) + 0.5)
+top.bar(torch.arange(1, n + 1), native_logp.detach(), color=colors, width=0.85)
+top.set_xlim(0.5, n + 0.5)
 top.set_xlabel("residue")
 top.set_ylabel("log p(native)")
 top.text(0.01, 0.06, "red: another amino acid ranked first", transform=top.transAxes,
          ha="left", color="#c0392b", fontsize=9)
-top.set_title("Per-residue score from the captured output site", loc="left", fontsize=11)
+top.set_title("Log-probability of the native amino acid (output logits)", loc="left",
+              fontsize=11)
 for side in ("top", "right"):
     top.spines[side].set_visible(False)
 
-image = bottom.imshow(
-    contacts, cmap="Greys", vmin=0, vmax=1,
-    extent=(0.5, len(UBIQUITIN) + 0.5, len(UBIQUITIN) + 0.5, 0.5),
-)
+index = torch.arange(n)
+shown = contacts.clone()
+shown[(index[:, None] - index[None, :]).abs() < 6] = float("nan")
+greys = plt.get_cmap("Greys").copy()
+greys.set_bad("#EFE3C8")
+image = bottom.imshow(shown, cmap=greys, vmin=0, vmax=1,
+                      extent=(0.5, n + 0.5, n + 0.5, 0.5))
+for text, cell, where in (
+    (r"$\beta$1-$\beta$2 hairpin", (13, 4), (30, 9)),
+    ("I44-V70", (70, 44), (56, 30)),
+):
+    bottom.annotate(text, xy=cell, xytext=where, fontsize=9, color="#333333",
+                    arrowprops={"arrowstyle": "-", "color": "#333333", "lw": 0.8})
 bottom.set_xlabel("residue")
 bottom.set_ylabel("residue")
-bottom.set_title("Contact probability from the captured attention maps", loc="left", fontsize=11)
+bottom.set_title("Contacts from the six attention maps (beige: pairs under 6 apart, masked)",
+                 loc="left", fontsize=11)
 fig.colorbar(image, ax=bottom, shrink=0.8, label="contact probability")
 fig.savefig("esm2_ubiquitin.png", dpi=150, facecolor="white")
 plt.close(fig)
 RESULT = Path("esm2_ubiquitin.png").stat().st_size > 0
 ```
 
-![Per-residue native log-probability for ubiquitin (four mispredicted residues in red) above
-the predicted contact map](../images/esm2/esm2_ubiquitin.png)
+![ESM-2 on ubiquitin: per-residue native log-probability (four mispredicted residues in red)
+above the predicted contact map with the beta1-beta2 hairpin and the I44-V70 contact
+labelled](../images/esm2/esm2_ubiquitin.png)
 
-The strongest contacts away from the diagonal pair residues 2 to 6 with 12 to 16, the hairpin
-formed by ubiquitin's first two beta strands, and residue 44 with residue 70, its third and
-fifth strands. The block around residues 21 to 33 is short-range contacts inside its alpha
-helix. The model learned these from sequences alone; it never saw a structure.
+The strongest contacts pair residues 2 to 6 with 12 to 16, the hairpin formed by ubiquitin's
+first two beta strands, and isoleucine 44 with valine 70, two residues of the hydrophobic patch
+on ubiquitin's surface that binding partners recognise. The model learned these from sequences
+alone; it never saw a structure.
 
 ## 6. Edit and read again
 
