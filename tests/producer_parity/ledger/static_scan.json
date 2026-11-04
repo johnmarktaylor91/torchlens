@@ -1592,14 +1592,6 @@
   "via_getattr": true
  },
  {
-  "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/_io/_save_gates.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/_numpy_payload_codec.py",
@@ -1608,11 +1600,27 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/_io/_replay_diagnostics.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/_save_gates.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_io/_save_subject.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -1645,14 +1653,6 @@
   "file": "torchlens/_io/_tlspec_identity.py",
   "has_default": false,
   "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_io/_save_subject.py",
-  "has_default": false,
-  "sites": 3,
   "via_getattr": false
  },
  {
