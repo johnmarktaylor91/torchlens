@@ -303,50 +303,42 @@ def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
     raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
 
 
-def _infer_vector_axis(
+def _resolve_vector_axis(
     direction: torch.Tensor,
     out: torch.Tensor,
     *,
-    dim: int | None,
-) -> int | None:
-    """Resolve the axis a 1-D direction lies along when ``dim`` is omitted.
+    infer: bool,
+) -> tuple[int | None, str]:
+    """Infer the out axis of a 1-D direction, or explain why it cannot be.
 
     Parameters
     ----------
     direction:
-        Direction tensor.
+        1-D direction tensor.
     out:
-        Activation tensor.
-    dim:
-        Caller-supplied axis; returned unchanged when given.
+        Activation tensor with two or more axes.
+    infer:
+        Whether the caller infers an omitted ``dim`` (``tl.steer``).
 
     Returns
     -------
-    int | None
-        ``dim`` when given or when no inference applies (the direction is not a
-        vector, or ``out`` has at most one axis); otherwise the only axis of
-        ``out`` whose size equals the direction's length.
-
-    Raises
-    ------
-    AmbiguousAxisError
-        When two or more axes of ``out`` have the direction's length, or none has.
+    tuple[int | None, str]
+        The only axis of ``out`` whose size equals the direction's length and an
+        empty message; or ``None`` and the ``AmbiguousAxisError`` message, which
+        names the matching dims (two or more, or none) when ``infer`` is set.
     """
 
-    if dim is not None or direction.ndim != 1 or out.ndim <= 1:
-        return dim
+    if not infer:
+        return None, "vector directions require explicit dim to avoid axis ambiguity"
     length = int(direction.shape[0])
     shape = tuple(out.shape)
     matches = [axis for axis, size in enumerate(shape) if size == length]
     if len(matches) == 1:
-        return matches[0]
-    if matches:
-        found = f"matches dims {matches} of out shape {shape}"
-    else:
-        found = f"matches no dim of out shape {shape}"
-    raise AmbiguousAxisError(
-        f"cannot infer the axis for a direction of length {length}: it {found}; "
-        "pass dim= to name the axis the direction lies along"
+        return matches[0], ""
+    found = f"matches dims {matches} of" if matches else "matches no dim of"
+    return None, (
+        f"cannot infer the axis for a direction of length {length}: it {found} "
+        f"out shape {shape}; pass dim= to name the axis the direction lies along"
     )
 
 
@@ -368,9 +360,9 @@ def _align_direction(
     dim:
         Axis receiving a vector direction.
     infer:
-        Infer an omitted ``dim`` for a vector direction through
-        ``_infer_vector_axis`` (``tl.steer``); otherwise an omitted ``dim``
-        refuses as before.
+        Infer an omitted ``dim`` for a vector direction when exactly one out
+        axis has its length (``tl.steer``); otherwise an omitted ``dim``
+        refuses.
 
     Returns
     -------
@@ -378,15 +370,13 @@ def _align_direction(
         Broadcast-compatible direction.
     """
 
-    if infer:
-        dim = _infer_vector_axis(direction, out, dim=dim)
     if tuple(direction.shape) == tuple(out.shape):
         return direction
     if direction.ndim == 1 and out.ndim > 1:
         if dim is None:
-            raise AmbiguousAxisError(
-                "vector directions require explicit dim to avoid axis ambiguity"
-            )
+            dim, refusal = _resolve_vector_axis(direction, out, infer=infer)
+            if dim is None:
+                raise AmbiguousAxisError(refusal)
         normalized_axis = dim % out.ndim
         if direction.shape[0] != out.shape[normalized_axis]:
             raise HookValueError(
