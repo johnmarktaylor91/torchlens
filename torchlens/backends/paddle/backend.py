@@ -487,13 +487,16 @@ class PaddleBackend:
         trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.
+        # The root class qualname is the saved root module record's class_qualname,
+        # a declared str column, so it is stamped for both root kinds.
         if module_tree is not None:
-            root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
-        else:
+            trace._source_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
             trace._provenance_root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
+                f"module_call:{trace._source_class_qualname}.__call__"
             )
+        else:
+            trace._source_class_qualname = getattr(model, "__qualname__", trace._source_class_name)
+            trace._provenance_root_entry_point = f"function_call:{trace._source_class_qualname}"
         trace.capture_events = CaptureEvents()
         trace._paddle_capture_depth = 0
         trace._paddle_module_stack = []

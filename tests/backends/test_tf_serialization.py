@@ -14,7 +14,11 @@ from conftest import tensorflow_backend_modules
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 del keras
 
+import torch  # noqa: E402
+
 import torchlens as tl  # noqa: E402
+from torchlens._io.format3.codec_policy import backend_materializes  # noqa: E402
+from torchlens.backends.registry import get_backend_spec  # noqa: E402
 from torchlens.errors import (  # noqa: E402
     BackendPayloadUnsupportedError,
     BackendRuntimeCompatibilityError,
@@ -190,11 +194,14 @@ def test_tf_tlspec_manifest_runtime_fingerprint_and_version_mismatch(
 
     assert manifest["schema_version"] == 2
     assert manifest["backend"] == "tf"
-    assert manifest["torch_version"] is None
+    # Saved format 3 stamps the writer's torch (a writer identity field) on every artifact,
+    # keeps only the include flags in payload_policy, and reads the payload policy and its
+    # materialization from the backend spec.
+    assert manifest["torch_version"] == torch.__version__
     assert manifest["backend_runtime"]["name"] == "tf"
     assert manifest["backend_runtime"]["version"] == tf.__version__
-    assert manifest["payload_policy"]["policy"] == "array_payloads"
-    assert manifest["payload_policy"]["materialization_supported"] is True
+    assert get_backend_spec("tf").serialization_policy.payload_policy == "array_payloads"
+    assert backend_materializes(manifest["backend"]) is True
     assert manifest["body_format"] == "safetensors"
 
     manifest["backend_runtime"]["version"] = "0.0.not-the-installed-tensorflow"
