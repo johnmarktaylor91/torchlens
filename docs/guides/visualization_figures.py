@@ -11,13 +11,16 @@ Usage::
     python docs/guides/visualization_figures.py --only rolled unrolled
     python docs/guides/visualization_figures.py --dot-dir /tmp/dot   # also save DOT source
 
-Images land in ``docs/images/visualization/`` as PNG. Rendering needs Graphviz.
+Images land in ``docs/images/visualization/`` as PNG. Rendering needs Graphviz, and the
+``show_cone`` figure needs ``cairosvg`` (in the ``test`` extra) to draw its shading into a
+PNG; without it that figure fails instead of being written unshaded.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -271,6 +274,30 @@ def draw_call(figure: Figure) -> str:
     return f"{target}.draw({args})"
 
 
+#: Warning codes meaning the image lacks something its keywords asked for.
+_DROPPED_FEATURE_CODES = frozenset({"viz_highlighter_not_drawn"})
+
+
+def _refuse_dropped_features(caught: list[warnings.WarningMessage]) -> None:
+    """Raise when a drawing warned that it left out a requested feature.
+
+    Parameters
+    ----------
+    caught:
+        Warnings recorded while drawing.
+
+    Raises
+    ------
+    RuntimeError
+        A warning carried a code in :data:`_DROPPED_FEATURE_CODES`.
+    """
+
+    for item in caught:
+        fields = getattr(item.message, "fields", None)
+        if isinstance(fields, dict) and fields.get("code") in _DROPPED_FEATURE_CODES:
+            raise RuntimeError(str(item.message))
+
+
 def render(figure: Figure, dot_dir: Path | None) -> Path:
     """Trace ``figure``'s model and write its PNG.
 
@@ -300,9 +327,12 @@ def render(figure: Figure, dot_dir: Path | None) -> Path:
             result = target.do(tl.module(address), getattr(tl, edit_name)())
             if isinstance(result, tl.Trace):
                 target = result
-        drawing = target.draw(
-            str(OUTPUT_DIR / figure.name), file_format="png", dpi=DPI, **figure.kwargs
-        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            drawing = target.draw(
+                str(OUTPUT_DIR / figure.name), file_format="png", dpi=DPI, **figure.kwargs
+            )
+        _refuse_dropped_features(caught)
         if dot_dir is not None:
             dot_dir.mkdir(parents=True, exist_ok=True)
             (dot_dir / f"{figure.name}.gv").write_text(drawing.dot, encoding="utf-8")
