@@ -8841,10 +8841,26 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/_causal.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/receptive_field/_causal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/receptive_field/_engine.py",
   "has_default": false,
-  "sites": 17,
+  "sites": 18,
   "via_getattr": false
  },
  {
@@ -8852,7 +8868,7 @@
   "field": "parents",
   "file": "torchlens/receptive_field/_engine.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -8861,6 +8877,14 @@
   "file": "torchlens/receptive_field/_engine.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/receptive_field/_engine_causal.py",
+  "has_default": false,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -8876,7 +8900,7 @@
   "field": "kind",
   "file": "torchlens/receptive_field/_engine_forward.py",
   "has_default": false,
-  "sites": 17,
+  "sites": 18,
   "via_getattr": false
  },
  {
@@ -8889,10 +8913,18 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/_engine_revision.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/receptive_field/_forward_query.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {
@@ -8945,7 +8977,31 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/_gradient_live.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/receptive_field/_gradient_live.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/receptive_field/_influence.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
   "file": "torchlens/receptive_field/_influence.py",
   "has_default": false,
   "sites": 2,
@@ -8980,7 +9036,7 @@
   "field": "kind",
   "file": "torchlens/receptive_field/_query.py",
   "has_default": false,
-  "sites": 10,
+  "sites": 11,
   "via_getattr": false
  },
  {
@@ -8997,6 +9053,14 @@
   "file": "torchlens/receptive_field/_query.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/receptive_field/_query_causal.py",
+  "has_default": false,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -9164,7 +9228,7 @@
   "field": "parents",
   "file": "torchlens/receptive_field/rules/attention.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -9178,9 +9242,25 @@
  {
   "ambiguous": true,
   "field": "parents",
+  "file": "torchlens/receptive_field/rules/linear.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/receptive_field/rules/norms.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/rules/transforms.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
