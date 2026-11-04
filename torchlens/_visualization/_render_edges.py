@@ -1760,10 +1760,10 @@ def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
         ``True`` when the node is an input leaf that already receives a
         container-node source edge in ``show_containers="nodes"`` mode.
     """
-
-    if not isinstance(_unwrap_focus_node(node), Op):
+    op = _unwrap_focus_node(node)
+    if not isinstance(op, Op):
         return False
-    trace = getattr(node, "source_trace", None)
+    trace = getattr(op, "source_trace", None)
     if trace is None:
         return False
     for record in getattr(trace, "_containers", {}).values():
@@ -1773,7 +1773,7 @@ def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
             if snapshot.role != Role.MODEL_INPUT:
                 continue
             for occurrence in snapshot.leaf_occurrences:
-                if _occurrence_matches_op(trace, occurrence.producer_op_label, node):
+                if _occurrence_matches_op(trace, occurrence.producer_op_label, op):
                     return True
     return False
 

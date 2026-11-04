@@ -618,9 +618,10 @@ def _container_leaf_groups(
 
     groups: dict[str, list[GraphNode]] = defaultdict(list)
     for node in entries_to_plot.values():
-        if vis_mode != "unrolled" or not isinstance(_unwrap_focus_node(node), Op):
+        op = _unwrap_focus_node(node)
+        if vis_mode != "unrolled" or not isinstance(op, Op):
             continue
-        group_id = _container_group_id(node)
+        group_id = _container_group_id(op)
         if group_id is not None:
             groups[group_id].append(node)
     return groups
