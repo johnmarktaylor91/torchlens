@@ -1907,13 +1907,13 @@ class Op(OpAtenMixin, _SelectionOperand):
     def bytes_read(self) -> Bytes | None:
         """Theoretical ideal read-once traffic for this operation."""
 
-        return _op_cost.theoretical_bytes(self, 0)
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[0])
 
     @property
     def bytes_written(self) -> Bytes | None:
         """Theoretical ideal write-once traffic for this operation."""
 
-        return _op_cost.theoretical_bytes(self, 1)
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[1])
 
     @property
     def arithmetic_intensity(self) -> float | None:

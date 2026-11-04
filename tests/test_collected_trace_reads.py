@@ -3,11 +3,11 @@
 A Trace with no outside references is freed by refcount, so the Trace behind a
 chained temporary (``tl.trace(model, x).output_ops[0].out``) can be gone before
 the read runs. Whether a view keeps its Trace alive is the lifetime contract's
-business; these tests pin what holds either way: when the Trace is alive the
-read returns its value, and when it was collected the read refuses with
-``RecordBindingError`` code ``trace_reference_collected`` and a remedy. A
-silent ``None`` (read as "not saved" or "no such relation") or an untyped
-attribute miss is a wrong answer.
+business; these tests pin what holds either way: a read answers a value, and a
+read that needs a Trace that was collected refuses with ``RecordBindingError``
+code ``trace_reference_collected`` and a remedy. A silent ``None`` (read as
+"not saved" or "no such relation") or an untyped attribute miss is a wrong
+answer.
 """
 
 from __future__ import annotations
@@ -56,15 +56,21 @@ def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
 
 
 def _assert_value_or_typed_refusal(view: Any, name: str, trace_ref: weakref.ref) -> None:
-    """Read ``view.<name>``: the value while the Trace lives, else the typed refusal."""
+    """Read ``view.<name>``: a value (never None), or the typed refusal once the Trace is gone.
 
-    if trace_ref() is None:
-        with pytest.raises(RecordBindingError) as exc_info:
-            getattr(view, name)
-        assert exc_info.value.fields["code"] == "trace_reference_collected", name
-        assert exc_info.value.fields["remedy"], name
+    A read the view can still answer from its own record (``bytes_written`` from
+    the Op's shape and dtype) may answer after the Trace is gone; one that needs
+    the Trace refuses. Neither may answer ``None``.
+    """
+
+    try:
+        value = getattr(view, name)
+    except RecordBindingError as exc:
+        assert trace_ref() is None, f"{name} refused while its Trace is alive"
+        assert exc.fields["code"] == "trace_reference_collected", name
+        assert exc.fields["remedy"], name
     else:
-        assert getattr(view, name) is not None, f"{name} read None on a live Trace"
+        assert value is not None, f"{name} read None"
 
 
 def _held_view(kind: str) -> tuple[Any, weakref.ref]:

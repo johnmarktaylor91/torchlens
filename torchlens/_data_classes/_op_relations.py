@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from ._op_out_read import _refuse_read_without_trace
-
 if TYPE_CHECKING:
     from .module import Module
     from .op import Op
@@ -87,10 +85,9 @@ def atomic_module(op: Op) -> Module | None:
     address = op.atomic_module_address
     if address is None:
         return None
-    trace = op._source_trace
-    if trace is None:
-        _refuse_read_without_trace(op)
+    if op._slot("_source_trace_ref") is None:
         return None
+    trace = op.trace  # a collected Trace refuses typed (trace_reference_collected)
     try:
         return cast("Module", trace.modules[address])
     except (KeyError, TypeError):
