@@ -183,8 +183,8 @@ def test_a_reader_without_the_mask_keywords_refuses_typed(
     session = _session(tl.zero_ablate())
     path = tmp_path / "masked.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    masked_spec = importlib.import_module("torchlens.intervention._masked_spec")
-    monkeypatch.setattr(masked_spec, "split_stored_mask", lambda name, kwargs: (kwargs, None))
+    masked_spec = importlib.import_module("torchlens.intervention.masked_edit")
+    monkeypatch.setattr(masked_spec, "split_stored_mask", lambda name, kwargs: (kwargs, None, None))
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     assert _coded(excinfo.value).fields["code"] == "intervention_helper_arguments_invalid"

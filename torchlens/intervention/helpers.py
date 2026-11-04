@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -38,6 +37,7 @@ from .errors import (
     SpliceModuleDtypeError,
 )
 from .hooks import HookContext
+from .masked_edit import checked_arguments, with_stored_mask
 from .population import Population
 from .types import Edit
 
@@ -997,7 +997,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
 
     Shared by ``.tlspec`` loads and ``Edit`` pickle restore: the hook factory is a
     local closure (never serialized), so both re-invoke the constructor on the stable
-    ``(name, args, kwargs)``; a stored element mask is re-applied (``_masked_spec``).
+    ``(name, args, kwargs)``; a stored element mask is checked and re-applied.
 
     Parameters
     ----------
@@ -1020,9 +1020,6 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
         ``intervention_helper_arguments_invalid`` (foreign keywords, or a bad stored mask).
     """
 
-    from ._masked_spec import split_stored_mask, with_stored_mask
-
-    kwargs, stored_mask = split_stored_mask(name, kwargs)
     constructors, renamed_to = _builtin_constructor_lookup(name)
     if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
@@ -1045,20 +1042,14 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             renamed_to=renamed_to,
         )
     constructor = constructors[name]
-    try:
-        inspect.signature(constructor).bind(*args, **kwargs)
-    except TypeError as exc:
+    kwargs, stored_mask, problem = checked_arguments(name, constructor, args, kwargs)
+    if problem is not None:
         raise InvalidArgumentError(
-            f"The saved intervention calls builtin helper {name!r} with arguments its "
-            f"constructor does not take ({exc}); the spec was saved by a torchlens whose "
-            "helper keywords differ",
+            problem.message,
             code="intervention_helper_arguments_invalid",
-            remedy=(
-                "load the spec with the torchlens version that saved it, or rebuild the "
-                "edit with the current constructor and save it again"
-            ),
-            argument="kwargs",
-        ) from exc
+            remedy=problem.remedy,
+            argument=problem.argument,
+        ) from problem.cause
     return with_stored_mask(constructor(*args, **kwargs), stored_mask)
 
 
