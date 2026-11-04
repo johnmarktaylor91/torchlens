@@ -2164,7 +2164,7 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     4
     """
 
-    cpu_rng_state = torch.get_rng_state()
+    cpu_rng_state = torch.default_generator.get_state()
     # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
     # gate allocated a CUDA context per visible device on CPU-only runs.
     from .._utils.rng import _snapshot_cuda_rng_states

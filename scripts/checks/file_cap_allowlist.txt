@@ -67,7 +67,7 @@ torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	109
 torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
-torchlens/_constants.py	1442
+torchlens/_constants.py	1437
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
@@ -87,7 +87,7 @@ torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	71
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_state_io.py::trace_getstate	103
 torchlens/_data_classes/_trace_state_io.py::trace_setstate	271
-torchlens/_data_classes/cleanup.py	1081
+torchlens/_data_classes/cleanup.py	1077
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1176
@@ -337,7 +337,7 @@ torchlens/_postprocess/ast_branches.py	2214
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
 torchlens/_postprocess/ast_branches.py::get_file_index	91
-torchlens/_postprocess/control_flow.py	1372
+torchlens/_postprocess/control_flow.py	1278
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
 torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
@@ -455,13 +455,12 @@ torchlens/_semantic/logit_lens.py	1393
 torchlens/_semantic/logit_lens.py::_reduce_projection_row	91
 torchlens/_semantic/logit_lens.py::logit_lens	72
 torchlens/_semantic/logit_lens.py::logit_lens_predictions	121
-torchlens/_semantic/patching.py	1103
+torchlens/_semantic/patching.py	1094
 torchlens/_semantic/patching.py::_require_effective_patch	62
 torchlens/_semantic/patching.py::_run_patch	74
 torchlens/_semantic/patching.py::activation_patch_residual_stream	128
 torchlens/_semantic/patching.py::attribution_patch_attention_heads	67
 torchlens/_semantic/recipes/__init__.py::activate_entrypoint_recipes	63
-torchlens/_semantic/recipes/attention.py	801
 torchlens/_semantic/recipes/attention.py::_eager_result_checked	68
 torchlens/_semantic/recipes/lm_head.py::language_model_head	62
 torchlens/_semantic/reconstruction.py::_result_or_missing	65
@@ -471,7 +470,7 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1393
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1906
+torchlens/_trace_core/op_store.py	1843
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
@@ -530,7 +529,7 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1862
+torchlens/_utils/tensor_utils.py	1860
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	72
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	179
@@ -1439,7 +1438,7 @@ torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	73
 torchlens/validation/backward.py::validate_backward_pass	283
 torchlens/validation/consolidated.py::_intervention_report	69
-torchlens/validation/consolidated.py::validate	247
+torchlens/validation/consolidated.py::validate	233
 torchlens/validation/core.py	3767
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80

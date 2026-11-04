@@ -4188,7 +4188,7 @@
   "field": "modules",
   "file": "torchlens/_semantic/recipes/_helpers.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -10797,6 +10797,14 @@
   "file": "torchlens/validation/_layer_grad_report.py",
   "has_default": true,
   "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_membership_perturbation.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {

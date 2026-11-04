@@ -25,6 +25,7 @@ Out-of-model, disclosed: deferred gradient streaming re-runs step-18/19-equivale
 code after backward, outside the pipeline.
 """
 
+import gc
 import time
 from typing import TYPE_CHECKING
 
@@ -169,10 +170,26 @@ def postprocess(
         for nested tuple outputs.
     """
 
+    # Automatic cyclic collection is paused for the call and restored to the
+    # exact prior state on every exit (a caller who disabled it keeps it off;
+    # no forced collect afterwards). Postprocess allocates hundreds of
+    # thousands of short-lived containers that reference counting frees, and
+    # each automatic collection the allocations trigger rescans the whole
+    # heap (the model plus the trace being built): on a GPT-2 generate
+    # trace that was about a quarter of postprocess wall time spent finding
+    # almost nothing. Cyclic garbage made here waits for the next automatic
+    # collection after the call. Same pattern as the fork-time cell isolation.
+    gc_was_enabled = gc.isenabled()
+    if gc_was_enabled:
+        gc.disable()
     try:
         _postprocess_body(self, output_tensors, output_tensor_addresses)
     finally:
-        ast_branches.release_parsed_asts()
+        try:
+            ast_branches.release_parsed_asts()
+        finally:
+            if gc_was_enabled:
+                gc.enable()
 
 
 def _postprocess_body(
