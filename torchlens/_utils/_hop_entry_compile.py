@@ -5,8 +5,9 @@
 that lifts closure parameters into operands and gives the eager kernels the
 structure torch tests; the capture's ``force_eager`` stance skips it. This
 module lets that one compile run, and hides helper frames from Dynamo.
-Re-exported by :mod:`torchlens._utils._torch_compat`, the sanctioned
-cross-version boundary.
+A sibling of :mod:`torchlens._utils._torch_compat` on the same cross-version
+boundary (every lookup feature-detected), imported directly so the compat
+module's eager import closure does not grow.
 """
 
 from __future__ import annotations

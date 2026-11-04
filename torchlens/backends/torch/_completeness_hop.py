@@ -22,8 +22,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._torch_compat import (
-    compile_disabled,
     get_higher_order_eager_kernel,
     get_higher_order_operator,
     get_scan_eager_body,

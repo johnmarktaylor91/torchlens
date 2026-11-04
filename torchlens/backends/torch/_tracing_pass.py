@@ -15,14 +15,15 @@ recorded, exactly as when no operand requires grad.
 Capture runs under the ``force_eager`` stance, which would also skip the
 compile torch's operator entry points run (it lifts closure parameters into
 operands and gives ``map`` its stacked output). That compile is let through
-(``_torch_compat.hop_compile_stance_lift_scope``) inside
+(``_hop_entry_compile.hop_compile_stance_lift_scope``) inside
 :func:`hop_internal_compile_scope`; while Dynamo traces it, the wrappers call
 the original unlogged (:func:`inside_hop_internal_compile`), and the compiled
 wrapper's eager run is captured as usual.
 
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
-tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class); an
-absent probe answers "not a tracing pass", which leaves capture unchanged.
+tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class) or
+its sibling ``_hop_entry_compile`` (the operator entry compile); an absent
+probe answers "not a tracing pass", which leaves capture unchanged.
 """
 
 from __future__ import annotations
@@ -33,12 +34,12 @@ from typing import Any
 
 from ... import _state
 from ..._utils import _torch_compat
+from ..._utils._hop_entry_compile import hop_compile_stance_lift_scope
 from ..._utils._torch_compat import (
     dynamo_is_compiling,
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
     get_tracing_tensor_types,
-    hop_compile_stance_lift_scope,
 )
 
 __all__ = (
