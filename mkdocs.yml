@@ -75,6 +75,7 @@ exclude_docs: |
   /_watch_perf_numbers.md
   /acknowledgments.md
   /activation_transform_persistence.md
+  /also_in_torchlens.md
   /internal/agent-reference/architecture.md
   /internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
   /internal/agent-reference/common-patterns.md
@@ -277,6 +278,8 @@ exclude_docs: |
 nav:
   # <generated:nav>
   - index.md
+  - Get started:
+      - faq.md
   - Field guide:
       - field-guide/seeded_subsample.md
       - See and inspect:
