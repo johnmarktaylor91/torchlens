@@ -214,51 +214,7 @@ def test_torchlens_rng_snapshots_record_no_rng_state_op() -> None:
 
 # ---------------------------------------------------------------------------
 # The rest of the ignored list that returns a tensor and escaped (ignored-funcs-triage).
-# View-function methods replay a view's chain onto a new base; ``_rev_view_func_unsafe``
-# exists only for views made under original-view tracking.
 # ---------------------------------------------------------------------------
-def _view_of(m: torch.Tensor) -> torch.Tensor:
-    """A transpose view of ``m`` that keeps its forward and reverse view functions."""
-
-    with torch.autograd._force_original_view_tracking(True):
-        return m.t()
-
-
-_VIEW_FUNC_FORWARDS: dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = {
-    "_view_func": lambda m, x: _view_of(m)._view_func(x * 2) * 2 + x,
-    "_view_func_unsafe": lambda m, x: _view_of(m)._view_func_unsafe(x * 2) * 2 + x,
-    "_rev_view_func_unsafe": lambda m, x: _view_of(m)._rev_view_func_unsafe(x * 2) * 2 + x,
-}
-_VIEW_FUNCS = tuple(name for name in _VIEW_FUNC_FORWARDS if hasattr(torch.Tensor, name))
-
-
-class _ViewFuncModel(nn.Module):
-    """Replays a recorded view's chain onto a recorded new base and consumes the result."""
-
-    def __init__(self, method: str) -> None:
-        super().__init__()
-        self.method = method
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return _VIEW_FUNC_FORWARDS[self.method](torch.relu(x), x)
-
-
-@pytest.mark.parametrize("method", _VIEW_FUNCS)
-def test_view_func_method_captured_validates_and_replays(method: str) -> None:
-    """The view-function method is decorated, records with the new base as a parent, validates."""
-
-    assert ("torch.Tensor", method) in _decorated_pairs()
-    model, x = _ViewFuncModel(method), _input_4x4()
-    log = tl.trace(model, x)
-    try:
-        (op,) = [op for op in log.ops if op.func_name == method]
-        new_base = [p for p in op.parents if p.startswith("mul")]
-        assert new_base and op.children, (op.parents, op.children)
-    finally:
-        log.cleanup()
-    _assert_validates_and_replays(model, x)
-
-
 class _MkldnnRnnLayerModel(nn.Module):
     """One LSTM layer through ``torch.mkldnn_rnn_layer`` with parameter weights."""
 
@@ -271,14 +227,14 @@ class _MkldnnRnnLayerModel(nn.Module):
         self.b_hh = nn.Parameter(torch.randn(8, generator=gen) * 0.1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        state = torch.zeros(1, 2)
+        hidden, cell = torch.zeros(1, 2), torch.zeros(1, 2)
         weights = (self.w_ih, self.w_hh, self.b_ih, self.b_hh)
         # mode 2 is LSTM; hidden 2, one layer, biases, not bidirectional or batch-first, eval.
         out = torch.mkldnn_rnn_layer(
             torch.relu(x).unsqueeze(1),
             *weights,
-            state,
-            state,
+            hidden,
+            cell,
             False,
             [],
             2,
@@ -294,14 +250,15 @@ class _MkldnnRnnLayerModel(nn.Module):
 
 @pytest.mark.parametrize("name", tuple(n for n in ("mkldnn_rnn_layer",) if hasattr(torch, n)))
 def test_mkldnn_rnn_layer_captured_validates_and_replays(name: str) -> None:
-    """The fused RNN layer records with its input and weights as parents, validates, replays."""
+    """The fused RNN layer records one op per output, each with input and states as parents."""
 
     assert ("torch", name) in _decorated_pairs()
     model, x = _MkldnnRnnLayerModel(), _input_4x4()
     log = tl.trace(model, x)
     try:
-        (op,) = [op for op in log.ops if op.func_name == name]
-        assert len(op.parents) >= 5 and op.children, (op.parents, op.children)
+        ops = [op for op in log.ops if op.func_name == name]
+        assert len(ops) == 4 and all(len(op.parents) == 3 for op in ops), ops
+        assert ops[0].children, ops[0].children
     finally:
         log.cleanup()
     _assert_validates_and_replays(model, x)

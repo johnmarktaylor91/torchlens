@@ -1219,7 +1219,6 @@ IGNORED_FUNCS = [
             *(f"_to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
             *("_conj", "_conj_physical", "_neg_view", "_lazy_clone", "_addmm_activation"),
             *("_is_all_true", "_is_any_true"),
-            *("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"),
         )
         if hasattr(torch.Tensor, _private_name)
     ),
