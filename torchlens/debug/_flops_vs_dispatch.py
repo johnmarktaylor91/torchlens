@@ -216,7 +216,7 @@ def flops_vs_dispatch(
     from .. import _user_funcs as user_funcs
     from ..report._compute_truth import compute_aggregation
 
-    rng_state = torch.get_rng_state()
+    rng_state = torch.default_generator.get_state()
     training_flags = {name: module.training for name, module in model.named_modules()}
 
     trace_kwargs.setdefault("save", "all")
