@@ -334,7 +334,8 @@ variance. `show_buffers=` takes `"never"`, `"meaningful"` (the default) or `"alw
 
 Each cylinder is one version of a buffer: `@norm.running_mean:1` is the running mean as the
 batch norm read it (dashed, with the argument position it fed, `arg 3`), and `:2` is the value
-the batch norm wrote back in training mode. The default, `"meaningful"`,
+the batch norm wrote back in training mode. The dashed `add_1_2` is the batch norm adding one
+to its `num_batches_tracked` counter. The default, `"meaningful"`,
 leaves out buffers whose only role is routine bookkeeping like this; `"never"` hides all
 buffers.
 
