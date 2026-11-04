@@ -83,6 +83,7 @@ from ._render_utils import (
     make_module_cluster_attrs,
     relativize_visualizer_image,
 )
+from ._rolled_edges import _SELF_LOOP_LABEL_HGAP  # noqa: F401  (spelling kept for importers)
 from ._typography import edge_annotation_pt
 from .code_panel import (
     CodePanelOption,
@@ -751,7 +752,6 @@ _SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quo
 
 
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
-_SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer on the far side of a pass label
 
 __all__ = [
     "Any",

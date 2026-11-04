@@ -25,9 +25,8 @@ from ._render_module_scope import (
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
+from ._rolled_edges import _html_combined_recurrence_label, _self_loop_port_attrs
 from .collapse_plan import OpSegment
-
-_PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1216,6 +1215,7 @@ def _add_edges_for_node(
             "style": edge_style,
             "arrowsize": ".7",
             "labelfontsize": edge_annotation_pt(),
+            **(_self_loop_port_attrs(rankdir) if edge_is_self_loop else {}),
         }
         if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
             edge_dict["minlen"] = "2"
@@ -1856,28 +1856,6 @@ def _html_edge_label(text: str) -> str:
     return (
         f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{_EDGE_LABEL_PAD}">'
         f'<TR><TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD></TR></TABLE>>'
-    )
-
-
-def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> str:
-    """Return an HTML combined recurrence label that sits against its edge.
-
-    Used for a node's self-loop arc, a merged recurrence back-edge, and merged
-    buffer-edge annotations. Graphviz routes the edge along a midpoint label's
-    left side, so the narrow left spacer keeps the text on its edge and the
-    wide right one keeps it off the next node; ``bottom=None`` gives one line.
-
-    ``top``/``bottom`` are escaped individually (not after joining) so the
-    literal ``<BR/>`` line-break tag inserted between them is preserved.
-    """
-
-    top = html_escape(top)
-    text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
-    return (
-        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f'<TR><TD WIDTH="{_PASS_LABEL_EDGE_GAP}"></TD>'
-        f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD>'
-        f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
     )
 
 

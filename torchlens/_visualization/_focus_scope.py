@@ -295,10 +295,16 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
     enclosing module down to the focused one with its class
     (``GPT2LMHeadModel › transformer › h.5 › mlp (GPT2MLP)``); the frames of
     the enclosing modules are not drawn. Its second line counts the drawn
-    view. Steps are joined by a single right-pointing angle quotation mark
-    (U+203A, in the bundled font) between non-breaking spaces, so the spacing
-    around the bold steps stays even in every SVG viewer. The whole model's parameter
-    line is printed on a whole-model draw only.
+    view (``8 ops (480.0 KB)``), with no label: the count line of a
+    whole-model draw carries none either. Steps are joined by a single
+    right-pointing angle quotation mark (U+203A, in the bundled font) between
+    non-breaking spaces, so a long scope never wraps at a separator. The whole
+    scope line is one bold text run: Graphviz writes every change of weight
+    as a separate SVG ``<text>`` placed by its own font metrics, so a line
+    that mixed bold and plain steps drifted at each boundary in browsers
+    whose font differs (the gap before the last step read wider than the
+    others). The whole model's parameter line is printed on a whole-model
+    draw only.
     """
 
     focus = focus_address(module)
@@ -310,9 +316,9 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
         )
     focus_module = trace.modules[focus]
     steps = [_escape(step) for step in _breadcrumb(focus)]
-    steps[-1] = f"<B>{steps[-1]}</B>&#160;({_escape(focus_module.class_name)})"
-    scope = _SCOPE_SEPARATOR.join([f"<B>{class_name}</B>", *steps])
-    return f"{scope}<br align='left'/>drawn: {_escape(count_line)}<br align='left'/>"
+    steps[-1] = f"{steps[-1]}&#160;({_escape(focus_module.class_name)})"
+    scope = _SCOPE_SEPARATOR.join([class_name, *steps])
+    return f"<B>{scope}</B><br align='left'/>{_escape(count_line)}<br align='left'/>"
 
 
 def _drawn_op_name(match: re.Match[str], text: str) -> str:

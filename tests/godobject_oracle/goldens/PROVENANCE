@@ -797,3 +797,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a17f7b615dcd915c8f7e8a5486d028f069a9468b (dirty)
 recorded: 2026-11-04T04:52:40.622552+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: viz-polish-2 (JMT 3 Nov 2026): module frames draw at one 1.5 pt stroke at every depth; rolled self-loops take ne/se ports and nodesep 0.5; the focus header is one bold scope run over an unlabeled op count: godobject viz identity
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7839ba17b9666439c7ede0b40baa84fc866feeca (dirty)
+recorded: 2026-11-04T05:52:01.604321+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: viz-polish-2 (JMT 3 Nov 2026): module frames draw at one 1.5 pt stroke at every depth; rolled self-loops take ne/se ports and nodesep 0.5; the focus header is one bold scope run over an unlabeled op count: godobject viz identity
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7839ba17b9666439c7ede0b40baa84fc866feeca (dirty)
+recorded: 2026-11-04T05:52:02.660716+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: viz-polish-2 (JMT 3 Nov 2026): module frames draw at one 1.5 pt stroke at every depth; rolled self-loops take ne/se ports and nodesep 0.5; the focus header is one bold scope run over an unlabeled op count: godobject viz identity
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7839ba17b9666439c7ede0b40baa84fc866feeca (dirty)
+recorded: 2026-11-04T05:52:03.679584+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: viz-polish-2 (JMT 3 Nov 2026): module frames draw at one 1.5 pt stroke at every depth; rolled self-loops take ne/se ports and nodesep 0.5; the focus header is one bold scope run over an unlabeled op count: godobject viz identity
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7839ba17b9666439c7ede0b40baa84fc866feeca (dirty)
+recorded: 2026-11-04T05:52:04.767867+00:00

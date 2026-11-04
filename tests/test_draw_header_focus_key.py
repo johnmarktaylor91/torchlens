@@ -6,8 +6,8 @@
 - The header's count names what it counts, and the count and the byte total
   cover the same nodes: the drawn nodes that show a tensor size (a focus's
   input and output stubs show none and are not counted).
-- Parameter counts carry thousands separators; every size uses the binary
-  unit its 1024 divisor implies (KiB, MiB).
+- Parameter counts carry thousands separators; every drawn size divides by
+  1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
   view and which the whole model, shows the key by default (the reading key is
@@ -33,6 +33,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import KEY_TABLE_ID, drawn_module_marks, key_swatches
 from torchlens._visualization._label_format import binary_size, format_memory
+from torchlens._visualization.modes import _compact_size
+from torchlens._visualization.overlays import format_overlay_value
 from torchlens._visualization.themes import (
     OKABE_ITO_SEMANTIC_PALETTE,
     RELEASED_SEMANTIC_PALETTE,
@@ -43,8 +45,8 @@ from torchlens.errors import ArgumentConflictError
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
 
 _FOCUS = "transformer.h.1.mlp"
-_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KiB|MiB|GiB))\)")
-_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KiB|MiB|GiB)<")
+_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KB|MB|GB))\)")
+_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KB|MB|GB)<")
 _NODE = re.compile(r"^\t(\S+) \[label=<")
 _CLUSTER = re.compile(r'subgraph "?cluster_([^"\s{]+)')
 
@@ -172,13 +174,16 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 # -- header count and units (AGT-2536) ----------------------------------------
 
 
-def test_binary_units_match_the_1024_divisor() -> None:
+def test_drawn_sizes_use_the_released_unit_names() -> None:
     assert binary_size(0) == "0 B"
     assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1.0 KiB"
-    assert binary_size(1.5 * 1024**2) == "1.5 MiB"
-    assert binary_size(3 * 1024**3) == "3.0 GiB"
-    assert format_memory(61440) == "60.0 KiB"
+    assert binary_size(1024) == "1.0 KB"
+    assert binary_size(1.5 * 1024**2) == "1.5 MB"
+    assert binary_size(3 * 1024**3) == "3.0 GB"
+    assert binary_size(1024**2 - 1) == "1024.0 KB"
+    assert format_memory(61440) == "60.0 KB"
+    assert _compact_size(61440) == "60.0KB"
+    assert format_overlay_value("bytes", 61440) == "bytes: 60.0 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         binary_size(-1)
@@ -193,7 +198,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
     assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{trace.num_params:,} params" in dot
-    assert not re.search(r"\d (?:KB|MB|GB)\b", dot)
+    assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
 
 @pytest.mark.parametrize("rolled", [False, True])
@@ -217,7 +222,7 @@ def test_focus_count_skips_the_boundary_stubs(
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
-        assert f"drawn: {count} ops ({binary_size(expected)})" in header
+        assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
 
 
 # -- focus scope line and reading key (AGT-2538) ------------------------------
@@ -225,12 +230,15 @@ def test_focus_count_skips_the_boundary_stubs(
 
 def test_focus_header_names_its_scope_and_its_lines(trace: tl.Trace, tmp_path: Path) -> None:
     header = _header(_dot(trace, tmp_path, "scope", module=_FOCUS))
-    # Non-breaking spaces around the U+203A separators: SVG viewers drop a
-    # plain space next to a bold run, which read as "_Toy> transformer".
+    # Non-breaking spaces around the U+203A separators, and ONE bold run for
+    # the whole scope: Graphviz writes each change of weight as its own SVG
+    # <text> placed by its own metrics, so a mixed line drifted at every
+    # bold/plain boundary in browsers whose font differs.
     sep = "&#160;&#8250;&#160;"
-    scope = f"<B>_Toy</B>{sep}transformer{sep}h.1{sep}<B>mlp</B>&#160;(_MLP)"
+    scope = f"<B>_Toy{sep}transformer{sep}h.1{sep}mlp&#160;(_MLP)</B><br align='left'/>"
     assert scope in header
-    assert "drawn: " in header
+    assert header.count("<B>") == 1, header
+    assert "drawn: " not in header  # the count line carries no label, as on a whole-model draw
     assert "whole model" not in header and "params" not in header
 
 
@@ -242,9 +250,7 @@ def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path
     assert "(shape), size:" not in dot
     bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
     assert KEY_TABLE_ID not in bare and "@name: a module" not in bare
-    assert (
-        "&#8250;&#160;<B>mlp</B>&#160;(_MLP)" in bare
-    )  # the scope line is the header, not the key
+    assert "&#8250;&#160;mlp&#160;(_MLP)</B>" in bare  # the scope line is the header, not the key
 
 
 def test_reading_key_is_opt_in_through_show_legend(trace: tl.Trace, tmp_path: Path) -> None:
@@ -272,7 +278,7 @@ def test_focus_draws_no_ancestor_frames(trace: tl.Trace, tmp_path: Path, rolled:
     assert frames, dot
     assert all(frame.startswith(_FOCUS) for frame in frames), frames
     widths = re.findall(r"penwidth=([\d.]+)", dot[dot.index("subgraph") :])
-    assert max(float(width) for width in widths) == 5.0  # the focus frame is the outermost
+    assert {float(width) for width in widths} == {1.5}  # one stroke at every depth
 
 
 def test_whole_model_draw_keeps_every_frame(trace: tl.Trace, tmp_path: Path) -> None:

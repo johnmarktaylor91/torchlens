@@ -64,7 +64,7 @@
  "regions": [
   {
    "name": "cluster_heads_a\\\"b_pass1",
-   "penwidth": "5.0",
+   "penwidth": "1.5",
    "style": "filled,solid"
   }
  ]
