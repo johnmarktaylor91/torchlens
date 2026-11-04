@@ -313,7 +313,8 @@ class ModuleCall:
 
     Examples
     --------
-    >>> call = tl.trace(model, x).modules["0"].calls[0]
+    >>> trace = tl.trace(model, x)
+    >>> call = trace.modules["0"].calls[0]
     >>> type(call).__name__
     'ModuleCall'
     >>> call.forward_pre_hook_effects
@@ -1182,7 +1183,8 @@ class Module:
 
     Examples
     --------
-    >>> module = tl.trace(model, x).modules["0"]
+    >>> trace = tl.trace(model, x)
+    >>> module = trace.modules["0"]
     >>> type(module).__name__, module.address, len(module.calls)
     ('Module', '0', 1)
     """
