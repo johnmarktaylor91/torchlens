@@ -11,9 +11,11 @@ Usage::
     python docs/guides/visualization_figures.py --only rolled unrolled
     python docs/guides/visualization_figures.py --dot-dir /tmp/dot   # also save DOT source
 
-Images land in ``docs/images/visualization/`` as PNG. Rendering needs Graphviz, and the
-``show_cone`` figure needs ``cairosvg`` (in the ``test`` extra) to draw its shading into a
-PNG; without it that figure fails instead of being written unshaded.
+Images land in ``docs/images/visualization/``, as PNG except the ``show_cone`` figure,
+which is SVG: TorchLens draws the downstream shading into SVG itself, while a PNG needs
+the optional ``cairosvg`` package and its native library. Rendering needs Graphviz. A
+drawing that warns it left out something its keywords asked for fails instead of being
+written.
 """
 
 from __future__ import annotations
@@ -170,6 +172,10 @@ def _stack() -> tuple[nn.Module, torch.Tensor]:
     return Stack(), torch.randn(2, 8)
 
 
+def _stack8() -> tuple[nn.Module, torch.Tensor]:
+    return Stack(num_blocks=8), torch.randn(2, 8)
+
+
 def _deep_stack() -> tuple[nn.Module, torch.Tensor]:
     return Stack(num_blocks=40), torch.randn(2, 8)
 
@@ -203,6 +209,8 @@ class Figure:
         drawing (the intervention figure).
     backward:
         Run ``trace.backward`` on the summed output before drawing.
+    file_format:
+        Image format, also the file extension.
     """
 
     name: str
@@ -210,6 +218,13 @@ class Figure:
     kwargs: Mapping[str, Any] = field(default_factory=dict)
     edit: tuple[str, str] | None = None
     backward: bool = False
+    file_format: str = "png"
+
+    @property
+    def filename(self) -> str:
+        """The image's file name under ``docs/images/visualization``."""
+
+        return f"{self.name}.{self.file_format}"
 
 
 FIGURES: tuple[Figure, ...] = (
@@ -222,10 +237,9 @@ FIGURES: tuple[Figure, ...] = (
     Figure("rolled", _loop, {"rolled": True}),
     Figure("depth_1", _cnn, {"depth": 1}),
     Figure("depth_2", _cnn, {"depth": 2}),
-    Figure("collapse_none", _stack),
-    Figure("collapse_quarter", _stack, {"collapse": 0.25}),
-    Figure("collapse_half", _stack, {"collapse": 0.5}),
-    Figure("collapse_max", _stack, {"collapse": "max"}),
+    Figure("collapse_quarter", _stack8, {"collapse": 0.25}),
+    Figure("collapse_half", _stack8, {"collapse": 0.5}),
+    Figure("collapse_max", _stack8, {"collapse": "max"}),
     Figure("collapse_auto", _deep_stack, {"collapse": "auto"}),
     Figure("module_focus", _stack, {"module": "blocks.1"}),
     Figure("profiling", _cnn, {"node_style": "profiling"}),
@@ -237,7 +251,13 @@ FIGURES: tuple[Figure, ...] = (
         edit=("fc1", "zero_ablate"),
     ),
     Figure("edited", _mlp, edit=("fc1", "zero_ablate")),
-    Figure("show_cone", _mlp, {"show_cone": True}, edit=("fc1", "zero_ablate")),
+    Figure(
+        "show_cone",
+        _mlp,
+        {"show_cone": True},
+        edit=("fc1", "zero_ablate"),
+        file_format="svg",
+    ),
     Figure("leftright", _mlp, {"direction": "leftright"}),
     Figure("buffers_always", _cnn, {"show_buffers": "always"}),
     Figure("label_fields", _mlp, {"node_label_fields": ["name", "shape", "dtype"]}),
@@ -330,13 +350,16 @@ def render(figure: Figure, dot_dir: Path | None) -> Path:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             drawing = target.draw(
-                str(OUTPUT_DIR / figure.name), file_format="png", dpi=DPI, **figure.kwargs
+                str(OUTPUT_DIR / figure.name),
+                file_format=figure.file_format,
+                dpi=DPI,
+                **figure.kwargs,
             )
         _refuse_dropped_features(caught)
         if dot_dir is not None:
             dot_dir.mkdir(parents=True, exist_ok=True)
             (dot_dir / f"{figure.name}.gv").write_text(drawing.dot, encoding="utf-8")
-        return OUTPUT_DIR / f"{figure.name}.png"
+        return OUTPUT_DIR / figure.filename
     finally:
         if target is not trace:
             target.cleanup()
