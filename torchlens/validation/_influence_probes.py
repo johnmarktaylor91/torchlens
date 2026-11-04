@@ -112,32 +112,33 @@ def _fresh(item: Any) -> Any:
     return item.clone() if isinstance(item, torch.Tensor) else item
 
 
-def _probe_call(layer: Op, layers_to_perturb: list[str]) -> _ProbeCall | None:
-    """Return the probe call for one perturbed parent in exactly one flat slot."""
+def _flat_slot_of(layer: Op, label: str) -> Slot | None:
+    """Return the one positional or keyword slot ``label`` fills, else None.
 
-    if len(layers_to_perturb) != 1:
-        return None
+    Several slots (a self-comparison ``x == x``) would move together and
+    prove nothing; a nested container member or the ``out=`` destination is
+    not a value operand.
+    """
+
     positions = getattr(layer, "parent_arg_positions", None) or {}
-    label = layers_to_perturb[0]
     slots: list[Any] = [k for k, v in (positions.get("args") or {}).items() if v == label]
     slots += [k for k, v in (positions.get("kwargs") or {}).items() if v == label]
     if len(slots) != 1 or isinstance(slots[0], tuple) or slots[0] == "out":
-        # Several slots (a self-comparison ``x == x``) would move together and
-        # prove nothing; a nested container member or the destination buffer
-        # is not a value operand.
+        return None
+    return slots[0]
+
+
+def _probe_call(layer: Op, layers_to_perturb: list[str]) -> _ProbeCall | None:
+    """Return the probe call for one perturbed parent in exactly one flat slot."""
+
+    slot = _flat_slot_of(layer, layers_to_perturb[0]) if len(layers_to_perturb) == 1 else None
+    if slot is None:
         return None
     args = tuple(getattr(layer, "saved_args", None) or ())
-    kwargs = {
-        name: value
-        for name, value in (getattr(layer, "saved_kwargs", None) or {}).items()
-        if name != "out"
-    }
-    slot = slots[0]
-    if isinstance(slot, int) and not 0 <= slot < len(args):
-        return None
-    if isinstance(slot, str) and slot not in kwargs:
-        return None
-    return _ProbeCall(args, kwargs, slot)
+    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = {name: value for name, value in saved_kwargs.items() if name != "out"}
+    present = 0 <= slot < len(args) if isinstance(slot, int) else slot in kwargs
+    return _ProbeCall(args, kwargs, slot) if present else None
 
 
 def _substitutes_move_output(
@@ -354,13 +355,23 @@ def _beyond_extreme(
         return None
     extreme = (other.max() if upward else other.min()).to(perturbed.dtype)
     if perturbed.is_floating_point():
-        step = torch.clamp(extreme.abs(), min=1.0)
-        beyond = extreme + step if upward else extreme - step
-        if not bool(torch.isfinite(beyond)):
-            return None
-        return (torch.full_like(perturbed, float(beyond)),)
-    info = torch.iinfo(perturbed.dtype)
-    limit = info.max if upward else info.min
-    if int(extreme) == limit:
+        value: float | int | None = _float_beyond(extreme, upward)
+    else:
+        value = _int_beyond(int(extreme), torch.iinfo(perturbed.dtype), upward)
+    return None if value is None else (torch.full_like(perturbed, value),)
+
+
+def _float_beyond(extreme: torch.Tensor, upward: bool) -> float | None:
+    """Return a finite float a full magnitude beyond ``extreme``, else None."""
+
+    step = torch.clamp(extreme.abs(), min=1.0)
+    beyond = extreme + step if upward else extreme - step
+    return float(beyond) if bool(torch.isfinite(beyond)) else None
+
+
+def _int_beyond(extreme: int, info: torch.iinfo, upward: bool) -> int | None:
+    """Return the integer one step beyond ``extreme``, else None at the dtype's limit."""
+
+    if extreme == (info.max if upward else info.min):
         return None
-    return (torch.full_like(perturbed, int(extreme) + (1 if upward else -1)),)
+    return extreme + (1 if upward else -1)

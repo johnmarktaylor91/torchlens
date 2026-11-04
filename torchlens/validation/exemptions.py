@@ -1828,9 +1828,9 @@ def _posthoc_value_proof_decision(
         if decision.exempt:
             return decision
     if layer.func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
-        decision = _binary_extrema_dominance_decision(layer, args, layers_to_perturb)
-        if decision is not None:
-            return decision
+        extrema_decision = _binary_extrema_dominance_decision(layer, args, layers_to_perturb)
+        if extrema_decision is not None:
+            return extrema_decision
     if layer.func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
         decision = _integer_mod_unit_divisor_decision(layer, layers_to_perturb, args)
         if decision.exempt:

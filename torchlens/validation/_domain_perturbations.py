@@ -51,10 +51,9 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    if layer.func_name == "isin":
-        return isin_membership_toggle_values(layer, parent_label, parent_values)
-    if layer.func_name == "isclose":
-        return isclose_tolerance_crossing_values(layer, parent_label, parent_values)
+    set_test_values = _SET_TEST_CROSSING_VALUES.get(layer.func_name)
+    if set_test_values is not None:
+        return set_test_values(layer, parent_label, parent_values)
     if not parent_values.is_floating_point():
         return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
@@ -90,6 +89,13 @@ def _perturb_domain_sensitive_parent_values(
     if layer.func_name in {"relu", "relu_"}:
         return _relu_boundary_crossing_values(parent_values)
     return None
+
+
+_SET_TEST_CROSSING_VALUES = {
+    "isin": isin_membership_toggle_values,
+    "isclose": isclose_tolerance_crossing_values,
+}
+"""Set and tolerance tests whose operands get values that flip each element's result."""
 
 
 def _integer_saturation_crossing_values(

@@ -199,14 +199,12 @@ def integer_extrema_crossing_values(
         shape, or a value would leave the dtype's range.
     """
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
-    slots = [index for index in (0, 1) if positions.get(index) == parent_label]
-    if len(args) < 2 or len(slots) != 1 or not isinstance(args[1 - slots[0]], torch.Tensor):
+    other_operand = _extrema_other_operand(layer, parent_label)
+    if other_operand is None:
         return None
     upward = layer.func_name == "maximum"
     wide = parent_values.detach().long()
-    other = args[1 - slots[0]].detach().to(device=wide.device).long()
+    other = other_operand.detach().to(device=wide.device).long()
     try:
         result = torch.maximum(wide, other) if upward else torch.minimum(wide, other)
     except RuntimeError:
@@ -217,6 +215,18 @@ def integer_extrema_crossing_values(
         return None
     candidate = result + 1 if upward else result - 1
     return _fitting(candidate, candidate != result, parent_values)
+
+
+def _extrema_other_operand(layer: Op, parent_label: str) -> torch.Tensor | None:
+    """Return the other positional tensor operand when the parent fills exactly one of two."""
+
+    args = tuple(getattr(layer, "saved_args", None) or ())
+    positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    slots = [index for index in (0, 1) if positions.get(index) == parent_label]
+    if len(args) < 2 or len(slots) != 1:
+        return None
+    other = args[1 - slots[0]]
+    return other if isinstance(other, torch.Tensor) else None
 
 
 def _fitting(
