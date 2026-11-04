@@ -125,7 +125,7 @@ Selections report sites and values separately and name the selector that
 produced them. For a five-token GPT-2 small capture:
 
 ```text
-Selection ACT: 12 sites, 184k values, from tl.func('tanh')
+Selection ACT: 12 sites, 184.3k values, from tl.func('tanh')
 ```
 
 `print(selection)` lists the first five sites, the number omitted, and the

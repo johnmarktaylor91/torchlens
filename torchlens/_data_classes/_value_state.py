@@ -125,7 +125,13 @@ def edited_token(record: Any) -> str:
 
 
 def value_line(
-    head: str, metadata: str, stats: Any, honesty: str = "", facts: tuple[str, ...] = ()
+    head: str,
+    metadata: str,
+    stats: Any,
+    honesty: str = "",
+    facts: tuple[str, ...] = (),
+    *,
+    compact: bool = True,
 ) -> str:
     """Keep identity and honesty, then degrade moments before extrema at 100 columns."""
 
@@ -136,8 +142,8 @@ def value_line(
         suffix = ", values not computed" if not honesty else ""
         return base + suffix if len(base + suffix) <= REPR_COLS else base
     for summary in (
-        value_words(stats, compact=True),
-        value_words(stats, compact=True, moments=False),
+        value_words(stats, compact=compact),
+        value_words(stats, compact=compact, moments=False),
         "values in print()",
     ):
         if not summary:

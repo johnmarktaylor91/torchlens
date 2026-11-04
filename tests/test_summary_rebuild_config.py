@@ -110,6 +110,9 @@ def test_fma1_renders_from_the_two_term_record(toy_trace) -> None:
     fma1 = toy_trace.summary(flop_convention="fma1")
     assert "(fma=2)" in fma2
     assert "(fma=1)" in fma1
+    assert "1 MAC = 2 FLOPs" in fma2
+    assert "1 MAC = 1 FLOP" in fma1
+    assert "1 MAC = 2 FLOPs" not in fma1
     assert fma1.total_flops_forward == fma2.total_flops_forward  # raw data unchanged
 
 

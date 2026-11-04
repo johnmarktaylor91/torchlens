@@ -259,3 +259,12 @@ def test_module_call_uses_stored_layer_count_and_singular_nouns() -> None:
     assert module_repr_line(module) == "Module fc: Linear, 1 call, 1 layer, 1 param, eval"
     call = SimpleNamespace(address="fc", class_name="Linear", call_index=1, ops=("linear",))
     assert module_call_repr_line(call) == "ModuleCall fc: call 1, Linear, 1 layer"
+
+
+def test_module_call_output_uses_full_card_value_spacing(captured) -> None:
+    """A real module output keeps the shared card's separated value pairs."""
+
+    trace, _model = captured
+    text = str(trace.module_calls["fc:1"])
+    assert "  output    " in text
+    assert "min  " in text and "  max  " in text

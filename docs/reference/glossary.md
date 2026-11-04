@@ -2552,7 +2552,7 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   pass-qualified op labels), `.selector` (the selector that produced it, or
   `None`), `.kind`, `.is_empty`, `.digest`, `.align_to(other)` and
   `.to_pandas()`; its repr gives the kind, compact counts and producing selector,
-  for example `Selection ACT: 12 sites, 184k values, from tl.func('tanh')`.
+  for example `Selection ACT: 12 sites, 184.3k values, from tl.func('tanh')`.
   Its card gives exact counts and the first five sites. Dense-mask counts that
   require reading tensor values say `not computed`. The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
   `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:

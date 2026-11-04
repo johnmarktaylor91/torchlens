@@ -254,7 +254,8 @@ def _identity(trace: Any) -> str:
     # Drop optional metadata in order, keeping every honesty marker visible.
     counts = _count_facts(trace)
     for optional in ([model, *counts], counts, []):
-        details = " ".join(part for part in (", ".join(optional), progress, states) if part)
+        suffix = " ".join((progress, states)).strip()
+        details = " ".join((", ".join(optional), suffix)).strip()
         line = one_line(identity, [details, health])
         if len(line) <= REPR_COLS or not optional:
             return line

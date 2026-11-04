@@ -9,7 +9,7 @@ from .._utils._display_card import inline_names, one_line, render_card
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import format_exact_count
 from .._utils.fail_open import fail_open
-from ._value_state import _count_words, edited_token, payload_facts, resolve_record, value_words
+from ._value_state import _count_words, edited_token, payload_facts, resolve_record, value_line
 
 
 def _output(record: Any, label: str) -> str:
@@ -19,9 +19,8 @@ def _output(record: Any, label: str) -> str:
     if output is None:
         return label
     metadata, stats, honesty = payload_facts(output)
-    required = " ".join(part for part in (metadata, honesty, edited_token(output)) if part)
-    values = value_words(stats) if not honesty else ""
-    return f"{display_key(output)}: {required}" + (f", {values}" if values else "")
+    state = " ".join((honesty, edited_token(output))).strip()
+    return value_line(display_key(output), metadata, stats, state, compact=False)
 
 
 def module_repr_line(module: Any) -> str:
