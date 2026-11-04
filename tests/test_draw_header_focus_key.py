@@ -10,7 +10,8 @@
   unit its 1024 divisor implies (KiB, MiB).
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
-  view and which the whole model, shows the key and a reading key by default,
+  view and which the whole model, shows the key by default (the reading key is
+  opt-in through ``show_legend=True``),
   and draws no frame for the focus's ancestors.
 - Key entries match drawn marks: a frame for an expanded module, a box for a
   module drawn as one op, a 3-D box for a collapsed module, a double outline
@@ -113,6 +114,12 @@ def _header(dot: str) -> str:
     return dot[dot.index("label=<") : dot.index("labeljust")]
 
 
+def _node_names(dot: str) -> list[str]:
+    """Names of the drawn nodes."""
+
+    return [m.group(1) for m in map(_NODE.match, dot.splitlines()) if m is not None]
+
+
 def _sized_nodes(dot: str) -> list[str]:
     """Names of the drawn nodes whose label shows a tensor size."""
 
@@ -196,13 +203,18 @@ def test_focus_count_skips_the_boundary_stubs(
     dot = _dot(trace, tmp_path, "focus", module=_FOCUS, rolled=rolled)
     header = _header(dot)
     count, noun, _size = _COUNT.search(header).groups()  # type: ignore[union-attr]
-    sized = _sized_nodes(dot)
+    stubs = [name for name in _sized_nodes(dot) if name.startswith("__module_focus")]
+    drawn = [name for name in _node_names(dot) if not name.startswith("__module_focus")]
     assert noun == ("layers" if rolled else "ops")
-    assert int(count) == len(sized)
-    assert not any(name.startswith("__module_focus") for name in sized)
+    assert int(count) == len(drawn)
+    # An input stub names the size of the tensor it brings (made outside the
+    # drawn module); an output stub none. Neither is counted. Every drawn op
+    # shows its output size, as on a whole-model draw.
+    assert stubs and all(name.startswith("__module_focus_input") for name in stubs)
+    assert len(_sized_nodes(dot)) - len(stubs) == len(drawn)
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
-        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
+        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
         assert f"drawn: {count} ops ({binary_size(expected)})" in header
 
@@ -212,28 +224,37 @@ def test_focus_count_skips_the_boundary_stubs(
 
 def test_focus_header_names_its_scope_and_its_lines(trace: tl.Trace, tmp_path: Path) -> None:
     header = _header(_dot(trace, tmp_path, "scope", module=_FOCUS))
-    scope = "<B>_Toy</B> &gt; transformer &gt; h.1 &gt; <B>mlp</B> (_MLP)"
+    # Non-breaking spaces around the separators: SVG viewers drop a plain
+    # space next to a bold run, which read as "_Toy> transformer".
+    scope = "<B>_Toy</B>&#160;&gt;&#160;transformer&#160;&gt;&#160;h.1&#160;&gt;&#160;<B>mlp</B>&#160;(_MLP)"
     assert scope in header
     assert "drawn: " in header
-    assert f"whole model: {trace.num_params:,} params" in header
+    assert "whole model" not in header and "params" not in header
 
 
 def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "keyed", module=_FOCUS)
     assert KEY_TABLE_ID in dot
-    assert "@name: the module at that address" in dot
+    assert "module run as one op" in dot  # the dropout and GELU are drawn as boxes
+    assert "@name: a module address" not in dot  # the reading key is opt-in
+    assert "(shape), size:" not in dot
+    bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
+    assert KEY_TABLE_ID not in bare and "@name: a module" not in bare
+    assert "&gt;&#160;<B>mlp</B>&#160;(_MLP)" in bare  # the scope line is the header, not the key
+
+
+def test_reading_key_is_opt_in_through_show_legend(trace: tl.Trace, tmp_path: Path) -> None:
+    dot = _dot(trace, tmp_path, "notes", module=_FOCUS, show_legend=True)
+    assert KEY_TABLE_ID in dot
+    assert "@name: a module address under transformer.h.1" in dot
     assert re.search(r"\w+_\d+_\d+: the \d+(st|nd|rd|th) \w+ call, op \d+ of the whole", dot)
     assert "(shape), size: the op's output tensor and its memory" in dot
     assert "params: the weights the op used (filled as the key shows)" in dot
-    assert "module run as one op" in dot  # the dropout and GELU are drawn as boxes
-    bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
-    assert KEY_TABLE_ID not in bare and "@name: the module" not in bare
-    assert "&gt; <B>mlp</B> (_MLP)" in bare  # the scope line is the header, not the key
 
 
 def test_whole_model_draw_keeps_its_key_opt_in(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "plain")
-    assert KEY_TABLE_ID not in dot and "@name: the module" not in dot
+    assert KEY_TABLE_ID not in dot and "@name: a module" not in dot
     assert "drawn: " not in _header(dot) and "&gt;" not in _header(dot)
 
 

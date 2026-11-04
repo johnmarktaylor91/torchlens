@@ -319,6 +319,10 @@ def test_key_lists_only_the_roles_drawn() -> None:
     # The default skin fills buffers white too; a white oval is still only a plain op.
     assert plain_only == frozenset({"plain op"})
     assert key_swatches(theme, plain_only, has_module=False) == ()
+    # A skin may paint buffers in the plain fill; only a cylinder is a buffer.
+    buffer_fill = THEME_PRESETS["torchlens"].semantic_palette["buffer"]
+    assert "buffer" not in drawn_legend_roles([{"shape": "oval", "fillcolor": buffer_fill}], theme)
+    assert "buffer" in drawn_legend_roles([{"shape": "cylinder", "fillcolor": buffer_fill}], theme)
     assert key_swatches(theme, frozenset(), has_module=False) == ()
 
 

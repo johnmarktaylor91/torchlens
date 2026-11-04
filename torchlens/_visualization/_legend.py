@@ -183,6 +183,8 @@ def drawn_legend_roles(
         # tests and buffers) names no other role on a non-cylinder node.
         plain_fill = fill in fills["plain op"]
         for role, role_fills in fills.items():
+            if role == "buffer":
+                continue  # a buffer is cued by its cylinder, matched above, never by fill alone
             if plain_fill and role != "plain op":
                 continue
             if fill in role_fills and not (role == "plain op" and shape == "box3d"):

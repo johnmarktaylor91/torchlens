@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1456 modules, 651504 lines, 0 modules without a docstring.
+83 packages, 1458 modules, 651675 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 48 | 25609 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4654 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38113 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38114 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10663 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 41 | 16522 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 78 | 44894 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 80 | 45065 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2303 |
@@ -87,7 +87,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 25 | 7334 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
-| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2471 |
+| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7192 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
@@ -291,7 +291,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38113 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38114 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -340,7 +340,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38113 
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 619 |
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
-| `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 594 |
+| `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 595 |
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 540 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 290 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 493 |
@@ -867,7 +867,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (78 modules, 44894 lines)
+Computational graph visualization via Graphviz. (80 modules, 45065 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -875,7 +875,6 @@ Computational graph visualization via Graphviz. (78 modules, 44894 lines)
 | `_arg_suppression` | Checked suppression of redundant constructor-arg label rows (L5 ). | 217 |
 | `_backward_inventory` | Backward-view style inventory and pass-row helpers (vizmech item 17). | 165 |
 | `_backward_rows` | Opt-in label rows for backward nodes (''draw_backward'' keywords). | 164 |
-| `_bool_outcomes` | Per-pass outcomes of terminal boolean (''if''-test) nodes, for drawing. | 182 |
 | `_boundary_bundle` | Boundary bundle (collapse ): one node for a flood of like model outputs. | 294 |
 | `_buffer_visibility` | Buffer-node visibility predicates shared across the render pipeline. | 81 |
 | `_bundle_graph` | The merged bundle graph behind ''Bundle.draw''. | 547 |
@@ -894,30 +893,33 @@ Computational graph visualization via Graphviz. (78 modules, 44894 lines)
 | `_encoding_request` | The ''EncodingChannelRequest'' carrier shared by ''_encoding'' and ''_color_sources''. | 27 |
 | `_encoding_size_layout` | Label-aware node geometry for the ''size_by'' channel (render-IR post-pass). | 193 |
 | `_expansion_manifest` | Expansion manifest for over-ceiling overviews. | 180 |
-| `_focus_scope` | The scope of a ''module='' focused draw: header scope line, reading key, ancestor frames. | 291 |
+| `_focus_relabel` | Relabelling a ''module='' focused draw for its scope. | 220 |
+| `_focus_scope` | The scope of a ''module='' focused draw: header scope line, reading key, ancestor frames. | 372 |
+| `_focus_stubs` | The input and output stubs of a ''module='' focused draw. | 199 |
 | `_fonts` | Bundled open font delivery for Graphviz renders. | 266 |
 | `_frame_penwidth` | Module frame border widths, shared by the Trace and bundle renderers. | 30 |
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 974 |
-| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 697 |
+| `_graph_shell` | The Graphviz graph shell of a forward draw: caption, graph, node and edge defaults. | 87 |
+| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 708 |
 | `_highlight` | ''Trace.draw(highlight=...)'': named highlights routed through the lens doors. | 113 |
-| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 661 |
-| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 336 |
+| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 547 |
+| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 328 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 69 |
 | `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 111 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse , the ''__segment__'' half). | 168 |
-| `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 966 |
-| `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1896 |
+| `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 922 |
+| `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1850 |
 | `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 2035 |
 | `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 591 |
-| `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2064 |
-| `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2260 |
+| `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2023 |
+| `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2356 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2085 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2086 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 514 |
-| `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 675 |
+| `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 676 |
 | `_segment_descriptors` | Segment descriptor construction and label derivation for collapse plans. | 427 |
 | `_stacking` | Rank (stacking) channel: annotation -> same-graphviz-rank groups (L5 ). | 273 |
 | `_surgery_diff` | Site-key-first surgery diff: two captures, joined on identity. | 491 |
@@ -925,7 +927,7 @@ Computational graph visualization via Graphviz. (78 modules, 44894 lines)
 | `_trace_collapse` | Collapse diagnostics as ''f(trace, ...)'' functions. | 104 |
 | `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 350 |
 | `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 91 |
-| `_typography` | The one typography record for graph rendering (vizmech , wave-2 item 14). | 244 |
+| `_typography` | The one typography record for graph rendering (vizmech , wave-2 item 14). | 241 |
 | `auto_collapse` | Smart module-collapse scoring and selection for graph rendering. | 2150 |
 | `bundle_diff` | Bundle diff renderer for paired TorchLens traces. | 815 |
 | `code_panel` | Source-code panel helpers for Graphviz visualizations. | 703 |
@@ -942,13 +944,13 @@ Computational graph visualization via Graphviz. (78 modules, 44894 lines)
 | `node_universe` | Presentation-free visible node universe for forward visualization. | 359 |
 | `overlays` | Per-node overlay helpers for TorchLens graph rendering. | 425 |
 | `render_execution` | Shared Graphviz layout-execution honesty seam (vizmech wave 1). | 351 |
-| `render_ir` | Resolved render-IR adapters for TorchLens graph visualization. | 1285 |
+| `render_ir` | Resolved render-IR adapters for TorchLens graph visualization. | 1281 |
 | `renderer_registry` | The renderer registry: every picture passes one capability gate ( item 16). | 147 |
 | `request` | Resolved visualization requests and output targets. | 188 |
 | `source_graph` | Renderer-neutral source graph extraction for visualization. | 232 |
 | `surgery_visuals` | Surgery visuals: ONE mark family over 's audit entries. | 683 |
 | `theme_registry` | Lens preset registry-as-data and preset resolution (themes memo). | 295 |
-| `themes` | Theme presets (cosmetic SKINS) for TorchLens graph rendering. | 722 |
+| `themes` | Theme presets (cosmetic SKINS) for TorchLens graph rendering. | 639 |
 
 ### `torchlens._visualization._rank_layout_internal`
 
@@ -1941,7 +1943,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 
 ### `torchlens.report._notebook`
 
-Extras-gated notebook namespace with no public objects yet. (10 modules, 2471 lines)
+Extras-gated notebook namespace with no public objects yet. (10 modules, 2470 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1950,7 +1952,7 @@ Extras-gated notebook namespace with no public objects yet. (10 modules, 2471 li
 | `_axis_labels` | Semantic axis labels, token decoding, and the SDPA hint (B3). | 171 |
 | `_card_suppression` | Card-suppression slot: a renderer bridge claims a card render without the card importing it. | 61 |
 | `_grid` | The native static array grid (B3): budgeted, masked, motif-coded. | 336 |
-| `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 265 |
+| `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 264 |
 | `_truncation` | Balanced truncation budgets, ported from treescope (B3). | 290 |
 | `cards` | The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace. | 537 |
 | `cardtree` | CardTree: presentation-only HTML card IR + native safe renderer (B1). | 411 |

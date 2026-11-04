@@ -104,10 +104,10 @@ def _segment_for_node(
     if segment_lookup is None or isinstance(node, BoundaryNode):
         return None
     label = str(getattr(node, "layer_label", ""))
-    if isinstance(node, Op):
+    if isinstance(_unwrap_focus_node(node), Op):
         # Unrolled nodes carry pass-qualified labels; match those against
         # concrete descriptor ops first so per-pass segments of a reused
-        # module absorb exactly their own pass.
+        # module absorb exactly their own pass (the proxy forwards ``label``).
         qualified = str(node.label)
         segment = segment_lookup.qualified_labels.get(qualified)
         if segment is not None:
@@ -1092,7 +1092,6 @@ def _add_edges_for_node(
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
-
         # Add it to the appropriate module cluster (most nested one containing both nodes)
         if edge_has_boundary:
             module = _get_lowest_module_for_two_render_nodes(
@@ -1110,11 +1109,9 @@ def _add_edges_for_node(
             )
         if tail_name == head_name and _self_loop_is_single_op_module(self, parent_node):
             module = -1
-        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
-        # below clobber the ``module`` loop variable (they reassign it to each
-        # node's own module path). Without this, the captured forward edge would
-        # record the wrong cluster key and sibling rank-groups would never resolve
-        # to a common cluster (always falling back to top-level emission).
+        # Keep the edge's LCA cluster key before the has_input_ancestor loops
+        # below reassign ``module``; the captured forward edge needs it so that
+        # sibling rank-groups resolve to a common cluster.
         edge_module_key: str | int = module
         if hook_edge is not None:
             # The site-to-hook edge goes in the cluster the site-to-child edge
@@ -1218,6 +1215,8 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": edge_annotation_pt(),
         }
+        if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
+            edge_dict["minlen"] = "2"
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%
@@ -1751,10 +1750,10 @@ def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
         ``True`` when the node is an input leaf that already receives a
         container-node source edge in ``show_containers="nodes"`` mode.
     """
-
-    if not isinstance(node, Op):
+    op = _unwrap_focus_node(node)
+    if not isinstance(op, Op):
         return False
-    trace = getattr(node, "source_trace", None)
+    trace = getattr(op, "source_trace", None)
     if trace is None:
         return False
     for record in getattr(trace, "_containers", {}).values():
@@ -1764,7 +1763,7 @@ def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
             if snapshot.role != Role.MODEL_INPUT:
                 continue
             for occurrence in snapshot.leaf_occurrences:
-                if _occurrence_matches_op(trace, occurrence.producer_op_label, node):
+                if _occurrence_matches_op(trace, occurrence.producer_op_label, op):
                     return True
     return False
 
@@ -1783,7 +1782,7 @@ def _op_is_model_output_container_leaf(node: GraphNode) -> bool:
         ``True`` when a sink container-node edge should carry its key label.
     """
 
-    if not isinstance(node, Op):
+    if not isinstance(_unwrap_focus_node(node), Op):
         return False
     trace = getattr(node, "source_trace", None)
     if trace is None:
