@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "0ec91978d",
+  "source_commit": "1ec01d364",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
   "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
