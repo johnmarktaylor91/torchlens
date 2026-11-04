@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._utils._display_card import REPR_COLS
+from .._utils._display_numbers import format_count, format_exact_count, plural
 from .._utils._display_text import tensor_text
 from .._utils.fail_open import fail_open
 
@@ -14,6 +15,13 @@ METADATA_ONLY = "(metadata only)"
 LAZY_DISK = "(disk-backed: metadata only until read)"
 PREVIEW_BACKEND = "(preview backend: shape/dtype only)"
 EDITED = "(edited)"
+
+
+def _count_words(count: int, noun: str, *, compact: bool = False) -> str:
+    """Pair a correctly inflected noun with an exact or compact display count."""
+
+    number = format_count(count) if compact else format_exact_count(count)
+    return f"{number} {plural(count, noun).partition(' ')[2]}"
 
 
 def _payload_state(op: Any) -> str:
@@ -76,7 +84,9 @@ def _health(stats: Any) -> str:
 
     from ..stats._record_values import value_health
 
-    return value_health(stats)
+    health = value_health(stats)
+    sampled = "(~sampled)" if stats is not None and stats.policy == "sampled" else ""
+    return " ".join(part for part in (health, sampled) if part)
 
 
 def payload_facts(record: Any) -> tuple[str, Any, str]:
@@ -115,19 +125,24 @@ def edited_token(record: Any) -> str:
 
 
 def value_line(
-    head: str, metadata: str, stats: Any, honesty: str = "", facts: tuple[str, ...] = ()
+    head: str,
+    metadata: str,
+    stats: Any,
+    honesty: str = "",
+    *,
+    compact: bool = True,
 ) -> str:
     """Keep identity and honesty, then degrade moments before extrema at 100 columns."""
 
     health = _health(stats)
     required = " ".join(part for part in (metadata, honesty, health) if part)
-    base = f"{head}: " + ", ".join((required, *facts))
+    base = f"{head}: {required}"
     if stats is None:
         suffix = ", values not computed" if not honesty else ""
         return base + suffix if len(base + suffix) <= REPR_COLS else base
     for summary in (
-        value_words(stats, compact=True),
-        value_words(stats, compact=True, moments=False),
+        value_words(stats, compact=compact),
+        value_words(stats, compact=compact, moments=False),
         "values in print()",
     ):
         if not summary:

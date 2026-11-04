@@ -281,7 +281,7 @@ def test_binding_read_only_surface_and_serialization_refusal(toy) -> None:
     with pytest.raises(BindingRuntimeError) as excinfo:
         pickle.dumps(bound)
     assert excinfo.value.fields["code"] == "binding_serialization_unsupported"
-    assert "read-only" in repr(bound)
+    assert "read-only" in str(bound)
 
 
 def test_binding_reentrant_call_refuses(toy) -> None:

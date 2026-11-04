@@ -148,7 +148,7 @@ def test_unknown_style_refuses_even_when_a_builtin_detector_claims_the_output() 
     with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
         trace.decode_output(style="clasification")
     assert excinfo.value.fields["code"] == "decode_style_unknown"
-    assert "did you mean 'classification'?" in str(excinfo.value)
+    assert "  candidates 'classification'" in str(excinfo.value)
 
 
 def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
