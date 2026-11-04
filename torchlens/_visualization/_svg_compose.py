@@ -12,12 +12,15 @@ import base64
 import html
 import os
 import re
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from .._utils.display import atomic_write_text
 from . import _render_utils
 from ._edit_highlighter import HighlighterStyle, highlight_svg
+from ._loop_edges import reports_route_failure, without_compass_ports
 from ._render_common import (
     _SVG_ATTR_RE,
     _SVG_IMAGE_TAG_RE,
@@ -64,14 +67,25 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     """
 
     root = Path(image_root) if image_root and Path(image_root).is_dir() else None
-    completed = _render_utils.run_bounded_subprocess(
-        ["dot", f"-T{fileformat}"],
-        timeout=_DETACHED_RENDER_TIMEOUT_S,
-        check=True,
-        capture_output=True,
-        input=dot.encode("utf-8"),
-        cwd=str(root) if root else None,
-    )
+
+    def run(source: str) -> subprocess.CompletedProcess[Any]:
+        """Lay out and render ``source`` in the bounded Graphviz child."""
+
+        return _render_utils.run_bounded_subprocess(
+            ["dot", f"-T{fileformat}"],
+            timeout=_DETACHED_RENDER_TIMEOUT_S,
+            check=True,
+            capture_output=True,
+            input=source.encode("utf-8"),
+            cwd=str(root) if root else None,
+        )
+
+    completed = run(dot)
+    if reports_route_failure(completed.stderr) and (portless := without_compass_ports(dot)) != dot:
+        # Graphviz could not route the loop's corner ports (2.43, :mod:`._loop_edges`):
+        # keep the portless layout only when it routes cleanly.
+        retry = run(portless)
+        completed = completed if reports_route_failure(retry.stderr) else retry
     surface_layout_stderr(completed.stderr, engine="dot")
     payload = bytes(completed.stdout)
     if fileformat != "svg":
