@@ -133,6 +133,29 @@ class _WitnessState:
     # backing the origin resolver's pointer fallback. Built once per forward on first use.
     storage_state_ptr_names: dict[int, frozenset[str]] | None = None
 
+    def release(self) -> None:
+        """Drop every per-forward reference once the capture that built this state ends.
+
+        torch's import-time registries (the sharded-op tables, dynamo's tensor attribute
+        map and its object rule cache) keep whichever callable was installed on
+        ``torch.Tensor`` or ``torch`` when they were first imported. A capture that
+        triggers such an import leaves one of this state's wrapper closures in those
+        tables for the life of the process, so the state they reach must hold nothing of
+        the finished capture: the trace dies by refcount with its last user reference,
+        and the wrapper's owner-thread and belt gates fail closed from then on.
+        """
+
+        self.trace = None
+        self.owner_thread_id = -1
+        self.belt_armed = False
+        self.events = []
+        self.plane_p_events = []
+        self.aten_events = None
+        self.aten_storage_alias_groups = {}
+        self.writeback_watch = []
+        self.storage_origins = None
+        self.storage_state_ptr_names = None
+
 
 class _StorageOriginRegistry:
     """Identity registry for capture-scoped storage-handle origins.

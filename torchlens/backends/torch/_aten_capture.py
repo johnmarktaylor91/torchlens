@@ -790,3 +790,4 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
             yield
     finally:
         _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(marker_token)
+        state.release()

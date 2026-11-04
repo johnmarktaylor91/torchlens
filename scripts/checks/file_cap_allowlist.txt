@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1560
+torchlens/_capture/projections.py	1533
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	104
@@ -79,9 +79,9 @@ torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
-torchlens/_data_classes/_trace_fork.py	841
+torchlens/_data_classes/_trace_fork.py	840
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
-torchlens/_data_classes/_trace_fork.py::build_fork	178
+torchlens/_data_classes/_trace_fork.py::build_fork	177
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
 torchlens/_data_classes/_trace_inventory.py::build_sites_table	92
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
@@ -100,7 +100,7 @@ torchlens/_data_classes/grad_fn.py	840
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
 torchlens/_data_classes/interface.py::_str_after_pass	63
 torchlens/_data_classes/layer.py	1800
-torchlens/_data_classes/module.py	2626
+torchlens/_data_classes/module.py	2623
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
@@ -535,8 +535,8 @@ torchlens/_utils/rng/monitor.py	1569
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor.__init__	114
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._classify_c_call	107
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._install_profile_hooks	77
-torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook	106
-torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook.hook	91
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook	84
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook.hook	69
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_frame_rngs	103
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
@@ -842,7 +842,7 @@ torchlens/backends/torch/_completeness_dispatch.py::_sample_writeback_at_consump
 torchlens/backends/torch/_completeness_dispatch.py::_split_consumed_state_items	61
 torchlens/backends/torch/_completeness_dispatch_names.py::_record_escape_source_tensor	163
 torchlens/backends/torch/_completeness_finalize.py::_finalize_census	154
-torchlens/backends/torch/_completeness_finalize.py::capture_completeness_witness	76
+torchlens/backends/torch/_completeness_finalize.py::capture_completeness_witness	71
 torchlens/backends/torch/_completeness_metadata.py::_observe_input_derived_layout_read	69
 torchlens/backends/torch/_completeness_origins.py::_register_dispatch_result_origins	110
 torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_bool_method	104
@@ -869,8 +869,7 @@ torchlens/backends/torch/_ops_containers.py::_prove_runnable_output_lossless_ung
 torchlens/backends/torch/_ops_containers.py::_walk_supported_output_container	81
 torchlens/backends/torch/_ops_containers.py::runnable_output_losslessness	61
 torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
-torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	216
-torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions.visit	77
+torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	172
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
 torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
@@ -885,7 +884,7 @@ torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventi
 torchlens/backends/torch/_ops_interventions.py::_record_predicate_intervention_spec	85
 torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fields	97
 torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	64
-torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	178
+torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	175
 torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
@@ -906,7 +905,7 @@ torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
 torchlens/backends/torch/backward.py	4187
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
-torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
+torchlens/backends/torch/backward.py::_capture_autograd_engine_call	94
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
 torchlens/backends/torch/backward.py::_emit_discovered_grad_fn	85
 torchlens/backends/torch/backward.py::_install_saved_tensors_hooks_scope	62
@@ -959,12 +958,10 @@ torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forwa
 torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
-torchlens/backends/torch/prehook_provenance.py	1003
 torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
-torchlens/backends/torch/prehook_provenance.py::_snapshot_state	82
 torchlens/backends/torch/rescue.py	934
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
@@ -1305,7 +1302,6 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	142
-torchlens/recording/_recorder.py	838
 torchlens/recording/_recorder.py::Recorder.__init__	157
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	148
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93

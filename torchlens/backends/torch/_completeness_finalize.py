@@ -477,6 +477,18 @@ def _resolve_witness_requests(trace: Any) -> tuple[bool, bool, bool, Any]:
     return record_escapes, record_aten, plane_p, event_stream
 
 
+def _finalize_witness(state: _WitnessState, trace: Any, mode: str, *, runnable: bool) -> None:
+    """Run the end-of-forward witness passes in their fixed order."""
+
+    if mode == "shadow":
+        _finalize_census(state)
+    else:
+        _finalize_input_semantics_without_census(trace)
+    if runnable:
+        _finalize_runnable_ledger(state)
+    _finalize_plane_p(state)
+
+
 @contextmanager
 def capture_completeness_witness(trace: Any) -> Iterator[None]:
     """Optionally run an aten census around one active-logging forward.
@@ -535,25 +547,20 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
                     try:
                         yield
                     finally:
-                        if mode == "shadow":
-                            _finalize_census(state)
-                        else:
-                            _finalize_input_semantics_without_census(trace)
-                        _finalize_runnable_ledger(state)
-                        _finalize_plane_p(state)
+                        _finalize_witness(state, trace, mode, runnable=True)
             finally:
                 _hub._ACTIVE_WITNESS_STATE = prior_active_state
                 _state._runnable_ledger_armed = prior_ledger_armed
+                state.release()
             return
-        with mode_context:
-            try:
-                yield
-            finally:
-                if mode == "shadow":
-                    _finalize_census(state)
-                else:
-                    _finalize_input_semantics_without_census(trace)
-                _finalize_plane_p(state)
+        try:
+            with mode_context:
+                try:
+                    yield
+                finally:
+                    _finalize_witness(state, trace, mode, runnable=False)
+        finally:
+            state.release()
 
 
 def _collect_authorized_internal_caller_modules() -> None:

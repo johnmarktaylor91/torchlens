@@ -879,11 +879,8 @@ class ModuleCall:
 
     @property
     def _source_trace(self) -> "Trace | None":
-        """Owning Trace, if still alive."""
+        """Owning Trace, if still alive (held weakly: a call never pins its trace)."""
 
-        strong_ref = self.__dict__.get("_source_trace_strong")
-        if strong_ref is not None:
-            return cast("Trace", strong_ref)
         ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None
@@ -891,9 +888,8 @@ class ModuleCall:
 
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
-        """Store the owning Trace for live module-call lookups."""
+        """Store the owning Trace weak reference for live module-call lookups."""
 
-        self.__dict__["_source_trace_strong"] = value
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
@@ -1098,7 +1094,6 @@ class ModuleCall:
         from ._state_adapter import state_items
 
         state = dict(state_items(self))
-        state.pop("_source_trace_strong", None)
         state.pop("_source_trace_ref", None)
         state.pop("_facets_cache", None)
         state["tlspec_version"] = TLSPEC_VERSION
