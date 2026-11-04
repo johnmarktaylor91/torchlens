@@ -33,7 +33,7 @@ from .._constants import FUNC_CALL_LOCATION_FIELD_ORDER
 from .._io._field_policy import FieldPolicy
 from .._io.format_contract import TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._source_links import vscode_file_line_link
-from .._utils._display_records import frame_repr, frame_str
+from .._utils._display_records import _source_path, frame_repr, frame_str
 from .field_policy import build_record_field_policy_table
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
@@ -238,15 +238,7 @@ def short_source_path(file: str) -> str:
     files under the working directory show relative to it, anything else in full.
     """
 
-    normalized = file.replace("\\", "/")
-    for marker in ("/site-packages/", "/dist-packages/"):
-        if marker in normalized:
-            return normalized.rsplit(marker, 1)[1]
-    try:
-        relative = os.path.relpath(file)
-    except ValueError:
-        return file
-    return file if relative.startswith("..") else relative
+    return _source_path(file)
 
 
 class FuncCallLocation:

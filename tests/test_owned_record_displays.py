@@ -46,7 +46,7 @@ def test_owned_tuples_keep_value_semantics(trace):
         assert rows[:] == tuple(rows)
         assert type(rows[:]) is tuple
         assert len(repr(rows)) <= 100
-        assert len(str(rows).splitlines()) <= 7
+        assert len(str(rows).splitlines()) <= 8
     labels = RecordTuple(("one", "two"), "Labels", "labels")
     assert hash(labels) == hash(tuple(labels))
     restored = pickle.loads(pickle.dumps(labels))
@@ -115,7 +115,7 @@ def test_accessor_renders_only_five_members():
 def test_frame_display_does_not_load_source(monkeypatch):
     frame = FuncCallLocation(file="missing.py", line_number=12, func_name="forward")
     monkeypatch.setattr(frame, "_ensure_source_loaded", lambda: pytest.fail("source read"))
-    assert repr(frame) == "FuncCallLocation: missing.py:12, in forward"
+    assert repr(frame) == "FuncCallLocation: missing.py:12 in forward"
     assert "  function  forward" in str(frame)
     frame.file = "/very/long/" * 20 + "model/forward.py"
     assert len(repr(frame)) <= 100

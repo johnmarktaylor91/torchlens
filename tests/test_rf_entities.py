@@ -245,7 +245,7 @@ def test_multi_output_module_call_reuses_existing_error_and_lists_candidates() -
         _ = call.receptive_field
     assert all(trace.ops[label].short_layer_label in str(caught.value) for label in call.output_ops)
     assert "\n  candidates " in str(caught.value)
-    assert "\n  remedy    " in str(caught.value)
+    assert "\n  remedy     " in str(caught.value)
 
 
 def test_tlspec_round_trip_drops_and_recomputes_view(tmp_path: Path) -> None:

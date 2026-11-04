@@ -32,6 +32,12 @@ def value_text(value: Any, depth: int = 0) -> str:
 def _value_text(value: Any, depth: int) -> str:
     """Format scalars and a bounded prefix of ordinary containers."""
 
+    if type(value).__module__ == "torchlens.intervention.types":
+        kind = type(value).__name__
+        if kind in {"LiteralTensor", "LiteralValue"}:
+            return value_text(value.value, depth)
+        if kind == "ParentRef":
+            return clipped(getattr(value, "_display_key", value.parent_label), 80)
     if isinstance(value, torch.Tensor):
         return tensor_stand_in(value)
     if isinstance(value, (str, bytes, int, float, bool, type(None))):

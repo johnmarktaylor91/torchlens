@@ -17,8 +17,10 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
+from .._utils._display_collections import collection_repr
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
+from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
 
@@ -81,6 +83,24 @@ class OpAccessor(Accessor["Op"]):
         if resolved is not None:
             return resolved
         raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
+
+    def __repr__(self) -> str:
+        """Name the owning layer and the accessor's positional and pass bases."""
+
+        return fail_open(self._display_identity, lambda _error: "OpAccessor: metadata unavailable")
+
+    def _display_identity(self) -> str:
+        """Read only the first and last stored pass; never list members."""
+
+        count = len(self)
+        head = collection_repr("OpAccessor", count, "op" if count == 1 else "ops")
+        if not count:
+            return head + ", 0-based positions, pass-qualified labels"
+        first, last = self._list[0], self._list[-1]
+        passes = str(first.pass_number)
+        if count > 1:
+            passes += f"-{last.pass_number}"
+        return f"{head} of {first.short_layer_label} (passes {passes}), 0-based positions"
 
     def set_pass(self, pass_index: int, value: "Op") -> None:
         """Store ``value`` as pass ``pass_index`` (1-based, the storage key).
@@ -161,6 +181,7 @@ class OpAccessor(Accessor["Op"]):
                     f"Layer {parent_label!r} has {len(parent_matches)} ops.",
                     [display_key(op) for op in parent_matches],
                     "Use a 0-based integer position or a pass-qualified label.",
+                    query=key,
                 )
             )
         for op_log in self._dict.values():

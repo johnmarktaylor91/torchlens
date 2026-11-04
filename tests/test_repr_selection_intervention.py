@@ -37,12 +37,12 @@ from torchlens.options import (
     ],
 )
 def test_default_options_omit_all_fields(kind: type) -> None:
-    """Default reprs stay pasteable; the card still lists every public field."""
+    """Default reprs stay pasteable; the card lists every non-None public field."""
 
     options = kind()
     assert repr(options) == f"{kind.__name__}()"
     for item in fields(options):
-        if item.repr and not item.name.startswith("_"):
+        if item.repr and not item.name.startswith("_") and getattr(options, item.name) is not None:
             assert item.name in str(options)
 
 
@@ -71,7 +71,7 @@ def test_recipe_spelling_rebuilds_exactly_or_discloses_rule_count() -> None:
     assert repr(opaque) == "Recipe: 1 rule"
     merged = recipe & tl.when(tl.func("tanh"), tl.scale(2.0))
     assert repr(merged) == "Recipe: 2 rules"
-    assert str(merged).startswith("Recipe: 2 rules\n  rule 1")
+    assert str(merged).startswith("Recipe: 2 rules\n  rule      1:")
     for factor in (float("inf"), float("nan")):
         assert repr(tl.when(tl.func("relu"), tl.scale(factor))) == "Recipe: 1 rule"
 
@@ -121,7 +121,8 @@ def test_selection_and_site_table_bound_before_rendering() -> None:
     assert repr(selection) == "Selection ACT: 8 sites, 64 values, from tl.func('relu')"
     assert "  values    64" in str(selection)
     assert str(selection).splitlines()[0] == repr(selection)
-    assert "... and 3 more" in str(selection)
+    assert "relu_1, relu_2, relu_3, and 5 more" in str(selection)
+    assert not any(line.startswith("  Site ") for line in str(selection).splitlines())
     assert repr(selection[0]).startswith("Site ACT relu_1:")
     table = _SiteTable(tuple(trace._layer_list))
     assert repr(table) == f"_SiteTable: {len(table)} sites"
@@ -143,7 +144,7 @@ def test_candidate_rows_use_five_stored_display_keys() -> None:
     assert message.splitlines() == [
         "Layer 'missing' not found.",
         "  candidates 'relu_1', '0', '1', '2', '3'; and 4 more",
-        "  remedy    choose a key.",
+        "  remedy     choose a key.",
     ]
     error = tl.errors.InvalidArgumentError(message, code="example", remedy="choose a key.")
     assert str(error) == message
@@ -183,7 +184,7 @@ def test_address_ambiguities_bound_text_and_preserve_candidate_payload(
     assert f"'5.{key}'" not in message and f"'6.{key}'" not in message
     assert "; and 2 more" in message
     remedy = "use a pass-qualified label, full address, or explicit call index"
-    assert f"\n  remedy    {remedy}" in message
+    assert f"\n  remedy     {remedy}" in message
     assert caught.value.fields["code"] == "ambiguous_op_lookup"
     assert caught.value.fields["remedy"] == remedy
     assert caught.value.fields["candidates"] == tuple(f"{index}.{key}" for index in range(7))

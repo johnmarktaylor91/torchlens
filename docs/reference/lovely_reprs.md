@@ -148,7 +148,8 @@ most five rules. Captured arguments and frozen intervention specs also
 show metadata and counts rather than tensor contents or callback dumps.
 
 Options show non-default fields in repr. Printing an options object lists
-all its public fields, including defaults:
+its public fields with non-None values, including defaults. Boolean card values use
+words, rows align to the longest field name, and a closing `more` row points to details:
 
 ```text
 CaptureOptions()
@@ -158,12 +159,12 @@ CaptureOptions(save_grads=True, aten_ops=True)
 Doctor, health and compute report reprs show their type, scope and row or
 finding counts. Summary tables retain their headers and totals, use plain
 numeric percentages, and explain every displayed marker in one legend.
-Lookup errors keep the problem first and offer at most five display keys:
+Lookup errors keep the problem first and offer at most five display keys, closest by edit distance first:
 
 ```text
 Layer 'tanhh_6' not found.
-  candidates 'tanh_1', 'tanh_6', 'tanh_11', 'tanh_2', 'tanh_9'; and 5 more
-  remedy    pass an in-range integer, a layer label, or a module address
+  candidates 'tanh_6', 'tanh_1', 'tanh_2', 'tanh_9', 'tanh_11'; and 5 more
+  remedy     pass an in-range integer, a layer label, or a module address
 ```
 
 ## Credits

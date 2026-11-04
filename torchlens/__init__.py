@@ -386,6 +386,7 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
             f"Layer {name!r} not found.",
             suggestions,
             "pass an in-range integer, a layer label, or a module address.",
+            query=name,
         )
     return f"Layer {name!r} not found."
 

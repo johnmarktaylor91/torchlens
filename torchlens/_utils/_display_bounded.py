@@ -3,9 +3,8 @@
 :class:`RecordTuple` is the tuple TorchLens returns for owned sequences of
 records (ATen rows, event buckets). It is a plain ``tuple`` in every respect
 (iteration, indexing, equality with tuples, hashing, pickling) except its
-repr and str, which print a count and at most five members instead of every
-record. :func:`short_dataclass_repr` is the one family repr for private
-dataclasses: scalar fields only, nested records as ``<Type>``, collections
+repr and str: repr prints a count; str adds at most five members.
+:func:`short_dataclass_repr` is the one family repr for private dataclasses: scalar fields first, nested objects omitted, collections
 as ``<N items>``, cut to one line.
 """
 
@@ -16,14 +15,16 @@ import enum
 from collections.abc import Iterable
 from typing import Any
 
-from ._display_card import LIST_LIMIT, REPR_COLS, bounded_lines, inline_names
+from ._display_card import REPR_COLS, bounded_lines, more_row, one_line
+from ._display_keys import display_key
+from ._display_numbers import plural
 from .fail_open import fail_open
 
 _SCALARS = (bool, int, float, str, bytes, type(None), enum.Enum)
 
 
 class RecordTuple(tuple):
-    """A tuple of records with a bounded repr: ``AtenOps: 2 calls (aten_825, aten_826)``.
+    """A tuple of records with a count-only repr: ``AtenOps: 2 calls``.
 
     ``title`` names the collection and ``noun`` counts its members; both are
     display-only and do not take part in equality or hashing.
@@ -50,38 +51,39 @@ class RecordTuple(tuple):
         return (type(self), (tuple(self), self.title, self.noun, self.singular))
 
     def _head(self) -> str:
-        return f"{self.title}: {len(self)} {self.singular if len(self) == 1 else self.noun}"
+        return f"{self.title}: {plural(len(self), self.singular, self.noun)}"
 
     def __repr__(self) -> str:
-        keys = [_member_key(item) for item in self[:LIST_LIMIT]]
-        head = self._head()
-        if not keys:
-            return head
-        line = f"{head} ({inline_names(keys, limit=2)})" if len(self) <= LIST_LIMIT else head
-        return line if len(line) <= REPR_COLS else head
+        return self._head()
 
     def __str__(self) -> str:
-        lines = [self._head()]
+        lines = [repr(self)]
         lines.extend(bounded_lines(self, _member_line))
+        lines.append(more_row((".count()", ".index()")))
         return "\n".join(lines)
 
 
 def short_dataclass_repr(obj: Any, *, width: int = REPR_COLS) -> str:
     """``ClassName(field=value, ...)`` with scalar fields only, at most ``width`` columns.
 
-    Nested dataclasses print as ``<ClassName>``, sized collections as
-    ``<N items>``, other objects as ``<TypeName>``. Never recurses and never
-    calls a member's repr except for scalars.
+    Sized collections print as ``<N items>``; nested records are omitted.
+    Never recurses and never calls a member's repr except for scalars.
     """
 
     name = type(obj).__name__
     if not dataclasses.is_dataclass(obj):
         return f"<{name}>"
+    if name == "OpRecord":
+        return one_line(f"OpRecord {display_key(obj)}", [f"kind {obj.kind}", f"sequence {obj.seq}"])
     parts: list[str] = []
-    for field in dataclasses.fields(obj):
-        if not field.repr:
+    identity = ("class_name", "label", "op_label", "label_raw", "name", "kind")
+    ordered = sorted(dataclasses.fields(obj), key=lambda field: field.name not in identity)
+    for field in ordered:
+        if not field.repr or field.name.endswith("object_id"):
             continue
         value = _read_field(obj, field.name)
+        if not isinstance(value, (*_SCALARS, tuple, list, set, frozenset, dict)):
+            continue
         parts.append(f"{field.name}={_short_value(value)}")
     text = f"{name}({', '.join(parts)})"
     if len(text) <= width:
@@ -98,21 +100,29 @@ def _short_value(value: Any) -> str:
     if dataclasses.is_dataclass(value):
         return f"<{type(value).__name__}>"
     if isinstance(value, (tuple, list, set, frozenset, dict)):
-        return f"<{len(value)} items>"
+        return f"<{plural(len(value), 'item')}>"
     return f"<{type(value).__name__}>"
 
 
 def _member_key(item: Any) -> str:
     """The identifying key of a member: its ``label`` when it has one."""
 
-    label = fail_open(lambda: getattr(item, "label", None), lambda _error: None)
-    return str(label) if isinstance(label, str) else type(item).__name__
+    return display_key(item)
 
 
 def _member_line(item: Any) -> str:
     """One member's one-line repr, guarded so a bad member cannot break the list."""
 
-    return fail_open(lambda: repr(item), lambda error: f"<{type(item).__name__}: display failed>")
+    def render() -> str:
+        line = repr(item).replace("\n", " ")
+        key = _member_key(item)
+        if key != "?":
+            if type(item).__name__ == "OpRecord":
+                line = f"kind {item.kind}, sequence {item.seq}"
+            line = f"{key}: {line}"
+        return line if len(line) <= REPR_COLS else line[: REPR_COLS - 3] + "..."
+
+    return fail_open(render, lambda error: f"<{type(item).__name__}: display failed>")
 
 
 def _read_field(obj: Any, name: str) -> Any:

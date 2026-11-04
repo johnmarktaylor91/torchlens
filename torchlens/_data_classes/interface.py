@@ -31,8 +31,7 @@ from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
-from .._utils._display_errors import candidate_keys, lookup_message
-from .._utils._display_keys import display_key
+from .._utils._display_errors import ambiguous_substring_message, candidate_keys, lookup_message
 from . import _doors
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -82,6 +81,7 @@ def _raise_ambiguous_lookup_key(self: "Trace", requested_key: str, stored_key: s
             f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops.",
             candidate_keys(matches, self._layer_dict_all_keys),
             "Use an exact op label or a more specific key.",
+            query=requested_key,
         )
     )
 
@@ -282,11 +282,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
             raise AmbiguousOpLookupError(
-                lookup_message(
-                    f"Ambiguous lookup: {ix!r} matches {len(entries_with_substr)} layers.",
-                    [display_key(entry) for entry in entries_with_substr.values()],
-                    "Use a more specific key.",
-                )
+                ambiguous_substring_message(str(ix), list(entries_with_substr.values()))
             )
 
     # Step 7: nothing matched — give a helpful error

@@ -91,7 +91,8 @@ class InterventionValidationReport:
             self.is_consistent,
             self.is_local,
         )
-        return f"InterventionValidationReport: {sum(axes)}/5 axes passed, passed={self.passed}"
+        verdict = "passed" if self.passed else "failed"
+        return f"InterventionValidationReport: {verdict}, {sum(axes)} of 5 axes passed"
 
     def __str__(self) -> str:
         """Show every recorded axis verdict without recomputing a check."""
@@ -99,13 +100,13 @@ class InterventionValidationReport:
         return render_card(
             repr(self),
             [
-                (name.removeprefix("is_"), str(getattr(self, name)))
-                for name in (
-                    "is_invariant",
-                    "is_specific",
-                    "is_complete",
-                    "is_consistent",
-                    "is_local",
+                (label, "passed" if getattr(self, name) else "failed")
+                for label, name in (
+                    ("invariant", "is_invariant"),
+                    ("specific", "is_specific"),
+                    ("complete", "is_complete"),
+                    ("agreement", "is_consistent"),
+                    ("local", "is_local"),
                 )
             ],
             (".details",),

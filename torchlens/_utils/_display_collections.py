@@ -7,7 +7,7 @@ from itertools import islice
 from typing import Any
 
 from ._display_card import LIST_LIMIT, REPR_COLS, bounded_lines, more_row
-from ._display_numbers import format_count
+from ._display_numbers import format_count, plural
 from .fail_open import fail_open
 
 
@@ -32,7 +32,7 @@ def member_repr(value: Any) -> str:
     """One bounded member, without expanding nested containers."""
 
     if isinstance(value, (Mapping, list, tuple, set, frozenset)):
-        return f"<{type(value).__name__}: {len(value)} items>"
+        return f"<{type(value).__name__}: {plural(len(value), 'item')}>"
     line = fail_open(
         lambda: repr(value).replace("\n", " "), lambda _error: f"<{type(value).__name__}>"
     )

@@ -5,9 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._utils._display_card import (
-    LIST_LIMIT,
     bounded_lines,
-    card_row,
+    inline_names,
     more_row,
     one_line,
     render_card,
@@ -110,17 +109,17 @@ def _value_count(count: int) -> str:
 
 @display_guard
 def selection_card(selection: Selection) -> str:
-    """List at most five sites, with an exact remainder and detail exits."""
+    """Summarize three stored site names inline, without repeating Site cards."""
 
     total = _total_selected(selection)
-    lines = [
+    return render_card(
         selection_repr(selection),
-        card_row("sites", format_exact_count(len(selection))),
-        card_row("values", "not computed" if total is None else format_exact_count(total)),
-    ]
-    lines.extend(bounded_lines(selection._entries, site_repr, limit=LIST_LIMIT))
-    lines.append(more_row((".labels", ".selector", ".to_pandas()")))
-    return "\n".join(lines)
+        [
+            ("sites", inline_names([_site_key(site) for site in selection._entries], limit=3)),
+            ("values", "not computed" if total is None else format_exact_count(total)),
+        ],
+        (".labels", ".selector", ".to_pandas()"),
+    )
 
 
 @display_guard

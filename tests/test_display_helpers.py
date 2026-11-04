@@ -116,20 +116,19 @@ def test_record_tuple_is_a_tuple_with_a_bounded_repr() -> None:
         [_Row(f"aten_{i}", i, (), None) for i in range(500)], title="AtenOps", noun="calls"
     )
     assert repr(rows) == "AtenOps: 500 calls"
-    assert str(rows).splitlines()[-1] == "  ... and 495 more"
+    assert str(rows).splitlines()[-2] == "  ... and 495 more"
+    assert str(rows).splitlines()[-1] == "  more      .count()  .index()"
     assert rows == tuple(rows)
     assert isinstance(rows, tuple)
     assert hash(RecordTuple((1, 2))) == hash((1, 2))
     clone = pickle.loads(pickle.dumps(rows))
     assert clone == rows and repr(clone) == repr(rows)
     small = RecordTuple([_Row("aten_825", 1, (), None)], title="AtenOps", noun="calls")
-    assert repr(small) == "AtenOps: 1 call (aten_825)"
+    assert repr(small) == "AtenOps: 1 call"
 
 
 def test_short_dataclass_repr_never_recurses() -> None:
     row = _Row("aten_1", 1, (1, 2), _Row("n", 0, (), None))
-    assert (
-        short_dataclass_repr(row) == "_Row(label='aten_1', count=1, items=<2 items>, nested=<_Row>)"
-    )
+    assert short_dataclass_repr(row) == "_Row(label='aten_1', count=1, items=<2 items>)"
     long_row = _Row("x" * 300, 1, (), None)
     assert len(short_dataclass_repr(long_row)) <= REPR_COLS

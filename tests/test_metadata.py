@@ -529,7 +529,7 @@ def test_repr_source_unavailable():
         source_context_lines=0,
     )
     r = repr(loc)
-    assert r == "FuncCallLocation: test.py:1, in test"
+    assert r == "FuncCallLocation: test.py:1 in test"
     assert loc.code_context is None
 
 
