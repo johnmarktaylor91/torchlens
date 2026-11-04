@@ -437,9 +437,8 @@ def _add_output_layers(
             _parent_payload = (
                 output_node.out if output_node.out is not None else output_node.transformed_out
             )
-            _ds = self._options_detach_saved_activations
-            _detach_payload = output_copy_detaches(output_tensor, _parent_payload, detach_saved=_ds)
-            if output_rides_parent_payload(output_tensor, output_node.out, detach_saved=_ds):
+            _detach_payload = output_copy_detaches(output_tensor, _parent_payload, self)
+            if output_rides_parent_payload(output_tensor, output_node.out, self):
                 # HONESTY 13-R1: the producer already retains this exact value, so the output
                 # pseudo-row rides that ONE retained payload instead of a second physical copy
                 # (the byte model charged both: a full duplicate of the logits on large

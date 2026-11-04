@@ -81,7 +81,7 @@ def output_gained_graph_after_log(returned: Any, retained: Any, *, detach_saved:
     )
 
 
-def output_rides_parent_payload(returned: Any, retained: Any, *, detach_saved: bool) -> bool:
+def output_rides_parent_payload(returned: Any, retained: Any, trace: Any) -> bool:
     """True iff the output row shares its producer's payload instead of its own copy.
 
     Parameters
@@ -90,8 +90,8 @@ def output_rides_parent_payload(returned: Any, retained: Any, *, detach_saved: b
         The output value.
     retained:
         The producer's retained payload.
-    detach_saved:
-        Whether the trace detaches saved activations.
+    trace:
+        The trace being built or refreshed.
 
     Returns
     -------
@@ -99,11 +99,12 @@ def output_rides_parent_payload(returned: Any, retained: Any, *, detach_saved: b
         The alias rule, unless the output gained a graph the payload lacks.
     """
 
+    detach_saved = _trace_payloads_detached(trace)
     gained = output_gained_graph_after_log(returned, retained, detach_saved=detach_saved)
     return not gained and output_payload_aliases_parent(returned, retained)
 
 
-def output_copy_detaches(returned: Any, retained: Any, *, detach_saved: bool) -> bool:
+def output_copy_detaches(returned: Any, retained: Any, trace: Any) -> bool:
     """True iff the output row's own copy is detached from the autograd graph.
 
     The copy inherits the producer payload's detachment, unless the returned
@@ -115,8 +116,8 @@ def output_copy_detaches(returned: Any, retained: Any, *, detach_saved: bool) ->
         Tensor the model returned.
     retained:
         The producer's retained payload.
-    detach_saved:
-        Whether the trace detaches saved activations.
+    trace:
+        The trace being built.
 
     Returns
     -------
@@ -124,6 +125,29 @@ def output_copy_detaches(returned: Any, retained: Any, *, detach_saved: bool) ->
         Whether the copy is taken detached.
     """
 
+    detach_saved = _trace_payloads_detached(trace)
     if output_gained_graph_after_log(returned, retained, detach_saved=detach_saved):
         return False
     return not (torch.is_tensor(retained) and retained.grad_fn is not None)
+
+
+def _trace_payloads_detached(trace: Any) -> bool:
+    """True iff the trace stores detached saved activations.
+
+    Set by ``detach_saved_activations``, and always for a Trace cooked from a
+    Recording, whose sparse capture stores detached payloads.
+
+    Parameters
+    ----------
+    trace:
+        The trace being built or refreshed.
+
+    Returns
+    -------
+    bool
+        Whether its saved activations are detached.
+    """
+
+    if trace._options_detach_saved_activations:
+        return True
+    return getattr(trace, "_cooked_from", None) is not None

@@ -800,8 +800,7 @@ class RefreshProjector:
             if not output.parents or output.out is None:
                 continue
             parent_out = self.target._layer_dict_all_keys[output.parents[0]].out
-            detach_saved = self.target._options_detach_saved_activations
-            if output_rides_parent_payload(output.out, parent_out, detach_saved=detach_saved):
+            if output_rides_parent_payload(output.out, parent_out, self.target):
                 output._internal_set("out", parent_out)
                 continue
             output._internal_set(
