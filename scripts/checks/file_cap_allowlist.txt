@@ -97,7 +97,7 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	837
 torchlens/_data_classes/interface.py::_getitem_after_pass	113
 torchlens/_data_classes/layer.py	1767
-torchlens/_data_classes/module.py	2618
+torchlens/_data_classes/module.py	2617
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
@@ -351,7 +351,7 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1840
+torchlens/_postprocess/finalization.py	1838
 torchlens/_postprocess/finalization.py::_build_conditional_records	159
 torchlens/_postprocess/finalization.py::_build_layer_logs	114
 torchlens/_postprocess/finalization.py::_build_module_logs	206
@@ -1276,7 +1276,7 @@ torchlens/receptive_field/_gradient.py::_select_inputs	71
 torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
-torchlens/receptive_field/_path.py::resolve_graph_point	65
+torchlens/receptive_field/_path.py::resolve_graph_point	61
 torchlens/receptive_field/_query.py	925
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64
