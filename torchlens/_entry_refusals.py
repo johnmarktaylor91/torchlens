@@ -50,12 +50,12 @@ class _DependencyIncompatibleError(_ActionableErrorMixin, CompatibilityError, Ru
 # --- torch backend ---------------------------------------------------------------------
 
 
-def refuse_contract_parent_missing() -> NoReturn:
-    """Raise ``contract_parent_missing``: a contract parent is absent from the call args."""
+def refuse_aliasing_parent_not_in_call_args() -> NoReturn:
+    """Raise ``aliasing_parent_not_in_call_args``: an aliasing parent is absent from the call args."""
 
     raise _InternalInvariantError(
         "Parent layer not found in function arguments",
-        code="contract_parent_missing",
+        code="aliasing_parent_not_in_call_args",
         remedy=BUG_REMEDY,
     )
 
@@ -254,12 +254,12 @@ def refuse_ilg_return_layers() -> NoReturn:
 
 
 def refuse_lovely_formatter() -> NoReturn:
-    """Raise ``lovely_formatter_unavailable`` for a lovely-tensors without ``lovely()``."""
+    """Raise ``lovely_tensors_has_no_lovely_function`` for a lovely-tensors without ``lovely()``."""
 
     raise _DependencyIncompatibleError(
         "The installed lovely_tensors does not expose a lovely() formatter, and "
         "torchlens.compat.lovely will not call the global monkey_patch() to work around this",
-        code="lovely_formatter_unavailable",
+        code="lovely_tensors_has_no_lovely_function",
         remedy=(
             "upgrade lovely-tensors to a version exposing lovely(), or call "
             "lovely_tensors directly if you want global patching"
@@ -423,12 +423,12 @@ def refuse_validation_scope(scope: str, valid_scopes: Collection[str]) -> NoRetu
 
 
 def refuse_status_not_bool() -> NoReturn:
-    """Raise ``validation_status_not_run`` for ``bool()`` of a status that never ran."""
+    """Raise ``validation_status_bool_before_run`` for ``bool()`` of a status that never ran."""
 
     raise ArgumentTypeError(
         "ValidationStatus is not a boolean pass/fail result unless replay validation "
         "has actually run",
-        code="validation_status_not_run",
+        code="validation_status_bool_before_run",
         remedy="read status.state, or run replay validation first and then read status.passed",
     )
 

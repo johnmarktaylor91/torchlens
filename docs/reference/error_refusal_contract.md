@@ -80,6 +80,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `agent_schema_unknown` | The schema tool was asked for an unserved schema id | Fetch the index first; the refusal lists every served id |
 | `agent_tool_unknown` | An agent tool call named an unregistered tool | Use a served tool name; the refusal lists the roster |
 | `agent_view_invalid` | A dump view or fold class id is outside the served vocabulary | Pass view=overview/graph/full; list classes via the folded overview first |
+| `aliasing_parent_not_in_call_args` | Internal invariant: an aliasing contract could not find its parent layer among the function arguments | Report it as a TorchLens bug with the traceback |
 | `attribute_walk_segment_invalid` | An attribute-walk path (`experimental` attribute addressing) has a malformed segment | Use dotted names with optional integer indexes, such as `blocks[0].attn` |
 | `auto_capture_every_invalid` | `auto_capture(every=...)` was given zero or a negative number | Pass `every` as a positive integer |
 | `backend_already_registered` | `register_backend` was given a name or alias that is already registered | Pass `replace=True` or register under another name |
@@ -90,7 +91,6 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `bundle_index_type_invalid` | A `Bundle` was indexed by something other than a member-name string | Index by a member name; `bundle.names` lists them |
 | `compat_layers_required` | `from_torchextractor` or `from_ilg` was called without the layers to extract | Pass `layers=[...]` or `return_layers={...}` |
 | `constant_unrealizable` | A captured constant (a closure or global tensor the model read) has no readable host buffer, so its payload cannot be recorded (jax, tf, mlx, tinygrad) | Pass the value as a model input, or make it a concrete readable array before the call |
-| `contract_parent_missing` | Internal invariant: an aliasing contract could not find its parent layer among the function arguments | Report it as a TorchLens bug with the traceback |
 | `edit_hook_factory_missing` | An edit spec without a runtime hook factory was asked for its hook | Build the edit with a TorchLens edit helper |
 | `escape_exemption_budget_exceeded` | Internal invariant at import: the audited callable-escape exemption list outgrew its budget | Remove an exemption, or raise the budget in the change that adds its regression test |
 | `explicit_seed_unsupported` | `seed=` was requested on a backend whose preview cannot seed the framework RNG (mlx, tinygrad) | Omit `seed` and seed the framework's own RNG state before calling |
@@ -103,7 +103,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `jax_control_flow_rejected` | A JAX control-flow primitive was met under `jax_control_flow='reject'` | Pass `jax_control_flow='unroll'` or `'region'` |
 | `jax_effects_unsupported` | The traced JAX function has side effects (callbacks, io, ordered effects) | Remove the side effects; the JAX backend captures pure functions |
 | `jax_nested_primitive_unsupported` | The traced JAX function uses a nested primitive or jaxpr the backend cannot inline | Move the primitive out of the traced function |
-| `lovely_formatter_unavailable` | The installed `lovely_tensors` has no `lovely()` formatter; TorchLens will not monkey-patch instead | Upgrade lovely-tensors, or call it directly |
+| `lovely_tensors_has_no_lovely_function` | The installed `lovely_tensors` has no `lovely()` formatter; TorchLens will not monkey-patch instead | Upgrade lovely-tensors, or call it directly |
 | `mlx_unwrapped_policy_invalid` | The MLX unwrapped-op policy is not one of the allowed values | Pass one of the policies the message lists |
 | `module_identity_mode_unsupported` | The requested `module_identity_mode` is not available for this backend's model object (for example tinygrad `object_module` on a raw callable, or a mode the paddle preview does not declare) | Use the mode the refusal names for that backend |
 | `module_metadata_missing` | A module reached the torch module stack without TorchLens metadata | Capture through `tl.trace`; otherwise report it as a TorchLens bug |
@@ -336,7 +336,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `intervention_result_invalid` | An intervention returned something other than an `mx.array`, or changed the output's shape or dtype (mlx) | Return an `mx.array` with the same shape and dtype as the hooked output |
 | `validation_replay_unsupported` | `validate=` replay was requested on a backend that declares no replay validation | Capture with `validate=False`, or use a backend that declares `has_validation_replay` |
 | `validation_scope_invalid` | `validate(scope=...)` named an unknown scope | Pass one of the scopes the message lists |
-| `validation_status_not_run` | A `ValidationStatus` was used as a boolean before replay validation ran | Read `status.state`, or run replay validation first |
+| `validation_status_bool_before_run` | A `ValidationStatus` was used as a boolean before replay validation ran | Read `status.state`, or run replay validation first |
 | `viz_array_shape_invalid` | A plotting primitive got an array of the wrong shape | Pass the shape the message names |
 | `viz_images_too_few` | `image_scatter` got fewer images than points it draws | Pass enough images or lower `max_items` |
 | `viz_input_empty` | A plotting primitive got nothing to draw | Pass at least one item |

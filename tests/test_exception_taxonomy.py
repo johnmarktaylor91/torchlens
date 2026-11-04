@@ -1123,12 +1123,12 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._errors._InternalInvariantError": (
         "private TorchLensError for internal-invariant refusals that were plain "
         "RuntimeError/ValueError; subclasses both, contracted by codes such as "
-        "module_metadata_missing and contract_parent_missing"
+        "module_metadata_missing and aliasing_parent_not_in_call_args"
     ),
     "torchlens._entry_refusals._DependencyIncompatibleError": (
         "private CompatibilityError for an installed dependency missing an API that was a "
         "plain RuntimeError; contracted by torch_tensorbase_unavailable and "
-        "lovely_formatter_unavailable"
+        "lovely_tensors_has_no_lovely_function"
     ),
     # Forward-validation copy-failure disclosure: a coded TorchLensWarning
     # (S-18 contract row validation_model_copy_failed) private to validation.

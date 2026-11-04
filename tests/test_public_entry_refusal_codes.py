@@ -32,10 +32,10 @@ _HERE = Path(__file__)
 # (case id, thunk that must raise, builtin the class must keep, stable code)
 HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...] = (
     (
-        "contract_parent",
-        refusals.refuse_contract_parent_missing,
+        "aliasing_parent",
+        refusals.refuse_aliasing_parent_not_in_call_args,
         RuntimeError,
-        "contract_parent_missing",
+        "aliasing_parent_not_in_call_args",
     ),
     ("bound_root", lambda: refusals.refuse_bound_root(len), TypeError, "bound_root_method_invalid"),
     (
@@ -114,7 +114,12 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
     ),
     ("torchextractor", refusals.refuse_torchextractor_layers, ValueError, "compat_layers_required"),
     ("ilg", refusals.refuse_ilg_return_layers, ValueError, "compat_layers_required"),
-    ("lovely", refusals.refuse_lovely_formatter, RuntimeError, "lovely_formatter_unavailable"),
+    (
+        "lovely",
+        refusals.refuse_lovely_formatter,
+        RuntimeError,
+        "lovely_tensors_has_no_lovely_function",
+    ),
     (
         "attribute_walk",
         lambda: refusals.refuse_attribute_walk_segment("bad["),
@@ -200,7 +205,12 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
         ValueError,
         "validation_scope_invalid",
     ),
-    ("status_not_bool", refusals.refuse_status_not_bool, TypeError, "validation_status_not_run"),
+    (
+        "status_not_bool",
+        refusals.refuse_status_not_bool,
+        TypeError,
+        "validation_status_bool_before_run",
+    ),
     (
         "region_provenance",
         lambda: refusals.refuse_region_provenance_missing("linear_1_1"),
@@ -374,7 +384,7 @@ def test_internal_invariant_class_keeps_both_builtins() -> None:
     with pytest.raises(ValueError) as as_value:
         refusals.refuse_module_unprepared()
     with pytest.raises(RuntimeError) as as_runtime:
-        refusals.refuse_contract_parent_missing()
+        refusals.refuse_aliasing_parent_not_in_call_args()
     assert type(as_value.value) is type(as_runtime.value)
 
 
