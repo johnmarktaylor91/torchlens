@@ -1551,7 +1551,7 @@ tests/test_trace_autoroute.py,4,0.99,0.96,slow
 tests/test_trace_autoroute_image.py,8,4.59,1.92,slow
 tests/test_trace_autoroute_input_preprocessor.py,4,1.82,1.45,slow
 tests/test_trace_autoroute_multimodal.py,8,2.99,2.85,slow
-tests/test_trace_bound_method_text.py,5,28.06,24.77,unmarked
+tests/test_trace_bound_method_text.py,5,28.06,24.77,heavy
 tests/test_trace_boundary_ops_multipass.py,7,0.87,0.38,unmarked
 tests/test_trace_core_op_store.py,6,0.04,0.01,smoke
 tests/test_trace_core_substrate.py,19,0.24,0.06,smoke

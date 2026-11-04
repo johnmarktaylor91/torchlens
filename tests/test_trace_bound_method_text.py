@@ -93,6 +93,7 @@ def test_generate_text_without_any_tokenizer_still_refuses() -> None:
         tl.trace(model.generate, PROMPT, input_kwargs=GENERATE)
 
 
+@pytest.mark.heavy
 @pytest.mark.real_model
 def test_gpt2_generate_text_as_the_readme_spells_it() -> None:
     """The README call: pretrained GPT-2, text straight into ``generate``."""
