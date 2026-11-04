@@ -1269,7 +1269,7 @@ trace = tl.trace(model, x, capture=options, save="all")
 trace.save("run.tlspec", level="runnable", include_weights=True)
 loaded = tl.load("run.tlspec")
 loaded.load_state_dict(model.state_dict())
-result = loaded.run(inputs=x)
+result = loaded.run_transaction(inputs=x)
 print(torch.allclose(result.output, model(x)))
 # Output:
 # True
