@@ -15,6 +15,42 @@ hook, so the edit fires once per forward call (`result.report.num_fires`), and t
 it writes into the cache already carry the edit. Use a trace or an episode capture only when you
 need the recorded graph, and then for a few steps.
 
+## Trace a generation loop
+
+To look inside generation rather than edit it, trace the model's own `generate` method. Each
+forward call `generate` makes is one call of every module, so a module's `num_calls` is the
+number of generated tokens and `module:k` is its output while generating token `k`. Call 1 is the
+prefill, which reads the whole prompt; each later call reads only the newest token, because the
+earlier ones are in the KV cache. The model is the `owner` of the trace's root, so its modules
+are addressed `owner.<address>`.
+
+```python
+# docs-test: expected=[3, [1, 5, 32], [1, 1, 32]]
+import torch
+import torchlens as tl
+from transformers import GPT2Config, GPT2LMHeadModel
+
+torch.manual_seed(0)
+lm = GPT2LMHeadModel(GPT2Config(vocab_size=128, n_embd=32, n_layer=2, n_head=2)).eval()
+prompt = torch.tensor([[3, 17, 42, 8, 99]])
+
+trace = tl.trace(lm.generate, prompt, input_kwargs={"max_new_tokens": 3})
+mlp = "owner.transformer.h.1.mlp"
+RESULT = [
+    trace[mlp].num_calls,  # 3: one call per generated token
+    list(trace[f"{mlp}:1"].out.shape),  # the prefill: all 5 prompt positions
+    list(trace[f"{mlp}:2"].out.shape),  # a decode step: the one new position
+]
+```
+
+With a Hugging Face model whose tokenizer TorchLens can find, pass the prompt as text, as with a
+plain trace: `tl.trace(model.generate, "The capital of France is", input_kwargs={...})`.
+`generate` checks whether to stop by reading tensors as Python values, so the trace warns once
+with a `ScalarEscapeWarning`: that stopping decision is not part of the recorded graph. A trace
+records every operation of every step, so keep it to a few tokens; to keep chosen sites across a
+long generation, use `tl.record(model, ids, save=..., generate_kwargs={...})`, which records only
+the sites you select at each step.
+
 ## Recipe: edit the cached past
 
 To change what later tokens see of the prompt without touching the new tokens, apply the edit to
