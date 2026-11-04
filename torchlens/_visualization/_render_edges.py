@@ -1882,6 +1882,16 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     )
 
 
+def _space_from_reverse_edge(
+    child_node: "Layer", parent_node: "Layer", edge_dict: Dict[str, Any], maps: "_RolledEdgeMaps"
+) -> None:
+    """Blank-label an every-pass edge whose reverse edge is also drawn.
+
+    Both then reserve a label slot, so Graphviz keeps the loop's splines apart."""
+    if parent_node.layer_label in maps.child_ops_per_layer(child_node) and "label" not in edge_dict:
+        edge_dict["label"] = _html_combined_recurrence_label("")
+
+
 def _label_rolled_call_indexs(
     child_node: "Layer",
     parent_node: "Layer",
@@ -1936,13 +1946,10 @@ def _label_rolled_call_indexs(
         else None
     )
 
-    # Decided on the post-sink-fix numbers (stock GPT-2 rolled, 97 -> 59
-    # hard label violations at 1.008x page area): every
-    # rolled In/Out annotation the caller vouches for -- no conditional label
-    # set, no argument label coming -- composes into ONE midpoint ``label``,
-    # which Graphviz reserves layout space for (a dummy node), so it clears
-    # nodes, splines and arrowheads on every engine and font stack. Self-loops
-    # always merge a full pair. Unvouched edges keep head/tail labels.
+    if out_label is None and in_label is None:
+        _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)
+        return
+    # Measured on stock GPT-2 rolled: 97 -> 59 hard label violations.
     if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
         edge_dict["label"] = _html_combined_recurrence_label(top, bottom)

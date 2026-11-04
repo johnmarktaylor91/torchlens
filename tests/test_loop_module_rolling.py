@@ -864,7 +864,8 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     the same two nodes; four head/tail labels would fight for that narrow band,
     so the back-edge's annotations merge into one midpoint ``label`` (graphviz
     reserves dummy-node space for it, pushing the anti-parallel curves apart).
-    The forward edge runs on every pass at both ends, so it carries no pass label.
+    The forward edge runs on every pass at both ends, so it carries no pass
+    label, only a blank midpoint slot that keeps the two curves apart.
     """
 
     dot = _render_dot(_trace(TanhRNNCellLoop()), tmp_path, "rnn_back_edge", depth=1000)
@@ -881,7 +882,7 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     forward_attrs = forward_edges[0]
     assert "headlabel" not in forward_attrs
     assert "taillabel" not in forward_attrs
-    assert _html_label_lines(forward_attrs, "label") is None
+    assert _html_label_lines(forward_attrs, "label") == []
 
 
 def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> None:
@@ -954,7 +955,7 @@ def test_rolled_edges_label_only_ends_a_strict_subset_of_passes_uses(tmp_path: P
     """An edge end that every pass of its node uses carries no pass label.
 
     In ``BranchingLoopBody`` the body edge ``linear -> tanh`` runs on all three
-    passes at both ends and goes unlabelled (it used to read ``In 1-3 / Out
+    passes at both ends and carries no text (it used to read ``In 1-3 / Out
     1-3``); the input edge (pass 1), the back-edge (passes 1-2 into 2-3) and the
     branch edge (pass 3 only) keep exactly their partial ends.
     """
@@ -968,7 +969,9 @@ def test_rolled_edges_label_only_ends_a_strict_subset_of_passes_uses(tmp_path: P
     assert texts == {"In 1", "In 2-3", "Out 1-2", "Out 3"}, sorted(texts)
     body = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
     assert len(body) == 1
-    assert _html_label_lines(body[0], "label") is None
+    # Blank, not absent: the back-edge joins the same two nodes, and the blank
+    # slot keeps Graphviz from bundling the loop's two splines into one line.
+    assert _html_label_lines(body[0], "label") == []
 
 
 def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
