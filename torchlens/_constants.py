@@ -1042,6 +1042,8 @@ PRIMITIVE_OP_FIELD_ORDER = [
 # __torch_function__), but TorchLens still decorates most of them. They are listed separately
 # because _get_torch_overridable_functions() intentionally skips them, so we must add them back
 # into ORIG_TORCH_FUNCS explicitly. Source: torch.overrides.get_ignored_functions().
+# Tensor-returning ``torch.*`` entries of the ignored list (feature-detected rows below).
+_TENSOR_IGNORED_FNS = ("mkldnn_rnn_layer", "_make_dep_token", "_functional_sym_constrain_range")
 IGNORED_FUNCS = [
     ("torch", "load"),
     ("torch", "empty"),
@@ -1099,10 +1101,9 @@ IGNORED_FUNCS = [
     # literal with no provenance signal. Protocol-invisible like ``from_numpy`` (see belt.py).
     ("torch", "from_dlpack"),
     ("torch.utils.dlpack", "from_dlpack"),
-    # The PUBLIC sparse-compressed constructors. Only the PRIVATE
-    # ``torch._sparse_csr_tensor`` was re-added, so the whole public family was
-    # undecorated: sparse inputs/params refuse at capture entry, but IN-FORWARD sparse
-    # creation was ungated.
+    # The PUBLIC sparse-compressed constructors. Only the PRIVATE ``torch._sparse_csr_tensor`` was
+    # re-added, so the whole public family was undecorated: sparse inputs/params refuse at capture
+    # entry, but IN-FORWARD sparse creation was ungated.
     ("torch", "sparse_coo_tensor"),
     ("torch", "sparse_csr_tensor"),
     ("torch", "sparse_csc_tensor"),
@@ -1159,12 +1160,9 @@ IGNORED_FUNCS = [
     ("torch.nn.functional", "upsample"),
     ("torch.nn.functional", "upsample_bilinear"),
     ("torch.nn.functional", "upsample_nearest"),
-    # ``handle_torch_function`` is deliberately ABSENT: it is __torch_function__
-    # protocol plumbing, not a tensor op. Decorating it made every composite's
-    # ``if has_torch_function(...)`` preamble route through a TorchLens wrapper
-    # whenever ANY foreign TorchFunctionMode was active (torch's own
-    # DeviceContext included), feeding function objects into tensor-arg capture
-    # and crashing with TorchLensTLCollisionError (stage-0 safety-net fix).
+    # ``handle_torch_function`` is deliberately ABSENT: protocol plumbing, not a tensor op.
+    # Wrapped, every composite's ``has_torch_function`` preamble ran through TorchLens under
+    # any foreign TorchFunctionMode and crashed with TorchLensTLCollisionError (stage-0 fix).
     ("torch.nn.functional", "sigmoid"),
     ("torch.nn.functional", "hardsigmoid"),
     ("torch.nn.functional", "tanh"),
@@ -1184,10 +1182,8 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "__delitem__"),
     ("torch.Tensor", "__iter__"),
     ("torch.Tensor", "__init_subclass__"),
-    # ``__torch_function__`` is deliberately ABSENT: same protocol-plumbing
-    # hazard as ``handle_torch_function`` above. (It was never actually
-    # decorated — classmethod access binds to <class 'method'>, which the
-    # decoration type gate skips — but listing it declared the wrong intent.)
+    # ``__torch_function__`` is deliberately ABSENT (the ``handle_torch_function`` hazard; the
+    # type gate skipped it anyway, but listing it declared the wrong intent).
     ("torch.Tensor", "__new__"),
     ("torch.Tensor", "__subclasshook__"),
     ("torch.Tensor", "as_subclass"),
@@ -1208,16 +1204,14 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
     ("torch.Tensor", "H"),
-    # r45: ``mH`` (batched conjugate transpose) must be wrapped for capture exactly like
-    # its sibling ``H`` / ``mT`` -- otherwise a forward using ``x.mH`` records the adjoint
-    # result as an unattributed literal and the runnable artifact cannot save/run (the r44
-    # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
+    # r45: ``mH`` is wrapped like ``H`` / ``mT``; unwrapped, ``x.mH`` recorded as an unattributed
+    # literal and the runnable artifact could not save or run (r44 corr1_1 / secF_1).
     ("torch.Tensor", "mH"),
     # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
     # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
     *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
-    # Private Tensor methods whose ``torch.*`` twins are crawled: unwrapped, ``x._neg_view()``
-    # or ``x._to_sparse_csr()`` reached its consumer with no provenance (philox: key is a parent).
+    # Private Tensor methods (most have crawled ``torch.*`` twins; philox records its key as a
+    # parent) and the other tensor-returning ignored functions: unwrapped, each lost provenance.
     *(
         ("torch.Tensor", _private_name)
         for _private_name in (
@@ -1228,12 +1222,16 @@ IGNORED_FUNCS = [
         )
         if hasattr(torch.Tensor, _private_name)
     ),
+    # Read ``torch.__dict__`` (as ``torch_attr`` does): no lazy ``torch.__getattr__``, no upward import.
+    *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch.__dict__.get(_name) is not None),
     # A no-parent factory (the CPU RNG state as a fresh uint8 tensor). TorchLens's own RNG
     # snapshots read ``torch.default_generator.get_state()``, so they never record.
     ("torch", "get_rng_state"),
     ("torch.random", "get_rng_state"),
-    # Exclusions on record: ``torch.empty_quantized`` (uninitialized quantized memory, no
-    # validation exemption); ``to_padded_tensor`` (nested receiver, which capture refuses).
+    # ``torch.load`` (both spellings) is wrapped only so the provenance warning names it; its result
+    # stays sourceless (replay never reloads files). Excluded: ``torch.empty_quantized``
+    # (uninitialized, no validation exemption), ``to_padded_tensor`` (nested), wrapper subclasses.
+    ("torch.serialization", "load"),
 ]
 
 
