@@ -137,6 +137,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
     assert trace.health_facts is not None
     report = trace.explain()
     assert isinstance(text, str)
+    assert "(disk-backed: metadata only until read)" in text
     assert "disk-backed" in html
     assert "disk-backed" in report
 
@@ -154,6 +155,11 @@ def test_explain_and_html_clean_answers_disclose_sparse_coverage(
     report = trace.explain()
     assert "could not be examined" in report
     assert "could not be examined" in trace._repr_html_()
+    # The text card carries the same coverage row as the notebook card (house style A20).
+    assert (
+        "\n  coverage  1 op examined, none non-finite (4 op(s) retained no payload and "
+        "could not be examined; re-run with a wider save= to cover them)\n"
+    ) in str(trace)
 
 
 # ---------------------------------------------------------------------------

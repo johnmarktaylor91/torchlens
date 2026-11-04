@@ -63,7 +63,7 @@ MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
     *WRITER_IDENTITY_FIELDS,
 )
 #: Artifact kinds the manifest ``kind`` may carry.
-ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention")
+ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention", "recipe")
 #: Payload codec ids the format writes; both are safetensors files.
 PAYLOAD_CODEC_IDS: Final[tuple[str, ...]] = ("torch_safetensors_v1", "numpy_safetensors_v1")
 #: Save levels, as ``torchlens._io.save_policy`` spells them.

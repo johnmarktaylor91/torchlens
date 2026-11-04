@@ -74,9 +74,7 @@ def _save_load(fork: Any, path: Path) -> Any:
 
 def _apply(spec: Any) -> Any:
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 _VERBS = {
@@ -89,12 +87,12 @@ def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_pat
     """The session scatters through both masks; the saved edit stores their intersection."""
 
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
-    staged = session.push()
+    staged = session
     loaded = _save_load(session, tmp_path / "first.tlspec").hook_specs[0].helper
     wider = _mask(3) | _mask(4)
     fork = _ready().fork()
     fork.do(tl.units(_SITE, wider), loaded)
-    twice = fork.push()
+    twice = fork
     assert torch.equal(twice[_SITE].out, staged[_SITE].out)
     again = _save_load(fork, tmp_path / "second.tlspec")
     kwargs = dict(again.hook_specs[0].helper.kwargs)
@@ -135,7 +133,7 @@ def _remedy_runs(error: Any, tmp_path: Path) -> None:
 
     assert "tl.io.save_intervention(fork, path, level='portable')" in error.fields["remedy"]
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
-    staged = session.push()
+    staged = session
     assert torch.equal(
         _apply(_save_load(session, tmp_path / "resaved.tlspec"))[_SITE].out, staged[_SITE].out
     )

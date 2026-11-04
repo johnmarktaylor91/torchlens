@@ -424,7 +424,7 @@ def validate(
     inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
-    scope: str,
+    scope: str = "forward",
     seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
@@ -449,7 +449,7 @@ def validate(
     input_kwargs:
         Keyword model input.
     scope:
-        Validation scope: ``"forward"``, ``"backward"``, ``"saved"``,
+        Validation scope: ``"forward"`` (default), ``"backward"``, ``"saved"``,
         ``"intervention"``, or ``"receptive_field"``. ``"receptive_field"``
         captures with ``save_mode="reference"``, so a model whose forward
         writes its own buffers in place (a train-mode BatchNorm's running

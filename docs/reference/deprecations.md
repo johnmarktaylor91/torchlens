@@ -25,7 +25,7 @@ unaffected.
 | `ModuleAccessor` | none (no longer public) | removed |
 | `Module` | `torchlens.types.Module` | removed |
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
-| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
+| `NodeSpec` | `torchlens.viz.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
 | `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
@@ -46,11 +46,9 @@ unaffected.
 | `get_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
 | `list_logs` | `torchlens.io.list_traces` | removed |
 | `log_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
-| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
 | `preview_fastlog` | none (no longer public) | removed |
 | `rehydrate_nested` | `torchlens.io.materialize_nested` | removed |
 | `render_lines_to_html` | none (no longer public) | removed |
-| `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
 | `resolve_sites` | `torchlens.Trace` indexing (`trace[selector]` returns every matching site as a `torchlens.Selection`) | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
@@ -153,16 +151,23 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.conditional_elif_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.conditional_else_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
-| `Trace.replay()` | `Trace.push()` | removed |
-| `Trace.replay_from()` | `Trace.push_from()` | removed |
+| `Trace.replay()` | `Trace.do(site, edit)` | removed |
+| `Trace.replay_from()` | `Trace.do(site, value)` | removed |
+| `Trace.push()` | `Trace.do(site, edit)`: one verb stages and propagates | removed |
+| `Trace.push_from()` | `Trace.do(site, value)` | removed |
+| `Trace.attach_hooks()`, `Op.attach_hooks()`, `Layer.attach_hooks()` | `Trace.do(site, hook)`; `InterventionOptions(engine="set_only")` stages without propagating | removed |
+| `Trace.set()`, `Layer.set()`, `Op.set()` | `Trace.do(site, value, intervention=InterventionOptions(engine="set_only"))` | removed |
+| `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)`; the scoped form stays as `with trace.fork() as scoped: scoped.do(...)`, which detaches the last `do` hooks on exit | removed |
+| `ReplayOptions(hooks=)` | a mapping of sites to edits on `Trace.do` | removed |
+| `ReplayOptions(differentiable=)` | `InterventionOptions(differentiable=True)` on `Trace.do` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `replay()` | `push()` | removed |
-| `replay_from()` | `push_from()` | removed |
+| `replay()` | `do(site, edit)` | removed |
+| `replay_from()` | `do(site, value)` | removed |
 | `rerun()` | `run()` | removed |
 | `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |

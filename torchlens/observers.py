@@ -43,7 +43,7 @@ class TapRecord:
     Examples
     --------
     >>> tap = tl.observers.tap(tl.func("relu"))
-    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> hooks = tl.options.CaptureOptions(hooks=tap)
     >>> trace = tl.trace(model, x, capture=hooks)
     >>> record = tap.records[0]
     >>> type(record).__name__
@@ -104,7 +104,7 @@ class TapObserver:
     Examples
     --------
     >>> tap = tl.observers.tap(tl.func("relu"))
-    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> hooks = tl.options.CaptureOptions(hooks=tap)
     >>> trace = tl.trace(model, x, capture=hooks)
     >>> type(tap).__name__
     'TapObserver'
@@ -420,7 +420,7 @@ def tap(
     Examples
     --------
     >>> tap = tl.observers.tap(tl.func("relu"))
-    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> hooks = tl.options.CaptureOptions(hooks=tap)
     >>> trace = tl.trace(model, x, capture=hooks)
     >>> tap.signal
     'both'

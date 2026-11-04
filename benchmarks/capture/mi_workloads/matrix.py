@@ -1,6 +1,7 @@
 """Run the (tool x workload) matrix for one model, each cell in a fresh process, then check exactness.
 
 python -m benchmarks.capture.mi_workloads.matrix --model gpt2 --out r.jsonl --resdir res/ [--tools a,b] [--workloads x,y]
+TL_BENCH_DEVICE=cuda runs every cell on the GPU (default cpu); TL_BENCH_THREADS sets the torch threads.
 Exactness: max abs diff of each tool's result tensor against the hooks result (bit-identical = 0.0);
 generation results compare token ids and report the number of differing positions.
 """
@@ -94,12 +95,12 @@ def main() -> None:
         ref_path = os.path.join(a.resdir, f"{a.model}.{wl}.hooks.pt")
         if not os.path.exists(ref_path):
             continue
-        ref = torch.load(ref_path)
+        ref = torch.load(ref_path, map_location="cpu")
         for tool in tools:
             path = os.path.join(a.resdir, f"{a.model}.{wl}.{tool}.pt")
             if tool == "hooks" or not os.path.exists(path):
                 continue
-            got = torch.load(path)
+            got = torch.load(path, map_location="cpu")
             rec = {"kind": "exact", "model": a.model, "tool": tool, "workload": wl}
             if got.shape != ref.shape:
                 rec["shape_mismatch"] = [list(got.shape), list(ref.shape)]

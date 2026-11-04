@@ -15,6 +15,7 @@ from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
+from .._ir.predicate import ModuleStackFrame
 from .._quantities import Bytes
 from ..backends.registry import (
     BackendName,
@@ -31,6 +32,7 @@ from .stop import evaluate_halt_stop
 if TYPE_CHECKING:
     from .._capture_state_helpers import CompiledCapturePrep
     from .._data_classes.trace import Trace
+    from ._lazy_contexts import LazyContextHistory
 from .._utils.display import _timed_phase
 
 
@@ -432,18 +434,16 @@ def _run_predicate_forward_with_root_frame(
             evaluate_halt_stop(trace, enter_ctx, state.options)
         else:
             enter_spec = _module_capture_spec(state.options)
-            append_projected_event(
-                trace,
-                enter_ctx,
-                enter_spec,
-                predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
-            )
+            enter_kept = enter_spec.save_out or enter_spec.save_metadata
+            # Lean journal (recording/_lean.py): no shell event for an unkept boundary.
+            if enter_kept or not state.options.lean:
+                append_projected_event(trace, enter_ctx, enter_spec, predicate_matched=enter_kept)
             evaluate_halt_stop(trace, enter_ctx, state.options)
     except StopSignal:
         raise
     except Exception as exc:
         state.handle_predicate_exception(enter_ctx, exc)
-        if not halt_only:
+        if not halt_only and not state.options.lean:
             append_projected_event(
                 trace,
                 enter_ctx,
@@ -485,12 +485,9 @@ def _run_predicate_forward_with_root_frame(
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
             else:
                 exit_spec = _module_capture_spec(state.options)
-                append_projected_event(
-                    trace,
-                    exit_ctx,
-                    exit_spec,
-                    predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
-                )
+                exit_kept = exit_spec.save_out or exit_spec.save_metadata
+                if exit_kept or not state.options.lean:
+                    append_projected_event(trace, exit_ctx, exit_spec, predicate_matched=exit_kept)
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
         except StopSignal:
             if active_model_exc is None:
@@ -500,7 +497,7 @@ def _run_predicate_forward_with_root_frame(
                 state.handle_predicate_exception(exit_ctx, exc)
             else:
                 state.add_predicate_failure(exit_ctx, exc)
-            if not halt_only:
+            if not halt_only and not state.options.lean:
                 if active_model_exc is None or not any(
                     event.raw_index == exit_ctx.event_index
                     for event in trace.capture_events.op_events
@@ -514,6 +511,51 @@ def _run_predicate_forward_with_root_frame(
         finally:
             if not halt_only:
                 state.append_context(exit_ctx)
+            backend.pop_module_frame(trace, state.module_stack, root_frame)
+    return outputs
+
+
+def _run_lazy_predicate_forward_with_root_frame(
+    trace: "Trace",
+    backend: CaptureBackend,
+    model: object,
+    input_args: tuple[Any, ...] | list[Any],
+    input_kwargs: dict[Any, Any],
+    model_device: object | None,
+    history: "LazyContextHistory",
+) -> Any:
+    """Run the forward under the root frame on a pass with deferred contexts.
+
+    Matches ``_run_predicate_forward_with_root_frame`` there: the root
+    boundary events are unkept, halt is off and a lean journal appends no
+    shell event for them, so the root enter and exit contexts are deferred.
+    The halt-stop directive is evaluated once on the built enter context (it
+    re-binds the directive to the pass options exactly as the eager root does);
+    later evaluations are no-ops with halt off.
+    """
+
+    state = history.state
+    root_frame = ModuleStackFrame(
+        address="",
+        module_type=type(model).__name__,
+        module_id=id(model),
+        pass_number=1,
+    )
+    backend.push_existing_module_frame(trace, state.module_stack, root_frame)
+    elapsed = time.time() - trace._provenance_start_time
+    history.defer_module_boundary("module_enter", root_frame, "root:enter:1", elapsed)
+    evaluate_halt_stop(trace, history.latest(), state.options)
+    outputs = None
+    try:
+        with _timed_phase(trace, "dispatch:forward_model"):
+            with _forward_peak_memory_bracket(trace, model_device):
+                with backend.inference_context(trace):
+                    outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
+    finally:
+        try:
+            elapsed = time.time() - trace._provenance_start_time
+            history.defer_module_boundary("module_exit", root_frame, "root:exit:1", elapsed)
+        finally:
             backend.pop_module_frame(trace, state.module_stack, root_frame)
     return outputs
 

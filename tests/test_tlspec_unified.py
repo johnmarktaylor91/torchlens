@@ -21,6 +21,9 @@ from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class UnifiedTinyModel(nn.Module):
     """Tiny model with one intervention-friendly operation."""

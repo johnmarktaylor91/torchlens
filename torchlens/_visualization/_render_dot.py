@@ -7,7 +7,8 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import InvalidArgumentError, PayloadUnavailableError
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -55,7 +56,7 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -70,7 +71,6 @@ from .source_graph import _resolve_focus_module, build_source_graph
 
 def _view_rendered_file(filepath: str) -> None:
     """Open a rendered visualization file when a local viewer is available.
-
     Parameters
     ----------
     filepath:
@@ -93,6 +93,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class _ForwardRenderContext:
     """Resolved state shared by forward-IR construction and emission."""
+
+    __repr__ = short_dataclass_repr
 
     request: ResolvedRenderRequest
     target: RenderTarget
@@ -117,6 +119,8 @@ class _ForwardRenderContext:
 class _ForwardIRWork:
     """Mutable forward-IR assembly state passed into region finalization."""
 
+    __repr__ = short_dataclass_repr
+
     render_ir: "RenderIR"
     builder: _RenderIRDecisionBuilder
     module_clusters: dict[str, Any]
@@ -129,12 +133,10 @@ class _ForwardIRWork:
 
 def _strip_render_extension(vis_outpath: str) -> str:
     """Return output path without a Graphviz-rendered file extension.
-
     Parameters
     ----------
     vis_outpath:
         User-provided render output path.
-
     Returns
     -------
     str
@@ -148,7 +150,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
 
 def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
     """Report the written graph path: always for a bare draw, else only when verbose.
-
     Parameters
     ----------
     trace:
@@ -166,7 +167,6 @@ def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
     """Raise if Graphviz did not produce a non-empty rendered artifact.
-
     Parameters
     ----------
     rendered_path:
@@ -175,7 +175,6 @@ def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: 
         DOT source path that was passed to Graphviz.
     graph_kind:
         Human-readable graph type for the error message.
-
     Raises
     ------
     GraphvizRenderError
@@ -203,7 +202,6 @@ def _raise_graphviz_timeout(
     error: subprocess.TimeoutExpired,
 ) -> None:
     """Raise a typed Graphviz timeout error with mitigation guidance.
-
     Parameters
     ----------
     graph_kind:
@@ -1223,6 +1221,8 @@ def _publish_forward_render(
 class _ForwardLayout:
     """Format, bounds and post-processing of one forward layout run."""
 
+    __repr__ = short_dataclass_repr
+
     fileformat: str
     timeout: int
     image_root: Path | None
@@ -1422,33 +1422,12 @@ def draw(
     if request.encoding is not None and not bool(
         renderer_capability_rows.get("encoding_channels", False)
     ):
-        from ._encoding import raise_encoding_dagua_refusal
+        from ._encoding import raise_encoding_renderer_refusal
 
-        raise_encoding_dagua_refusal(request.encoding.active_channels())
+        raise_encoding_renderer_refusal(vis_renderer, request.encoding.active_channels())
     resolved_outpath, announce_path = resolve_draw_outpath(
         vis_outpath, vis_fileformat, announce_path
     )
-    if vis_renderer == "dagua":
-        opted_in_module = sys.modules.get("torchlens.experimental.dagua")
-        if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
-            raise CaptureNotActiveError(
-                "dagua renderer is experimental and has not been opted into",
-                code="dagua_renderer_not_opted_in",
-                remedy="opt in via `from torchlens.experimental import dagua` first",
-            )
-        from ..experimental.dagua._bridge import render_trace_with_dagua
-
-        return render_trace_with_dagua(
-            self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            path=resolved_outpath,
-            vis_save_only=vis_save_only,
-            file_format=vis_fileformat,
-            show_buffers=show_buffer_layers == "always",
-            vis_direction=direction,
-            theme=vis_theme,
-        )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
     target = RenderTarget(
@@ -1469,10 +1448,10 @@ def draw(
         segment_lookup,
         site_labels,
     )
-    work = _populate_forward_ir(self, context)
-
-    forward_render_ir = _finalize_forward_ir(self, context, work)
-    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    with edge_typography_for_draw(theme, request):
+        work = _populate_forward_ir(self, context)
+        forward_render_ir = _finalize_forward_ir(self, context, work)
+        rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
     _write_overview_expansion_manifest(self, request, target)
     return rendered
 

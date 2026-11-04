@@ -53,7 +53,7 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 TLSPEC_SCHEMA_VERSION = 1
 TLSPEC_MANIFEST_FILENAME = "manifest.json"
 TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable", "runnable")
-TlspecKind = Literal["intervention", "trace", "bundle"]
+TlspecKind = Literal["intervention", "trace", "bundle", "recipe"]
 TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable", "runnable"]
 
 _EMPTY_META_HASH = sha256(repr([]).encode("utf-8")).hexdigest()

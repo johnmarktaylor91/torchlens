@@ -66,9 +66,7 @@ def _apply(spec: Any) -> Any:
     """Apply a loaded spec on a fresh capture of the same model and input."""
 
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 def _out(trace: Any) -> torch.Tensor:

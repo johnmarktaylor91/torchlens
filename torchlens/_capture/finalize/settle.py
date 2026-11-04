@@ -5,6 +5,7 @@ Moved verbatim from ``torchlens._capture.trace`` by the capture seam.
 
 import time
 import warnings
+from contextlib import nullcontext
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from torch import nn
@@ -42,6 +43,7 @@ class _RefreshRequest(NamedTuple):
     save_grads: str | list[Any] | None
     seed: int | None
     run_until_plan: Any | None
+    staged_plan: Any | None = None
 
 
 def save_new_outs(
@@ -54,6 +56,7 @@ def save_new_outs(
     seed: int | None = None,
     backward_ready: bool | None = None,
     _run_until_plan: Any | None = None,
+    _staged_plan: Any | None = None,
 ) -> None:
     """Re-run the model with new inputs, saving refreshed outs.
 
@@ -78,13 +81,25 @@ def save_new_outs(
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
+        _staged_plan: The live ``run(inputs=)`` door's plan for applying the
+            trace's staged intervention spec; the refreshed capture then runs
+            under it and replaces this trace's state instead of being projected.
 
     Returns
 
     -------
         Nothing; mutates ``self`` in place with new out values.
     """
-    request = _RefreshRequest(model, inputs, input_kwargs, save, save_grads, seed, _run_until_plan)
+    request = _RefreshRequest(
+        model,
+        inputs,
+        input_kwargs,
+        save,
+        save_grads,
+        seed,
+        _run_until_plan,
+        _staged_plan,
+    )
     if backward_ready is not None:
         _refresh_under_backward_ready(self, request, backward_ready)
         return
@@ -96,15 +111,6 @@ def _refresh_under_backward_ready(
 ) -> None:
     """Refresh under a temporary detach/backward-ready override, restoring it after."""
 
-    (
-        model,
-        input_args,
-        input_kwargs,
-        save,
-        save_grads,
-        seed,
-        _run_until_plan,
-    ) = request
     model_detach_saved_activations = self._options_detach_saved_activations
     model_train_mode = self._options_backward_ready
     layer_detach_saved_activations = {
@@ -120,14 +126,15 @@ def _refresh_under_backward_ready(
             layer_log_entry.detach_saved_activations = target_detach_saved_activations
         save_new_outs(
             self,
-            model=model,
-            inputs=input_args,
-            input_kwargs=input_kwargs,
-            save=save,
-            save_grads=save_grads,
-            seed=seed,
+            model=request.model,
+            inputs=request.input_args,
+            input_kwargs=request.input_kwargs,
+            save=request.save,
+            save_grads=request.save_grads,
+            seed=request.seed,
             backward_ready=None,
-            _run_until_plan=_run_until_plan,
+            _run_until_plan=request.run_until_plan,
+            _staged_plan=request.staged_plan,
         )
     finally:
         self._options_detach_saved_activations = model_detach_saved_activations
@@ -158,6 +165,11 @@ def _refresh_and_project(self: "Trace", request: _RefreshRequest) -> None:
     refreshed = _run_refresh_forward(
         self, request, refresh_seed, resolved_layer_nums, grad_layer_nums_to_save
     )
+    if request.staged_plan is not None:
+        # An applied edit inserts ops, so the same-graph projection cannot hold:
+        # the trace becomes the refreshed capture (fire records included).
+        request.staged_plan.adopt(self, refreshed)
+        return
     _project_refreshed(
         self, refreshed, layer_nums_to_save, grad_layer_nums_to_save, _run_until_plan
     )
@@ -192,53 +204,50 @@ def _run_refresh_forward(
 
     from ..._user_funcs import _run_model_and_save_specified_outs
 
-    model, input_args, input_kwargs, _layers, save_grads, _seed, _run_until_plan = request
+    _run_until_plan = request.run_until_plan
+    staged_plan = request.staged_plan
     save_grads_policy = self._options_save_grads
-    return _run_model_and_save_specified_outs(
-        model=cast(nn.Module, model),
-        input_args=input_args,
-        input_kwargs=input_kwargs or {},
-        layers_to_save="all" if resolved_layer_nums is None else "none",
-        **_refresh_replay_config(self),
-        save_grads=save_grads_policy not in (None, False),
-        grads_to_save=save_grads,
-        seed=refresh_seed,
-        num_context_lines=getattr(self, "num_context_lines", 7),
-        optimizer=getattr(self, "_optimizer", None),
-        save_source_context=self._options_save_source_context,
-        save_rng=self._options_save_rng,
-        recurrence_detection=self._options_recurrence_detection,
-        verbose=self._options_verbose,
-        backward_ready=self._options_backward_ready,
-        inference_only=self._options_inference_only,
-        # A refresh retains payloads like any capture; dropping the configured
-        # budget here silently rebudgeted every refresh/run() forward at the
-        # default "auto" (or left a save_budget=None session budgeted).
-        save_budget=getattr(self, "save_budget", "auto"),
-        # F2: a refresh re-arms the nonfinite tripwire. The historical refresh
-        # forwarded only inference_only, so a raise_on_nan capture silently
-        # lost its abort policy on every refreshed forward.
-        raise_on_nan=bool(self._options_on_nonfinite),
-        # A refresh measures CPU peaks only if the source opted in.
-        measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
-        # A refresh records ATen operations (and values) only if the source opted in.
-        aten_ops=getattr(self, "_options_aten_ops", False),
-        output_transform=getattr(self, "_output_transform", None),
-        save_transformed_output=self._options_save_transformed_output,
-        retain_output_parents_for_layers_to_save=True,
-        _resolved_layer_nums_to_save=resolved_layer_nums,
-        _resolved_grad_layer_nums_to_save=(
-            grad_layer_nums_to_save
-            if grad_layer_nums_to_save == "all"
-            else tuple(cast(list[int], grad_layer_nums_to_save))
-        ),
-        _refresh_projection_capture=True,
-        # L4 2.3 live until=: the run-installed halt latch rides the EXISTING
-        # halt= surface of the internal refresh capture (one forwarded argument;
-        # the driver's halt arm settles the throwaway HALTED and returns the
-        # partial normally into the projection flow below).
-        halt_predicate=None if _run_until_plan is None else _run_until_plan.halt_predicate,
-    )
+    with staged_plan.capture_scope() if staged_plan is not None else nullcontext():
+        return _run_model_and_save_specified_outs(
+            model=cast(nn.Module, request.model),
+            input_args=request.input_args,
+            input_kwargs=request.input_kwargs or {},
+            layers_to_save="all" if resolved_layer_nums is None else "none",
+            **_refresh_replay_config(self),
+            save_grads=save_grads_policy not in (None, False),
+            grads_to_save=request.save_grads,
+            seed=refresh_seed,
+            num_context_lines=getattr(self, "num_context_lines", 7),
+            optimizer=getattr(self, "_optimizer", None),
+            save_source_context=self._options_save_source_context,
+            save_rng=self._options_save_rng,
+            recurrence_detection=self._options_recurrence_detection,
+            verbose=self._options_verbose,
+            backward_ready=self._options_backward_ready,
+            inference_only=self._options_inference_only,
+            # A refresh retains payloads like any capture: keep the configured budget.
+            save_budget=getattr(self, "save_budget", "auto"),
+            # A refresh re-arms the nonfinite tripwire (F2).
+            raise_on_nan=bool(self._options_on_nonfinite),
+            # A refresh measures CPU peaks only if the source opted in.
+            measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
+            # A refresh records ATen operations (and values) only if the source opted in.
+            aten_ops=getattr(self, "_options_aten_ops", False),
+            output_transform=getattr(self, "_output_transform", None),
+            save_transformed_output=self._options_save_transformed_output,
+            retain_output_parents_for_layers_to_save=True,
+            _resolved_layer_nums_to_save=resolved_layer_nums,
+            _resolved_grad_layer_nums_to_save=(
+                grad_layer_nums_to_save
+                if grad_layer_nums_to_save == "all"
+                else tuple(cast(list[int], grad_layer_nums_to_save))
+            ),
+            # A staged run's capture becomes the trace itself, not a projection source.
+            _refresh_projection_capture=staged_plan is None,
+            # L4 2.3 live until=: the run-installed halt latch rides the capture's halt= surface.
+            halt_predicate=None if _run_until_plan is None else _run_until_plan.halt_predicate,
+            **({} if staged_plan is None else staged_plan.capture_kwargs()),
+        )
 
 
 def _project_refreshed(

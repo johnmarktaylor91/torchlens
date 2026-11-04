@@ -27,6 +27,9 @@ from torchlens._io.bundle import save as _save_bundle
 from torchlens.errors import TraceCaptureError
 from torchlens.recording._halt import StopSignal
 
+#: The replay doors below edit a root capture in place on purpose.
+_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+
 
 class ExplodingModel(nn.Module):
     def __init__(self) -> None:
@@ -168,7 +171,7 @@ def test_n3_failed_capture_refuses_backward_and_replay() -> None:
         source.backward(torch.ones(1))
     assert exc_info.value.fields["code"] == "N3"
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        source.push()
+        source.do(tl.func("linear"), tl.scale(1.0), intervention=_CONFIRM)
     assert exc_info.value.fields["code"] == "N3"
 
 
