@@ -21,7 +21,6 @@ Step 11 (_build_lookup_keys_and_finalize_retained_layers): Builds lookup key map
 """
 
 from collections import defaultdict
-from dataclasses import fields, is_dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes.cleanup import _project_conditional_child_views
@@ -30,6 +29,7 @@ from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
 from .._record_type import record_type
 from ..intervention.types import ParentRef
+from ._label_rename import _rename_label_dataclass, _rename_replay_fields
 from ._module_containment import _log_module_hierarchy_info_for_layer
 
 if TYPE_CHECKING:
@@ -156,6 +156,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     # results are safe.
     equivalent_ops_memo: dict[int, tuple[Any, Any]] = {}
     recurrent_ops_memo: dict[str, list[str]] = {}
+    field_cache: dict[type, Any] = {}
 
     for _t, layer_entry in enumerate(self):
         _normalize_io_role_flags(layer_entry)
@@ -170,7 +171,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Replace any layer names with their final names:
         _replace_layer_names_for_layer_entry(
-            self, layer_entry, equivalent_ops_memo, recurrent_ops_memo
+            self, layer_entry, equivalent_ops_memo, recurrent_ops_memo, field_cache
         )
 
         # Log the module hierarchy information:
@@ -193,7 +194,6 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         unique_layers_seen.add(layer_entry.layer_label)
 
         # Tally elapsed time:
-
         self._cost_func_calls_duration += layer_entry.func_duration
 
     _tally_params_by_identity(self, mbd)
@@ -436,6 +436,7 @@ def _replace_layer_names_for_layer_entry(
     layer_entry: Op,
     equivalent_ops_memo: dict[int, tuple[Any, Any]] | None = None,
     recurrent_ops_memo: dict[str, list[str]] | None = None,
+    field_cache: dict[type, Any] | None = None,
 ) -> None:
     """Replace all raw labels in a Op's fields with final labels.
 
@@ -475,6 +476,8 @@ def _replace_layer_names_for_layer_entry(
         recurrent_ops_memo: Cross-Op ``raw member label -> renamed list`` table
             for the current rename sweep. ``None`` builds a throwaway table
             (single-Op callers, test doubles).
+        field_cache: Cross-Op dataclass field-name cache for the template and
+            record walks of the current sweep. ``None`` builds a throwaway table.
     """
     mapping = self._raw_to_final_layer_labels
     layer_mapping = self._raw_to_final_parent_layer_labels
@@ -483,11 +486,17 @@ def _replace_layer_names_for_layer_entry(
         equivalent_ops_memo = {}
     if recurrent_ops_memo is None:
         recurrent_ops_memo = {}
+    if field_cache is None:
+        field_cache = {}
+
+    # Resolved once per Op (not once per renamed field): real Ops write through
+    # ``_internal_set``; lightweight test doubles fall back to ``setattr``.
+    internal_set = getattr(layer_entry, "_internal_set", None)
+    slot_read = getattr(layer_entry, "_slot", None)
 
     def set_entry_field(field_name: str, value: Any) -> None:
         """Set a renamed entry field on real Ops or lightweight test doubles."""
 
-        internal_set = getattr(layer_entry, "_internal_set", None)
         if internal_set is not None:
             internal_set(field_name, value)
             return
@@ -497,7 +506,6 @@ def _replace_layer_names_for_layer_entry(
         if field == "equivalent_ops":
             # Read the RAW slot: the public read is copy-on-read, and a copy has
             # a fresh identity that would defeat the memo on every Op.
-            slot_read = getattr(layer_entry, "_slot", None)
             orig = slot_read(field) if slot_read is not None else getattr(layer_entry, field, None)
             if not orig:
                 continue
@@ -512,7 +520,6 @@ def _replace_layer_names_for_layer_entry(
         if field == "recurrent_ops":
             # Read the RAW slot: the public read is copy-on-read, and a copy
             # would defeat both sharing and the memo hit-rate.
-            slot_read = getattr(layer_entry, "_slot", None)
             orig = slot_read(field) if slot_read is not None else getattr(layer_entry, field, None)
             if not orig:
                 continue
@@ -534,9 +541,9 @@ def _replace_layer_names_for_layer_entry(
         else:
             field_mapping = mapping
         if isinstance(orig, list):
-            set_entry_field(field, [field_mapping[raw] for raw in orig])
+            set_entry_field(field, list(map(field_mapping.__getitem__, orig)))
         else:  # set
-            set_entry_field(field, type(orig)(field_mapping[raw] for raw in orig))
+            set_entry_field(field, type(orig)(map(field_mapping.__getitem__, orig)))
 
     # Scalar label-bearing fields. ``buffer_source`` names the producer of a buffer's
     # current value and is a portable ``FieldPolicy.KEEP`` field read by the public
@@ -597,100 +604,7 @@ def _replace_layer_names_for_layer_entry(
                 "conditional_else_children",
                 [layer_mapping[layer_label] for layer_label in conditional_else_children_value],
             )
-
-    edge_uses = getattr(layer_entry, "_edge_uses", None)
-    if edge_uses:
-        set_entry_field(
-            "_edge_uses", [_rename_label_dataclass(record, mapping) for record in edge_uses]
-        )
-
-    args_template = getattr(layer_entry, "args_template", None)
-    if args_template is not None:
-        set_entry_field("args_template", _rename_template_parent_refs(args_template, mapping))
-    kwargs_template = getattr(layer_entry, "kwargs_template", None)
-    if kwargs_template is not None:
-        set_entry_field("kwargs_template", _rename_template_parent_refs(kwargs_template, mapping))
-    interventions = getattr(layer_entry, "edits", None)
-    if interventions:
-        set_entry_field(
-            "edits",
-            [_rename_label_dataclass(record, mapping) for record in interventions],
-        )
-
-
-def _rename_template_parent_refs(value: Any, mapping: dict[str, str]) -> Any:
-    """Rename ``ParentRef.parent_label`` leaves in replay templates.
-
-    Args:
-        value: Template or nested template component.
-        mapping: Raw-to-final layer-label mapping.
-
-    Returns:
-        Template value with parent references rewritten where possible.
-    """
-
-    if isinstance(value, ParentRef):
-        return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
-    if isinstance(value, tuple):
-        return tuple(_rename_template_parent_refs(item, mapping) for item in value)
-    if isinstance(value, list):
-        return [_rename_template_parent_refs(item, mapping) for item in value]
-    if isinstance(value, dict):
-        return {key: _rename_template_parent_refs(item, mapping) for key, item in value.items()}
-    if is_dataclass(value) and not isinstance(value, type):
-        updates = {
-            field.name: _rename_template_parent_refs(getattr(value, field.name), mapping)
-            for field in fields(value)
-            if hasattr(value, field.name)
-        }
-        return replace(value, **updates)
-    return value
-
-
-def _rename_label_dataclass(value: Any, mapping: dict[str, str]) -> Any:
-    """Rename known label fields on frozen intervention dataclasses.
-
-    Args:
-        value: Dataclass-like record or nested container.
-        mapping: Raw-to-final layer-label mapping.
-
-    Returns:
-        Record with label-bearing string fields rewritten.
-    """
-
-    label_fields = {
-        "parent_label",
-        "child_label",
-        "target_label",
-        "call_label",
-        "site_label",
-        "layer_label",
-    }
-    if callable(value):
-        return value
-    if isinstance(value, tuple):
-        return tuple(_rename_label_dataclass(item, mapping) for item in value)
-    if isinstance(value, list):
-        return [_rename_label_dataclass(item, mapping) for item in value]
-    if isinstance(value, dict):
-        return {
-            _rename_label_dataclass(key, mapping): _rename_label_dataclass(item, mapping)
-            for key, item in value.items()
-        }
-    if is_dataclass(value) and not isinstance(value, type):
-        updates = {}
-        for field in fields(value):
-            if not hasattr(value, field.name):
-                continue
-            field_value = getattr(value, field.name)
-            if field.name in label_fields and isinstance(field_value, str):
-                updates[field.name] = mapping.get(field_value, field_value)
-            else:
-                updates[field.name] = _rename_label_dataclass(field_value, mapping)
-        return replace(value, **updates)
-    if isinstance(value, str):
-        return mapping.get(value, value)
-    return value
+    _rename_replay_fields(layer_entry, mapping, set_entry_field, field_cache, ParentRef)
 
 
 def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
@@ -751,42 +665,6 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     self._layers_logged = True
 
     self._layers_saved = self._num_saved_ops == len(self._layer_list)
-
-
-def _collect_parent_refs(value: Any) -> list[ParentRef]:
-    """Collect ``ParentRef`` leaves from a nested replay template.
-
-    Args:
-        value: Template or nested component.
-
-    Returns:
-        Parent references found under ``value``.
-    """
-
-    if isinstance(value, ParentRef):
-        return [value]
-    if isinstance(value, tuple):
-        refs: list[ParentRef] = []
-        for item in value:
-            refs.extend(_collect_parent_refs(item))
-        return refs
-    if isinstance(value, list):
-        refs = []
-        for item in value:
-            refs.extend(_collect_parent_refs(item))
-        return refs
-    if isinstance(value, dict):
-        refs = []
-        for item in value.values():
-            refs.extend(_collect_parent_refs(item))
-        return refs
-    if is_dataclass(value) and not isinstance(value, type):
-        refs = []
-        for field in fields(value):
-            if hasattr(value, field.name):
-                refs.extend(_collect_parent_refs(getattr(value, field.name)))
-        return refs
-    return []
 
 
 def _add_lookup_keys_for_layer_entry(
