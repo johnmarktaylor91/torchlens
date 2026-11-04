@@ -177,7 +177,7 @@ def _reachable(trace: Trace, source_label: str, target_label: str) -> bool:
             continue
         seen.add(label)
         try:
-            op = trace[label]
+            op = trace.ops[label]
         except (KeyError, InvalidArgumentError):
             # A frontier label the trace cannot serve (boundary pseudo-label)
             # is simply not on any path; the walk continues past it.

@@ -1396,13 +1396,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   return that Op, `trace["relu_1_1:all"]` and `trace[tl.label("relu_1_1:all")]` return the
   Selection of every pass (an Op collection refuses `:all` with a `KeyError` naming those
   doors), and `trace.layers["relu_1_1:last"]` is the aggregate Layer like any pass spelling.
-  A bare multi-pass label through `trace[...]` refuses (`multipass_bare_label_ambiguous`, the
-  `tl.label` refusal) naming these spellings and `trace.layers[label]`; `trace[...]` never
-  returns a Layer.
+  A bare layer label at `trace[...]` is the Layer, single- or multi-pass; a single-pass Layer
+  passes single-op reads (`.out`, `.shape`) through to its Op, and on a multi-pass Layer they
+  refuse (`layer_pass_ambiguous`) naming `label:1` and `label:last`. A door that must give one
+  Op (`trace.ops[label]`, `tl.label(label)`) refuses a bare multi-pass label
+  (`multipass_bare_label_ambiguous`) naming these spellings and `trace[label]`.
 
 **Indexing coherence (every door returns the kind it names)**
-: The plain door `trace[key]` returns the kind the key names: a layer label its Op (never a
-  Layer, above), a module address its `Module` whether called once or many times, `address:N`
+: The plain door `trace[key]` returns the kind the key names: a layer label its `Layer` and
+  `label:N` its Op (*Pass tokens*, above), a module address its `Module` whether called once or many times, `address:N`
   its `ModuleCall`, a parameter address its `Param`, a buffer address its `Buffer`
   (`buffer_address:N` the version Op), a grad_fn label its `GradFn`. A typed door always
   returns its own kind and converts a key that names exactly one such object: `trace.ops[address]`

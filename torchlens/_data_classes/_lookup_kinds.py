@@ -114,11 +114,17 @@ def op_at(trace: Any, key: Any) -> Any:
 
     The internal spelling for callers that accept any lookup key but need an
     Op: ``trace[key]`` for an Op (or a selector result), ``trace.ops[key]`` when
-    the plain door answers with a Module, ModuleCall or Buffer.
+    the plain door answers with a Layer, Module, ModuleCall or Buffer (a bare
+    multi-pass layer label refuses there, naming the pass spellings).
     """
 
     record = trace[key]
-    if isinstance(key, str) and type(record).__name__ in {"Module", "ModuleCall", "Buffer"}:
+    if isinstance(key, str) and type(record).__name__ in {
+        "Layer",
+        "Module",
+        "ModuleCall",
+        "Buffer",
+    }:
         return trace.ops[key]
     return record
 
@@ -323,8 +329,8 @@ def grad_fn_for_key(trace: Any, key: str) -> Any:
 def module_item(module: Any, key: str) -> Any:
     """Resolve ``module[key]`` for a string key: the kind the key names, inside this module.
 
-    A layer label of this module gives what ``trace[label]`` gives (an Op, or
-    the multi-pass teaching refusal); a descendant module address gives that
+    A layer label of this module gives what ``trace[label]`` gives (its Layer,
+    or the Op of ``label:N``); a descendant module address gives that
     Module and a descendant call label its ModuleCall; a substring naming one
     layer of this module gives that record.
     """

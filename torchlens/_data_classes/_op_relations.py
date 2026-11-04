@@ -271,7 +271,7 @@ def _resolve_relation_record(op: Op, label: str) -> Op | None:
 
     trace = op.source_trace
     try:
-        return cast("Op", trace[label])
+        return cast("Op", trace.ops[label])
     except (KeyError, ValueError):
         try:
             return cast("Op", trace.graph.orphans[label])

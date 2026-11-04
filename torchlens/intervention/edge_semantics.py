@@ -183,14 +183,14 @@ def distribution_relation(trace: Any, record: Any) -> EdgeDistributionRelation |
 
     if record.arg_kind != "positional" or tuple(record.arg_path) != (0,):
         return None
-    child = fail_open(lambda: trace[record.child_label], lambda _error: None)
+    child = fail_open(lambda: trace.ops[record.child_label], lambda _error: None)
     func_name = getattr(child, "func_name", None)
     if child is None or func_name not in SAME_MULTISET_FUNCS:
         return None
     parents = tuple(getattr(child, "parents", ()) or ())
     if len(parents) != 1 or parents[0] != record.parent_label:
         return None
-    parent = fail_open(lambda: trace[record.parent_label], lambda _error: None)
+    parent = fail_open(lambda: trace.ops[record.parent_label], lambda _error: None)
     child_numel = _numel(getattr(child, "shape", None))
     parent_numel = _numel(getattr(parent, "shape", None)) if parent is not None else None
     if child_numel is None or parent_numel is None or child_numel != parent_numel:

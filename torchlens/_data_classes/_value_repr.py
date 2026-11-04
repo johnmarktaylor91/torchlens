@@ -509,7 +509,7 @@ def module_call_card(call: Any) -> str:
 
 
 def _resolve_trace_record(record: Any, label: str) -> Any | None:
-    """Resolve one layer label through the owning trace, or None.
+    """Resolve one output label to its Op through the owning trace, or None.
 
     Module/ModuleCall records reach their trace through ``_source_trace``;
     Op/Layer through ``source_trace``. Every failure degrades to ``None``
@@ -521,7 +521,7 @@ def _resolve_trace_record(record: Any, label: str) -> Any | None:
         trace = fail_open(lambda: record.source_trace, lambda _error: None)
     if trace is None:
         return None
-    return fail_open(lambda: trace[label], lambda _error: None)
+    return fail_open(lambda: trace.ops[label], lambda _error: None)
 
 
 def module_repr_line(module: Any) -> str:

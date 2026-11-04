@@ -291,7 +291,7 @@ def _forward_join(trace: Trace, node: Any) -> tuple[str | None, str | None, str 
     source_line = None
     if isinstance(op_label, str) and op_label:
         try:
-            op = trace[op_label]
+            op = trace.ops[op_label]
         except Exception:  # noqa: BLE001 - the join is best-effort disclosure.
             op = None
         if op is not None:

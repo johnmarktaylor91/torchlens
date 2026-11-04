@@ -136,7 +136,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
 def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
     """Return the aggregate Layer a bare multi-pass label names, else ``None``.
 
-    ``trace[label]`` refuses a bare multi-pass label (every pass is a distinct
+    A bare multi-pass label names a Layer, not one op (every pass is a distinct
     op); the lineage contract still owes the honest "select a pass" message,
     which needs the aggregate record's pass count.
     """

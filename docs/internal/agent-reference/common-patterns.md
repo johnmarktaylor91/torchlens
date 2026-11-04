@@ -434,7 +434,8 @@ naming the `:N` spellings (glossary: *Indexing coherence*).
 ```python
 trace["encoder.mlp"]             # Module (called once or many times)
 trace["encoder.mlp:2"]           # ModuleCall
-trace["linear_3_7"]              # Op; trace["linear_3_7"] of a multi-pass layer refuses
+trace["linear_3_7"]              # Layer, single- or multi-pass (.out reads one pass or refuses)
+trace["linear_3_7:2"]            # Op; also "linear_3_7:last"
 trace.ops["encoder.mlp"]         # the module's output Op (refuses when called twice)
 trace.layers["encoder.mlp"]      # its Layer
 trace.modules["linear_3_7"]      # the Module that op ran in

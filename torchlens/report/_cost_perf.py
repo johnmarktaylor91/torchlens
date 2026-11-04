@@ -559,7 +559,7 @@ def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
     total = int(output_bytes)
     for parent_label in getattr(op, "parents", ()) or ():
         try:
-            parent = trace[str(parent_label)]
+            parent = trace.ops[str(parent_label)]
         except (KeyError, ValueError):
             return None
         parent_bytes = getattr(parent, _TRAFFIC_OUTPUT_FIELD, None)
