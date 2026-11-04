@@ -7,9 +7,9 @@ generated token is one call of every module including the root, the trace
 validates and survives a save/load round trip, a loop that keeps its values
 as tensors traces without warnings, an escape warning names the caller's
 line, the caller's ``input_kwargs`` survive an input transform, text reaches
-a bound method of a model with a resolvable tokenizer, and the tensor search
-keeps a property's log record quiet. The GPT-2 test runs the README snippet
-itself.
+a bound method of a model with a resolvable tokenizer, a plain module address
+resolves to the model's module, and the tensor search keeps a property's log
+record quiet. The GPT-2 test runs the README snippet itself.
 """
 
 from __future__ import annotations
@@ -32,6 +32,8 @@ N_NEW = 3
 
 class _ToyGenerator(nn.Module):
     """Two-module decoder stand-in with an HF-shaped ``generate`` loop."""
+
+    config: Any  # set by the text-input test only; annotation, no class attribute
 
     def __init__(self, *, stop_token: int | None = None) -> None:
         super().__init__()
@@ -193,6 +195,16 @@ def test_empty_call_index_lookup_suggests_no_wrapper_spelling(key: str) -> None:
     message = str(excinfo.value)
     assert "owner" not in message
     assert "Please use a more specific key." in message
+
+
+def test_plain_module_address_resolves_to_the_owners_module() -> None:
+    model = _ToyGenerator().eval()
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    head = gen["head"]
+    # The record of model.head, checked by what it is rather than how the owner prefix spells it.
+    assert head is gen.modules["head"]
+    assert str(head.address).removeprefix("owner.") == "head"
+    assert head.num_calls == N_NEW
 
 
 class _CacheWithLoggedProperty:

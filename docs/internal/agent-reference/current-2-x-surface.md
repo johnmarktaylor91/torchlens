@@ -606,6 +606,10 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- Owned ATen and event sequences are tuple subclasses with bounded displays. Equality,
+  hashing, slicing and standalone pickling retain tuple behavior; saved artifacts encode
+  these sequences as ordinary tuples. Collection reprs show counts; `str()` shows five
+  members and the exact remaining count.
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
@@ -1562,6 +1566,8 @@
   an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
   (recorded preprocessing against the model's card, warning
   `preprocessing_card_mismatch`; nothing runs it automatically).
+  `register`/`unregister` are the public door of the input detector registry
+  (custom raw-input routes; later traces only).
   `torchlens.inventory.list_sites` is the two-rung site inventory (free module
   listing; one disclosed-cost metadata-only forward) whose emitted selectors are
   CERTIFIED against the engine's matcher at emission -- every selector extracts keyed
@@ -1983,6 +1989,7 @@ object's docstring):
 - `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
 - `tl.postprocessing.register`: Decorator registering a custom output detector (`name=`, `priority=`); the namespace also exports `unregister`, `list`, `info`, `snapshot`, `Detector` and `ResolvedPostprocessing`.
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
+- `tl.preprocessing.register`: Decorator registering a custom input detector (`name=`, `priority=`) that receives `(model, payload, **kwargs)` and returns a `Trace` by re-entering `tl.trace`, or `None`; the namespace also exports `unregister`. Guide: `docs/guides/model_conveniences.md`.
 - `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
 - `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.report.InterventionValidationReport`: Five-axis intervention validation result.
