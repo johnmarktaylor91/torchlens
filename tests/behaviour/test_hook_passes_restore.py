@@ -27,10 +27,14 @@ from torchlens.intervention import replay
 
 
 def _doors() -> tuple[object, object]:
+    """Return the functions now bound at the capture door and the replay door."""
+
     return run_entry._run_resolved_request, replay._run_replay
 
 
 def _first_operation_call_site(log: tl.Trace) -> str:
+    """Return the call-site file of the first non-I/O op in ``log``."""
+
     for label in log.op_labels:
         op = log.ops[label]
         if op.type not in ("input", "output", "buffer"):
@@ -39,6 +43,8 @@ def _first_operation_call_site(log: tl.Trace) -> str:
 
 
 def test_hooks_cell_leaves_the_capture_doors_unwrapped(tmp_path: Path) -> None:
+    """After a hooks cell the doors are the originals and a later trace's call site is this file."""
+
     before = _doors()
     run_cell(case_by_name("toy:simple_ff"), (feature("hooks"),), tmp_path / "cell")
     assert _doors() == before
@@ -47,6 +53,8 @@ def test_hooks_cell_leaves_the_capture_doors_unwrapped(tmp_path: Path) -> None:
 
 
 def test_recording_restores_the_doors_when_its_body_raises() -> None:
+    """``recording()`` restores both doors when its body raises."""
+
     before = _doors()
     with pytest.raises(RuntimeError, match="cell body failed"):
         with _hook_passes.recording(lambda out, *, ctx: out, []):
@@ -56,6 +64,8 @@ def test_recording_restores_the_doors_when_its_body_raises() -> None:
 
 
 def test_stop_recording_restores_the_doors() -> None:
+    """``stop_recording`` restores both doors."""
+
     before = _doors()
     recorder = _hook_passes.start_recording(lambda out, *, ctx: out, [])
     assert _doors() != before
@@ -64,12 +74,16 @@ def test_stop_recording_restores_the_doors() -> None:
 
 
 def test_patch_tripwire_names_and_unwraps_a_left_wrapper() -> None:
+    """The tripwire names a wrapper left on a door and finds the original under it."""
+
     from _leak_guards import _unwrapped, leaked_internal_patches
 
     original = run_entry._run_resolved_request
 
     @functools.wraps(original)
     def left_behind(r: object) -> object:
+        """Delegate unchanged: a stand-in for a wrapper a helper forgot to remove."""
+
         return original(r)
 
     run_entry._run_resolved_request = left_behind

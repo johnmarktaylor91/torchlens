@@ -215,6 +215,8 @@ def _is_test_patch(value: object) -> bool:
 
 
 def _torchlens_modules() -> list[ModuleType]:
+    """Return every loaded ``torchlens`` module."""
+
     return [
         module
         for name, module in list(sys.modules.items())
