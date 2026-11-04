@@ -45,7 +45,7 @@ def _row(trace: Trace, route: _Route) -> dict[str, Any]:
     counts = [sum(row.count(expert) for row in selected) for expert in range(route.expert_count)]
     assignments = sum(counts)
     return {
-        "module": route.block,
+        "module": route.block or "self",
         "router": route.gate,
         "call": trace.ops[route.indices].func_call_id,
         "token_shape": tuple(indices.shape[:-1]),
@@ -58,6 +58,7 @@ def _row(trace: Trace, route: _Route) -> dict[str, Any]:
 
 def _routing_table(trace: Trace, address: str | None = None) -> list[dict[str, Any]]:
     """Collect rows for all blocks, or exactly one requested module address."""
+    address = "" if address == "self" else address
     return [
         _row(trace, route) for route in _routes(trace) if address is None or route.block == address
     ]

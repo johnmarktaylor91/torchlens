@@ -66,6 +66,7 @@ def test_routing_table_matches_independent_gate_oracle() -> None:
     trace = tl.trace(model, x)
     assert len(trace.routing_table) == 1
     row = trace.routing_table[0]
+    assert row["module"] == "self"
     assert row["expert_indices"] == expected_indices.tolist()
     torch.testing.assert_close(torch.tensor(row["gate_weights"]), expected_weights)
     assert row["tokens_per_expert"] == [2, 2, 2, 2]
