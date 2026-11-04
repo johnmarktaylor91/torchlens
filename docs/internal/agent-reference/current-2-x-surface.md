@@ -1853,6 +1853,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.ablation_grid`: Render the measured-intervention receipt grid (THE differentiator).
 - `tl.viz.attention`: Render an attention view to paper-ready PNG/SVG/PDF pages.
 - `tl.viz.attention_atlas`: Render the whole-model attention atlas (BertViz model view, matched).
+- `tl.viz.chans`: Draw a tensor's leading channels as a grid of grayscale tiles.
 - `tl.viz.contact_sheet`: Render one page of the ranked overview contact sheet.
 - `tl.viz.histogram_waterfall`: Render the histogram waterfall (step x signed-log2-bin density).
 - `tl.viz.image_scatter`: Render a bounded 2D scatter with optional PIL thumbnails.
@@ -1864,6 +1865,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.nodes.histogram`: Create a compact value-distribution histogram visualizer.
 - `tl.viz.nodes.text_table`: Render a text batch as a Graphviz HTML-like table label.
 - `tl.viz.quantile_fan`: Render the quantile-fan strip for one series (the default view).
+- `tl.viz.rgb`: Draw a three-channel tensor as one RGB picture.
 - `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
 - `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
 - `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.

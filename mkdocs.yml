@@ -114,6 +114,7 @@ exclude_docs: |
   /field-guide/dissection.md
   /field-guide/extract_features.md
   /field-guide/feature_visualisation.md
+  /field-guide/generation_attention.md
   /field-guide/generation_step_attribution.md
   /field-guide/intervene.md
   /field-guide/jacobian_lens.md
@@ -129,6 +130,7 @@ exclude_docs: |
   /field-guide/sae_trainers.md
   /field-guide/see_and_inspect.md
   /field-guide/tcav.md
+  /field-guide/tensor_images.md
   /field-guide/torchcam.md
   /field-guide/trainable_backbone.md
   /field-guide/training_ribbon.md

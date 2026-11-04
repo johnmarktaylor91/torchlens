@@ -158,6 +158,8 @@ pages:
   - path: field-guide/feature_visualisation.md
     section: field-guide
     moved_from: [recipes/feature_visualisation.md]
+  - path: field-guide/generation_attention.md
+    section: field-guide
   - path: field-guide/generation_step_attribution.md
     section: field-guide
     moved_from: [recipes/generation_step_attribution.md]
@@ -203,6 +205,8 @@ pages:
   - path: field-guide/tcav.md
     section: field-guide
     moved_from: [recipes/tcav.md]
+  - path: field-guide/tensor_images.md
+    section: field-guide
   - path: field-guide/torchcam.md
     section: field-guide
     moved_from: [recipes/torchcam.md]

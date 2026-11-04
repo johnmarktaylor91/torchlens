@@ -36,6 +36,8 @@ PAGES: dict[str, str] = {
     "docs/field-guide/training_ribbon.md": "matplotlib",
     "docs/field-guide/tcav.md": "torchlens",
     "docs/field-guide/generation_step_attribution.md": "transformers",
+    "docs/field-guide/generation_attention.md": "transformers",
+    "docs/field-guide/tensor_images.md": "torchvision",
     "docs/field-guide/trainable_backbone.md": "torchvision",
     "docs/field-guide/tuned_lens.md": "tuned_lens",
     "docs/field-guide/jacobian_lens.md": "transformers",
