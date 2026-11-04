@@ -368,12 +368,14 @@ class _Scene:
         ]
         local = self._near(_union([r for _, boxes in placements for b in boxes for r in b]))
         choice, chosen = min(placements, key=lambda item: self._score(edge, item[1], local))
-        boxes, shifts = list(chosen), []
-        for index, label in enumerate(edge["labels"]):
-            others = [r for j, lines in enumerate(boxes) if j != index for r in lines]
-            shift = self._nudge(label, boxes[index], others, local)
-            boxes[index] = _shifted(boxes[index], shift)
-            shifts.append(shift)
+        boxes = list(chosen)
+        shifts = [(0.0, 0.0)] * len(boxes)
+        for _ in range(2):  # a second round lets an earlier label make way for a later one
+            for index, label in enumerate(edge["labels"]):
+                others = [r for j, lines in enumerate(boxes) if j != index for r in lines]
+                dx, dy = self._nudge(label, boxes[index], others, local)
+                boxes[index] = _shifted(boxes[index], (dx, dy))
+                shifts[index] = (shifts[index][0] + dx, shifts[index][1] + dy)
         for lines in boxes:
             self.rects.extend(lines)
         return choice, shifts
