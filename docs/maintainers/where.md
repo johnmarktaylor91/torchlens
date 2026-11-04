@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1492 modules, 656074 lines, 0 modules without a docstring.
+83 packages, 1493 modules, 656086 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6365 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 114 | 55419 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 115 | 55431 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8853 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9100 |
@@ -1275,7 +1275,7 @@ tinygrad backend preview. (9 modules, 4474 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (114 modules, 55419 lines)
+Torch backend implementation package for TorchLens capture. (115 modules, 55431 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1299,6 +1299,7 @@ Torch backend implementation package for TorchLens capture. (114 modules, 55419 
 | `_completeness_patches` | Scoped tensor and metadata observer patches. | 754 |
 | `_completeness_storage` | Storage observation and scalar-escape helpers. | 870 |
 | `_completeness_types` | State and value types shared by completeness-witness slices. | 282 |
+| `_consumer_kind` | Raise-time branch-kind classification for a scalar escape. | 29 |
 | `_escape_detection_fields` | Field table copying escape/completeness diagnostics from a trace onto a fastlog recording. | 33 |
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
@@ -1390,7 +1391,7 @@ Torch backend implementation package for TorchLens capture. (114 modules, 55419 
 | `prehook_provenance` | Reversible forward-pre-hook input provenance for PyTorch eager capture. | 1003 |
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 949 |
 | `sources` | Log torch capture source tensors. | 781 |
-| `structure_only_belt` | Structure-only teaching-refusal belts (L7a memo sec 2, -default branch). | 674 |
+| `structure_only_belt` | Structure-only teaching-refusal belts (L7a memo sec 2, -default branch). | 657 |
 | `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1656 |
 | `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2847 |
 
