@@ -15,11 +15,8 @@ Fix pack (checks memo item 2 / D17), all ADDITIVE:
   via ``grad_scales={bwd: scale}``; UNKNOWN provenance yields UNKNOWN
   magnitude verdicts in the new ``verdict`` column, never a silent
   pass-as-1.0.
-- ``basis=`` selector: the legacy total-norm classification stays the
-  DEFAULT for one deprecation cycle; the flip to ``basis="rms"`` is
-  announced in ``attrs["basis_notice"]`` and gated on the multi-model
-  calibration runs -- changing a shipped verdict semantics unannounced is
-  the defect class the checks panel exists to prevent.
+- ``basis=`` selector: ``"total_norm"`` (the default) classifies on each
+  gradient's total norm; ``basis="rms"`` classifies on ``norm/sqrt(numel)``.
 """
 
 from __future__ import annotations
@@ -70,16 +67,8 @@ _NO_GRADS_HINT = (
     "trace.backward(loss)"
 )
 
-#: Closed classification bases (D17): legacy total-norm default, RMS opt-in.
+#: Closed classification bases (D17): total-norm default, RMS opt-in.
 _BASES = ("total_norm", "rms")
-
-#: The planned-flip announcement (deprecation notice, D17).
-_BASIS_NOTICE = (
-    "basis='total_norm' is the legacy classification and remains the default "
-    "for one deprecation cycle; the flip to basis='rms' (norm/sqrt(numel), "
-    "killing the ~128x numel artifact) is announced and gated on the "
-    "multi-model calibration runs. Opt in with basis='rms' today."
-)
 
 
 def _unavailable_row(
@@ -183,7 +172,7 @@ def _validate_options(
         raise InvalidArgumentError(
             f"basis must be one of {_BASES}, got {basis!r}",
             code="grad_basis_invalid",
-            remedy="pass basis='total_norm' (legacy default) or basis='rms'",
+            remedy="pass basis='total_norm' (the default) or basis='rms'",
         )
     if grad_scale is not None and grad_scales is not None:
         raise KeywordConflictError(
@@ -445,8 +434,6 @@ def _audit_attrs(
         "scale_provenance": ctx.provenance,
         "torchlens_capture_honesty": capture_honesty_facts(trace),
     }
-    if ctx.basis == "total_norm":
-        attrs["basis_notice"] = _BASIS_NOTICE
     if ctx.scale is not None:
         attrs["grad_scale"] = ctx.scale
     if proof_note is not None:
@@ -492,8 +479,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     names the fact that could not be proven), and UNKNOWN provenance yields
     UNKNOWN magnitude verdicts in the ``verdict`` column
     (the scale-invariant ``dead`` and ``nonfinite`` verdicts survive); the
-    legacy boolean columns keep their shipped classification through the
-    ``basis`` deprecation window (``attrs["basis_notice"]``).
+    boolean columns classify on the selected ``basis``.
 
     Parameters
     ----------
@@ -522,14 +508,14 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
         ITS stamp. Mutually exclusive with ``grad_scale``.
     basis:
         Classification basis for the boolean columns and the ``verdict``
-        column: ``"total_norm"`` (legacy default) or ``"rms"``
+        column: ``"total_norm"`` (the default) or ``"rms"``
         (``norm / sqrt(numel)``).
 
     Returns
     -------
     tuple[list[dict[str, Any]], dict[str, Any]]
         Severity-ranked audit row dicts and the attrs mapping (counts,
-        thresholds, basis + deprecation notice, capture-honesty facts on the
+        thresholds, basis, capture-honesty facts on the
         audited path). When every measurable gradient flags exploding
         without a scale, ``attrs["all_exploding_hint"]`` names the AMP
         scaled-gradients possibility.
@@ -634,8 +620,7 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         Per-backward scale stamps ``{bwd: scale}``; see
         :func:`gradient_flow_audit_rows`.
     basis:
-        ``"total_norm"`` (legacy default, deprecation window announced in
-        ``attrs["basis_notice"]``) or ``"rms"``.
+        ``"total_norm"`` (the default) or ``"rms"``.
 
     Returns
     -------
