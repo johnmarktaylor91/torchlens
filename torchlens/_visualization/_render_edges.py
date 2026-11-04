@@ -1470,8 +1470,8 @@ def _projected_antiparallel_edge_attrs() -> dict[str, str]:
 class _RolledEdgeMaps:
     """Per-draw memo of the ``Layer`` rolled-edge map properties.
 
-    ``child_ops_per_layer``, ``parent_ops_per_layer``, ``edges_vary_across_ops``,
-    and ``parents_per_pass`` are computed properties that rebuild their dicts
+    ``child_ops_per_layer``, ``parent_ops_per_layer`` and ``parents_per_pass``
+    are computed properties that rebuild their dicts
     from every pass's op record on each access, and one rolled draw reads them
     O(edges) times.  Layer graph fields do not change during a draw, so a draw
     shares one computation per layer.  Every cached value comes from the
@@ -1480,12 +1480,11 @@ class _RolledEdgeMaps:
     op children/parents between draws.
     """
 
-    __slots__ = ("_child_ops", "_parent_ops", "_edges_vary", "_parents_per_pass")
+    __slots__ = ("_child_ops", "_parent_ops", "_parents_per_pass")
 
     def __init__(self) -> None:
         self._child_ops: dict[str, dict[str, list[int]]] = {}
         self._parent_ops: dict[str, dict[str, list[int]]] = {}
-        self._edges_vary: dict[str, bool] = {}
         self._parents_per_pass: dict[str, dict[int, list[str]]] = {}
 
     def child_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1502,14 +1501,6 @@ class _RolledEdgeMaps:
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
             found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
-        return found
-
-    def edges_vary_across_ops(self, layer: "Layer") -> bool:
-        """Per-draw memo of ``Layer.edges_vary_across_ops``."""
-
-        found = self._edges_vary.get(layer.layer_label)
-        if found is None:
-            found = self._edges_vary[layer.layer_label] = layer.edges_vary_across_ops
         return found
 
     def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
@@ -1904,9 +1895,9 @@ def _label_rolled_call_indexs(
     """Add pass-number annotations to edges in rolled mode.
 
     In rolled mode, a single edge may represent connections from different
-    ops.  When edges vary across ops (``edges_vary_across_ops``), the edge
-    says which ops it applies to, e.g. ``"Out 1,3"`` / ``"In 2,4"``, using
-    ``int_list_to_compact_str`` for concise ranges (``"1-3"``).
+    ops.  An end used by a strict subset of its node's passes names them,
+    e.g. ``"Out 1,3"`` / ``"In 2,4"`` (``int_list_to_compact_str``: ``"1-3"``);
+    an end every pass uses carries no label.
 
     The annotations compose into ONE midpoint ``label``
     whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
@@ -1936,12 +1927,12 @@ def _label_rolled_call_indexs(
     child_call_indexs = maps.parent_ops_per_layer(child_node)[parent_node.layer_label]
     out_label = (
         f"Out {int_list_to_compact_str(parent_call_indexs)}"
-        if maps.edges_vary_across_ops(parent_node)
+        if len(set(parent_call_indexs)) < parent_node.num_passes
         else None
     )
     in_label = (
         f"In {int_list_to_compact_str(child_call_indexs)}"
-        if maps.edges_vary_across_ops(child_node)
+        if len(set(child_call_indexs)) < child_node.num_passes
         else None
     )
 
