@@ -3,8 +3,9 @@
 Owns the monitor's result record (:class:`HostRngMonitorResult`), the foreign-thread
 routing of thread-local reads, the owner-thread synchronization vocabulary and the
 teardown settlement that promotes disclosed foreign reads to monitor uncertainty when the
-owner joined another thread in-window, and the positional-arity decoder for a held
-reference ``c_call`` site.
+owner joined another thread in-window, the positional-arity decoder for a held
+reference ``c_call`` site, and the subclass-override test the clock ``c_call``
+classifier applies to an inherited ``datetime`` reader.
 """
 
 from __future__ import annotations
@@ -693,3 +694,14 @@ def call_site_argcount(frame: Any) -> int | None:
         return None
     except Exception:
         return None
+
+
+def _subclass_overrides_reader(receiver: type, name: str, base: type) -> bool:
+    """Return whether ``receiver`` redefines ``name`` above ``base`` in its MRO (r42 hon1_1)."""
+
+    for klass in receiver.__mro__:
+        if klass is base:
+            return False
+        if name in getattr(klass, "__dict__", {}):
+            return True
+    return False

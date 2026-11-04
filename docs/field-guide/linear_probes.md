@@ -324,7 +324,8 @@ for alpha in (0.0, 1.0, 2.0, 4.0, 8.0):
     spec = tl.when(site, tl.steer(direction, strength=alpha, dim=-1))
     rec = tl.record(model, victims, save=site, intervene=spec)
     out = rec.output
-    steered = rec.to_trace().find_sites(site).first().out
+    rec_trace = rec.to_trace()
+    steered = rec_trace.find_sites(site).first().out
     kls.append(kl_from(base_logp, out.logits).item())
     site_scores.append((steered @ w + b).mean().item())
 
