@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._display_keys import display_key
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -99,7 +100,7 @@ class TestLayerLogDisplay:
         """The card's first line IS the repr (F10; lovely D15)."""
         for layer_log in simple_log._layer_logs.values():
             s = str(layer_log)
-            assert layer_log.layer_label in s
+            assert display_key(layer_log) in s
             assert s.splitlines()[0] == repr(layer_log)
             assert len(s.splitlines()) <= 8
 
@@ -108,8 +109,11 @@ class TestLayerLogDisplay:
         for layer_log in recurrent_log._layer_logs.values():
             if layer_log.num_passes > 1:
                 s = str(layer_log)
-                assert f"x{layer_log.num_passes} passes" in s
-                assert "pass 1/" in s  # per-pass cores, never pooled
+                assert f"{layer_log.num_passes} passes" in s.splitlines()[0]
+                pass_rows = [line for line in s.splitlines() if line.startswith("  pass ")]
+                assert len(pass_rows) == layer_log.num_passes  # per-pass cores, never pooled
+                for pass_num, row in enumerate(pass_rows, start=1):
+                    assert row.startswith(f"  pass {pass_num} ")
                 break
 
 
