@@ -93,13 +93,11 @@ def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
     focus = focus_address(module)
     if focus is None:
         return depth
-    focus_module = module_at(trace, focus)
-    ops = list(getattr(focus_module, "ops", None) or ()) if focus_module is not None else []
-    if not ops:
-        return depth
-    stack = [str(call).split(":", 1)[0] for call in trace[ops[0]].modules]
-    level = stack.index(focus) + 1 if focus in stack else 0
-    return depth + level
+    for op in trace.ops:
+        stack = [str(call).split(":", 1)[0] for call in getattr(op, "modules", None) or ()]
+        if focus in stack:
+            return depth + stack.index(focus) + 1
+    return depth
 
 
 def focus_parent_prefix(module: Any) -> str | None:

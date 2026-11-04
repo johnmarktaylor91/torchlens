@@ -1261,7 +1261,7 @@ def _build_module_focus_entries(
         node = cast(FocusNode, render_node)
         new_parents: list[str] = []
         for parent_label in node.parents:
-            if parent_label in focus_labels:
+            if _layer_of(parent_label) in focus_labels:
                 new_parents.append(parent_label)
                 continue
             parent_node = entries_to_plot.get(parent_label) or entries_by_layer_label.get(
@@ -1286,7 +1286,7 @@ def _build_module_focus_entries(
 
         new_children: list[str] = []
         for child_label in node.children:
-            if child_label in focus_labels:
+            if _layer_of(child_label) in focus_labels:
                 new_children.append(child_label)
                 continue
             child_node = entries_to_plot.get(child_label) or entries_by_layer_label.get(child_label)
@@ -1309,6 +1309,17 @@ def _build_module_focus_entries(
     focused_entries.update(input_boundaries)
     focused_entries.update(output_boundaries)
     return focused_entries
+
+
+def _layer_of(label: str) -> str:
+    """The layer behind an edge label: ``gelu_3_10:2`` (its second pass) is ``gelu_3_10``.
+
+    Focus membership is a layer's property (its module stack), while a
+    node's parents and children name passes, so a module that ran twice
+    keeps its inner edges instead of turning them into stubs.
+    """
+
+    return label.split(":", 1)[0]
 
 
 def _node_is_inside_module(node: GraphNode, address: str) -> bool:

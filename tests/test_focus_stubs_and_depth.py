@@ -220,7 +220,7 @@ def test_shape_rows_are_drawn_where_the_shape_changes(trace: tl.Trace, tmp_path:
     dot = _dot(trace, tmp_path, "mixer", module="mixer")
     rows = _node_rows(dot)
     by_kind = {name.split("_")[0]: name for name in rows if not name.startswith("__")}
-    cat, proj, mul, norm = (by_kind[kind] for kind in ("cat", "linear", "mul", "layer"))
+    cat, proj, mul, norm = (by_kind[kind] for kind in ("cat", "linear", "mul", "layernorm"))
     # cat widens its inputs and the projection narrows again: both show a shape.
     assert _tensor_row(trace, cat) in rows[cat]
     assert _tensor_row(trace, proj) in rows[proj]
@@ -249,15 +249,17 @@ def test_whole_model_draw_keeps_every_shape_row(trace: tl.Trace, tmp_path: Path)
             assert any(row.startswith("(") for row in node_rows), (name, node_rows)
 
 
-def test_frame_titles_under_the_scope_leave_the_scope_prefix_off(
+def test_leaf_rows_under_the_scope_leave_the_scope_prefix_off(
     trace: tl.Trace, tmp_path: Path
 ) -> None:
+    """A focused leaf draws its op with a ``@name`` row relative to the scope line."""
+
     norm = _dot(trace, tmp_path, "norm", module="mixer.norm")
-    assert "<B>@norm</B>" in norm and "@mixer.norm" not in norm
+    assert ">@norm</TD>" in norm and "@mixer.norm" not in norm
     (into,) = _stubs(norm, "input").values()
     assert into[-1] == "@mixer"  # the scope module itself keeps its own name
     whole = _dot(trace, tmp_path, "whole")
-    assert "<B>@mixer.norm</B>" in whole
+    assert ">@mixer.norm</TD>" in whole
 
 
 # -- depth counts from the focused module --------------------------------------
