@@ -137,6 +137,7 @@ exclude_docs: |
   /for-ai-agents.md
   /gallery/any_architecture.md
   /gallery/basis_grid.md
+  /gallery/protein_language_model.md
   /gradient_contract.md
   /guides/fast_paths.md
   /maintainers/architecture.md
@@ -199,6 +200,7 @@ exclude_docs: |
   /neuroai/journey.md
   /neuroai/loaders.md
   /neuroai/netrep.md
+  /neuroai/task_rnn_circuits.md
   /non_goals.md
   /performance.md
   /quickstart.md

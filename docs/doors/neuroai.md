@@ -14,6 +14,10 @@
 
 - [The NeuroAI feature-extraction journey](../neuroai/journey.md): load, verify the input
   side, address the layer, extract at scale, hand the features on, prove it.
+- [Task RNN circuits](../neuroai/task_rnn_circuits.md): train a recurrent network on a
+  memory task, edit windows of timesteps, find its fixed points with `torch.autograd`.
+- [A protein language model, traced](../gallery/protein_language_model.md): ESM-2 attention
+  maps, a per-residue readout and a contact map.
 - [Loading models for feature extraction](../neuroai/loaders.md) and
   [bring your own alignment](../neuroai/byo_alignment.md).
 - [torchlens.neuro](../reference/neuro.md) and [the brain-benchmarking seam](../reference/brain_benchmarking_seam.md):

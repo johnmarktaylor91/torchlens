@@ -172,6 +172,10 @@ rdms = tl.repgeom.rdm_evolution(log, save=tl.module("V4.output"))  # one RDM per
 RESULT = (len(v4_passes), len(rdms))
 ```
 
+The same pass addressing goes further on a recurrent network trained on a task:
+[task RNN circuits](task_rnn_circuits.md) edits windows of timesteps, finds the
+network's fixed points and shows that they hold its memory.
+
 ## Showpiece: whole-network geometry in one pass
 
 ```python
