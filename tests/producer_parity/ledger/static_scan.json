@@ -5620,7 +5620,7 @@
   "field": "modules",
   "file": "torchlens/attribution/graph/_build.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -8370,6 +8370,14 @@
  {
   "ambiguous": false,
   "field": "is_edited",
+  "file": "torchlens/intervention/_replay_values.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_output_parent",
   "file": "torchlens/intervention/_replay_values.py",
   "has_default": false,
   "sites": 1,
