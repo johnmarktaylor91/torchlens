@@ -586,6 +586,10 @@ def test_flash_attention_2_witness_sees_no_gap() -> None:
     assert gap_warnings == [], [str(w.message) for w in gap_warnings]
 
 
+_FA2_SEEN_MASKS: list[torch.Tensor] = []
+"""The ``S_dmask`` each ``_Fa2DropoutAttention`` forward received (module state is restored)."""
+
+
 class _Fa2DropoutAttention(torch.nn.Module):
     """One bf16 projection into q, k, v and a FlashAttention 2 call with dropout and S_dmask."""
 
@@ -593,14 +597,13 @@ class _Fa2DropoutAttention(torch.nn.Module):
         super().__init__()
         self.seq = seq
         self.proj = torch.nn.Linear(32, 96).to("cuda", torch.bfloat16)
-        self.seen: list[torch.Tensor] = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         from flash_attn import flash_attn_func
 
         q, k, v = self.proj(x).view(1, self.seq, 3, 2, 16).unbind(2)
         out, _lse, s_dmask = flash_attn_func(q, k, v, dropout_p=0.25, return_attn_probs=True)
-        self.seen.append(s_dmask)
+        _FA2_SEEN_MASKS.append(s_dmask)
         return out.sum(-1)
 
 
@@ -648,7 +651,7 @@ def test_flash_attention_2_dropout_replays_exactly(seq: int) -> None:
         (mask_op,) = [op for op in kernel_ops if op.multi_output_index == 2]
         saved, rounded = mask_op.out, -(-seq // 128) * 128
         assert saved.shape == (1, 2, rounded, rounded)
-        assert torch.equal(saved, model.seen[-1])
+        assert torch.equal(saved, _FA2_SEEN_MASKS[-1])
         assert not saved[..., seq:, :].any() and not saved[..., :seq, seq:].any()
         assert (saved[..., :seq, :seq] < 0).any(), "dropped entries carry the sign bit"
         for op in kernel_ops:

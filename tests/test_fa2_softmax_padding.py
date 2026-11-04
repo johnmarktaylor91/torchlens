@@ -61,7 +61,7 @@ def _padded_kernel(
     del alibi_slopes
     vf: Any = torch._C._VariableFunctions
     out = vf.add(q, vf.mul(k, v))
-    lse = vf.logsumexp(q, [3])
+    lse = vf.logsumexp(vf.add(q, k), [3])  # reads q and k, as the declared row says
     if return_softmax:
         scores = vf.matmul(vf.transpose(q, 1, 2), vf.transpose(vf.transpose(k, 1, 2), 2, 3))
         pad_q, pad_k = _ROUNDED - q.shape[1], _ROUNDED - k.shape[1]
