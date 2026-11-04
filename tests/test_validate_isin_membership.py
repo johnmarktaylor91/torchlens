@@ -103,15 +103,22 @@ def _isin_ops(trace: Trace) -> Iterator[Any]:
 def _plant_isin_func(
     monkeypatch: pytest.MonkeyPatch, planted: Callable[..., torch.Tensor]
 ) -> list[str]:
-    """Replace every captured ``isin`` callable before replay; return the labels planted."""
+    """Replace captured ``isin`` callables before replay; return the labels planted.
+
+    Only ops whose saved output the planted callable still reproduces are
+    planted, so the plain replay matches and the perturbation check alone has
+    to catch the bug (an op the plant changes would fail the replay first).
+    """
 
     planted_labels: list[str] = []
     original = Trace.validate_forward_pass
 
     def validate_with_planted_isin(trace: Trace, *args: Any, **kwargs: Any) -> Any:
         for op in _isin_ops(trace):
-            op.func = planted
-            planted_labels.append(op.label)
+            replayed = planted(*op.saved_args, **(op.saved_kwargs or {}))
+            if torch.equal(replayed, op.out):
+                op.func = planted
+                planted_labels.append(op.label)
         return original(trace, *args, **kwargs)
 
     monkeypatch.setattr(Trace, "validate_forward_pass", validate_with_planted_isin)
