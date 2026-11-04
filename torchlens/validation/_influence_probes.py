@@ -113,6 +113,8 @@ class _ProbeCall:
 
 
 def _fresh(item: Any) -> Any:
+    """Return a clone of ``item`` if it is a tensor, else ``item`` unchanged."""
+
     return item.clone() if isinstance(item, torch.Tensor) else item
 
 

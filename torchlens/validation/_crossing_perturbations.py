@@ -64,6 +64,8 @@ def isclose_tolerance_crossing_values(
     rtol, atol, equal_nan = _isclose_tolerances(layer)
 
     def close(candidate: torch.Tensor) -> torch.Tensor:
+        """Return the elementwise ``isclose`` mask of ``candidate`` against the other operand."""
+
         pair = (candidate, other) if slot == 0 else (other, candidate)
         return torch.isclose(*pair, rtol=rtol, atol=atol, equal_nan=equal_nan)
 
@@ -84,6 +86,8 @@ def isclose_tolerance_crossing_values(
 
 
 def _is_real_numeric(value: torch.Tensor) -> bool:
+    """Return whether ``value`` has a real, non-boolean numeric dtype."""
+
     return value.dtype != torch.bool and not value.is_complex()
 
 
