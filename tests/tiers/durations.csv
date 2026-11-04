@@ -51,7 +51,7 @@ tests/oracles/test_legacy_peak_rss_units.py,2,0.01,0.00,unmarked
 tests/oracles/test_legacy_quantity_doors.py,7,0.17,0.05,unmarked
 tests/oracles/test_legacy_timing_bounds.py,8,2.24,0.86,unmarked
 tests/oracles/test_oracle_w0_deprecation.py,8,0.03,0.01,unmarked
-tests/oracles/test_oracle_w0_lints.py,14,19.13,18.84,heavy
+tests/oracles/test_oracle_w0_lints.py,14,6.22,6.13,heavy
 tests/oracles/test_oracle_w0_registry.py,24,0.46,0.34,unmarked
 tests/oracles/test_oracle_w0_skeleton.py,5,0.02,0.01,unmarked
 tests/oracles/test_oracle_w0_surface.py,12,0.91,0.76,unmarked
@@ -673,7 +673,7 @@ tests/test_hon_summary_honesty.py,2,0.06,0.04,unmarked
 tests/test_hook_handle_remove_mid_rerun.py,6,1.40,0.50,unmarked
 tests/test_hybrid_registered_container_kind.py,3,0.01,0.01,unmarked
 tests/test_identity_shims.py,14,2.00,0.48,unmarked
-tests/test_ignored_torch_capture.py,43,8.81,0.64,unmarked
+tests/test_ignored_torch_capture.py,55,3.59,0.31,unmarked
 tests/test_implicit_boundary_tightening.py,8,0.32,0.07,unmarked
 tests/test_import_hygiene.py,25,34.83,3.88,heavy
 tests/test_indexing_coherence.py,27,0.46,0.28,unmarked
@@ -1625,7 +1625,7 @@ tests/test_tvscope_preprocessing.py,15,0.06,0.01,heavy
 tests/test_two_pass_inplace_fix.py,9,9.16,8.55,slow
 tests/test_type_checking_imports.py,1,6.29,6.29,unmarked
 tests/test_unhide_surfaces.py,5,0.89,0.80,heavy
-tests/test_union_merge_integrity.py,29,2.80,0.35,unmarked
+tests/test_union_merge_integrity.py,29,2.17,0.20,unmarked
 tests/test_unpickle_c_path.py,2,0.04,0.04,smoke
 tests/test_unpickle_c_security.py,8,6.83,4.14,unmarked
 tests/test_user_docs_currency.py,43,0.19,0.09,unmarked
@@ -1657,7 +1657,7 @@ tests/test_validation_key_forgery.py,2,0.07,0.04,unmarked
 tests/test_validation_module_call_counts.py,9,0.68,0.14,unmarked
 tests/test_validation_non_pass_records.py,6,0.46,0.30,unmarked
 tests/test_validation_per_run_cache.py,2,0.37,0.29,unmarked
-tests/test_validation_perturbation_units.py,20,0.46,0.38,unmarked
+tests/test_validation_perturbation_units.py,28,1.31,0.57,unmarked
 tests/test_validation_pristine_ground_truth.py,9,16.09,4.97,heavy
 tests/test_validation_reasons_structural.py,8,0.04,0.02,unmarked
 tests/test_validation_registry_ledger.py,73,0.18,0.01,unmarked
