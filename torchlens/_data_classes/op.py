@@ -2520,6 +2520,7 @@ class Op(OpAtenMixin, _SelectionOperand):
     def do(
         self,
         edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -2685,10 +2686,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         _ensure_detached_store(self)
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
-        default_fill_state(
-            state,
-            defaults=self._DEFAULT_FILL_STATE,
-        )
+        default_fill_state(state, defaults=self._DEFAULT_FILL_STATE)
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes

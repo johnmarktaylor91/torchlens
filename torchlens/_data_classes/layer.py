@@ -1567,6 +1567,7 @@ class Layer(_SelectionOperand):
     def do(
         self,
         edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1592,11 +1593,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().do(
-            self._intervention_site(),
-            edit,
-            model=model,
-            inputs=inputs,
-            intervention=intervention,
+            self._intervention_site(), edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def to_pandas(self) -> "pd.DataFrame":
