@@ -162,6 +162,56 @@ def projection_input_spec(
     return module_input_op_spec(child, recipe_id)
 
 
+#: Output-projection children an attention module may own directly.
+OUTPUT_PROJECTION_CHILD_NAMES = ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o")
+
+#: Hugging Face's wrapped self-attention layout (BERT on every transformers
+#: line, ViT on 4.x): a wrapper holds the q/k/v core under one of these child
+#: names and the output projection at ``output.dense`` beside it.
+WRAPPED_CORE_CHILD_NAMES = ("self", "attention")
+WRAPPED_OUTPUT_PROJECTION = "output.dense"
+
+
+def wrapped_attention_core(module: Any) -> str | None:
+    """Return the child name holding ``query``/``key``/``value`` in a wrapped layout.
+
+    ``None`` when ``module`` is not an HF wrapper (its own children are the
+    projections, or it has no recognised core child).
+    """
+
+    for name in WRAPPED_CORE_CHILD_NAMES:
+        core = child_module(module, name)
+        if core is not None and child_module(core, "query") is not None:
+            return name
+    return None
+
+
+def output_projection_child(module: Any) -> Any | None:
+    """Return an attention module's output-projection Module record.
+
+    Looks at the module's own children first, then the wrapped layout: a
+    wrapper's ``output.dense``, or, for the q/k/v core inside a wrapper, the
+    ``output.dense`` sibling the wrapper holds.
+    """
+
+    for name in (*OUTPUT_PROJECTION_CHILD_NAMES, WRAPPED_OUTPUT_PROJECTION):
+        child = child_module(module, name)
+        if child is not None:
+            return child
+    address = getattr(module, "address", None)
+    if not isinstance(address, str) or "." not in address:
+        return None
+    parent_address, own_name = address.rsplit(".", 1)
+    trace = getattr(module, "_source_trace", None)
+    if own_name not in WRAPPED_CORE_CHILD_NAMES or trace is None:
+        return None
+    try:
+        parent = trace.modules[parent_address]
+    except (KeyError, ValueError):
+        return None
+    return child_module(parent, WRAPPED_OUTPUT_PROJECTION)
+
+
 def module_output(module: Any) -> Any | None:
     """Return a module's first-call single output when available."""
 
