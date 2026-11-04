@@ -504,11 +504,9 @@ def _make_plain_scalar_escape_method(
                     str(label)
                 )
                 if name not in INVISIBLE_HOST_ESCAPE_FUNCS:
-                    state.count += 1
-                    if state.first_file is None:
-                        state.first_file, state.first_line = _first_scalar_escape_source()
                     if name == "__bool__":
                         _record_bool_consumer_location(state.trace, self)
+                    _tally_plain_scalar_escape(state, self, name)
         return original(self, *args, **kwargs)
 
     return wrapper
@@ -831,6 +829,7 @@ from ._completeness_dispatch_names import (  # noqa: E402
     _external_warning_stacklevel,
     _first_scalar_escape_source,
     _record_escape_source_tensor,
+    _tally_plain_scalar_escape,
 )
 from ._completeness_metadata import (  # noqa: E402
     _expand_state_alias_addresses,
