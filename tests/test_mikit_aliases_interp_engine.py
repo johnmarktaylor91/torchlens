@@ -154,12 +154,27 @@ def test_gpt2_rows_name_the_gpt2_modules(traces):
         "attn_out.0": "transformer.h.0.attn",
         "mlp_act.1": "transformer.h.1.mlp",
         "mlp_pre.0": "transformer.h.0.mlp",
-        "lm_head": "lm_head",
+        # The logits facet sits on the model that owns the head (the trace root).
+        "lm_head": "self",
     }
     for point, module_address in expected.items():
         found = mi.resolve_alias(trace, point)
         assert found.status in LIVE, (point, found.status, found.remedy)
         assert found.module_address == module_address, (point, found.module_address)
+
+
+def test_gpt2_mlp_act_is_the_activation_the_model_runs(traces):
+    """mlp_act is the down projection's input: GPT-2's own tanh GELU, not the exact GELU."""
+
+    from transformers.activations import ACT2FN
+
+    trace = traces["gpt2"]
+    for layer in range(2):
+        act = mi.resolve_alias(trace, f"mlp_act.{layer}")
+        pre = mi.resolve_alias(trace, f"mlp_pre.{layer}")
+        neurons, up = _payload(trace, act), _payload(trace, pre)
+        assert torch.equal(neurons, ACT2FN["gelu_new"](up)), layer
+        assert not torch.equal(neurons, torch.nn.functional.gelu(up)), layer
 
 
 def test_mlp_projection_points_follow_the_mlp_kind(traces):

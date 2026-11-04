@@ -1284,7 +1284,10 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms; nnterp accessor spellings such as
   `"attentions_output[3]"` resolve too, and
-  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names), `test_prompt`, `apply_norm_scale`
+  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names;
+  interp-engine point addresses such as `"resid_post.3"` resolve too, and
+  `alias_report(trace, generation="interp-engine")` lists the sites under those
+  addresses plus every interp-engine point with no torchlens site), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
   planning (`retention_plan`). ~47 names; `MechInterpError` family.
   Component edge graph: `torchlens.mechinterp.component_graph(trace)` returns a

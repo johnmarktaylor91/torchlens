@@ -419,16 +419,27 @@ def reshape_heads(
     return value.view(*value.shape[:-1], n_heads, inferred_d_head)
 
 
-def activation_gelu(value: Any) -> Any | AbsenceReason:
-    """Return GELU activation when the value is tensor-like."""
+def module_activation(module: Any, attribute: str, value: Any, recipe_id: str) -> Any:
+    """Return ``value`` passed through the module's own activation.
+
+    The forward applies ``module.<attribute>`` inline, so recomputing with that
+    same callable reproduces the tensor the next projection read, bit for bit.
+    A fixed formula would not: GPT-2 declares the tanh GELU approximation, and
+    the exact GELU differs from it by up to about 5e-4.
+    """
 
     if isinstance(value, AbsenceReason):
         return value
+    activation = getattr(module, attribute, None)
+    if not callable(activation):
+        return structural(f"{recipe_id}: the module has no callable {attribute!r} activation")
     if isinstance(value, FacetSpec):
-        return FacetSpec.computed(lambda: F.gelu(Facet(value).value), function_id=value.function_id)
+        return FacetSpec.computed(
+            lambda: activation(Facet(value).value), function_id=value.function_id
+        )
     if isinstance(value, torch.Tensor):
-        return F.gelu(value)
-    return structural("GELU activation operand is not tensor-like")
+        return activation(value)
+    return structural("activation operand is not tensor-like")
 
 
 def activation_silu(value: Any) -> Any | AbsenceReason:

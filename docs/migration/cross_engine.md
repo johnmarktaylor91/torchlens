@@ -78,6 +78,89 @@ site = mi.resolve_alias(trace, "layers_output[1]")
 RESULT = (len(report), not_live, site.module_address, site.facet)
 ```
 
+## interp-engine point addresses
+
+interp-engine (<https://github.com/decoderesearch/interp-engine>) names a site by a
+canonical point address: a point name, then the layer, then any extra coordinate
+(`resid_post.5`, `embeddings`, `resid_streams.5.stream-2`). Its `capture(token_ids, points)`
+takes those strings as they are. `resolve_alias` and `alias_report(trace,
+generation="interp-engine")` accept the addresses below. The table is pinned to
+interp-engine 1.14.3 (commit `2afe000da14f1fff8b9c611665f7fe343f523dd0`); its address fields
+are `name`, `layer` and `stream`.
+
+| interp-engine point | TransformerLens name | TorchLens facet |
+| --- | --- | --- |
+| `embeddings` | `hook_embed` | `lookup` on the token embedding |
+| `resid_pre.L` | `blocks.L.hook_resid_pre` | `resid_pre` |
+| `attn_in.L` | `blocks.L.attn.hook_in` | `input` on the attention module |
+| `value.L` | `blocks.L.attn.hook_v` | `v` |
+| `attn_scores.L` | `blocks.L.attn.hook_attn_scores` | `scores` |
+| `attn_probs.L` | `blocks.L.attn.hook_pattern` | `pattern` |
+| `z.L` | `blocks.L.attn.hook_z` | `z` |
+| `attn_out.L` | `blocks.L.attn.hook_out` | `attn_out` |
+| `resid_mid.L` | `blocks.L.hook_resid_mid` | `resid_mid` |
+| `mlp_in.L` | `blocks.L.mlp.hook_in` | `input` on the MLP module |
+| `mlp_pre.L` | `blocks.L.mlp.hook_pre` | `up_out` (plain MLP only) |
+| `mlp_pre_linear.L` | `blocks.L.mlp.hook_pre_linear` | `up_out` (gated MLP only) |
+| `mlp_act.L` | `blocks.L.mlp.hook_post` | `intermediate` |
+| `mlp_out.L` | `blocks.L.mlp.hook_out` | `output` on the MLP module |
+| `resid_post.L` | `blocks.L.hook_resid_post` | `resid_post` |
+| `lm_head` | (the returned logits) | `logits` |
+
+`alias_report(trace, generation="interp-engine")` lists the trace's sites under these
+addresses, then one `structurally_absent` entry for each of the 18 other interp-engine points,
+with the reason none of them has a TorchLens site: the QK-norm points (`q_norm_in`,
+`q_norm_out`, `k_norm_in`, `k_norm_out`), `attn_gate`, the post-sublayer norm outputs
+(`attn_out_post`, `mlp_out_post`), the MoE routing points (`router_logits`,
+`expert_weights`, `expert_indices`), `final_norm`, and the seven hyper-connection points.
+Hand interp-engine the addresses whose status says TorchLens has the site:
+
+```python
+# migration-test: tool=torchlens expected=(48, 18, ['mlp_pre_linear.0', 'mlp_pre_linear.1'], 'transformer.h.1')
+import torch
+import transformers
+import torchlens as tl
+import torchlens.mechinterp as mi
+
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    n_layer=2, n_embd=32, n_head=2, vocab_size=64, n_positions=16, attn_implementation="eager"
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+ids = torch.tensor([[1, 2, 3, 4]])
+
+trace = tl.trace(model, ids, save="all")
+report = mi.alias_report(trace, generation="interp-engine")
+has_site = ("real", "reconstructed_read_only", "needs_capture")
+capture_points = [r.query for r in report if r.status in has_site]
+no_site = [r.query for r in report if r.facet is None]
+not_live = sorted(r.query for r in report if r.facet is not None and r.status not in has_site)
+site = mi.resolve_alias(trace, "resid_post.1")
+# With interp-engine: acts = await engine.capture(ids[0].tolist(), capture_points)
+RESULT = (len(report), len(no_site), not_live, site.module_address)
+```
+
+Limits of the mapping:
+
+- interp-engine returns each point as `[n_tokens, width]`. TorchLens keeps the model's own
+  layout: flatten the batch dimension, and for `z.L` move the head dimension behind the
+  token dimension (`z[0].permute(1, 0, 2).reshape(n_tokens, -1)`) before comparing.
+- `layer` is interp-engine's flattened forward order. It equals the block index on
+  single-stack decoders (GPT-2, Llama-style models), which are the models this table was
+  checked on; on other layouts check the engine's numbering before pairing.
+- `embeddings` is the token embedding module's output. GPT-2's learned position embedding
+  (`transformer.wpe`) has no interp-engine point.
+- `attn_out.L` and `mlp_out.L` are the raw sublayer outputs. On families with a norm after
+  each sublayer (Gemma-2, OLMo-2) interp-engine's `attn_out_post` and `mlp_out_post` differ
+  from them, and TorchLens has no facet for those.
+- The query and key projections, the attention `result` per head, the gated MLP's
+  `gated_out`, `down_out`, the norms' `normalized` and `inv_rms`, the embedding `indices`
+  and `final_norm_input` have no interp-engine point.
+
+On GPT-2 small and SmolLM2-135M (float32, CPU, interp-engine's eager backend) every
+address above that TorchLens has a site for was captured by interp-engine and matched the
+TorchLens tensor exactly.
+
 ## Worked example: checking nnsight's hooks against TorchLens
 
 nnsight (`pip install nnsight`) reads module inputs and outputs inside a `trace` context.
