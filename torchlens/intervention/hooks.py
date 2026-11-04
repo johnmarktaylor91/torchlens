@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError
+from .._io.format_errors import ArtifactError
 from .._selection.selectors import (
     BackwardPassSelector,
     BaseSelector,
@@ -871,7 +872,7 @@ def expand_facet_hook_entries(
                 "facet_name": facet_name,
                 "facet_home_label": home_label,
                 "facet_write_mask": mask,
-                # The request a portable save persists; a load re-resolves it (_facet_persist).
+                # The request a portable save persists; loading rebinds it (save.py).
                 "facet_selector": _facet_request(facet_name, selector),
                 "facet_write_mask_sha256": _mask_digest(mask),
             }
@@ -1421,6 +1422,53 @@ def _facet_request(facet_name: str, selector: FacetSelector) -> dict[str, Any]:
         "head_index": selector.head_index,
         "module_address": selector.module_address,
     }
+
+
+def _rebound_facet_request(log: Any, hook_spec: HookSpec, where: object) -> HookSpec:
+    """Return a loaded rule; a saved facet write is rebuilt on ``log`` or refused typed."""
+
+    metadata = hook_spec.metadata
+    if not (metadata.get("facet_write") and isinstance(hook_spec.helper, Edit)):
+        return hook_spec
+    if not is_facet_target(hook_spec.site_target):
+        return hook_spec
+    entry, problem = _reproduced_facet_entry(log, hook_spec)
+    if entry is None:
+        raise ArtifactError(
+            f"The facet write on {metadata.get('facet_home_label')!r} (facet "
+            f"{metadata.get('facet_name')!r}) saved in {where} does not reproduce on the "
+            f"loaded trace: {problem}.",
+            code="bundle_load_failed",
+            remedy="re-attach the facet intervention on a live trace and save again; "
+            "do not hand-edit the recipe",
+        )
+    home = TargetSpec("label", entry.metadata["facet_home_label"])
+    return HookSpec(
+        home, entry.normalized_callable, hook_spec.helper, hook_spec.handle, dict(metadata)
+    )
+
+
+def _reproduced_facet_entry(log: Any, rule: HookSpec) -> tuple[NormalizedHookEntry | None, str]:
+    """Return the re-expanded entry matching the stored facet write, or the problem."""
+
+    metadata, digest = rule.metadata, rule.metadata.get("facet_write_mask_sha256")
+    mask = metadata.get("facet_write_mask")
+    if not isinstance(mask, torch.Tensor) or _mask_digest(mask) != digest:
+        return None, "the stored write mask is missing or does not match its sha256"
+    try:
+        plan = normalize_hook_plan(
+            rule.site_target, rule.helper, allow_replay_only_site_targets=True
+        )
+        entries = expand_facet_hook_entries(log, plan)
+    except SiteResolutionError as exc:
+        return None, f"the facet selector no longer resolves ({exc})"
+    wanted = (metadata.get("facet_home_label"), metadata.get("facet_name"))
+    for entry in entries:
+        if (entry.metadata["facet_home_label"], entry.metadata["facet_name"]) == wanted:
+            if entry.metadata["facet_write_mask_sha256"] == digest:
+                return entry, ""
+            return None, "the re-resolved write mask differs from the stored one"
+    return None, "the facet selector resolves to another home op or facet"
 
 
 def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, Any]]:

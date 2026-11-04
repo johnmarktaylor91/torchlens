@@ -311,7 +311,7 @@ writes the same file in its own directory: one grammar, two homes.
   format 3 alone refuses the facet recipe (`bundle_load_failed`) instead of installing the edit
   on the whole home tensor. Loading a trace re-resolves each stored selector on the loaded trace
   and rebuilds the wrapper only when the home label, facet name and mask digest match the stored
-  ones; otherwise the load refuses typed (`ArtifactError`). A spec loaded without a trace
+  ones; otherwise the load raises `ArtifactError`. A spec loaded without a trace
   keeps the request unbound: re-applied as `(site, edit)` it re-resolves the facet on the target
   trace, and a sticky rule that lost its wrapper refuses to fire. A facet write whose edit holds
   a user callable keeps a placeholder of the wrapper.

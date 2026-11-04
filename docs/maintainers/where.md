@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1579 modules, 677086 lines, 0 modules without a docstring.
+83 packages, 1578 modules, 677020 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 80 | 37449 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37383 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -1719,7 +1719,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (80 modules, 37449 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37383 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1734,7 +1734,6 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_edit_copy` | Field-wise deep copy for ''tl.Edit'' (the ''Edit'' dataclass). | 40 |
 | `_edit_guards` | Call guards shared by the trace edit verbs (''do'', ''set'', hook attachment). | 155 |
 | `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 172 |
-| `_facet_persist` | Facet-write rules of a saved recipe, rebound to the trace they load with. | 129 |
 | `_facet_save` | The capture-time save selector for ''trace(save=<facet selector>)''. | 102 |
 | `_facet_union` | Facet unions at the write doors: ''head_a \| head_b'' splits into its facet branches. | 170 |
 | `_facet_writes` | Facet writes: which records serve facet views, and the facet slice an edit is writing. | 252 |
@@ -1785,7 +1784,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `edge_substitution` | Edge substitution (L6 stage 3): replace the value CONSUMED on one edge. | 523 |
 | `errors` | Error ownership for TorchLens intervention APIs. | 756 |
 | `helpers` | Built-in helper constructors for TorchLens interventions. | 1332 |
-| `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1670 |
+| `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1718 |
 | `injection` | ''log_injections'' stages 0-2: anchored injected-op recording (/). | 858 |
 | `masked_edit` | Engine-owned masked-edit derivation for ''do(selection, edit)''. | 431 |
 | `model_door` | The ONE audited model-argument funnel (surgery item 10, OP2). | 221 |
@@ -1796,7 +1795,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `replay` | Saved-DAG replay engine for TorchLens interventions. | 1678 |
 | `rerun` | Full-forward rerun engine for TorchLens interventions. | 1640 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1638 |
-| `save` | Persistence for TorchLens intervention specifications. | 841 |
+| `save` | Persistence for TorchLens intervention specifications. | 856 |
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `spec` | The ONE immutable public intervention spec ( substrate). | 801 |
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 339 |

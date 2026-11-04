@@ -1061,9 +1061,9 @@ def _finish_format3_recipe(root: Path, trace: Trace | None = None) -> Interventi
     package rebuilds built-in edits (facet writes rebound on ``trace``); a callable placeholder
     becomes an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
-    from ..intervention._facet_persist import load_trace_recipe_spec
+    from ..intervention.save import _load_trace_recipe_spec
 
-    return load_trace_recipe_spec(root, trace)
+    return _load_trace_recipe_spec(root, trace)
 
 
 format3_reader.install_load_hooks(
