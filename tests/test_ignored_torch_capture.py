@@ -20,6 +20,8 @@ import torchlens as tl
 from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.options import CaptureOptions
+from torchlens.validation.core import validate_saved_outs
+from torchlens.validation.diagnostics import get_validation_failure
 
 
 def _decorated_pairs() -> set[tuple[str, str]]:
@@ -288,5 +290,34 @@ def test_philox_fill_validates_and_replays(method: str, fold_key: bool) -> None:
                 assert torch.equal(result.output, model(*replay_inputs))
             finally:
                 result.trace.cleanup()
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("method", _PHILOX_FILLS)
+def test_planted_key_blind_philox_fill_fails_perturbation(method: str) -> None:
+    """A fill whose replay ignores its key fails: only the destination slot is excused."""
+
+    model, inputs = _PhiloxFillModel(method, fold_key=True), _philox_inputs(7, 0)
+    torch.manual_seed(0)
+    ground_truth = model(*inputs)
+    torch.manual_seed(0)
+    trace = tl.trace(model, inputs, capture=CaptureOptions(save_args=True, seed=0), save="all")
+    try:
+        fill = next(op for op in trace._layer_list if op.func_name == method)
+        key_label = fill.parent_arg_positions["args"][1]
+        frozen = fill.out.detach().clone()
+
+        def key_blind_fill(*args: object, **kwargs: object) -> torch.Tensor:
+            return frozen.clone()
+
+        key_blind_fill.__name__ = fill.func.__name__
+        fill.func = key_blind_fill
+        status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        assert status.state == "failed"
+        failure = get_validation_failure(trace)
+        assert failure is not None and failure.check_name == "perturbation"
+        assert key_label in failure.extra["perturbed_parents"]
     finally:
         trace.cleanup()
