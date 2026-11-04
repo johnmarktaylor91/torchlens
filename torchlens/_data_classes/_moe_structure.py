@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch.nn as nn
 
+from ..intervention.types import CapturedArgTemplate, LiteralValue
 from ._moe_layouts import _Layout, _layouts
 from ._runtime_handles import source_model_from_trace
 
@@ -46,12 +47,17 @@ def _ancestors(ops: dict[str, Op], label: str) -> set[str]:
     return seen
 
 
-def _last_axis(op: Op, position: int, default: int) -> bool:
+def _last_axis(op: Op, position: int, default: int, rank: int | None = None) -> bool:
     """Require a statically recorded expert-axis reduction/selection."""
-    args = op.args_template or ()
-    kwargs = op.kwargs_template or {}
-    dim = kwargs.get("dim", args[position] if len(args) > position else default)
-    return isinstance(dim, int) and bool(op.shape) and dim % len(op.shape) == len(op.shape) - 1
+    template = op.args_template
+    if not isinstance(template, CapturedArgTemplate):
+        return False
+    args = template.args
+    kwargs = dict(template.kwargs)
+    dim = kwargs.get("dim", args[position] if len(args) > position else LiteralValue(default))
+    dim = dim.value if isinstance(dim, LiteralValue) else None
+    rank = len(op.shape) if rank is None else rank
+    return isinstance(dim, int) and rank > 0 and -rank <= dim < rank and dim % rank == rank - 1
 
 
 def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
@@ -62,7 +68,10 @@ def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
             calls.setdefault(op.func_call_id, {})[op.multi_output_index] = op
     pairs = [(rows[0], rows[1]) for rows in calls.values() if 0 in rows and 1 in rows]
     for indices in ops.values():
-        if indices.func_name != "argmax" or not _last_axis(indices, 1, -1):
+        input_rank = max(
+            (len(ops[label].shape) for label in indices.parents if label in ops), default=0
+        )
+        if indices.func_name != "argmax" or not _last_axis(indices, 1, -1, input_rank):
             continue
         for values in ops.values():
             if (
