@@ -1,9 +1,9 @@
 """Recurrent and conditional drawing marks: edge annotation size and pass marks.
 
-* Edge annotations (``In``/``Out`` pass ranges, argument labels, IF/THEN) follow
+* Edge annotations (``In``/``Out`` pass ranges, argument labels, THEN/ELSE) follow
   the edge font size (``edge_overrides["fontsize"]`` or ``font_size``) instead of
-  a fixed 8 pt; the default drawing keeps 8 pt and 18 pt.
-* A rolled pass range on a conditional edge shares the branch label's midpoint
+  a fixed size; the default drawing keeps 13 pt annotations and 14 pt arm labels.
+* A rolled pass range on a conditional edge shares the arm label's midpoint
   slot rather than floating as a tail or head label.
 * The ``"label"`` token of ``node_label_fields`` carries the pass marks the default
   title shows, and the ``"pass"`` token prints nothing on single-pass nodes.
@@ -68,7 +68,8 @@ def _edge_point_sizes(dot: str) -> set[str]:
 
 
 def _branch_edge(dot: str) -> str:
-    lines = [line for line in _edge_lines(dot) if "<u>IF</u>" in line]
+    # The conditional-arm edge: IF names the test node, THEN rides the arm edge.
+    lines = [line for line in _edge_lines(dot) if "<u>THEN</u>" in line]
     assert len(lines) == 1, lines
     return lines[0]
 
@@ -91,7 +92,8 @@ def linear_trace() -> Iterator[tl.Trace]:
 
 def test_resolve_edge_typography_scales_annotation_and_emphasis() -> None:
     record = resolve_edge_typography(DEFAULT_TYPOGRAPHY, edge_overrides={"fontsize": 7})
-    assert (record.annotation_pt, record.emphasis_pt) == ("7", "9")
+    # Both scale by 7/14 from the 13/14 default (emphasis keeps its ratio to the base).
+    assert (record.annotation_pt, record.emphasis_pt) == ("7", "7")
     assert resolve_edge_typography(DEFAULT_TYPOGRAPHY) is DEFAULT_TYPOGRAPHY
     # A callable override cannot size a whole draw; the theme record stands.
     unsized = resolve_edge_typography(DEFAULT_TYPOGRAPHY, edge_overrides={"fontsize": len})
@@ -106,10 +108,10 @@ def test_resolve_edge_typography_scales_annotation_and_emphasis() -> None:
     assert ordered.annotation_pt == "11"
 
 
-def test_default_edge_annotations_keep_8_and_18_point(loop_if_trace: tl.Trace) -> None:
+def test_default_edge_annotations_keep_13_and_14_point(loop_if_trace: tl.Trace) -> None:
     dot = _dot(loop_if_trace, rolled=True)
-    assert '<FONT POINT-SIZE="18"><b><u>IF</u>' in _branch_edge(dot)
-    assert '"8"' in {f'"{size}"' for size in _edge_point_sizes(dot)}
+    assert '<FONT POINT-SIZE="14"><b><u>THEN</u>' in _branch_edge(dot)
+    assert '"13"' in {f'"{size}"' for size in _edge_point_sizes(dot)}
 
 
 @pytest.mark.parametrize(
@@ -121,23 +123,24 @@ def test_edge_font_size_sizes_every_edge_annotation(
     loop_if_trace: tl.Trace, kwargs: dict[str, object]
 ) -> None:
     dot = _dot(loop_if_trace, rolled=True, **kwargs)
-    assert _edge_point_sizes(dot) == {"7", "9"}
-    assert '<FONT POINT-SIZE="9"><b><u>IF</u>' in _branch_edge(dot)
-    assert "labelfontsize=8" not in dot
+    # 13 pt annotations and 14 pt arm labels both scale to 7 pt.
+    assert _edge_point_sizes(dot) == {"7"}
+    assert '<FONT POINT-SIZE="7"><b><u>THEN</u>' in _branch_edge(dot)
+    assert "labelfontsize=13" not in dot
 
 
 def test_edge_font_size_sizes_argument_labels(linear_trace: tl.Trace) -> None:
     default = _dot(linear_trace, rolled=True)
     sized = _dot(linear_trace, rolled=True, edge_overrides={"fontsize": 12})
-    assert "8" in _edge_point_sizes(default)
-    assert "8" not in _edge_point_sizes(sized)
+    assert "13" in _edge_point_sizes(default)
+    assert "13" not in _edge_point_sizes(sized)
     assert "12" in _edge_point_sizes(sized)
 
 
 def test_rolled_pass_range_shares_the_branch_midpoint(loop_if_trace: tl.Trace) -> None:
     line = _branch_edge(_dot(loop_if_trace, rolled=True))
     label = line.split("[label=", 1)[1]
-    assert "<u>IF</u>" in label and ">Out " in label
+    assert "<u>THEN</u>" in label and ">Out " in label
     assert "taillabel" not in line
     assert "headlabel" not in line
 
@@ -171,4 +174,8 @@ def test_rolled_argument_and_pass_range_share_one_midpoint(loop_if_trace: tl.Tra
     for line in input_edges:
         assert "headlabel" not in line and "xlabel" not in line
         label = line.split("[label=", 1)[1]
-        assert ">arg " in label and ">In " in label
+        assert ">arg " in label
+    # The pass-range check applies to the edge that carries one: input_2 feeds pass 1
+    # only (``In 1``, stacked with its argument); input_1 feeds every pass, so it has none.
+    ranged = [line for line in input_edges if ">In " in line.split("[label=", 1)[1]]
+    assert len(ranged) == 1 and ranged[0].strip().startswith("input_2")
