@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1450 modules, 650175 lines, 0 modules without a docstring.
+83 packages, 1450 modules, 650181 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -55,8 +55,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 17 | 6798 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8669 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6978 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6487 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6980 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6489 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 110 | 54449 |
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9046 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2036 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10789 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10790 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 4026 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1272 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 369 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5523 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 77 | 36762 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 77 | 36763 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1929 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
@@ -1172,7 +1172,7 @@ JAX backend preview exports. (10 modules, 8669 lines)
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (17 modules, 6978 lines)
+Technical-preview MLX backend for TorchLens. (17 modules, 6980 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1187,7 +1187,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6978 lines)
 | `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2512 |
 | `capabilities` | Registry-backed capability exports for the technical-preview MLX backend. | 38 |
 | `external_arrays` | Arrays a forward can reach from outside itself: the closure-constant census. | 147 |
-| `interventions` | Static-label live interventions for the technical-preview MLX backend. | 481 |
+| `interventions` | Static-label live interventions for the technical-preview MLX backend. | 483 |
 | `model_prep` | MLX model preparation helpers for technical-preview capture. | 495 |
 | `settings` | Backend-local MLX settings (no public trace option grows for a preview). | 88 |
 | `tensor_store` | External metadata store for MLX arrays. | 82 |
@@ -1196,7 +1196,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6978 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6487 lines)
+Paddle backend preview. (14 modules, 6489 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1208,7 +1208,7 @@ Paddle backend preview. (14 modules, 6487 lines)
 | `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
-| `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 552 |
+| `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 554 |
 | `model_prep` | Paddle model preparation helpers for technical-preview capture. | 369 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 700 |
@@ -1471,7 +1471,7 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 2036 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (26 modules, 10789 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (26 modules, 10790 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1489,7 +1489,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_grad_fn_walk` | Post-hoc ''grad_fn'' walker (approved diagnostic, R grad_fn ruling). | 424 |
 | `_grad_scale_proof` | Prove from a trace that a backward ran without loss scaling. | 189 |
 | `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 723 |
-| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 776 |
+| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 777 |
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 469 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2249 |
@@ -1619,7 +1619,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (77 modules, 36762 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (77 modules, 36763 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1652,7 +1652,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_recipe_io` | Save and load a :class:'Recipe' as a ''.tlspec'' directory (manifest kind ''"recipe"''). | 368 |
 | `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 288 |
 | `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 332 |
-| `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 454 |
+| `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 455 |
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 181 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 389 |
