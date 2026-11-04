@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1458 modules, 651579 lines, 0 modules without a docstring.
+83 packages, 1461 modules, 652273 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 48 | 25609 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4658 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 92 | 38297 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 92 | 38318 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10663 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6363 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 111 | 54762 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 114 | 55435 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8836 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
@@ -291,7 +291,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (92 modules, 38297 lines)
+Core data structures for representing a logged forward pass. (92 modules, 38318 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -336,7 +336,7 @@ Core data structures for representing a logged forward pass. (92 modules, 38297 
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
-| `_trace_accessors` | Trace accessor helpers. | 703 |
+| `_trace_accessors` | Trace accessor helpers. | 724 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace. | 401 |
 | `_trace_aten` | Public ATen-operation accessors for ''Trace'' (''CaptureOptions(aten_ops=True)''). | 66 |
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 619 |
@@ -1257,7 +1257,7 @@ tinygrad backend preview. (9 modules, 4474 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (111 modules, 54762 lines)
+Torch backend implementation package for TorchLens capture. (114 modules, 55435 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1287,7 +1287,10 @@ Torch backend implementation package for TorchLens capture. (111 modules, 54762 
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 533 |
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 764 |
-| `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 183 |
+| `_grad_fn_graph` | Backward graph relations of ''GradFn'' records: parents, children, siblings, co-parents. | 229 |
+| `_grad_fn_growth` | Append newly discovered ''GradFn'' records to a backward projection in place. | 364 |
+| `_grad_fn_membership` | Module membership of ''GradFn'' records: paired addresses and inferred containment. | 355 |
+| `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 224 |
 | `_grad_fn_pairing` | Pair autograd ''GradFn'' nodes with the forward ops whose outputs they belong to. | 93 |
 | `_grad_fn_source` | Best-effort source metadata for autograd grad-fn classes. | 115 |
 | `_gradfn_markers` | grad_fn-fire marker sink helpers (torchnative). | 149 |
@@ -1349,7 +1352,7 @@ Torch backend implementation package for TorchLens capture. (111 modules, 54762 
 | `aliasing` | Torch alias and mutation contract detection. | 429 |
 | `arg_names` | Argument-name introspection for wrapped torch callables (''_state._arg_names''). | 93 |
 | `backend` | Torch implementation of the capture backend Protocol. | 787 |
-| `backward` | Capture torch backward execution and autograd graph metadata. | 4187 |
+| `backward` | Capture torch backward execution and autograd graph metadata. | 3871 |
 | `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 521 |
 | `bound_root` | TL-authored synthetic root for bound-method capture. | 130 |
 | `buffer_writes` | Registered-buffer write capture for the torch backend. | 1787 |
