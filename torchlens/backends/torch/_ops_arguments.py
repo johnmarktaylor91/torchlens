@@ -43,6 +43,7 @@ from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ..._ir.workspaces import RawGraphWorkspace
 
 
 __all__ = (
@@ -55,6 +56,24 @@ __all__ = (
     "_session_validated_parameter",
     "_tensor_has_known_provenance",
 )
+
+
+def _peek_raw_graph_workspace(trace: "Trace | None") -> "RawGraphWorkspace | None":
+    """Read the trace's raw-graph workspace, if this capture still holds one.
+
+    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
+    lives for one capture: postprocess pops it at its terminal consume and a
+    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
+    direct private read guarded by ``AttributeError`` rather than a
+    string-literal ``getattr`` default, so a rename breaks loudly.
+    """
+
+    if trace is None:
+        return None
+    try:
+        return trace._raw_graph_ws
+    except AttributeError:
+        return None
 
 
 def _function_registry_key(
@@ -80,7 +99,7 @@ def _function_registry_key(
 
     if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
         return FunctionRegistryKey("torch.Tensor", str(func_name), "method")
-    workspace = getattr(trace, "_raw_graph_ws", None)
+    workspace = _peek_raw_graph_workspace(trace)
     if workspace is None or not _is_permanent_c_callable(func):
         return _derive_function_registry_key(func)
     memo = workspace._function_key_memo
