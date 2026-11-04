@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1576 modules, 676174 lines, 0 modules without a docstring.
+83 packages, 1578 modules, 676302 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26636 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39357 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 103 | 39405 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -29,7 +29,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 34 | 17545 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 35 | 17625 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (102 modules, 39357 lines)
+Core data structures for representing a logged forward pass. (103 modules, 39405 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -339,6 +339,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39357
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 799 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record (tvscope). | 114 |
+| `_removed_parent_refs` | Replace intervention-template references to removed parent ops. | 79 |
 | `_repr` | Shared record representation helpers. | 64 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
 | `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 691 |
@@ -388,7 +389,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39357
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 376 |
 | `buffer` | Persistent buffer entities and dict-like accessors. | 488 |
-| `cleanup` | Trace cleanup helpers and post-session teardown. | 1081 |
+| `cleanup` | Trace cleanup helpers and post-session teardown. | 1050 |
 | `container` | Runtime views over captured TorchLens output containers. | 1187 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
 | `field_policy` | Structural field-policy tables for TorchLens record classes. | 192 |
@@ -655,12 +656,13 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 516 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (34 modules, 17545 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (35 modules, 17625 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 318 |
+| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 335 |
 | `_ast_predicates` | Statement and expression predicates for the conditional AST indexer. | 162 |
+| `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 295 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'') and its in-memory evidence. | 133 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 227 |
@@ -684,7 +686,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (3
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 35 |
 | `_streamed_tensor_types` | Wire tensor identity and dtype lookup for streamed-reference finalization. | 51 |
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2214 |
-| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1372 |
+| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1278 |
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1761 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 914 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
