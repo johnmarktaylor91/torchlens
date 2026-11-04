@@ -208,3 +208,85 @@ def test_torchlens_rng_snapshots_record_no_rng_state_op() -> None:
     finally:
         log.cleanup()
     assert tl.validate(model, _input_4x4(), scope="forward") is True
+
+
+# ---------------------------------------------------------------------------
+# Philox in-place fills. ``x._philox_normal_(key)`` and ``x._philox_uniform_(key)`` fill their
+# receiver from a counter-based key tensor (torch 2.13+, CUDA kernels only). The key is a recorded
+# parent, and the fill is a pure function of the key, so a replay with the same key reproduces it
+# bit for bit and a replay with a new key reproduces a plain forward on that key.
+# ---------------------------------------------------------------------------
+_PHILOX_FILLS = tuple(
+    name for name in ("_philox_normal_", "_philox_uniform_") if hasattr(torch.Tensor, name)
+)
+
+
+class _PhiloxFillModel(nn.Module):
+    """Fills a fresh tensor from ``key`` (folded first when ``fold_key``) and consumes it."""
+
+    def __init__(self, method: str, fold_key: bool) -> None:
+        super().__init__()
+        self.method = method
+        self.fold_key = fold_key
+
+    def forward(self, x: torch.Tensor, key: torch.Tensor) -> torch.Tensor:
+        if self.fold_key:
+            key = torch._philox_key_fold_in(key, 3)
+        return getattr(torch.empty_like(x), self.method)(key) * 2 + x
+
+
+def _philox_inputs(seed: int, offset: int) -> tuple[torch.Tensor, torch.Tensor]:
+    torch.manual_seed(seed)
+    x = torch.randn(4, 4, device="cuda")
+    return x, torch.tensor([seed, offset], dtype=torch.uint64, device="cuda")
+
+
+@pytest.mark.parametrize("method", _PHILOX_FILLS)
+def test_philox_fill_is_decorated(method: str) -> None:
+    """The in-place method spelling is decorated, not only its ``torch.*`` twin."""
+
+    assert ("torch.Tensor", method) in _decorated_pairs()
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("fold_key", (False, True), ids=("input_key", "folded_key"))
+@pytest.mark.parametrize("method", _PHILOX_FILLS)
+def test_philox_fill_captured_with_key_parent(method: str, fold_key: bool) -> None:
+    """The fill records as one op whose parents are its receiver and the key's producer."""
+
+    log = tl.trace(_PhiloxFillModel(method, fold_key), _philox_inputs(7, 0))
+    try:
+        by_name = {op.func_name: op for op in log.ops}
+        assert method in by_name, f"{method} not captured: {list(by_name)}"
+        assert [op.func_name for op in log.ops].count(method) == 1
+        fill = by_name[method]
+        receiver = by_name["empty_like"].layer_label
+        assert receiver in fill.parents, fill.parents
+        key_parents = [parent for parent in fill.parents if parent != receiver]
+        assert len(key_parents) == 1, fill.parents
+        if fold_key:
+            assert key_parents == [by_name["_philox_key_fold_in"].layer_label]
+        assert fill.children, f"{method} output has no recorded consumer"
+    finally:
+        log.cleanup()
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("fold_key", (False, True), ids=("input_key", "folded_key"))
+@pytest.mark.parametrize("method", _PHILOX_FILLS)
+def test_philox_fill_validates_and_replays(method: str, fold_key: bool) -> None:
+    """Validation passes; seeded and key-driven replays reproduce the fill exactly."""
+
+    model = _PhiloxFillModel(method, fold_key)
+    inputs = _philox_inputs(7, 0)
+    assert tl.validate(model, inputs, scope="forward", validate_metadata=True) is True
+    trace = tl.trace(model, inputs, capture=CaptureOptions(seed=5))
+    try:
+        for replay_inputs in (inputs, _philox_inputs(11, 4)):
+            result = trace.run_transaction(inputs=replay_inputs, seed=5)
+            try:
+                assert torch.equal(result.output, model(*replay_inputs))
+            finally:
+                result.trace.cleanup()
+    finally:
+        trace.cleanup()
