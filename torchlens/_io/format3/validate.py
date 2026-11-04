@@ -23,6 +23,7 @@ from typing import Any, Final
 
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._extra_files import _warn_extra_files
+from .._injected_row_cells import refuse_stamped_model_rows
 from .._json import loads_bounded, read_bytes_bounded
 from .._runtime_identity import check_runtime_identity, parse_pep440
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
@@ -31,6 +32,7 @@ from ..paths import reject_symlink_path
 from ..writer_contract import writer_contract_digest
 from . import contract
 from .carried import carried_field_errors
+from .codec_policy import known_backend
 from .summaries import summary_schema_errors
 
 __all__ = [
@@ -369,26 +371,12 @@ def _disclosure_errors(disclosures: Any) -> list[str]:
     return ["disclosures must be {count: positive int, first: [<=16 strings]}"]
 
 
-def _is_known_backend(name: str) -> bool:
-    """Whether ``name`` is a contract backend or a backend registered in this runtime now.
-
-    A runtime-registered backend (a third-party spec) saves and loads under its own name;
-    an unregistered unknown name keeps the typed refusal.
-    """
-
-    if name in contract.BACKENDS:
-        return True
-    from ...backends.registry import registered_backend_specs
-
-    return any(spec.name == name for spec in registered_backend_specs())
-
-
 def _backend_errors(manifest: Mapping[str, Any]) -> list[str]:
     """The artifact backend (absent means torch) and its ``backend_runtime`` stamp, which an
     array artifact carries and which must name the same backend wherever it appears."""
 
     backend = manifest.get("backend", contract.DEFAULT_BACKEND)
-    if not isinstance(backend, str) or not _is_known_backend(backend):
+    if not isinstance(backend, str) or not known_backend(backend):
         return [f"unknown backend {backend!r}; the artifact backend is one of {contract.BACKENDS}"]
     runtime = manifest.get("backend_runtime")
     if runtime is None and backend == contract.DEFAULT_BACKEND:
@@ -552,33 +540,6 @@ def _injected_op_ids(
     return {id(obj) for obj, row in pairs if row.get("injection_provenance") is not None}
 
 
-def _check_stamped_model_ops(
-    tables: Mapping[str, list[dict[str, Any]]],
-    objects: Mapping[str, Sequence[Any]],
-    main_keys: list[Any],
-    injected: set[int],
-) -> None:
-    """A main-key (model) op row carrying ``injection_provenance`` is a forged injected row.
-
-    It refuses with the injected-row codes the load split uses, in its order: the
-    provenance grammar (``artifact_injection_provenance_invalid``), then the codec
-    envelope (``artifact_injection_codec_invalid``); one that passes both still fails
-    the coverage invariant below.
-    """
-
-    stamped = {id(op) for op in main_keys} & injected
-    if not stamped:
-        return
-    from ..injection_codec import check_injected_row_cells
-
-    for index, (obj, row) in enumerate(
-        zip(objects.get("op", ()), tables.get("op", ()), strict=True)
-    ):
-        if id(obj) in stamped:
-            label = str(row.get("layer_label") or row.get("label") or f"op[{index}]")
-            check_injected_row_cells(row["injection_provenance"], row.get("annotations"), label)
-
-
 def _check_op_coverage(
     tables: Mapping[str, list[dict[str, Any]]],
     objects: Mapping[str, Sequence[Any]],
@@ -599,7 +560,9 @@ def _check_op_coverage(
     entries = _entries(trace[field])
     if field == "_layer_dict_main_keys":
         injected = _injected_op_ids(tables, objects)
-        _check_stamped_model_ops(tables, objects, entries, injected)
+        stamped = {id(op) for op in entries} & injected
+        pairs = enumerate(zip(objects.get("op", ()), tables.get("op", ()), strict=True))
+        refuse_stamped_model_rows((i, row) for i, (obj, row) in pairs if id(obj) in stamped)
         rows = {id(op) for op in _entries(trace.get("_layer_list") or ()) if id(op) not in injected}
     else:
         rows = {id(op) for op in objects.get("op", ())}

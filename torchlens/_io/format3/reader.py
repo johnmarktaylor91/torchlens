@@ -26,7 +26,7 @@ from . import contract
 from ._payload_headers import validate_payload_headers
 from ._record_refs import _RecordResolver
 from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
-from .codec_policy import codec_backend
+from .codec_policy import backend_hint_fields, backend_materializes, codec_backend
 from .container import iter_members, read_member_index
 from .decode import (
     CELL_CODE,
@@ -308,7 +308,7 @@ class TensorRefSink:
             "logical_backend": backend,
             "codec": codec_id,
             # A backend payload's hints are the 2.x tensor-entry fields the codec reads.
-            **_backend_hint_fields(codec_metadata),
+            **backend_hint_fields(codec_metadata),
         }
         return BlobRef(blob_id, kind)
 
@@ -374,22 +374,6 @@ def _tensor_geometry(ref: Mapping[str, Any], at: str) -> tuple[list[int], int, s
     if dtype_name not in STORABLE_DTYPES:
         raise cell_error(at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE)
     return shape, numel, device, is_complex, dtype_name
-
-
-_BACKEND_HINT_FIELDS: Final = (
-    "logical_dtype",
-    "logical_device",
-    "transport_backend",
-    "transport_dtype",
-    "codec_metadata",
-)
-
-
-def _backend_hint_fields(hints: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Return the payload codec's entry fields from a tensor cell's codec hints."""
-
-    hints = hints or {}
-    return {name: hints.get(name) for name in _BACKEND_HINT_FIELDS}
 
 
 def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:
@@ -628,22 +612,9 @@ class DecodedArtifact(_RecordResolver):
         # only the include flags there, so the backend's capability answers it.
         manifest["payload_policy"] = {
             **dict(manifest.get("payload_policy") or {}),
-            "materialization_supported": _backend_materializes(manifest["backend"]),
+            "materialization_supported": backend_materializes(manifest["backend"]),
         }
         return manifest
-
-
-def _backend_materializes(backend: str) -> bool:
-    """Whether a registered backend rebuilds its saved payloads (torch always does)."""
-
-    if backend == contract.DEFAULT_BACKEND:
-        return True
-    from ...backends.registry import registered_backend_specs
-
-    return any(
-        spec.name == backend and spec.capabilities.payload_materialization
-        for spec in registered_backend_specs()
-    )
 
 
 # ---- Doors -----------------------------------------------------------------

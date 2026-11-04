@@ -29,11 +29,17 @@ from __future__ import annotations
 __tl_layer__ = "L3"
 
 from collections.abc import Callable
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._injected_row_cells import (
+    _ENVELOPE_KEY,
+    _LITERAL_TYPES,
+    _refuse_codec,
+    _validate_envelope,
+    check_injection_provenance_row,
+)
 from ._torch_symbols import torch_attr
 from .format_contract import ArtifactError, BlobRef
 from .scrub import BlobSpec
@@ -46,15 +52,6 @@ __all__ = [
     "finalize_loaded_injected_ops",
     "split_restored_injected_rows",
 ]
-
-_ENVELOPE_KEY = "injection_codec_v1"
-"""The op-row annotations key carrying the codec extras."""
-
-_ENVELOPE_FIELDS = frozenset({"version", "host_label", "callable", "fire_device", "args", "kwargs"})
-"""Closed key set of one codec envelope."""
-
-_LITERAL_TYPES = (bool, int, float, str, bytes)
-"""Closed literal arg-snapshot types (plus ``None``)."""
 
 
 # ---------------------------------------------------------------------------
@@ -222,12 +219,6 @@ def _synthesize_row(
     return Op(fields)
 
 
-_CALLABLE_KEY_FIELDS = frozenset(
-    {"namespace", "qualname", "dispatch_kind", "version", "import_path"}
-)
-"""Closed field set of one persisted callable registry key."""
-
-
 def _encode_registry_key(callable_ref: Any) -> dict[str, Any] | None:
     """Encode one FunctionRegistryKey as its plain persisted field dict."""
 
@@ -316,41 +307,6 @@ def split_restored_injected_rows(trace: Any) -> None:
     state["pending_loaded_rows"] = injected
 
 
-def check_injected_row_cells(provenance: Any, annotations: Any, label: str) -> None:
-    """Check one decoded injected-row candidate before any record is built.
-
-    Runs the load split's row checks in their order on table cells: the
-    provenance grammar, then the ``injection_codec_v1`` envelope.
-
-    Parameters
-    ----------
-    provenance, annotations:
-        The row's ``injection_provenance`` and ``annotations`` cells.
-    label:
-        Row label used in the refusal message.
-    """
-
-    from .forgery_validation import check_injection_provenance_row
-
-    check_injection_provenance_row(provenance, label)
-    _validate_envelope(SimpleNamespace(annotations=annotations), label)
-
-
-def _refuse_codec(message: str, reason: str) -> NoReturn:
-    """Raise one typed codec-envelope load refusal."""
-
-    raise ArtifactError(
-        f"{message} -- the artifact's injected-op codec envelope is forged or hand-edited",
-        code="artifact_injection_codec_invalid",
-        field="Op.annotations.injection_codec_v1",
-        reason=reason,
-        remedy=(
-            "re-capture with log_injections and re-save with one current "
-            "TorchLens version; do not hand-edit injected-op rows"
-        ),
-    )
-
-
 def _recorded_rule_ids(trace: Any) -> frozenset[str]:
     """The spec rule ids this artifact's own intervention record vouches for.
 
@@ -417,8 +373,6 @@ def _validate_one_split_row(
     recorded_rule_ids: frozenset[str],
 ) -> str:
     """Validate one injected row's identity and anchoring; return its label."""
-
-    from .forgery_validation import check_injection_provenance_row
 
     label = getattr(row, "layer_label", None)
     if not isinstance(label, str) or not label:
@@ -533,149 +487,6 @@ def _validate_row_op_identity(row: Any, label: str) -> None:
                 "injected ops are outside the dataflow graph by construction",
                 "record_graph_entangled",
             )
-
-
-def _validate_envelope(row: Any, label: str) -> None:
-    """Validate one row's codec envelope shape fail-closed."""
-
-    annotations = getattr(row, "annotations", None)
-    if not isinstance(annotations, dict) or _ENVELOPE_KEY not in annotations:
-        _refuse_codec(
-            f"injected-op row {label!r} carries no {_ENVELOPE_KEY} envelope",
-            "codec_missing",
-        )
-    envelope = annotations[_ENVELOPE_KEY]
-    if not isinstance(envelope, dict) or set(envelope) != _ENVELOPE_FIELDS:
-        _refuse_codec(
-            f"injected-op row {label!r} envelope keys are not the closed codec set",
-            "codec_schema",
-        )
-    if envelope["version"] != 1:
-        _refuse_codec(
-            f"injected-op row {label!r} envelope version {envelope['version']!r} is unknown",
-            "codec_version",
-        )
-    host_label = envelope["host_label"]
-    if not isinstance(host_label, str) or not host_label:
-        _refuse_codec(f"injected-op row {label!r} host_label is not a string", "codec_host")
-    if not label.startswith(f"{host_label}/inj_"):
-        _refuse_codec(
-            f"injected-op row label {label!r} does not extend its host label "
-            f"{host_label!r} with the /inj_ suffix",
-            "codec_label",
-        )
-    _validate_envelope_callable(envelope["callable"], label)
-    fire_device = envelope["fire_device"]
-    if fire_device is not None and not isinstance(fire_device, str):
-        _refuse_codec(f"injected-op row {label!r} fire_device is not a string", "codec_device")
-    _validate_envelope_args(envelope, label)
-
-
-def _validate_envelope_callable(callable_ref: Any, label: str) -> None:
-    """Validate one persisted callable registry key fail-closed."""
-
-    if callable_ref is None:
-        return
-    if not isinstance(callable_ref, dict) or set(callable_ref) != _CALLABLE_KEY_FIELDS:
-        _refuse_codec(
-            f"injected-op row {label!r} callable reference keys are not the "
-            "closed registry-key set",
-            "codec_callable",
-        )
-    for key_field in ("namespace", "qualname", "dispatch_kind"):
-        if not isinstance(callable_ref[key_field], str) or not callable_ref[key_field]:
-            _refuse_codec(
-                f"injected-op row {label!r} callable {key_field} is not a non-empty string",
-                "codec_callable",
-            )
-    if not isinstance(callable_ref["version"], int) or isinstance(callable_ref["version"], bool):
-        _refuse_codec(
-            f"injected-op row {label!r} callable version is not an int",
-            "codec_callable",
-        )
-    if callable_ref["import_path"] is not None and not isinstance(callable_ref["import_path"], str):
-        _refuse_codec(
-            f"injected-op row {label!r} callable import_path is not a string",
-            "codec_callable",
-        )
-
-
-def _validate_envelope_args(envelope: dict[str, Any], label: str) -> None:
-    """Validate the envelope's encoded args/kwargs payloads fail-closed."""
-
-    for slot_name in ("args", "kwargs"):
-        payload = envelope[slot_name]
-        if payload is None:
-            continue
-        if not isinstance(payload, list):
-            _refuse_codec(
-                f"injected-op row {label!r} envelope {slot_name} is not a list",
-                "codec_args",
-            )
-        for item in payload:
-            if slot_name == "kwargs":
-                _validate_encoded_pair(item, label, "envelope kwargs entry")
-            else:
-                _validate_encoded_value(item, label)
-
-
-def _validate_encoded_pair(item: Any, label: str, what: str) -> None:
-    """Validate one ``[str_key, encoded_value]`` pair fail-closed."""
-
-    if not isinstance(item, list) or len(item) != 2 or not isinstance(item[0], str):
-        _refuse_codec(f"injected-op row {label!r} {what} is malformed", "codec_args")
-    _validate_encoded_value(item[1], label)
-
-
-def _validate_encoded_value(encoded: Any, label: str) -> None:
-    """Validate one encoded arg value against the closed grammar."""
-
-    if not isinstance(encoded, dict) or set(encoded) != {"kind", "value"}:
-        _refuse_codec(
-            f"injected-op row {label!r} carries a malformed encoded replay arg",
-            "codec_args",
-        )
-    kind = encoded["kind"]
-    value = encoded["value"]
-    if kind in ("tensor", "literal", "dtype", "device"):
-        _validate_encoded_leaf(kind, value, label)
-        return
-    if kind in ("list", "tuple", "dict"):
-        if not isinstance(value, list):
-            _refuse_codec(
-                f"injected-op row {label!r} {kind} arg is not an item list",
-                "codec_args",
-            )
-        for item in value:
-            if kind == "dict":
-                _validate_encoded_pair(item, label, "dict arg entry")
-            else:
-                _validate_encoded_value(item, label)
-        return
-    _refuse_codec(
-        f"injected-op row {label!r} encoded arg kind {kind!r} is not in the closed grammar",
-        "codec_args",
-    )
-
-
-def _validate_encoded_leaf(kind: str, value: Any, label: str) -> None:
-    """Validate one leaf-kind encoded arg value fail-closed."""
-
-    if kind == "tensor" and not isinstance(value, BlobRef):
-        _refuse_codec(
-            f"injected-op row {label!r} tensor arg does not reference a payload blob",
-            "codec_args",
-        )
-    if kind == "literal" and value is not None and not isinstance(value, _LITERAL_TYPES):
-        _refuse_codec(
-            f"injected-op row {label!r} literal arg has non-literal type {type(value).__name__}",
-            "codec_args",
-        )
-    if kind in ("dtype", "device") and not isinstance(value, str):
-        _refuse_codec(
-            f"injected-op row {label!r} {kind} arg is not a string",
-            "codec_args",
-        )
 
 
 # ---------------------------------------------------------------------------

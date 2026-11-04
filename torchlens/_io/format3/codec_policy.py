@@ -7,7 +7,9 @@ raw values (the trace input and other value cells) in any artifact, and outside 
 columns of a non-torch artifact a tensor of that artifact's own backend when its
 ``logical_backend`` hint names it (derived gradients). A codec hint that
 disagrees with the cell's backend is a typed ``record_schema_invalid`` refusal raised
-before any codec is looked up.
+before any codec is looked up. A backend outside the contract set is admitted only while it
+is registered in this runtime, and its registered capabilities say whether its payloads
+materialize.
 """
 
 from __future__ import annotations
@@ -22,7 +24,14 @@ from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
 
-__all__ = ["codec_backend", "payload_codec", "payload_columns"]
+__all__ = [
+    "backend_hint_fields",
+    "backend_materializes",
+    "codec_backend",
+    "known_backend",
+    "payload_codec",
+    "payload_columns",
+]
 
 _TORCH_CODEC, _ARRAY_CODEC = contract.PAYLOAD_CODEC_IDS
 
@@ -91,3 +100,46 @@ def codec_backend(
     if problem is not None:
         raise cell_error(at, problem, code=CELL_CODE)
     return backend
+
+
+def known_backend(name: str) -> bool:
+    """Whether ``name`` is a contract backend or a backend registered in this runtime now.
+
+    A runtime-registered backend (a third-party spec) saves and loads under its own name;
+    an unregistered unknown name keeps the typed refusal.
+    """
+
+    if name in contract.BACKENDS:
+        return True
+    from ...backends.registry import registered_backend_specs
+
+    return any(spec.name == name for spec in registered_backend_specs())
+
+
+def backend_materializes(backend: str) -> bool:
+    """Whether a registered backend rebuilds its saved payloads (torch always does)."""
+
+    if backend == contract.DEFAULT_BACKEND:
+        return True
+    from ...backends.registry import registered_backend_specs
+
+    return any(
+        spec.name == backend and spec.capabilities.payload_materialization
+        for spec in registered_backend_specs()
+    )
+
+
+_BACKEND_HINT_FIELDS = (
+    "logical_dtype",
+    "logical_device",
+    "transport_backend",
+    "transport_dtype",
+    "codec_metadata",
+)
+
+
+def backend_hint_fields(hints: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return the payload codec's entry fields from a tensor cell's codec hints."""
+
+    hints = hints or {}
+    return {name: hints.get(name) for name in _BACKEND_HINT_FIELDS}

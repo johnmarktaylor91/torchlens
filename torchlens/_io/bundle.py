@@ -2568,8 +2568,7 @@ def _write_payload_blob(
     blob, key = store.submit(host_tensor(transport_tensor), codec=NUMPY_CODEC)
     manifest_fields = codec.manifest_fields(blob_spec.value, encoded)
     codec_fields = {"id": NUMPY_CODEC, **manifest_fields}
-    # ``device`` names the stored transport tensor's torch device; the capture-time
-    # backend device travels in the codec hints as ``logical_device``.
+    # ``device`` is the transport tensor's; the backend device rides the hints (logical_device).
     reference = tensor_reference(transport_tensor, blob=blob, key=key, codec=codec_fields)
     tensor_refs[blob_spec.blob_id] = reference
     return TensorEntry(
