@@ -4931,3 +4931,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: eef3623490239d8390ff12a7809476d4df8b28ed (dirty)
 recorded: 2026-11-04T19:29:47.020453+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: gpt2-generate-validate: new validation/_membership_perturbation.py reads Op parent_arg_positions, saved_args and saved_kwargs (getattr with default) to build the isin membership-toggle perturbation; read sites added in that one file, none moved or removed elsewhere
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4607a6a1bbd4ef4e2100b1105d3eb0cc17802ea (clean)
+recorded: 2026-11-04T20:28:22.848477+00:00
