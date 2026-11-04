@@ -169,6 +169,7 @@ def test_recorded_trace_keeps_the_function_output_detached() -> None:
     recording = tl.record(
         _DirectFunctionOutput(), torch.randn(2, 3).requires_grad_(True), save=tl.func("__mul__")
     )
-    output = _output_row(recording.to_trace())
+    trace = recording.to_trace()
+    output = _output_row(trace)
     assert output.out is not None
     assert output.out.grad_fn is None
