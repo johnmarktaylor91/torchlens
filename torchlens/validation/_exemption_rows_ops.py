@@ -454,6 +454,17 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         _KERNEL + "test_undeclared_kernel_unmoved_sibling_output_still_fails",
     ),
     _custom(
+        "_flash_attn_forward",
+        "check_foreign_kernel_dependence_exempt",
+        "a perturbed parent of one output of FlashAttention 2's native custom op "
+        "flash_attn::_flash_attn_forward, at a position the kernel table declares that "
+        "output independent of",
+        "per-output dependence declared per kernel in a table (the log-sum-exp and dropout "
+        "mask depend on q and k, not v; the rng state on none of q, k, v); the attention "
+        "output, other operators and undeclared positions stay strict",
+        _KERNEL + "test_undeclared_custom_op_unmoved_sibling_output_still_fails",
+    ),
+    _custom(
         "expand",
         "check_expand_pinned_size_exempt",
         "an expand size pinned to the input extent at that dim (-1 or the same size)",

@@ -15,6 +15,14 @@ the base, where the lse sibling's v edge failed). Fail-closed: an undeclared ker
 same unmoved sibling output still fails; output 0 keeps its full parent set; a declared
 dependent argument that does not move the output still fails; a position outside the row,
 a keyword, nested or unmapped parent and a missing output index stay strict.
+
+FlashAttention 2 is a native custom op (``flash_attn::_flash_attn_forward``, four sibling
+outputs, no boundary op). Its stand-in is a CPU operator registered under the same qualified
+name and schema for the duration of one test (a scoped library, so a process that later loads
+the real ``flash-attn`` is unaffected). Regression: it validates with an empty and with a
+filled dropout mask. Fail-closed: the same operator under another namespace fails; the
+attention output and q, k on the log-sum-exp keep failing when they do not move; a parent at
+an undeclared position or a keyword stays strict; removing the rows makes it fail again.
 """
 
 from __future__ import annotations
@@ -32,12 +40,16 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils import _torch_compat as tc
+from torchlens.backends.torch import _foreign_data
 from torchlens.backends.torch._foreign_data import (
+    FLASH_ATTENTION_2_CUSTOM_OP,
+    FLASH_ATTENTION_2_FUNC_NAME,
     FLASH_ATTENTION_4_EXIT,
     FLASH_ATTENTION_4_FUNCTION,
     FLASH_ATTENTION_4_INTERFACE_MODULE,
     OutputDependence,
     known_foreign_kernel_output_dependence,
+    known_native_custom_op_output_dependence,
 )
 from torchlens.backends.torch._function_boundary import FOREIGN_FUNCTION_FUNC_NAME
 from torchlens.options import CaptureOptions
@@ -255,6 +267,7 @@ def test_table_declares_the_flash_attention_4_log_sum_exp_row_only() -> None:
 
 def test_check_is_registered_under_autogradfunction() -> None:
     assert CUSTOM_EXEMPTION_CHECKS["autogradfunction"] is check_foreign_kernel_dependence_exempt
+    assert CUSTOM_EXEMPTION_CHECKS["_flash_attn_forward"] is check_foreign_kernel_dependence_exempt
 
 
 # ------------------------------------------------- the predicate on fake records
@@ -429,3 +442,240 @@ def test_position_outside_the_row_stays_strict() -> None:
         assert _decision(trace, lse, _parent_at(lse, 3)) == _INSENSITIVE
     finally:
         trace.cleanup()
+
+
+# ------------------------------------------- FlashAttention 2: a native custom op
+
+_FA2_SCHEMA = (
+    "_flash_attn_forward(Tensor q, Tensor k, Tensor v, float dropout_p, float softmax_scale, "
+    "bool causal, int window_size_left, int window_size_right, float softcap, "
+    "Tensor? alibi_slopes, bool return_softmax) -> (Tensor, Tensor, Tensor, Tensor)"
+)
+
+
+def _fa2_kernel(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    dropout_p: float,
+    softmax_scale: float,
+    causal: bool,
+    window_size_left: int,
+    window_size_right: int,
+    softcap: float,
+    alibi_slopes: torch.Tensor | None,
+    return_softmax: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """FlashAttention 2's output shape in unpatchable C calls: (out, lse, S_dmask, rng_state)."""
+
+    del dropout_p, softmax_scale, causal, window_size_left, window_size_right, softcap
+    vf: Any = torch._C._VariableFunctions
+    out = vf.add(q, vf.mul(k, v))
+    if alibi_slopes is not None:
+        out = vf.add(out, alibi_slopes)
+    lse = vf.logaddexp(q, k)
+    mask = vf.mul(q, k) if return_softmax else vf.empty((0,), dtype=q.dtype)
+    rng_state = vf.full((2,), 1234, dtype=torch.int64)
+    return out, lse, mask, rng_state
+
+
+@pytest.fixture
+def fa2_op() -> Any:
+    """Register the stand-in as ``flash_attn::_flash_attn_forward`` for one test."""
+
+    with torch.library._scoped_library("flash_attn", "FRAGMENT") as lib:
+        lib.define(_FA2_SCHEMA)
+        lib.impl("_flash_attn_forward", _fa2_kernel, "CPU")
+        yield torch.ops.flash_attn._flash_attn_forward
+
+
+@pytest.fixture
+def undeclared_fa2_op() -> Any:
+    """The same operator, name and schema under an undeclared namespace."""
+
+    with torch.library._scoped_library("tltest_fa2dep", "FRAGMENT") as lib:
+        lib.define(_FA2_SCHEMA)
+        lib.impl("_flash_attn_forward", _fa2_kernel, "CPU")
+        yield torch.ops.tltest_fa2dep._flash_attn_forward
+
+
+class _Fa2Model(nn.Module):
+    """q, k, v projections into the four-output op; only the attention output is consumed."""
+
+    def __init__(self, op: Any, *, return_softmax: bool = False, layout: str = "args") -> None:
+        super().__init__()
+        self.op = op
+        self.return_softmax = return_softmax
+        self.layout = layout
+        self.q_proj = nn.Linear(4, 4)
+        self.k_proj = nn.Linear(4, 4)
+        self.v_proj = nn.Linear(4, 4)
+        self.a_proj = nn.Linear(4, 4)
+
+    def _fixed(self, alibi: torch.Tensor | None) -> dict[str, Any]:
+        """The non-q, k, v arguments in schema order (no dropout, unit scale)."""
+
+        return {
+            "dropout_p": 0.0,
+            "softmax_scale": 1.0,
+            "causal": False,
+            "window_size_left": -1,
+            "window_size_right": -1,
+            "softcap": 0.0,
+            "alibi_slopes": alibi,
+            "return_softmax": self.return_softmax,
+        }
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        q, k, v = self.q_proj(x), self.k_proj(x), self.v_proj(x)
+        alibi = self.a_proj(x) if self.layout == "alibi" else None
+        if self.layout == "kwarg":
+            out, *_rest = self.op(q, k, v=v, **self._fixed(None))
+        else:
+            out, *_rest = self.op(q, k, v, *self._fixed(alibi).values())
+        return torch.relu(out)
+
+
+def _fa2_capture(model: nn.Module, x: torch.Tensor) -> Any:
+    with torch.no_grad():
+        return _capture(model, x)
+
+
+def _fa2_validates(model: nn.Module, x: torch.Tensor) -> bool:
+    with torch.no_grad():
+        return _validates(model, x)
+
+
+def _fa2_siblings(trace: Any) -> dict[int, Any]:
+    """Return the four native sibling ops of the one ``_flash_attn_forward`` call."""
+
+    ops = [op for op in trace._layer_list if op.func_name == FLASH_ATTENTION_2_FUNC_NAME]
+    assert len({op.func_call_id for op in ops}) == 1, [op.label for op in ops]
+    by_index = {op.multi_output_index: op for op in ops}
+    assert set(by_index) == {0, 1, 2, 3}, by_index
+    for op in ops:
+        assert op.func_name != FOREIGN_FUNCTION_FUNC_NAME and not op.transform_config
+    return by_index
+
+
+def test_table_declares_the_flash_attention_2_rows_only() -> None:
+    """Outputs 1 and 2 depend on q and k of q, k, v; output 3 on none; output 0 has no row."""
+
+    lookup = known_native_custom_op_output_dependence
+    qkv = frozenset({0, 1, 2})
+    op, name = FLASH_ATTENTION_2_CUSTOM_OP, FLASH_ATTENTION_2_FUNC_NAME
+    assert lookup(op, name, 1) == OutputDependence(op, 1, frozenset({0, 1}), qkv)
+    assert lookup(op, name, 2) == OutputDependence(op, 2, frozenset({0, 1}), qkv)
+    assert lookup(op, name, 3) == OutputDependence(op, 3, frozenset(), qkv)
+    for index, positions in ((1, [2]), (2, [2]), (3, [0, 1, 2])):
+        row = lookup(op, name, index)
+        assert row is not None and [p for p in range(10) if row.independent_of(p)] == positions
+    strict = (
+        (op, name, 0),
+        (op, name, 4),
+        ("tltest_fa2dep::_flash_attn_forward", name, 1),
+        (op, "flashattnforward", 1),
+        ("flash_attn::_flash_attn_varlen_forward", name, 1),
+    )
+    for args in strict:
+        assert lookup(*args) is None, args
+
+
+def test_fa2_declared_op_validates_with_either_dropout_mask(fa2_op: Any) -> None:
+    """Regression: four native siblings validate with an empty and a filled S_dmask."""
+
+    x = torch.randn(3, 4)
+    for return_softmax in (False, True):
+        model = _Fa2Model(fa2_op, return_softmax=return_softmax)
+        trace = _fa2_capture(model, x)
+        try:
+            siblings = _fa2_siblings(trace)
+            assert siblings[2].out.numel() == (12 if return_softmax else 0)
+            assert siblings[0].children and not any(siblings[i].children for i in (1, 2, 3))
+            for op in siblings.values():
+                assert declared_output_dependence(op) == known_native_custom_op_output_dependence(
+                    FLASH_ATTENTION_2_CUSTOM_OP, FLASH_ATTENTION_2_FUNC_NAME, op.multi_output_index
+                )
+        finally:
+            trace.cleanup()
+        assert _fa2_validates(model, x) is True, return_softmax
+        assert last_validation_failure() is None
+
+
+def test_fa2_declared_edges_are_exempt_and_every_other_edge_is_checked(fa2_op: Any) -> None:
+    """v on lse and S_dmask and q, k, v on rng_state are excused; q, k and output 0 are tested."""
+
+    trace = _fa2_capture(_Fa2Model(fa2_op, return_softmax=True), torch.randn(3, 4))
+    try:
+        sib = _fa2_siblings(trace)
+        exempt = ((1, 2), (2, 2), (3, 0), (3, 1), (3, 2))
+        for index, position in exempt:
+            assert _decision(trace, sib[index], _parent_at(sib[index], position)) == _EXEMPT
+        for index, position in ((0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (2, 0), (2, 1)):
+            parent = _parent_at(sib[index], position)
+            assert _check_perturbation_exemptions(trace, sib[index], [parent]) is False
+            assert _decision(trace, sib[index], parent) == _CHANGED, (index, position)
+    finally:
+        trace.cleanup()
+
+
+def test_fa2_output_zero_and_dependent_edges_still_fail_when_unmoved(fa2_op: Any) -> None:
+    """A frozen attention output fails on q and v; a frozen lse fails on q and k."""
+
+    trace = _fa2_capture(_Fa2Model(fa2_op), torch.randn(3, 4))
+    try:
+        sib = _fa2_siblings(trace)
+        _freeze(sib[0])
+        _freeze(sib[1])
+        for index, position in ((0, 0), (0, 2), (1, 0), (1, 1)):
+            assert _decision(trace, sib[index], _parent_at(sib[index], position)) == _INSENSITIVE
+        assert _decision(trace, sib[1], _parent_at(sib[1], 2)) == _EXEMPT
+    finally:
+        trace.cleanup()
+
+
+def test_undeclared_custom_op_unmoved_sibling_output_still_fails(undeclared_fa2_op: Any) -> None:
+    """The same op, name and shape under an undeclared namespace fails on the lse's v edge."""
+
+    model = _Fa2Model(undeclared_fa2_op)
+    x = torch.randn(3, 4)
+    assert _fa2_validates(model, x) is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == "perturbation", failure
+    trace = _fa2_capture(model, x)
+    try:
+        lse = _fa2_siblings(trace)[1]
+        assert declared_output_dependence(lse) is None
+        assert failure.op_label == lse.label, failure
+        assert failure.extra["perturbed_parents"] == [_parent_at(lse, 2)], failure
+    finally:
+        trace.cleanup()
+
+
+def test_fa2_parent_at_an_undeclared_position_or_keyword_stays_strict(fa2_op: Any) -> None:
+    """alibi_slopes (position 9) on rng_state, and v passed by keyword, are never excused."""
+
+    for layout, label_of in (
+        ("alibi", lambda op: _parent_at(op, 9)),
+        ("kwarg", lambda op: op.parent_arg_positions["kwargs"]["v"]),
+    ):
+        trace = _fa2_capture(_Fa2Model(fa2_op, layout=layout), torch.randn(3, 4))
+        try:
+            sib = _fa2_siblings(trace)
+            for index in (1, 3):
+                parent = label_of(sib[index])
+                assert _check_perturbation_exemptions(trace, sib[index], [parent]) is False
+                assert _decision(trace, sib[index], parent) == _INSENSITIVE, (layout, index)
+        finally:
+            trace.cleanup()
+
+
+def test_fa2_without_the_rows_fails_again(fa2_op: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mutation proof: with the native rows removed the declared op fails on the lse's v edge."""
+
+    monkeypatch.setattr(_foreign_data, "_KNOWN_NATIVE_CUSTOM_OPS", ())
+    model = _Fa2Model(fa2_op)
+    assert _fa2_validates(model, torch.randn(3, 4)) is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == "perturbation", failure
+    assert failure.extra["perturbed_parents"], failure

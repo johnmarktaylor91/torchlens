@@ -499,11 +499,12 @@ class OutputDependence:
     Parameters
     ----------
     function:
-        ``__qualname__`` of the ``autograd.Function`` the declaration is about.
+        ``__qualname__`` of the ``autograd.Function`` the declaration is about, or the
+        ``namespace::name`` of a native custom op (:data:`_KNOWN_NATIVE_CUSTOM_OPS`).
     output_index:
         ``multi_output_index`` of the output (the kernel returns a tuple).
     depends_on:
-        Positional arguments whose values reach this output.
+        Positional arguments whose values reach this output (empty: none of ``positions``).
     positions:
         Positional arguments the declaration speaks for. The output is declared independent
         of exactly ``positions - depends_on``; a parent at any other position is undeclared.
@@ -632,5 +633,92 @@ def known_foreign_kernel_output_dependence(
             continue
         for row in kernel.dependence:
             if row.function == function and row.output_index == output_index:
+                return row
+    return None
+
+
+FLASH_ATTENTION_2_CUSTOM_OP = "flash_attn::_flash_attn_forward"
+"""Qualified name of the FlashAttention 2 forward custom op (``torch.ops.flash_attn``)."""
+
+FLASH_ATTENTION_2_FUNC_NAME = "_flash_attn_forward"
+"""``func_name`` TorchLens records for each output of the FlashAttention 2 forward op."""
+
+
+@dataclass(frozen=True)
+class KnownNativeCustomOp:
+    """One native custom op whose per-output dependence is declared.
+
+    A ``torch.library`` custom op is recorded natively (``_torch_ops_calls``): one op per
+    returned tensor, sibling outputs of one ``func_call_id``, each carrying the call's full
+    parent set, with no boundary op, no exit and no capability flag. The op is identified
+    by the operator its recorded replay callable calls (``qualified_name``) together with
+    the recorded ``func_name``.
+    """
+
+    qualified_name: str
+    func_name: str
+    dependence: tuple[OutputDependence, ...]
+
+
+_QKV = frozenset({0, 1, 2})
+
+_KNOWN_NATIVE_CUSTOM_OPS: tuple[KnownNativeCustomOp, ...] = (
+    KnownNativeCustomOp(
+        FLASH_ATTENTION_2_CUSTOM_OP,
+        FLASH_ATTENTION_2_FUNC_NAME,
+        dependence=(
+            # _flash_attn_forward(q, k, v, dropout_p, softmax_scale, causal, ...) returns
+            # (out, softmax_lse, S_dmask, rng_state). Output 0 (the attention output) has no
+            # row: every one of its parents stays strict.
+            # Output 1, softmax_lse = logsumexp_j(scale * q k_j^T): reads q and k, not v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 1, frozenset({0, 1}), _QKV),
+            # Output 2, S_dmask: the softmax of the q k scores with dropped entries marked
+            # (return_softmax with dropout), else an empty tensor: reads q and k, not v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 2, frozenset({0, 1}), _QKV),
+            # Output 3, rng_state: the generator's (seed, offset) for the dropout mask, read
+            # from the CUDA generator, never from q, k or v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 3, frozenset(), _QKV),
+        ),
+    ),
+)
+"""``(qualified name, recorded func_name, per-output dependence)`` per known native custom op.
+
+FlashAttention 2 (``flash-attn`` 2.x) calls ``torch.ops.flash_attn._flash_attn_forward``,
+which TorchLens records as four native sibling ops. Its unconsumed outputs do not read every
+parent the call carries, so the perturbation check reads these rows through
+:func:`known_native_custom_op_output_dependence` and excuses a parent of a declared output
+only at a declared-independent position; an operator, output or position with no row stays
+strict. Not gated by a capability flag: the declaration is about the recorded call.
+"""
+
+
+def known_native_custom_op_output_dependence(
+    qualified_name: str, func_name: str, output_index: int
+) -> OutputDependence | None:
+    """Return the declared dependence of one output of a recorded native custom op.
+
+    Parameters
+    ----------
+    qualified_name:
+        ``namespace::name`` of the operator the op's replay callable calls
+        (``_torch_ops_calls.recorded_custom_op_name``).
+    func_name:
+        The op's recorded ``func_name``; it must match the row's, so an operator recorded
+        under another name is not covered.
+    output_index:
+        The op's ``multi_output_index``.
+
+    Returns
+    -------
+    OutputDependence | None
+        The declared row, or ``None`` when the operator, name or output has none (the
+        caller then stays strict).
+    """
+
+    for custom_op in _KNOWN_NATIVE_CUSTOM_OPS:
+        if custom_op.qualified_name != qualified_name or custom_op.func_name != func_name:
+            continue
+        for row in custom_op.dependence:
+            if row.output_index == output_index:
                 return row
     return None

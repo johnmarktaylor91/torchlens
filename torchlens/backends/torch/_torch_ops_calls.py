@@ -134,6 +134,31 @@ def _qualified_name(op: Any) -> str:
     return str(getattr(packet, "_qualified_op_name", ""))
 
 
+def recorded_custom_op_name(func: Any) -> str | None:
+    """Return the ``namespace::name`` of the ``torch.ops`` operator a recorded op replays.
+
+    Parameters
+    ----------
+    func:
+        An op record's replay callable (``Op.func``).
+
+    Returns
+    -------
+    str | None
+        The operator's qualified name when ``func`` is the replay callable
+        :func:`_decorated_for` builds for a non-mutating operator (a ``functools.partial``
+        of the class ``__call__`` bound to an ``OpOverloadPacket`` or ``OpOverload``);
+        ``None`` for any other callable, including a missing one on a loaded bundle.
+    """
+
+    if not isinstance(func, functools.partial) or not func.args:
+        return None
+    op = func.args[0]
+    if not isinstance(op, (_torch_ops.OpOverloadPacket, _torch_ops.OpOverload)):
+        return None
+    return _qualified_name(op) or None
+
+
 def _keeps_dedicated_path(op: Any) -> bool:
     """Return whether this operator must not be recorded by the ``torch.ops`` recorder.
 

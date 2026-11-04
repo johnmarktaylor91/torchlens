@@ -961,6 +961,28 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         ),
     ),
     CustomCheckExemption(
+        func_name="_flash_attn_forward",
+        check="check_foreign_kernel_dependence_exempt",
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "FlashAttention 2's custom op flash_attn::_flash_attn_forward is recorded as four "
+            "native sibling ops of one call, each carrying q, k and v; the kernel table "
+            "declares per output which positional arguments reach it (ruling: declare "
+            "per-output dependence per kernel in a table): the log-sum-exp (output 1) and the "
+            "dropout mask (output 2) depend on q and k at positions 0 and 1, not v at 2, and "
+            "the rng state (output 3) on none of the three; a parent is excused for that "
+            "output only when every position it occupies is declared independent"
+        ),
+        refuses=(
+            "every parent of the attention output (output 0, no row), q and k on the "
+            "log-sum-exp and dropout mask, an op whose replay callable is not the declared "
+            "torch.ops operator (another namespace under the same func_name, a loaded bundle "
+            "with no callable), a parent at a position outside 0 to 2, a keyword, nested or "
+            "unmapped parent, and an op that did not record multi_output_index"
+        ),
+    ),
+    CustomCheckExemption(
         func_name="expand",
         check="check_expand_pinned_size_exempt",
         contract=_C2,
