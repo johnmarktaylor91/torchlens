@@ -72,6 +72,7 @@ from .._ir.workspaces import (
     ModuleCaptureWorkspace,
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
+    _init_module_hierarchy_data,
 )
 from .._literals import (
     BufferVisibilityLiteral,
@@ -947,8 +948,6 @@ class Trace(TraceOutputMixin, TraceLike):
         self._module_capture_ws = ModuleCaptureWorkspace()
         self._wrapper_runtime_ws = WrapperRuntimeWorkspace()
         self._primitive_op_profile = None
-        from .._ir.workspaces import _init_module_hierarchy_data
-
         self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
         self._options_mode: Literal["exhaustive", "predicate"] = "exhaustive"
         # L7a: a structure-only capture; value consumers gate through

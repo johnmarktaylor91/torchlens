@@ -11,7 +11,6 @@ from __future__ import annotations
 import difflib
 from typing import TYPE_CHECKING, Any
 
-from .._errors import InvalidArgumentError
 from .._utils._display_bounded import RecordTuple
 from .._utils._display_collections import callable_list_repr, callable_list_str
 
@@ -626,18 +625,8 @@ def modules_with_facet(trace: Trace, name: str) -> Iterator[Any]:
             if module.facets.has(name):
                 yield module
         elif _recipe_declares_facet(module, name):
-            raise InvalidArgumentError(
-                f"Module {module.address!r} runs {module.num_calls} times and its facet "
-                f"recipe declares {name!r}, but facets are read only on a module called "
-                "once, so this shared module has no facet view",
-                code="module_call_ambiguous",
-                remedy=(
-                    f"read or edit one call's ops directly, e.g. "
-                    f"trace.modules[{module.address!r}].calls[N].ops with fork().do()"
-                ),
-                address=module.address,
-                num_calls=module.num_calls,
-            )
+            # The coded single-call refusal names the module and its call count.
+            module._single_call_or_error()
 
 
 def _recipe_declares_facet(module: Any, name: str) -> bool:

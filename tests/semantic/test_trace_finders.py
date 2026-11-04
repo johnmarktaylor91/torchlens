@@ -110,7 +110,7 @@ def test_modules_with_facet_refuses_a_shared_layer_that_declares_the_facet() -> 
 
     log = trace_fn(_AlbertStyleModel(), torch.randn(2, 3, 8))
 
-    with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' runs 2 times") as info:
+    with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' has 2 calls") as info:
         list(log.modules_with_facet("q"))
     assert info.value.fields["code"] == "module_call_ambiguous"
     assert list(log.modules_with_facet("normalized")) == []
