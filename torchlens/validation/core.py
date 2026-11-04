@@ -3574,7 +3574,7 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
         Perturbed tensor of the same shape/dtype, every element guaranteed to
         differ from the original where the dtype permits it.
     """
-    if tensor.dtype in _UNSIGNED_AS_SIGNED:  # few kernels (no lt/where): step the signed view
+    if tensor.dtype in _UNSIGNED_AS_SIGNED:  # CC+1 essential: uint16/32/64 lack lt/where kernels
         signed = _directional_step_perturb(tensor.view(_UNSIGNED_AS_SIGNED[tensor.dtype]), strategy)
         return signed.view(tensor.dtype)
     if strategy == "negate_values":
