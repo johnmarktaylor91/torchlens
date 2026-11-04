@@ -37,11 +37,19 @@ __all__ = (
 )
 
 
-def _graph_lookup(trace: Trace) -> Any:
-    """Return ``(columns, rows_by_label)`` when the column bodies apply, else ``None``."""
+def _row(trace: Trace, rows: dict[str, int], label: str) -> int:
+    """Return ``label``'s row; an unknown label raises ``trace[label]``'s refusal."""
 
-    if getattr(trace, "_tracing_finished", False):
-        return None
+    row = rows.get(label)
+    return _row_or_refuse(trace, rows, label) if row is None else row
+
+
+def _graph_lookup(trace: Trace) -> Any:
+    """Return ``(columns, rows_by_label)`` when the column bodies apply, else ``None``.
+
+    The single seam every body here consults (tests force the facade through it).
+    """
+
     return _column_lookup(trace)
 
 
@@ -91,7 +99,8 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)
         row = rows[tensor_label]  # KeyError(label), as the raw layer dict raises
-        if len(children(row)) == 0 and not is_output(row):
+        child_labels = children(row)
+        if len(child_labels) == 0 and not is_output(row):
             # ``trace[label]`` resolves through the same raw layer dict: same row.
             mark_sink(row, True)
             if tensor_label not in seen_sink_labels:
@@ -101,7 +110,7 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
                     seen_terminated_bool_labels.add(tensor_label)
                     terminated_bool_ops.append(tensor_label)
                     mark_terminal_bool(row, True)
-        for next_label in children(row) + parents(row):
+        for next_label in child_labels + parents(row):
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
     return nodes_seen
@@ -200,11 +209,15 @@ def reset_and_flood_if_edges(trace: Trace, branch_bool_labels: list[str]) -> Non
     node_stack = branch_bool_labels.copy()
     while node_stack:
         node_label = node_stack.pop()
-        row = _row_or_refuse(trace, rows, node_label)
+        row = rows.get(node_label)
+        if row is None:
+            row = _row(trace, rows, node_label)
         if node_label in nodes_seen:
             continue
         for parent_label in parents(row):
-            parent_row = _row_or_refuse(trace, rows, parent_label)
+            parent_row = rows.get(parent_label)
+            if parent_row is None:
+                parent_row = _row(trace, rows, parent_label)
             if has_output_descendant(parent_row):
                 entry_children(parent_row).append(node_label)
                 put_in_body(parent_row, False)
@@ -291,7 +304,9 @@ def assign_conditional_branch_stacks(
     put_arm_children = columns.setter("conditional_arm_children")
     translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
     for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
-        row = _row_or_refuse(trace, rows, layer_label)
+        row = rows.get(layer_label)
+        if row is None:
+            row = _row(trace, rows, layer_label)
         if is_orphan(row):
             continue
         code_context = code_context_of(row)
@@ -397,14 +412,21 @@ def _attribute_forward_edges_column(
     label_raw_of = columns.getter("_label_raw")
     pass_number_of = columns.getter("pass_number")
     for parent_label in trace._raw_graph_ws.raw_layer_labels_list:
-        parent_row = _row_or_refuse(trace, rows, parent_label)
+        parent_row = rows.get(parent_label)
+        if parent_row is None:
+            parent_row = _row(trace, rows, parent_label)
         if is_orphan(parent_row):
             continue
         for child_label in children(parent_row):
-            child_row = _row_or_refuse(trace, rows, child_label)
+            child_row = rows.get(child_label)
+            if child_row is None:
+                child_row = _row(trace, rows, child_label)
             if is_orphan(child_row):
                 continue
-            gained = get_gained_branch_entries(stack_of(parent_row), stack_of(child_row))
+            child_stack = stack_of(child_row)
+            if not child_stack:  # an empty child stack gains nothing
+                continue
+            gained = get_gained_branch_entries(stack_of(parent_row), child_stack)
             for conditional_id, branch_kind in gained:
                 arm_children_of(parent_row).setdefault(conditional_id, {}).setdefault(
                     branch_kind, []
@@ -533,9 +555,17 @@ def materialize_derived_views(trace: Trace) -> None:
     put_elif = columns.setter("conditional_elif_children")
     put_else = columns.setter("conditional_else_children")
     for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
-        row = _row_or_refuse(trace, rows, layer_label)
+        row = rows.get(layer_label)
+        if row is None:
+            row = _row(trace, rows, layer_label)
         if is_orphan(row):
             continue
-        put_then(row, _then_children(arm_children_of(row)))
-        put_elif(row, _elif_children(arm_children_of(row)))
-        put_else(row, _else_children(arm_children_of(row)))
+        arm_children = arm_children_of(row)
+        if not arm_children:  # what the three builders return for no arms, fresh per op
+            put_then(row, [])
+            put_elif(row, {})
+            put_else(row, [])
+            continue
+        put_then(row, _then_children(arm_children))
+        put_elif(row, _elif_children(arm_children))
+        put_else(row, _else_children(arm_children))
