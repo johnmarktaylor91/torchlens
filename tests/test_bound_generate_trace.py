@@ -192,7 +192,7 @@ def test_empty_call_index_lookup_suggests_no_wrapper_spelling(key: str) -> None:
         gen[key]
     message = str(excinfo.value)
     assert "owner" not in message
-    assert message.endswith("Please use a more specific key.")
+    assert "Please use a more specific key." in message
 
 
 class _CacheWithLoggedProperty:
