@@ -118,21 +118,7 @@ def _extend_grad_fn_graph_relations(
     def record(label: str) -> GradFn:
         return grad_fn_logs[label_to_id[label]]
 
-    # Child id -> the appended parents it gained, in order.
-    touched_child_ids: dict[int, list[str]] = {}
-    for object_id in new_ids:
-        grad_fn_logs[object_id].parents = []
-    for object_id in new_ids:
-        grad_fn_record = grad_fn_logs[object_id]
-        child_ids = [
-            child_id for child_id in grad_fn_record.next_grad_fn_ids if child_id in grad_fn_logs
-        ]
-        grad_fn_record.children = [grad_fn_logs[child_id].label for child_id in child_ids]
-        for child_id in child_ids:
-            child = grad_fn_logs[child_id]
-            if grad_fn_record.label not in child.parents:
-                child.parents = [*child.parents, grad_fn_record.label]
-                touched_child_ids.setdefault(child_id, []).append(grad_fn_record.label)
+    touched_child_ids = _link_appended_records(grad_fn_logs, new_ids)
 
     def children_of(label: str) -> Sequence[str]:
         return record(label).children
@@ -165,3 +151,32 @@ def _extend_grad_fn_graph_relations(
         grad_fn_record.co_parents = _co_parent_labels(
             grad_fn_record.label, grad_fn_record.children, parents_of
         )
+
+
+def _link_appended_records(
+    grad_fn_logs: Mapping[int, GradFn], new_ids: Sequence[int]
+) -> dict[int, list[str]]:
+    """Set appended records' children and add them to their children's parents.
+
+    Returns
+    -------
+    dict[int, list[str]]
+        Each child's object id mapped to the appended parent labels it
+        gained, in order.
+    """
+
+    touched_child_ids: dict[int, list[str]] = {}
+    for object_id in new_ids:
+        grad_fn_logs[object_id].parents = []
+    for object_id in new_ids:
+        grad_fn_record = grad_fn_logs[object_id]
+        child_ids = [
+            child_id for child_id in grad_fn_record.next_grad_fn_ids if child_id in grad_fn_logs
+        ]
+        grad_fn_record.children = [grad_fn_logs[child_id].label for child_id in child_ids]
+        for child_id in child_ids:
+            child = grad_fn_logs[child_id]
+            if grad_fn_record.label not in child.parents:
+                child.parents = [*child.parents, grad_fn_record.label]
+                touched_child_ids.setdefault(child_id, []).append(grad_fn_record.label)
+    return touched_child_ids

@@ -287,16 +287,34 @@ def _replay_membership_for_new_grad_fns(
             if _inherit_module_from_best_neighbor(trace, grad_fn_record, candidates):
                 new_sweeps[object_id] = sweep
                 changed = True
+    if _moves_an_existing_sweep(new_sweeps, neighbors, sweeps):
+        return None
+    return new_sweeps
+
+
+def _moves_an_existing_sweep(
+    new_sweeps: MembershipSweeps,
+    neighbors: Mapping[int, Sequence[int]],
+    sweeps: MembershipSweeps,
+) -> bool:
+    """Return whether an appended record, once set, could set an existing neighbor sooner.
+
+    An appended record set in sweep ``t`` is a candidate for its existing
+    neighbors from sweep ``t + 1``; a neighbor still unset then (never set, or
+    set later than ``t + 1``) could take its module instead in a scratch
+    rebuild. Preset neighbors (sweep 0) and ineligible ones never move.
+    """
+
     for object_id, set_sweep in new_sweeps.items():
         if set_sweep is None:
             continue
         for neighbor_id in neighbors[object_id]:
-            if neighbor_id in new_records or neighbor_id not in sweeps:
+            if neighbor_id in new_sweeps or neighbor_id not in sweeps:
                 continue
             existing_sweep = sweeps[neighbor_id]
             if existing_sweep != 0 and (existing_sweep is None or set_sweep + 1 < existing_sweep):
-                return None
-    return new_sweeps
+                return True
+    return False
 
 
 def _visible_at(

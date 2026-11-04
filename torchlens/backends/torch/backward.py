@@ -85,7 +85,7 @@ from ._grad_fn_growth import (
     _grad_fn_record_from_discovery,
     _GradFnGrowth,
     _layer_grad_fn_ids,
-    _plan_grad_fn_growth,
+    _plan_backward_tail_fold,
 )
 from ._grad_fn_membership import (
     MembershipSweeps,
@@ -858,57 +858,6 @@ class _BackwardFoldState:
     layer_grad_fn_ids: frozenset[int] = frozenset()
 
 
-def _backward_tail_is_foldable(
-    state: _BackwardFoldState, tail: list[Any], new_events: list[Any] | None = None
-) -> bool:
-    """Return whether an appended event tail can fold without a full rebuild.
-
-    Foldable means the tail introduces no new grad-fn node (with
-    ``new_events``, new-node discoveries are collected there instead, for
-    ``_plan_grad_fn_growth`` to accept or refuse), no merge that
-    would retroactively change an already-assigned label or field, no
-    topology change (which would require re-running the global order and
-    module-inference passes), and no event for an already-built pass. Any
-    other tail falls back to the byte-identical full rebuild.
-    """
-
-    max_built = max(state.built_pass_indices, default=0)
-    for event in tail:
-        if isinstance(event, BackwardPassStart):
-            if event.pass_index <= max_built or event.pass_index in state.starts:
-                return False
-        elif isinstance(event, BackwardPassEnd):
-            if event.pass_index <= max_built or event.pass_index in state.ends:
-                return False
-        elif isinstance(event, GradFnDiscovered):
-            existing = state.discovered.get(event.object_id)
-            if existing is None:
-                if new_events is None:
-                    return False
-                new_events.append(event)
-                continue
-            if existing.op_label is None and event.op_label is not None:
-                return False
-            if existing.param_ref is None and event.param_ref is not None:
-                return False
-            if existing.created_in_pass is None and event.created_in_pass is not None:
-                return False
-            if existing.creator_object_id is None and event.creator_object_id is not None:
-                return False
-            if tuple(event.topology) != tuple(state.latest_topology.get(event.object_id, ())):
-                return False
-        elif isinstance(event, (GradFnFired, OpGradObserved, ParamGradObserved)):
-            if event.pass_index <= max_built:
-                return False
-        elif isinstance(event, CheckpointInvocationObserved):
-            # Projection-neutral: token evidence lives in runtime state and
-            # the witness field, never in the folded records.
-            continue
-        else:
-            return False
-    return True
-
-
 def _materialize_backward_projections(trace: Any) -> None:
     """Rebuild backward-facing Trace records from sidecar events.
 
@@ -953,21 +902,14 @@ def _materialize_backward_projections(trace: Any) -> None:
     try:
         state = getattr(trace, "_backward_projection_fold_state", None)
         watermark = getattr(trace, "_backward_projection_event_count", None)
-        tail = (
-            list(stream_events[watermark:])
-            if isinstance(watermark, int) and 0 < watermark < event_count
-            else []
+        plan = (
+            _plan_backward_tail_fold(trace, state, stream_events, watermark)
+            if isinstance(state, _BackwardFoldState)
+            else None
         )
-        new_events: list[Any] = []
-        growth = None
         fold_rows = None
-        if (
-            isinstance(state, _BackwardFoldState)
-            and tail
-            and _backward_tail_is_foldable(state, tail, new_events)
-            and (growth := _plan_grad_fn_growth(trace, state, new_events)) is not None
-        ):
-            fold_rows = _fold_backward_projection_tail(trace, state, tail, growth)
+        if plan is not None:
+            fold_rows = _fold_backward_projection_tail(trace, state, *plan)
         else:
             _materialize_backward_projections_impl(trace, list(stream_events), stream=stream)
         _bind_backward_epoch(trace, fold_rows=fold_rows, revision=revision, watermark=event_count)

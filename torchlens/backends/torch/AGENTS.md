@@ -44,8 +44,9 @@ Core capture path:
   addresses, inferred containment swept to a fixed point, and the replay of those
   sweeps for appended records); `_grad_fn_graph.py` — parent, child, sibling and
   co-parent relations, from scratch or extended for appended records;
-  `_grad_fn_growth.py` — the projection fold that appends the nodes a new
-  `autograd.grad` or `backward` call discovers, refusing (so the caller rebuilds)
+  `_grad_fn_growth.py` — the projection fold that checks each new event tail
+  and appends the nodes a new `autograd.grad` or `backward` call discovers,
+  refusing (so the caller rebuilds)
   whenever appending could change an existing record. All three were split out of
   `backward.py` under its size ratchet.
 
