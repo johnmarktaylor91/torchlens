@@ -14,7 +14,7 @@ import weakref
 from collections.abc import Sequence
 from typing import Any, Literal, TypeAlias
 
-from .._errors import RecordBindingError
+from ._call_tree import _live_call_trace
 
 #: Which way a conditional went: ``Conditional.outcome``'s values.
 ConditionalOutcome: TypeAlias = Literal[
@@ -210,17 +210,7 @@ class ArmRef:
 
         if arm is None:
             return self
-        ref = arm.__dict__.get("_trace_ref")
-        if ref is None:
-            return None
-        trace = ref()
-        if trace is None:
-            raise RecordBindingError(
-                "Trace has been garbage-collected; a Conditional does not keep its Trace alive",
-                code="trace_reference_collected",
-                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
-            )
-        return trace
+        return _live_call_trace(arm, slot="_trace_ref", record="Conditional")
 
     def __set__(self, arm: Any, value: Any) -> None:
         """Bind ``value`` weakly; ``None`` (or this default) leaves the arm unbound."""

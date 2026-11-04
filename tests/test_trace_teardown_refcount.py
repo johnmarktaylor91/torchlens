@@ -108,7 +108,7 @@ def test_retained_conditional_does_not_keep_its_trace() -> None:
     assert repr(arm).startswith("ConditionalArm(")
     with pytest.raises(RecordBindingError) as excinfo:
         arm.evaluation_ops  # noqa: B018
-    assert excinfo.value.code == "trace_reference_collected"
+    assert excinfo.value.fields["code"] == "trace_reference_collected"
     with pytest.raises(RecordBindingError):
         arm.execution_ops  # noqa: B018
 
