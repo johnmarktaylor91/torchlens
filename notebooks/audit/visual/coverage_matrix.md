@@ -131,7 +131,6 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | Axis | Rationale |
 |------|-----------|
 | `vis_mode:none` | a trace with no picture requested draws nothing by definition. |
-| `vis_renderer:dagua` | Experimental opt-in backend (torchlens.experimental.dagua); not part of the stable visual language. |
 | `placement:auto` | 'auto' just selects dot or rank by cost estimate; both concrete engines are shown on the placement page. |
 | `code_panel:forward_class` | code_panel='forward' and 'class' use the same panel machinery as True / 'init+forward' (shown); only the excerpt differs. |
 | `overlay:others` | node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same generic numeric-row + bold-border machinery as the overlays shown ('nan' and 'intervention', the two color-coded overlays, both have pages). |

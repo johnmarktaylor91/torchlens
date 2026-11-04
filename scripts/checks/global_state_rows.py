@@ -1294,7 +1294,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/experiment/_grid.py", "__all__"),
         ("torchlens/experiment/_head_sugar.py", "__all__"),
         ("torchlens/experimental/__init__.py", "__all__"),
-        ("torchlens/experimental/dagua/__init__.py", "__all__"),
         ("torchlens/experimental/node_styles.py", "__all__"),
         ("torchlens/export/__init__.py", "__all__"),
         ("torchlens/export/_graphs.py", "__all__"),

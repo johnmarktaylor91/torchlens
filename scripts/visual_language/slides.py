@@ -1311,7 +1311,7 @@ SLIDES: tuple[Slide, ...] = (
         rule="Bundle graph and diff, fastlog preview, summary, tviz and more have their own keys; "
         "red delta is not an intervention.",
         layout="table",
-        rows=("VS01", "VS02", "VS03", "VS04", "VI05", "VY03"),
+        rows=("VS01", "VS02", "VS03", "VS04", "VI05"),
     ),
     Slide(
         id="cheat-sheet",
@@ -1471,12 +1471,6 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     ),
     ("Treescope cards", "notebook cards", "treescope", "docs/guides/treescope_cards.md"),
     ("Offline report", "a standalone HTML report", "report", "docs/guides/offline_report.md"),
-    (
-        "Dagua renderer",
-        "experimental second renderer; channels refuse",
-        'renderer="dagua"',
-        "torchlens/experimental/dagua",
-    ),
 )
 
 
