@@ -28,22 +28,24 @@ _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
 
 
 class _LoopBranch(nn.Module):
-    """A shared Linear applied three times, then a data-dependent branch."""
+    """A shared Linear applied ``steps`` times, then a data-dependent branch."""
 
-    def __init__(self) -> None:
+    def __init__(self, steps: int = 3) -> None:
         """Build the shared and head layers."""
 
         super().__init__()
+        self.steps = steps
         self.fc = nn.Linear(4, 4)
         self.head = nn.Linear(4, 2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the loop, the branch and the head."""
 
-        for _ in range(3):
+        for _ in range(self.steps):
             x = torch.relu(self.fc(x))
         if x.sum() > 0:
             x = x * 2
+            x = x + 1
         else:
             x = x - 1
         return self.head(x)
@@ -72,6 +74,7 @@ class _TiedShrinking(nn.Module):
 
 _MODELS: dict[str, Callable[[], tuple[nn.Module, torch.Tensor]]] = {
     "loop_branch": lambda: (_LoopBranch(), torch.ones(2, 4)),
+    "long_loop": lambda: (_LoopBranch(steps=40), torch.ones(2, 4)),
     "tied_shrinking": lambda: (_TiedShrinking(), torch.ones(4, 4)),
 }
 

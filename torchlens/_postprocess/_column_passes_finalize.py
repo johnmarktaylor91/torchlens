@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from itertools import zip_longest
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .._data_classes._op_columns import column_rows_by_label
 from .._quantities import Bytes
@@ -68,12 +68,13 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
     """
 
     ops = trace._layer_list
-    lookup = column_rows_by_label(dict(enumerate(ops))) if ops else None
+    # Keyed by position, not label: reading every label would cost a facade read per op.
+    lookup = column_rows_by_label(cast("dict[str, Any]", dict(enumerate(ops)))) if ops else None
     if lookup is None:
         layer_logs = _group_passes_facade(ops, layer_class)
         total = _sum_autograd(layer_logs, reconcile, _facade_reader)
     else:
-        columns, rows_by_index = lookup
+        columns, rows_by_index = cast("tuple[Any, dict[int, int]]", lookup)
         get = {name: columns.getter(name) for name in _READ_FIELDS}
         row_of = {id(op): rows_by_index[index] for index, op in enumerate(ops)}
         layer_logs = _group_passes_columns(
