@@ -19,8 +19,10 @@ _PATCH_SOURCE_BOUND = (
     "This capture carries {count} op(s) patched from another run (tl.patch_from); the "
     "patched values belong to the donor run's inputs, not to a function of this run's "
     "inputs, so no runnable artifact can recompute them. Runnable save is refused; keep "
-    "the patched fork with the analysis save, trace.save(path) at level 'portable' (the "
-    "default) or 'audit', which stores the patched activations as data."
+    "the patched fork with the analysis save, trace.save(path, "
+    "level='executable_with_callables'), which stores the patched activations as data "
+    "and records the patch as an audit-only rule (saved format 3 refuses it at 'portable', "
+    "and 'audit' stores no activations)."
 )
 _USER_INTERVENTION_REPLACED = (
     "This capture carries {count} user-intervention-replaced op(s); the replacement value "

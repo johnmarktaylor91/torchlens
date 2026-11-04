@@ -132,9 +132,9 @@ def test_patched_fork_refuses_runnable_save_and_names_the_analysis_save(tmp_path
     assert "user_intervention_unsupported" in diagnostics
     assert "producer_patch_source_bound" in diagnostics
     assert "donor run" in diagnostics
-    assert "trace.save(path)" in diagnostics
+    assert "trace.save(path, level='executable_with_callables')" in diagnostics
     assert not (tmp_path / "patched.tlspec").exists()
 
     analysis_path = tmp_path / "patched-analysis.tlspec"
-    fork.save(analysis_path)
+    fork.save(analysis_path, level="executable_with_callables")
     assert analysis_path.exists()

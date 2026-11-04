@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import re
 from collections.abc import Callable, Iterator
@@ -1055,9 +1056,20 @@ def test_intervene_trace_round_trips_transient_dedup_state(
         assert excinfo.value.fields["code"] == "run_intervention_spec_not_persisted"
 
 
-def test_unknown_backend_runtime_version_serializes_as_null() -> None:
-    """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
+def test_unknown_backend_runtime_version_is_a_string_never_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown backend runtime version is a string, never ``None`` nor the string ``"None"``.
 
+    Saved format 3 requires a version string on every non-torch ``backend_runtime`` stamp,
+    so a backend that stamps none records its installed distribution's version, and ``""``
+    when that distribution is not installed.
+    """
+
+    def _not_installed(distribution: str) -> str:
+        raise importlib.metadata.PackageNotFoundError(distribution)
+
+    monkeypatch.setattr(importlib.metadata, "version", _not_installed)
     source = SimpleNamespace(
         _provenance_backend_version=None,
         _provenance_backend_config={},
@@ -1066,5 +1078,5 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
 
     runtime = _backend_runtime(source, backend_name="mlx")
 
-    assert runtime["version"] is None
-    assert '"version": null' in json.dumps(runtime)
+    assert runtime["version"] == ""
+    assert '"version": ""' in json.dumps(runtime)
