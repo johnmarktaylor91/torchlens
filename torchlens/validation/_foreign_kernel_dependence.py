@@ -34,8 +34,8 @@ from ..backends.torch._foreign_data import (
     OutputDependence,
     known_foreign_kernel_output_dependence,
     known_native_custom_op_output_dependence,
+    recorded_custom_op_name,
 )
-from ..backends.torch._torch_ops_calls import recorded_custom_op_name
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op

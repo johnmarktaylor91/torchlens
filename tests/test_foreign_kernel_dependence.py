@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import array
 import ctypes
+import functools
 import math
 import warnings
 from types import SimpleNamespace
@@ -223,6 +224,15 @@ def _freeze(op: Any) -> None:
 
     saved = op.out.detach().clone()
     object.__setattr__(op, "func", lambda *args, **kwargs: saved.clone())
+
+
+def _freeze_keeping_identity(op: Any) -> None:
+    """Freeze a native custom op's replay while it still names the recorded operator."""
+
+    saved = op.out.detach().clone()
+    packet = op.func.args[0]
+    frozen = functools.partial(lambda _packet, *args, **kwargs: saved.clone(), packet)
+    object.__setattr__(op, "func", frozen)
 
 
 def _parent_at(op: Any, position: int) -> str:
@@ -637,17 +647,21 @@ def test_fa2_output_zero_and_dependent_edges_still_fail_when_unmoved(fa2_op: Any
     trace = _fa2_capture(_Fa2Model(fa2_op), torch.randn(3, 4))
     try:
         sib = _fa2_siblings(trace)
-        _freeze(sib[0])
-        _freeze(sib[1])
+        _freeze_keeping_identity(sib[0])
+        _freeze_keeping_identity(sib[1])
         for index, position in ((0, 0), (0, 2), (1, 0), (1, 1)):
             assert _decision(trace, sib[index], _parent_at(sib[index], position)) == _INSENSITIVE
         assert _decision(trace, sib[1], _parent_at(sib[1], 2)) == _EXEMPT
+        # A replay callable that no longer calls the operator loses the declaration.
+        _freeze(sib[1])
+        assert declared_output_dependence(sib[1]) is None
+        assert _decision(trace, sib[1], _parent_at(sib[1], 2)) == _INSENSITIVE
     finally:
         trace.cleanup()
 
 
 def test_undeclared_custom_op_unmoved_sibling_output_still_fails(undeclared_fa2_op: Any) -> None:
-    """The same op, name and shape under an undeclared namespace fails on the lse's v edge."""
+    """The same op, name and shape under an undeclared namespace fails on a declared edge."""
 
     model = _Fa2Model(undeclared_fa2_op)
     x = torch.randn(3, 4)
@@ -656,10 +670,18 @@ def test_undeclared_custom_op_unmoved_sibling_output_still_fails(undeclared_fa2_
     assert failure is not None and failure.check_name == "perturbation", failure
     trace = _fa2_capture(model, x)
     try:
-        lse = _fa2_siblings(trace)[1]
-        assert declared_output_dependence(lse) is None
-        assert failure.op_label == lse.label, failure
-        assert failure.extra["perturbed_parents"] == [_parent_at(lse, 2)], failure
+        sib = _fa2_siblings(trace)
+        assert all(declared_output_dependence(op) is None for op in sib.values())
+        failed = next(op for op in sib.values() if op.label == failure.op_label)
+        assert failed.multi_output_index in (1, 2, 3), failure
+        # The failing edge is one the declared operator's row would excuse.
+        row = known_native_custom_op_output_dependence(
+            FLASH_ATTENTION_2_CUSTOM_OP, FLASH_ATTENTION_2_FUNC_NAME, failed.multi_output_index
+        )
+        position_of = {label: pos for pos, label in failed.parent_arg_positions["args"].items()}
+        perturbed = failure.extra["perturbed_parents"]
+        assert row is not None and perturbed, failure
+        assert all(row.independent_of(position_of[label]) for label in perturbed), failure
     finally:
         trace.cleanup()
 

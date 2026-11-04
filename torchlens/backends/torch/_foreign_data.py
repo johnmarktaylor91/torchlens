@@ -701,7 +701,7 @@ def known_native_custom_op_output_dependence(
     ----------
     qualified_name:
         ``namespace::name`` of the operator the op's replay callable calls
-        (``_torch_ops_calls.recorded_custom_op_name``).
+        (:func:`recorded_custom_op_name`).
     func_name:
         The op's recorded ``func_name``; it must match the row's, so an operator recorded
         under another name is not covered.
@@ -722,3 +722,29 @@ def known_native_custom_op_output_dependence(
             if row.output_index == output_index:
                 return row
     return None
+
+
+def recorded_custom_op_name(func: Any) -> str | None:
+    """Return the ``namespace::name`` of the ``torch.ops`` operator a recorded op replays.
+
+    Parameters
+    ----------
+    func:
+        An op record's replay callable (``Op.func``).
+
+    Returns
+    -------
+    str | None
+        The operator's qualified name when ``func`` is the replay callable the torch.ops
+        recorder builds for a non-mutating operator (a ``functools.partial`` of the class
+        ``__call__`` bound to an ``OpOverloadPacket`` or ``OpOverload``); ``None`` for any
+        other callable, including a missing one on a loaded bundle.
+    """
+
+    if not isinstance(func, functools.partial) or not func.args:
+        return None
+    op = func.args[0]
+    if not isinstance(op, (torch._ops.OpOverloadPacket, torch._ops.OpOverload)):
+        return None
+    packet = getattr(op, "_overloadpacket", op)
+    return str(getattr(packet, "_qualified_op_name", "")) or None
