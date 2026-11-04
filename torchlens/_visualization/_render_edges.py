@@ -1887,9 +1887,10 @@ def _space_from_reverse_edge(
 ) -> None:
     """Blank-label an every-pass edge whose reverse edge is also drawn.
 
-    Both then reserve a label slot, so Graphviz keeps the loop's splines apart."""
+    Both then reserve a label slot, so Graphviz keeps the loop's splines apart. The slot
+    holds a no-break space: Graphviz before 14 rejects an empty FONT element."""
     if parent_node.layer_label in maps.child_ops_per_layer(child_node) and "label" not in edge_dict:
-        edge_dict["label"] = _html_combined_recurrence_label("")
+        edge_dict["label"] = _html_combined_recurrence_label("\u00a0")
 
 
 def _label_rolled_call_indexs(

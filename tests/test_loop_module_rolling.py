@@ -883,6 +883,8 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     assert "headlabel" not in forward_attrs
     assert "taillabel" not in forward_attrs
     assert _html_label_lines(forward_attrs, "label") == []
+    # Graphviz 2.43 rejects an empty FONT element as a syntax error.
+    assert "></FONT>" not in dot
 
 
 def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> None:
