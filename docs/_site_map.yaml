@@ -146,6 +146,9 @@ pages:
     section: doors
   - path: facets.md
     section: concepts
+  - path: faq.md
+    section: get-started
+    publish: true
   - path: fields/debugging_and_training.md
     section: fields
     note: landing page for people debugging or training networks; linked from the README

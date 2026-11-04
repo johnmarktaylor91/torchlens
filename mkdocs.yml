@@ -274,6 +274,8 @@ exclude_docs: |
 nav:
   # <generated:nav>
   - index.md
+  - Get started:
+      - faq.md
   - Field guide:
       - field-guide/seeded_subsample.md
   - Reference:
