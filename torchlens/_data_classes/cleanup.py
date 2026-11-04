@@ -681,6 +681,7 @@ def _scrub_intervention_fields_after_removal(
         surviving_entries: Surviving entries to scrub in-place.
     """
 
+    field_cache: dict[type, Any] = {}  # dataclass field names, shared by the whole sweep
     for layer_entry in surviving_entries:
         layer_entry._edge_uses = [
             edge
@@ -689,10 +690,10 @@ def _scrub_intervention_fields_after_removal(
             and edge.child_label not in labels_to_remove
         ]
         layer_entry.args_template = _scrub_template(
-            getattr(layer_entry, "args_template", None), labels_to_remove
+            getattr(layer_entry, "args_template", None), labels_to_remove, field_cache
         )
         layer_entry.kwargs_template = _scrub_template(
-            getattr(layer_entry, "kwargs_template", None), labels_to_remove
+            getattr(layer_entry, "kwargs_template", None), labels_to_remove, field_cache
         )
         interventions = [
             record
@@ -703,7 +704,6 @@ def _scrub_intervention_fields_after_removal(
             layer_entry._internal_set("edits", interventions)
         else:
             layer_entry.edits = interventions
-
     self.state_history = [
         record
         for record in getattr(self, "state_history", [])
@@ -746,18 +746,18 @@ def _scrub_intervention_spec_after_removal(self: Any, labels_to_remove: set[str]
         self._mark_intervention_spec_mutated()
 
 
-def _scrub_template(template: Any, labels_to_remove: set[str]) -> Any:
+def _scrub_template(template: Any, labels_to_remove: set[str], cache: Any = None) -> Any:
     """Return ``template`` with removed-parent refs replaced, rebuilt only if it names one.
 
-    An untouched template keeps its object: every removal runs before the
-    step-9 rename, which rebuilds each template into a fresh copy.
+    An untouched template keeps its object: every removal runs before the step-9
+    rename, which copies each template. ``cache``: the sweep's field-name cache.
     """
 
     def names_removed(leaf: Any) -> bool:
         """Return whether ``leaf`` is a ``ParentRef`` to a removed parent."""
         return isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove
 
-    if template_has_leaf(template, names_removed):
+    if template_has_leaf(template, names_removed, cache):
         return _replace_removed_parent_refs(template, labels_to_remove)
     return template
 

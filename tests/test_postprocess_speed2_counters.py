@@ -6,6 +6,8 @@
   every dataclass node of every op's replay templates.
 * A ``ParentRef`` leaf is rebuilt with its constructor, not through
   ``dataclasses.replace`` (which re-reads the field list per leaf).
+* The removal scrub (orphan pruning) likewise reads each dataclass's field
+  list once per class per sweep, not once per surviving op's template.
 
 ``tests/test_label_rename_reference.py`` pins that the faster walks return
 exactly what the plain ``isinstance`` ladders returned.
@@ -23,6 +25,7 @@ import torch
 from _hermetic_counters import quiet_gc
 
 import torchlens as tl
+from torchlens._data_classes import cleanup
 from torchlens._data_classes._template_walk import map_template_leaves
 from torchlens._postprocess import labeling
 from torchlens.intervention.types import ParentRef
@@ -42,20 +45,33 @@ class _Chain(torch.nn.Module):
         return x
 
 
+class _OrphanChain(_Chain):
+    """``_Chain`` plus a disconnected op chain, so orphan pruning scrubs every template."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        unused = torch.zeros(2) + 1  # reaches neither input nor output: pruned as orphans
+        del unused
+        return super().forward(x)
+
+
 def _first_arg(frame: FrameType) -> Any:
     code = frame.f_code
     return frame.f_locals.get(code.co_varnames[0]) if code.co_argcount else None
 
 
 def _count_in_step(
-    monkeypatch: pytest.MonkeyPatch, depth: int
+    monkeypatch: pytest.MonkeyPatch,
+    depth: int,
+    owner: Any = labeling,
+    step: str = "_log_final_info_for_layers",
+    model: type[_Chain] = _Chain,
 ) -> tuple[tl.Trace, dict[str, int], list[type]]:
-    """Trace ``_Chain(depth)``; count Python calls of interest inside step 9 only."""
+    """Trace ``model(depth)``; count Python calls of interest inside ``owner.step`` only."""
 
     counts = {"fields": 0, "replace": 0}
     replaced: list[type] = []
     targets = {fields.__code__: "fields", replace.__code__: "replace"}
-    real = labeling._log_final_info_for_layers
+    real = getattr(owner, step)
 
     def profiler(frame: FrameType, event: str, _arg: Any) -> None:
         if event == "call":
@@ -65,17 +81,17 @@ def _count_in_step(
                 if name == "replace":
                     replaced.append(type(_first_arg(frame)))
 
-    def counted(self: Any) -> None:
+    def counted(*args: Any) -> None:
         previous = sys.getprofile()
         sys.setprofile(profiler)
         try:
-            real(self)
+            real(*args)
         finally:
             sys.setprofile(previous)
 
-    monkeypatch.setattr(labeling, "_log_final_info_for_layers", counted)
+    monkeypatch.setattr(owner, step, counted)
     with quiet_gc():
-        trace = tl.trace(_Chain(depth).eval(), torch.randn(2, 4))
+        trace = tl.trace(model(depth).eval(), torch.randn(2, 4))
     return trace, counts, replaced
 
 
@@ -115,3 +131,16 @@ def test_rename_builds_parent_refs_without_dataclasses_replace(
     refs = [ref for op in trace.ops for ref in _parent_refs(op.args_template)]
     assert len(refs) >= len(trace.ops) // 2
     assert all(ref.parent_label in final_labels for ref in refs)
+
+
+def test_removal_scrub_reads_dataclass_fields_once_per_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Counter: ``dataclasses.fields`` calls in the orphan-removal scrub do not grow with ops."""
+
+    step = "_scrub_intervention_fields_after_removal"
+    small, small_counts, _ = _count_in_step(monkeypatch, 3, cleanup, step, _OrphanChain)
+    large, large_counts, _ = _count_in_step(monkeypatch, 12, cleanup, step, _OrphanChain)
+    assert len(large.ops) >= len(small.ops) + 27
+    assert small_counts["fields"] > 0, "the scrub must walk dataclass template nodes"
+    assert large_counts["fields"] == small_counts["fields"]
