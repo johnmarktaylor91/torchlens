@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
+from types import FrameType
 from typing import Any
 
 from ... import _state
@@ -101,7 +102,7 @@ def _inside_unsupported_grad_operator() -> bool:
     if map_impl is None:
         return False
     map_module = type(map_impl).__module__
-    frame = sys._getframe(1)
+    frame: FrameType | None = sys._getframe(1)
     while frame is not None:
         if frame.f_globals.get("__name__") == map_module:
             return True
