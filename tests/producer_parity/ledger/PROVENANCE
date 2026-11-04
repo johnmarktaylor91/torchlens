@@ -4515,3 +4515,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 172ccea9defc05538a063cafde3a91fb2dc946ef (dirty)
 recorded: 2026-11-04T00:05:04.290760+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: owner-prefix: a bound-method root presents the owner tree; Op.modules, module_call_stack and module containment are written in _postprocess/_module_containment.py (root frames dropped) and the owner is prepared by backends/torch/_root_prep.py; _session_forwards.py no longer writes Op.modules
+env: py3.10-torch2.13.0
+torch: 2.13.0
+source: 33689a4385095cbcd31708b783e19d5e5cb1247a (dirty)
+recorded: 2026-11-04T03:03:41.282277+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: owner-prefix: a bound-method root presents the owner tree; Op.modules, module_call_stack and module containment are written in _postprocess/_module_containment.py (root frames dropped) and the owner is prepared by backends/torch/_root_prep.py; _session_forwards.py no longer writes Op.modules
+env: py3.10-torch2.13.0
+torch: 2.13.0
+source: 33689a4385095cbcd31708b783e19d5e5cb1247a (dirty)
+recorded: 2026-11-04T03:03:43.073143+00:00
