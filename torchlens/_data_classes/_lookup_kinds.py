@@ -68,13 +68,16 @@ def converted(accessor: Any, key: str, resolver: Any) -> Any:
     return record
 
 
-def refuse_several(kind: str, key: str, spellings: Sequence[str], noun: str) -> None:
-    """Raise the ambiguity refusal naming every object ``key`` reaches."""
+def refuse_several(
+    kind: str, key: str, spellings: Sequence[str], noun: str, message: str | None = None
+) -> None:
+    """Raise the ambiguity refusal naming every object ``key`` reaches (or ``message``)."""
 
     listed = ", ".join(repr(spelling) for spelling in spellings[:10])
     suffix = "..." if len(spellings) > 10 else ""
     raise AmbiguousOpLookupError(
-        f"{key!r} names {len(spellings)} {noun} on this trace, so no single {kind} "
+        message
+        or f"{key!r} names {len(spellings)} {noun} on this trace, so no single {kind} "
         f"answers it. Use one of: {listed}{suffix}.",
         key=key,
         candidates=tuple(spellings),
@@ -368,9 +371,8 @@ def module_item(module: Any, key: str) -> Any:
     if len(matches) > 1:
         from .._utils._display_errors import module_lookup_message
 
-        raise AmbiguousOpLookupError(
-            module_lookup_message(key, module, matches), key=key, address=module.address
-        )
+        message = module_lookup_message(key, module, matches)
+        refuse_several("layer", key, matches, f"layers of module '{module.address}'", message)
     raise KeyError(f"'{key}' not found in module '{module.address}' layers")
 
 
