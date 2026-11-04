@@ -237,7 +237,11 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         # second pass to fc1, relu and fc2. Sizes: 16 + 4 + 1 + 16 + 6 x 16 + 16.
         assert "<br align='left'/>8 layers (11 ops, 149 B)<br" in rolled, rolled
         assert "<br align='left'/>11 ops (149 B)<br" in unrolled, unrolled
-        total = sum(int(op.activation_memory) for op in loop.ops.values())
+        # ``loop.ops`` iterates the counted ops only; the header also counts
+        # and sizes the input and output nodes it draws.
+        boundary = [loop.ops[label] for label in (*loop.input_layers, *loop.output_layers)]
+        assert len(loop.ops) + len(boundary) == 11
+        total = sum(int(op.activation_memory) for op in (*loop.ops.values(), *boundary))
         assert binary_size(total) == "149 B"
     finally:
         loop.cleanup()
@@ -253,7 +257,9 @@ def test_rolled_count_line_keeps_singular_forms() -> None:
     op = SimpleNamespace(activation_memory=16)
     one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
     assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
-    assert drawn_count_line(None, one, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
+    # In the unrolled view the drawn node is the op itself.
+    one_op = SimpleNamespace(units=(_count_unit("raw_op", op),))
+    assert drawn_count_line(None, one_op, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
     box = SimpleNamespace(units=(_count_unit("module_box", op),))
     assert drawn_count_line(None, box, "rolled") == "1 node (16 B)"  # type: ignore[arg-type]
 
