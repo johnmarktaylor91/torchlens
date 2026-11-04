@@ -29,6 +29,13 @@ v2.38.0 was tagged but never published to PyPI: its release checks failed. 2.38.
   children, and a parameter held in an Equinox `Sequential` is named by its path from the owning
   module (`layers.0.weight`), so the trace saves.
 - **docs**: the learn notebooks use `trace.ops[name]`; the FAQ's version answers are factual.
+- **viz**: a rolled drawing's header counts every pass of the layers it draws, input and output
+  nodes included (the README loop reads `8 layers (11 ops, 149 B)`), and rolled pass labels sit at
+  the end of their own edge.
+- **display**: progress bars fall back to tqdm's text bar in notebooks without ipywidgets instead
+  of printing errors on every `fork().do()`.
+- **docs**: the README's code blocks run as tests, and its printed output matches what the code
+  prints.
 
 ## v2.38.0 (2026-11-04)
 
