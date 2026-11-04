@@ -11104,6 +11104,7 @@ test-docstrings	tests/test_validation.py	90
 test-docstrings	tests/test_validation.py	99
 test-docstrings	tests/test_validation.py	99.9
 test-docstrings	tests/test_validation_bool_exemption.py	30
+test-docstrings	tests/test_validation_bool_exemption.py	4.57
 test-docstrings	tests/test_validation_default_dtype_and_parameter_output.py	64
 test-docstrings	tests/test_validation_degenerate_forward.py	16570
 test-docstrings	tests/test_validation_hardening.py	1.0
