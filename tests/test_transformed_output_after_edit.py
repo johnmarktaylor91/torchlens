@@ -45,10 +45,11 @@ def _times_ten(output: torch.Tensor) -> torch.Tensor:
     return output * 10.0
 
 
-def _capture() -> tuple[nn.Module, torch.Tensor, Any]:
+def _capture(**capture: Any) -> tuple[nn.Module, torch.Tensor, Any]:
     model = _TinyClassifier().eval()
     x = torch.ones(1, 2)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(output_transform=_times_ten))
+    options = tl.options.CaptureOptions(output_transform=_times_ten, **capture)
+    trace = tl.trace(model, x, capture=options)
     return model, x, trace
 
 
@@ -95,8 +96,8 @@ def test_rerun_recomputes_transformed_output_from_the_edited_forward() -> None:
     assert torch.allclose(trace.transformed_output, trace[out].out * 10.0)
 
 
-def _stale_fork() -> tuple[Any, Any]:
-    model, x, trace = _capture()
+def _stale_fork(**capture: Any) -> tuple[Any, Any]:
+    model, x, trace = _capture(**capture)
     return trace, _fork_do(trace, model, x, tl.zero_ablate(), "replay")
 
 
@@ -126,10 +127,17 @@ def test_pickle_round_trip_of_a_stale_fork_still_refuses() -> None:
     _assert_refuses(pickle.loads(pickle.dumps(_stale_fork()[1])))
 
 
-def test_saved_stale_fork_loads_with_no_transformed_output(tmp_path: Path) -> None:
-    """A portable save writes no transformed output for a stale fork (``None`` on load)."""
+@pytest.mark.parametrize("save_policy", ["small", True])
+def test_saved_stale_fork_loads_with_no_transformed_output(
+    tmp_path: Path, save_policy: str | bool
+) -> None:
+    """A portable save writes no transformed output for a stale fork (``None`` on load).
 
-    parent, edited = _stale_fork()
+    ``save_transformed_output=True`` saves the value whole, so only the save
+    path's own stale check keeps the marker out of the bundle.
+    """
+
+    parent, edited = _stale_fork(save_transformed_output=save_policy)
     bundle = tmp_path / "stale_fork.tlspec"
     edited.save(str(bundle))
     assert tl.load(str(bundle)).transformed_output is None
