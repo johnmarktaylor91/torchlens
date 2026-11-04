@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import sys
 from collections import Counter
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 
@@ -50,11 +51,19 @@ def _model() -> GPT2LMHeadModel:
 
 
 @pytest.fixture(scope="module")
-def pair() -> tuple[GPT2LMHeadModel, torch.Tensor, torch.Tensor, tl.Trace, tl.Trace]:
+def pair() -> Iterator[tuple[GPT2LMHeadModel, torch.Tensor, torch.Tensor, tl.Trace, tl.Trace]]:
     model = _model()
     ids_f = torch.tensor([[1, 5, 7, 3, 9]])
     ids_i = torch.tensor([[1, 5, 7, 4, 9]])
-    return model, ids_f, ids_i, tl.trace(model, ids_f), tl.trace(model, ids_i)
+    france = tl.trace(model, ids_f)
+    try:
+        italy = tl.trace(model, ids_i)
+        try:
+            yield model, ids_f, ids_i, france, italy
+        finally:
+            italy.cleanup()
+    finally:
+        france.cleanup()
 
 
 def _head(block: int, head: int) -> Any:
