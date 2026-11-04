@@ -27,11 +27,11 @@ from ..._utils._torch_compat import (
 )
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
+from ._same_object_handoff import set_same_object_live_value, set_same_object_mutation
 from ._tl import (
     active_label_session_token,
     get_param_meta,
     get_tensor_label,
-    set_same_object_mutation,
     set_tensor_label,
 )
 
@@ -52,7 +52,7 @@ __all__ = (
     "_record_label_version_snapshot",
     "_bind_writeback_receiver_label",
     "_label_version_baseline",
-    "_stamp_same_object_mutation",
+    "_stamp_same_object",
     "get_capture_producer_policy",
     "set_capture_producer_policy",
     "_should_keep_alias_mutation_contract",
@@ -325,7 +325,9 @@ def _label_version_baseline(t: Any) -> int | None:
     return version
 
 
-def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: bool) -> None:
+def _stamp_same_object(
+    logged: Any, receiver: Any, mutation_signature: bool, distinct_return: bool = False
+) -> None:
     """Stamp a same-object call's mutation verdict on the copy it is logged against.
 
     The op-output classifier only sees the fresh logging copy, never the live
@@ -343,6 +345,14 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
         The live first argument the call returned.
     mutation_signature
         Whether the call's signature requests mutation.
+    distinct_return
+        Whether the caller receives the copy itself (the module-boundary
+        ``identity`` mint), so the copy is the live object.
+
+    A non-mutating return also stamps the live receiver: the caller and every
+    downstream op consume it, not the copy, so a by-reference payload must be
+    it. A Parameter receiver is logged through its own mutation path and keeps
+    the copy.
     """
 
     if not isinstance(logged, torch.Tensor):
@@ -356,6 +366,8 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
         verdict = current is None or current != baseline
     with contextlib.suppress(AttributeError):
         set_same_object_mutation(logged, verdict)
+        if not (verdict or distinct_return or isinstance(receiver, torch.nn.Parameter)):
+            set_same_object_live_value(logged, receiver)
 
 
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
@@ -400,6 +412,8 @@ def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None
     """
 
     trace._capture_producer_policy = get_capture_producer_policy(mode)
+    if mode == "predicate":
+        install_lazy_record_contexts(trace)
 
 
 def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
@@ -737,7 +751,10 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
-from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
+from ._ops_predicate_events import (  # noqa: E402
+    _emit_predicate_operation_events,
+    install_lazy_record_contexts,
+)
 from .ops import (  # noqa: E402
     _ANCESTOR_FIELD_NAMES,
     _ANCESTOR_SLOT_DESCRIPTORS,

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import copy as _copy
 import inspect
-import json as _json
 import shutil as _shutil
 import warnings
 from collections.abc import Callable
@@ -35,6 +34,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+    read_runnable_descriptor,
+)
 from torchlens._runnable import (
     _VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
@@ -61,10 +64,7 @@ def _save(trace: tl.Trace, path: Path) -> Path:
 
 
 def _mutate(path: Path, mutate: Callable[[dict], None]) -> None:
-    manifest_path = path / "manifest.json"
-    manifest = _json.loads(manifest_path.read_text())
-    mutate(manifest["run"])
-    manifest_path.write_text(_json.dumps(manifest))
+    mutate_runnable_descriptor(path, mutate)
 
 
 def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
@@ -75,7 +75,7 @@ def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
     if readiness is not None and readiness.status is ReadinessStatus.UNAVAILABLE:
         return ("refused", {d.code.value for d in readiness.diagnostics})
     try:
-        result = loaded.run(inputs=inputs, on_divergence="return")
+        result = loaded.run_transaction(inputs=inputs, on_divergence="return")
         return ("ran", result.report.path_faithfulness)
     except Exception as exc:  # noqa: BLE001 -- typed refusal classification
         return ("raised", type(exc).__name__)
@@ -310,7 +310,7 @@ def _strip_inventory_members(run: dict, family: str) -> None:
 
 
 def _strip_third_leg(run: dict, family: str) -> None:
-    """Remove the owner-record obligation / claim leg where one exists in-manifest."""
+    """Remove the owner-record obligation / claim leg where one exists in the descriptor."""
 
     if family in {"scalar_bool", "loop_predicate"}:
         for call in run["calls"]:
@@ -360,8 +360,7 @@ def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
 
     model_factory, capture_inputs, run_inputs = _FAMILY_FIXTURES[family]
     source = _save(_trace(model_factory(), capture_inputs()), tmp_path / f"{family}.tlspec")
-    manifest = _json.loads((source / "manifest.json").read_text())
-    present = _copy.deepcopy(manifest["run"])
+    present = _copy.deepcopy(read_runnable_descriptor(source))
     stripped_probe = _strip_family_witnesses(present, family)
     if family == "model_input_literal":
         assert stripped_probe > 0, "fixture must emit literal facts"
@@ -505,7 +504,7 @@ def test_r70_pin_corr2recover_repro_b_stale_escape_strips(tmp_path: Path) -> Non
     x = torch.tensor([5.0, 1.0, 1.0])
     changed = torch.tensor([99.0, 1.0, 1.0])
     source = _save(_trace(_Escape(), x.clone()), tmp_path / "pin_b.tlspec")
-    result = tl.load(source).run(inputs=x.clone())
+    result = tl.load(source).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     outcome, detail = _verdict(source, changed)
     assert outcome == "ran" and detail is PathFaithfulness.UNVERIFIABLE, (outcome, detail)
@@ -576,7 +575,7 @@ def test_r71_completeness_forgery_never_strengthens(tmp_path: Path) -> None:
     )
     descriptor = tl.load(source)._runnable.descriptor
     assert any(gap.gap_kind is WitnessGapKind.OPAQUE_INPUT_LEAF for gap in descriptor.coverage_gaps)
-    result = tl.load(source).run(inputs=[x.clone(), {"blob": (1 + 2j)}])
+    result = tl.load(source).run_transaction(inputs=[x.clone(), {"blob": (1 + 2j)}])
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
     def _force_complete(run: dict) -> None:
@@ -626,7 +625,7 @@ def test_r71_no_over_trigger_greens(tmp_path: Path) -> None:
     for index, (model, capture_inputs, run_inputs) in enumerate(cases):
         path = _save(_trace(model, capture_inputs), tmp_path / f"green_{index}.tlspec")
         effective = capture_inputs if run_inputs is None else run_inputs
-        result = tl.load(path).run(inputs=effective)
+        result = tl.load(path).run_transaction(inputs=effective)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, index
 
     # Metadata-OBLIVIOUS model: a changed-layout runtime input stays VERIFIED (the
@@ -643,7 +642,7 @@ def test_r71_no_over_trigger_greens(tmp_path: Path) -> None:
     path = _save(_trace(_Oblivious(), x.clone()), tmp_path / "green_layout.tlspec")
     noncontiguous = x.t().contiguous().t()
     assert not noncontiguous.is_contiguous()
-    result = tl.load(path).run(inputs=noncontiguous)
+    result = tl.load(path).run_transaction(inputs=noncontiguous)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

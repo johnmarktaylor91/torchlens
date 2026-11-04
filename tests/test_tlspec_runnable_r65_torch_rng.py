@@ -271,7 +271,7 @@ def _roundtrip_run(
     path = tmp / "torch_rng.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_activations=True, include_weights=include_weights)
-    return tl.load(path).run(inputs=x, seed=run_seed)
+    return tl.load(path).run_transaction(inputs=x, seed=run_seed)
 
 
 def test_initial_seed_profile_keeps_capture_seed() -> None:

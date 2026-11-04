@@ -56,7 +56,7 @@ _PREVIEW_POLICIES: tuple[PreviewTraceOptionPolicy, ...] = (
 )
 
 _PREVIEW_DEFAULT_OPTIONS: dict[str, Any] = {
-    "layers_to_save": "all",
+    "save": "all",
     "input_kwargs": {},
     "activation_transform": None,
     "detach_saved_activations": False,
@@ -75,7 +75,7 @@ _PREVIEW_DEFAULT_OPTIONS: dict[str, Any] = {
 }
 
 _PREVIEW_UNSUPPORTED_VALUES: tuple[tuple[str, Any], ...] = (
-    ("layers_to_save", ["relu_1_1"]),
+    ("save", ["relu_1_1"]),
     ("input_kwargs", {"bias": object()}),
     ("activation_transform", lambda value: value),
     ("detach_saved_activations", True),
@@ -108,7 +108,7 @@ def _preview_rejects(policy: PreviewTraceOptionPolicy, option_name: str) -> bool
 
     return (
         (option_name == "input_kwargs" and policy.input_kwargs_message is not None)
-        or (option_name == "layers_to_save" and policy.full_save_message is not None)
+        or (option_name == "save" and policy.full_save_message is not None)
         or option_name in (policy.rejected_truthy_messages or {})
         or (option_name == "output_device" and policy.output_device_message is not None)
         or (

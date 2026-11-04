@@ -59,7 +59,7 @@ def _run_report(model: nn.Module, x: torch.Tensor, tmp_path: Path, **save_kwargs
     trace = tl.trace(model, x.clone(), capture=_CAPTURE)
     path = tmp_path / f"{type(model).__name__}.tlspec"
     trace.save(path, level="runnable", include_weights=True, **save_kwargs)
-    return tl.load(path).run(inputs=x.clone()).report
+    return tl.load(path).run_transaction(inputs=x.clone()).report
 
 
 class EmptyEscapeModel(nn.Module):
@@ -217,7 +217,7 @@ def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     assert pruned_rng_control_source_labels(trace)  # the recorder fired
     path = tmp_path / "pruned-branch.tlspec"
     trace.save(path, level="runnable", include_weights=True)
-    report = tl.load(path).run(inputs=x.clone()).report
+    report = tl.load(path).run_transaction(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -262,7 +262,7 @@ def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
         trace.save(path, level="runnable", include_weights=True)
     except RunnablePreflightError:
         return "refused", None
-    return "ran", tl.load(path).run(inputs=x.clone()).report
+    return "ran", tl.load(path).run_transaction(inputs=x.clone()).report
 
 
 def _materialized_aten_op_names() -> set[str]:

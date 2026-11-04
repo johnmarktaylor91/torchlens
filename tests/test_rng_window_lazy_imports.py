@@ -31,7 +31,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _EINSUM_ID = (
     "tests/test_tlspec_runnable_producer.py::"
-    "test_runnable_internal_einsum_identity_save_load_and_run_verified[3]"
+    "test_runnable_internal_einsum_identity_save_load_and_run_verified[5]"
 )
 
 _RECORDING_FINDER_MODULE = """
@@ -131,7 +131,7 @@ def test_first_capture_runs_no_import_inside_the_rng_window(tmp_path: Path, case
 
 @pytest.mark.slow
 def test_static_scan_suite_then_einsum_stays_verified() -> None:
-    """The deterministic order that failed: a static-scan suite, then einsum[3]."""
+    """The deterministic order that failed: a static-scan suite, then einsum[5]."""
 
     completed = subprocess.run(
         [

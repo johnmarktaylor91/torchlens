@@ -51,7 +51,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 | TL Trace, phase profile | 68.9 | 64.3 | 135.7 | 3.7 | N/A | N/A | N/A | ok |
 | Trace.run(model, x) | 330.8 | 319.5 | 481.5 | 10.6 | N/A | N/A | N/A | ok |
 | fastlog module-boundary metadata | 29.7 | 27.4 | 35.5 | 3.3 | N/A | N/A | N/A | ok |
-| tl.save fresh tlspec path | 185.1 | 178.0 | 204.9 | 7.5 | N/A | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 185.1 | 178.0 | 204.9 | 7.5 | N/A | N/A | N/A | ok |
 | tl.load saved fixture | 106.3 | 102.8 | 128.4 | 8.7 | N/A | N/A | N/A | ok |
 
 ## Peer Comparison Tables
@@ -60,7 +60,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 
 | Operation | median_ms | p5_ms | p95_ms | IQR_ms | USS delta MB (10-run memory pass) | max_allocated_mb | max_reserved_mb | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| tl.save fresh tlspec path | 185.1 | 178.0 | 204.9 | 7.5 | N/A | N/A | N/A | ok |
+| Trace.save fresh tlspec path | 185.1 | 178.0 | 204.9 | 7.5 | N/A | N/A | N/A | ok |
 | tl.load saved fixture | 106.3 | 102.8 | 128.4 | 8.7 | N/A | N/A | N/A | ok |
 
 ## Decoration Overhead
@@ -84,7 +84,7 @@ Gradient mode is enabled for headline rows, models are in eval mode, dtype is fl
 - Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.
 - TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.
 - HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.
-- No-save Trace rows use `save=[]`, which records metadata for every op but saves no activation tensors.
+- No-save Trace rows use `save=lambda _ctx: False`, which records metadata for every op but saves no activation tensors.
 
 ## Rerun Tolerance
 

@@ -37,7 +37,7 @@ PURE_OBSERVER (2026-10-11).
   buffers/RNG/modes/plain attributes and records the forward's attribute
   writes on the trace (`Module.attribute_writes`); the explicit opt-in
   `CaptureOptions(carry_state=True)` carries FORWARD_EQUIVALENT for
-  train-through-trace users (the same spelling as `trace.run(inputs=...,
+  train-through-trace users (the same spelling as `trace.run_transaction(inputs=...,
   carry_state=True)`): buffers, modes and plain attributes advance as one
   direct `model(x)` would, and the same attribute writes are recorded. Random state never advances under either: every
   capture draws from its own seed and restores the global engines (R57). A

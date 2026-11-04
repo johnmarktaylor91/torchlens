@@ -151,9 +151,11 @@ def rank_changes(
     *,
     k: int = 10,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+    by: Literal["site", "module"] = "site",
 ) -> list[tuple[str, float]]:
     """Rank sites by out distance from a baseline (the SITE axis)."""
 
+    _check_rank_by(by)
     baseline_name = self._baseline_or_raise(baseline)
     # SITE AXIS (ledger memo D3f): most_changed answers "WHERE did the
     # bundle diverge" — per site it AVERAGES the metric from the baseline
@@ -196,9 +198,40 @@ def rank_changes(
                 continue
             distances.append(_distance_value(base, out, metric, site=key))
         if distances:
-            scored.append((key, sum(distances) / len(distances)))
+            row_key = key if by == "site" else _module_row_key(site, key)
+            scored.append((row_key, sum(distances) / len(distances)))
+    if by == "module":
+        scored = _fold_module_rows(scored)
     scored.sort(key=lambda row: row[1], reverse=True)
     return scored[:k]
+
+
+def _check_rank_by(by: str) -> None:
+    """Refuse a ``rank_changes(by=)`` value outside the two row kinds."""
+
+    if by not in ("site", "module"):
+        raise InvalidArgumentError(
+            f"rank_changes(by=) must be 'site' or 'module', got {by!r}",
+            code="rank_changes_by_invalid",
+            remedy="pass by='site' for one row per op or by='module' for one row per module",
+            argument="by",
+        )
+
+
+def _module_row_key(site: Any, site_key: str) -> str:
+    """Return the module address a site belongs to, or its own key when it has none."""
+
+    address = getattr(site, "atomic_module_address", None)
+    return address if address else site_key
+
+
+def _fold_module_rows(scored: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Fold per-site scores into one row per module: the module's most changed site."""
+
+    folded: dict[str, float] = {}
+    for key, score in scored:
+        folded[key] = max(score, folded.get(key, score))
+    return list(folded.items())
 
 
 def compare_members(

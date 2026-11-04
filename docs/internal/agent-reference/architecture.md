@@ -200,7 +200,7 @@ Key entry points:
   each consumer sees is substituted at its derived occurrence address via the
   tier-(ii) edge-substitution store (`substitution_kind="param"`; cone
   recomputation RE-SPLICES every tier-(ii) entry (param, region, and edge kinds),
-  so later pushes never silently revert any edit; chained param edits compose),
+  so later replays never silently revert any edit; chained param edits compose),
   the live `nn.Parameter` is never written, and
   rerun/set_only refuse `param_substitution_engine_unsupported`. Recurrently
   reused params (tied weights, multi-pass consumers) substitute at EVERY
@@ -209,7 +209,7 @@ Key entry points:
   positions, released legacy captures, bare pass-ambiguous consumer
   spellings, and consumer inventories omitting a pass.
 - Pass-qualified replay (decided 2026-08-17; refusal spelling
-  DOCUMENTED-UNSTABLE): the replay/push engine keys cone traversal, the
+  DOCUMENTED-UNSTABLE): the replay engine keys cone traversal, the
   overlay, hook targets, and commits by pass-qualified op labels
   (`Op.label`, `label:pass`), so multi-pass edits touch exactly the
   addressed pass, recompute downstream passes, and commit every pass's
@@ -225,7 +225,7 @@ Key entry points:
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
-  the replay/push engine only (`edge_intervention_engine_unsupported`
+  the replay engine only (`edge_intervention_engine_unsupported`
   otherwise); the substituted value rides `Op.edge_substitutions` (+
   `edge_replacement_stamps`, `FireRecord.edge_address`; persisted as of
   tlspec v8) while capture truth stays unmodified, and uncorroborated
@@ -285,7 +285,11 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
+  `AtenOp.gpu_kernels` is the GPU kernel launches one ATen call made, matched to it by
+  the profiler's correlation id; `Op.gpu_kernels` is the deduplicated union of those
+  across the op's ATen calls. With telemetry off each returns one row with
+  `attribution_status="unavailable"`, never an empty tuple. Both are declared on their
+  classes and reach `torchlens._kernel_telemetry` by module name only when read; the views sit over
   the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
   keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
@@ -392,11 +396,11 @@ trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
 # (code "buffer_sink_routing_unsupported", provisional/documented-unstable).
-run_result = torch_trace.run(inputs=x, seed=42)
+run_result = torch_trace.run_transaction(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
-verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
+verified = loaded_trace.run_transaction(inputs=x, seed=42, on_divergence="raise")
 overview_svg = torch_trace.draw(collapse="auto", file_format="svg")
 module_scores = torch_trace.module_collapse_order
 

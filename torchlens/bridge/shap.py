@@ -38,7 +38,7 @@ def explain(
     Returns
     -------
     dict[str, Any]
-        Contract payload containing SHAP values and the explainer object.
+        SHAP values and explainer; for shap's plots wrap ``values`` in ``shap.Explanation``.
 
     Raises
     ------

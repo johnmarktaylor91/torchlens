@@ -154,6 +154,6 @@ def test_forward_dunder_model_runnable_round_trip_verified(tmp_path: Path) -> No
     path = tmp_path / "forward_dunder.tlspec"
     trace.save(path, level="runnable")
 
-    result = tl.load(path).run(inputs=inputs)
+    result = tl.load(path).run_transaction(inputs=inputs)
     torch.testing.assert_close(result.output, model(*inputs))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

@@ -42,6 +42,8 @@ __all__ = [
     "env_var_reads",
     "env_var_reads_in_tree",
     "package_error_classes",
+    "public_builtin_raise_sites",
+    "public_builtin_raise_sites_in_tree",
     "public_option_fields",
     "raise_sites",
     "raise_sites_in_tree",
@@ -331,6 +333,66 @@ def raise_sites_in_tree(
     for module, tree in sorted(trees.items()):
         _Visitor(module).visit(tree)
     return tuple(sites)
+
+
+PLAIN_BUILTIN_ERRORS = frozenset({"ValueError", "TypeError", "RuntimeError"})
+
+
+def _rebinds(tree: ast.Module) -> set[str]:
+    """Plain-builtin names a module rebinds (import or assignment), which then are not builtins."""
+
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update(alias.asname or alias.name for alias in node.names)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.ClassDef):
+            names.add(node.name)
+    return names & PLAIN_BUILTIN_ERRORS
+
+
+def _private(name: str) -> bool:
+    return name.startswith("_") and not (name.startswith("__") and name.endswith("__"))
+
+
+def public_builtin_raise_sites_in_tree(trees: dict[str, ast.Module]) -> tuple[str, ...]:
+    """Raises of a plain ``ValueError``/``TypeError``/``RuntimeError`` at public entry points.
+
+    Public means a module path with no ``_``-prefixed component and no ``_``-prefixed
+    enclosing function or class (dunders count as public). Such a raise carries no stable
+    code and no remedy; the coded refusal helpers replace them. Returns
+    ``module:scope:Class:line`` strings.
+    """
+
+    sites: list[str] = []
+
+    class _Visitor(_ScopedVisitor):
+        def __init__(self, module: str, shadowed: set[str]) -> None:
+            super().__init__()
+            self._module = module
+            self._shadowed = shadowed
+
+        def visit_Raise(self, node: ast.Raise) -> None:  # noqa: N802
+            exc = node.exc
+            target = exc.func if isinstance(exc, ast.Call) else exc
+            name = target.id if isinstance(target, ast.Name) else ""
+            public = not any(_private(part) for part in self._scope)
+            if name in PLAIN_BUILTIN_ERRORS and name not in self._shadowed and public:
+                sites.append(f"{self._module}:{self.scope}:{name}:{node.lineno}")
+            self.generic_visit(node)
+
+    for module, tree in sorted(trees.items()):
+        if not any(part.startswith("_") for part in module.split(".")):
+            _Visitor(module, _rebinds(tree)).visit(tree)
+    return tuple(sites)
+
+
+@lru_cache(maxsize=1)
+def public_builtin_raise_sites() -> tuple[str, ...]:
+    """Public-entry plain builtin raises in the live package (debt.3 burn-down)."""
+
+    return public_builtin_raise_sites_in_tree(_package_trees())
 
 
 def _warn_bindings(tree: ast.Module) -> tuple[set[str], set[str]]:

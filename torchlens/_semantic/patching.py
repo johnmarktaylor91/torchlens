@@ -77,7 +77,6 @@ def activation_patch_residual_stream(
     torch.Tensor
         Metric values shaped ``[layer, pos]`` or ``[layer]``.
     """
-
     guard = _CounterfactualStateGuard(model)
     guard.open()
     clean_log = corrupted_log = None

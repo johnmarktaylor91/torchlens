@@ -35,6 +35,8 @@ from torchlens._visualization.node_spec import intervention_sites_for_log
 from torchlens.errors import TorchLensWarning
 from torchlens.intervention.types import Edit, FireRecord
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 PURPLE = "#7B1FA2"
 
 
@@ -215,10 +217,10 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         second = trace[f"{linear.layer_label}:2"]
-        trace._attach_hooks(
+        trace.do(
             tl.grad(second.label),
             named_backward,
-            confirm_mutation=True,
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
         sites = intervention_sites_for_log(trace)
         assert [site.label for site in sites] == [second.label]

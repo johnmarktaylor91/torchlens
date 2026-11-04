@@ -68,7 +68,7 @@ def test_live_run_keeps_its_own_forward_return(fast: bool) -> None:
     seen: list[Any] = []
     handle = model.register_forward_hook(lambda _module, _args, output: seen.append(output))
     try:
-        result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast)
+        result = trace.run_transaction(inputs=torch.full((1, 3), 2.0), fast=fast)
     finally:
         handle.remove()
     assert len(seen) == 1
@@ -88,7 +88,7 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
     site = next(layer.layer_label for layer in trace.layers if layer.layer_type == "linear")
-    result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
+    result = trace.run_transaction(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = result.trace.output
     assert exc_info.value.fields["code"] == "output_capture_stopped"

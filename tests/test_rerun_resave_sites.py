@@ -2,7 +2,7 @@
 
 Regression pin: the capture-engine rerun re-saved by the ORIGINAL capture's
 raw op indices. A staged edit inserts an ``intervention_replacement`` op, so
-every later op shifts by one: after ``attach_hooks`` on a plain capture saved
+every later op shifts by one: after staging a hook on a plain capture saved
 with ``tl.module("blocks.1") | tl.module("head")``, the rerun saved the op
 before the head (an ``add``) instead of the head, and left the steered site
 output unsaved. Every rerun door here must save exactly what a fresh steered
@@ -25,6 +25,8 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 _VOCAB = 32
 _DIM = 8
@@ -142,6 +144,10 @@ def fresh() -> dict[str, Any]:
     return reference
 
 
+#: Stage the steer as a sticky hook without propagating it (the rerun propagates it).
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
+
 def _assert_matches_fresh(trace: Any, fresh: dict[str, Any], *, exact: bool = True) -> None:
     """Assert the trace saved what the fresh steered capture saved.
 
@@ -166,7 +172,7 @@ def test_rerun_after_attach_hooks_resaves_the_requested_sites(fresh: dict[str, A
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer())
     for _ in range(_REPEATS):
         _rerun(trace, model, x)
         _assert_matches_fresh(trace, fresh)
@@ -209,11 +215,11 @@ def test_fork_do_rerun_engine_resaves_the_requested_sites(fresh: dict[str, Any])
 
 
 def test_chunked_rerun_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
-    """A chunked rerun after ``attach_hooks`` saves the steered sites."""
+    """A chunked rerun after a staged ``do`` saves the steered sites."""
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer())
     _rerun(trace, model, x, replay=tl.options.ReplayOptions(chunk_size=1))
     _assert_matches_fresh(trace, fresh, exact=False)
 
@@ -227,7 +233,7 @@ def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> N
     trace.do(
         tl.module(_SITE),
         value,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     _rerun(trace, model, x)
     # Same graph shape as the steered capture: one replacement op at the site.
@@ -266,7 +272,7 @@ def test_restored_trace_rerun_with_shifted_graph_refuses() -> None:
     model, x = _setup()
     trace = _restored(model, x)
     before = _saved_labels(trace)
-    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer())
     with pytest.raises(ControlFlowDivergenceError) as excinfo:
         trace.run(model, x)
     assert excinfo.value.fields["code"] == "rerun_resave_ops_shifted"

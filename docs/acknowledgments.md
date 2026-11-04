@@ -8,6 +8,9 @@ TorchLens feature, ordered roughly by how much we took. Point-of-use
 "inspired by" notes live in the borrowed features' own docs; this page
 collects them. "Inspired by" appears only where provenance supports it;
 everything else is related prior art, and nothing here implies endorsement.
+This page is about where TorchLens's ideas came from; the tools TorchLens
+hands its output to, with the exact calls, are on the
+[connectors page](bridges.md).
 
 ## License hygiene
 
@@ -27,8 +30,11 @@ work; do not under-apply it to unlicensed or copyleft work.
   single largest influence on `torchlens.mechinterp`: the ActivationCache
   analysis-kit design (accumulated residual / decomposition / stacked heads /
   logit attributions), the cached-scale LayerNorm linearization our norm facet
-  is validated against bit-exactly, `get_act_name` ergonomics and the `L5H7`
-  spelling, `test_prompt`, `head_detector`'s conventions, `FactoredMatrix`
+  is validated against bit-exactly, `get_act_name` ergonomics, the activation
+  names our facets use (`q`, `k`, `v`, `pattern`, `z`, `result`, `resid_pre`,
+  `resid_mid`, `resid_post`) and their opt-in `hook_`-prefixed aliases
+  (`tl.facets.enable_transformer_lens_aliases`), `test_prompt`,
+  `head_detector`'s conventions, `FactoredMatrix`
   (vendored under the MIT License from TransformerLens v4.2.0, commit
   `bd55eab6`, as `torchlens.mechinterp.FactoredMatrix`, feeding the QK/OV
   circuits built on verified head weight views), the `TransformerBridge`

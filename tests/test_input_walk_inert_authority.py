@@ -336,11 +336,11 @@ def test_mode_box_changed_field_diverges_runnable_replay(tmp_path):
     changed = _ModeBox({"x": tensor})
     changed.mode = "b"
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=changed)
+        tl.load(path).run_transaction(inputs=changed)
 
     same = _ModeBox({"x": tensor})
     same.mode = "a"
-    result = tl.load(path).run(inputs=same)
+    result = tl.load(path).run_transaction(inputs=same)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

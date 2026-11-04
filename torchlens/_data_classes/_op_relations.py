@@ -85,9 +85,9 @@ def atomic_module(op: Op) -> Module | None:
     address = op.atomic_module_address
     if address is None:
         return None
-    trace = op._source_trace
-    if trace is None:
+    if op._slot("_source_trace_ref") is None:
         return None
+    trace = op.trace  # a collected Trace refuses typed (trace_reference_collected)
     try:
         return cast("Module", trace.modules[address])
     except (KeyError, TypeError):
@@ -271,7 +271,7 @@ def _resolve_relation_record(op: Op, label: str) -> Op | None:
 
     trace = op.source_trace
     try:
-        return cast("Op", trace[label])
+        return cast("Op", trace.ops[label])
     except (KeyError, ValueError):
         try:
             return cast("Op", trace.graph.orphans[label])

@@ -17,11 +17,18 @@ use. `--out` receives a JSON summary and a portable `.tlspec` of one representat
 loadable with `tl.load`. The bundles keep every activation: about 370 MB for the induction
 run (one 101-token sequence) and about 50 MB for one IOI prompt.
 
+Each saved bundle is verified before the summary is written: it is loaded back with
+`tl.load`, rerun on the same model and input with `loaded.run(model, inputs)`, and every
+op of both the loaded trace and the replay must match the original bitwise, label by label.
+The script prints a `REPLAY:` line and records the comparison under `replay` in the JSON
+summary; any mismatch raises instead of writing a summary. A mismatch is a finding to
+explain, never a tolerance to widen.
+
 The TorchLens calls used: `tl.trace` with `tl.options.CaptureOptions`,
 `torchlens.mechinterp.head_scores` with `torchlens.mechinterp.FixedPeriodInduction`,
 `torchlens.mechinterp.direct_logit_contributions` over `torchlens.mechinterp.full_decomposition`,
 `trace.fork`, `do` with `tl.facet(...).in_module(...)` hooks and `model=`/`inputs=`, and
-`Trace.save`.
+`Trace.save`, then `tl.load` and `loaded.run` to verify the saved bundle.
 
 ## Data
 

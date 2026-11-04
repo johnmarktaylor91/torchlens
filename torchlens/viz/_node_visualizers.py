@@ -216,7 +216,7 @@ def histogram(
             x0 = margin + int(index * bar_w)
             x1 = margin + max(x0 + 1, int((index + 1) * bar_w) - 1)
             y0 = height - margin - bar_h
-            draw.rectangle((x0, y0, x1, height - margin), fill=(66, 133, 244))
+            draw.rectangle((x0, y0, x1, height - margin), fill=(96, 96, 96))
         return image
 
     return visualizer

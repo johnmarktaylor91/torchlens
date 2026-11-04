@@ -79,15 +79,14 @@ class _Sites:
 def _module(trace: Any, name: str, role: str) -> Any:
     """Return the module log ``name`` or refuse naming its role."""
 
-    try:
-        return trace.modules[name]
-    except Exception as exc:  # noqa: BLE001 - any lookup failure is the same refusal
+    if not is_module(trace, name):  # membership: an op label would convert to its Module
         raise _graph_refusal(
             f"The {role} module {name!r} is not a module of this capture. "
             "Remedy: name a module from dict(model.named_modules()) that ran once in "
             "the captured forward.",
             code="attribution_graph_site_not_found",
-        ) from exc
+        )
+    return trace.modules[name]
 
 
 def _one_op(module: Any, name: str, field: str, role: str) -> str:
@@ -340,11 +339,8 @@ def _within(labels: list[str]) -> Any:
 def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
     """Return the edge label of a frozen module's output, or of an op label."""
 
-    try:
-        trace.modules[name]
-    except Exception:  # noqa: BLE001 - not a module name: try it as an op label
-        if name in index.edges or f"{name}:1" in index.edges:
-            return _edge_label(index, name, "frozen")
+    if not is_module(trace, name) and (name in index.edges or f"{name}:1" in index.edges):
+        return _edge_label(index, name, "frozen")
     module = _module(trace, name, "frozen")
     return _edge_label(index, _one_op(module, name, "output_ops", "frozen"), "frozen")
 

@@ -63,6 +63,44 @@ def _message_from_payload(class_name: str, fields: dict[str, object]) -> str:
     return f"{class_name}: {rendered}."
 
 
+def _actionable_message(problem: str, remedy: str) -> str:
+    """Combine a refusal description with its required user remedy.
+
+    Parameters
+    ----------
+    problem:
+        Description of the rejected object or operation and its cause.
+    remedy:
+        Concrete action the caller can take to resolve the refusal.
+
+    Returns
+    -------
+    str
+        Stable human-readable message containing both clauses.
+    """
+
+    problem_clause = problem.rstrip()
+    if "\n  remedy " in problem_clause:
+        problem_clause, old_remedy = problem_clause.rsplit("\n  remedy", 1)
+        padding = old_remedy[: len(old_remedy) - len(old_remedy.lstrip())]
+        return f"{problem_clause}\n  remedy{padding}{remedy.rstrip()}"
+    if not problem_clause.endswith((".", "!", "?", ":", ";")):
+        problem_clause = f"{problem_clause}."
+    return f"{problem_clause} Remedy: {remedy.rstrip().rstrip('.')}."
+
+
+def _remedy_from_message(message: str) -> str | None:
+    """Read the authored remedy from either supported display layout."""
+
+    if _REMEDY_MARKER in message:
+        return message.rsplit(_REMEDY_MARKER, 1)[1].strip().rstrip(".") or None
+    for line in reversed(message.splitlines()):
+        label, separator, value = line.strip().partition(" ")
+        if label == "remedy" and separator:
+            return value.strip().rstrip(".") or None
+    return None
+
+
 class TorchLensError(Exception):
     """Root base class for all TorchLens errors.
 
@@ -118,13 +156,10 @@ class TorchLensError(Exception):
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)
-        # Remedy-contract alignment (R65 fixwave-6): the refusal contract
-        # promises a non-empty ``fields["remedy"]`` whose text the message
-        # ends with, but most sites author the remedy ONLY in the message.
-        # Derive the structured field from the authored "Remedy: ..." tail at
-        # this one chokepoint; an explicit ``remedy=`` kwarg always wins.
-        if message and "remedy" not in self.fields and _REMEDY_MARKER in message:
-            derived_remedy = message.rsplit(_REMEDY_MARKER, 1)[1].strip().rstrip(".")
+        # Preserve the structured remedy for both sentence and card layouts.
+        # An explicit ``remedy=`` payload always takes precedence.
+        if message and "remedy" not in self.fields:
+            derived_remedy = _remedy_from_message(message)
             if derived_remedy:
                 self.fields["remedy"] = derived_remedy
         super().__init__("" if message is None else message)
@@ -273,6 +308,32 @@ class TorchLensWarning(UserWarning):
             if derived_remedy:
                 self.fields["remedy"] = derived_remedy
         super().__init__("" if message is None else message)
+        if _QUIET_CODES and self.fields.get("code") in _QUIET_CODES:
+            # tl.errors.quiet(*codes): one "ignore" filter matches the marker base.
+            self.__class__ = _quieted_class(type(self))
+
+
+_QUIET_CODES: frozenset[object] = frozenset()
+"""Warning codes ``tl.errors.quiet(*codes)`` silences now (``errors/_quiet.py`` sets it)."""
+
+_QUIETED_CLASSES: dict[type, type] = {}
+
+
+class _QuietedWarning(TorchLensWarning):
+    """Marker base of a coded warning that ``tl.errors.quiet`` silenced."""
+
+
+def _quieted_class(cls: type) -> type:
+    """The cached same-named subclass of ``cls`` that carries the quiet marker."""
+
+    if issubclass(cls, _QuietedWarning):
+        return cls
+    quieted = _QUIETED_CLASSES.get(cls)
+    if quieted is None:
+        namespace = {"__module__": cls.__module__, "__qualname__": cls.__qualname__}
+        quieted = type(cls.__name__, (_QuietedWarning, cls), namespace)
+        _QUIETED_CLASSES[cls] = quieted
+    return quieted
 
 
 class TraceNotReproducibleWarning(TorchLensWarning):

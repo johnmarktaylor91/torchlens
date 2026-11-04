@@ -233,10 +233,10 @@ def test_mlx_save_grads_raises() -> None:
 
 
 @pytest.mark.optional
-def test_mlx_layers_to_save_raises_typed_error() -> None:
-    """MLX capture rejects the unsupported legacy ``layers_to_save`` selector."""
+def test_mlx_label_list_save_raises_typed_error() -> None:
+    """MLX capture rejects a label-list ``save=``: its capture takes only ``save='all'``."""
 
-    with pytest.raises(BackendUnsupportedError, match="layers_to_save"):
+    with pytest.raises(BackendUnsupportedError, match="save='all'"):
         tl.trace(
             TinyMLP(),
             _tiny_mlp_input(),

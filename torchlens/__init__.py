@@ -14,17 +14,17 @@ For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
 
 from __future__ import annotations
 
+import typing as _typing
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
-if _TYPE_CHECKING:
+if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.3"
-
-if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
+
+#: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
+__version__ = "2.38.0"
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
@@ -164,7 +164,7 @@ _LAZY_ATTRS = {
 }
 
 
-def _resolve_top_level(name: str) -> _Any:
+def _resolve_top_level(name: str) -> _typing.Any:
     """Resolve a top-level TorchLens attribute, honoring existing globals.
 
     Parameters
@@ -215,12 +215,13 @@ _REDIRECTS: dict[str, str] = {
     "Macs": "use torchlens.types.Macs",
     "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
     "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
     "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
+    "do": "use torchlens.Trace.do (trace.do(site, edit, model=model, inputs=x)) -- do is a Trace method, not a root verb",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "show_bundle_graph": "use torchlens.Bundle.draw (bundle.draw(path)): the merged bundle graph",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
@@ -243,7 +244,7 @@ _REDIRECTS: dict[str, str] = {
     "ModuleAccessor": "use torchlens._data_classes.module.ModuleAccessor",
     "ModuleCall": "use torchlens.types.ModuleCall",
     "ModuleInputSnapshot": "use torchlens.types.ModuleInputSnapshot",
-    "NodeSpec": "use torchlens.experimental.dagua.NodeSpec",
+    "NodeSpec": "use torchlens.viz.NodeSpec",
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.types.PreHookEffect",
@@ -254,14 +255,16 @@ _REDIRECTS: dict[str, str] = {
     "render_graph": "use torchlens.Trace.draw (trace.draw())",
     "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
     "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
-    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
     "resample_ablate": "use torchlens.intervention.scramble_elements -- resample_ablate was renamed",
+    "push": "use torchlens.Trace.do (trace.do(site, edit)) -- push folded into do, which applies and propagates the edit",
+    "push_from": "use torchlens.Trace.do (trace.do(site, edit)) -- push_from folded into do, which applies and propagates the edit",
     "reset_naming_counter": "use torchlens.io.reset_naming_counter",
     "resolve_sites": "use torchlens.Trace indexing (trace[selector]) -- it returns every matching site as a torchlens.Selection",
     "load_extraction": "use torchlens.load(path) -- it detects a saved extraction directory",
+    "run": "use torchlens.Trace.run (trace.run(model, x)) -- run is a Trace method, not a root verb",
     "save": "use torchlens.Trace.save (trace.save(path)) -- objects save themselves; torchlens.load(path) reads a saved artifact back",
     "save_intervention": "use torchlens.io.save_intervention",
     "semantic": "use torchlens.facets for facet functions and torchlens.mechinterp for the logit lens -- the semantic package is private",
@@ -270,11 +273,11 @@ _REDIRECTS: dict[str, str] = {
     "SiteTable": "use torchlens.Selection -- trace[selector] returns one",
     "SpecCompat": "use torchlens.types.SpecCompat",
     "StreamingOptions": "use torchlens.options.StorageOptions",
-    "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
+    "suppress_mutate_warnings": "use torchlens.errors.quiet() (or quiet(code, ...) for chosen codes)",
+    "swap_with": "use torchlens.intervention.helpers.swap_with (swap_with(other_label)) -- an edit helper under torchlens.intervention.helpers, not a root verb",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
     "TorchLensPostfuncError": "use torchlens.errors.UserTransformError",
-    "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
     "transformer": "import torchlens.transformer, then use torchlens.transformer.AttentionView and its siblings -- a submodule, not a root name; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
@@ -293,7 +296,7 @@ _REDIRECTS: dict[str, str] = {
 _REFUSALS: dict[str, str] = {}
 
 
-def __getattr__(name: str) -> _Any:
+def __getattr__(name: str) -> _typing.Any:
     """Return lazy package attributes through the five-step facade order.
 
     The order (architecture memo 5.4, testable spec): (1) underscore-prefixed
@@ -348,12 +351,14 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
-def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
+def _suggest_layer_labels(trace: _typing.Any, query: str) -> list[str]:
     """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
+
+    from ._utils._display_errors import candidate_keys
 
     if not isinstance(trace, _resolve_top_level("Trace")):
         return []
-    return list(trace._suggest_layer_labels(str(query)))
+    return candidate_keys(list(trace._suggest_layer_labels(str(query))), trace._layer_dict_all_keys)
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -373,8 +378,14 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """
 
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+        from ._utils._display_errors import lookup_message
+
+        return lookup_message(
+            f"Layer {name!r} not found.",
+            suggestions,
+            "pass an in-range integer, a layer label, or a module address.",
+            query=name,
+        )
     return f"Layer {name!r} not found."
 
 
@@ -491,7 +502,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
 
 
 def pluck(
-    model: _nn.Module, inputs: _Any, layer: str, stop_after: _Any | None = None
+    model: _nn.Module, inputs: _typing.Any, layer: str, stop_after: _typing.Any | None = None
 ) -> _torch.Tensor:
     """Return the saved out for one layer.
 
@@ -534,7 +545,7 @@ def pluck(
     return _out_from_log(trace, layer)
 
 
-def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
+def _extract_facet_plan(layers: _typing.Any) -> dict[str, _typing.Any]:
     """Return ``output_key -> facet selector`` for the facet selectors in an extract request.
 
     A list entry keys by the selector's spelling; a mapping entry by the user label.
@@ -552,12 +563,12 @@ def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
 
 def _extract_with_facets(
     model: _nn.Module,
-    x: _Any,
-    layers: _Any,
-    facet_plan: dict[str, _Any],
+    x: _typing.Any,
+    layers: _typing.Any,
+    facet_plan: dict[str, _typing.Any],
     *,
     detach_saved_activations: bool,
-) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _typing.Any]]:
     """Extract a request holding facet selectors: each facet's value, as ``trace[selector]`` reads it.
 
     One facet alone captures with ``save=selector`` (its homes); a mixed or
@@ -565,6 +576,7 @@ def _extract_with_facets(
     as in a plain extract, from the same trace.
     """
 
+    from ._data_classes._lookup_kinds import _record_view
     from .options import CaptureOptions as _LazyCaptureOptions
 
     capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
@@ -574,7 +586,7 @@ def _extract_with_facets(
     else:
         trace = _resolve_top_level("trace")(model, x, capture=capture)
     outputs: dict[str, _torch.Tensor] = {}
-    views: dict[str, _Any] = {}
+    views: dict[str, _typing.Any] = {}
     items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
     for label, value in items:
         key = (
@@ -587,17 +599,17 @@ def _extract_with_facets(
             outputs[key], views[key] = facet.value, facet
         else:
             outputs[key] = _out_from_log(trace, str(value))
-            views[key] = trace[str(value)]
+            views[key] = _record_view(trace, str(value))
     return trace, outputs, views
 
 
 def _extract_layers_with_trace(
     model: _nn.Module,
-    x: _Any,
+    x: _typing.Any,
     layers: _Iterable[str] | _Mapping[str, str],
     *,
     detach_saved_activations: bool = True,
-) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _typing.Any]]:
     """Run one selective capture and resolve the requested layers.
 
     Parameters
@@ -623,8 +635,8 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
+    from ._data_classes._lookup_kinds import _record_view
     from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
-    from ._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -635,11 +647,11 @@ def _extract_layers_with_trace(
     capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
     trace = _resolve_top_level("trace")(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, _torch.Tensor] = {}
-    views: dict[str, _Any] = {}
+    views: dict[str, _typing.Any] = {}
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            views[label] = _record_view(trace, pattern)  # the plain door canonicalizes the name
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -649,18 +661,24 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = trace[match]
+            views[match] = _record_view(trace, match)
     return trace, outputs, views
 
 
 def extract(
     model: _nn.Module,
-    inputs: _Any,
+    inputs: _typing.Any,
     layers: _Iterable[str] | _Mapping[str, str],
     *,
     detach_saved_activations: bool = True,
 ) -> dict[str, _torch.Tensor]:
     """Return saved outs for many layers.
+
+    ``tl.extract`` is the narrow door: it takes only ``model``, ``inputs``,
+    ``layers`` and ``detach_saved_activations``. Every other capture option
+    (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
+    ``episode=``, storage) belongs to ``tl.trace``; call it and read
+    ``trace[label].out`` when you need one of them.
 
     Parameters
     ----------

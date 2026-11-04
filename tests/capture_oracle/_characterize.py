@@ -952,7 +952,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "failed": product.is_failed,
             "halted": product.is_stopped,
             "stop_reason": product.stop_reason,
-            "n_ops_completed": product.num_committed_ops,
+            "n_ops_committed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
             "last_event_func": product.last_event_func,

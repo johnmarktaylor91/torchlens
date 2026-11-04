@@ -155,7 +155,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "model-explorer export-bridge demo dependency, no declared extra",
     ),
-    "dagua": (UNAVAILABLE_OK, "unreleased in-development layout engine"),
     "delphi.latents.loader": (
         OPTIONAL_PREVIEW,
         "SAE latent-export consumer (eai-delphi, no declared extra); nightly.yml "
@@ -1055,6 +1054,12 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_extract_dataset_device.py::test_cuda_model_returns_cuda_results_in_memory": (
+        "[2026-11-03] in-memory extract_dataset results stay on the model's device: "
+        "the CUDA-resident result is only observable with a CUDA model; dark on "
+        "CPU-only CI, executed on the owner's GPU box (its CPU sibling "
+        "test_memory_mode_keeps_stored_batches_on_the_capture_device runs everywhere)"
+    ),
     "test_debug_findings_source_lines.py::test_compare_cpu_against_cuda": (
         "[2026-11-03] compare of a CPU run against a CUDA run (payloads moved to "
         "the CPU before comparing): needs a CUDA device; dark on CPU-only CI, "
@@ -1313,7 +1318,6 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
         "everywhere, so absence costs validation breadth only"
     ),
     "dacite": "model-explorer export-bridge demo dependency",
-    "dagua": "unreleased in-development layout engine",
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
     "fvcore.nn": (
         "supplementary FLOP-counter cross-oracle (A07); the closed-form and "

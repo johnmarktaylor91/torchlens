@@ -1,8 +1,8 @@
 """Generate ``docs/maintainers/persisted_fields.md``, the persisted field set of the saved format.
 
 One command: ``python tools/docs/persisted_fields.py``. It reads the writer contract of
-record (``torchlens/schemas/writer_contract_v11.json``), the frozen previous contract
-(``writer_contract_v10.json``) for the key diff, the generated storage bindings
+record selected by the active ``TLSPEC_VERSION``, the frozen previous contract
+for the key diff, the generated storage bindings
 (``torchlens/_data_classes/_schema_bindings.py``) for each key's storage kind and type
 annotation, and the record-class modules under ``torchlens/_data_classes/`` with ``ast``
 (nothing is imported) for the public accessor that reads each private store. It writes
@@ -26,8 +26,24 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 SCHEMAS = REPO / "torchlens" / "schemas"
-CONTRACT = SCHEMAS / "writer_contract_v11.json"
-PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v10.json"
+
+
+def _record_contract_version() -> int:
+    """Read the declared active version without importing the package."""
+
+    source = REPO / "torchlens" / "_io" / "format_contract.py"
+    for node in ast.parse(source.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "TLSPEC_VERSION"
+            for target in node.targets
+        ):
+            return int(ast.literal_eval(node.value))
+    raise SystemExit(f"{source}: no literal TLSPEC_VERSION declaration found")
+
+
+_RECORD_VERSION = _record_contract_version()
+CONTRACT = SCHEMAS / f"writer_contract_v{_RECORD_VERSION}.json"
+PREVIOUS_CONTRACT = SCHEMAS / f"writer_contract_v{_RECORD_VERSION - 1}.json"
 DATA_CLASSES = REPO / "torchlens" / "_data_classes"
 BINDINGS = DATA_CLASSES / "_schema_bindings.py"
 GROUPS_MODULE = DATA_CLASSES / "_trace_groups.py"

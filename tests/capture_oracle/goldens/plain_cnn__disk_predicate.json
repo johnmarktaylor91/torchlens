@@ -20,12 +20,15 @@
       "disk_storage": {
         "created": true,
         "files": [
-          "blobs/0000000001.safetensors",
-          "blobs/0000000002.safetensors",
-          "blobs/0000000003.safetensors",
-          "blobs/0000000007.safetensors",
+          "blobs/torch_safetensors_v1-0000.safetensors",
           "manifest.json",
-          "metadata.pkl"
+          "records/func_call_location.json",
+          "records/layer.json",
+          "records/module.json",
+          "records/module_call.json",
+          "records/op.json",
+          "records/param.json",
+          "records/trace.json"
         ]
       },
       "events": [
@@ -175,7 +178,14 @@
             "source_trace": "unknown",
             "source_trace_id": "unknown",
             "step_index": "defaulted_zero",
-            "templates.args_template": "unknown",
+            "templates.args_template.args": "populated",
+            "templates.args_template.func_id.dispatch_kind": "populated",
+            "templates.args_template.func_id.import_path": "unknown",
+            "templates.args_template.func_id.namespace": "populated",
+            "templates.args_template.func_id.qualname": "populated",
+            "templates.args_template.func_id.version": "populated",
+            "templates.args_template.kwargs": "defaulted_empty",
+            "templates.args_template.notes": "defaulted_empty",
             "templates.has_saved_args": "defaulted_false",
             "templates.kwargs_template": "unknown",
             "templates.saved_args": "unknown",
@@ -321,7 +331,14 @@
             "source_trace": "unknown",
             "source_trace_id": "unknown",
             "step_index": "defaulted_zero",
-            "templates.args_template": "unknown",
+            "templates.args_template.args[0]": "populated",
+            "templates.args_template.func_id.dispatch_kind": "populated",
+            "templates.args_template.func_id.import_path": "unknown",
+            "templates.args_template.func_id.namespace": "populated",
+            "templates.args_template.func_id.qualname": "populated",
+            "templates.args_template.func_id.version": "populated",
+            "templates.args_template.kwargs": "defaulted_empty",
+            "templates.args_template.notes": "defaulted_empty",
             "templates.has_saved_args": "defaulted_false",
             "templates.kwargs_template": "unknown",
             "templates.saved_args": "unknown",
@@ -604,20 +621,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 1570074,
+      "python_peak_memory_median_bytes": 2102949,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 77.33258092775941
+      "wall_time_median_ms": 874.2133779451251
     }
   },
   "sha256_chunks": [
-    "ec3b374b",
-    "d7b6505f",
-    "01a18a01",
-    "9be4ac9f",
-    "a3298da0",
-    "3b2dba78",
-    "23d3038e",
-    "58f5ac5d"
+    "1f307269",
+    "e3f46919",
+    "f0478e38",
+    "61fc555c",
+    "69adfa0b",
+    "53b5c658",
+    "40a51c1a",
+    "2a3abe91"
   ]
 }

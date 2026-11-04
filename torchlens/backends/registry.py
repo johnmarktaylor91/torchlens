@@ -8,6 +8,7 @@ from typing import Any, Final, Literal, TypeAlias
 
 from ._backend_names import TORCH_BACKEND_NAME as TORCH_BACKEND_NAME
 from ._backend_protocol import MATURITIES, _install_spec_lookup, protocol_problems
+from ._entry_refusals import refuse_backend_registered
 from ._errors import (
     AmbiguousBackendError as AmbiguousBackendError,
     BackendCapabilityConformanceError as BackendCapabilityConformanceError,
@@ -475,7 +476,7 @@ def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
     names = (str(spec.name), *spec.aliases)
     for name in names:
         if not replace and name in _REGISTRY:
-            raise ValueError(f"Backend {name!r} is already registered.")
+            refuse_backend_registered(name)
     _validate_capture_backend_factory(spec)
     _validate_protocol_factory(spec)
     _validate_capability_implementations(spec)

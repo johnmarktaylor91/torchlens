@@ -14,8 +14,7 @@ from .._literals import VisNodeModeLiteral
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from .._utils.display import human_readable_size
-from ._label_format import format_shape
+from ._label_format import binary_size, format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -228,7 +227,7 @@ def vision_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> spec = vision_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec = vision_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
     >>> spec.lines[0], spec.lines[-1].startswith("in=")
     ('conv', True)
     """
@@ -264,7 +263,7 @@ def attention_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> spec = attention_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec = attention_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
     >>> spec.lines
     ['conv']
     """
@@ -395,9 +394,9 @@ def _get_optional_attr(obj: object, attr_name: str) -> Any:
 
 
 def _compact_size(size: float) -> str:
-    """Format bytes without the space used by the generic display helper."""
+    """Format bytes for a drawing without the space (``"60.0KB"``)."""
 
-    return human_readable_size(size).replace(" ", "")
+    return binary_size(size).replace(" ", "")
 
 
 def _first_call_location(layer_log: Op | Layer) -> Any | None:

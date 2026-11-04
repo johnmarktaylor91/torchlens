@@ -51,6 +51,13 @@ tvs = pytest.importorskip("torchvision.models.segmentation")
 SVG_NODE_RE = re.compile(r'class="node"')
 
 
+@pytest.fixture(autouse=True)
+def _wall_clock_never_changes_plans(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disarm the collapse watchdog as CI does: host load must never change a plan."""
+
+    monkeypatch.setenv("TORCHLENS_DETERMINISTIC", "1")
+
+
 class ResidualBlock(torch.nn.Module):
     """Small residual block with enough internal structure to collapse."""
 

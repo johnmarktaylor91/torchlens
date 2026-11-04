@@ -4,7 +4,6 @@
 
 | File | Purpose |
 |------|---------|
-| `build_torchlens_theme_gallery.py` | Generate visualization theme gallery artifacts (dagua renderer) |
 | `backend_ci_changes.py` | Decides whether a preview backend's per-change `backend-protocol` leg runs for a diff (`pr.yml`; rules pinned by `tests/test_backend_framework_pins.py`) |
 | `check_ci_executed_tests.py` | Executed-floor attestation over a junit XML (wired into CI legs) |
 | `check_flops_coverage.py` | Report FLOPs handler coverage (`torchlens/_capture/flops.py`) against decorated torch functions |
@@ -14,7 +13,7 @@
 | `normalize_sdist.py` | Deterministic sdist/wheel normalization for reproducible releases (invoked by `build_command` + the nightly double-build gate) |
 | `render_collapse_reference.py` | Regenerate the collapse reference images |
 | `render_large_graph.py` | Render synthetic large graphs with layout backends |
-| `run_notebooks.py` | Execute every user notebook with nbclient (nightly `notebooks` leg; needs the `test` extra); `--write-outputs` regenerates the stored outputs of the ten-minute tutorial and the learning path |
+| `run_notebooks.py` | Execute every user notebook with nbclient (nightly `notebooks` leg; needs the `test` extra); `--write-outputs` regenerates the stored outputs of the ten-minute tutorial, the learning path and the README-linked notebooks |
 
 ## Release Safety
 A major version ships only on the maintainer's explicit command. Three stops, each failing

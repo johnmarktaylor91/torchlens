@@ -198,9 +198,9 @@ def test_train_mode_batchnorm_runs_and_default_run_restores_stats():
     model = _train_bn_stack()
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     before = {name: buf.clone() for name, buf in model.named_buffers()}
-    full = log.run(inputs=torch.randn(2, 3, 8, 8))
+    full = log.run_transaction(inputs=torch.randn(2, 3, 8, 8))
     full.output.pow(2).mean().backward()
-    truncated = log.run(inputs=torch.randn(2, 3, 8, 8), until="act0")
+    truncated = log.run_transaction(inputs=torch.randn(2, 3, 8, 8), until="act0")
     assert truncated.report.truncated is True
     truncated.trace["act0"].out.pow(2).mean().backward()
     for name, value in before.items():
@@ -209,14 +209,14 @@ def test_train_mode_batchnorm_runs_and_default_run_restores_stats():
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/transaction.py, intervention/_trace_run.py.
 def test_run_carry_state_advances_train_stats_like_a_plain_forward():
-    """run(carry_state=True) running statistics equal a plain forward's, bit-exact."""
+    """run_transaction(carry_state=True) running statistics equal a plain forward's, bit-exact."""
 
     model = _train_bn_stack()
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     reference = copy.deepcopy(model)
     x2 = torch.randn(2, 3, 8, 8)
     reference(x2)
-    log.run(inputs=x2, carry_state=True)
+    log.run_transaction(inputs=x2, carry_state=True)
     for (name, got), (_, expected) in zip(
         model.named_buffers(), reference.named_buffers(), strict=True
     ):
@@ -230,7 +230,7 @@ def test_train_mode_run_backward_matches_eager_gradients():
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     reference = copy.deepcopy(model)
     x2 = torch.randn(2, 3, 8, 8)
-    log.run(inputs=x2).output.pow(2).mean().backward()
+    log.run_transaction(inputs=x2).output.pow(2).mean().backward()
     reference(x2).pow(2).mean().backward()
     got = {name: p.grad for name, p in model.named_parameters()}
     expected = {name: p.grad for name, p in reference.named_parameters()}
@@ -250,7 +250,7 @@ def test_d18_still_refuses_unproven_train_mode_evidence():
         if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError, match="unproven"):
-        log.run(inputs=torch.randn(2, 3, 8, 8))
+        log.run_transaction(inputs=torch.randn(2, 3, 8, 8))
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/projectors.py.
@@ -271,7 +271,7 @@ def test_d18_still_refuses_a_non_norm_buffer_writer():
     log = tl.trace(model, torch.randn(2, 3))
     assert float(model.steps) == 0.0
     with pytest.raises(BufferSinkRoutingError, match="not proven train-mode"):
-        log.run(inputs=torch.randn(2, 3))
+        log.run_transaction(inputs=torch.randn(2, 3))
 
 
 def test_carry_state_does_not_change_the_trace():
