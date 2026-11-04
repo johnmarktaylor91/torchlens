@@ -83,12 +83,12 @@ def test_bare_label_error_names_a_spelling_that_resolves() -> None:
 
     with pytest.raises(InvalidArgumentError) as single_read:
         layer.out
-    assert single_read.value.code == "layer_pass_ambiguous"
+    assert single_read.value.fields["code"] == "layer_pass_ambiguous"
     _assert_every_named_spelling_resolves(trace, str(single_read.value))
 
     with pytest.raises(AmbiguousSiteError) as selector:
         trace[tl.label("linear_1")]
-    assert selector.value.code == "multipass_bare_label_ambiguous"
+    assert selector.value.fields["code"] == "multipass_bare_label_ambiguous"
     _assert_every_named_spelling_resolves(trace, str(selector.value))
 
     with pytest.raises(AmbiguousOpLookupError) as ops_door:
