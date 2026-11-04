@@ -479,24 +479,35 @@ def _fa2_kernel(
     return out, lse, mask, rng_state
 
 
+def _scoped_fa2_standin(namespace: str) -> Any:
+    """Yield ``torch.ops.<namespace>._flash_attn_forward`` with the stand-in CPU kernel.
+
+    The library is scoped: its definition and kernel are removed when the test ends. When
+    the real ``flash-attn`` already registered the operator in this process, only the CPU
+    kernel is added (the real schema is the one ``_FA2_SCHEMA`` spells).
+    """
+
+    with torch.library._scoped_library(namespace, "FRAGMENT") as lib:
+        if not hasattr(getattr(torch.ops, namespace), "_flash_attn_forward"):
+            lib.define(_FA2_SCHEMA)
+        torch.library.register_kernel(
+            f"{namespace}::_flash_attn_forward", "cpu", _fa2_kernel, lib=lib
+        )
+        yield getattr(torch.ops, namespace)._flash_attn_forward
+
+
 @pytest.fixture
 def fa2_op() -> Any:
     """Register the stand-in as ``flash_attn::_flash_attn_forward`` for one test."""
 
-    with torch.library._scoped_library("flash_attn", "FRAGMENT") as lib:
-        lib.define(_FA2_SCHEMA)
-        lib.impl("_flash_attn_forward", _fa2_kernel, "CPU")
-        yield torch.ops.flash_attn._flash_attn_forward
+    yield from _scoped_fa2_standin("flash_attn")
 
 
 @pytest.fixture
 def undeclared_fa2_op() -> Any:
     """The same operator, name and schema under an undeclared namespace."""
 
-    with torch.library._scoped_library("tltest_fa2dep", "FRAGMENT") as lib:
-        lib.define(_FA2_SCHEMA)
-        lib.impl("_flash_attn_forward", _fa2_kernel, "CPU")
-        yield torch.ops.tltest_fa2dep._flash_attn_forward
+    yield from _scoped_fa2_standin("tltest_fa2dep")
 
 
 class _Fa2Model(nn.Module):
