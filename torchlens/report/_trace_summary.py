@@ -9,7 +9,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._capture.structure_only import claim_status_for
-from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
+from .._data_classes._nonfinite import (
+    _unmaterialized_disk_payload_count,
+    coverage_gap_note,
+    first_nonfinite_layer,
+)
+from .._data_classes._value_state import LAZY_DISK
 from .._data_classes.func_call_location import display_frame
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
@@ -189,15 +194,54 @@ __all__ = ["first_nonfinite", "repr_html", "summary"]
 _MORE = (".summary()", ".modules", ".layers", ".ops", ".params")
 
 
-def _stored_verdict(trace: Any) -> str:
-    """Read a previously settled verdict; never derive or persist a health record."""
+def _stored_facts(trace: Any) -> Any:
+    """Read a previously settled health record; never derive or persist one."""
 
     payload = getattr(trace, "annotations", {}).get("health_facts")
     if payload is None:
-        return "not_checked"
+        return None
     revision = capture_fingerprint(trace)
     facts = _parse_persisted(payload, revision)
-    return facts.verdict if facts.capture_revision == revision else "not_checked"
+    return facts if facts.capture_revision == revision else None
+
+
+def _stored_verdict(trace: Any) -> str:
+    """Read a previously settled verdict; never derive or persist a health record."""
+
+    facts = _stored_facts(trace)
+    return "not_checked" if facts is None else facts.verdict
+
+
+def _coverage_text(trace: Any) -> str:
+    """After a settled partial scan: what it examined and why the rest was not.
+
+    The gap note is the one ``explain()`` and ``first_nonfinite()`` print, counted
+    from payload metadata; no payload is read and nothing is scanned here.
+    """
+
+    facts = fail_open(lambda: _stored_facts(trace), lambda _error: None)
+    if facts is None or facts.verdict != "not_checked" or facts.basis == "persisted_invalid":
+        return ""
+    note = coverage_gap_note(trace, kind="saved").strip()
+    if not note:
+        return ""
+    checked = facts.num_checked_ops
+    examined = f"{plural(checked, 'op')} examined, none non-finite" if checked else "no op examined"
+    return f"{examined} {note}"
+
+
+def _saved_text(trace: Any) -> str:
+    """Saved outputs and their bytes; disk-backed payloads keep the record cards' token."""
+
+    saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
+    text = (
+        f"{format_exact_count(saved)} of {format_exact_count(len(trace._layer_list))} layer outputs, "
+        f"{format_iec_bytes(trace._cost_saved_activation_memory)}"
+    )
+    disk = fail_open(
+        lambda: _unmaterialized_disk_payload_count(trace, kind="saved"), lambda _error: 0
+    )
+    return f"{text} {LAZY_DISK}" if disk else text
 
 
 def _health_text(trace: Any) -> str:
@@ -285,7 +329,6 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
     param_ops = exact(trace._num_layers_with_params)
     duration = float(trace._provenance_duration)
     compute = float(trace._cost_func_calls_duration)
-    saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
     rows = [
         (
             "model",
@@ -296,10 +339,8 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
             f"{format_duration(duration)} ({format_duration(duration - compute)} of it logging), seed {trace._options_seed}",
         ),
         ("graph", _graph_text(trace)),
-        (
-            "saved",
-            f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
-        ),
+        ("saved", _saved_text(trace)),
+        ("coverage", _coverage_text(trace)),
         ("outputs", plural(len(trace.output_layers), "output site")),
         ("flops", "MACs reported as FLOPs // 2"),
     ]
@@ -316,7 +357,12 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
 
 def _graph_text(trace: Any) -> str:
     graph = trace.graph
-    topology = "recurrent" if graph.is_recurrent else "feedforward"
+    topology = "feedforward"
+    if graph.is_recurrent:
+        passes = fail_open(lambda: int(graph.max_ops_per_layer), lambda _error: 0)
+        topology = (
+            f"recurrent (up to {format_exact_count(passes)} passes)" if passes > 1 else "recurrent"
+        )
     if trace._provenance_verified is False:
         topology = "structure unverified"
     branching = "with branching" if graph.is_branching else "no branching"

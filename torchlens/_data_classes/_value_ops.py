@@ -20,7 +20,7 @@ from ._value_state import (
     value_line,
     value_words,
 )
-from .func_call_location import display_frame, short_source_path
+from .func_call_location import display_frame, short_source_path, stale_location_note
 
 _OP_MORE = (".out", ".parents", ".children", ".func_config", ".code_context", ".lookup_keys")
 _LAYER_MORE = (".ops", ".parents", ".children", ".to_pandas()")
@@ -75,12 +75,14 @@ def _function(op: Any, *, duration: bool = True) -> str:
 
 
 def _source(op: Any) -> str:
-    """Captured source location only; never consult source files or linecache."""
+    """Captured source location; never reads source text (a stale file is flagged by one stat)."""
 
     frame = display_frame(getattr(op, "code_context", None))
     if frame is None:
         return ""
-    return f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
+    location = f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
+    note = stale_location_note(frame)
+    return f"{location} ({note})" if note else location
 
 
 def _module(op: Any) -> str:
@@ -113,7 +115,7 @@ def _position(op: Any, kind: str) -> str:
     """Position belongs to the card, not the one-line identity."""
 
     trace = trace_of(op)
-    total = getattr(trace, "_num_ops", None)
+    total = fail_open(lambda: trace._num_ops, lambda _error: None)
     index = getattr(op, "step_index", None)
     if index is None or total is None:
         return ""
@@ -185,7 +187,13 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     if passes > len(ops):
         rows.append(("", f"... and {format_exact_count(passes - len(ops))} more passes"))
     if ops:
-        rows.extend((("module", _module(ops[0])), ("function", _function(ops[0], duration=False))))
+        rows.extend(
+            (
+                ("module", _module(ops[0])),
+                ("function", _function(ops[0], duration=False)),
+                ("source", _source(ops[0])),
+            )
+        )
     return rows
 
 

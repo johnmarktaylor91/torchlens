@@ -48,18 +48,22 @@ def three_pass_log() -> Generator[tl.Trace, None, None]:
 
 
 def test_trace_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
-    """print(trace) renders multi-pass rows as "(pass k/N)", never "(k/N ops)"."""
+    """print(trace) spells multiplicity in passes, never "(k/N ops)".
+
+    The trace card has no per-layer rows (house style A17): it states the pass count on
+    its graph row, and the per-layer rows moved to ``summary()``, which counts passes too.
+    """
 
     text = str(three_pass_log)
-    assert "(pass 1/3)" in text
-    assert "(pass 3/3)" in text
+    assert "\n  graph     recurrent (up to 3 passes), " in text
     assert " ops)" not in text
+    assert "up to 3 passes" in str(three_pass_log.summary())
 
 
 def test_layer_str_spells_passes_never_ops(three_pass_log: tl.Trace) -> None:
-    """Layer str renders aggregate multiplicity as "(x3 passes)", never "(3 ops)"."""
+    """Layer str renders aggregate multiplicity as "3 passes", never "(3 ops)"."""
 
     layer = three_pass_log.layers["linear_1_1"]
     text = str(layer)
-    assert "(x3 passes)" in text
+    assert text.splitlines()[0] == "Layer linear_1: 3 passes, float32 [2, 3]"
     assert "(3 ops)" not in text

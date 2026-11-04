@@ -187,14 +187,40 @@ def _read_fingerprinted_lines(filename: str, fingerprint: Any) -> list[str] | st
         if entry is None or len(entry) != 4:
             return _SOURCE_TEXT_UNAVAILABLE
         return list(entry[2])
+    status = _file_fingerprint_status(filename, fingerprint)
+    if status:
+        return status
+    linecache.checkcache(filename)
+    return linecache.getlines(filename) or _SOURCE_TEXT_UNAVAILABLE
+
+
+def _file_fingerprint_status(filename: str, fingerprint: tuple[Any, ...]) -> str:
+    """Return ``""`` while the file matches its capture fingerprint, else why not (one stat)."""
+
     try:
         stat = os.stat(filename)
     except (OSError, ValueError):
         return _SOURCE_TEXT_MISSING
     if (stat.st_size, stat.st_mtime_ns) != (fingerprint[1], fingerprint[2]):
         return _SOURCE_TEXT_CHANGED
-    linecache.checkcache(filename)
-    return linecache.getlines(filename) or _SOURCE_TEXT_UNAVAILABLE
+    return ""
+
+
+def stale_location_note(frame: Any) -> str:
+    """Return why a lazily read frame's file no longer matches its capture, or ``""``.
+
+    A card names the captured ``file:line`` without its text; when the file
+    changed or vanished since capture that line no longer holds the code that
+    ran, so the card says so. One ``os.stat``; source text is never read.
+    Snapshotted frames and frames with no file fingerprint return ``""``.
+    """
+
+    fingerprint = getattr(frame, "_linecache_entry", None)
+    if getattr(frame, "source_loading_enabled", True) or not getattr(frame, "file", None):
+        return ""
+    if not isinstance(fingerprint, tuple) or len(fingerprint) != 4 or fingerprint[0] == "linecache":
+        return ""
+    return _file_fingerprint_status(str(frame.file), fingerprint)
 
 
 def _torch_package_dir() -> str:
