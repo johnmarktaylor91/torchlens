@@ -183,14 +183,11 @@ def _build_root_module_log(
 ) -> "Module":
     """Build the root Module ("self") representing the model itself.
 
-    The root module encomops all layers and params. Its address_children are
-    only direct children (no dots in address), while call_children may include
-    grandchildren called directly (e.g., self.level21.level12(x)).
-
-    The root's calls: one synthesized ``self:1`` spanning the whole capture
-    when the root's forward ran undecorated (a plain module root), else the
-    recorded ``self:1`` .. ``self:N`` (a bound-method root whose owner the
-    bound method called N times).
+    The root encompasses all layers and params; address_children are the direct
+    children (no dots), call_children may include grandchildren called directly.
+    Its calls: one synthesized ``self:1`` spanning the whole capture when the
+    root's forward ran undecorated (a plain module root), else the recorded
+    ``self:1`` .. ``self:N`` of a bound-method root called N times.
     """
     from .._data_classes.param import ParamAccessor
 
@@ -212,6 +209,23 @@ def _build_root_module_log(
         address_children = [
             child for child in root_meta_children if child != "self" and "." not in child
         ]
+
+    root_ops: dict[int, ModuleCall] = {}
+    if recorded_calls:
+        child_to_parent, input_layers_by_call = _root_call_build_inputs(self, mbd)
+        root_ops, _labels = _build_submodule_call_logs(
+            self,
+            "self",
+            recorded_calls,
+            pass_dict,
+            mbd,
+            child_to_parent,
+            all_addresses=list(root_meta.get("all_addresses", ["self"])),
+            module_class=root_meta.get("cls"),
+            pass_input_layers_by_call=input_layers_by_call,
+        )
+        for root_call in root_ops.values():
+            root_call.call_parent = None  # the root's own calls have no calling module
 
     root_module = Module(
         address="self",
@@ -242,7 +256,7 @@ def _build_root_module_log(
         call_children=[m for m in mbd["top_level_modules"] if m != "self"],
         call_depth=0,
         num_calls=max(1, recorded_calls),
-        ops={},
+        ops=root_ops,
         call_labels=[f"self:{call_index}" for call_index in range(1, max(1, recorded_calls) + 1)],
         layer_labels=root_layers,
         params=root_params,
@@ -263,23 +277,7 @@ def _build_root_module_log(
         _source_trace=self,
     )
 
-    if recorded_calls:
-        child_to_parent, input_layers_by_call = _root_call_build_inputs(self, mbd)
-        root_ops, _labels = _build_submodule_call_logs(
-            self,
-            "self",
-            recorded_calls,
-            pass_dict,
-            mbd,
-            child_to_parent,
-            all_addresses=list(root_meta.get("all_addresses", ["self"])),
-            module_class=root_meta.get("cls"),
-            pass_input_layers_by_call=input_layers_by_call,
-        )
-        for root_call in root_ops.values():
-            root_call.call_parent = None  # the root's own calls have no calling module
-        root_module.ops = root_ops
-    else:
+    if not recorded_calls:
         root_module.ops[1] = _synthesized_root_call(self, mbd, root_meta)
         pass_dict["self:1"] = root_module.ops[1]
     root_module._sync_boundary_fields_from_calls()

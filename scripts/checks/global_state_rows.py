@@ -624,7 +624,7 @@ _WEAK_SUBJECT_TABLES = frozenset(
         ("torchlens/backends/torch/completeness_witness.py", "_RUNNABLE_INPUT_STORAGE_SITES"),
         ("torchlens/backends/torch/completeness_witness.py", "_STATE_METADATA_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STORAGE_REBIND_BARRIER_LABELS"),
-        ("torchlens/backends/torch/model_prep.py", "_source_line_cache"),
+        ("torchlens/backends/torch/_root_prep.py", "_source_line_cache"),
         # Implicit-backward task ordinals keyed weakly by their owning trace;
         # entries die with the trace.
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
@@ -987,7 +987,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/completeness_witness.py", "_RUNNABLE_LEDGER_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STATE_METADATA_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STORAGE_REBIND_BARRIER_LABELS"),
-        ("torchlens/backends/torch/model_prep.py", "_source_line_cache"),
+        ("torchlens/backends/torch/_root_prep.py", "_source_line_cache"),
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
