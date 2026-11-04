@@ -49,6 +49,8 @@ def test_numbers_follow_the_house_spellings() -> None:
         (999950, "1.0M"),
         (999950000, "1.0G"),
         (124439808, "124.4M"),
+        (999950000000, "1.0T"),
+        (3400000000000, "3.4T"),
     ],
 )
 def test_compact_counts_keep_one_decimal_and_roll_over(count: int, expected: str) -> None:
