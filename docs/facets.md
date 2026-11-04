@@ -42,6 +42,9 @@ nested positional    -> out1.0
 `module.outs` remains a thin alias for raw structural outputs. `module.facets` is
 the unified named access layer. If a module was called more than once,
 `module.facets` raises; choose an explicit pass with `module.calls[n].facets`.
+A call's view runs the module's recipes for that call alone, and child modules
+resolve to their call inside it: for an attention layer shared across depth
+(ALBERT), `module.calls[n].facets.q` is the query projection of pass `n`.
 
 `keys()`, iteration, `in`, `has(name)`, and item/attribute access are
 available-now surfaces: recipes run once and only facets readable in the current
