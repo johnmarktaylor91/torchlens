@@ -202,7 +202,13 @@ def encode_tables(
     encoder: ValueEncoder = encoder_factory(tables.reference)
     schema = record_schema("trace")
     fields = {
-        name: _encode_trace_cell(encoder, cells.cell("trace", state, state, name), name, schema)
+        name: _encode_cell(
+            encoder,
+            cells.cell("trace", state, state, name),
+            "trace",
+            name,
+            _is_payload(schema, name),
+        )
         for name in _write_columns("trace", payload_policy)
     }
     files: dict[str, dict[str, Any]] = {
@@ -226,14 +232,12 @@ def _is_payload(schema: Mapping[str, Any], name: str) -> bool:
     return name in schema and schema[name].storage == "payload"
 
 
-def _encode_trace_cell(
-    encoder: ValueEncoder, value: Any, name: str, schema: Mapping[str, Any]
-) -> Any:
-    """Encode one trace cell; a plain JSON scalar is written as it is (no encoder call)."""
+def _encode_cell(encoder: ValueEncoder, value: Any, at_row: str, name: str, payload: bool) -> Any:
+    """Encode the cell ``at_row.name``; a plain JSON scalar is written as it is (no encoder call)."""
 
     if plain_cell(value):
         return value
-    return encoder.encode(value, f"trace.{name}", payload=_is_payload(schema, name))
+    return encoder.encode(value, f"{at_row}.{name}", payload=payload)
 
 
 # Complexity: fixed-point row discovery must encode newly referenced rows before the same pass ends.
@@ -267,14 +271,11 @@ def _encode_record_rows(
                 row = done[kind]
                 record = tables.rows[kind][row]
                 state = dict(state_items(record))
+                at_row = f"{kind}[{row}]"
                 for name in names[kind]:
                     value = cells.cell(kind, record, state, name)
                     columns[kind][name].append(
-                        value
-                        if plain_cell(value)
-                        else encoder.encode(
-                            value, f"{kind}[{row}].{name}", payload=payload_columns[name]
-                        )
+                        _encode_cell(encoder, value, at_row, name, payload_columns[name])
                     )
                 done[kind] += 1
                 progressed = True
