@@ -911,7 +911,7 @@ def load_merged(path: str | Path) -> MergedTrace:
                 raise _tamper(
                     f"rank {declared_rank} member core {str(member_path)!r} failed "
                     f"a bundle-integrity check ({_bounded_exc(exc)}); a guarded-unpickler denylist "
-                    "refusal, a corrupt pickle stream or a root pickle in a 3.0 core (unopened) "
+                    "refusal, a corrupt pickle stream or a foreign root pickle (unopened) "
                     "is a tampered artifact, never a degradation laundered into a partial merge"
                 ) from exc
             # A member bundle that no longer LOADS on this runtime is a genuine

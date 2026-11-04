@@ -21,8 +21,8 @@ from .._io.format3.contract import FORMAT_NAME, MANIFEST_FILE
 # boundary, wrapped into a ``ArtifactError`` tagged with this code (A-R58-1).
 _BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
 
-#: The 2.x metadata carrier. The 3.0 writer never produces it, so inside a 3.0 core it is
-#: foreign content.
+#: The 2.x metadata carrier. The current writer never produces it, so inside a current-format
+#: core it is foreign content.
 _LEGACY_PICKLE = "metadata.pkl"
 
 
@@ -36,7 +36,7 @@ def _is_bundle_integrity_refusal(exc: BaseException, member_path: Path | None = 
     dependency) both by the stable ``code`` the ``bundle.load`` boundary stamps
     on it AND by walking the ``__cause__``/``__context__`` chain for the raw
     ``pickle.UnpicklingError``/``EOFError`` (belt-and-braces: a refusal that
-    reaches here through any other wrapper is still caught). A 3.0 core at
+    reaches here through any other wrapper is still caught). A current-format core at
     ``member_path`` that holds a root ``metadata.pkl`` is tamper too, whatever the
     loader raised (see :func:`_holds_foreign_pickle`).
     """
@@ -57,11 +57,11 @@ def _is_bundle_integrity_refusal(exc: BaseException, member_path: Path | None = 
 
 
 def _holds_foreign_pickle(member_path: Path) -> bool:
-    """Return whether a rank core names the 3.0 format yet holds a root ``metadata.pkl``.
+    """Return whether a rank core names the current format yet holds a root ``metadata.pkl``.
 
     The pickle is never opened: ``tl.load`` refuses any root holding it as a 2.x artifact
     before reading it, so without this check ``load_merged`` recorded the planted file as a
-    runtime degradation. A core whose manifest does not name the 3.0 format (or cannot be
+    runtime degradation. A core whose manifest does not name the current format (or cannot be
     read) answers False and stays with the loader's verdict: a genuine 2.x core still degrades.
     """
 

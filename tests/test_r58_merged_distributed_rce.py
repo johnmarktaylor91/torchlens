@@ -476,9 +476,9 @@ def test_corrupt_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None
 
 
 def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path) -> None:
-    """A root ``metadata.pkl`` planted in a 3.0 rank core refuses as tamper, unopened.
+    """A root ``metadata.pkl`` planted in a current-format rank core refuses as tamper, unopened.
 
-    The 3.0 writer emits no pickle, so the file is foreign content: it must refuse
+    The current writer emits no pickle, so the file is foreign content: it must refuse
     typed, never degrade the merge to partial, and never be unpickled (its
     ``__reduce__`` would create the marker file).
     """
@@ -499,7 +499,7 @@ def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path)
         load_merged(art)
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "rank 1" in str(caught.value)
-    assert "root pickle in a 3.0 core (unopened)" in str(caught.value)
+    assert "foreign root pickle (unopened)" in str(caught.value)
     assert "metadata.pkl" in str(caught.value.__cause__)
     assert not marker.exists()
 
