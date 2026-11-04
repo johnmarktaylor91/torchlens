@@ -1054,6 +1054,12 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_extract_dataset_device.py::test_cuda_model_returns_cuda_results_in_memory": (
+        "[2026-11-03] in-memory extract_dataset results stay on the model's device: "
+        "the CUDA-resident result is only observable with a CUDA model; dark on "
+        "CPU-only CI, executed on the owner's GPU box (its CPU sibling "
+        "test_memory_mode_keeps_stored_batches_on_the_capture_device runs everywhere)"
+    ),
     "test_debug_findings_source_lines.py::test_compare_cpu_against_cuda": (
         "[2026-11-03] compare of a CPU run against a CUDA run (payloads moved to "
         "the CPU before comparing): needs a CUDA device; dark on CPU-only CI, "
