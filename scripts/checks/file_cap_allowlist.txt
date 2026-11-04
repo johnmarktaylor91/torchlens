@@ -1377,7 +1377,7 @@ torchlens/trackers/_watch.py	1533
 torchlens/trackers/_watch.py::watch	187
 torchlens/transformer/_decomp.py::render_neuron_card	67
 torchlens/transformer/_decomp.py::score_decomposition	78
-torchlens/transformer/_extract.py::attention_view	76
+torchlens/transformer/_extract.py::attention_view	71
 torchlens/transformer/_lens_heatmap.py::render_logit_lens_heatmap	108
 torchlens/transformer/_metrics.py::token_metrics	71
 torchlens/transformer/_predictions.py::prediction_trajectory	61

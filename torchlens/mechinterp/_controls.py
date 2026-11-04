@@ -86,6 +86,18 @@ class AblationControlsReport:
         One verdict per family that ran.
     direction_p:
         The direction family's rank p-value, or ``None`` when no direction was given.
+
+    Examples
+    --------
+    >>> from collections import OrderedDict
+    >>> net = nn.Sequential(OrderedDict(fc1=nn.Linear(4, 8), act=nn.ReLU(), fc2=nn.Linear(8, 2)))
+    >>> def metric(trace):
+    ...     return trace.output_ops[-1].out.sum()
+    >>> report = tl.mechinterp.ablation_controls(
+    ...     net.eval(), torch.randn(6, 4), tl.module("fc1"), metric, axis=0
+    ... )
+    >>> type(report).__name__, [family.family for family in report.families]
+    ('AblationControlsReport', ['baseline'])
     """
 
     clean: float
@@ -372,27 +384,23 @@ def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated k
     metric:
         ``Trace -> number``: the quantity the claim is about.
     axis:
-        The site value's batch axis, which ``mean`` averages over and ``resample`` draws
-        rows along. Explicit, never guessed from rank.
+        The batch axis ``mean`` averages over and ``resample`` draws rows along; never guessed.
     baseline:
         The ablation the claim used: ``"zero"``, ``"mean"`` or ``"resample"``.
     donors:
         Input whose rows feed the mean and resample baselines (default ``inputs``).
     direction:
-        Optional 1-D direction the claim is about; runs the direction family against
-        ``n_directions`` matched random directions.
+        Optional 1-D direction the claim is about; runs the direction family.
     feature_axis:
         The site axis ``direction`` lives on; required with ``direction``.
     n_directions:
-        Matched random directions of the same norm that the claimed direction is ranked
-        against.
+        Matched random directions of the same norm to rank ``direction`` against.
     sites:
         Optional ``name -> selector`` of neighbouring sites; runs the site family.
     seed:
         Seed of the random directions and the resample draw.
     min_ratio:
-        Share of the claimed effect a baseline or site control must keep, with the same
-        sign, to survive.
+        Share of the claimed effect (same sign) a baseline or site control must keep.
     alpha:
         The largest direction-family rank p-value that survives.
 
@@ -400,14 +408,38 @@ def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated k
     -------
     AblationControlsReport
         Every rerun, the verdict per family and ``survives`` overall.
+
+    Examples
+    --------
+    >>> from collections import OrderedDict
+    >>> net = nn.Sequential(OrderedDict(fc1=nn.Linear(4, 8), act=nn.ReLU(), fc2=nn.Linear(8, 2)))
+    >>> def metric(trace):
+    ...     return trace.output_ops[-1].out.sum()
+    >>> report = tl.mechinterp.ablation_controls(
+    ...     net.eval(), torch.randn(6, 4), tl.module("fc1"), metric, axis=0
+    ... )
+    >>> report.baseline, [row.name for row in report.rows]
+    ('zero', ['zero', 'mean', 'resample'])
+    >>> isinstance(report.survives, bool)
+    True
     """
 
     settings = _Settings(axis, baseline, feature_axis, n_directions, seed, min_ratio, alpha)
     _validate(settings, direction)
-    runner = _Runner(model, inputs, metric, donors)
-    claimed = runner.effect(site, _baseline_edit(runner, baseline, site, settings))
+    return _report(_Runner(model, inputs, metric, donors), site, direction, sites, settings)
+
+
+def _report(
+    runner: _Runner,
+    site: Any,
+    direction: torch.Tensor | None,
+    sites: Mapping[str, Any] | None,
+    settings: _Settings,
+) -> AblationControlsReport:
+    """Run the claimed ablation and every family that applies, and assemble the report."""
+
+    claimed = runner.effect(site, _baseline_edit(runner, settings.baseline, site, settings))
     rows, families, direction_p = _run_families(runner, site, claimed, direction, sites, settings)
-    report_rows, verdicts = tuple(rows), tuple(families)
     return AblationControlsReport(
-        runner.clean, claimed, baseline, report_rows, verdicts, direction_p
+        runner.clean, claimed, settings.baseline, tuple(rows), tuple(families), direction_p
     )
