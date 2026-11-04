@@ -18,7 +18,7 @@ import math
 import re
 import subprocess
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import _render_utils
 
@@ -37,12 +37,13 @@ Point = tuple[float, float]
 _PASS_TEXT = re.compile(r"(?<![a-z])(?:headlabel|taillabel)=<<TABLE[^\n]*?>(?:In|Out) [0-9]")
 _EDGE_LINE = re.compile(r'^\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)\s*->\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)')
 _ASCENT, _DESCENT = 0.78, 0.22  # glyph box model of tests/support/label_geometry.py
-_PEN_EPS = 0.25  # penetration (pt) that counts as a collision
+_MIN_GAP = 0.5  # (pt) a label nearer than this to anything collides (the gate allows 0.25 overlap)
 _CLEAR_TARGET = 3.0  # clearance (pt) after which closeness to the node wins
 _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
-_REACH = 90.0  # obstacles farther than this from a label are ignored
+_REACH = 90.0  # (pt) the gap reported when there is nothing to measure against
 _NEAR_NODE = 14.0  # (pt) a label farther than this from its own node no longer reads as its
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
+_CHUNK = 12  # samples per indexed piece of a line, so a distant stretch is skipped whole
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
 _CANDIDATES: tuple[tuple[float, float], ...] = tuple(
     (distance, float(angle))
@@ -244,6 +245,16 @@ class _Scene:
         seen: dict[tuple[str, str], int] = {}
         for edge in layout.get("edges", []):
             self._add_edge(edge, names, seen)
+        self.indexed_polygons = [(_bounds(p), p) for p in self.polygons]
+        self.indexed_lines = [
+            (_bounds(chunk), chunk)
+            for line in (*self.splines, *self.borders)
+            for start in range(0, max(1, len(line) - 1), _CHUNK)
+            if (chunk := line[start : start + _CHUNK + 1])
+        ]
+        self.indexed_nodes = {
+            name: [(_bounds(o), o) for o in outlines] for name, outlines in self.nodes.items()
+        }
 
     def _add_edge(
         self, edge: dict[str, Any], names: dict[int, str], seen: dict[tuple[str, str], int]
@@ -289,26 +300,39 @@ class _Scene:
         from its node then gets its own offset (one per label, in label order).
         """
 
-        placements = (
+        placements = [
             ((distance, angle), [self._placed(label, distance, angle) for label in edge["labels"]])
             for distance, angle in _CANDIDATES
-        )
-        choice, chosen = min(placements, key=lambda item: self._score(edge, item[1]))
+        ]
+        local = self._near(_union([r for _, boxes in placements for b in boxes for r in b]))
+        choice, chosen = min(placements, key=lambda item: self._score(edge, item[1], local))
         boxes, shifts = list(chosen), []
         for index, label in enumerate(edge["labels"]):
             others = [r for j, lines in enumerate(boxes) if j != index for r in lines]
-            shift = self._nudge(label, boxes[index], others)
+            shift = self._nudge(label, boxes[index], others, local)
             boxes[index] = _shifted(boxes[index], shift)
             shifts.append(shift)
         for lines in boxes:
             self.rects.extend(lines)
         return choice, shifts
 
-    def _nudge(self, label: dict[str, Any], lines: list[Rect], others: list[Rect]) -> Point:
+    def _near(self, region: Rect) -> _Obstacles:
+        """Return the obstacles that can come within ``_CLEAR_TARGET`` of ``region``."""
+
+        grown = _grow(region, _CLEAR_TARGET + 1.0)
+        return _Obstacles(
+            [item for item in self.indexed_polygons if _overlaps(grown, item[0])],
+            [item for item in self.indexed_lines if _overlaps(grown, item[0])],
+            [r for r in self.rects if _overlaps(grown, r)],
+        )
+
+    def _nudge(
+        self, label: dict[str, Any], lines: list[Rect], others: list[Rect], local: _Obstacles
+    ) -> Point:
         """Return the offset that moves one label clear and beside its node, if it needs one."""
 
         single = {"labels": [label]}
-        best = (self._score(single, [lines], others), (0.0, 0.0))
+        best = (self._score(single, [lines], local, others), (0.0, 0.0))
         if best[0][0] == 0.0 and not best[0][1]:
             return best[1]
         (ex, ey), (x0, y0, x1, y1) = label["end"], _union(lines)
@@ -319,7 +343,7 @@ class _Scene:
                     round((ex + radius * math.cos(phi) - (x0 + x1) / 2) * 2) / 2,
                     round((ey + radius * math.sin(phi) - (y0 + y1) / 2) * 2) / 2,
                 )
-                score = self._score(single, [_shifted(lines, shift)], others)
+                score = self._score(single, [_shifted(lines, shift)], local, others)
                 if score < best[0]:
                     best = (score, shift)
         return best[1]
@@ -334,7 +358,11 @@ class _Scene:
         return [(cx + o[0], cy + o[1], cx + o[2], cy + o[3]) for o in label["offsets"]]
 
     def _score(
-        self, edge: dict[str, Any], boxes: list[list[Rect]], extra: Sequence[Rect] = ()
+        self,
+        edge: dict[str, Any],
+        boxes: list[list[Rect]],
+        local: _Obstacles,
+        extra: Sequence[Rect] = (),
     ) -> tuple[float, bool, float, float]:
         """Rank one placement of an edge's labels; lower is better.
 
@@ -347,21 +375,13 @@ class _Scene:
         for label, lines in zip(edge["labels"], boxes, strict=True):
             others = [r for other in boxes if other is not lines for r in other] + list(extra)
             for rect in lines:
-                gap = self._clearance(rect, others)
-                depth += max(0.0, -gap - _PEN_EPS)
+                gap = _clearance(rect, others, local)
+                depth += max(0.0, _MIN_GAP - gap)
                 clearance = min(clearance, gap)
-            own = self.nodes.get(label["node"], [])
-            far = max(far, min((_rect_poly_gap(r, o) for r in lines for o in own), default=0.0))
+            own = self.indexed_nodes.get(label["node"], [])
+            far = max(far, min((_node_gap(r, o) for r in lines for o in own), default=0.0))
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
         return (round(depth, 3), far > _NEAR_NODE, shortfall, round(far, 3))
-
-    def _clearance(self, rect: Rect, extra: Iterable[Rect]) -> float:
-        near = _grow(rect, _REACH)
-        gaps = [_rect_poly_gap(rect, p) for p in self.polygons if _overlaps(near, _bounds(p))]
-        gaps += [_rect_line_gap(rect, s) for s in self.splines if _overlaps(near, _bounds(s))]
-        gaps += [_rect_line_gap(rect, b) for b in self.borders if _overlaps(near, _bounds(b))]
-        gaps += [_rect_rect_gap(rect, r) for r in (*self.rects, *extra) if _overlaps(near, r)]
-        return min(gaps, default=_REACH)
 
     def add_fixed_labels(self, targeted: set[tuple[str, str, int]]) -> None:
         """Count the head/tail labels of edges that are not being placed as obstacles."""
@@ -369,6 +389,35 @@ class _Scene:
         for edge in self.edges:
             if (edge["tail"], edge["head"], edge["occurrence"]) not in targeted:
                 self.rects.extend(r for label in edge["labels"] for r in label["default"])
+
+
+class _Obstacles(NamedTuple):
+    """Obstacles near one edge's candidate labels, each line and outline with its bounds."""
+
+    polygons: list[tuple[Rect, list[Point]]]
+    lines: list[tuple[Rect, list[Point]]]
+    rects: list[Rect]
+
+
+def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
+    """Gap from ``rect`` to its nearest obstacle, or ``_CLEAR_TARGET`` when none is that close.
+
+    Only gaps below ``_CLEAR_TARGET`` change a score, so obstacles whose bounds stay
+    farther away are skipped.
+    """
+
+    probe = _grow(rect, _CLEAR_TARGET)
+    gaps = [_rect_poly_gap(rect, p) for b, p in local.polygons if _overlaps(probe, b)]
+    gaps += [_rect_line_gap(rect, p) for b, p in local.lines if _overlaps(probe, b)]
+    gaps += [_rect_rect_gap(rect, r) for r in (*local.rects, *extra) if _overlaps(probe, r)]
+    return min(gaps, default=_CLEAR_TARGET)
+
+
+def _node_gap(rect: Rect, outline: tuple[Rect, list[Point]]) -> float:
+    """Gap from ``rect`` to a node outline; the bounds' gap stands in once it is far."""
+
+    bounds_gap = _rect_rect_gap(rect, outline[0])
+    return bounds_gap if bounds_gap > _NEAR_NODE else _rect_poly_gap(rect, outline[1])
 
 
 def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:
