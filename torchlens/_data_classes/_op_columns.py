@@ -33,7 +33,7 @@ stay outside the record import cycle.
 
 from __future__ import annotations
 
-import sys
+import importlib
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -71,7 +71,7 @@ def _bound_facade() -> tuple[type, Any, frozenset[str], Any]:
     if not _OP_FACADE:
         raise RuntimeError("the Op facade is not bound; import torchlens first")
     op_class, op_vars, slot_names, _field_classes = _OP_FACADE[0]
-    return op_class, op_vars, frozenset(slot_names), sys.modules[op_class.__module__]
+    return op_class, op_vars, frozenset(slot_names), importlib.import_module(op_class.__module__)
 
 
 def _slow_cell_types(name: str, attribute: Any) -> tuple[tuple[type, ...], Any]:
@@ -155,7 +155,7 @@ class OpColumns:
     def _shell(self, row: int) -> Any:
         """Return an ``Op`` facade over ``(self.store, row)`` for exact delegation."""
 
-        op_class = _OP_FACADE[0][0]
+        op_class: Any = _OP_FACADE[0][0]
         shell = op_class.__new__(op_class)
         _object_setattr(shell, "_core", self.store)
         _object_setattr(shell, "_row", row)

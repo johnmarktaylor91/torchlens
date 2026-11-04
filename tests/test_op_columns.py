@@ -350,11 +350,11 @@ def branchy_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-def _outcome(read: Callable[[], Any]) -> tuple[str, Any]:
-    """Return ``("value", v)`` or ``("raise", (type, message))`` for one read."""
+def _outcome(read: Callable[..., Any], *args: Any) -> tuple[str, Any]:
+    """Return ``("value", read(*args))`` or ``("raise", (type, message))``."""
 
     try:
-        return "value", read()
+        return "value", read(*args)
     except Exception as exc:  # the facade's own refusal shapes are compared
         return "raise", (type(exc), str(exc))
 
@@ -373,26 +373,45 @@ def _same(left: Any, right: Any) -> bool:
 
 
 def test_finished_trace_reads_match_facade_field_by_field(branchy_trace: tl.Trace) -> None:
-    """Fork A reads through the facade, fork B through the view: equal everywhere."""
+    """Fork B read through the view equals fork A read through the facade.
 
-    facade_fork, column_fork = branchy_trace.fork(), branchy_trace.fork()
-    facade_ops, column_ops = list(facade_fork.ops), list(column_fork.ops)
-    assert len(facade_ops) == len(column_ops) > 3
+    Fields whose facade reads already differ between two forks (fork-owned
+    values such as the owning-trace reference) are detected with a third,
+    facade-read fork C; for those the view must return the same type as the
+    facade and exactly what fork B's own facade then reads.
+    """
+
+    forks = (branchy_trace.fork(), branchy_trace.fork(), branchy_trace.fork())
+    facade_ops, column_ops, control_ops = (list(fork.ops) for fork in forks)
+    assert len(facade_ops) == len(column_ops) == len(control_ops) > 3
     column_store = object.__getattribute__(column_ops[0], "_core")
     columns = OpColumns(column_store)
     names = [name for name in _OP_SLOT_NAMES if name not in {"out", "grad"}]
     getters = {name: columns.getter(name) for name in names}
 
     mismatches = []
-    for facade_op, column_op in zip(facade_ops, column_ops):
+    fork_owned = set()
+    for facade_op, column_op, control_op in zip(facade_ops, column_ops, control_ops, strict=True):
         row = object.__getattribute__(column_op, "_row")
         assert object.__getattribute__(column_op, "_core") is column_store
         for name in names:
-            kind_f, facade_value = _outcome(lambda: getattr(facade_op, name))
-            kind_c, column_value = _outcome(lambda: getters[name](row))
-            if kind_f != kind_c or not _same(facade_value, column_value):
+            kind_f, facade_value = _outcome(getattr, facade_op, name)
+            kind_c, column_value = _outcome(getters[name], row)
+            kind_o, control_value = _outcome(getattr, control_op, name)
+            if kind_f != kind_c:
                 mismatches.append((row, name, kind_f, kind_c))
+            elif kind_f == kind_o and _same(facade_value, control_value):
+                if not _same(facade_value, column_value):
+                    mismatches.append((row, name, "differs", "from facade"))
+            else:
+                fork_owned.add(name)
+                _kind_b, own_value = _outcome(getattr, column_op, name)
+                if type(column_value) is not type(control_value) or not (
+                    own_value is column_value or _same(own_value, column_value)
+                ):
+                    mismatches.append((row, name, "fork-owned", "differs from own facade"))
     assert not mismatches, mismatches[:10]
+    assert len(fork_owned) < len(names) // 4, sorted(fork_owned)
 
 
 def test_column_rows_by_label_maps_raw_labels_to_one_store() -> None:
