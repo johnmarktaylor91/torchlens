@@ -66,16 +66,23 @@ def _backward_card(record: Any) -> str:
 
 
 def frame_repr(frame: Any) -> str:
-    return fail_open(
-        lambda: one_line("FuncCallLocation", [_frame_location(frame)], [f"in {frame.func_name}"]),
-        lambda _error: "FuncCallLocation: metadata unavailable",
-    )
+    def _line() -> str:
+        function = f"in {frame.func_name}"
+        return one_line("FuncCallLocation", [_frame_location(frame, function), function])
+
+    return fail_open(_line, lambda _error: "FuncCallLocation: metadata unavailable")
 
 
-def _frame_location(frame: Any) -> str:
+# A long path is shortened before the function name is dropped; at least this
+# many columns stay for the location even when the function name is very long.
+_MIN_LOCATION_COLS = 24
+
+
+def _frame_location(frame: Any, function: str) -> str:
     path = str(frame.file).replace("\\", "/")
     location = f"{path}:{frame.line_number}"
-    budget = REPR_COLS - len("FuncCallLocation: ")
+    reserved = len("FuncCallLocation: ") + len(f", {function}")
+    budget = max(REPR_COLS - reserved, _MIN_LOCATION_COLS)
     if len(location) > budget:
         location = f"{'/'.join(path.rsplit('/', 2)[-2:])}:{frame.line_number}"
     return location if len(location) <= budget else "..." + location[-(budget - 3) :]

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1463 modules, 650408 lines, 0 modules without a docstring.
+83 packages, 1463 modules, 650489 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 47 | 25315 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4659 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 95 | 37951 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 95 | 37985 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10638 |
@@ -38,9 +38,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2969 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 48 | 17213 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 48 | 17220 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44606 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44600 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2306 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7160 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14277 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14323 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2256 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 18 | 7257 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
@@ -289,7 +289,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (95 modules, 37951 lines)
+Core data structures for representing a logged forward pass. (95 modules, 37985 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -365,7 +365,7 @@ Core data structures for representing a logged forward pass. (95 modules, 37951 
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_modules` | Bounded module and module-call record displays. | 94 |
-| `_value_ops` | Operation and pass-aware layer text cards, built from captured facts. | 245 |
+| `_value_ops` | Operation and pass-aware layer text cards, built from captured facts. | 253 |
 | `_value_params` | Parameter and buffer records: metadata first, explicit value basis. | 113 |
 | `_value_repr` | Record display facade: one-line identities and bounded labelled cards. | 34 |
 | `_value_state` | Resident-payload probes and bounded value facts for record displays. | 168 |
@@ -377,7 +377,7 @@ Core data structures for representing a logged forward pass. (95 modules, 37951 
 | `container` | Runtime views over captured TorchLens output containers. | 1187 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
 | `field_policy` | Structural field-policy tables for TorchLens record classes. | 243 |
-| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 767 |
+| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 793 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 846 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 395 |
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 445 |
@@ -798,7 +798,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (13 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (48 modules, 17213 lines)
+Shared helpers used by two or more TorchLens packages. (48 modules, 17220 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -811,7 +811,7 @@ Shared helpers used by two or more TorchLens packages. (48 modules, 17213 lines)
 | `_display_collections` | Metadata-only summaries for owned accessors and callable report containers. | 74 |
 | `_display_keys` | Display keys for ops and layers (house style v1, rule A5). | 55 |
 | `_display_numbers` | Number and unit spellings shared by every printout (house style v1). | 94 |
-| `_display_records` | Bounded cards for backward records, source frames and Trace concern views. | 185 |
+| `_display_records` | Bounded cards for backward records, source frames and Trace concern views. | 192 |
 | `_display_text` | Tensor, dtype, shape and device spellings shared by every printout. | 52 |
 | `_exception_notes` | The guarded PEP 678 exception-note helper, shared by every crash-note site. | 84 |
 | `_foreign_data_replay` | Replay of a resolved foreign data round trip (the ''foreigndata'' op). | 85 |
@@ -877,7 +877,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (77 modules, 44606 lines)
+Computational graph visualization via Graphviz. (77 modules, 44600 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -916,7 +916,7 @@ Computational graph visualization via Graphviz. (77 modules, 44606 lines)
 | `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 111 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse , the ''__segment__'' half). | 168 |
 | `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 966 |
-| `_render_dot` | (syntax error at line 13) | 1902 |
+| `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1896 |
 | `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 2036 |
 | `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 591 |
 | `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2064 |
@@ -1905,7 +1905,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 14277 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 14323 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1942,7 +1942,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_report` | The detached immutable summary report layer (summary memo item 10). | 596 |
 | `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 405 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 210 |
-| `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 337 |
+| `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 383 |
 
 ### `torchlens.report._notebook`
 
