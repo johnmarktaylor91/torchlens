@@ -288,10 +288,13 @@ DOCS: dict[str, str] = {
             ``"intervention"``, ``"bundle_delta"``), a mapping of layer label
             to value, or a callable ``node -> value``.
         node_label_fields:
-            Explicit list of label rows to show on every node.
+            Explicit list of label rows to show on every node. ``"label"`` keeps
+            the default title's pass marks (``:2``, ``(x3)``); ``"pass"`` adds
+            no row on a single-pass node.
         graph_overrides, edge_overrides, grad_edge_overrides, module_overrides:
             Graphviz attribute overrides for the graph, forward edges, gradient
-            edges and module boxes.
+            edges and module boxes. A static forward-edge ``fontsize`` also sizes
+            the edge annotations (pass ranges, IF/THEN, argument labels).
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn:
             Per-node styling and selection callbacks (see ``tl.viz.nodes``).
         intervention_mode:
@@ -301,7 +304,8 @@ DOCS: dict[str, str] = {
         code_panel:
             Source-location panel option (``False``, ``True`` or a panel spec).
         font_size, dpi:
-            Typography and raster resolution overrides.
+            Typography and raster resolution overrides; ``font_size`` sizes the
+            edge annotations when ``edge_overrides`` sets no ``fontsize``.
         order_siblings:
             Keep sibling ops in execution order (a post-pass; off while
             ``stack_by`` is active).
