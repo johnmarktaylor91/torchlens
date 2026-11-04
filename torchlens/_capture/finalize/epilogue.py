@@ -250,8 +250,8 @@ def _warn_once_capture_memory_threshold(trace: Trace) -> None:
     """Warn once per session when a capture's saved activations pass the size threshold."""
 
     global _CAPTURE_MEMORY_WARNED
-    saved = getattr(trace, "_cost_saved_activation_memory", None)
-    if _CAPTURE_MEMORY_WARNED or saved is None or int(saved) <= _CAPTURE_MEMORY_THRESHOLD:
+    saved = trace._cost_saved_activation_memory
+    if _CAPTURE_MEMORY_WARNED or int(saved) <= _CAPTURE_MEMORY_THRESHOLD:
         return
     _CAPTURE_MEMORY_WARNED = True
     warnings.warn(

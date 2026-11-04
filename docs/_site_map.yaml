@@ -74,6 +74,9 @@ pages:
   - path: internal/agent-reference/current-2-x-surface.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
+  - path: internal/agent-reference/feature-inspection.md
+    section: internal
+    note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here

@@ -675,7 +675,7 @@ class JAXBackend:
             )
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,

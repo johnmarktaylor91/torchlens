@@ -462,7 +462,7 @@ class TinygradBackend:
             cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,

@@ -53,7 +53,7 @@ def test_router_identity_and_expert_selection(dictionary: bool) -> None:
     for expert_id, key in enumerate(keys):
         members = [op for op in trace.ops if f"bank.{key}:1" in op.modules]
         assert members and all(op.expert == expert_id for op in members)
-        selected = trace[tl.where(lambda op: op.expert == expert_id)]
+        selected = trace[tl.where(lambda op, expert_id=expert_id: op.expert == expert_id)]
         assert set(selected.labels) == {op.label for op in members}
     assert not hasattr(trace.ops[0], "__dict__")
 

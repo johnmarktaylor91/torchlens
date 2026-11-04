@@ -75,7 +75,7 @@ def quiet(*codes: str) -> _QuietScope:
     ...     warnings.simplefilter("always")
     ...     with tl.errors.quiet("trace_zero_fire"):
     ...         warnings.warn(tl.errors.TorchLensWarning("hidden", code="trace_zero_fire"))
-    ...         warnings.warn(tl.errors.TorchLensWarning("shown", code="other_code"))
+    ...         warnings.warn(tl.errors.TorchLensWarning("shown", code="bind_zero_fire"))
     >>> [str(item.message) for item in caught]
     ['shown']
     """

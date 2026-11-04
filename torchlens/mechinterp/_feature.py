@@ -91,6 +91,30 @@ def _objective(value: Any, unit: int | tuple[int, ...] | None, sae: Any) -> torc
     return value.mean()
 
 
+_ADAM_BETAS = (0.9, 0.999)
+_ADAM_EPS = 1e-8
+
+
+def _adam_ascent_update(
+    image: torch.Tensor,
+    gradient: torch.Tensor,
+    moments: tuple[torch.Tensor, torch.Tensor],
+    step: int,
+    lr: float,
+) -> None:
+    """Move ``image`` one Adam step up ``gradient`` (torch.optim.Adam defaults)."""
+    beta1, beta2 = _ADAM_BETAS
+    first_moment, second_moment = moments
+    loss_gradient = -gradient
+    with torch.no_grad():
+        first_moment.lerp_(loss_gradient, 1 - beta1)
+        second_moment.mul_(beta2).addcmul_(loss_gradient, loss_gradient, value=1 - beta2)
+        correction1 = 1 - beta1**step
+        correction2 = 1 - beta2**step
+        denom = (second_moment.sqrt() / math.sqrt(correction2)).add_(_ADAM_EPS)
+        image.addcdiv_(first_moment, denom, value=-lr / correction1)
+
+
 def _optimize(
     model: nn.Module,
     target: BaseSelector,
@@ -109,7 +133,9 @@ def _optimize(
         return out
 
     bound = when(target, keep).bind(model, on_zero_fire="disclose")
-    optimizer = torch.optim.Adam([image], lr=lr)
+    # Adam's update written out on the one input tensor: torchlens never builds a
+    # torch optimizer (the no-optimizer contract); the input is the caller's own.
+    moments = (torch.zeros_like(image), torch.zeros_like(image))
     history = []
     with torch.enable_grad():
         for index in range(steps + 1):
@@ -128,9 +154,7 @@ def _optimize(
                 _invalid(
                     "The selected activation has no finite gradient with respect to the input."
                 )
-            optimizer.zero_grad(set_to_none=True)
-            image.grad = -gradient
-            optimizer.step()
+            _adam_ascent_update(image, gradient, moments, index + 1, lr)
     return image.detach(), history
 
 
