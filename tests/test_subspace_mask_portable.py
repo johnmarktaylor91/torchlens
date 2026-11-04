@@ -4,8 +4,8 @@
 its ``within=`` element mask and the mask's sha256 in the ``subspace_edit`` payload, so a
 one-position edit (LoReFT acts on one position) saves at ``level="portable"`` and reapplies
 bit-identically. A malformed, tampered or partial stored mask, or a stored keyword the loader
-does not know, refuses at load with a code whose remedy runs. Every other masked edit keeps
-its portability.
+does not know, refuses at load with a code whose remedy runs. A masked plain builtin verb is
+portable too (its own payload is pinned in tests/test_masked_edit_portable.py).
 """
 
 from __future__ import annotations
@@ -189,12 +189,14 @@ def _coded(error: BaseException) -> Any:
     raise AssertionError(f"no coded error in the chain of {error!r}")
 
 
-def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
-    """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
+def test_other_masked_builtin_edits_save_portably(tmp_path: Path) -> None:
+    """A masked plain verb (no subspace) stores its mask too and reloads executable."""
 
     fork = _ready().fork()
     fork.do(tl.units(_SITE, _mask()), tl.scale(2.0))
-    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="audit")
+    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="portable")
     loaded = tl.io.load_intervention_spec(tmp_path / "plain.tlspec")
     saved = loaded.hook_specs[0].helper
-    assert saved.portability == "opaque_audit" and saved.factory is None
+    assert saved.portability == "builtin" and saved.factory is not None
+    assert torch.equal(dict(saved.kwargs)["mask"], _mask())
+    assert torch.equal(_apply(loaded)[_SITE].out, fork[_SITE].out)
