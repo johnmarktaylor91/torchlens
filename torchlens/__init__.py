@@ -629,7 +629,6 @@ def _extract_layers_with_trace(
 
     from ._data_classes._lookup_kinds import extraction_view
     from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
-    from ._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -644,9 +643,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = extraction_view(
-                trace, canonical_module_site_key(trace, pattern) or pattern
-            )
+            views[label] = extraction_view(trace, pattern)
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -656,7 +653,7 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = extraction_view(trace, canonical_module_site_key(trace, match) or match)
+            views[match] = extraction_view(trace, match)
     return trace, outputs, views
 
 

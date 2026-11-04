@@ -117,7 +117,7 @@ def test_selection_sequence_rows_and_getitem_singleton(phase2_log: tl.Trace) -> 
     assert table.labels == ("relu_1_2:1", "relu_2_3:1")
     assert list(table.to_pandas()["label"]) == ["relu_1_2:1", "relu_2_3:1"]
     assert phase2_log[tl.label("linear_1_1")].layer_label == "linear_1_1"
-    assert phase2_log["linear"].layer_label == "linear_1_1"
+    assert phase2_log.ops["linear"].layer_label == "linear_1_1"
 
 
 def test_target_specs_freeze_and_resolve_clearly(phase2_log: tl.Trace) -> None:

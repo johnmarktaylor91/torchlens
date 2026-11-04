@@ -126,11 +126,16 @@ def op_at(trace: Any, key: Any) -> Any:
 def extraction_view(trace: Any, key: str) -> Any:
     """The view an extraction key names: its Op from ``trace.ops``, else ``op_at``.
 
-    The ops door answers op labels and record keys (a module, call or buffer
-    key names its output Op). A pattern only the plain door resolves, such as a
-    unique substring like ``"relu"``, keeps the plain door's answer.
+    A caller-spelled module name (wrapper-relative or dot-flattened) first maps
+    to the address it names. The ops door answers op labels and record keys (a
+    module, call or buffer key names its output Op). A pattern only the plain
+    door resolves, such as a unique substring like ``"relu"``, keeps the plain
+    door's answer.
     """
 
+    from .._trace_selector_helpers import canonical_module_site_key
+
+    key = canonical_module_site_key(trace, key) or key
     try:
         return trace.ops[key]
     except KeyError:
@@ -193,7 +198,11 @@ def output_op(trace: Any, key: str) -> Any:
     and a buffer address with several versions, naming the ``:N`` spellings.
     """
 
-    if key in (getattr(trace, "_ambiguous_lookup_keys", {}) or {}):
+    try:
+        ambiguous = trace._ambiguous_lookup_keys or {}
+    except AttributeError:  # a trace-shaped stand-in without the store
+        ambiguous = {}
+    if key in ambiguous:
         trace[key]  # the plain door raises the ambiguity refusal for this key
     ops, spellings = _output_op_candidates(trace, key)
     if len(ops) > 1:

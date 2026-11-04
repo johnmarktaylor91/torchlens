@@ -1226,9 +1226,9 @@ torchlens/neuro/_compare.py::compare	115
 torchlens/neuro/_datasets.py::_build_dataset	67
 torchlens/neuro/_datasets.py::datasets	86
 torchlens/neuro/_datasets.py::single_dataset	94
-torchlens/neuro/_handoff.py	845
+torchlens/neuro/_handoff.py	844
 torchlens/neuro/_handoff.py::enumerate_extraction_sites	97
-torchlens/neuro/_handoff.py::enumerate_trace_sites	86
+torchlens/neuro/_handoff.py::enumerate_trace_sites	84
 torchlens/neuro/_handoff.py::resolve_stimulus_ids	76
 torchlens/neuro/_handoff.py::validate_obs	72
 torchlens/neuro/_rdms.py::_build_matrix_rdms	65

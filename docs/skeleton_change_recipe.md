@@ -105,7 +105,8 @@ import torchlens as tl
 recipe = tl.when(tl.site(module_path="lm_head"), tl.scale(0.5))
 original_log = tl.trace(model, input_ids)
 stage_only = tl.options.InterventionOptions(engine="set_only")
-original_log.do(recipe, intervention=stage_only)  # stage the rule; nothing propagates
+with tl.io.suppress_mutate_warnings():  # an intended in-place edit of this trace
+    original_log.do(recipe, intervention=stage_only)  # stage the rule; nothing propagates
 tl.io.save_intervention(original_log, "recipe.tlspec")
 ```
 
@@ -193,7 +194,8 @@ inner_rule = tl.when(
     tl.site(module_path="transformer.h.1.mlp.c_proj", func="addmm"),
     tl.zero_ablate(),
 )
-original_log.do(inner_rule, intervention=stage_only)
+with tl.io.suppress_mutate_warnings():
+    original_log.do(inner_rule, intervention=stage_only)
 tl.io.save_intervention(original_log, "recipe.tlspec", overwrite=True)
 spec = tl.io.load_intervention_spec("recipe.tlspec")
 
@@ -271,7 +273,8 @@ recipe_v2 = tl.when(
     ),
     tl.zero_ablate(),
 )
-edited_log.do(recipe_v2, intervention=stage_only)
+with tl.io.suppress_mutate_warnings():
+    edited_log.do(recipe_v2, intervention=stage_only)
 tl.io.save_intervention(edited_log, "recipe_v2.tlspec")
 spec_v2 = tl.io.load_intervention_spec("recipe_v2.tlspec")
 compat_v2 = tl.intervention.check_spec_compat(spec_v2, edited_log)

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, cast
 from torchlens._errors import _actionable_message, _ActionableErrorMixin
 from torchlens.errors._base import ConfigurationError
 
+from ._data_classes._lookup_kinds import op_at
 from ._record_type import record_type
 
 if TYPE_CHECKING:
@@ -337,7 +338,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
     if address and address_counts[address] == 1:
         # engine-ambiguous or unresolvable addresses fall to the label
         with contextlib.suppress(Exception):
-            resolved = trace[str(address)]
+            resolved = op_at(trace, str(address))  # a module address names its output op
             if str(getattr(resolved, "layer_label", "")) == str(layer.layer_label):
                 return str(address)
     if int(getattr(layer, "num_passes", 1) or 1) > 1:
