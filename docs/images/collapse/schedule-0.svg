@@ -203,7 +203,7 @@
 <title>maxpool2d_1_4pass1&#45;&gt;iadd_1_10pass1</title>
 <path fill="none" stroke="black" d="M676.84,-615.25C678.39,-617.72 679.79,-620.26 681,-622.86 725.91,-719.55 700,-755.37 700,-861.98 700,-861.98 700,-861.98 700,-1113.98 700,-1204.7 729.04,-1240.79 680,-1317.11 669.8,-1332.98 654.53,-1345.61 638.33,-1355.49"/>
 <polygon fill="black" stroke="black" points="637.47,-1353.15 632.65,-1358.79 639.93,-1357.39 637.47,-1353.15"/>
-<text xml:space="preserve" text-anchor="start" x="600.59" y="-1343.1" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="594.59" y="-1341.2" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- batchnorm_2_6pass1 -->
 <g id="node8" class="node">
@@ -294,7 +294,7 @@
 <title>batchnorm_3_9pass1&#45;&gt;iadd_1_10pass1</title>
 <path fill="none" stroke="black" d="M561.45,-1317.36C561.53,-1326.47 561.6,-1335.74 561.67,-1344.4"/>
 <polygon fill="black" stroke="black" points="559.22,-1344.33 561.72,-1351.31 564.12,-1344.29 559.22,-1344.33"/>
-<text xml:space="preserve" text-anchor="start" x="530.99" y="-1336.37" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="524.99" y="-1334.47" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- conv2d_4_11pass1 -->
 <g id="node13" class="node">
@@ -324,7 +324,7 @@
 <title>relu_2_7pass2&#45;&gt;iadd_2_16pass1</title>
 <path fill="none" stroke="black" d="M621.9,-1523.95C644.89,-1539.95 668.76,-1561.41 682,-1587.53 726.09,-1674.48 692,-1709.17 692,-1806.66 692,-1806.66 692,-1806.66 692,-2058.66 692,-2149.09 727.4,-2184.76 680,-2261.78 670.17,-2277.76 655.13,-2290.42 639.04,-2300.28"/>
 <polygon fill="black" stroke="black" points="638.21,-2297.93 633.4,-2303.57 640.68,-2302.16 638.21,-2297.93"/>
-<text xml:space="preserve" text-anchor="start" x="601.34" y="-2287.88" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="595.34" y="-2285.98" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- batchnorm_4_12pass1 -->
 <g id="node14" class="node">
@@ -401,7 +401,7 @@
 <title>batchnorm_5_15pass1&#45;&gt;iadd_2_16pass1</title>
 <path fill="none" stroke="black" d="M561.45,-2262.04C561.53,-2271.14 561.6,-2280.42 561.67,-2289.07"/>
 <polygon fill="black" stroke="black" points="559.22,-2289 561.72,-2295.98 564.12,-2288.96 559.22,-2289"/>
-<text xml:space="preserve" text-anchor="start" x="530.99" y="-2281.05" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="524.99" y="-2279.15" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- relu_3_13pass2 -->
 <g id="node19" class="node">
@@ -553,14 +553,14 @@
 <title>batchnorm_7_21pass1&#45;&gt;iadd_3_24pass1</title>
 <path fill="none" stroke="black" d="M449.25,-3310.71C455.58,-3320.59 462.03,-3330.67 467.97,-3339.94"/>
 <polygon fill="black" stroke="black" points="465.74,-3341.01 471.58,-3345.59 469.87,-3338.37 465.74,-3341.01"/>
-<text xml:space="preserve" text-anchor="start" x="441.65" y="-3330.41" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="435.65" y="-3328.51" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- batchnorm_8_23pass1&#45;&gt;iadd_3_24pass1 -->
 <g id="edge43" class="edge">
 <title>batchnorm_8_23pass1&#45;&gt;iadd_3_24pass1</title>
 <path fill="none" stroke="black" d="M662.8,-2885.91C646.44,-2978.06 607.51,-3164.89 540,-3310.46 535.35,-3320.47 529.29,-3330.63 523.06,-3339.95"/>
 <polygon fill="black" stroke="black" points="521.1,-3338.48 519.15,-3345.64 525.14,-3341.26 521.1,-3338.48"/>
-<text xml:space="preserve" text-anchor="start" x="487.55" y="-3330.44" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="481.55" y="-3328.54" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- relu_4_19pass2 -->
 <g id="node28" class="node">
@@ -604,7 +604,7 @@
 <title>relu_4_19pass2&#45;&gt;iadd_4_30pass1</title>
 <path fill="none" stroke="black" d="M548.9,-3517.34C570.98,-3533.53 594.13,-3555.12 607,-3580.88 650.62,-3668.15 620,-3702.45 620,-3800.01 620,-3800.01 620,-3800.01 620,-4052.01 620,-4142.39 657.68,-4178.34 610,-4255.13 599.56,-4271.94 583.43,-4284.98 566.25,-4294.95"/>
 <polygon fill="black" stroke="black" points="565.1,-4292.78 560.16,-4298.31 567.47,-4297.07 565.1,-4292.78"/>
-<text xml:space="preserve" text-anchor="start" x="528.08" y="-4282.59" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="522.08" y="-4280.69" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- batchnorm_9_26pass1 -->
 <g id="node30" class="node">
@@ -681,7 +681,7 @@
 <title>batchnorm_10_29pass1&#45;&gt;iadd_4_30pass1</title>
 <path fill="none" stroke="black" d="M484.81,-4255.39C485.1,-4264.49 485.4,-4273.77 485.68,-4282.42"/>
 <polygon fill="black" stroke="black" points="483.23,-4282.41 485.9,-4289.33 488.12,-4282.26 483.23,-4282.41"/>
-<text xml:space="preserve" text-anchor="start" x="455.2" y="-4274.4" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="449.2" y="-4272.5" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- relu_5_27pass2 -->
 <g id="node35" class="node">
@@ -833,14 +833,14 @@
 <title>batchnorm_12_35pass1&#45;&gt;iadd_5_38pass1</title>
 <path fill="none" stroke="black" d="M348.97,-5304.06C350.59,-5313.26 352.24,-5322.63 353.78,-5331.37"/>
 <polygon fill="black" stroke="black" points="351.32,-5331.56 354.95,-5338.03 356.15,-5330.71 351.32,-5331.56"/>
-<text xml:space="preserve" text-anchor="start" x="324.46" y="-5323.07" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="318.46" y="-5321.17" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- batchnorm_13_37pass1&#45;&gt;iadd_5_38pass1 -->
 <g id="edge57" class="edge">
 <title>batchnorm_13_37pass1&#45;&gt;iadd_5_38pass1</title>
 <path fill="none" stroke="black" d="M590.09,-4879.37C584.23,-4975.41 560.61,-5172.43 466,-5303.81 455.63,-5318.21 441.21,-5330.39 426.39,-5340.31"/>
 <polygon fill="black" stroke="black" points="425.39,-5338.04 420.83,-5343.89 428.04,-5342.16 425.39,-5338.04"/>
-<text xml:space="preserve" text-anchor="start" x="388.81" y="-5328.26" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="382.81" y="-5326.36" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- relu_6_33pass2 -->
 <g id="node44" class="node">
@@ -884,7 +884,7 @@
 <title>relu_6_33pass2&#45;&gt;iadd_6_44pass1</title>
 <path fill="none" stroke="black" d="M406.18,-5510.66C425.39,-5527.39 445.89,-5549.41 457,-5574.23 496.84,-5663.28 470,-5695.8 470,-5793.36 470,-5793.36 470,-5793.36 470,-6045.36 470,-6135.74 507.68,-6171.69 460,-6248.48 449.56,-6265.29 433.43,-6278.33 416.25,-6288.3"/>
 <polygon fill="black" stroke="black" points="415.1,-6286.13 410.16,-6291.66 417.47,-6290.42 415.1,-6286.13"/>
-<text xml:space="preserve" text-anchor="start" x="378.08" y="-6275.94" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="372.08" y="-6274.04" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- batchnorm_14_40pass1 -->
 <g id="node46" class="node">
@@ -961,7 +961,7 @@
 <title>batchnorm_15_43pass1&#45;&gt;iadd_6_44pass1</title>
 <path fill="none" stroke="black" d="M334.81,-6248.74C335.1,-6257.84 335.4,-6267.12 335.68,-6275.77"/>
 <polygon fill="black" stroke="black" points="333.23,-6275.77 335.9,-6282.68 338.12,-6275.61 333.23,-6275.77"/>
-<text xml:space="preserve" text-anchor="start" x="305.2" y="-6267.75" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="299.2" y="-6265.85" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- relu_7_41pass2 -->
 <g id="node51" class="node">
@@ -1113,14 +1113,14 @@
 <title>batchnorm_17_49pass1&#45;&gt;iadd_7_52pass1</title>
 <path fill="none" stroke="black" d="M205.24,-7297.41C207.22,-7306.61 209.25,-7315.98 211.14,-7324.72"/>
 <polygon fill="black" stroke="black" points="208.7,-7325.07 212.58,-7331.39 213.49,-7324.03 208.7,-7325.07"/>
-<text xml:space="preserve" text-anchor="start" x="182.15" y="-7316.42" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="176.15" y="-7314.52" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- batchnorm_18_51pass1&#45;&gt;iadd_7_52pass1 -->
 <g id="edge71" class="edge">
 <title>batchnorm_18_51pass1&#45;&gt;iadd_7_52pass1</title>
 <path fill="none" stroke="black" d="M440.3,-6872.86C434.85,-6968.66 412.3,-7164.81 320,-7297.16 310.17,-7311.25 296.44,-7323.34 282.29,-7333.25"/>
 <polygon fill="black" stroke="black" points="281.02,-7331.16 276.59,-7337.1 283.76,-7335.22 281.02,-7331.16"/>
-<text xml:space="preserve" text-anchor="start" x="244.58" y="-7321.5" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="238.58" y="-7319.6" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- relu_8_47pass2 -->
 <g id="node60" class="node">
@@ -1164,7 +1164,7 @@
 <title>relu_8_47pass2&#45;&gt;iadd_8_58pass1</title>
 <path fill="none" stroke="black" d="M270.45,-7504.05C291.13,-7520.5 313,-7542.29 325,-7567.58 366.83,-7655.72 338,-7689.15 338,-7786.71 338,-7786.71 338,-7786.71 338,-8038.71 338,-8129.09 375.27,-8164.79 328,-8241.83 317.68,-8258.65 301.6,-8271.75 284.53,-8281.77"/>
 <polygon fill="black" stroke="black" points="283.41,-8279.59 278.49,-8285.14 285.8,-8283.87 283.41,-8279.59"/>
-<text xml:space="preserve" text-anchor="start" x="246.42" y="-8269.43" font-family="Helvetica,sans-Serif" font-size="11.00">arg 1</text>
+<text xml:space="preserve" text-anchor="start" x="240.42" y="-8267.53" font-family="Helvetica,sans-Serif" font-size="13.00">arg 1</text>
 </g>
 <!-- batchnorm_19_54pass1 -->
 <g id="node62" class="node">
@@ -1241,7 +1241,7 @@
 <title>batchnorm_20_57pass1&#45;&gt;iadd_8_58pass1</title>
 <path fill="none" stroke="black" d="M204.17,-8242.09C204.68,-8251.19 205.2,-8260.47 205.69,-8269.12"/>
 <polygon fill="black" stroke="black" points="203.24,-8269.18 206.07,-8276.03 208.13,-8268.91 203.24,-8269.18"/>
-<text xml:space="preserve" text-anchor="start" x="175.41" y="-8261.1" font-family="Helvetica,sans-Serif" font-size="11.00">arg 0</text>
+<text xml:space="preserve" text-anchor="start" x="169.41" y="-8259.2" font-family="Helvetica,sans-Serif" font-size="13.00">arg 0</text>
 </g>
 <!-- relu_9_55pass2 -->
 <g id="node67" class="node">
