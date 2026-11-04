@@ -295,7 +295,7 @@ def _run_capture_cells(
         return tl.record(
             workload.model,
             list(workload.args),
-            workload.kwargs or None,
+            input_kwargs=workload.kwargs or None,
             save=lambda ctx: ctx.kind == "op" and ctx.raw_index % 100 == 0,
         )
 
