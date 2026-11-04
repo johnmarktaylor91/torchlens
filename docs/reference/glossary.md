@@ -4886,7 +4886,7 @@ The sections above describe each surface in depth.
 | `Trace.is_replayable` | Whether the capture ran with `replayable=True` (the runnable apparatus: runnable save, edge provenance). Saved-graph replay (`do()` without `model=`) needs only the per-op argument templates every `tl.trace` capture records (`trace.options.save_arg_templates`), so it does not need this flag |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
-| `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
+| `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`); after a replay rewrites an output op it refuses `output_not_stored` (the rerun engine recomputes it), and a saved such trace stores no transformed output (`None` on load) |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
