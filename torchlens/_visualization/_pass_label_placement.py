@@ -48,9 +48,14 @@ _NEAR_END = 12.0  # (pt) a label farther than this from its own edge's end no lo
 _ATTACH_REACH = 30.0  # (pt) the stretch of a label's own edge, from its end, it reads against
 _OTHER_REACH = 60.0  # (pt) other edges at the same node within this of the end compete for it
 _ATTACH_MARGIN = 4.0  # (pt) a label must be this much nearer its own edge than any other there
-#: (degrees) a label's centre must lie within this of its own edge's direction at the end,
-#: so it sits out along that edge, on the side of the node where the edge meets it
-_MAX_OFF_EDGE = 60.0
+#: outward normals of a node's sides; a label stays wholly beyond the side its edge meets
+_SIDES: dict[str, Point] = {
+    "left": (-1.0, 0.0),
+    "right": (1.0, 0.0),
+    "bottom": (0.0, -1.0),
+    "top": (0.0, 1.0),
+}
+_ON_SIDE = 2.0  # (pt) an end this close to a side of its node's box is on that side
 _SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
 _CHUNK = 12  # samples per indexed piece of a line, so a distant stretch is skipped whole
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
@@ -322,7 +327,10 @@ class _Scene:
                     p for p in edge["samples"] if math.dist(p, end) <= _ATTACH_REACH
                 ] or [end]
                 ahead = min(label["own_line"], key=lambda p: abs(math.dist(p, end) - 15.0))
-                label["direction"] = math.atan2(ahead[1] - end[1], ahead[0] - end[0])
+                label["box"] = _union(
+                    [_bounds(o) for o in self.nodes.get(node, [])] or [(*end, *end)]
+                )
+                label["side"] = _side(label["box"], end, (ahead[0] - end[0], ahead[1] - end[1]))
                 label["other_lines"] = [
                     near
                     for other in self.edges
@@ -407,7 +415,7 @@ class _Scene:
 
         Collision depth first; then whether a label reads as belonging to another edge
         at its node (it is not clearly nearer its own edge's last stretch than every
-        other edge there, or it sits beside the node instead of out along its edge); then whether it is more than ``_NEAR_END`` from its own
+        other edge there, or it reaches back past the side of the node its edge meets); then whether it is more than ``_NEAR_END`` from its own
         edge's end; then clearance short of ``_CLEAR_TARGET`` (half-point steps); then
         the farthest distance from a label to its own edge's end.
         """
@@ -426,7 +434,7 @@ class _Scene:
                 (_rect_line_gap(r, line) for r in lines for line in label["other_lines"]),
                 default=math.inf,
             )
-            ambiguous = ambiguous or rival < own + _ATTACH_MARGIN or _off_edge(label, lines)
+            ambiguous = ambiguous or rival < own + _ATTACH_MARGIN or _wrong_side(label, lines)
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
         return (round(depth, 3), ambiguous, end_gap > _NEAR_END, shortfall, round(end_gap, 3))
 
@@ -460,14 +468,37 @@ def _clearance(rect: Rect, extra: Iterable[Rect], local: _Obstacles) -> float:
     return min(gaps, default=_CLEAR_TARGET)
 
 
-def _off_edge(label: dict[str, Any], lines: list[Rect]) -> bool:
-    """Whether a label's centre lies outside ``_MAX_OFF_EDGE`` of its edge's direction."""
+def _side(box: Rect, end: Point, heading: Point) -> str:
+    """The side of a node's box where its edge meets it.
+
+    The side the end lies on; at a corner, or on a curved outline away from the box,
+    the side the edge heads away from the node through.
+    """
+
+    gaps = {
+        "left": abs(end[0] - box[0]),
+        "right": abs(box[2] - end[0]),
+        "bottom": abs(end[1] - box[1]),
+        "top": abs(box[3] - end[1]),
+    }
+    touching = [side for side, gap in gaps.items() if gap <= _ON_SIDE] or list(_SIDES)
+    return max(
+        touching, key=lambda side: _SIDES[side][0] * heading[0] + _SIDES[side][1] * heading[1]
+    )
+
+
+def _wrong_side(label: dict[str, Any], lines: list[Rect]) -> bool:
+    """Whether a label reaches back past the side of its node where its edge meets it."""
 
     x0, y0, x1, y1 = _union(lines)
-    (ex, ey) = label["end"]
-    bearing = math.atan2((y0 + y1) / 2 - ey, (x0 + x1) / 2 - ex)
-    turn = abs((bearing - label["direction"] + math.pi) % (2 * math.pi) - math.pi)
-    return math.degrees(turn) > _MAX_OFF_EDGE
+    nx0, ny0, nx1, ny1 = label["box"]
+    beyond = {
+        "left": x1 <= nx0 + _MIN_GAP,
+        "right": x0 >= nx1 - _MIN_GAP,
+        "bottom": y1 <= ny0 + _MIN_GAP,
+        "top": y0 >= ny1 - _MIN_GAP,
+    }
+    return not beyond[label["side"]]
 
 
 def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:

@@ -9,9 +9,9 @@ Graphviz reserves no room for head/tail labels and moves both ends of an edge wi
 (``torchlens/_visualization/_pass_label_placement.py``), and a labelled straight edge
 keeps the two ranks of length its midpoint label used to reserve.  These tests pin that
 per direction on the README loop toy with the label-geometry audit the rolled gate uses,
-and check that each label touches the end of its own edge and is nearer that edge
-than any other edge at its node (JMT, 4 Nov 2026: a label beside the wrong edge
-reads as that edge's).
+and check that each label touches the end of its own edge, is nearer that edge than any
+other edge at its node, and lies wholly beyond the side of the node that edge meets
+(JMT, 4 Nov 2026: a label beside the wrong edge reads as that edge's).
 """
 
 from __future__ import annotations
@@ -42,9 +42,8 @@ from torchlens._visualization._pass_label_placement import (
 _NEAR_END_PT = 12.0
 #: how much nearer (pt) a pass label must be to its own edge than to any other edge at its node
 _ATTACH_MARGIN_PT = 4.0
-#: a pass label sits out along its own edge: its centre within this angle (degrees) of the
-#: edge's direction at its end, never beside the node next to another edge
-_MAX_OFF_EDGE_DEG = 60.0
+#: (pt) an edge end this close to a side of its node's box meets the node on that side
+_ON_SIDE_PT = 2.0
 _DIRECTIONS = ("bottomup", "topdown", "leftright", "rightleft")
 
 
@@ -110,16 +109,16 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
     assert result.hard_violation_count == 0, result.describe_violations(direction)
     attachments = _attachments(dot)
     assert sorted(text for text, *_ in attachments) == ["In 1", "In 2", "Out 1", "Out 2"]
-    for text, end_gap, own_gap, rival_gap, off_edge in attachments:
+    for text, end_gap, own_gap, rival_gap, side, beyond in attachments:
         assert end_gap <= _NEAR_END_PT, (direction, text, end_gap)
         assert rival_gap >= own_gap + _ATTACH_MARGIN_PT, (direction, text, own_gap, rival_gap)
-        assert off_edge <= _MAX_OFF_EDGE_DEG, (direction, text, off_edge)
+        assert beyond, (direction, text, side)
 
 
-def _attachments(dot: str) -> list[tuple[str, float, float, float, float]]:
+def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool]]:
     """Per pass label: its gap to its own edge's end, to that edge's last 30 pt, to
-    the nearest other edge at the same node (within 60 pt of the end), and the angle
-    (degrees) between its own edge's direction at the end and the label's centre."""
+    the nearest other edge at the same node (within 60 pt of the end), the side of the
+    node's box its edge meets, and whether the label lies wholly beyond that side."""
 
     layout = json.loads(
         subprocess.run(
@@ -132,6 +131,7 @@ def _attachments(dot: str) -> list[tuple[str, float, float, float, float]]:
         ).stdout
     )
     names = {obj["_gvid"]: obj["name"] for obj in layout["objects"]}
+    node_boxes = {obj["name"]: _node_box(obj) for obj in layout["objects"] if "pos" in obj}
     edges = [
         (
             names[edge["tail"]],
@@ -158,21 +158,62 @@ def _attachments(dot: str) -> list[tuple[str, float, float, float, float]]:
                 if math.dist(p, end) <= 60.0
             ]
             ahead = min(own, key=lambda p: abs(math.dist(p, end) - 15.0))
-            (x0, y0) = (min(b[0] for b in boxes), min(b[1] for b in boxes))
-            (x1, y1) = (max(b[2] for b in boxes), max(b[3] for b in boxes))
-            turn = math.atan2((y0 + y1) / 2 - end[1], (x0 + x1) / 2 - end[0]) - math.atan2(
-                ahead[1] - end[1], ahead[0] - end[0]
+            label_box = (
+                min(b[0] for b in boxes),
+                min(b[1] for b in boxes),
+                max(b[2] for b in boxes),
+                max(b[3] for b in boxes),
             )
+            side = _side_met(node_boxes[node], end, ahead)
             found.append(
                 (
                     texts[0],
                     min(_box_point_gap(b, end) for b in boxes),
                     min(_box_point_gap(b, p) for b in boxes for p in own),
                     min((_box_point_gap(b, p) for b in boxes for p in rivals), default=math.inf),
-                    math.degrees(abs((turn + math.pi) % (2 * math.pi) - math.pi)),
+                    side,
+                    _beyond(label_box, node_boxes[node], side),
                 )
             )
     return found
+
+
+def _node_box(obj: dict) -> tuple[float, float, float, float]:
+    x, y = (float(v) for v in obj["pos"].split(","))
+    half_w, half_h = float(obj["width"]) * 36.0, float(obj["height"]) * 36.0
+    return x - half_w, y - half_h, x + half_w, y + half_h
+
+
+def _side_met(
+    box: tuple[float, float, float, float],
+    end: tuple[float, float],
+    ahead: tuple[float, float],
+) -> str:
+    """The side of the node's box the edge meets: the one its end lies on; at a corner,
+    the one the edge leaves through."""
+
+    gaps = {
+        "left": abs(end[0] - box[0]),
+        "right": abs(box[2] - end[0]),
+        "bottom": abs(end[1] - box[1]),
+        "top": abs(box[3] - end[1]),
+    }
+    normals = {"left": (-1, 0), "right": (1, 0), "bottom": (0, -1), "top": (0, 1)}
+    near = [side for side, gap in gaps.items() if gap <= _ON_SIDE_PT] or list(normals)
+    heading = (ahead[0] - end[0], ahead[1] - end[1])
+    return max(near, key=lambda s: normals[s][0] * heading[0] + normals[s][1] * heading[1])
+
+
+def _beyond(
+    label: tuple[float, float, float, float], box: tuple[float, float, float, float], side: str
+) -> bool:
+    slack = 0.5  # pt of rounding in the layout's coordinates
+    return {
+        "left": label[2] <= box[0] + slack,
+        "right": label[0] >= box[2] - slack,
+        "bottom": label[3] <= box[1] + slack,
+        "top": label[1] >= box[3] - slack,
+    }[side]
 
 
 def _end_point(pos: str, *, head: bool) -> tuple[float, float]:
