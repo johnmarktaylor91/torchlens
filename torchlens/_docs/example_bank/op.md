@@ -407,11 +407,13 @@ After a backward pass the op links to its backward record and the live handle is
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 trace.backward(trace.ops["output_1"].out.sum())
 op = trace.ops["linear_1_1"]
-print("grad_fn", op.grad_fn)
+print("grad_fn", type(op.grad_fn).__name__, op.grad_fn.label, op.grad_fn.op_label)
 print("grad_fn_label", op.grad_fn_label)
 print("grad_fn_handle", op.grad_fn_handle)
 # Output:
-# ...
+# grad_fn GradFn addmm_back_2_7 linear_1_1
+# grad_fn_label addmm_back_2_7
+# grad_fn_handle None
 ```
 
 ## Cost
@@ -935,12 +937,12 @@ for label in trace.op_labels:
     print(label, op.is_in_conditional, op.in_conditionals,
           op.conditional_depth, op.conditional_branch_depth, op.conditional_branch_stack)
 # Output:
-# input_1:1 False False () 0 0 ()
-# linear_1_1:1 False False () 0 0 ()
-# sum_1_2:1 False True () 0 0 ()
-# gt_1_3:1 True False (ConditionalRoleRef(conditional_id='cond_gt_1_3', arm_index=0, arm_kind='then', role='evaluation'),) 1 0 ()
-# relu_1_4:1 True False (ConditionalRoleRef(conditional_id='cond_gt_1_3', arm_index=0, arm_kind='then', role='body'),) 1 1 ((0, 'then'),)
-# output_1:1 False False () 0 0 ()
+# input_1:1 False () 0 0 ()
+# linear_1_1:1 False () 0 0 ()
+# sum_1_2:1 False () 0 0 ()
+# gt_1_3:1 True (ConditionalRoleRef(conditional_id='cond_gt_1_3', arm_index=0, arm_kind='then', role='evaluation'),) 1 0 ()
+# relu_1_4:1 True (ConditionalRoleRef(conditional_id='cond_gt_1_3', arm_index=0, arm_kind='then', role='body'),) 1 1 ((0, 'then'),)
+# output_1:1 False () 0 0 ()
 ```
 
 ### op-conditional-children

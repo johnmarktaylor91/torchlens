@@ -79,7 +79,14 @@ print("out", tuple(layer.out.shape))
 print("has_saved_activation", layer.has_saved_activation)
 print("is_module_input", layer.is_module_input)
 # Output:
-# ...
+# label relu_1_2:1
+# short_label relu_1:1
+# pass_index 1
+# step_index 2
+# lookup_keys ['-3', '2', 'relu_1', 'relu_1:1', 'relu_1_2', 'relu_1_2:1', 'relu_1_3', 'relu_1_3_raw']
+# out (3, 8)
+# has_saved_activation True
+# is_module_input True
 ```
 
 ### layer-addresses
@@ -254,10 +261,9 @@ After a backward pass a single-pass layer links to its backward record.
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 trace.backward(trace.ops["output_1"].out.sum())
 layer = trace.layers["linear_1_1"]
-print("grad_fn", layer.grad_fn)
-print("ops grad_fn", layer.ops[0].grad_fn)
+print("grad_fn", type(layer.grad_fn).__name__, layer.grad_fn.label, layer.grad_fn.class_name)
 # Output:
-# ...
+# grad_fn GradFn addmm_back_2_7 AddmmBackward0
 ```
 
 ### layer-call-records
@@ -452,10 +458,13 @@ trace = tl.trace(model, x)
 layer = trace.layers["linear_1_1"]
 print("edges_vary_across_ops", layer.edges_vary_across_ops)
 print("parent_arg_positions", layer.parent_arg_positions)
-print("equivalence_class", layer.equivalence_class)
+print("equivalence_class", layer.equivalence_class.startswith("linear_"))
 print("equivalent_ops", sorted(layer.equivalent_ops))
 # Output:
-# ...
+# edges_vary_across_ops True
+# parent_arg_positions {'args': {0: 'input_1'}, 'kwargs': {}}
+# equivalence_class True
+# equivalent_ops ['linear_1_1:1', 'linear_1_1:2', 'linear_1_1:3']
 ```
 
 ### layer-get-parents-children
@@ -560,7 +569,16 @@ print("output_of_modules", layer.output_of_modules)
 print("output_of_module_calls", layer.output_of_module_calls)
 print("input_to_module_calls", trace.layers["relu_1_2"].input_to_module_calls)
 # Output:
-# ...
+# module fc1:1
+# modules ('fc1:1',)
+# module_call_stack ('fc1:1',)
+# module_call_depth 1
+# in_submodule True
+# is_atomic_module True
+# leaf_module_ops {'fc1:1'}
+# output_of_modules ('fc1',)
+# output_of_module_calls ('fc1:1',)
+# input_to_module_calls ('fc2:1',)
 ```
 
 ### layer-multi-output
@@ -673,7 +691,6 @@ print("is_in_conditional_evaluation", layer.is_in_conditional_evaluation)
 # is_scalar_bool True
 # bool_value True
 # is_terminal_bool True
-# terminal_bool_for None
 # is_in_conditional_evaluation True
 ```
 
