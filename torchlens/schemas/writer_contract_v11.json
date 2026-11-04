@@ -1302,7 +1302,7 @@
    "tlspec_manifest_v2.json": "54f461249c41fb8ff64367b7dff0b6e2af66e2e2b833b9d9b8575adae7eebe59"
   },
   "min_tlspec_version": 11,
-  "min_torchlens_version": "3.0.0",
+  "min_torchlens_version": "2.38.0",
   "payload_codec_ids": [
    "torch_safetensors_v1",
    "numpy_safetensors_v1"
@@ -4012,5 +4012,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "25c9c0fb5503f91fd7f7dc27d709c936f7afb9fb7ae60bd9e90d58797d7271d5"
+ "writer_contract_digest": "49a6cca44f1ec18d891d4465d54dd3dd4d7451e2fd70089ffe121ffc6cf1fc27"
 }

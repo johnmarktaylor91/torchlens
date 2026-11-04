@@ -1,4 +1,4 @@
-"""Compatibility adapters for TorchLens 2.x."""
+"""Compatibility adapters for TorchLens 2.37 and earlier."""
 
 from __future__ import annotations
 
