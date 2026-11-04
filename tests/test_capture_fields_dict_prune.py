@@ -119,8 +119,8 @@ _UNREAD_KEYS = frozenset(
 _MAX_KEYS_PER_OP = 91
 # Python calls into TorchLens code per function-call op while capture runs
 # (postprocess excluded). Measured 1074.2 (1090.9 while the unread keys were built);
-# the pin sits between the two so it holds across torch versions and still fails
-# if the unread-key work returns.
+# the pin sits between the two, leaving margin for call-count drift between torch
+# versions while still failing if the unread-key work returns.
 _MAX_TORCHLENS_CALLS_PER_OP = 1082.0
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
 
