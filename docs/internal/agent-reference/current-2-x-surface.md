@@ -88,7 +88,10 @@
   inputs, older logits) once it is reduced, so memory is linear in the token count; `GenerationRecording.series(name)` returns a
   `TokenSeries` (`positions`, `values`), `.series_names`, `.peak_saved_bytes`, `.evicted_steps`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
-  payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
+  payload reads rejected explicitly; recorded ops carry capture-time equivalence classes and
+  parameter identity, so the cooked Trace groups recurrent layers into passes like `tl.trace`.
+  A `Recording` has no `draw()` and no facets (both need `to_trace()`); `tl.extract` takes only
+  `model`, `inputs`, `layers` and `detach_saved_activations`. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
   predicate spelling. Failed forwards default to
   the historical `on_forward_error="raise"` behavior; opt into
@@ -146,6 +149,19 @@
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
+- **Conditionals keep source arms; `Conditional.outcome` says which way it went** (doc of
+  record `docs/conditional_attribution.md`). An `if` with no `else` never gains one; when every
+  arm ends in `return`/`raise`/`break`/`continue`, the code after the chain is one more arm of kind
+  `fallthrough` (drawn `FALLTHROUGH`, counted by `num_arms`, `has_else` stays `False`).
+  `Conditional.outcome` (a plain string, derived, not persisted; unrelated to the
+  `CaptureOutcome` of `Trace.outcome`) is `then`/`elif`/`else`/`fallthrough`/`skipped`/
+  `multiple`/`unknown`; `fired_arm_kind is None` means no single arm fired.
+
+  ```python
+  cond = trace.graph.conditionals[0]
+  cond.outcome          # e.g. "fallthrough" for `if c: return a` then `return b`, c false
+  cond.fired_arm_kind   # "fallthrough"; cond.fired_arm.execution_ops names the after-code ops
+  ```
 - **Every capture product carries ONE settled typed outcome** (early-stopping
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen
@@ -340,6 +356,8 @@
   `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
   `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.summary()` (the bundle card as text), `b.to_pandas()` (one `member`-keyed table) and
+  `b.to_agent_json()` (`torchlens.agent_bundle.v1`, members keyed by name) read the bundle whole.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
   `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
@@ -586,6 +604,10 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- Owned ATen and event sequences are tuple subclasses with bounded displays. Equality,
+  hashing, slicing and standalone pickling retain tuple behavior; saved artifacts encode
+  these sequences as ordinary tuples. Collection reprs show counts; `str()` shows five
+  members and the exact remaining count.
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`

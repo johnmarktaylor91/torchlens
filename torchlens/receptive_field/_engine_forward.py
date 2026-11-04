@@ -9,6 +9,7 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from .._utils._display_bounded import short_dataclass_repr
 from ._engine import (
     _concatenation_offsets,
     _geometry_memo,
@@ -50,6 +51,8 @@ _TARGET_SOLUTION_CACHE_SIZE = 8
 class _ProjectiveFieldSolution:
     """Immutable target-anchored projective descriptor solution."""
 
+    __repr__ = short_dataclass_repr
+
     registry_epoch: int
     graph_revision: tuple[object, ...]
     target_labels: tuple[str, ...]
@@ -60,19 +63,16 @@ class _ProjectiveFieldSolution:
 
 def solve_projective(trace: Trace, target_ops: Iterable[Op | str]) -> _ProjectiveFieldSolution:
     """Solve projective descriptors from every target ancestor into target space.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
     target_ops:
         Non-empty iterable of target operations or exact pass-qualified labels.
-
     Returns
     -------
     _ProjectiveFieldSolution
         Immutable solution containing one descriptor per source and reachable target.
-
     Raises
     ------
     ValueError

@@ -67,13 +67,14 @@ class _Stateful(nn.Module):
         return torch.relu(x * self.scale)
 
 
-class _Branch(nn.Module):
-    """A tensor-driven if; capture records a scalar-escape advisory at the ``if``."""
+class _ScalarEscape(nn.Module):
+    """A Python float read off a tensor; capture records a scalar-escape advisory there.
+
+    A recorded ``if`` test is not an escape, so the advisory needs a real one.
+    """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.sum() > 0:
-            return x * 2
-        return x - 1
+        return x * float(x.sum())
 
 
 def _draw(model: nn.Module, x: torch.Tensor, tmp_path: Path, name: str, **kwargs: object) -> str:
@@ -326,10 +327,10 @@ def test_header_advisory_names_no_local_directory(tmp_path: Path) -> None:
     """The capture advisory in the header cites the file name and line only."""
 
     with warnings.catch_warnings(record=True):
-        # The scalar escape at the ``if`` is warned once at capture; it is
-        # the advisory under test, not a defect.
+        # The scalar escape is warned once at capture; it is the advisory
+        # under test, not a defect.
         warnings.simplefilter("always")
-        trace = tl.trace(_Branch(), torch.ones(1, 3))
+        trace = tl.trace(_ScalarEscape(), torch.ones(1, 3))
     dot = str(trace.draw(file_format="svg", path=str(tmp_path / "adv")).dot)
     assert "capture advisory" in dot
     assert str(Path(__file__).resolve().parent) not in dot

@@ -40,16 +40,20 @@ def pass_token_labels(subject: Any) -> tuple[str, ...]:
     """Return the ``:all`` and ``:last`` spellings a finished op answers to.
 
     Every pass of a layer answers to ``layer_label:all``; the pass whose number
-    equals the layer's pass count answers to ``layer_label:last`` as well.
-    Subjects without a layer label (grad-fn nodes) answer to neither.
+    equals the layer's pass count answers to ``layer_label:last`` as well. The
+    short layer label (``linear_1``) takes both tokens the same way, since a
+    label lookup accepts it wherever it accepts the full label. Subjects
+    without a layer label (grad-fn nodes) answer to neither.
     """
 
     layer_label = getattr(subject, "layer_label", None)
     if not isinstance(layer_label, str):
         return ()
-    spellings = [f"{layer_label}:{PASS_TOKEN_ALL}"]
+    short_label = getattr(subject, "short_layer_label", None)
+    bases = [layer_label]
+    if isinstance(short_label, str) and short_label and short_label != layer_label:
+        bases.append(short_label)
     pass_number = getattr(subject, "pass_number", None) or 1
     num_passes = getattr(subject, "num_passes", None) or 1
-    if pass_number == num_passes:
-        spellings.append(f"{layer_label}:{PASS_TOKEN_LAST}")
-    return tuple(spellings)
+    tokens = [PASS_TOKEN_ALL] + ([PASS_TOKEN_LAST] if pass_number == num_passes else [])
+    return tuple(f"{base}:{token}" for base in bases for token in tokens)

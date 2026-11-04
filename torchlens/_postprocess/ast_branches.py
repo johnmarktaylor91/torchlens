@@ -46,10 +46,16 @@ import tokenize
 import warnings
 from collections import OrderedDict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal, NamedTuple, TypeAlias, cast
 
 from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._postprocess._ast_predicates import (
+    classify_test_value_structure,
+    fallthrough_statements,
+    is_direct_bool_call,
+    is_match_case_node,
+)
 
 ConditionalKey: TypeAlias = tuple[str, int, int, int]
 SourceRange: TypeAlias = tuple[int, int, int, int]
@@ -1753,73 +1759,28 @@ def _ast_depth(node: ast.AST, parent_map: dict[ast.AST, ast.AST]) -> int:
     return depth
 
 
-def _test_value_structure(test: ast.expr) -> str:
-    """Classify a branch test expression's bool-value semantics.
+def _with_fallthrough_arm(
+    record: ConditionalRecord, fallthrough: list[ast.stmt]
+) -> ConditionalRecord:
+    """Return ``record`` with a ``fallthrough`` arm over ``fallthrough`` (unchanged when empty).
 
     Parameters
     ----------
-    test:
-        Full test expression node of one ``if``/``elif``/ternary arm.
+    record:
+        Conditional record built from the chain's source arms.
+    fallthrough:
+        Statements proven to run only when every test was false.
 
     Returns
     -------
-    str
-        ``"bare"`` when the runtime value of a consumed bool IS the test
-        outcome (possibly under an even number of ``not``\\ s), ``"negated"``
-        when the outcome is the logical inverse (odd ``not`` parity over a
-        single consumed expression), and ``"compound"`` when the test
-        aggregates several truth values through ``and``/``or``, where no
-        single consumed bool's raw value can honestly stand for the outcome.
+    ConditionalRecord
+        The record, with ``branch_ranges["fallthrough"]`` when ``fallthrough`` is non-empty.
     """
 
-    negations = 0
-    node: ast.expr = test
-    while isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-        negations += 1
-        node = node.operand
-    if any(isinstance(child, ast.BoolOp) for child in ast.walk(node)):
-        return "compound"
-    return "negated" if negations % 2 else "bare"
-
-
-def _is_direct_bool_call(node: ast.AST) -> bool:
-    """Return whether a node is a direct ``bool(...)`` cast call.
-
-    Parameters
-    ----------
-    node:
-        AST node to inspect.
-
-    Returns
-    -------
-    bool
-        ``True`` when the node is a direct call to the built-in ``bool``.
-    """
-
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "bool"
-        and len(node.args) == 1
-        and not node.keywords
-    )
-
-
-def _is_match_case_node(node: ast.AST) -> bool:
-    """Return whether a node is a structural pattern-matching case node.
-
-    Parameters
-    ----------
-    node:
-        AST node to inspect.
-
-    Returns
-    -------
-    bool
-        ``True`` when the node is a ``match_case`` object.
-    """
-
-    return type(node).__name__ == "match_case"
+    if not fallthrough:
+        return record
+    arm_ranges = {**record.branch_ranges, "fallthrough": _statement_list_span(fallthrough)}
+    return replace(record, branch_ranges=arm_ranges)
 
 
 class _ScopeIndexer:
@@ -1873,10 +1834,13 @@ class _ScopeIndexer:
     ) -> None:
         """Walk a list of AST nodes under shared conditional context.
 
+        An ``if`` chain that records a fall-through arm walks the rest of the
+        list itself, under that arm, so the walk stops there.
+
         Parameters
         ----------
         nodes:
-            Nodes to traverse.
+            Nodes to traverse (a statement list or a field's node list).
         parent_conditional_key:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
@@ -1885,7 +1849,12 @@ class _ScopeIndexer:
             Current conditional nesting depth within the scope.
         """
 
-        for node in nodes:
+        for index, node in enumerate(nodes):
+            if isinstance(node, ast.If) and not self._is_synthetic_elif(node):
+                context = (parent_conditional_key, parent_branch_kind, call_depth)
+                if self._handle_if(node, *context, following=nodes[index + 1 :]):
+                    return
+                continue
             self._walk_node(node, parent_conditional_key, parent_branch_kind, call_depth)
 
     def _walk_node(
@@ -1912,7 +1881,7 @@ class _ScopeIndexer:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             return
 
-        if isinstance(node, ast.If):
+        if isinstance(node, ast.If) and not self._is_synthetic_elif(node):
             self._handle_if(node, parent_conditional_key, parent_branch_kind, call_depth)
             return
 
@@ -1930,16 +1899,20 @@ class _ScopeIndexer:
             for if_expr in node.ifs:
                 self._add_bool_consumer("comprehension_filter", if_expr, None, None)
 
-        if _is_match_case_node(node):
+        if is_match_case_node(node):
             guard = getattr(node, "guard", None)
             if isinstance(guard, ast.AST):
                 self._add_bool_consumer("match_guard", guard, None, None)
 
-        if _is_direct_bool_call(node):
+        if is_direct_bool_call(node):
             self._add_bool_consumer("bool_cast", node, None, None)
 
-        for child in ast.iter_child_nodes(node):
-            self._walk_node(child, parent_conditional_key, parent_branch_kind, call_depth)
+        for _field_name, value in ast.iter_fields(node):
+            if isinstance(value, list):
+                children = [item for item in value if isinstance(item, ast.AST)]
+                self._walk_nodes(children, parent_conditional_key, parent_branch_kind, call_depth)
+            elif isinstance(value, ast.AST):
+                self._walk_node(value, parent_conditional_key, parent_branch_kind, call_depth)
 
     def _handle_if(
         self,
@@ -1947,7 +1920,8 @@ class _ScopeIndexer:
         parent_conditional_key: ConditionalKey | None,
         parent_branch_kind: str | None,
         call_depth: int,
-    ) -> None:
+        following: Sequence[ast.AST] = (),
+    ) -> bool:
         """Index a flattened ``if``/``elif``/``else`` chain.
 
         Parameters
@@ -1960,15 +1934,17 @@ class _ScopeIndexer:
             Enclosing branch kind, if any.
         call_depth:
             Current conditional nesting depth within the scope.
+        following:
+            Statements after the chain in its statement list.
+
+        Returns
+        -------
+        bool
+            ``True`` when ``following`` became the ``fallthrough`` arm and was walked here.
         """
 
-        if self._is_synthetic_elif(node):
-            self._walk_node(node.test, parent_conditional_key, parent_branch_kind, call_depth)
-            self._walk_nodes(node.body, parent_conditional_key, parent_branch_kind, call_depth)
-            self._walk_nodes(node.orelse, parent_conditional_key, parent_branch_kind, call_depth)
-            return
-
         flattened_elifs, terminal_else = self._flatten_elif_chain(node)
+        fallthrough = fallthrough_statements(node, flattened_elifs, terminal_else, following)
         record = self._build_if_record(
             node=node,
             flattened_elifs=flattened_elifs,
@@ -1977,6 +1953,7 @@ class _ScopeIndexer:
             parent_branch_kind=parent_branch_kind,
             call_depth=call_depth,
         )
+        record = _with_fallthrough_arm(record, fallthrough)
         self._register_conditional(record)
 
         self._add_bool_consumer("if_test", node.test, record.key, "then")
@@ -1991,6 +1968,8 @@ class _ScopeIndexer:
 
         if terminal_else:
             self._walk_nodes(terminal_else, record.key, "else", call_depth + 1)
+        self._walk_nodes(fallthrough, record.key, "fallthrough", call_depth + 1)
+        return bool(fallthrough)
 
     def _handle_ifexp(
         self,
@@ -2031,7 +2010,7 @@ class _ScopeIndexer:
                 "else": _node_span(node.orelse),
             },
             branch_test_spans={"then": _node_span(node.test)},
-            branch_test_structures={"then": _test_value_structure(node.test)},
+            branch_test_structures={"then": classify_test_value_structure(node.test)},
             call_depth=call_depth,
             parent_conditional_key=parent_conditional_key,
             parent_branch_kind=parent_branch_kind,
@@ -2114,13 +2093,13 @@ class _ScopeIndexer:
         )
         branch_ranges: dict[str, SourceRange] = {"then": _statement_list_span(node.body)}
         branch_test_spans: dict[str, SourceRange] = {"then": _node_span(node.test)}
-        branch_test_structures: dict[str, str] = {"then": _test_value_structure(node.test)}
+        branch_test_structures: dict[str, str] = {"then": classify_test_value_structure(node.test)}
 
         for index, elif_node in enumerate(flattened_elifs, start=1):
             branch_kind = f"elif_{index}"
             branch_ranges[branch_kind] = _statement_list_span(elif_node.body)
             branch_test_spans[branch_kind] = _node_span(elif_node.test)
-            branch_test_structures[branch_kind] = _test_value_structure(elif_node.test)
+            branch_test_structures[branch_kind] = classify_test_value_structure(elif_node.test)
 
         if terminal_else:
             branch_ranges["else"] = _statement_list_span(terminal_else)

@@ -57,7 +57,7 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
 
     assert isinstance(value, tl.types.Quantity)
     assert isinstance(value, int)
-    assert str(value) == "1.2 MB"
+    assert str(value) == "1.18 MiB"
     assert repr(tl.types.Bytes(32)) == "Bytes('32 B')"
     assert f"{value:raw}" == "1234567"
     assert f"{value:.2f MB}" == "1.18 MB"
@@ -125,7 +125,7 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     ]
 
     assert all(isinstance(field, tl.types.Bytes) for field in fields)
-    assert re.fullmatch(r"-?\d+(?:\.\d+)? [KMGTPE]?B", str(op.activation_memory))
+    assert re.fullmatch(r"-?\d+(?:\.\d+)? (?:[KMGTPE]i)?B", str(op.activation_memory))
     assert op.activation_memory + 1 > op.activation_memory
 
 

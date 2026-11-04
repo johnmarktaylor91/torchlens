@@ -8,10 +8,10 @@ from torch import nn
 
 from .._input_coerce import _coerce_inputs
 from ..options import CaptureOptions
+from ._dry_run import DryRun
 from ._recorder import Recorder
 from .exceptions import refuse_recorder_uninitialized
 from .options import PredicateFn
-from .types import DryRun
 
 
 def dry_run(
