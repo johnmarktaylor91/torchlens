@@ -837,14 +837,6 @@ def _collapsed_container_node_name(group_id: str) -> str:
     return f"container_{safe}"
 
 
-def _unwrap_focus_node(node: GraphNode) -> GraphNode:
-    """Return the source node behind a focus proxy."""
-
-    if isinstance(node, FocusNode):
-        return node.original
-    return node
-
-
 def _base_node_for_metadata(node: GraphNode) -> BaseGraphNode:
     """Return a non-boundary graph node for metadata helpers."""
 

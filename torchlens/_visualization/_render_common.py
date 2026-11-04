@@ -244,6 +244,14 @@ InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
 BackwardPassFilter = set[int] | None
 
 
+def _unwrap_focus_node(node: GraphNode) -> GraphNode:
+    """Return the source node behind a focus proxy, so an op renders as an op."""
+
+    if isinstance(node, FocusNode):
+        return node.original
+    return node
+
+
 def _render_node_label(node: GraphNode, vis_mode: str) -> str:
     """Return the graph node label for the active visualization mode.
 
@@ -260,9 +268,10 @@ def _render_node_label(node: GraphNode, vis_mode: str) -> str:
     str
         Stable label used as the DOT node identifier before Graphviz escaping.
     """
-    if vis_mode == "unrolled" and isinstance(node, Op):
-        return node.label
-    return node.layer_label
+    source = _unwrap_focus_node(node)
+    if vis_mode == "unrolled" and isinstance(source, Op):
+        return source.label
+    return source.layer_label
 
 
 def _relation_label(node: GraphNode) -> str:
@@ -273,9 +282,10 @@ def _relation_label(node: GraphNode) -> str:
     bare layer label, so argument-label matching must compare against the same
     spelling. Non-Op nodes keep their layer label.
     """
-    if isinstance(node, Op) and int(getattr(node, "num_passes", 1) or 1) > 1:
-        return str(node.label)
-    return str(node.layer_label)
+    source = _unwrap_focus_node(node)
+    if isinstance(source, Op) and int(getattr(source, "num_passes", 1) or 1) > 1:
+        return str(source.label)
+    return str(source.layer_label)
 
 
 def _render_node_name(node: GraphNode, vis_mode: str) -> str:
@@ -855,6 +865,7 @@ __all__ = [
     "_SVG_VIEWBOX_RE",
     "_open_file_quietly",
     "_render_node_label",
+    "_unwrap_focus_node",
     "_relation_label",
     "_render_node_name",
     "_theme_annotation_ink",

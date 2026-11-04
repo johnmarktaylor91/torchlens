@@ -104,10 +104,10 @@ def _segment_for_node(
     if segment_lookup is None or isinstance(node, BoundaryNode):
         return None
     label = str(getattr(node, "layer_label", ""))
-    if isinstance(node, Op):
+    if isinstance(_unwrap_focus_node(node), Op):
         # Unrolled nodes carry pass-qualified labels; match those against
         # concrete descriptor ops first so per-pass segments of a reused
-        # module absorb exactly their own pass.
+        # module absorb exactly their own pass (the proxy forwards ``label``).
         qualified = str(node.label)
         segment = segment_lookup.qualified_labels.get(qualified)
         if segment is not None:
@@ -1761,7 +1761,7 @@ def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
         container-node source edge in ``show_containers="nodes"`` mode.
     """
 
-    if not isinstance(node, Op):
+    if not isinstance(_unwrap_focus_node(node), Op):
         return False
     trace = getattr(node, "source_trace", None)
     if trace is None:
@@ -1792,7 +1792,7 @@ def _op_is_model_output_container_leaf(node: GraphNode) -> bool:
         ``True`` when a sink container-node edge should carry its key label.
     """
 
-    if not isinstance(node, Op):
+    if not isinstance(_unwrap_focus_node(node), Op):
         return False
     trace = getattr(node, "source_trace", None)
     if trace is None:
