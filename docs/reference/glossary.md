@@ -4343,7 +4343,7 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
-| `tl.errors.quiet` | `tl.errors.quiet(*codes)`: the one switch that silences TorchLens warnings. `quiet()` silences every TorchLens warning; `quiet("code", ...)` silences only the coded warnings whose `fields["code"]` is listed. A bare call lasts for the session; `with tl.errors.quiet(...):` restores the prior state and warning filters at the end of the block. A later explicit `warnings.simplefilter` takes precedence (was `tl.io.suppress_mutate_warnings`) |
+| `tl.errors.quiet` | `tl.errors.quiet(*codes)`: the one switch that silences TorchLens warnings. `quiet()` silences every TorchLens warning; `quiet("code", ...)` silences only the coded warnings whose `fields["code"]` is listed. A bare call lasts for the session; `with tl.errors.quiet(...):` restores the prior state and warning filters at the end of the block. A later explicit `warnings.simplefilter` takes precedence |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
