@@ -2870,7 +2870,7 @@ docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
-docs-md	docs/maintainers/where.md	1581
+docs-md	docs/maintainers/where.md	1583
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
@@ -3040,6 +3040,7 @@ docs-md	docs/maintainers/where.md	2592
 docs-md	docs/maintainers/where.md	260
 docs-md	docs/maintainers/where.md	2608
 docs-md	docs/maintainers/where.md	261
+docs-md	docs/maintainers/where.md	2615
 docs-md	docs/maintainers/where.md	262
 docs-md	docs/maintainers/where.md	2638
 docs-md	docs/maintainers/where.md	264
@@ -3113,9 +3114,9 @@ docs-md	docs/maintainers/where.md	310
 docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	314
-docs-md	docs/maintainers/where.md	31442
 docs-md	docs/maintainers/where.md	3148
 docs-md	docs/maintainers/where.md	318
+docs-md	docs/maintainers/where.md	31880
 docs-md	docs/maintainers/where.md	319
 docs-md	docs/maintainers/where.md	32
 docs-md	docs/maintainers/where.md	320
@@ -3441,7 +3442,7 @@ docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
-docs-md	docs/maintainers/where.md	677325
+docs-md	docs/maintainers/where.md	677763
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
@@ -9006,6 +9007,7 @@ package-docstrings	torchlens/transforms/_srp_hash.py	64
 package-docstrings	torchlens/validation/__init__.py	2.37
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
+package-docstrings	torchlens/validation/_crossing_perturbations.py	0..10
 package-docstrings	torchlens/validation/_destination_coverage.py	256
 package-docstrings	torchlens/validation/_destination_coverage.py	43
 package-docstrings	torchlens/validation/_domain_perturbations.py	17
