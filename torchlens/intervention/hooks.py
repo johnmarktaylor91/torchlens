@@ -1438,7 +1438,7 @@ def _rebound_facet_request(log: Any, hook_spec: HookSpec, where: object) -> Hook
             f"The facet write on {metadata.get('facet_home_label')!r} (facet "
             f"{metadata.get('facet_name')!r}) saved in {where} does not reproduce on the "
             f"loaded trace: {problem}.",
-            code="bundle_load_failed",
+            code="facet_write_not_reproducible",
             remedy="re-attach the facet intervention on a live trace and save again; "
             "do not hand-edit the recipe",
         )
