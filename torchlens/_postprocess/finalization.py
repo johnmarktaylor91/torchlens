@@ -23,7 +23,6 @@ Step 20 (_release_param_refs): Drops live parameter references after finalizatio
 
 import time
 from collections import defaultdict, deque
-from dataclasses import replace
 from itertools import zip_longest
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
@@ -37,7 +36,6 @@ from .._data_classes._module_role_hints import (
 from .._data_classes._state_adapter import state_items
 from .._data_classes._summary import format_call_arg
 from .._data_classes.module import Module, ModuleCall
-from .._data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
@@ -59,6 +57,7 @@ from ._conditional_records import (
 )
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from ._pre_hook_provenance import _pre_hook_provenance_for_call
 from ._root_module_log import _recorded_root_calls, _root_call_build_inputs, _root_call_children
 from .saved_summary import _has_retained_gradient_payloads
 
@@ -322,59 +321,6 @@ def _synthesized_root_call(
         module_call_stack=[],
         _source_trace=self,
     )
-
-
-def _pre_hook_provenance_for_call(
-    trace: "Trace", call_label: str
-) -> tuple[ModuleInputSnapshot | None, ModuleInputSnapshot | None, tuple[PreHookEffect, ...]]:
-    """Return provenance for one call with raw producer labels finalized.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose Step-8 raw-to-final operation map is available.
-    call_label:
-        Pass-qualified module call label.
-
-    Returns
-    -------
-    tuple[ModuleInputSnapshot | None, ModuleInputSnapshot | None, tuple[PreHookEffect, ...]]
-        Before snapshot, after snapshot, and ordered effects.
-    """
-
-    values = trace._module_capture_ws.module_build_data.get("module_pre_hook_provenance", {}).get(
-        call_label
-    )
-    if values is None:
-        return None, None, ()
-    before, after, effects = values
-    return (
-        _finalize_snapshot_source_labels(trace, before),
-        _finalize_snapshot_source_labels(trace, after),
-        tuple(effects),
-    )
-
-
-def _finalize_snapshot_source_labels(
-    trace: "Trace", snapshot: ModuleInputSnapshot | None
-) -> ModuleInputSnapshot | None:
-    """Replace raw tensor producer labels in one immutable snapshot."""
-
-    if snapshot is None:
-        return None
-    mapping = trace._raw_to_final_op_labels
-    observations = tuple(
-        replace(
-            observation,
-            source_op=(
-                mapping.get(observation.source_op, observation.source_op)
-                if observation.source_op is not None
-                else None
-            ),
-        )
-        for observation in snapshot.tensor_observations
-    )
-    return replace(snapshot, tensor_observations=observations)
 
 
 def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module") -> None:
