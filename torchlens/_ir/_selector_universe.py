@@ -25,22 +25,23 @@ from typing import Any
 from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
+#: Where ``Trace`` is defined; this module identifies it by class, not by import.
+#: Importing ``_data_classes._trace_missing_attrs.is_live_trace`` (the canonical
+#: reader) at module level runs that package's ``__init__``, whose ``op`` module
+#: imports the ``intervention`` package, whose ``spec`` imports back into
+#: ``selector_eval``; with this module on the ``selector_eval`` import path a cold
+#: ``import torchlens._ir.selector_eval`` (or ``_selection.resolver``) then hit a
+#: partially initialised ``selector_eval``. Same identity check as ``_trace_state``.
+_TRACE_MODULE = __name__.rsplit(".", 2)[0] + "._data_classes.trace"
+
 
 def _is_live_trace(candidate: Any) -> bool:
-    """Return whether ``candidate`` is a live ``Trace`` (deferred import).
+    """Return whether ``candidate`` is a ``Trace`` that still holds its stores."""
 
-    ``torchlens._data_classes`` is imported inside the function on purpose: a
-    module-level import runs that package's ``__init__``, whose ``op`` module
-    imports the ``intervention`` package, whose ``spec`` imports back into
-    ``selector_eval``. With this module on the ``selector_eval`` import path, a
-    cold ``import torchlens._ir.selector_eval`` (or ``_selection.resolver``)
-    then hit a partially initialised ``selector_eval``. Keeping the guard
-    deferred leaves the selector modules importable first in a fresh interpreter.
-    """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
-    return is_live_trace(candidate)
+    for cls in type(candidate).__mro__:
+        if cls.__name__ == "Trace" and cls.__module__ == _TRACE_MODULE:
+            return not candidate.__dict__.get("_tl_cleaned_up", False)
+    return False
 
 
 #: String-label attribute universes per lifecycle, in match order.
