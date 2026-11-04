@@ -7,7 +7,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 
 | package | public functions and classes | missing examples |
 |---|---|---|
-| _autoroute | 7 | 0 |
+| _autoroute | 9 | 0 |
 | _capture | 7 | 0 |
 | _captured_run | 1 | 0 |
 | _data_classes | 27 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1055** | **0** |
+| **total** | **1057** | **0** |
 
 Public callable members of those classes (methods and properties): 1479.
