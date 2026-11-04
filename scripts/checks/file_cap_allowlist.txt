@@ -77,7 +77,6 @@ torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
-torchlens/_data_classes/_trace_fork.py	840
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
 torchlens/_data_classes/_trace_fork.py::build_fork	177
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
@@ -698,7 +697,7 @@ torchlens/attribution/_text.py	1089
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	284
-torchlens/attribution/graph/_build.py	827
+torchlens/attribution/graph/_build.py	822
 torchlens/attribution/graph/_build.py::build_graph	92
 torchlens/attribution/graph/_neuronpedia_upload.py::upload_to_neuronpedia	77
 torchlens/attribution/graph/_result.py::AttributionGraph.to_neuronpedia	82
@@ -1142,7 +1141,7 @@ torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
 torchlens/intervention/replay.py	1678
-torchlens/intervention/replay.py::_commit_replay_updates	72
+torchlens/intervention/replay.py::_commit_replay_updates	71
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
