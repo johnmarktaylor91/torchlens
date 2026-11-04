@@ -141,8 +141,9 @@ def test_input_stubs_name_the_outside_op_its_tensor_and_its_module(
         label = name.removeprefix("__module_focus_input_")
         assert label in feeders
         module = trace[label].modules[-1].split(":")[0]
-        assert rows == [f"from {label}", _tensor_row(trace, label), f"@{module}"], rows
-    assert {rows[-1] for rows in stubs.values()} == {"@pre_x.act", "@pre_y.act"}
+        assert rows == [f"from {module}", label, _tensor_row(trace, label)], rows
+    assert {rows[0] for rows in stubs.values()} == {"from pre_x.act", "from pre_y.act"}
+    assert not any(row.startswith("@") for rows in stubs.values() for row in rows)
 
 
 def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path) -> None:
@@ -152,12 +153,12 @@ def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path
     by_first_row = {rows[0]: rows for rows in stubs.values()}
     # One reader is the first call of ``shared`` (a module called twice, so its
     # op's address carries the pass); the other is the model's own output.
-    (to_shared,) = [rows for rows in stubs.values() if rows[-1].startswith("@shared.fc")]
-    assert to_shared[-1] == "@shared.fc:1"
-    assert to_shared[0].startswith("to linear_")
-    (to_output,) = [rows for rows in stubs.values() if rows[-1].startswith("model output")]
-    assert to_output[0].startswith("to output_")
-    assert to_output[-1] == "model output 1"
+    (to_shared,) = [rows for rows in stubs.values() if rows[0].startswith("to shared.fc")]
+    assert to_shared[0] == "to shared.fc:1"
+    assert to_shared[1].startswith("linear_")
+    (to_output,) = [rows for rows in stubs.values() if rows[0].startswith("to model output")]
+    assert to_output[0] == "to model output 1"
+    assert to_output[1].startswith("output_")
     # No size row: the tensor leaving is the inner op's own, already drawn.
     assert all(len(rows) == 2 for rows in stubs.values()), by_first_row
 
@@ -173,9 +174,9 @@ def test_stubs_sit_outside_the_focused_frame(trace: tl.Trace, tmp_path: Path) ->
 def test_model_input_stub_reads_the_input_role(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "pre_x", module="pre_x")
     (rows,) = _stubs(dot, "input").values()
-    assert rows[0] == "from input_1"
-    assert rows[1] == _tensor_row(trace, "input_1")
-    assert rows[2] == "model input x"  # the role in words, not an ``@`` module address
+    assert rows[0] == "from model input x"  # the role in words, not a module address
+    assert rows[1] == "input_1"
+    assert rows[2] == _tensor_row(trace, "input_1")
 
 
 def test_leaf_focus_draws_its_ops_between_its_stubs(trace: tl.Trace, tmp_path: Path) -> None:
@@ -185,8 +186,8 @@ def test_leaf_focus_draws_its_ops_between_its_stubs(trace: tl.Trace, tmp_path: P
     (into,) = _stubs(dot, "input").values()
     (out,) = _stubs(dot, "output").values()
     # Addresses leave off the scope line's ``pre_x``; ``mixer`` is outside it.
-    assert into[0].startswith("from linear_") and into[-1] == "@fc"
-    assert out[0].startswith("to cat_") and out[-1] == "@mixer"
+    assert into[0] == "from fc" and into[1].startswith("linear_")
+    assert out[0] == "to mixer" and out[1].startswith("cat_")
     assert "<B>@act</B>" in dot and "@pre_x.act" not in dot
     notes = _dot(trace, tmp_path, "act_notes", module="pre_x.act", show_legend=True)
     assert "@name: a module address under pre_x" in notes
@@ -198,18 +199,18 @@ def test_focus_on_a_module_called_twice_draws_both_passes(trace: tl.Trace, tmp_p
     assert {"shared_pass1", "shared_pass2"} <= clusters
     (into,) = _stubs(dot, "input").values()
     (out,) = _stubs(dot, "output").values()
-    assert into[-1] == "@mixer.norm"
-    assert out[-1] == "@head"
+    assert into[0] == "from mixer.norm"
+    assert out[0] == "to head"
 
 
 def test_reading_notes_explain_from_and_to_when_asked(trace: tl.Trace, tmp_path: Path) -> None:
     dot = _dot(trace, tmp_path, "mixer", module="mixer", show_legend=True)
     header = dot[dot.index("label=<") : dot.index("labeljust")]
-    assert "from name, to name: the op outside this module" in header
+    assert "from module, to module: the module outside this one" in header
     plain = _dot(trace, tmp_path, "mixer_plain", module="mixer")
-    assert "from name, to name" not in plain  # the reading key is opt-in
+    assert "from module, to module" not in plain  # the reading key is opt-in
     whole = _dot(trace, tmp_path, "whole", show_legend=True)
-    assert "from name, to name" not in whole
+    assert "from module, to module" not in whole
 
 
 @pytest.mark.parametrize("rolled", [False, True])
@@ -218,8 +219,8 @@ def test_rolled_and_unrolled_focus_share_the_stub_rows(
 ) -> None:
     dot = _dot(trace, tmp_path, f"rolled{rolled}", module="mixer", rolled=rolled)
     for rows in _stubs(dot, "input").values():
-        assert rows[0].startswith("from gelu_") or rows[0].startswith("from add_")
-        assert rows[-1] in {"@pre_x.act", "@pre_y.act"}
+        assert rows[1].startswith("gelu_") or rows[1].startswith("add_")
+        assert rows[0] in {"from pre_x.act", "from pre_y.act"}
 
 
 @pytest.mark.parametrize("module", ["mixer", "pre_x.act"])

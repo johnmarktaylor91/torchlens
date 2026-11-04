@@ -224,9 +224,10 @@ def test_focus_count_skips_the_boundary_stubs(
 
 def test_focus_header_names_its_scope_and_its_lines(trace: tl.Trace, tmp_path: Path) -> None:
     header = _header(_dot(trace, tmp_path, "scope", module=_FOCUS))
-    # Non-breaking spaces around the separators: SVG viewers drop a plain
-    # space next to a bold run, which read as "_Toy> transformer".
-    scope = "<B>_Toy</B>&#160;&gt;&#160;transformer&#160;&gt;&#160;h.1&#160;&gt;&#160;<B>mlp</B>&#160;(_MLP)"
+    # Non-breaking spaces around the U+203A separators: SVG viewers drop a
+    # plain space next to a bold run, which read as "_Toy> transformer".
+    sep = "&#160;&#8250;&#160;"
+    scope = f"<B>_Toy</B>{sep}transformer{sep}h.1{sep}<B>mlp</B>&#160;(_MLP)"
     assert scope in header
     assert "drawn: " in header
     assert "whole model" not in header and "params" not in header
@@ -240,7 +241,9 @@ def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path
     assert "(shape), size:" not in dot
     bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
     assert KEY_TABLE_ID not in bare and "@name: a module" not in bare
-    assert "&gt;&#160;<B>mlp</B>&#160;(_MLP)" in bare  # the scope line is the header, not the key
+    assert (
+        "&#8250;&#160;<B>mlp</B>&#160;(_MLP)" in bare
+    )  # the scope line is the header, not the key
 
 
 def test_reading_key_is_opt_in_through_show_legend(trace: tl.Trace, tmp_path: Path) -> None:

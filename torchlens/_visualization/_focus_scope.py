@@ -3,13 +3,13 @@
 A focused draw shows one module's operations. The modules that enclose it
 (its ancestors) contain nothing else that is drawn, so their frames would
 only nest the picture in empty margins. They are not drawn: the header's
-scope line names them instead (``GPT2LMHeadModel > transformer > h.5 >
+scope line names them instead (``GPT2LMHeadModel › transformer › h.5 ›
 mlp``), and the focused module's own frame is the outermost one, with frame
 widths measured from it.
 
 Inside the picture, module addresses leave off the path the scope line
 already printed (the focused module's enclosing path): under the scope
-``GPT2LMHeadModel > transformer > h.5 > mlp`` the frame reads ``@mlp`` and
+``GPT2LMHeadModel › transformer › h.5 › mlp`` the frame reads ``@mlp`` and
 its children ``@mlp.c_fc`` (``relative_address``; the label rewriting lives
 in ``_focus_relabel``).
 
@@ -284,15 +284,20 @@ def _breadcrumb(address: str) -> list[str]:
     return steps
 
 
+#: Joins the scope line's steps: U+203A between non-breaking spaces.
+_SCOPE_SEPARATOR = "&#160;&#8250;&#160;"
+
+
 def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: str) -> str:
     """Return the header head: a focused draw's scope and drawn view, else the whole model's.
 
     A focused draw's first line is the scope: the model class, then each
     enclosing module down to the focused one with its class
-    (``GPT2LMHeadModel > transformer > h.5 > mlp (GPT2MLP)``); the frames of
+    (``GPT2LMHeadModel › transformer › h.5 › mlp (GPT2MLP)``); the frames of
     the enclosing modules are not drawn. Its second line counts the drawn
-    view. The separators are non-breaking spaces, so the spacing around the
-    bold steps stays even in every SVG viewer. The whole model's parameter
+    view. Steps are joined by a single right-pointing angle quotation mark
+    (U+203A, in the bundled font) between non-breaking spaces, so the spacing
+    around the bold steps stays even in every SVG viewer. The whole model's parameter
     line is printed on a whole-model draw only.
     """
 
@@ -306,7 +311,7 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
     focus_module = trace.modules[focus]
     steps = [_escape(step) for step in _breadcrumb(focus)]
     steps[-1] = f"<B>{steps[-1]}</B>&#160;({_escape(focus_module.class_name)})"
-    scope = "&#160;&gt;&#160;".join([f"<B>{class_name}</B>", *steps])
+    scope = _SCOPE_SEPARATOR.join([f"<B>{class_name}</B>", *steps])
     return f"{scope}<br align='left'/>drawn: {_escape(count_line)}<br align='left'/>"
 
 
@@ -341,10 +346,7 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
     names = [str(attrs.get("name", "")) for attrs in node_attrs]
     prefix = focus_parent_prefix(module)
     under = f" under {prefix}" if prefix else ""
-    notes = [
-        f"@name: a module address{under} (a frame title, a module drawn as one box,"
-        " or the module holding a from/to op)"
-    ]
+    notes = [f"@name: a module address{under} (a frame title or a module drawn as one box)"]
     example = next(
         (
             (m, t)
@@ -362,8 +364,8 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
     notes.append("(shape), size: the op's output tensor and its memory")
     if any(name.startswith("__module_focus_") for name in names):
         notes.append(
-            "from name, to name: the op outside this module that made its input,"
-            " or that takes its output"
+            f"from module, to module: the module{under} outside this one that made its"
+            " input or takes its output, then that op's name"
         )
     if any("params:" in text for text in texts):
         notes.append("params: the weights the op used (filled as the key shows)")

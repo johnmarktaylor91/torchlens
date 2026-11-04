@@ -2,7 +2,7 @@
 
 The header's scope line prints the focused module's enclosing path, so the
 picture leaves it off: frame titles and ``@address`` rows are relative to it
-(``@mlp``, ``@mlp.c_fc`` under ``GPT2LMHeadModel > transformer > h.5 > mlp``),
+(``@mlp``, ``@mlp.c_fc`` under ``GPT2LMHeadModel › transformer › h.5 › mlp``),
 and the focused module's own frame carries its address alone, its class being
 on the scope line. Every op keeps its full label rows (name, output shape and
 size, params). ``strip_focus_ancestors`` applies the relabelling, drops the

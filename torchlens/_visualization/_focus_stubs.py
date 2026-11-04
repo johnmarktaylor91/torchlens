@@ -2,9 +2,10 @@
 
 A focused draw shows one module's ops. Each tensor that crosses the module's
 edge gets a stub: an input stub stands for the outside op that made a tensor
-the module reads (``from <op>``, its shape and size, and that op's module),
-an output stub for the outside op that takes the module's output (``to
-<op>`` and its module). Stubs sit outside the focused module's frame.
+the module reads (``from <module>``, that op's name, the tensor's shape and
+size), an output stub for the outside op that takes the module's output
+(``to <module>`` and that op's name). Stubs sit outside the focused module's
+frame.
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -14,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from ._focus_scope import module_at
+from ._focus_scope import focus_parent_prefix, module_at, relative_address
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -126,7 +127,14 @@ def _get_or_create_boundary_node(
         children=inner if boundary_kind == "input" else [],
         parents=inner if boundary_kind == "output" else [],
         modules=_boundary_module_path(target_module, vis_mode, inner_node.modules),
-        lines=_boundary_lines(trace, external_node, vis_mode, boundary_kind, tensor_row),
+        lines=_boundary_lines(
+            trace,
+            external_node,
+            vis_mode,
+            boundary_kind,
+            tensor_row,
+            prefix=focus_parent_prefix(target_module),
+        ),
     )
     boundary_nodes[boundary_label] = boundary
     return boundary
@@ -153,24 +161,38 @@ def _boundary_lines(
     vis_mode: str,
     boundary_kind: str,
     tensor_row: str | None,
+    *,
+    prefix: str | None = None,
 ) -> tuple[str, ...]:
     """Return the label rows of a focus stub standing for ``external_node``.
 
-    ``from <op>`` (an input stub) or ``to <op>`` (an output stub) names the
-    outside op by its label (the name its own node carries); an input stub adds
-    ``tensor_row``, the shape and size of the tensor it brings; the last row
-    is that op's module (``@mlp``), or ``model input x`` / ``model output
-    logits`` when the outside op is the model's own input or output.
+    The first row says where the tensor comes from or goes to, in the words a
+    reader looks for: ``from c_fc`` / ``to c_proj`` (the outside op's module,
+    relative to the scope line's ``prefix``), or ``from model input x`` /
+    ``to model output logits``. The second row is the outside op's own label
+    (the name its node carries elsewhere); an outside op in no module has it
+    on the first row instead (``from linear_1_1``). An input stub ends with
+    ``tensor_row``, the shape and size of the tensor it brings.
     """
 
+    word = "from" if boundary_kind == "input" else "to"
     title = external_node.layer_label
-    rows = [f"{'from' if boundary_kind == 'input' else 'to'} {title}"]
+    address = _boundary_address(trace, external_node, vis_mode)
+    if address is None:
+        rows = [f"{word} {title}"]
+    else:
+        where = address if address.startswith("model ") else _relative_call(address, prefix)
+        rows = [f"{word} {where}", title]
     if boundary_kind == "input" and tensor_row:
         rows.append(tensor_row)
-    address = _boundary_address(trace, external_node, vis_mode)
-    if address is not None:
-        rows.append(address if address.startswith("model ") else f"@{address}")
     return tuple(rows)
+
+
+def _relative_call(address: str, prefix: str | None) -> str:
+    """Return a module address, pass suffix kept (``shared.fc:1``), without the scope prefix."""
+
+    module, colon, calls = address.partition(":")
+    return f"{relative_address(module, prefix)}{colon}{calls}"
 
 
 def _boundary_address(trace: Trace, external_node: GraphNode, vis_mode: str) -> str | None:

@@ -1859,13 +1859,15 @@ def _html_edge_label(text: str) -> str:
 
 
 def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> str:
-    """Return an HTML combined recurrence label with left/right spacers.
+    """Return an HTML combined recurrence label that sits against its edge.
 
     Used for a node's self-loop arc, a merged recurrence back-edge, and merged
     buffer-edge annotations; the combined ``In``/``Out`` label sits beside the
-    edge, and wide side spacer cells keep it clear of the node border and the
-    edge line.  When ``bottom`` is ``None`` the label is a single line (a
-    buffer edge may carry only one of ``In``/``Out``).
+    edge. Graphviz routes the edge along the left side of a midpoint label, so
+    the left spacer is only ``_PASS_LABEL_EDGE_GAP`` wide and the text reads as
+    part of that edge rather than floating between edges; the wide right spacer
+    keeps it clear of the next node or edge. When ``bottom`` is ``None`` the
+    label is a single line (a buffer edge may carry only one of ``In``/``Out``).
 
     ``top``/``bottom`` are escaped individually (not after joining) so the
     literal ``<BR/>`` line-break tag inserted between them is preserved.
@@ -1875,7 +1877,7 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f'<TR><TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD>'
+        f'<TR><TD WIDTH="{_PASS_LABEL_EDGE_GAP}"></TD>'
         f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD>'
         f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
     )
