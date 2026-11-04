@@ -82,6 +82,18 @@ class SmallCNN(nn.Module):
         return self.head(x.mean(dim=(2, 3)))
 
 
+class NormNet(nn.Module):
+    """A linear layer, a batch norm and a ReLU: one module with buffers."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(8, 8)
+        self.norm = nn.BatchNorm1d(8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.norm(self.fc(x)))
+
+
 class Block(nn.Module):
     """A residual block: layer norm, then a two-layer MLP submodule."""
 
@@ -166,6 +178,10 @@ def _mlp() -> tuple[nn.Module, torch.Tensor]:
 
 def _cnn() -> tuple[nn.Module, torch.Tensor]:
     return SmallCNN(), torch.randn(1, 3, 8, 8)
+
+
+def _norm() -> tuple[nn.Module, torch.Tensor]:
+    return NormNet(), torch.randn(4, 8)
 
 
 def _stack() -> tuple[nn.Module, torch.Tensor]:
@@ -259,7 +275,7 @@ FIGURES: tuple[Figure, ...] = (
         file_format="svg",
     ),
     Figure("leftright", _mlp, {"direction": "leftright"}),
-    Figure("buffers_always", _cnn, {"show_buffers": "always"}),
+    Figure("buffers_always", _norm, {"show_buffers": "always"}),
     Figure("label_fields", _mlp, {"node_label_fields": ["name", "shape", "dtype"]}),
     Figure("saved_for_backward", _mlp, {"show_saved_for_backward": True}),
     Figure(

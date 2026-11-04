@@ -8,7 +8,7 @@ option changes, with a real drawing for every option.
 Every image on this page is drawn by `docs/guides/visualization_figures.py`, which sits
 beside this page in the repository: `python docs/guides/visualization_figures.py` redraws them
 all. The code line under each image
-is the exact call that drew it. The models are deliberately tiny so that each drawing fits the
+is the exact call that drew it, and clicking an image opens it at full size. The models are deliberately tiny so that each drawing fits the
 page; for drawings of real architectures, see the
 [Model Menagerie](https://modelmenagerie.ai).
 
@@ -26,7 +26,7 @@ program to be installed.
 
 ## Your first drawing
 
-![A small CNN drawn with the default settings](../images/visualization/first_drawing.png)
+[![A small CNN drawn with the default settings](../images/visualization/first_drawing.png)](../images/visualization/first_drawing.png)
 
 `trace.draw()`
 
@@ -38,7 +38,7 @@ left corner names the model and counts what was drawn: 10 operations whose outpu
 
 ## Reading a node
 
-![A two-layer MLP: five nodes from input_1 to output_1](../images/visualization/node_anatomy.png)
+[![A two-layer MLP: five nodes from input_1 to output_1](../images/visualization/node_anatomy.png)](../images/visualization/node_anatomy.png)
 
 `trace.draw()`
 
@@ -58,19 +58,23 @@ Each node is one operation, or a model input or output. Its rows, top to bottom:
 - **Parameters**, when the operation used any: `params: weight (16, 8) · bias (16,)` gives each
   parameter's name and shape. Round brackets mean the parameter is trainable; square brackets,
   as in `weight [8, 8]`, mean it is frozen (`requires_grad=False`).
-- **Address**, starting with `@`: where the operation happened. `@fc1` means it was the output
-  of the module `model.fc1`; `@input.x` means the model's argument `x`. On a recurrent model the
-  address can carry the call numbers: `@inp:1,2,3` is calls 1, 2 and 3 of module `inp`.
+- **Address**, starting with `@`, on rectangles, inputs and outputs: `@fc1` means the node is
+  the output of the module `model.fc1`; `@input.x` means the model's argument `x`. On a
+  recurrent model the address can carry the call numbers: `@inp:1,2,3` is calls 1, 2 and 3 of
+  module `inp`. A plain operation (an ellipse) has no address row; the box drawn around it
+  names its module.
 
 The shape of the node says what kind of record it is. An ellipse is a plain operation such as
-`relu` or `add`. A rectangle is a module that ran as one operation, such as an `nn.Linear` or
-`nn.Conv2d`. A double-bordered rectangle (`batchnorm_1_2` in the first drawing) is such a
-module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
+`torch.relu` or `x.mean()`. A rectangle is an operation that was a module call's whole work: a
+module that ran as one operation, such as an `nn.Linear` or `nn.Conv2d`, or the one operation
+a module ran itself while the rest ran in its submodules (the residual `add` of a block, in
+the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
+(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
 
 ## Fill colors
 
-![One node of each fill: input, trainable, frozen and mixed weights, a branch test and the output](../images/visualization/fills.png)
+[![One node of each fill: input, trainable, frozen and mixed weights, a branch test and the output](../images/visualization/fills.png)](../images/visualization/fills.png)
 
 `trace.draw()`
 
@@ -88,7 +92,7 @@ The default drawing uses six fills:
 
 `show_legend=True` adds a key for the fills and shapes the drawing uses:
 
-![The same drawing with its legend](../images/visualization/legend.png)
+[![The same drawing with its legend](../images/visualization/legend.png)](../images/visualization/legend.png)
 
 `trace.draw(show_legend=True)`
 
@@ -101,7 +105,7 @@ focus](#focusing-on-one-module) drawing. `show_legend=False` never draws one.
 When Python code inside `forward` branches on a tensor (`if x.mean() > 0:`), TorchLens records
 the comparison that decided it and marks the branch on the drawing.
 
-![A model that takes the THEN branch](../images/visualization/branch.png)
+[![A model that takes the THEN branch](../images/visualization/branch.png)](../images/visualization/branch.png)
 
 `trace.draw()`
 
@@ -131,7 +135,7 @@ for _ in range(3):
 
 By default each pass is its own node (unrolled):
 
-![The loop unrolled: every pass a separate node](../images/visualization/unrolled.png)
+[![The loop unrolled: every pass a separate node](../images/visualization/unrolled.png)](../images/visualization/unrolled.png)
 
 `trace.draw()`
 
@@ -140,7 +144,7 @@ and `@rec:2` is the second call of module `rec`.
 
 `rolled=True` draws each layer once and turns the repetition into a loop:
 
-![The same loop rolled: one node per layer, with back edges](../images/visualization/rolled.png)
+[![The same loop rolled: one node per layer, with back edges](../images/visualization/rolled.png)](../images/visualization/rolled.png)
 
 `trace.draw(rolled=True)`
 
@@ -156,11 +160,11 @@ used on every pass.
 `depth=` sets how many levels of the module tree are drawn open. Modules deeper than that are
 each drawn as a single three-dimensional box.
 
-![depth=1: the whole features stack as one box](../images/visualization/depth_1.png)
+[![depth=1: the whole features stack as one box](../images/visualization/depth_1.png)](../images/visualization/depth_1.png)
 
 `trace.draw(depth=1)`
 
-![depth=2: each ConvBlock as one box inside features](../images/visualization/depth_2.png)
+[![depth=2: each ConvBlock as one box inside features](../images/visualization/depth_2.png)](../images/visualization/depth_2.png)
 
 `trace.draw(depth=2)`
 
@@ -176,15 +180,15 @@ operation drawn), `"auto"`, `"max"`, or a number from 0.0 to 1.0. The model belo
 residual blocks, each with a layer norm and an MLP submodule (`blocks.0.mlp` and so on); drawn
 with `collapse="none"` it has 44 nodes.
 
-![collapse=0.25](../images/visualization/collapse_quarter.png)
+[![collapse=0.25](../images/visualization/collapse_quarter.png)](../images/visualization/collapse_quarter.png)
 
 `trace.draw(collapse=0.25)`
 
-![collapse=0.5](../images/visualization/collapse_half.png)
+[![collapse=0.5](../images/visualization/collapse_half.png)](../images/visualization/collapse_half.png)
 
 `trace.draw(collapse=0.5)`
 
-![collapse="max"](../images/visualization/collapse_max.png)
+[![collapse="max"](../images/visualization/collapse_max.png)](../images/visualization/collapse_max.png)
 
 `trace.draw(collapse='max')`
 
@@ -193,17 +197,18 @@ A number picks a stop on a schedule of folding steps that runs from `0.0` (the s
 smaller one. Equal steps in the number fold the graph by equal ratios: here `0.25` draws the
 inside of the first four blocks as boxes and leaves 32 nodes, and `0.5` does so for all eight
 and leaves 20. Each block's residual `add` stays visible beside its box. `"max"` condenses
-everything that can be condensed, down to 9 nodes here: the dashed rounded box stands for the
-first six blocks in a row and says how many blocks, operations and parameters it holds. On
-other models such a box stands for a run of operations and names its first and last operation,
-how many it holds and the modules it spans. The schedule has only the steps the model allows, so on a small model several numbers
-can give the same drawing; `trace.draw(...).collapse_schedule` lists the steps.
+everything that can be condensed: here the dashed rounded box stands for the first six blocks
+in a row and says how many blocks, operations and parameters it holds. On other models such a
+box stands for a run of operations and names its first and last operation, how many it holds
+and the modules it spans. The schedule has only the steps the model allows, so on a small model
+several numbers can give the same drawing; `trace.draw(...).collapse_schedule` lists the
+steps.
 
 `"auto"` picks the level for you, aiming at a graph of readable size. A small model is left as
 it is; a large one is folded until it fits. Here it is on the same model with 40 blocks
 (204 nodes uncollapsed):
 
-![collapse="auto" on a 40-block model](../images/visualization/collapse_auto.png)
+[![collapse="auto" on a 40-block model](../images/visualization/collapse_auto.png)](../images/visualization/collapse_auto.png)
 
 `trace.draw(collapse='auto')`
 
@@ -219,7 +224,7 @@ never folds.
 
 `module=` draws only the inside of one module, given as its address or its `Module` record.
 
-![The inside of blocks.1, with its neighbours as stubs](../images/visualization/module_focus.png)
+[![The inside of blocks.1, with its neighbours as stubs](../images/visualization/module_focus.png)](../images/visualization/module_focus.png)
 
 `trace.draw(module='blocks.1')`
 
@@ -232,7 +237,7 @@ module on the other side. The reading key at the top is on by default for a focu
 
 ### Profiling: `node_style="profiling"`
 
-![The CNN with timing, memory and source rows on every node](../images/visualization/profiling.png)
+[![The CNN with timing, memory and source rows on every node](../images/visualization/profiling.png)](../images/visualization/profiling.png)
 
 `trace.draw(node_style='profiling')`
 
@@ -250,14 +255,14 @@ edited = trace.fork()
 edited.do(tl.module("fc1"), tl.zero_ablate())
 ```
 
-![The edited trace, with the zeroed node marked](../images/visualization/edited.png)
+[![The edited trace, with the zeroed node marked](../images/visualization/edited.png)](../images/visualization/edited.png)
 
 `edited.draw()`
 
 `show_cone=True` also shades, in translucent purple, every node and arrow downstream of an
 edit: everything whose value the edit could have changed.
 
-![The edited trace with its downstream cone shaded](../images/visualization/show_cone.svg)
+[![The edited trace with its downstream cone shaded](../images/visualization/show_cone.svg)](../images/visualization/show_cone.svg)
 
 `edited.draw(show_cone=True)`
 
@@ -269,7 +274,7 @@ The shading is drawn into SVG directly; for PNG and PDF output it needs the opti
 lists each edit, how it was applied and the audit record behind it. The full record is also
 written beside the image as `<path>.census.txt`.
 
-![The intervention view, with its caption](../images/visualization/interventions.png)
+[![The intervention view, with its caption](../images/visualization/interventions.png)](../images/visualization/interventions.png)
 
 `edited.draw(highlight='interventions')`
 
@@ -280,7 +285,7 @@ value. Both take a built-in name (`"time"`, `"bytes"`, `"flops"`, `"magnitude"`,
 `"grad_norm"`, and for `size_by` also `"dims"`), the name of a field on the node records, or
 a function from a node to a number. The legend states the source, the scale and the range.
 
-![Nodes colored by execution time and sized by output bytes](../images/visualization/color_size.png)
+[![Nodes colored by execution time and sized by output bytes](../images/visualization/color_size.png)](../images/visualization/color_size.png)
 
 `trace.draw(color_by='time', size_by='bytes')`
 
@@ -293,7 +298,7 @@ encoded. `size_scale=` chooses how values map to area (the legend names the mapp
 `"rightleft"`. The default flows bottom up for the forward graph, top down for the backward
 graph and left to right for the combined graph.
 
-![The MLP drawn left to right](../images/visualization/leftright.png)
+[![The MLP drawn left to right](../images/visualization/leftright.png)](../images/visualization/leftright.png)
 
 `trace.draw(direction='leftright')`
 
@@ -303,14 +308,14 @@ graph and left to right for the combined graph.
 include `"name"`, `"type"`, `"shape"`, `"dtype"`, `"memory"`, `"module"`, `"params"`,
 `"pass"`, `"flops"` and `"time"`.
 
-![Each node showing only its name, shape and dtype](../images/visualization/label_fields.png)
+[![Each node showing only its name, shape and dtype](../images/visualization/label_fields.png)](../images/visualization/label_fields.png)
 
 `trace.draw(node_label_fields=['name', 'shape', 'dtype'])`
 
 `show_saved_for_backward=True` adds a row on each operation that kept tensors for the
 backward pass, with how many and how large; an operation that kept nothing gets no row.
 
-![Rows for the tensors each operation saved for backward](../images/visualization/saved_for_backward.png)
+[![Rows for the tensors each operation saved for backward](../images/visualization/saved_for_backward.png)](../images/visualization/saved_for_backward.png)
 
 `trace.draw(show_saved_for_backward=True)`
 
@@ -323,13 +328,13 @@ says it).
 Buffers are module state that is not a parameter, such as a batch norm's running mean and
 variance. `show_buffers=` takes `"never"`, `"meaningful"` (the default) or `"always"`.
 
-![The CNN with every buffer drawn as a cylinder](../images/visualization/buffers_always.png)
+[![A batch norm layer with every buffer drawn as a cylinder](../images/visualization/buffers_always.png)](../images/visualization/buffers_always.png)
 
 `trace.draw(show_buffers='always')`
 
-Each cylinder is one version of a buffer: `@features.0.norm.running_mean:1` is the running
-mean as the batch norm read it (dashed, with the argument position it fed, `arg 3`), and
-`:2` is the value the batch norm wrote back in training mode. The default, `"meaningful"`,
+Each cylinder is one version of a buffer: `@norm.running_mean:1` is the running mean as the
+batch norm read it (dashed, with the argument position it fed, `arg 3`), and `:2` is the value
+the batch norm wrote back in training mode. The default, `"meaningful"`,
 leaves out buffers whose only role is routine bookkeeping like this; `"never"` hides all
 buffers.
 
@@ -338,7 +343,7 @@ buffers.
 After `trace.backward(loss)`, `graph="backward"` draws the gradient computation instead of
 the forward pass, and `graph="combined"` draws both.
 
-![The MLP's backward graph, with module rows](../images/visualization/backward_paths.png)
+[![The MLP's backward graph, with module rows](../images/visualization/backward_paths.png)](../images/visualization/backward_paths.png)
 
 `trace.draw(graph='backward', show_module_paths=True)`
 
@@ -355,12 +360,12 @@ adds the norm and largest absolute value of each captured gradient.
 
 | `trace.draw(theme='paper')` | `trace.draw(theme='dark')` | `trace.draw(theme='high_contrast')` |
 |---|---|---|
-| ![paper](../images/visualization/theme_paper.png){ width="240" } | ![dark](../images/visualization/theme_dark.png){ width="240" } | ![high contrast](../images/visualization/theme_high_contrast.png){ width="240" } |
+| [![paper](../images/visualization/theme_paper.png){ width="240" }](../images/visualization/theme_paper.png) | [![dark](../images/visualization/theme_dark.png){ width="240" }](../images/visualization/theme_dark.png) | [![high contrast](../images/visualization/theme_high_contrast.png){ width="240" }](../images/visualization/theme_high_contrast.png) |
 
 `"colorblind"` uses a palette that stays distinct under color-vision deficiencies; the default
 palette does not (its frozen grey and input green, for example, can look alike):
 
-![The fill model in the colorblind theme](../images/visualization/theme_colorblind.png)
+[![The fill model in the colorblind theme](../images/visualization/theme_colorblind.png)](../images/visualization/theme_colorblind.png)
 
 `trace.draw(theme='colorblind')`
 
