@@ -12,6 +12,7 @@ import ast
 import importlib.util
 import inspect
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -110,7 +111,13 @@ def test_canonical_names_and_keywords_exist(slug: str) -> None:
     canonical = CARDS[slug].canonical
     if canonical == GEN.NO_CALL:
         pytest.skip("card says TorchLens is the wrong tool")
-    for call in _tl_calls(canonical):
+    _assert_calls_are_real(canonical)
+
+
+def _assert_calls_are_real(source: str) -> None:
+    """Every ``tl.`` call in ``source`` resolves to a callable that takes its keywords."""
+
+    for call in _tl_calls(source):
         target = _resolve(_dotted(call))
         assert callable(target), _dotted(call)
         try:
@@ -121,6 +128,19 @@ def test_canonical_names_and_keywords_exist(slug: str) -> None:
             continue
         for keyword in call.keywords:
             assert keyword.arg in params, f"{_dotted(call)} has no keyword {keyword.arg!r}"
+
+
+@pytest.mark.parametrize("rule", CARD_SET.rules)
+def test_read_first_rules_name_real_calls(rule: str) -> None:
+    """Every ``tl.`` name a read-first rule spells exists, and its calls take their keywords."""
+
+    for span in re.findall(r"`([^`]+)`", rule):
+        for dotted in re.findall(r"\btl(?:\.\w+)+", span):
+            _resolve(dotted)
+        try:
+            _assert_calls_are_real(span)
+        except SyntaxError:
+            continue
 
 
 def test_every_accepted_and_avoided_call_resolves() -> None:
