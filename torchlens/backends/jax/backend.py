@@ -2604,6 +2604,16 @@ class JAXBackend:
                         mbd["top_level_module_ops"].append(call_label)
                     if address != "self" and address not in mbd["top_level_modules"]:
                         mbd["top_level_modules"].append(address)
+                    # The root module's call is recorded (its ``__call__`` is
+                    # scoped), but ``_jax_event_module_stack`` elides it from
+                    # nested stacks, so an outermost submodule call is the
+                    # root call's child: list it, as the parent the shared
+                    # builder gives it (``self:1``) requires.
+                    if address != "self" and "self" in seen_addresses:
+                        root_children = seen_pass_children["self:1"]
+                        if call_label not in root_children:
+                            root_children.add(call_label)
+                            mbd["module_pass_children"]["self:1"].append(call_label)
                 elif parent_call_label is not None:
                     if call_label not in seen_pass_children[parent_call_label]:
                         seen_pass_children[parent_call_label].add(call_label)
