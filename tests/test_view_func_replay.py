@@ -148,8 +148,8 @@ def test_view_func_method_validates_and_replays(method: str, chain: str) -> None
     trace = tl.trace(model, x)
     try:
         op = _view_func_op(trace, method)
-        new_base = [p for p in op.parents if p.startswith("mul")]
-        assert new_base and op.children, (op.parents, op.children)
+        positions = op.parent_arg_positions["args"]
+        assert 0 in positions and 1 in positions and op.children, (positions, op.children)
     finally:
         trace.cleanup()
     _assert_validates_and_replays(model, x)
@@ -157,9 +157,21 @@ def test_view_func_method_validates_and_replays(method: str, chain: str) -> None
 
 @pytest.mark.parametrize("method", _VIEW_FUNCS)
 def test_view_func_on_view_made_outside_forward_validates(method: str) -> None:
-    """A receiver built before the forward replays through its saved view context."""
+    """A receiver built before the forward replays through its saved view context.
 
-    _assert_validates_and_replays(_OutsideViewModel(method), _input_4x4())
+    ``tl.validate`` runs its ground truth on a deep copy of the model, and torch's
+    ``Tensor.__deepcopy__`` rebuilds a tensor with ``set_``, which drops the view relation, so
+    this case validates the trace of the model itself against its own plain forward.
+    """
+
+    trace, ground_truth = _traced_with_args(_OutsideViewModel(method), _input_4x4())
+    try:
+        op = _view_func_op(trace, method)
+        assert op.saved_args[0]._is_view()
+        status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
+        assert status.state == "passed", get_validation_failure(trace)
+    finally:
+        trace.cleanup()
 
 
 @pytest.mark.parametrize("chain", tuple(_CHAINS))
@@ -233,7 +245,8 @@ def test_planted_wrong_new_base_value_fails_replay(method: str) -> None:
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
         failure = get_validation_failure(trace)
-        assert failure is not None and failure.op_label == op.layer_label
+        assert failure is not None and failure.op_label.split(":")[0] == op.layer_label
+        assert failure.check_name == "forward_replay"
     finally:
         trace.cleanup()
 
@@ -251,7 +264,7 @@ def test_compact_receiver_is_a_replay_error(method: str) -> None:
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
         failure = get_validation_failure(trace)
-        assert failure is not None and failure.op_label == op.layer_label
+        assert failure is not None and failure.op_label.split(":")[0] == op.layer_label
         assert "raised an exception" in failure.message
     finally:
         trace.cleanup()
