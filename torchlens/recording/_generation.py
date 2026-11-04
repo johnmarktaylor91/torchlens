@@ -389,7 +389,7 @@ def preflight_generation(
 def _rng_digest() -> str:
     """Return a short digest of the CPU torch RNG state."""
 
-    state = torch.get_rng_state().numpy().tobytes()
+    state = torch.default_generator.get_state().numpy().tobytes()
     return hashlib.sha256(state).hexdigest()[:16]
 
 
