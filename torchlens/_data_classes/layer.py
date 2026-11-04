@@ -308,7 +308,8 @@ class Layer(_SelectionOperand):
 
     Examples
     --------
-    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> trace = tl.trace(model, x)
+    >>> layer = trace.layers["relu_1_2"]
     >>> type(layer).__name__, layer.func_name
     ('Layer', 'relu')
     >>> tuple(layer.out.shape)
@@ -806,9 +807,9 @@ class Layer(_SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; a Layer does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
@@ -1028,7 +1029,7 @@ class Layer(_SelectionOperand):
             raise InvalidArgumentError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on one pass: trace['{self.layer_label}:1'].{field_name} "
-                f"or trace.layers['{self.layer_label}'].ops[0].{field_name}",
+                f"or trace['{self.layer_label}:last'].{field_name}",
                 code="layer_pass_ambiguous",
                 remedy=f"access {field_name!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
@@ -1566,7 +1567,8 @@ class Layer(_SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1576,12 +1578,10 @@ class Layer(_SelectionOperand):
 
         Parameters
         ----------
-        input_transform:
-            Transform or hook to apply to this layer's output.
-        model:
-            Model required when ``intervention.engine="rerun"``.
-        inputs:
-            Input required when ``intervention.engine="rerun"``.
+        edit:
+            Value, hook or helper applied to this layer's output, as in ``Trace.do``.
+        model, inputs:
+            Required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
 
@@ -1592,11 +1592,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().do(
-            self._intervention_site(),
-            input_transform,
-            model=model,
-            inputs=inputs,
-            intervention=intervention,
+            self._intervention_site(), edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def to_pandas(self) -> "pd.DataFrame":
@@ -1627,28 +1623,9 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Layer card (F10; lovely D15/4.3).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        Data-model contract: never raises. A Layer detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of propagating the typed relation
-        refusal out of ``repr()``/``print()``/f-string interpolation
-        (r4 b7-opus R52-A). The historical numberless five-line summary is
-        replaced by the card: line 1 is the envelope+core repr, multi-pass
-        layers show per-pass cores (never a pooled statistic, D32), and
-        exits are named on the ``More:`` line.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_card(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_card(self)
 
     def _describe_bound(self) -> str:
         """Build the full summary; relation reads require a live Trace."""
@@ -1680,23 +1657,9 @@ class Layer(_SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        The lovely demo moment: ``log['label']`` at a REPL answers with
-        dtype/shape/device, distribution, and health in one line. Never
-        raises; detached layers keep the placeholder contract.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_repr_line(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_repr_line(self)
 
     def _detached_from_trace(self) -> bool:
         """Whether this Layer lost its owning Trace (R52-A placeholder gate).

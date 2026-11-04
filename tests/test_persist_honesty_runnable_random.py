@@ -37,7 +37,7 @@ def test_random_state_run_warns(runnable_bundle):
     path, _, x = runnable_bundle
     loaded = tl.load(path)
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
-        result = loaded.run(inputs=x, seed=0)
+        result = loaded.run_transaction(inputs=x, seed=0)
     assert result.report.state_source is StateSource.RANDOM_INITIALIZATION
     warnings_seen = [w.message for w in record if issubclass(w.category, TorchLensWarning)]
     # S-18 contract: consumers branch on fields["code"], never message text.
@@ -57,7 +57,7 @@ def test_embedded_weights_run_does_not_warn(tmp_path):
     loaded = tl.load(path)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
     random_warnings = [
         w for w in caught if issubclass(w.category, TorchLensWarning) and "RANDOM" in str(w.message)
@@ -71,7 +71,7 @@ def test_staged_user_state_run_does_not_warn(runnable_bundle):
     loaded.load_state_dict(model.state_dict())
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
     assert result.report.state_source is StateSource.USER_STATE_DICT
     random_warnings = [
         w for w in caught if issubclass(w.category, TorchLensWarning) and "RANDOM" in str(w.message)

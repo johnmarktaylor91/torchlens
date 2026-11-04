@@ -118,8 +118,8 @@ def test_run_on_streamed_trace_refuses_trace_option_unsupported(
     before = sorted(path.name for path in (target / "blobs").iterdir())
     doors = {
         "run(model, x)": lambda: trace.run(model, x),
-        "run(inputs=)": lambda: trace.run(inputs=x),
-        "run(inputs=, fast=True)": lambda: trace.run(inputs=x, fast=True),
+        "run_transaction(inputs=)": lambda: trace.run_transaction(inputs=x),
+        "run_transaction(inputs=, fast=True)": lambda: trace.run_transaction(inputs=x, fast=True),
     }
     for name, door in doors.items():
         with pytest.raises(TorchLensError) as info:
@@ -141,6 +141,6 @@ def test_loaded_streamed_bundle_is_not_refused_as_streamed(
     loaded = tl.load(target)
     assert loaded._source_bundle_path is not None  # same bundle path as the streamed trace
     try:
-        loaded.run(inputs=x)
+        loaded.run_transaction(inputs=x)
     except TorchLensError as exc:  # the loaded provider's own verdict, never the streamed-trace one
         assert _code(exc) != "trace_option_unsupported"

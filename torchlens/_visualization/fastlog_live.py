@@ -10,14 +10,15 @@ from typing import Any, cast
 
 import graphviz
 
-from ..recording.types import DryRun, RecordContext
+from ..recording._dry_run import DryRun
+from ..recording.types import RecordContext
 from ..viz._drawing import Drawing
 from . import _render_utils
 from ._render_common import GraphvizRenderError
 from ._svg_compose import render_detached_dot
 
 _RAIL_COLORS = (
-    "#4E79A7",
+    "#9C755F",
     "#F28E2B",
     "#E15759",
     "#76B7B2",

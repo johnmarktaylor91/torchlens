@@ -1,0 +1,123 @@
+name: Docs site
+
+# Publishes the documentation site to GitHub Pages after each release, and on
+# manual dispatch. The build matches docs.yml (the same toolchain, checks and
+# strict build) and adds the interactive API map (tools/generate_api_map.py)
+# at <pages root>/api-map/. The site root is the site's own index page.
+#
+# Why this listens for the Release workflow instead of the `release` event:
+# release.yml creates the GitHub Release with its own GITHUB_TOKEN, and
+# GitHub never starts another workflow from an event that token caused. A
+# Release run that finished successfully for a version-tag push is the
+# signal that a release was published; the page is built from that run's
+# commit, so it always shows the code of the release it follows.
+#
+# The github-pages environment only accepts deployments from the default
+# branch; workflow_run and workflow_dispatch both run in that context.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "git ref to build the site from (default: the ref this run was started on)"
+        required: false
+        default: ""
+
+# Default-deny token scope: only the deploy job gets the Pages scopes.
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the docs site and the API map
+    # After a Release run: only a successful run of a version-tag push, never
+    # the pull-request dry run of release.yml and never a refused tag.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "requirements-docs.lock"
+
+      # Every package pinned with its hash, as in docs.yml.
+      - name: Install the docs toolchain
+        run: uv pip install --system --require-hashes -r requirements-docs.lock
+
+      - name: Agent index and llms.txt match the task cards
+        run: python tools/docs/build_agent_index.py --check
+
+      - name: Site navigation matches the site map
+        run: python tools/docs/site_nav.py --check
+
+      - name: Strict build
+        # Writes site/ from scratch; the API map is added after, so --clean
+        # cannot remove it.
+        run: zensical build --strict --clean
+
+      - name: Generate the API map
+        # The generator is stdlib-only and reads the checked-out source tree;
+        # it needs neither torch nor an installed torchlens.
+        run: |
+          python tools/generate_api_map.py site/api-map/index.html
+          ls -l site/index.html site/api-map
+
+      - name: Check the page
+        # Fail loud on an empty or externally dependent page before it deploys.
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          page = Path("site/api-map/index.html")
+          text = page.read_text(encoding="utf-8")
+          print(f"{page}: {page.stat().st_size} bytes")
+          if page.stat().st_size < 1_000_000:
+              raise SystemExit("the page is implausibly small; the generator produced no map")
+          for marker in ("<!doctype html>", "</html>", "tl.Trace"):
+              if marker.lower() not in text.lower():
+                  raise SystemExit(f"the page lacks {marker!r}")
+          if re.search(r'<(script|link)\b[^>]*\b(src|href)="https?://', text):
+              raise SystemExit("the page loads an external script or stylesheet; it must stay self-contained")
+          PY
+
+      - name: Internal links and anchors
+        run: python tools/docs/check_site_links.py site --base-path /torchlens/
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -158,14 +158,39 @@ def test_slot_clone_equals_dataclasses_replace_on_every_record() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_boundary_indexes_equal_fresh_comprehensions() -> None:
+def test_boundary_indexes_equal_fresh_comprehensions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from torchlens._capture.projections import RecordingState
+    from torchlens.backends.torch import _predicate_forward
+
+    # Unselected op contexts leave ``all_contexts`` once committed, so the fresh
+    # comprehension is taken over every context (``keep_all_contexts``, as a dry
+    # run keeps them) at each module exit, where the retention step reads the index.
+    real_post_init = RecordingState.__post_init__
+
+    def _keep_every_context(self: Any) -> None:
+        real_post_init(self)
+        self.keep_all_contexts = True
+
+    real_boundary = _predicate_forward._record_predicate_module_boundary_outputs
+    exits: list[tuple[dict[str, Any], dict[str, Any]]] = []
+
+    def _spy(trace: Any, state: Any, out: Any, **kwargs: Any) -> None:
+        fresh = {
+            ctx.raw_label: ctx
+            for ctx in state.all_contexts
+            if ctx.kind == "op" and ctx.raw_label is not None
+        }
+        exits.append((dict(state.op_context_by_raw_label), fresh))
+        real_boundary(trace, state, out, **kwargs)
+
+    monkeypatch.setattr(RecordingState, "__post_init__", _keep_every_context)
+    monkeypatch.setattr(_predicate_forward, "_record_predicate_module_boundary_outputs", _spy)
     recording = _record_one_module(_model())
     state = object.__getattribute__(recording, "_recording_state")
-    assert state.op_context_by_raw_label == {
-        ctx.raw_label: ctx
-        for ctx in state.all_contexts
-        if ctx.kind == "op" and ctx.raw_label is not None
-    }
+    assert exits and any(index for index, _ in exits), "module exits read a live index"
+    for index, fresh in exits:
+        assert index == fresh
+    assert not state.op_context_by_raw_label, "a finished pass keeps no op context index"
     expected = {
         (record.ctx.raw_label, record.ctx.pass_number)
         for record in recording.records

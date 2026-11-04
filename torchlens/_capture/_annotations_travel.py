@@ -3,7 +3,7 @@
 ``Trace.annotations`` is classified as inheritable graph state
 (``data_classes/_trace_components.py``), so every sub-key rides every
 copy-on-write fork verbatim -- and until this module existed NO sub-key had a
-travel policy, so a fresh re-execution product (``trace.run(inputs=...)``,
+travel policy, so a fresh re-execution product (``trace.run_transaction(inputs=...)``,
 guarded-fast refresh, loaded-sparse run) carried the ORIGINAL capture's
 episode ledger and observer values under a ``path_faithfulness=VERIFIED``
 report with zero warnings (the foldA round-3 R11/R12 receipts). The defect is

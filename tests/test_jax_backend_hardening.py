@@ -13,6 +13,7 @@ import pytest
 import torchlens as tl
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io.bundle import _build_manifest, _write_payload_blob
+from torchlens._io.format3.payloads import PayloadStore, seal_tensor_entries
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
@@ -267,10 +268,14 @@ def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
     path.mkdir()
     (path / "blobs").mkdir()
     codec = get_payload_codec("jax")
-    tensor_entries = [
-        _write_payload_blob(tmp_path=path, blob_spec=blob_spec, codec=codec)
+    store = PayloadStore(path)
+    tensor_refs: dict[str, dict[str, Any]] = {}
+    queued = [
+        _write_payload_blob(store=store, tensor_refs=tensor_refs, blob_spec=blob_spec, codec=codec)
         for blob_spec in blob_specs
     ]
+    store.close()
+    tensor_entries = seal_tensor_entries(path, queued)
     manifest = _build_manifest(
         trace=trace,
         tensor_entries=tensor_entries,

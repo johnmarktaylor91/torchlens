@@ -9,7 +9,6 @@ from typing import Any
 
 import graphviz
 
-from ._pass_marks import stack_labels
 from ._render_utils import html_escape
 from ._typography import edge_annotation_pt
 
@@ -194,7 +193,11 @@ def _argument_edge_label_rows_text(arg_label: str) -> str | None:
 
 
 def _set_argument_edge_label(
-    edge_dict: dict[str, Any], arg_label: str, *, prefer_midpoint: bool = False
+    edge_dict: dict[str, Any],
+    arg_label: str,
+    *,
+    prefer_midpoint: bool = False,
+    rolled: bool = False,
 ) -> str:
     """Attach an argument-position label without overwriting semantic edge labels.
 
@@ -208,25 +211,26 @@ def _set_argument_edge_label(
             ``label`` -- which graphviz reserves real layout space for --
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.
+        rolled:
+            Rolled drawing: a label with no pass range beside it takes the free midpoint.
 
-    A head slot already taken (a rolled ``In 2-3`` pass range) moves both labels,
-    stacked, to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
-    layout space for the midpoint, while head labels and xlabels are painted over
-    whatever sits there, and one stack keeps the edge's argument and passes together.
+    A head slot already taken (a rolled ``In 2-3`` pass range) sends the argument
+    label to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
+    layout space for the midpoint, and the pass range stays at the node it names.
 
     Returns:
         The channel the label landed on: ``"label"``, ``"headlabel"``,
         ``"midpoint"`` (the free midpoint after a taken head slot; not merged with
         same-pair parallel edges, whose head labels differ), or ``"xlabel"``.
     """
-    if prefer_midpoint and "label" not in edge_dict:
+    if (prefer_midpoint or (rolled and "headlabel" not in edge_dict)) and "label" not in edge_dict:
         edge_dict["label"] = arg_label
-        return "label"
+        return "label" if prefer_midpoint else "midpoint"
     if "headlabel" not in edge_dict:
         edge_dict["headlabel"] = arg_label
         return "headlabel"
     if "label" not in edge_dict:
-        edge_dict["label"] = stack_labels(arg_label, str(edge_dict.pop("headlabel")))
+        edge_dict["label"] = arg_label
         return "midpoint"
     if "xlabel" not in edge_dict:
         edge_dict["xlabel"] = arg_label

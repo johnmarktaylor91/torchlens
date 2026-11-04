@@ -29,6 +29,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.errors import AttributionError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 X = [[1.0, 2.0, -1.0, 3.0], [2.0, -1.0, 4.0, 0.0]]
 W_ENC = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -0.5, 1.0], [0.0, 0.0, 0.5]]
 B_ENC = [0.0, 0.0, 0.25]
@@ -126,7 +128,8 @@ def test_facet_read_door_returns_the_encoder_activation(setup) -> None:
     """``trace[site].facets`` serves every latent, one latent and a chosen set."""
 
     model, x, _sae = setup
-    facets = _trace(model, x)["fc1"].facets
+    trace = _trace(model, x)
+    facets = trace["fc1"].facets
     listed = facets.keys()
     assert "res" in listed
     torch.testing.assert_close(facets["res"].value, torch.tensor([_latents(r) for r in X]), **TOL)
@@ -143,7 +146,7 @@ def _recording_hook(seen: list[torch.Tensor]):
     return _hook
 
 
-_IN_PLACE = tl.options.InterventionOptions(confirm_mutation=True)
+_IN_PLACE = tl.options.InterventionOptions()
 
 _DOORS = {
     "do_pairs": lambda trace, site, hook: trace.do([(site, hook)], intervention=_IN_PLACE),

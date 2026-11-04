@@ -68,7 +68,7 @@ def test_r29_disjoint_views_of_one_base_do_not_over_trigger(tmp_path: Path) -> N
     big = torch.randn(8)
     va, vb = big[:4], big[4:]  # share base storage, disjoint byte spans
     assert va.untyped_storage().data_ptr() == vb.untyped_storage().data_ptr()
-    result = tl.load(path).run(inputs=(va, vb))
+    result = tl.load(path).run_transaction(inputs=(va, vb))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -88,7 +88,7 @@ def _run_pair(tmp_path: Path, name: str, a: torch.Tensor, b: torch.Tensor):
     """Capture on clones, then run on the given (possibly aliased) pair."""
 
     path = _save(AddInputsModel(), (a.detach().clone(), b.detach().clone()), tmp_path / name)
-    return tl.load(path).run(inputs=(a, b))
+    return tl.load(path).run_transaction(inputs=(a, b))
 
 
 # Kept: sole branch coverage of _runnable/input_aliases.py, _utils/alias_footprint.py.

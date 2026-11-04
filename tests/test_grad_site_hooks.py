@@ -19,6 +19,8 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.hooks import HookContext
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CAPTURE = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
 
 
@@ -108,7 +110,7 @@ def test_patch_from_on_gradient_site_refuses_before_attaching() -> None:
         trace.do(
             tl.grad(mul),
             tl.patch_from(donor),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert exc_info.value.fields["code"] == "edit_signal_mismatch"
     hook_specs_after = len(

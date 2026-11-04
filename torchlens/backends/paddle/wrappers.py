@@ -112,6 +112,7 @@ _FUNCTIONAL_CORE_OPS = {
 }
 _TENSOR_CORE_METHODS = {
     "__add__",
+    "__eq__",
     "__ge__",
     "__getitem__",
     "__gt__",
@@ -119,6 +120,7 @@ _TENSOR_CORE_METHODS = {
     "__lt__",
     "__matmul__",
     "__mul__",
+    "__ne__",
     "__neg__",
     "__pow__",
     "__radd__",

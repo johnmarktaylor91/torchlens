@@ -53,7 +53,7 @@ def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
 
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_AddOneModel().eval(), x, tmp_path / "dev.tlspec")
-    result = tl.load(path).run(inputs=x.cuda(), on_divergence="return")
+    result = tl.load(path).run_transaction(inputs=x.cuda(), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert result.report.is_poisoned is True
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -65,7 +65,7 @@ def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
 
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_AddOneModel().eval(), x, tmp_path / "ok.tlspec")
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
     assert result.report.is_poisoned is False

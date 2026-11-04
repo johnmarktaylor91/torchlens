@@ -23,12 +23,13 @@ from torchlens._autoroute._decode_spellings import (
     STYLE_KW,
     UNDETECTED_REMEDY,
 )
-from torchlens._autoroute.output import register
+from torchlens._autoroute.output import list as _registered_output_detectors, register
 from torchlens._capture._episode_derivation import _render_container_path
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
+from torchlens._utils._display_errors import lookup_message
 from torchlens._utils.torchvision_weights import match_torchvision_weights
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
@@ -313,6 +314,25 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
     return None
 
 
+def output_decoders_cache_key() -> tuple[tuple[str, int, int], ...]:
+    """Return the registered output detectors as a capture-cache fragment.
+
+    Registered detectors label the capture-time decode, so a cached trace made
+    before a register or unregister must not serve the next capture.
+
+    Returns
+    -------
+    tuple[tuple[str, int, int], ...]
+        ``(name, priority, registration_order)`` per registered detector, in
+        dispatch order; re-registering a name changes its order and the key.
+    """
+
+    return tuple(
+        (detector.name, detector.priority, detector.registration_order)
+        for detector in _registered_output_detectors()
+    )
+
+
 def semantic_output_cache_key(model: Any) -> dict[str, Any]:
     """Return a serializable semantic-output cache fingerprint.
 
@@ -409,6 +429,7 @@ def _build_output_meta(
         if tokenizer is not None
         else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
+        "model_class_name": trace._source_class_name,
     }
 
 
@@ -439,8 +460,6 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         Always, with code ``decode_style_unknown``.
     """
 
-    import difflib
-
     if style is None:
         raise DecodeStyleUnknownError(
             "no output detector resolved a decode style from the retained outputs. "
@@ -449,11 +468,13 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
             remedy=f"pass {STYLE_KW}= a built-in style or a registered custom style",
             argument=STYLE_KW,
         )
-    close = difflib.get_close_matches(str(style), BUILTIN_OUTPUT_STYLES, n=1)
-    hint = f" (did you mean {close[0]!r}?)" if close else ""
     raise DecodeStyleUnknownError(
-        f"unknown {STYLE_KW}={style!r}{hint}; no built-in or registered custom output "
-        f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
+        lookup_message(
+            f"unknown {STYLE_KW}={style!r}; no built-in or registered custom output detector resolved it.",
+            list(BUILTIN_OUTPUT_STYLES),
+            "pass a built-in style, or register a custom output detector.",
+            query=str(style),
+        ),
         code="decode_style_unknown",
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "

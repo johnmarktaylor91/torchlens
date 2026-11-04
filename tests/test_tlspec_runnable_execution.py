@@ -365,10 +365,10 @@ def test_loaded_sparse_fast_run_refuses_seed_drift(
     path, model, _ = runnable_execution_artifact
     loaded = tl.load(path)
     loaded.load_state_dict(model.state_dict())
-    loaded.run(inputs=torch.ones(2, 3), seed=5, fast=True)
+    loaded.run_transaction(inputs=torch.ones(2, 3), seed=5, fast=True)
 
     with pytest.raises(RunCapabilityUnavailableError, match="pins the seed"):
-        loaded.run(inputs=torch.ones(2, 3), seed=6, fast=True)
+        loaded.run_transaction(inputs=torch.ones(2, 3), seed=6, fast=True)
 
 
 # Kept: sole branch coverage of _fast_run.py, _io/runnable.py, _runnable/attestation.py; a sole mutation kill.
@@ -390,8 +390,8 @@ def test_loaded_sparse_fast_run_reseeds_rng_after_verify_once(tmp_path: Path) ->
     captured.save(path, level="runnable")
     loaded = tl.load(path)
 
-    verified = loaded.run(inputs=inputs, seed=31, fast=True)
-    repeated = loaded.run(inputs=inputs, seed=31, fast=True)
+    verified = loaded.run_transaction(inputs=inputs, seed=31, fast=True)
+    repeated = loaded.run_transaction(inputs=inputs, seed=31, fast=True)
 
     assert verified.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert repeated.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -420,13 +420,13 @@ def test_loaded_sparse_fast_run_refuses_counter_free_functional_batchnorm_state_
     path = tmp_path / f"functional-batchnorm-{composed_views}-fast.tlspec"
     captured.save(path, level="runnable", include_weights=True)
 
-    oracle = tl.load(path).run(inputs=inputs)
+    oracle = tl.load(path).run_transaction(inputs=inputs)
     assert oracle.report.path_faithfulness is PathFaithfulness.VERIFIED
     with pytest.raises(
         RunCapabilityUnavailableError,
         match="may update or mutate declared state",
     ):
-        tl.load(path).run(inputs=inputs, fast=True)
+        tl.load(path).run_transaction(inputs=inputs, fast=True)
 
 
 # Kept: sole branch coverage of _fast_sparse_state.py.
@@ -449,13 +449,13 @@ def test_loaded_sparse_fast_run_refuses_state_view_inplace_mutation(
     path = tmp_path / "state-view-inplace-fast.tlspec"
     captured.save(path, level="runnable", include_weights=True)
 
-    oracle = tl.load(path).run(inputs=inputs)
+    oracle = tl.load(path).run_transaction(inputs=inputs)
     assert oracle.report.path_faithfulness is PathFaithfulness.VERIFIED
     with pytest.raises(
         RunCapabilityUnavailableError,
         match="may update or mutate declared state",
     ):
-        tl.load(path).run(inputs=inputs, fast=True)
+        tl.load(path).run_transaction(inputs=inputs, fast=True)
 
 
 # Kept: sole branch coverage of _fast_sparse_state.py.
@@ -478,10 +478,10 @@ def test_loaded_sparse_fast_run_does_not_mutate_caller_input(tmp_path: Path) -> 
 
     first_input = torch.arange(4.0)
     expected_first = (first_input + 2) * 3
-    first = loaded.run(inputs=first_input, fast=True)
+    first = loaded.run_transaction(inputs=first_input, fast=True)
     second_input = torch.arange(4.0, 8.0)
     expected_second = (second_input + 2) * 3
-    second = loaded.run(inputs=second_input, fast=True)
+    second = loaded.run_transaction(inputs=second_input, fast=True)
 
     assert torch.equal(first_input, torch.arange(4.0))
     assert torch.equal(second_input, torch.arange(4.0, 8.0))
@@ -498,11 +498,11 @@ def test_loaded_sparse_fast_run_keeps_control_witness_guard(honesty_artifact: Pa
     """Evaluate recorded control witnesses on every trusted compiled iteration."""
 
     loaded = tl.load(honesty_artifact)
-    verified = loaded.run(inputs=torch.ones(2), seed=19, fast=True)
+    verified = loaded.run_transaction(inputs=torch.ones(2), seed=19, fast=True)
     assert verified.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=-torch.ones(2), seed=19, fast=True)
+        loaded.run_transaction(inputs=-torch.ones(2), seed=19, fast=True)
 
 
 # Kept: a sole mutation kill.
@@ -519,7 +519,7 @@ def test_loaded_sparse_execution_pauses_recursive_capture(
     for call_id, original in tuple(attached.items()):
         attached[call_id] = _logging_probe(original, observed)
 
-    loaded.run(inputs=torch.ones(2, 3), seed=5)
+    loaded.run_transaction(inputs=torch.ones(2, 3), seed=5)
 
     assert observed
     assert not any(observed)
@@ -585,14 +585,14 @@ def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) 
 
     # The baked arm is whatever the capture forward took; pick a run seed whose
     # TRUE live forward takes the OTHER arm, then run at that exact seed.
-    baked = tl.load(path).run(inputs=inputs, seed=0).output
+    baked = tl.load(path).run_transaction(inputs=inputs, seed=0).output
     flip_seed = 3 if torch.allclose(baked, inputs * 2.0) else 1
-    report = tl.load(path).run(inputs=inputs, seed=flip_seed).report
+    report = tl.load(path).run_transaction(inputs=inputs, seed=flip_seed).report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
     # Changed input is equally unverifiable (the taken branch is unwitnessed).
-    changed = tl.load(path).run(inputs=torch.tensor([5.0, -1.0]), seed=0).report
+    changed = tl.load(path).run_transaction(inputs=torch.tensor([5.0, -1.0]), seed=0).report
     assert changed.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert changed.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -627,7 +627,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
     trace.save(path, level="runnable")
 
     loaded = tl.load(path)
-    result = loaded.run(inputs=inputs.clone())
+    result = loaded.run_transaction(inputs=inputs.clone())
     expected = model(inputs)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -638,7 +638,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
         assert result.output[1] == 3.0
     assert all(check.passed for check in result.report.contract_checks)
     if expected_type is tuple:
-        poisoned = loaded.run(
+        poisoned = loaded.run_transaction(
             inputs=torch.ones(4),
             on_divergence="return",
         )
@@ -690,7 +690,7 @@ def test_loaded_sparse_still_diverges_for_a_genuinely_changed_output_structure(
     loaded._runnable.callables_by_call_id["call:1"] = _return_positional_pair
 
     with pytest.raises(PathDivergenceError):
-        loaded.run(inputs=inputs.clone())
+        loaded.run_transaction(inputs=inputs.clone())
 
 
 def _logging_probe(func: Any, observed: list[bool]) -> Any:
@@ -716,7 +716,7 @@ def test_analysis_only_loaded_trace_raises_typed_capability_error(tmp_path: Path
     loaded = tl.load(path)
 
     with pytest.raises(RunCapabilityUnavailableError) as captured:
-        loaded.run(inputs=torch.ones(2, 3))
+        loaded.run_transaction(inputs=torch.ones(2, 3))
 
     assert captured.value.fields["code"] == "run_capability_unavailable"
     assert captured.value.fields["readiness"] is loaded.readiness
@@ -732,7 +732,7 @@ def test_witness_divergence_raises_and_rolls_back_by_default(honesty_artifact: P
     source_outs = _clone_outs(loaded)
 
     with pytest.raises(PathDivergenceError) as captured:
-        loaded.run(inputs=-torch.ones(2), seed=19)
+        loaded.run_transaction(inputs=-torch.ones(2), seed=19)
 
     mismatch = captured.value.fields["first_mismatch"]
     assert mismatch.code.value == "loop_predicate_mismatch"
@@ -760,7 +760,7 @@ def test_unfinishable_sparse_call_raises_typed_error_without_leaking_fork(
     logs_before = set(_state.list_logs())
 
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(
+        loaded.run_transaction(
             inputs=torch.ones(2, 4),
             on_divergence="return",
         )
@@ -780,7 +780,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
 
     poisoned = (
         tl.load(honesty_artifact)
-        .run(
+        .run_transaction(
             inputs=torch.zeros(2),
             on_divergence="return",
         )
@@ -835,7 +835,7 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
         witness_completeness=gap_spec.resulting_completeness,
     )
 
-    result = loaded.run(inputs=torch.ones(2), seed=29)
+    result = loaded.run_transaction(inputs=torch.ones(2), seed=29)
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.first_mismatch is None
@@ -851,20 +851,20 @@ def test_incomplete_witness_coverage_is_unverifiable_and_poisoned(
         witness_completeness=WitnessCompleteness.INCOMPLETE_UNOBSERVED_PREDICATE,
     )
     with pytest.raises(RunPreconditionError):
-        contradictory.run(inputs=torch.ones(2), seed=29)
+        contradictory.run_transaction(inputs=torch.ones(2), seed=29)
 
 
 # Kept: sole branch coverage of _runnable/transaction.py, _runnable/verification.py.
 def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) -> None:
     """Retain divergence across a later matching run instead of rehabilitating the Trace."""
 
-    first = tl.load(honesty_artifact).run(
+    first = tl.load(honesty_artifact).run_transaction(
         inputs=torch.zeros(2),
         on_divergence="return",
     )
     first_mismatch = first.report.first_mismatch
 
-    second = first.trace.run(
+    second = first.trace.run_transaction(
         inputs=torch.ones(2),
         on_divergence="return",
     )
@@ -873,7 +873,7 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
     assert second.report.first_mismatch == first_mismatch
     assert second.report.is_poisoned
     with pytest.raises(PathDivergenceError):
-        first.trace.run(inputs=torch.ones(2))
+        first.trace.run_transaction(inputs=torch.ones(2))
 
 
 def _clone_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
@@ -971,9 +971,9 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
     trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
 
     shared = torch.tensor([3.0, 4.0])
-    aliased = tl.load(tmp_path / "readonly.tlspec").run(inputs=[shared, shared])
+    aliased = tl.load(tmp_path / "readonly.tlspec").run_transaction(inputs=[shared, shared])
     assert aliased.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    distinct = tl.load(tmp_path / "readonly.tlspec").run(
+    distinct = tl.load(tmp_path / "readonly.tlspec").run_transaction(
         inputs=[torch.tensor([3.0, 4.0]), torch.tensor([5.0, 6.0])]
     )
     assert distinct.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
@@ -1035,7 +1035,7 @@ def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> 
         "bn": train,
     }
     trace.save(tmp_path / "bn.tlspec", level="runnable", include_activations=True)
-    result = tl.load(tmp_path / "bn.tlspec").run(inputs=x)
+    result = tl.load(tmp_path / "bn.tlspec").run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

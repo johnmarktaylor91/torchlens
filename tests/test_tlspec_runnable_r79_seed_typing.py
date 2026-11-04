@@ -109,11 +109,11 @@ def test_r79_bool_and_out_of_range_seed_refuse_typed(tmp_path: Path, bad_seed: o
 
     rng_before = torch.get_rng_state()
     with pytest.raises(RunPreconditionError) as excinfo:
-        loaded.run(inputs=x.clone(), seed=bad_seed)  # type: ignore[arg-type]
+        loaded.run_transaction(inputs=x.clone(), seed=bad_seed)  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == RunnableErrorCode.CONTEXT_FIELD_INVALID.value
     assert torch.equal(torch.get_rng_state(), rng_before)
 
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

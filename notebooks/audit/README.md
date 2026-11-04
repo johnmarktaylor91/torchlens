@@ -27,11 +27,11 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
   flags any `__all__` entry that fails `getattr`.)
 - **Submodule families:** `tl.debug` 8/8 · `tl.export` 17/17 (12 dep-free formats
   executed, tracker formats enumerated) · `tl.attribution` 10/10 · `tl.viz` 11/11
-  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 12 of 16 `__all__`
+  (incl. `feature_map_node_spec`) · `tl.report` 2/2 · `torchlens.io` 12 of 15 `__all__`
   names exercised (`inspect_tlspec`, `detect_tlspec_format`, `log_model_metadata` +
   its deprecated alias, `list_logs`, `save_intervention`, `load_intervention_spec`,
   `save`, `load`, `PayloadLoadHints`, `JaxPayloadLoadHint`; the remainder —
-  `cleanup_tmp`, `rehydrate_nested`, `TraceState`, `suppress_mutate_warnings` — is
+  `cleanup_tmp`, `rehydrate_nested`, `TraceState` — is
   judged plumbing) · `torchlens.errors` hierarchy enumerated + typed-catch
   demonstrated with the payload contract (nb 12) · `torchlens.backends` registry
   enumerated + `UnknownBackendError` surface (nb 16) · `tl.compat` 9/9 (all `from_*` shims invoked, guarded) ·
@@ -68,7 +68,7 @@ All 17 notebooks run green. Per-notebook surfaces and the verified rough edges:
 | `11_visualization_in_workflow` | `draw` option sweep, **collapse-v2** (string + float slider, `fold_repeats=`, `Drawing.collapse_plan`, `Drawing.collapse_schedule`), customization callbacks (`node_spec_fn`/`skip_fn`/`collapse_fn`), presentation knobs (`for_paper`, `node_label_fields`, `vis_intervention_mode`), `Trace.annotate`, `tl.viz` primitives (all 11 names) | yes | option sweeps tripwired for byte-identical renders (`fold_repeats`, `show_containers`); `viz.__all__` lists `batch_summary` (a module, not a callable); `node_overlay` rejects callables; `path` double-extension footgun |
 | `12_validation_stats_reporting` | `tl.validate` (all 4 scopes incl. structured `InterventionValidationReport`), `trace.explain` + `tl.observers.log_value`, `tl.observers.tap`/`tl.observers.span`, `summary` grammar (`level=`/`view=` axes; the removed legacy presets refuse typed), **full `tl.debug` family** (8 diagnostics + result classes) | yes | the legacy `summary(level='compute'/'cost')` presets that crashed on multi-pass models are removed (they refuse typed naming `view='compute'`); bool scopes vs structured intervention scope asymmetry; `verbose=True` prints nothing |
 | `13_tabular_export` | `to_pandas` at all three levels, **all 17 `torchlens.export` formats** (12 executed, tracker formats enumerated), schema comparison, round-trips | yes | three disjoint DataFrame schemas; tracker exports fail opaquely when handed a path; `xarray` error names no offending op |
-| `14_huggingface_guarded` | Guarded HF text + ViT trace, `tl._autoroute.input` registry, `tl.bridge.transformers.trace_text`, attention q/k/v head facets | yes | `Facet.value` (not `.tensor`); SDPA facets need eager attention; `trace_image` path still undemonstrated |
+| `14_huggingface_guarded` | Guarded HF text + ViT trace, `tl.preprocessing.register` and the internal input registry, `tl.bridge.transformers.trace_text`, attention q/k/v head facets | yes | `Facet.value` (not `.tensor`); SDPA facets need eager attention; `trace_image` path still undemonstrated |
 | `15_attribution` | **`tl.attribution`** — all 8 methods, `Attribution`, `AttributionError` surface, target specs, `tl.viz.heatmap`/`causal_trace_heatmap` tie-in | yes | `tl.attribution` reachable but invisible (no `__all__`/docs pointer); each call re-runs the model (no `trace=` reuse) |
 | `16_compat_and_bridges` | **`tl.report.doctor`** (`DoctorReport`) + **`tl.compat`** (`from_fx`/`from_ilg`/`from_torchextractor`/`from_timm`/`from_huggingface`, `lovely`/`torchshow`) + **`tl.bridge`** roster (16 adapters enumerated; captum + profiler end-to-end) | yes | `report.doctor` emits stray protobuf stderr noise; broken third-party deps crash raw through bridge imports; adapter modules leak plumbing names |
 | `17_receptive_projective_fields` | **`tl.receptive_field`** (`cross_validate`, `verify`, `node_spec`), entity `receptive_field` / `projective_field` views, geometry/gradient/viz actions, layer-to-layer selectors, plural trace tables, and `tl.validate(scope="receptive_field")` | yes | None observed; this notebook asserts the ResNet-18 435 x 435 differentiator and preserves any future tripwire failure as a GAP |

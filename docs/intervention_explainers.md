@@ -201,10 +201,12 @@ direction = torch.tensor([1.0, 1.0, 0.0, 0.0])
 unit = direction / direction.norm()
 site = tl.module("0")
 
-clean = tl.trace(model, x, save=site).find_sites(site).first().out
-off = tl.trace(
+clean_trace = tl.trace(model, x, save=site)
+clean = clean_trace.find_sites(site).first().out
+off_trace = tl.trace(
     model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
-).find_sites(site).first().out
+)
+off = off_trace.find_sites(site).first().out
 
 # project_out leaves no component along the direction and keeps the rest.
 RESULT = [
@@ -242,7 +244,8 @@ model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
-source_value = tl.trace(model, x_source)[site].out
+source_trace = tl.trace(model, x_source)
+source_value = source_trace[site].out
 
 fork = tl.trace(model, x).fork()
 fork.do(
@@ -254,7 +257,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x).fork()
-reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions())
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -343,7 +346,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens).fork()
-fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+fresh.do(spec, intervention=tl.options.InterventionOptions())
 
 RESULT = [
     torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit
@@ -375,13 +378,11 @@ Portable saves reject opaque local callables. Use built-in helpers such as `zero
 
 A `.tlspec/` directory contains:
 
-- `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
-  metadata.
-- `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON, one blob per tensor object however
-  many places the spec references it (a sticky hook's `hook` and `helper` entries and its fire
-  records share one blob).
-- `README.md`: a generated human-readable summary.
+- `manifest.json`: the artifact manifest, `kind: "intervention"`.
+- `intervention.json`: the recipe: each rule's selector and built-in `Edit` identity as typed
+  JSON; a user callable is a placeholder, never pickled.
+- `blobs/recipe-<nnnn>.safetensors`: the recipe's tensors, one entry per tensor object however
+  many places the recipe references it (a sticky hook's edit and its fire records share one).
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
 `torchlens.intervention.check_spec_compat(spec, new_trace)`.

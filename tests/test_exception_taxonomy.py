@@ -1117,6 +1117,19 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "private ReplayPreconditionError subclass; contracted by its code "
         "replay_param_changed_since_capture, caught as ReplayPreconditionError"
     ),
+    # Public-entry refusals that were plain builtins: private carriers of the coded fields,
+    # kept private until the public spellings are ruled (the raised builtin lineage and
+    # the codes are the contract; callers catch the builtin or TorchLensError).
+    "torchlens._errors._InternalInvariantError": (
+        "private TorchLensError for internal-invariant refusals that were plain "
+        "RuntimeError/ValueError; subclasses both, contracted by codes such as "
+        "module_metadata_missing and aliasing_parent_not_in_call_args"
+    ),
+    "torchlens._entry_refusals._DependencyIncompatibleError": (
+        "private CompatibilityError for an installed dependency missing an API that was a "
+        "plain RuntimeError; contracted by torch_tensorbase_unavailable and "
+        "lovely_tensors_has_no_lovely_function"
+    ),
     # Forward-validation copy-failure disclosure: a coded TorchLensWarning
     # (S-18 contract row validation_model_copy_failed) private to validation.
     "torchlens._validation_state_snapshot._ValidationCopyFailedWarning": (
@@ -1205,6 +1218,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
+    "torchlens._io.format_errors.OpaqueCallableError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens.intervention.errors; defined in the L0 error module so the "
+        "format 3 recipe encoder can raise it; this row records the defining file"
+    ),
     "torchlens.bundle._labels.AmbiguousLabelError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens.bundle; this row records the defining file (moved into the "
@@ -1228,7 +1246,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
     "torchlens._fast_live_until.FastUntilReached": (
-        "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
+        "internal control-flow cut signal (BaseException) for trace.run_transaction(inputs=..., fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
     "torchlens._runnable.execution._ProjectionCountExceeded": (
@@ -1500,7 +1518,7 @@ def test_layers_to_save_type_invalid_provoked() -> None:
 
     model = torch.nn.Identity()
     with pytest.raises(ArgumentTypeError) as excinfo:
-        # grad_transform is the FOURTH positional slot (after input_kwargs).
+        # Only model and inputs are positional; extra positional values are refused.
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:

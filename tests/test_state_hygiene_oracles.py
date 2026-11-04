@@ -43,6 +43,8 @@ from torchlens.intervention.errors import (
     ReplayPreconditionError,
 )
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _HOOK_DICTS = (
     "_forward_hooks",
     "_forward_pre_hooks",
@@ -199,7 +201,7 @@ def _scale_fc1() -> Any:
 
 
 _DIRECTION = torch.randn(16, generator=torch.Generator().manual_seed(7))
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 def _stage(trace: Any, site: Any, edit: Any) -> Any:
@@ -299,7 +301,8 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     spec = tl.when(tl.module("fc2"), _steer())
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
-        torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
+        trace = tl.trace(model, x, intervene=spec)
+        torch.testing.assert_close(trace.output_ops[0].out, want)
         recorded = tl.record(
             model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
         ).to_trace()
@@ -328,14 +331,14 @@ def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None
     model, x, expected = net
     trace = tl.trace(model, x)
     baseline = _readout(trace).clone()
-    handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)
+    handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0))
     trace.run(model, x)
     trace.run(model, x)
     torch.testing.assert_close(_readout(trace), expected)
     if exit_door == "by_site":
-        trace.clear_edits(tl.module("fc1"), confirm_mutation=True)
+        trace.clear_edits(tl.module("fc1"))
     else:
-        trace.clear_edits(handle=handle, confirm_mutation=True)
+        trace.clear_edits(handle=handle)
     assert len(trace._intervention_spec.hook_specs) == 0, "detach left hook copies behind"
     trace.run(model, x)
     torch.testing.assert_close(_readout(trace), baseline)
@@ -351,7 +354,7 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     trace.do(
         tl.module("fc1"),
         lambda out, *, ctx: out * 2.0,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     staged = _staged(trace)
     for _ in range(3):
@@ -465,7 +468,7 @@ def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
         hook_spec.site_target.selector_value for hook_spec in trace._intervention_spec.hook_specs
     )
     assert len(door_labels) == 2
-    trace.clear_edits(tl.label(door_labels[0]), confirm_mutation=True)
+    trace.clear_edits(tl.label(door_labels[0]))
     staged = _staged(trace)
     readout = _readout(trace, "fc3").clone()
     with pytest.raises(ControlFlowDivergenceError) as excinfo:
@@ -525,7 +528,7 @@ def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged
     trace.do(
         label,
         value,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     staged = _staged(trace)
     result = trace.run(model, x2)
@@ -573,7 +576,7 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc1"), tl.scale(2.0))
         trace.run(model, x)
-        trace.clear_edits(tl.module("fc1"), confirm_mutation=True)
+        trace.clear_edits(tl.module("fc1"))
     elif door == "failing_capture":
 
         def boom(_out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -608,7 +611,8 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         with pytest.raises(KeyboardInterrupt):
             call()
         with torch.no_grad():
-            assert tl.trace(model, x).output_ops[0].out.equal(model(x))
+            trace = tl.trace(model, x)
+            assert trace.output_ops[0].out.equal(model(x))
 
 
 # ---------------------------------------------------------------------------
@@ -633,14 +637,14 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace.do(
             tl.module("fc1"),
             lambda out, *, ctx: out * 2.0,
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     else:
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc1"), tl.scale(2.0))
     if door == "clear":
         trace.run(model, x)
-        trace.clear_edits(tl.module("fc1"), confirm_mutation=True)
+        trace.clear_edits(tl.module("fc1"))
         with torch.no_grad():
             expected = model(x)
     with warnings.catch_warnings():
@@ -773,8 +777,8 @@ def _reload(trace: Any, tmp_path: Any) -> Any:
 
 
 _NOT_PERSISTED = (EngineDispatchError, "run_intervention_spec_not_persisted")
-_RERUN = tl.options.InterventionOptions(engine="rerun", confirm_mutation=True)
-_REPLAY = tl.options.InterventionOptions(engine="replay", confirm_mutation=True)
+_RERUN = tl.options.InterventionOptions(engine="rerun")
+_REPLAY = tl.options.InterventionOptions(engine="replay")
 
 _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], str | None]]] = {
     "run": (lambda t, m, x: t.run(m, x), _NOT_PERSISTED),
@@ -804,7 +808,7 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
         (ReplayPreconditionError, None),
     ),
     "run_inputs": (
-        lambda t, m, x: t.run(inputs=x),
+        lambda t, m, x: t.run_transaction(inputs=x),
         (RunCapabilityUnavailableError, "run_capability_unavailable"),
     ),
 }
@@ -826,11 +830,32 @@ def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, 
     loaded = _reload(_intervened_trace(model, x, origin), tmp_path)
     readout = loaded.output_ops[0].out.clone()
     call, (error_type, code) = _LOADED_DOORS[door]
+    if door == "run_inputs":
+        with pytest.raises(EngineDispatchError) as staged_refusal:
+            call(loaded, model, x2)
+        assert staged_refusal.value.fields["code"] == "run_staged_spec_unapplied"
+        assert torch.equal(loaded.output_ops[0].out, readout)
+    if error_type is EngineDispatchError or door == "run_inputs":
+        # Fault injection retains the original missing-recipe guard witness:
+        # honest format 3 saves now preserve these built-in recipes.
+        assert loaded._intervention_spec.metadata["recipe_placeholders"] == []
+        loaded._intervention_spec = None
     with pytest.raises(error_type) as excinfo:
         call(loaded, model, x2)
     if code is not None:
         assert excinfo.value.fields["code"] == code
     assert torch.equal(loaded.output_ops[0].out, readout), "a refused door changed the trace"
+
+
+@pytest.mark.parametrize("origin", ["intervene", "attach_hooks", "fork_do"])
+def test_loaded_builtin_recipe_rerun_keeps_the_original_intervention(mlp, tmp_path, origin):
+    """A persisted built-in recipe reruns against the external PyTorch hook oracle."""
+
+    model, x, x2 = mlp
+    loaded = _reload(_intervened_trace(model, x, origin), tmp_path)
+    expected = _hooked(model, {"fc2": lambda out: out * 0.5}, x2)
+    loaded.run(model, x2)
+    torch.testing.assert_close(loaded.output_ops[0].out, expected)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/hashing.py, campaign mutant kills.
@@ -844,7 +869,7 @@ def test_loaded_plain_trace_reruns_with_a_new_edit(mlp, tmp_path) -> None:
     for _ in range(2):
         loaded.run(model, x2)
         torch.testing.assert_close(loaded.output_ops[0].out, want)
-    loaded.clear_edits(tl.module("fc2"), confirm_mutation=True)
+    loaded.clear_edits(tl.module("fc2"))
     loaded.run(model, x2)
     with torch.no_grad():
         torch.testing.assert_close(loaded.output_ops[0].out, model(x2))

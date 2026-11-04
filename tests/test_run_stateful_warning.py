@@ -33,7 +33,7 @@ def test_live_run_warns_once_and_batchnorm_stats_mutate() -> None:
         ) as observed,
         pytest.raises(ValueError, match="fast=True"),
     ):
-        captured.run(inputs=torch.randn(4, 3))
+        captured.run_transaction(inputs=torch.randn(4, 3))
 
     assert "running_mean, running_var, num_batches_tracked on module '<root>'" in str(
         observed[0].message
@@ -41,7 +41,7 @@ def test_live_run_warns_once_and_batchnorm_stats_mutate() -> None:
     assert torch.equal(model.running_mean, before)
     with warnings.catch_warnings(record=True) as observed:
         with pytest.raises(ValueError, match="fast=True"):
-            captured.run(inputs=torch.randn(4, 3))
+            captured.run_transaction(inputs=torch.randn(4, 3))
     assert not [
         warning for warning in observed if "training-mode BatchNorm" in str(warning.message)
     ]
@@ -58,7 +58,7 @@ def test_eval_mode_batchnorm_does_not_warn() -> None:
         # historical mode-blind buffer-sink refusal was the capability the
         # D-ruling narrowed); the pinned property here is NO training-mode
         # warning either way.
-        result = captured.run(inputs=torch.randn(4, 3))
+        result = captured.run_transaction(inputs=torch.randn(4, 3))
 
     assert result.output is not None
     assert not [
@@ -106,8 +106,8 @@ def test_graph_change_error_names_live_state_mutation_and_isolation_hint() -> No
     model(torch.ones(2))
 
     with pytest.raises(ValueError) as caught:
-        captured.run(inputs=torch.ones(2))
+        captured.run_transaction(inputs=torch.ones(2))
 
     message = str(caught.value)
     assert "Live-model state mutation across run() calls" in message
-    assert "run(inputs=..., fast=True)" in message
+    assert "run_transaction(inputs=..., fast=True)" in message

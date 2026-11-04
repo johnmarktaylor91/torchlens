@@ -21,7 +21,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | Need | Use | Notes |
 | --- | --- | --- |
 | Complete graph metadata and a few activations | `tl.trace(model, x, save=predicate)` | Best default for debugging and one-off analysis. |
-| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure. |
+| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure, `Trace.draw` options or facets (a `Recording` has neither). |
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
@@ -215,10 +215,11 @@ full `tl.trace` calls per mode followed four two-capture warmup batches; the per
 
 ### Phase timing buckets
 
-`trace._phase_timings` groups wall-clock timings by stable bucket names. Capture buckets include
-`ctx_build:*`, `dispatch:*`, `clone_save:*`, and `object_construction:op`. Postprocess buckets use
-`postprocess:Step N: ...`, matching the numbered postprocess pipeline. Graphviz rendering records
-`render:graphviz:forward`, `render:graphviz:backward`, or `render:graphviz:combined` when those
+`trace._phase_timings` groups wall-clock timings by stable snake_case bucket names. Capture
+buckets include `ctx_build_*`, `dispatch_*`, `clone_save_*`, `backward_grad_event_*` and
+`object_construction_op`. Postprocess buckets use the postprocess pipeline's step names
+(`add_output_layers` through `release_param_refs`). Graphviz rendering records
+`render_graphviz_forward`, `render_graphviz_backward`, or `render_graphviz_combined` when those
 render entrypoints run.
 
 ## Chunked forward capture

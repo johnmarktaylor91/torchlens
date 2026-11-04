@@ -34,6 +34,7 @@ from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_l
 from .._selection.resolver import _resolve_unchecked
 from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
+from ._edit_guards import detach_handles, internal_mutation
 from ._rerun_predicate import raw_live_labels
 from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
@@ -77,7 +78,7 @@ class _SignalPlan:
     plan has no site in that pass.
     """
 
-    hooks_or_site: Any
+    site: Any
     value_or_hook: Any
     forward: tuple[Any, Any] | None
     backward: tuple[Any, Any] | None
@@ -101,32 +102,32 @@ def _is_public_recipe(value: Any) -> bool:
     return isinstance(value, Recipe)
 
 
-def _door_pairs(hooks_or_site: Any, value_or_hook: Any) -> list[tuple[Any, Any]] | None:
+def _door_pairs(site: Any, value_or_hook: Any) -> list[tuple[Any, Any]] | None:
     """Lower the ``do()`` call shapes that can carry a gradient site to pairs.
 
     Returns ``None`` for shapes that never address a gradient site
     (selection batches, regions, slices), which keep their own doors.
     """
 
-    if _is_public_recipe(hooks_or_site):
-        return [(rule.target, rule.edit) for rule in hooks_or_site.rules]
-    if value_or_hook is None and isinstance(hooks_or_site, Mapping):
-        return list(hooks_or_site.items())
-    if value_or_hook is None and isinstance(hooks_or_site, (list, tuple)):
-        if all(isinstance(pair, tuple) and len(pair) == 2 for pair in hooks_or_site):
-            return list(hooks_or_site)
+    if _is_public_recipe(site):
+        return [(rule.target, rule.edit) for rule in site.rules]
+    if value_or_hook is None and isinstance(site, Mapping):
+        return list(site.items())
+    if value_or_hook is None and isinstance(site, (list, tuple)):
+        if all(isinstance(pair, tuple) and len(pair) == 2 for pair in site):
+            return list(site)
         return None
-    return [(hooks_or_site, value_or_hook)]
+    return [(site, value_or_hook)]
 
 
-def signal_plan(hooks_or_site: Any, value_or_hook: Any) -> _SignalPlan | None:
+def signal_plan(site: Any, value_or_hook: Any) -> _SignalPlan | None:
     """Split a ``do()`` input into its activation and backward halves.
 
     Returns ``None`` when no site addresses the backward pass, so plain
     activation edits keep the unchanged ``do`` path.
     """
 
-    pairs = _door_pairs(hooks_or_site, value_or_hook)
+    pairs = _door_pairs(site, value_or_hook)
     if pairs is None or all(site_signal(site) == "forward" for site, _edit in pairs):
         return None
     forward: list[tuple[Any, Any]] = []
@@ -143,14 +144,14 @@ def signal_plan(hooks_or_site: Any, value_or_hook: Any) -> _SignalPlan | None:
 
         if not half:
             return None
-        if _is_public_recipe(hooks_or_site):
+        if _is_public_recipe(site):
             return Recipe(rules=tuple(Rule(site, edit) for site, edit in half)), None
         if len(half) == 1 and value_or_hook is not None:
             return half[0]
         return list(half), None
 
     return _SignalPlan(
-        hooks_or_site=hooks_or_site,
+        site=site,
         value_or_hook=value_or_hook,
         forward=_half(forward),
         backward=_half(backward),
@@ -201,7 +202,7 @@ def do_signal_plan(trace: Trace, plan: _SignalPlan, request: _SignalDoRequest) -
     if preflight_txn.engine == "rerun":
         result = trace._fork_trace(name=None)
     else:
-        trace._warn_if_root_mutation(confirm_mutation=request.intervention_options.confirm_mutation)
+        trace._warn_if_root_mutation()
         result = trace
     txn = preflight_txn._replace(audit_rows_before=len(result.intervention_audit))
     backward_handles, forced, attached = _arm_or_record_error(trace, result, plan, request, txn)
@@ -222,7 +223,7 @@ def _preflight_signal_do(
     )
     strict = intervention_options.strict
     preflight_txn = _DoTransaction(
-        hooks_or_site=plan.hooks_or_site,
+        site=plan.site,
         value_or_hook=plan.value_or_hook,
         engine=engine,
         transaction_start=time.monotonic(),
@@ -350,13 +351,10 @@ def arm_signal_plan(
         forward_site = plan.forward[0]
         if engine == "rerun":
             forward_site = lower_live_labels(trace, forward_site)
-        _kind, handles = trace._apply_do_mutation(
-            forward_site,
-            plan.forward[1],
-            engine=engine,
-            strict=strict,
-            confirm_mutation=True,
-        )
+        with internal_mutation():
+            _kind, handles = trace._apply_do_mutation(
+                forward_site, plan.forward[1], engine=engine, strict=strict
+            )
         attached.extend(handles)
     if engine == "rerun":
         forced = force_backward_ready(trace)
@@ -364,10 +362,11 @@ def arm_signal_plan(
         trace.run(model, x, replay=ReplayOptions(strict=strict))
     assert plan.backward is not None
     site, edit = plan.backward
-    if _is_public_recipe(site):
-        backward_handles = trace._attach_hooks(site, strict=strict, confirm_mutation=True)
-    else:
-        backward_handles = trace._attach_hooks(site, edit, strict=strict, confirm_mutation=True)
+    with internal_mutation():
+        if _is_public_recipe(site):
+            backward_handles = trace._attach_hooks(site, strict=strict)
+        else:
+            backward_handles = trace._attach_hooks(site, edit, strict=strict)
     attached.extend(backward_handles)
     return backward_handles, forced
 
@@ -460,13 +459,6 @@ def force_backward_ready(trace: Trace) -> bool:
         return False
     trace._options_backward_ready = True
     return True
-
-
-def detach_handles(trace: Trace, handle_ids: list[str] | tuple[str, ...]) -> None:
-    """Remove exactly the sticky hooks one transaction attached."""
-
-    for handle_id in handle_ids:
-        trace.clear_edits(handle=handle_id, confirm_mutation=True)
 
 
 def stamp_arming_event(trace: Trace, handle_ids: tuple[str, ...], event_id: str) -> None:

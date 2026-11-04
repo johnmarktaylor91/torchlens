@@ -418,7 +418,7 @@ def test_state_restore_admits_only_proven_train_mode_norm_writers():
     log = trace_fn(model, torch.randn(3, 4))
     try:
         before = {name: buf.clone() for name, buf in model.named_buffers()}
-        log.run(inputs=torch.randn(3, 4))
+        log.run_transaction(inputs=torch.randn(3, 4))
         for name, buf in model.named_buffers():
             assert torch.equal(before[name], buf), name
     finally:
@@ -427,7 +427,7 @@ def test_state_restore_admits_only_proven_train_mode_norm_writers():
     log = trace_fn(counter, torch.randn(3, 4))
     try:
         with pytest.raises(BufferSinkRoutingError) as exc_info:
-            log.run(inputs=torch.randn(3, 4))
+            log.run_transaction(inputs=torch.randn(3, 4))
         _assert_buffer_sink_refusal(exc_info)
     finally:
         log.cleanup()

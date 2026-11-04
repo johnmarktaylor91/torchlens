@@ -594,8 +594,8 @@ def dead_neurons_rows(
     skipped = 0
     axes: dict[str, int] = {}
     for op in _layer_output_ops(trace):
-        label = _op_label(op)
-        source_line = _source_line(op)
+        module = _output_module(op)
+        row_key = {"op": _op_label(op), "module": module, "source_line": _source_line(op)}
         out, reason = _safe_out(op, get_payload_codec(str(trace._provenance_backend)))
         reason = reason or _tensor_unavailable_reason(out)
         if reason is None and not isinstance(out, torch.Tensor):
@@ -606,13 +606,12 @@ def dead_neurons_rows(
             skipped += 1
             rows.append(
                 {
-                    "op": label,
+                    **row_key,
                     "total_units": None,
                     "dead_count": None,
                     "dead_frac": None,
                     "sample_dead_idx": [],
                     "reason": reason or _unit_axis_reason(trace, out, dim),
-                    "source_line": source_line,
                 }
             )
             continue
@@ -625,13 +624,12 @@ def dead_neurons_rows(
         dead_count = len(dead_indices)
         rows.append(
             {
-                "op": label,
+                **row_key,
                 "total_units": total_units,
                 "dead_count": dead_count,
                 "dead_frac": 0.0 if total_units == 0 else dead_count / total_units,
                 "sample_dead_idx": dead_indices[:10],
                 "reason": "",
-                "source_line": source_line,
             }
         )
 
@@ -703,9 +701,29 @@ def _unit_axis_reason(trace: Trace, out: Any, dim: int | None) -> str:
     return "invalid-dim"
 
 
+def _output_module(op: Op) -> str | None:
+    """Return the innermost module address whose output ``op`` is, or ``None``.
+
+    Parameters
+    ----------
+    op:
+        TorchLens op.
+
+    Returns
+    -------
+    str | None
+        The deepest address in ``Op.output_of_modules``, or ``None`` when the op
+        is no module's output.
+    """
+
+    addresses = list(getattr(op, "output_of_modules", None) or ())
+    return max(addresses, key=lambda address: address.count("."), default=None)
+
+
 #: Columns of the ``dead_neurons`` table, in order.
 _DEAD_NEURON_COLUMNS: tuple[str, ...] = (
     "op",
+    "module",
     "total_units",
     "dead_count",
     "dead_frac",
@@ -752,7 +770,8 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float 
     Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
-        Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
+        Columns are ``op``, ``module`` (the innermost module whose output the
+        op is, or ``None``), ``total_units``, ``dead_count``, ``dead_frac``,
         ``sample_dead_idx``, ``reason``, and ``source_line`` (``"file:line"``
         of the user code that ran the op). The optional view over
         :func:`dead_neurons_rows` (the pandas-free core).

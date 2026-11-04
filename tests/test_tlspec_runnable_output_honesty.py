@@ -143,7 +143,7 @@ def test_f1_live_run_returns_exact_output_object(kind: str) -> None:
     model = _F1Model(kind)
     x = torch.tensor([[1.0, 4.0], [3.0, 2.0]])
     trace = _capture(model, x)
-    result = trace.run(inputs=x)
+    result = trace.run_transaction(inputs=x)
     live = model(x)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -202,7 +202,7 @@ def _roundtrip(model: nn.Module, x: Any, path: Path, *, include_activations: boo
 
     trace = _capture(model, x)
     trace.save(path, level="runnable", include_activations=include_activations)
-    return tl.load(path).run(inputs=x)
+    return tl.load(path).run_transaction(inputs=x)
 
 
 def test_f2_bytes_output_literal_round_trips_byte_exact(tmp_path: Path) -> None:
@@ -255,7 +255,7 @@ def test_f3_custom_mapping_output_never_bare_tensor_verified(tmp_path: Path) -> 
     except tl.errors.TorchLensError:
         # Honest producer-preflight rejection at save is the chosen contract.
         return
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation in {
         NumericAttestationStatus.NOT_APPLICABLE,
@@ -280,7 +280,7 @@ def test_f5_memoryview_output_round_trips_or_rejects(tmp_path: Path) -> None:
         # Honest reject at save is acceptable.
         return
     # If save advertised runnable, the loaded run must NOT crash.
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
         assert bytes(result.output[1]) == b"abc"
     else:
@@ -297,7 +297,7 @@ def test_r7_nonreconstructable_class_output_is_unverifiable_or_rejected(
     x = torch.tensor([1.0, 2.0])
     trace = _capture(model, x)
 
-    live_result = trace.run(inputs=x)
+    live_result = trace.run_transaction(inputs=x)
     assert live_result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
     with pytest.raises(tl.errors.TorchLensError):
@@ -378,7 +378,7 @@ def test_f6_exotic_output_dict_key_typed_reject_not_raw_valueerror(
         # A typed TorchLens error (honest reject) is acceptable.
         return
     # If it saved, the identical loaded run must return the mapping faithfully.
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     assert result.report.path_faithfulness is not PathFaithfulness.DIVERGED
     assert key in result.output
 
@@ -598,7 +598,7 @@ def test_r35_lossless_outputs_still_save_and_run_verified(tmp_path: Path, kind: 
     trace = _capture(model, x)
     path = tmp_path / f"{kind}.tlspec"
     trace.save(str(path), level="runnable")
-    result = tl.load(str(path)).run(inputs=x)
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert type(result.output) is type(expected)
     if isinstance(expected, torch.Tensor):

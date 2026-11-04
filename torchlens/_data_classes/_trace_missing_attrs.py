@@ -77,7 +77,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "trace.module_collapse_order still lists every module's collapse score"
     ),
     "save_new_outs": (
-        "use trace.run(inputs=x) -- save_new_outs left the public surface; run(inputs=) is the "
+        "use trace.run_transaction(inputs=x) -- save_new_outs left the public surface; run_transaction(inputs=) is the "
         "graph-checked refresh (a changed graph raises), while run(model, x) re-captures"
     ),
     "validate_saved_outs": (
@@ -90,13 +90,13 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "set": removed_set_remedy("Trace", "trace", "site, value"),
     "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
     "conditional_elif_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
     "conditional_else_entry_edges": (
-        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"
     ),
 }
 

@@ -5,8 +5,8 @@ the ``show_call_tree`` ASCII printer with its display/visibility helpers,
 plus the call-scope helpers that resolve a ModuleCall's op-slot labels and
 count its scoped graph edges. ``module.py`` consumes
 ``_edge_counts_for_scope``, ``_print_call_tree_from_root``,
-``_resolve_call_ops`` and ``_sum_call_ops_field``; the display-only helpers
-are internal to the printer.
+``_resolve_call_ops``, ``_sum_call_ops_field``, ``_live_call_trace`` and
+``_bound_call_trace``; the display-only helpers are internal to the printer.
 """
 
 from collections.abc import Iterator
@@ -276,3 +276,37 @@ def show_call_tree(
         show_call_index=show_call_index,
         file=file,
     )
+
+
+def _live_call_trace(call: "ModuleCall") -> "Trace | None":
+    """Return the ModuleCall's owning Trace, or ``None`` for a call never bound to one.
+
+    A call holds its Trace weakly, so a dead reference means the user dropped the
+    Trace: that refuses ``trace_reference_collected`` instead of reading as an
+    empty result.
+    """
+
+    ref = call.__dict__.get("_source_trace_ref")
+    if ref is None:
+        return None
+    trace = ref()
+    if trace is None:
+        raise RecordBindingError(
+            "Trace has been garbage-collected; a ModuleCall does not keep its Trace alive",
+            code="trace_reference_collected",
+            remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
+        )
+    return cast("Trace", trace)
+
+
+def _bound_call_trace(call: "ModuleCall") -> "Trace":
+    """Return the ModuleCall's owning Trace; refuse when unbound or collected."""
+
+    trace = _live_call_trace(call)
+    if trace is None:
+        raise RecordBindingError(
+            "ModuleCall not bound to a Trace",
+            code="record_not_bound",
+            remedy="keep the owning Trace alive and read records through it",
+        )
+    return trace

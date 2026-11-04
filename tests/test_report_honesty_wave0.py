@@ -230,8 +230,9 @@ def test_compat_report_repr_is_designed_and_bounded() -> None:
     report = tl.report.doctor(nn.Linear(3, 4), torch.randn(2, 3))
     rendered = repr(report)
     assert str(report) == report.show()
-    assert rendered.startswith("TorchLens doctor report:")
-    assert "finding(s)" in rendered
+    assert rendered.startswith("DoctorReport ")
+    assert rendered.endswith(" rows")
+    assert str(report).splitlines()[0] == rendered
     assert ESC not in rendered
     for line in rendered.splitlines():
         assert len(line) <= 160
@@ -274,11 +275,12 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
 # Kept: sole branch coverage of report/_doctor.py.
 @pytest.mark.heavy  # doctor probe walk crossed the 7s smoke budget at T55 (7.2s cpu)
 def test_doctor_report_repr_is_bounded() -> None:
-    """DoctorReport repr is the designed multi-line render with capped lines."""
+    """DoctorReport repr names its scope and row count in one bounded line."""
 
     doctor_report = tl.report.doctor()
     rendered = repr(doctor_report)
-    assert rendered.startswith("TorchLens doctor report:")
+    assert rendered.startswith("DoctorReport environment:")
+    assert len(rendered.splitlines()) == 1
     for line in rendered.splitlines():
         assert len(line) <= 200
     assert isinstance(doctor_report.capability_snapshot(), dict)

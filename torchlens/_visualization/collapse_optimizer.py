@@ -1,8 +1,6 @@
 """Bounded beam-search tree-cut optimizer for v2 auto collapse.
-
 The selection is a memoized tree cut with a deterministic, bounded frontier,
 not an exact optimizer:
-
 - every frontier merge keeps at most one point per rendered node count and at
   most ``FRONTIER_CAP`` node-count buckets, so reachable counts can be pruned
   (a beam, with classic beam suboptimality);
@@ -12,7 +10,6 @@ not an exact optimizer:
   wins globally can be pruned locally;
 - subtrees larger than ``K_CAP`` rendered nodes are dropped from frontiers
   entirely.
-
 The result is a deterministic approximation of the stated objective. "DP" and
 "frontier" in the helper names refer to the memoized structure, not to an
 optimality guarantee.
@@ -30,6 +27,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _boundary_bundle as _bundle
@@ -125,7 +123,6 @@ MAX_SALIENCE_FLOOR = 0.75
 @dataclass(frozen=True)
 class OptimizerWeights:
     """Cost weights for the v2 tree-cut optimizer.
-
     Parameters
     ----------
     w_grain:
@@ -164,7 +161,6 @@ class OptimizerWeights:
 @dataclass(frozen=True)
 class RoleComponent:
     """Flow-ordered sibling role component.
-
     Parameters
     ----------
     members:
@@ -307,6 +303,8 @@ class _FrontierPoint:
 @dataclass(frozen=True)
 class _OptimizerState:
     """Immutable shared state for one g-star DP run."""
+
+    __repr__ = short_dataclass_repr
 
     trace: Trace
     context: RenderContext
@@ -560,6 +558,8 @@ def _run_admitted_selection(
 @dataclass(frozen=True)
 class _PlanMemos:
     """Plan-local pricing memos shared across one selection's passes."""
+
+    __repr__ = short_dataclass_repr
 
     expanded_cache: dict[
         str, tuple[ChildCondensedFlowGraph | None, tuple[str, ...], tuple[str, ...]]

@@ -19,6 +19,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _SharedThenFresh(nn.Module):
     """One Linear reused for two passes, then a fresh single-pass Linear."""
@@ -114,9 +116,7 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         else:
             layer.do(
                 torch.zeros(2, 3),
-                intervention=tl.options.InterventionOptions(
-                    engine="set_only", confirm_mutation=True
-                ),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
             )
     if door == "set_only":
         # One staged value entry covers both passes; nothing propagates yet.
@@ -148,7 +148,7 @@ def test_set_only_callable_on_multi_pass_layer_is_sticky_on_both_passes(captured
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         fork.layers[shared].do(
             _double_hook,
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     # Staged as a hook, not a value, and nothing propagates yet.
     assert fork._intervention_spec.target_value_specs == []
@@ -218,11 +218,7 @@ def test_union_of_pass_labels_hook_refires_on_run(captured, engine: str) -> None
     shared, _fresh = _linear_labels(trace)
     fork = trace.fork()
     site = tl.label(f"{shared}:1") | tl.label(f"{shared}:2")
-    options = (
-        tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
-        if engine == "set_only"
-        else None
-    )
+    options = tl.options.InterventionOptions(engine="set_only") if engine == "set_only" else None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", MultiMatchWarning)
         fork.do(site, _double_hook, intervention=options)

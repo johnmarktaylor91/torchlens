@@ -47,8 +47,9 @@ def _assert_contract(exc: BaseException, expected_code: str, builtin: type[BaseE
     assert fields["code"] == expected_code
     remedy = fields.get("remedy")
     assert isinstance(remedy, str) and remedy
-    assert "Remedy:" in str(exc)
-    assert remedy in str(exc)
+    message = str(exc)
+    remedy_label = "\n  remedy     " if "\n  candidates " in message else "Remedy: "
+    assert f"{remedy_label}{remedy}" in message
 
 
 RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]], ...] = (
@@ -90,7 +91,7 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "run_legacy_arguments_conflict",
         TypeError,
-        lambda log: log.run(object(), torch.randn(1, 4), inputs=torch.randn(1, 4)),
+        lambda log: log.run(object(), torch.randn(1, 4)),
     ),
     (
         "derived_field_assignment_invalid",

@@ -2325,3 +2325,163 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 03849402b7182502db552dd4e0e243baa2ea02ed (clean)
 recorded: 2026-11-03T21:18:05.870865+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:08:29.734094+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:08:35.794484+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:08:41.982029+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:08:48.031383+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:08:54.994758+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:09:01.416461+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:09:07.971630+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: Recording parity with tl.trace (rulings-gap-3 ce787e987, in C-134 via C-131 acea48883): predicate record events now carry the equivalence class and parameter identity exhaustive capture gives (55538173a "give predicate records an equivalence class and parameter identity so cooked recordings group loops": graph.equivalence_class unknown to populated, params_facet params populated, params_count 0 to 2); a single-output op carries no multi_output_index (98a7559a0, _sparse_refs exhaustive parity: output.multi_output_index defaulted_zero to unknown); the root module frame (address "") is no longer listed in an op module stack (54a6e1429 "give a cooked Recording the exhaustive graph shape for rerun": module_stack and modules_facet lose the root frame, root-level ops get an empty stack). Each record now matches the tl.trace exhaustive golden on these fields; the re-record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (c134-oracle bisect c134o-bisect-1, c134o-bisect-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
+recorded: 2026-11-03T23:09:13.902764+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:14.725172+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:20.258473+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:26.010729+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:31.465964+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:37.726845+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:43.446291+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:49.741033+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:55.200952+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: format 3 chunk naming (5b3f6d79b "feat(format3): stream payloads into 3.0 chunks and write the envelope at publish", on the train by C-128; docs/maintainers/saved_format_3.md names chunks blobs/<codec>-<nnnn>.safetensors): ground_truth.disk_storage.files lists blobs/torch_safetensors_v1-0000.safetensors and blobs/torch_safetensors_v1-0001.safetensors in place of blobs/0000000001.safetensors and blobs/0000000002.safetensors; the re-recorded record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (fixq6-g4 per-case diff, job mp-c133-g4-oracle-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6a81be6458cf43359728dd5e8f38648365664aee (clean)
+recorded: 2026-11-03T23:59:14.313455+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-133 remerge (mq-c133 bd05f5c3e + train 19cfba538): re-record plain_cnn__disk_record on the merged tip. Two intended changes meet: (1) the format stack 2cf31c4ec format 3 chunk names (blobs/torch_safetensors_v1-<nnnn>.safetensors, saved_format_3.md); (2) the train C-134 75721dc85 re-record (Recording parity with tl.trace: equivalence class and parameter identity on predicate records; n_ops_committed rename). Both parents disagree only in measured tracking medians and the digest list; every other differing field is one of these two changes (field audit in RESULT-REMERGE-C133.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1587a409fd98814913c4d5ced16a53c72db48961 (dirty)
+recorded: 2026-11-04T05:07:42.631442+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-133 remerge (mq-c133 bd05f5c3e + train 19cfba538): re-record plain_cnn__disk_exhaustive and plain_cnn__disk_predicate on the merged tip. The train re-recorded them on C-135 (2a89ec78f, replay templates on every eager capture) with format 2 chunk names; the format stack writes the 3.0 layout to disk (2cf31c4ec, blobs/torch_safetensors_v1-<nnnn>.safetensors plus records/, saved_format_3.md). Against the train the goldens differ only in disk_storage.files, the measured tracking medians and the digest list (field audit in RESULT-REMERGE-C133.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8d1a9c956d0d971c4f9e5c7700a5035c1bfbabc6 (clean)
+recorded: 2026-11-04T05:27:33.775403+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-133 remerge (mq-c133 bd05f5c3e + train 19cfba538): re-record plain_cnn__disk_exhaustive and plain_cnn__disk_predicate on the merged tip. The train re-recorded them on C-135 (2a89ec78f, replay templates on every eager capture) with format 2 chunk names; the format stack writes the 3.0 layout to disk (2cf31c4ec, blobs/torch_safetensors_v1-<nnnn>.safetensors plus records/, saved_format_3.md). Against the train the goldens differ only in disk_storage.files, the measured tracking medians and the digest list (field audit in RESULT-REMERGE-C133.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8d1a9c956d0d971c4f9e5c7700a5035c1bfbabc6 (clean)
+recorded: 2026-11-04T05:27:42.184547+00:00

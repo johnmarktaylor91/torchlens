@@ -2,7 +2,8 @@ name: Docs
 
 # Build the documentation site strictly and check its links. Runs on pull
 # requests and on manual dispatch only: never on pushes to work branches.
-# There is no deploy job; publishing the site is a separate, later step.
+# There is no deploy job here; api-map.yml builds the same site and deploys
+# it to GitHub Pages after each release.
 on:
   pull_request:
   workflow_dispatch:

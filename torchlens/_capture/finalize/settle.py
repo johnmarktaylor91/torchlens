@@ -81,7 +81,7 @@ def save_new_outs(
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
-        _staged_plan: The live ``run(inputs=)`` door's plan for applying the
+        _staged_plan: The live ``run_transaction(inputs=)`` door's plan for applying the
             trace's staged intervention spec; the refreshed capture then runs
             under it and replaces this trace's state instead of being projected.
 

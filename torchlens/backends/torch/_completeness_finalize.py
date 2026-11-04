@@ -13,6 +13,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import CaptureGapWarning
+from ..._utils._package_frames import external_warning_stacklevel
 from ..._utils._torch_symbols import torch_attr
 from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (
@@ -262,7 +263,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 f"{first['operator']} ({first['reason']}). The Trace is marked "
                 "capture_verified=False; inspect trace.completeness_diagnostics.",
                 CaptureGapWarning,
-                stacklevel=3,
+                stacklevel=external_warning_stacklevel(),
             )
             # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
             # Imported here so a capture without a gap never pays for the import.
@@ -477,6 +478,18 @@ def _resolve_witness_requests(trace: Any) -> tuple[bool, bool, bool, Any]:
     return record_escapes, record_aten, plane_p, event_stream
 
 
+def _finalize_witness(state: _WitnessState, trace: Any, mode: str, *, runnable: bool) -> None:
+    """Run the end-of-forward witness passes in their fixed order."""
+
+    if mode == "shadow":
+        _finalize_census(state)
+    else:
+        _finalize_input_semantics_without_census(trace)
+    if runnable:
+        _finalize_runnable_ledger(state)
+    _finalize_plane_p(state)
+
+
 @contextmanager
 def capture_completeness_witness(trace: Any) -> Iterator[None]:
     """Optionally run an aten census around one active-logging forward.
@@ -535,25 +548,20 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
                     try:
                         yield
                     finally:
-                        if mode == "shadow":
-                            _finalize_census(state)
-                        else:
-                            _finalize_input_semantics_without_census(trace)
-                        _finalize_runnable_ledger(state)
-                        _finalize_plane_p(state)
+                        _finalize_witness(state, trace, mode, runnable=True)
             finally:
                 _hub._ACTIVE_WITNESS_STATE = prior_active_state
                 _state._runnable_ledger_armed = prior_ledger_armed
+                state.release()
             return
-        with mode_context:
-            try:
-                yield
-            finally:
-                if mode == "shadow":
-                    _finalize_census(state)
-                else:
-                    _finalize_input_semantics_without_census(trace)
-                _finalize_plane_p(state)
+        try:
+            with mode_context:
+                try:
+                    yield
+                finally:
+                    _finalize_witness(state, trace, mode, runnable=False)
+        finally:
+            state.release()
 
 
 def _collect_authorized_internal_caller_modules() -> None:

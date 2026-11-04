@@ -22,8 +22,10 @@ from torchlens.intervention.errors import (
 from torchlens.io import TraceState
 from torchlens.options import InterventionOptions
 
-_CONFIRM = InterventionOptions(confirm_mutation=True)
-_DIFFERENTIABLE = InterventionOptions(differentiable=True, confirm_mutation=True)
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+_CONFIRM = InterventionOptions()
+_DIFFERENTIABLE = InterventionOptions(differentiable=True)
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
