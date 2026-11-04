@@ -51,6 +51,10 @@ from typing import Any
 
 import torch
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 GATED_COUNTERS = (
     "metadata_pickle_dumps",
     "pickler_save_calls",
