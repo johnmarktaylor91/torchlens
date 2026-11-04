@@ -48,6 +48,10 @@ SUPPORTED_FORMATS = ("png", "svg", "pdf")
 #: position can never read as a small-but-present attention weight.
 MASKED_CELL_COLOR = "#d9d9d9"
 
+#: Outline of the query row a generation decode step computed (the output
+#: color of the graph palette; it stays visible over both ends of viridis).
+STEP_ROW_COLOR = "#ff9999"
+
 _INSTALL_COMMAND = 'pip install "torchlens[viz]"'
 
 

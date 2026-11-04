@@ -28,6 +28,7 @@ from ._mpl import (
     ATTENTION_CMAP,
     DIVERGING_CMAP,
     MASKED_CELL_COLOR,
+    STEP_ROW_COLOR,
     colorbar,
     figure,
     paged_paths,
@@ -152,9 +153,10 @@ def _disclosure_lines(view: AttentionView, annotation: Annotation | None) -> lis
             "(shared storage is never presented as independent heads)"
         )
     if view.episode is not None:
-        lines.append(
-            f"episode step {view.episode.step} ({view.episode.role}, {view.episode.completion})"
-        )
+        line = f"episode step {view.episode.step} ({view.episode.role}, {view.episode.completion})"
+        if view.episode.role == "decode":
+            line += "; outlined row: the position this step computed (rows above it: earlier steps)"
+        lines.append(line)
     if annotation is not None:
         measured = sum(1 for value in annotation.values if value is not None)
         lines.append(
@@ -169,6 +171,33 @@ def _disclosure_lines(view: AttentionView, annotation: Annotation | None) -> lis
                 f"{receipt.positive_control:+.3g}; fires: {receipt.fires}"
             )
     return lines
+
+
+def _outline_step_row(ax: Any, view: AttentionView) -> None:
+    """Outline the last query row of a decode step's view (tviz memo D22).
+
+    A cached decode forward computes exactly one row, the newest position,
+    which is the last row of the view; the prefill computes every row and
+    gets no outline.
+    """
+
+    if view.episode is None or view.episode.role != "decode":
+        return
+    require_matplotlib()
+    from matplotlib.patches import Rectangle
+
+    n_dst, n_src = int(view.pattern.shape[1]), int(view.pattern.shape[2])
+    ax.add_patch(
+        Rectangle(
+            (0, n_dst - 1),
+            n_src,
+            1,
+            fill=False,
+            edgecolor=STEP_ROW_COLOR,
+            linewidth=1.8,
+            clip_on=False,
+        )
+    )
 
 
 def _head_title(view: AttentionView, head: int, suffix: str) -> str:
@@ -265,6 +294,7 @@ def _render_one_page(  # noqa: PLR0913 -- page geometry is explicit, never modul
         ax = axes[slot // columns][slot % columns]
         mesh = _panel_mesh(ax, view, view.heads.index(head), vmin, vmax)
         _panel_ticks(ax, view)
+        _outline_step_row(ax, view)
         suffix, value = _annotation_for(annotation, head)
         _effect_border(ax, value, effect_scale)
         ax.set_title(_head_title(view, head, suffix), fontsize=7)
