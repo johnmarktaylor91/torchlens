@@ -17,6 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
+from ._pass_marks import pass_label_fits, with_branch
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
@@ -24,7 +25,6 @@ from ._render_module_scope import (
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
-from ._typography import DEFAULT_TYPOGRAPHY
 from .collapse_plan import OpSegment
 
 if TYPE_CHECKING:
@@ -1085,7 +1085,7 @@ def _add_edges_for_node(
                     "fontcolor": label_color or node_color,
                     "style": edge_style,
                     "arrowsize": ".7",
-                    "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+                    "labelfontsize": edge_annotation_pt(),
                 }
             tail_name = hook_name
 
@@ -1216,7 +1216,7 @@ def _add_edges_for_node(
             "fontcolor": label_color or node_color,
             "style": edge_style,
             "arrowsize": ".7",
-            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+            "labelfontsize": edge_annotation_pt(),
         }
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
@@ -1282,7 +1282,7 @@ def _add_edges_for_node(
                     edge_dict,
                     is_self_loop=edge_is_self_loop,
                     rankdir=rankdir,
-                    allow_midpoint_merge="label" not in edge_dict and not arg_labeler_may_fire,
+                    allow_midpoint_merge=pass_label_fits(edge_dict) and not arg_labeler_may_fire,
                     rolled_maps=rolled_maps,
                 )
 
@@ -1855,7 +1855,7 @@ def _html_edge_label(text: str) -> str:
     text = html_escape(text)
     return (
         f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{_EDGE_LABEL_PAD}">'
-        f'<TR><TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">{text}</FONT></TD></TR></TABLE>>'
+        f'<TR><TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD></TR></TABLE>>'
     )
 
 
@@ -1877,7 +1877,7 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
         f'<TR><TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD>'
-        f'<TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">{text}</FONT></TD>'
+        f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD>'
         f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
     )
 
@@ -1953,7 +1953,7 @@ def _label_rolled_call_indexs(
     # Measured on stock GPT-2 rolled: 97 -> 59 hard label violations.
     if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
-        edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
+        edge_dict["label"] = with_branch(edge_dict, _html_combined_recurrence_label(top, bottom))
         return
     single_label = out_label if out_label is not None else in_label
     if (
@@ -1961,7 +1961,7 @@ def _label_rolled_call_indexs(
         and single_label is not None
         and (out_label is None or in_label is None)
     ):
-        edge_dict["label"] = _html_combined_recurrence_label(single_label)
+        edge_dict["label"] = with_branch(edge_dict, _html_combined_recurrence_label(single_label))
         return
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)

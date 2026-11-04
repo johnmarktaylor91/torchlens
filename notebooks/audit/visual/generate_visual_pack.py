@@ -733,8 +733,6 @@ AXES: dict[str, str] = {
 # Axes that are deliberately NOT given a page, with the honest reason.
 NA_AXES: dict[str, str] = {
     "vis_mode:none": "a trace with no picture requested draws nothing by definition.",
-    "vis_renderer:dagua": "Experimental opt-in backend (torchlens.experimental.dagua); "
-    "not part of the stable visual language.",
     "placement:auto": "'auto' just selects dot or rank by cost estimate; both concrete "
     "engines are shown on the placement page.",
     "code_panel:forward_class": "code_panel='forward' and 'class' use the same panel "

@@ -82,7 +82,7 @@ from ._render_utils import (
     make_module_cluster_attrs,
     relativize_visualizer_image,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import edge_annotation_pt
 from .code_panel import (
     CodePanelOption,
     compose_graph_with_code_panel,
@@ -795,9 +795,6 @@ _SVG_ROOT_RE = re.compile(r"<svg\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
 _SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quote)""")
 
 
-# Sourced from the one typography record (vizmech D29): the historical
-# literal 8 is now the record's annotation role.
-_EDGE_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer left/right of a self-loop label
 
@@ -897,7 +894,6 @@ __all__ = [
     "VisualizationOverrides",
     "VisualizationTheme",
     "_CODE_PANEL_COMPOSED_FORMATS",
-    "_EDGE_LABEL_FONT_SIZE",
     "_EDGE_LABEL_PAD",
     "_RenderIRDecisionBuilder",
     "_GRAPHVIZ_ESCAPE_HINT",
@@ -930,6 +926,7 @@ __all__ = [
     "dataclass",
     "defaultdict",
     "direction_to_rankdir",
+    "edge_annotation_pt",
     "field",
     "format_memory",
     "format_collapsed_module_contents",

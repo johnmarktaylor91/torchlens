@@ -1818,16 +1818,16 @@ def channel_wrapped_node_spec_fn(
     return channel_then_user
 
 
-def raise_encoding_dagua_refusal(channels: tuple[str, ...] = ("color_by",)) -> None:
-    """Refuse an active channel on the dagua renderer (never a silent drop).
+def raise_encoding_renderer_refusal(renderer: str, channels: tuple[str, ...]) -> None:
+    """Refuse an active channel on a renderer without encoding support (never a silent drop).
 
-    An active channel silently dropped by the alternate label path would be
-    a dishonest no-op; channels are Graphviz-dot-only in v1.
+    A renderer whose capability rows lack ``encoding_channels`` would drop the
+    channel as a dishonest no-op; channels are Graphviz-dot-only in v1.
     """
 
     channel_names = ", ".join(channels) if channels else "color_by"
     raise _encoding_error(
-        f"encoding channels ({channel_names}) are not supported by the dagua renderer",
+        f"encoding channels ({channel_names}) are not supported by the {renderer} renderer",
         code="encoding_requires_dot_layout",
         remedy=f"use the graphviz renderer, or drop {channel_names}",
         argument="vis_renderer",
