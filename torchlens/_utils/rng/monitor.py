@@ -39,7 +39,7 @@ from . import (
     numpy_frames,
 )
 from .call_sites import _call_site_time_arg_proof
-from .channels import HostRngMonitorResult
+from .channels import HostRngMonitorResult, _subclass_overrides_reader
 from .inventory_types import (
     _NUMPY_RNG_INSTANCE_TYPES,
     _UNCERTAIN_DETAIL_CAP,
@@ -911,24 +911,13 @@ class host_nondeterminism_monitor:
         # the base in the MRO) -- an override that returns a fixed value is not a clock read; if
         # it calls the inherited reader, that inner call is caught by the exact-key path.
         if name in ("now", "utcnow", "today") and issubclass(receiver, _datetime_module.datetime):
-            if not self._subclass_overrides_reader(receiver, name, _datetime_module.datetime):
+            if not _subclass_overrides_reader(receiver, name, _datetime_module.datetime):
                 return f"datetime.datetime.{name}"
             return None
         if name == "today" and issubclass(receiver, _datetime_module.date):
-            if not self._subclass_overrides_reader(receiver, name, _datetime_module.date):
+            if not _subclass_overrides_reader(receiver, name, _datetime_module.date):
                 return "datetime.date.today"
         return None
-
-    @staticmethod
-    def _subclass_overrides_reader(receiver: type, name: str, base: type) -> bool:
-        """Return whether ``receiver`` redefines ``name`` above ``base`` in its MRO (r42 hon1_1)."""
-
-        for klass in receiver.__mro__:
-            if klass is base:
-                return False
-            if name in getattr(klass, "__dict__", {}):
-                return True
-        return False
 
     @property
     def _sys_hook(self) -> Any:
@@ -940,6 +929,7 @@ class host_nondeterminism_monitor:
 
     @_sys_hook.setter
     def _sys_hook(self, hook: Any) -> None:
+        """Hold ``hook`` weakly (``None`` clears the slot)."""
         self._sys_hook_ref = None if hook is None else _weakref_module.ref(hook)
 
     @property
@@ -949,6 +939,7 @@ class host_nondeterminism_monitor:
 
     @_threading_hook.setter
     def _threading_hook(self, hook: Any) -> None:
+        """Hold ``hook`` weakly (``None`` clears the slot)."""
         self._threading_hook_ref = None if hook is None else _weakref_module.ref(hook)
 
     def _make_profile_hook(self, predecessor: Any, *, records_thread_ident: bool = False) -> Any:

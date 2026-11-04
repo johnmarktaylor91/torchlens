@@ -50,7 +50,8 @@ class ReceptiveFieldRule(Protocol):
     >>> builtin = tl.receptive_field.rules()["conv2d"]
     >>> def delegating_rule(context):
     ...     return builtin(context)
-    >>> op = tl.trace(model, x)["conv2d_1_1"]
+    >>> trace = tl.trace(model, x)
+    >>> op = trace["conv2d_1_1"]
     >>> delegating_rule(tl.receptive_field.ReceptiveFieldRuleContext(op)) is not None
     True
     """
