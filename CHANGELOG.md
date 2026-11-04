@@ -3,6 +3,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
+  read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
+  or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
+  promise. Error codes, return values and labels are unchanged.
+
 <!-- version list -->
 
 ## v2.38.0 (2026-11-04)
