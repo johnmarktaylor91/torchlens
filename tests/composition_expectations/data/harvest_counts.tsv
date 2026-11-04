@@ -4,7 +4,5 @@
 # by regex today); the taught-path universe consumes this feed at wave A.
 metric	count
 harvest_doc_files	191
-harvest_python_fences	534
-harvest_claim_strings	291
 harvest_python_fences	539
 harvest_claim_strings	292
