@@ -6,13 +6,18 @@ data-free ``FakeTensor`` inputs, then runs it eagerly. TorchLens must stay out
 of that fake-tensor pass and record only the eager run.
 
 ``cond`` runs the same program with or without grad, so its grad trace records
-exactly the no-grad ops. ``while_loop``, ``map`` and ``scan`` run a different
-eager program on the grad path (stacked loop outputs, sliced and unbound map
-rows, the scan's traced combine graph), and TorchLens records what executed.
-For them the grad trace must reproduce the no-grad outputs bit for bit,
-validate True (and still fail validation when a capture bug is planted), keep
-the no-grad ops as an ordered subsequence, and hold only real activations.
-Backward must run through every traced output.
+exactly the no-grad ops. ``while_loop`` and ``scan`` run a different eager
+program on the grad path (stacked loop outputs, the scan's traced combine
+graph), and TorchLens records what executed. For them the grad trace must
+reproduce the no-grad outputs bit for bit, validate True (and still fail
+validation when a capture bug is planted), keep the no-grad ops as an ordered
+subsequence, hold only real activations, and carry backward.
+
+Capture runs under the ``force_eager`` stance. A grad-requiring ``map`` then
+returns one tensor per row instead of the stacked tensor (plain torch does the
+same under that stance), so its capture keeps failing loudly rather than
+returning a different structure. ``cond`` backward under that stance fails in
+plain torch too, so backward is checked for ``while_loop`` and ``scan``.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends.torch import rescue
+from torchlens.backends.torch import rescue, wrappers
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
@@ -218,7 +223,6 @@ _COND_CASES: dict[str, Callable[[], nn.Module]] = {
 
 _LOOP_CASES: dict[str, Callable[..., nn.Module]] = {
     "while_loop": _WhileModel,
-    "map": _MapModel,
     "scan": _ScanModel,
 }
 
@@ -397,20 +401,73 @@ def raw_mul() -> Iterator[_Mul]:
     wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
 
-@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
-def test_loop_hop_grad_trace_with_a_planted_drop_fails_validation(
-    name: str, raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
+def test_while_loop_grad_trace_with_a_planted_drop_fails_validation(
+    raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A capture that drops an op in the HOP body still fails validation under grad.
+    """A raw op the capture drops in the loop body still fails validation under grad.
 
-    The rescue re-run is disabled so the capture keeps the planted drop.
+    The rescue re-run is disabled so the capture keeps the planted drop. (A raw
+    op in a ``scan`` body is not a drop on the grad path: the body runs as the
+    graph torch traced from it, whose ops are captured.)
     """
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    model, x = _model(name, raw_mul), _input(name)
+    model, x = _model("while_loop", raw_mul), _input("while_loop")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
+
+
+@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
+def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tracing-pass guard that also swallows an eager body op fails validation.
+
+    The planted guard passes the body's ``* 2.0`` through unlogged on the eager
+    run, the capture bug an over-broad fake-pass test would cause.
+    """
+
+    real_guard = wrappers.inside_tracing_tensor_pass
+
+    def over_broad_guard(args: tuple[object, ...], kwargs: dict[str, object]) -> bool:
+        """Report the real tracing pass, and also any call scaling by ``2.0``.
+
+        Parameters
+        ----------
+        args:
+            Positional arguments of the decorated call.
+        kwargs:
+            Keyword arguments of the decorated call.
+
+        Returns
+        -------
+        bool
+            Whether the wrapper should pass the call through unlogged.
+        """
+
+        planted = any(isinstance(arg, float) and arg == 2.0 for arg in args)
+        return planted or real_guard(args, kwargs)
+
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+    monkeypatch.setattr(wrappers, "inside_tracing_tensor_pass", over_broad_guard)
+    model, x = _model(name), _input(name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
+
+
+def test_map_grad_operand_capture_fails_loudly() -> None:
+    """A grad-requiring ``map`` fails capture instead of returning per-row outputs.
+
+    Under the capture stance torch's eager ``map`` autograd returns one tensor
+    per row; recording that would silently differ from the untraced call.
+    """
+
+    torch.manual_seed(0)
+    x = torch.randn(3, 4).requires_grad_(True)
+    with pytest.raises(AttributeError, match="fake_mode"):
+        tl.trace(_MapModel(), x)
 
 
 @pytest.mark.parametrize("name", _ALL_CASES)
@@ -427,7 +484,7 @@ def test_grad_operands_leave_only_real_activations(name: str) -> None:
         assert op.out.device.type == x.device.type, op.func_name
 
 
-@pytest.mark.parametrize("name", _ALL_CASES)
+@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
 def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     """The traced output carries the graph, and backward gives the eager grads."""
 
@@ -442,5 +499,6 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     trace.backward(output.out.sum())
     assert traced_input.grad is not None
     torch.testing.assert_close(traced_input.grad, reference_input.grad)
-    assert output.has_saved_grad
-    assert type(output.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+    producer = trace[output.parents[0]]
+    assert producer.has_saved_grad
+    assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES

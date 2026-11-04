@@ -12,6 +12,12 @@ or crashes reading ``.device`` of a half-built ``FakeTensor``. The capture
 wrapper therefore passes such calls through unlogged; only the eager run is
 recorded, exactly as when no operand requires grad.
 
+``map`` is the exception. Capture runs under the ``force_eager`` stance, which
+skips the compile a grad-requiring ``map`` normally runs, and torch's eager
+``map`` autograd then returns one tensor per row instead of the stacked tensor.
+Passing its tracing pass through would turn the old crash into a silently
+different result, so that pass is left to fail as before.
+
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
 tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class); an
 absent probe answers "not a tracing pass", which leaves capture unchanged.
@@ -19,6 +25,7 @@ absent probe answers "not a tracing pass", which leaves capture unchanged.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -26,6 +33,7 @@ from ... import _state
 from ..._utils._torch_compat import (
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
+    get_higher_order_operator,
     get_tracing_tensor_types,
 )
 
@@ -76,6 +84,33 @@ def _fake_tensor_mode_active() -> bool:
     return any(isinstance(mode, fake_mode_cls) for mode in stack)
 
 
+_OPERATOR_CALL_FRAMES = frozenset({"__call__", "dispatch"})
+"""Code names of the ``HigherOrderOperator`` frames whose ``self`` is the operator."""
+
+
+def _inside_unsupported_grad_operator() -> bool:
+    """Return whether the running tracing pass belongs to a grad-requiring ``map``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a ``HigherOrderOperator.__call__`` or ``dispatch`` frame
+        of ``map_impl`` is on the Python stack. Its eager autograd result
+        differs from the untraced call under the capture stance (see the
+        module docstring), so that pass is not passed through.
+    """
+
+    map_impl = get_higher_order_operator("map", "map_impl")
+    if map_impl is None:
+        return False
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code.co_name in _OPERATOR_CALL_FRAMES and frame.f_locals.get("self") is map_impl:
+            return True
+        frame = frame.f_back
+    return False
+
+
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
     """Return whether a decorated call runs inside torch's fake-tensor tracing.
 
@@ -90,18 +125,19 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     -------
     bool
         ``True`` when an argument is a tracing tensor or tracing tensor class,
-        or a ``FakeTensorMode`` is active. ``False`` whenever the tracing
-        classes were never imported in this process, so ordinary capture pays
-        one cached probe per logged call.
+        or a ``FakeTensorMode`` is active, unless the pass belongs to a
+        grad-requiring ``map``. ``False`` whenever the tracing classes were
+        never imported in this process, so ordinary capture pays one cached
+        probe per logged call.
     """
 
     tracing_types = get_tracing_tensor_types()
     if not tracing_types:
         return False
-    for value in (*args, *kwargs.values()):
-        if _is_tracing_value(value, tracing_types):
-            return True
-    return _fake_tensor_mode_active()
+    in_pass = any(_is_tracing_value(value, tracing_types) for value in (*args, *kwargs.values()))
+    if not (in_pass or _fake_tensor_mode_active()):
+        return False
+    return not _inside_unsupported_grad_operator()
 
 
 def call_inside_tracing_pass(
