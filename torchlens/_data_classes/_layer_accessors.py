@@ -140,7 +140,8 @@ class OpAccessor(Accessor["Op"]):
         """Owning layer and the REAL read basis of ``ops[...]``, with no members listed."""
 
         basis = "0-based positions or pass-qualified labels"
-        layer = getattr(self._list[0], "layer_label", None) if self._list else None
+        first = self._list[0] if self._list else None
+        layer = getattr(first, "short_layer_label", None) or getattr(first, "layer_label", None)
         return f"layer {layer}; {basis}" if layer else basis
 
     def _resolve_substring(self, key: str) -> "Op | None":
