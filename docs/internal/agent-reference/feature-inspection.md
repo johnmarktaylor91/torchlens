@@ -15,8 +15,8 @@ import torchlens.mechinterp
 model = nn.Sequential(nn.Linear(3, 2), nn.ReLU()).eval()
 x = torch.ones(1, 3)
 trace = tl.trace(model, x)
-# Requires the optional visualization dependencies and Graphviz.
-drawing = trace.draw("feature-edges.svg", show_edge_shapes=True)
+# Requires the optional visualization dependencies; file_format="dot" needs no Graphviz binary.
+drawing = trace.draw(file_format="dot", show_edge_shapes=True)
 ```
 
 `trace.source.annotated()` returns numbered captured root `forward` source with op
@@ -26,7 +26,11 @@ and buffer rows are omitted. A source-less capture or an artifact saved without 
 raises `InvalidArgumentError` with code `source_unavailable` and a capture/save remedy.
 
 ```python
-# Put the model in a Python source file so capture can obtain its source.
+import torch
+from torch import nn
+import torchlens as tl
+
+# Capture reads the model's source through linecache, as for a module on disk.
 class SourceModel(nn.Module):
     def forward(self, x):
         return torch.relu(x)
@@ -49,6 +53,11 @@ latent. `steps` and `lr` must be positive. Unsupported settings, empty/multiple 
 and disconnected or non-finite objectives refuse with `feature_visualization_invalid`.
 
 ```python
+import torch
+from torch import nn
+import torchlens as tl
+import torchlens.mechinterp
+
 model = nn.Sequential(nn.Conv2d(1, 2, 1, bias=False)).eval()
 with torch.no_grad():
     model[0].weight.fill_(1)

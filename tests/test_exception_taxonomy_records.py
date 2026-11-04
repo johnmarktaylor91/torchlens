@@ -91,7 +91,7 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "run_legacy_arguments_conflict",
         TypeError,
-        lambda log: log.run(object(), torch.randn(1, 4), inputs=torch.randn(1, 4)),
+        lambda log: log.run(object(), torch.randn(1, 4)),
     ),
     (
         "derived_field_assignment_invalid",
