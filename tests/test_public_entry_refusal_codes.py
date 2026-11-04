@@ -22,7 +22,7 @@ import pytest
 from torch import nn
 
 import torchlens as tl
-from torchlens import _entry_refusals as refusals
+from torchlens import _entry_refusals as refusals, _errors as base_refusals
 from torchlens.backends import _entry_refusals as backend_refusals
 from torchlens.errors import TorchLensError
 from torchlens.recording.exceptions import refuse_recorder_uninitialized
@@ -160,13 +160,13 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
     ),
     (
         "projection",
-        refusals.refuse_recording_projection_missing,
+        lambda: base_refusals.require_recording_projection(None),
         RuntimeError,
         "recording_projection_uninitialized",
     ),
     (
         "replay_events",
-        lambda: refusals.refuse_if_no_replay_events(None),
+        lambda: base_refusals.refuse_if_no_replay_events(None),
         RuntimeError,
         "recording_events_not_retained",
     ),

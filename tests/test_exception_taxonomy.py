@@ -1120,7 +1120,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # Public-entry refusals that were plain builtins: private carriers of the coded fields,
     # kept private until the public spellings are ruled (the raised builtin lineage and
     # the codes are the contract; callers catch the builtin or TorchLensError).
-    "torchlens._entry_refusals._InternalInvariantError": (
+    "torchlens._errors._InternalInvariantError": (
         "private TorchLensError for internal-invariant refusals that were plain "
         "RuntimeError/ValueError; subclasses both, contracted by codes such as "
         "module_metadata_missing and contract_parent_missing"

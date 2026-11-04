@@ -14,8 +14,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, cast
 import torch
 
 from .._captured_run import TraceLike
-from .._entry_refusals import refuse_if_no_replay_events, refuse_recording_projection_missing
-from .._errors import CaptureNotActiveError
+from .._errors import (
+    CaptureNotActiveError,
+    refuse_if_no_replay_events,
+    require_recording_projection,
+)
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
 
@@ -767,10 +770,7 @@ class Recording(TraceLike):
                     predicate_failures=tuple(self.predicate_failures),
                 ),
             )
-        trace = self._recording_trace
-        if trace is None:
-            refuse_recording_projection_missing()
-        return trace
+        return require_recording_projection(self._recording_trace)
 
     def raw_metadata(self) -> tuple[dict[str, Any], ...]:
         """Return payload-free raw metadata for every captured event.

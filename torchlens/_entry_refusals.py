@@ -18,35 +18,13 @@ from ._errors import (
     InvalidArgumentError,
     _actionable_message,
     _ActionableErrorMixin,
+    _InternalInvariantError,
 )
-from .errors._base import CompatibilityError, TorchLensError
+from .errors._base import CompatibilityError
 
 _FactoryT = TypeVar("_FactoryT")
 
 BUG_REMEDY = "report this as a TorchLens bug with the full traceback"
-
-
-class _InternalInvariantError(_ActionableErrorMixin, TorchLensError, RuntimeError, ValueError):
-    """Raised when TorchLens's own bookkeeping breaks an invariant (a TorchLens bug).
-
-    It subclasses both ``RuntimeError`` and ``ValueError`` because the invariant
-    checks it replaced raised one or the other.
-
-    Examples
-    --------
-    >>> issubclass(_InternalInvariantError, RuntimeError)
-    True
-    """
-
-    def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
-        """Initialize an internal-invariant refusal with its code and remedy."""
-
-        super().__init__(
-            _actionable_message(problem, remedy),
-            code=code,
-            remedy=remedy,
-            **cast(dict[str, Any], context),
-        )
 
 
 class _DependencyIncompatibleError(_ActionableErrorMixin, CompatibilityError, RuntimeError):
@@ -393,27 +371,6 @@ def refuse_log_value_outside_trace() -> NoReturn:
         code="capture_context_required",
         remedy="call log_value from inside the forward pass that tl.trace runs",
     )
-
-
-def refuse_recording_projection_missing() -> NoReturn:
-    """Raise ``recording_projection_uninitialized`` when the lazy projection is unset."""
-
-    raise _InternalInvariantError(
-        "recording_trace projection was not initialized",
-        code="recording_projection_uninitialized",
-        remedy=BUG_REMEDY,
-    )
-
-
-def refuse_if_no_replay_events(capture_events: object) -> None:
-    """Raise ``recording_events_not_retained`` when a projection has no replay events."""
-
-    if capture_events is None:
-        raise CaptureNotActiveError(
-            "Recording.to_trace() core has no replay event facts",
-            code="recording_events_not_retained",
-            remedy="convert the in-session Recording rather than a disk-recovered one",
-        )
 
 
 # --- validation ------------------------------------------------------------------------
