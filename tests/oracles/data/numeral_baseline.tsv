@@ -3020,7 +3020,6 @@ docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
-docs-md	docs/maintainers/where.md	651209
 docs-md	docs/maintainers/where.md	653
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	657
@@ -3071,7 +3070,6 @@ docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	732
-docs-md	docs/maintainers/where.md	7334
 docs-md	docs/maintainers/where.md	736
 docs-md	docs/maintainers/where.md	74
 docs-md	docs/maintainers/where.md	744
@@ -4824,7 +4822,6 @@ error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/_capture/prepare/cache.py	600
 error-strings	torchlens/_capture/prepare/resolve.py	1024
 error-strings	torchlens/_data_substrate/digests.py	256
-error-strings	torchlens/_entry_refusals.py	2.1
 error-strings	torchlens/_extraction/dtype_policy.py	16
 error-strings	torchlens/_extraction/engine.py	25.6
 error-strings	torchlens/_extraction/engine.py	41.6
