@@ -193,6 +193,13 @@ expert contributions from routing indices alone.
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
+- **`tl.errors.quiet(*codes)` is the one switch that silences TorchLens warnings**: `quiet()`
+  silences every TorchLens warning, `quiet("code", ...)` only the coded warnings whose
+  `fields["code"]` is listed; a bare call lasts for the session and `with tl.errors.quiet(...):`
+  restores the prior state at the end of the block. A capture that keeps more than 1 GiB of saved
+  activations warns once per session with code `capture_memory_threshold_exceeded`, naming
+  `save=` selectors and `save='stats'` as the remedy; `tl.errors.quiet("capture_memory_threshold_exceeded")`
+  hides it.
 - **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
