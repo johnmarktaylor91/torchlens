@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from .format_errors import ArtifactTooOldError
 
-#: The major release line whose saved files this release refuses with the one 2.x error.
+#: The major release line of every release before the first format-11 writer
+#: (``format_contract.FIRST_FORMAT3_RELEASE``). A file one of them saved refuses with the
+#: one 2.x error; the check compares the full release stamp, not only this major.
 PRE_3_MAJOR = 2
 
 #: Top-level torchlens packages the 3.0 rename made private, renamed or folded away. A
@@ -78,7 +80,7 @@ _PRE_3_GLOBALS = frozenset(
 )
 
 _REMEDY = (
-    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<3'), or "
+    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<2.38'), or "
     "capture the model again with this release and save that."
 )
 
@@ -126,7 +128,7 @@ def pre_3_artifact_error(
         The refusal, ready to raise; ``fields["code"]`` is ``artifact_version_below_floor``.
     """
 
-    from .format_contract import MIN_TLSPEC_VERSION
+    from .format_contract import FIRST_FORMAT3_RELEASE, MIN_TLSPEC_VERSION
 
     remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
     return ArtifactTooOldError(
@@ -135,7 +137,7 @@ def pre_3_artifact_error(
         code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
-        floor_torchlens_version="3.0.0",
+        floor_torchlens_version=FIRST_FORMAT3_RELEASE,
         path=path,
         remedy=remedy,
     )
