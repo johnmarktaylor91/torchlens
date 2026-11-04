@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.backends.torch import rescue
 
 _RAW_MUL = torch._C._VariableFunctions.mul
 """A dispatcher-level multiply TorchLens does not wrap: the planted dropped op."""
@@ -256,7 +257,7 @@ def _associative_scan(raw: bool) -> Callable[[torch.Tensor], torch.Tensor]:
     associative_scan = _hop_function("associative_scan", "associative_scan")
     mul = _RAW_MUL if raw else torch.mul
     return lambda x: (
-        associative_scan(lambda a, b: mul(a + b, 1.0), x, 0, combine_mode="generic") + x
+        associative_scan(lambda a, b: mul(a + b, 2.0), x, 0, combine_mode="generic") + x
     )
 
 
@@ -291,36 +292,24 @@ def _validate(model: nn.Module) -> bool:
         return tl.validate(model, x, scope="forward", validate_metadata=True)
 
 
-def _require_plain_run(fn: Callable[[torch.Tensor], torch.Tensor]) -> None:
-    """Skip when this torch cannot run the HOP eagerly at all.
-
-    Parameters
-    ----------
-    fn:
-        Forward function to try once without TorchLens.
-    """
-
-    try:
-        fn(torch.randn(3, 3))
-    except (RuntimeError, ValueError, NotImplementedError) as exc:
-        pytest.skip(f"torch {torch.__version__} cannot run this HOP eagerly: {exc}")
-
-
 @pytest.mark.parametrize("hop", sorted(_HOP_FORWARDS))
 def test_hop_capture_validates_true(hop: str) -> None:
     """A correct capture through a HOP validates True instead of raising."""
 
     fn = _HOP_FORWARDS[hop](False)
-    _require_plain_run(fn)
     assert _validate(_Forward(fn)) is True
 
 
 @pytest.mark.parametrize("hop", sorted(_HOP_FORWARDS))
-def test_hop_planted_dropped_op_validates_false(hop: str) -> None:
-    """An uncaptured op inside the HOP subgraph that ran is caught by the witness."""
+def test_hop_planted_dropped_op_validates_false(hop: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An uncaptured op inside the HOP subgraph that ran is caught by the witness.
 
+    The rescue re-run is disabled so the primary capture keeps the planted drop (it would
+    otherwise recover the raw op through aten recording and repair the capture).
+    """
+
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     fn = _HOP_FORWARDS[hop](True)
-    _require_plain_run(fn)
     assert _validate(_Forward(fn)) is False
 
 
