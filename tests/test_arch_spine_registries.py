@@ -91,8 +91,16 @@ class TestExportTargetDoor:
 
 class TestRendererDoor:
     def test_capability_gate_refuses_incapable_renderer_typed(self) -> None:
-        with pytest.raises(UnsupportedRendererCapabilityError) as excinfo:
-            require_renderer_capabilities("dagua", {"encoding_channels": True})
+        register_renderer(
+            "test_no_encoding",
+            RendererEntry(name="test_no_encoding", kind="render_ir"),
+            capabilities={"encoding_channels": False, "formats": ("svg",)},
+        )
+        try:
+            with pytest.raises(UnsupportedRendererCapabilityError) as excinfo:
+                require_renderer_capabilities("test_no_encoding", {"encoding_channels": True})
+        finally:
+            unregister_renderer("test_no_encoding")
         assert excinfo.value.fields["code"] == "renderer_capability_unsupported"
         # graphviz passes the same requirement.
         require_renderer_capabilities("graphviz", {"encoding_channels": True})
@@ -134,5 +142,5 @@ class TestKernelInventoryCounts:
 
         rows = kernel_universe_rows()
         assert rows["export_targets"] >= 17
-        assert rows["renderers"] >= 2
+        assert rows["renderers"] >= 1
         assert "sidecar_families" in rows

@@ -258,7 +258,6 @@ OPTIONAL_EXAMPLE_MODULES: tuple[str, ...] = (
     "brainscore_core",
     "brainscore_vision",
     "captum",
-    "dagua",
     "depyf",
     "dialz",
     "inseq",

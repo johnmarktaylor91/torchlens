@@ -53,7 +53,9 @@ MANIFEST_PATH = TESTS_DIR / "support" / "proofnet" / "gate_manifest.tsv"
 #: new gate entering the tier.
 #: 32 -> 30 (ci-shape): the `git` and `semantic_release` rows burned down when the
 #: no-major release chain and its release-environment-only tests were removed.
-EXECUTES_NOWHERE_CEILING = 30
+#: 30 -> 29 (2026-11-03): the alternate renderer's optional-package row burned
+#: down when that renderer was removed.
+EXECUTES_NOWHERE_CEILING = 29
 
 GALLERY_DIR = TESTS_DIR / "workflow_gallery"
 

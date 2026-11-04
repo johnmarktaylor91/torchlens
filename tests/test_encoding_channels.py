@@ -587,9 +587,24 @@ if __name__ == "__main__":  # pragma: no cover
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_render_dot.py.
-def test_dagua_renderer_with_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """The alternate label path never silently drops an active channel."""
+def test_renderer_without_encoding_channels_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    """A renderer lacking the encoding capability never silently drops an active channel."""
 
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, color_by="bytes", renderer="dagua")
+    from torchlens._visualization.renderer_registry import (
+        RendererEntry,
+        register_renderer,
+        unregister_renderer,
+    )
+
+    register_renderer(
+        "no_encoding_probe",
+        RendererEntry(name="no_encoding_probe", kind="render_ir"),
+        capabilities={"encoding_channels": False, "formats": ("svg",)},
+        replace=True,
+    )
+    try:
+        with pytest.raises(Exception) as excinfo:
+            _draw(mlp_log, tmp_path, color_by="bytes", renderer="no_encoding_probe")
+    finally:
+        unregister_renderer("no_encoding_probe")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"

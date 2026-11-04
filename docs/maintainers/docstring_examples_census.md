@@ -56,7 +56,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | errors | 30 | 0 |
 | examples | 1 | 0 |
 | experiment | 6 | 0 |
-| experimental | 6 | 0 |
+| experimental | 5 | 0 |
 | export | 29 | 0 |
 | features | 5 | 0 |
 | fingerprint | 5 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1055** | **0** |
+| **total** | **1054** | **0** |
 
-Public callable members of those classes (methods and properties): 1481.
+Public callable members of those classes (methods and properties): 1480.
