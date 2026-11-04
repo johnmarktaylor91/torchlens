@@ -8,6 +8,9 @@ persist, by owning record class, so a user can see everything without loading an
 
 from __future__ import annotations
 
+import hashlib
+import os
+import stat
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -16,7 +19,7 @@ from .._json import loads_bounded, read_bytes_bounded
 from ..format_errors import ArtifactError
 from . import contract
 
-__all__ = ["inspect_record_tables"]
+__all__ = ["foreign_file_note", "inspect_record_tables", "names_format3"]
 
 _REMEDY = "re-save the trace with trace.save()"
 
@@ -35,6 +38,55 @@ def _read_json_file(path: Path, *, code: str, what: str) -> Any:
             remedy=_REMEDY,
             file_path=str(path),
         ) from exc
+
+
+def names_format3(root: Path) -> bool:
+    """Return whether ``root``'s manifest names the 3.0 format.
+
+    Reads the manifest under the bounded reader and nothing else. A missing,
+    unreadable or non-object manifest names no format (a 2.x manifest carries
+    neither ``format`` nor ``format_version``).
+    """
+
+    try:
+        manifest = loads_bounded(read_bytes_bounded(root / contract.MANIFEST_FILE).decode("utf-8"))
+    except (OSError, ValueError, ArtifactError):
+        return False
+    if not isinstance(manifest, dict):
+        return False
+    version = manifest.get("format_version")
+    return manifest.get("format") == contract.FORMAT_NAME or (
+        type(version) is int and version == contract.FORMAT_MAJOR
+    )
+
+
+def foreign_file_note(path: Path) -> dict[str, Any]:
+    """Describe a root file the 3.0 layout does not own, never parsing it.
+
+    Parameters
+    ----------
+    path:
+        The foreign file (for example a root ``metadata.pkl`` planted beside a 3.0 save).
+
+    Returns
+    -------
+    dict[str, Any]
+        ``name``, ``size_bytes`` and ``sha256`` (the hex digest of the bytes). A
+        symlink or other non-regular entry is not followed or opened: its digest is
+        ``None`` and ``size_bytes`` is the entry's own size.
+    """
+
+    entry = path.lstat()
+    if not stat.S_ISREG(entry.st_mode):
+        return {"name": path.name, "size_bytes": entry.st_size, "sha256": None}
+    digest = hashlib.sha256()
+    size = 0
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+            size += len(chunk)
+    return {"name": path.name, "size_bytes": size, "sha256": digest.hexdigest()}
 
 
 def inspect_record_tables(root: Path) -> dict[str, Any]:

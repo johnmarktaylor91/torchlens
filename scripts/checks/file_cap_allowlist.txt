@@ -267,7 +267,6 @@ torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	96
-torchlens/_io/state_contract.py::inspect_state_contract	108
 torchlens/_io/streaming.py	995
 torchlens/_io/streaming.py::BundleStreamWriter.__init__	83
 torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62

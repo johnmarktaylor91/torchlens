@@ -40,12 +40,23 @@ from functools import cache
 from typing import Any
 
 from .format_contract import TLSPEC_VERSION
-from .format_errors import UnknownPersistedFieldError
+from .format_errors import ArtifactError, UnknownPersistedFieldError
 
 #: Cap on unknown names spelled out in one refusal/inventory row (the full
 #: count always reports; a hostile million-key state must not build a
 #: gigabyte message).
 _MAX_NAMED_UNKNOWNS = 20
+
+#: Byte ceiling on a legacy ``metadata.pkl`` the inert inventory reads, at parity with
+#: the load path's own ceiling on the same file (``bundle._MAX_METADATA_PKL_BYTES``).
+_MAX_INVENTORY_PKL_BYTES = 512 * 1024**2
+
+#: Cap on distinct surrogate classes one inventory scan creates. Each distinct pickled
+#: qualname costs one class object; a real 2.x trace names a few dozen, while a
+#: hostile pickle could name one per few bytes. The surrogates live only for the scan.
+_MAX_SURROGATE_CLASSES = 4096
+
+_INVENTORY_REMEDY = "re-save the trace with trace.save()"
 
 #: Transport-envelope keys the bundle writer places BESIDE the Trace state in
 #: metadata.pkl and the loaders pop before ``__setstate__`` ever runs
@@ -262,13 +273,6 @@ class _SurrogateRecord:
         """Absorb a pickle-VM batch append inertly (nothing is stored)."""
 
 
-@cache
-def _surrogate_class(qualname: str) -> type:
-    """One cached surrogate SUBCLASS per pickled qualname."""
-
-    return type("_Surrogate", (_SurrogateRecord,), {"_tl_qualname": qualname, "__slots__": ()})
-
-
 def _iter_surrogates(root: Any) -> Iterator[_SurrogateRecord]:
     """Yield every ``_SurrogateRecord`` reachable from an unpickled skeleton."""
 
@@ -289,13 +293,90 @@ def _iter_surrogates(root: Any) -> Iterator[_SurrogateRecord]:
             stack.extend(node)
 
 
+def _inventory_refusal(metadata_path: Any, reason: str) -> ArtifactError:
+    """Return the typed refusal for a legacy ``metadata.pkl`` the inventory will not read.
+
+    The same error and code the 3.0 inventory half raises for an unreadable record file.
+    """
+
+    from .format3 import contract
+
+    return ArtifactError(
+        f"Artifact metadata {metadata_path} could not be read: {reason}. "
+        f"Remedy: {_INVENTORY_REMEDY}.",
+        code=contract.REFUSAL_CODES["record_file_corrupt"],
+        remedy=_INVENTORY_REMEDY,
+        file_path=str(metadata_path),
+    )
+
+
+def _load_inventory_skeleton(metadata_path: Any) -> Any:
+    """Inertly unpickle a legacy ``metadata.pkl`` into surrogate skeletons, under bounds.
+
+    Every global resolves to a per-scan surrogate subclass (nothing is imported), the
+    file must sit under the byte ceiling, and the scan creates at most
+    ``_MAX_SURROGATE_CLASSES`` distinct surrogate classes.
+
+    Raises
+    ------
+    ArtifactError
+        When the file is over the byte ceiling or names too many distinct classes.
+    """
+
+    import io as _stdlib_io
+    import os
+    import pickle
+
+    classes: dict[str, type] = {}
+
+    def surrogate_class(qualname: str) -> type:
+        cls = classes.get(qualname)
+        if cls is None:
+            if len(classes) >= _MAX_SURROGATE_CLASSES:
+                raise _inventory_refusal(
+                    metadata_path,
+                    f"it names more than {_MAX_SURROGATE_CLASSES} distinct classes",
+                )
+            cls = type(
+                "_Surrogate", (_SurrogateRecord,), {"_tl_qualname": qualname, "__slots__": ()}
+            )
+            classes[qualname] = cls
+        return cls
+
+    class _InventoryUnpickler(pickle.Unpickler):
+        """Unpickler that resolves EVERY global to an inert surrogate class."""
+
+        def find_class(self, module: str, name: str) -> Any:
+            """Return the per-scan surrogate type instead of importing anything."""
+
+            return surrogate_class(f"{module}.{name}")
+
+        def persistent_load(self, pid: Any) -> Any:
+            """Stand in for persistent-id references with an inert surrogate."""
+
+            return surrogate_class("persistent_id")()
+
+    with metadata_path.open("rb") as handle:
+        size = os.fstat(handle.fileno()).st_size
+        if size > _MAX_INVENTORY_PKL_BYTES:
+            raise _inventory_refusal(
+                metadata_path,
+                f"it is {size} bytes, above the {_MAX_INVENTORY_PKL_BYTES}-byte ceiling",
+            )
+        return _InventoryUnpickler(_stdlib_io.BufferedReader(handle)).load()
+
+
 def inspect_state_contract(path: Any) -> dict[str, Any]:
     """Inertly inventory a bundle's persisted state against the contract.
 
-    A 3.0 save's record tables go to :func:`.format3.inventory.inspect_record_tables`; a 2.x
-    ``metadata.pkl`` is read by a surrogate unpickler that builds skeleton records only (no
-    record object, no ``__setstate__``, no import outside the pickle protocol). Nothing
-    refuses: unknown fields are REPORTED with their owning record types (MEMO 3.3).
+    An artifact whose manifest names the 3.0 format, or that has no root
+    ``metadata.pkl``, goes to :func:`.format3.inventory.inspect_record_tables`; a
+    root ``metadata.pkl`` beside a 3.0 manifest is never unpickled and is reported
+    under ``foreign_files`` by name, size and digest. A 2.x ``metadata.pkl`` is read
+    by a bounded surrogate unpickler that builds skeleton records only (no record
+    object, no ``__setstate__``, no import outside the pickle protocol). Nothing
+    refuses an unknown field: unknown fields are REPORTED with their owning record
+    types (MEMO 3.3).
 
     Parameters
     ----------
@@ -306,64 +387,76 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
     -------
     dict[str, Any]
         ``{"record_types": {qualname: {"instances": n, "unknown_fields":
-        [...]}}, "unknown_field_total": n, "governed_record_types": [...]}``.
+        [...]}}, "unknown_field_total": n, "governed_record_types": [...]}``,
+        plus ``foreign_files`` when a 3.0 artifact carries a root pickle.
         Record types outside the governed registry report their state keys
         uninterpreted (``"ungoverned": True``) rather than guessing.
+
+    Raises
+    ------
+    ArtifactError
+        When a file the inventory must read is unreadable, or a legacy
+        ``metadata.pkl`` exceeds the inventory's byte or class bounds.
     """
 
-    import io as _stdlib_io
-    import pickle
     from pathlib import Path
+
+    from .format3.inventory import foreign_file_note, inspect_record_tables, names_format3
+
+    root = Path(path)
+    metadata_path = root / "metadata.pkl"
+    has_root_pickle = metadata_path.is_symlink() or metadata_path.exists()
+    if not has_root_pickle or names_format3(root):
+        report = inspect_record_tables(root)
+        if has_root_pickle:
+            report["foreign_files"] = [foreign_file_note(metadata_path)]
+        return report
+    return _legacy_skeleton_report(_load_inventory_skeleton(metadata_path))
+
+
+def _trace_root_rows(skeleton: Any) -> dict[str, dict[str, Any]]:
+    """Attribute a legacy ``metadata.pkl`` ROOT mapping's keys to the Trace contract.
+
+    The root is the Trace's scrubbed state mapping itself (the scrub path
+    serializes the state dict, not a pickled Trace object), so its keys, less
+    the transport envelope, are checked against the Trace contract directly.
+    """
+
+    from importlib import import_module as _import_module
 
     from .field_registry import RECORD_CONTRACT_CLASSES
 
-    metadata_path = Path(path) / "metadata.pkl"
-    if not metadata_path.exists():
-        from .format3.inventory import inspect_record_tables
-
-        return inspect_record_tables(Path(path))
-
-    class _InventoryUnpickler(pickle.Unpickler):
-        """Unpickler that resolves EVERY global to an inert surrogate class."""
-
-        def find_class(self, module: str, name: str) -> Any:
-            """Return the cached surrogate type instead of importing anything."""
-
-            return _surrogate_class(f"{module}.{name}")
-
-        def persistent_load(self, pid: Any) -> Any:
-            """Stand in for persistent-id references with an inert surrogate."""
-
-            return _surrogate_class("persistent_id")()
-
-    with metadata_path.open("rb") as handle:
-        skeleton = _InventoryUnpickler(_stdlib_io.BufferedReader(handle)).load()
-
-    governed_by_qualname = {}
-    for contract_key, (module_name, class_name) in RECORD_CONTRACT_CLASSES.items():
-        governed_by_qualname[f"{module_name}.{class_name}"] = contract_key
-
-    report: dict[str, dict[str, Any]] = {}
-
-    # The metadata.pkl ROOT is the Trace's scrubbed state mapping itself (the
-    # scrub path serializes the state dict, not a pickled Trace object), so
-    # the root keys are attributed to the Trace contract directly.
-    from importlib import import_module as _import_module
-
-    if isinstance(skeleton, dict):
-        trace_module, trace_class = RECORD_CONTRACT_CLASSES["trace"]
-        trace_cls = getattr(_import_module(trace_module), trace_class)
-        root_keys = {
-            str(key): None
-            for key in skeleton
-            if isinstance(key, str) and key not in _TRACE_TRANSPORT_KEYS
-        }
-        _, root_unknown = partition_state_keys(trace_cls, root_keys)
-        report[f"{trace_module}.{trace_class}"] = {
+    if not isinstance(skeleton, dict):
+        return {}
+    trace_module, trace_class = RECORD_CONTRACT_CLASSES["trace"]
+    trace_cls = getattr(_import_module(trace_module), trace_class)
+    root_keys = {
+        str(key): None
+        for key in skeleton
+        if isinstance(key, str) and key not in _TRACE_TRANSPORT_KEYS
+    }
+    _, root_unknown = partition_state_keys(trace_cls, root_keys)
+    return {
+        f"{trace_module}.{trace_class}": {
             "instances": 1,
             "unknown_fields": set(root_unknown),
             "ungoverned": False,
         }
+    }
+
+
+def _legacy_skeleton_report(skeleton: Any) -> dict[str, Any]:
+    """Build the inventory report from a legacy ``metadata.pkl`` surrogate skeleton."""
+
+    from importlib import import_module as _import_module
+
+    from .field_registry import RECORD_CONTRACT_CLASSES
+
+    governed_by_qualname = {
+        f"{module_name}.{class_name}": contract_key
+        for contract_key, (module_name, class_name) in RECORD_CONTRACT_CLASSES.items()
+    }
+    report = _trace_root_rows(skeleton)
 
     for surrogate in _iter_surrogates(skeleton):
         row = report.setdefault(
