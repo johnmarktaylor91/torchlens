@@ -4531,3 +4531,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: fc7ac6f3fa7701948e18a22f56a5687c2e9c9624 (dirty)
 recorded: 2026-11-03T23:34:25.035645+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-134 remerge3: union merge interleaved static_scan rows; regenerate in generator order
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0afcc8440f28ce5615133edd2c8e7d188dfd76b9 (dirty)
+recorded: 2026-11-04T02:34:28.448767+00:00
