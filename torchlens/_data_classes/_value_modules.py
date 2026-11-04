@@ -84,7 +84,7 @@ def module_call_card(call: Any) -> str:
     """At most three output sites and child calls, plus exact remainders."""
 
     rows = []
-    labels: Any = getattr(call, "output_layers", ()) or ()
+    labels: Any = getattr(call, "output_ops", ()) or getattr(call, "output_layers", ()) or ()
     for label in islice(labels, 3):
         rows.append(("output", _output(call, label)))
     if len(labels) > 3:

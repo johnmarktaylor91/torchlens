@@ -13,6 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._value_params import buffer_card
 from torchlens._data_classes._value_state import LAZY_DISK, payload_facts, value_line
+from torchlens._utils._display_keys import display_key
 from torchlens.stats import _record_values, _tensor_stats
 from torchlens.stats._stats_kernel import SAMPLE_CAP
 from torchlens.stats._tensor_stats import FamilyEvidence, tensor_stats
@@ -265,6 +266,8 @@ def test_module_call_output_uses_full_card_value_spacing(captured) -> None:
     """A real module output keeps the shared card's separated value pairs."""
 
     trace, _model = captured
-    text = str(trace.module_calls["fc:1"])
-    assert "  output    " in text
-    assert "min  " in text and "  max  " in text
+    for index in range(1, 4):
+        call = trace.module_calls[f"fc:{index}"]
+        text = str(call)
+        assert f"  output    {display_key(trace.ops[call.output_ops[0]])}" in text
+        assert "min  " in text and "  max  " in text
