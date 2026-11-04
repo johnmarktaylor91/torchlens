@@ -51,6 +51,8 @@ class RecordTuple(tuple):
         return (type(self), (tuple(self), self.title, self.noun, self.singular))
 
     def _head(self) -> str:
+        """The count header: title, member count and the singular or plural noun."""
+
         return f"{self.title}: {plural(len(self), self.singular, self.noun)}"
 
     def __repr__(self) -> str:
@@ -120,6 +122,8 @@ def _member_line(item: Any) -> str:
     """One member's one-line repr, guarded so a bad member cannot break the list."""
 
     def render() -> str:
+        """The member's repr on one line, led by its key once and cut to the repr width."""
+
         line = repr(item).replace("\n", " ")
         key = _member_key(item)
         if type(item).__name__ == "OpRecord" and key != "?":
@@ -136,9 +140,13 @@ def _read_field(obj: Any, name: str) -> Any:
     """Read one dataclass field for display; a failing property reads as ``None``."""
 
     def read() -> Any:
+        """Read the named field from the record."""
+
         return getattr(obj, name)
 
     def fallback(_error: Exception) -> Any:
+        """Return ``None`` when reading the field raised."""
+
         return None
 
     return fail_open(read, fallback)

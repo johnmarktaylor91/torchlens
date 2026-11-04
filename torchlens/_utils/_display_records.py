@@ -22,6 +22,8 @@ def backward_repr(record: Any) -> str:
 
 
 def _backward_identity(record: Any) -> str:
+    """Build the repr line of a GradFn, GradFnCall or BackwardPass from identity and counts."""
+
     kind = type(record).__name__
     if kind == "GradFn":
         return one_line(
@@ -45,6 +47,8 @@ def backward_str(record: Any) -> str:
 
 
 def _backward_card(record: Any) -> str:
+    """Build a backward record's card: kind-specific rows and the accessors holding its payloads."""
+
     kind = type(record).__name__
     if kind == "GradFn":
         rows = [
@@ -67,6 +71,8 @@ def _backward_card(record: Any) -> str:
 
 
 def frame_repr(frame: Any) -> str:
+    """One-line repr of a source frame: the shortened location ending in the function name."""
+
     return fail_open(
         lambda: one_line("FuncCallLocation", [_frame_location(frame)]),
         lambda _error: "FuncCallLocation: metadata unavailable",
@@ -74,6 +80,8 @@ def frame_repr(frame: Any) -> str:
 
 
 def _frame_location(frame: Any) -> str:
+    """Path, line and function, shortened from the left so the function name always shows."""
+
     path = _source_path(str(frame.file))
     suffix = f":{frame.line_number} in {frame.func_name}"
     location = f"{path}{suffix}"
@@ -98,6 +106,8 @@ def _source_path(file: str) -> str:
 
 
 def frame_str(frame: Any) -> str:
+    """Source frame card with file, line and function rows; the repr replaces it on failure."""
+
     return fail_open(
         lambda: render_card(
             frame_repr(frame),
@@ -133,6 +143,8 @@ def group_repr(group: Any, summary: Any) -> str:
 
 
 def _group_identity(group: Any, summary: Any) -> str:
+    """Build a Trace group's repr line: cost totals for TraceCost, else its headline facts."""
+
     trace = group._trace
     name = type(group).__name__
     if name == "TraceCost":
@@ -180,6 +192,8 @@ def group_str(group: Any, summary: Any) -> str:
 
 
 def _group_card(group: Any, summary: Any) -> str:
+    """Build a Trace group's card: compute and saved for TraceCost, else one status row."""
+
     name, trace = type(group).__name__, group._trace
     if name == "TraceCost":
         rows = [
@@ -223,6 +237,8 @@ def capture_events_repr(events: Any) -> str:
 
 
 def capture_events_str(events: Any) -> str:
+    """CaptureEvents card with one row per journal lane size; the repr replaces it on failure."""
+
     return fail_open(
         lambda: render_card(
             capture_events_repr(events),
@@ -237,6 +253,8 @@ def capture_events_str(events: Any) -> str:
 
 
 def ir_record_repr(record: Any) -> str:
+    """One-line repr for a private IR record, with dedicated forms for journals and tensor facts."""
+
     if type(record).__name__ == "CaptureEvents":
         return capture_events_repr(record)
     if type(record).__name__ == "_AtenTensorFact":

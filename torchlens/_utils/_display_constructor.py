@@ -78,6 +78,8 @@ def display_guard(render: Callable[P, str]) -> Callable[P, str]:
 
     @wraps(render)
     def guarded(*args: P.args, **kwargs: P.kwargs) -> str:
+        """Run the renderer; a failure prints the owner's type with 'display unavailable'."""
+
         return fail_open(
             lambda: render(*args, **kwargs),
             lambda _error: f"{type(args[0]).__name__}: display unavailable",
@@ -93,6 +95,8 @@ def bind_template_keys(template: Any, records: Any) -> None:
 
 
 def _bind_template_keys(value: Any, records: Any) -> None:
+    """Walk a template and cache each parent reference's display key in place."""
+
     if type(value).__name__ == "ParentRef":
         record = records.get(value.parent_label)
         if record is not None:

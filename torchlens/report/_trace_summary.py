@@ -246,6 +246,8 @@ def _saved_text(trace: Any) -> str:
 
 
 def _health_text(trace: Any) -> str:
+    """NaN/Inf health in words from the stored verdict, never running a check."""
+
     verdict = fail_open(lambda: _stored_verdict(trace), lambda _error: "not_checked")
     return _verdict_text(verdict)
 
@@ -277,6 +279,8 @@ def _state_tokens(trace: Any) -> list[str]:
 
 
 def _trace_honesty_suffix(trace: Any) -> str:
+    """The non-default state tokens followed by the health text."""
+
     return " ".join((*_state_tokens(trace), _health_text(trace)))
 
 
@@ -287,6 +291,8 @@ def _trace_repr(trace: Any) -> str:
 
 
 def _identity(trace: Any) -> str:
+    """Build the Trace repr line, dropping model and counts before any state or health marker."""
+
     if trace.__dict__.get("_tl_cleaned_up", False):
         return f"Trace {getattr(trace, 'name', None) or 'unnamed'}: (freed)"
     name = getattr(trace, "name", None) or "unnamed"
@@ -307,6 +313,8 @@ def _identity(trace: Any) -> str:
 
 
 def _count_facts(trace: Any) -> list[str]:
+    """Layer and op counts for a finished trace, or the op event count while capture runs."""
+
     if not trace._tracing_finished:
         return [plural(len(trace.event_stream.op_events), "op event")]
     return [
@@ -405,6 +413,8 @@ def _captured_text(duration: float, compute: float) -> str:
 
 
 def _graph_text(trace: Any) -> str:
+    """Graph topology in words: recurrence and its pass count, branching, conditional branching."""
+
     graph = trace.graph
     topology = "feedforward"
     if graph.is_recurrent:
@@ -424,6 +434,8 @@ def _graph_text(trace: Any) -> str:
 
 
 def _trace_text(trace: Any) -> str:
+    """Trace card: the repr line over the shared rows; the repr replaces it on failure."""
+
     return fail_open(
         lambda: render_card(
             _trace_repr(trace), _trace_rows(trace), more=_MORE, max_rows=TRACE_CARD_MAX_ROWS

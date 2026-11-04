@@ -56,6 +56,8 @@ def site_repr(site: Site) -> str:
     """Keep site identity, selected count and provenance on one line."""
 
     def render() -> str:
+        """Build the Site line from its selected count and provenance relation."""
+
         count = _selected(site)
         values = "values not computed" if count is None else _value_count(count)
         return clipped(

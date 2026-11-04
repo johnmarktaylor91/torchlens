@@ -94,6 +94,8 @@ def _difference_text(value: float | None) -> str:
 
 
 def _failure_location(failure: Any) -> str:
+    """The failing op's bound display key, else its stored label, else 'not recorded'."""
+
     return getattr(failure, "_display_op_key", None) or failure.op_label or "not recorded"
 
 
@@ -101,6 +103,8 @@ def bind_failure_key(failure: Any, trace: Any) -> None:
     """Retain only the resolved display string, never a Trace or tensor reference."""
 
     def bind() -> None:
+        """Look up the failing op and keep only its display key on the failure."""
+
         record = trace._layer_dict_all_keys.get(failure.op_label)
         if record is not None:
             failure._display_op_key = display_key(record)
