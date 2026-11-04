@@ -72,7 +72,10 @@ def test_in_module_selector_takes_the_bare_address_on_a_bound_method_trace() -> 
     gen_labels = [str(label) for label in trace[tl.in_module("body.0")].labels]
     assert len(plain_labels) == 1
     assert len(gen_labels) == 3  # one body.0 op per generate step
-    assert all(label in trace.modules["body.0"].layer_labels for label in gen_labels)
+    body_layers = set(trace.modules["body.0"].layer_labels)
+    assert {
+        label.rsplit(":", 1)[0] for label in gen_labels
+    } == body_layers  # one layer, three passes
     try:
         stale = list(trace[tl.in_module("owner.body.0")].labels)
     except LookupError:
