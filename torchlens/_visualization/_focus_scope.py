@@ -29,6 +29,7 @@ from ._frame_penwidth import compute_module_penwidth
 if TYPE_CHECKING:
     import graphviz
 
+    from .._data_classes.module import Module
     from .._data_classes.trace import Trace
     from .render_ir import RenderIR, RenderIRRegion
 
@@ -39,6 +40,7 @@ __all__ = [
     "focus_ancestor_keys",
     "focus_parent_prefix",
     "focus_relative_depth",
+    "module_at",
     "reading_notes",
     "relative_address",
     "scope_caption_head",
@@ -69,6 +71,12 @@ def focus_address(module: Any) -> str | None:
     return address
 
 
+def module_at(trace: Trace, address: str) -> Module | None:
+    """Return the module record at ``address``, or ``None`` when the trace has none there."""
+
+    return trace.modules[address] if address in trace.modules else None
+
+
 def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
     """Return the module nesting depth to draw, counted from the focused module.
 
@@ -85,7 +93,7 @@ def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
     focus = focus_address(module)
     if focus is None:
         return depth
-    focus_module = trace.modules.get(focus)
+    focus_module = module_at(trace, focus)
     ops = list(getattr(focus_module, "ops", None) or ()) if focus_module is not None else []
     if not ops:
         return depth

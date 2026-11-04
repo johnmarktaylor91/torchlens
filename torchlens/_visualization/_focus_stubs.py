@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ._focus_scope import module_at
+
 if TYPE_CHECKING:
     from .._data_classes.module import Module
     from .._data_classes.trace import Trace
@@ -190,5 +192,5 @@ def _boundary_address(trace: Trace, external_node: GraphNode, vis_mode: str) -> 
     address = module_pass.split(":", 1)[0]
     if vis_mode == "rolled" or ":" not in module_pass:
         return address
-    module = trace.modules.get(address)
+    module = module_at(trace, address)
     return address if module is None or module.num_calls == 1 else module_pass

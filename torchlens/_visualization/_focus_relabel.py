@@ -23,6 +23,7 @@ from ._focus_scope import (
     focus_address,
     focus_ancestor_keys,
     focus_parent_prefix,
+    module_at,
     relative_address,
 )
 from ._label_format import format_memory, format_shape
@@ -200,7 +201,7 @@ def _relabelled_region(region: RenderIRRegion, trace: Trace, prefix: str) -> Ren
     address = region.key.split(":", 1)[0]
     if region.kind != "module" or not region.label.startswith(address):
         return region
-    module = trace.modules.get(address)
+    module = module_at(trace, address)
     if module is None:
         return region
     label = relative_address(address, prefix) + region.label[len(address) :]
