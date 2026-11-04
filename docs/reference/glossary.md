@@ -1427,7 +1427,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
   same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`);
   a facet already scoped to another module refuses
-  `selector_module_facet_scope_conflict`;
+  `selector_module_facet_scope_conflict`; in `do`, a `|` union of facet selectors
+  (`tl.module(a) & tl.head(i) | tl.module(b) & tl.head(j)`, or
+  `(tl.module(a) | tl.module(b)) & tl.head(i)`) edits every branch in one call, exactly as
+  chained `do` calls would, while `find_sites` and any other composite holding a facet refuse
+  `facet_selector_unsupported`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
