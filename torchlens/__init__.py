@@ -354,9 +354,11 @@ def __dir__() -> list[str]:
 def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
     """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
 
+    from ._utils._display_errors import candidate_keys
+
     if not isinstance(trace, _resolve_top_level("Trace")):
         return []
-    return list(trace._suggest_layer_labels(str(query)))
+    return candidate_keys(list(trace._suggest_layer_labels(str(query))), trace._layer_dict_all_keys)
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -376,8 +378,14 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """
 
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+        from ._utils._display_errors import lookup_message
+
+        return lookup_message(
+            f"Layer {name!r} not found.",
+            suggestions,
+            "pass an in-range integer, a layer label, or a module address.",
+            query=name,
+        )
     return f"Layer {name!r} not found."
 
 

@@ -114,10 +114,12 @@ class TestParamLogFields:
         r = repr(pl)
         assert pl.address in r
         assert "\n" not in r
+        assert r.startswith(f"Param {pl.address}:")
         assert r.startswith(f"Param {pl.address}: ")
         assert "trainable" in r or "frozen" in r
         card = str(pl)
         assert card.splitlines()[0] == r
+        assert "  gradient  " + ("captured" if pl._has_grad else "none captured") in card
         # ``has_grad False`` reads in words (house style A18); no backward ran here.
         assert "\n  gradient  none captured\n" in card
 

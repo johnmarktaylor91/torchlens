@@ -84,8 +84,8 @@ episode-declared and undeclared runs of the same seeded fixture.
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
 (F41, the ruled root contract: `tl.trace(model.generate, ids,
 episode=EpisodeOptions(n_steps=N))` — the owner resolves via
-`method.__self__` and registers as a submodule of the TL-authored wrapper
-root) `stepped_module` DEFAULTS to the owner; on a module root it is
+`method.__self__` and is the root `self` of the TL-authored wrapper root's
+tree; the stepped address recorded is `self`) `stepped_module` DEFAULTS to the owner; on a module root it is
 required, and `None` refuses typed (`episode_declaration_invalid`) — wrap
 the loop in a module or trace the bound generation method directly. Step
 tallying is FLAT: each

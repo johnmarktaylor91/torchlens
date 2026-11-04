@@ -52,6 +52,7 @@ _ESCAPE_CHARS = frozenset({"%", "|", "/"})
 
 #: Call-instance identity of ops running directly in the root forward.
 ROOT_CALL_INSTANCE = "<root>"
+ROOT_MODULE_ADDRESS = "self"
 
 
 def escape_site_component(component: str) -> str:
@@ -106,6 +107,14 @@ def _entry_call_instance(entry: Any) -> str:
     if isinstance(entry, str):
         return entry
     return f"{entry[0]}:{entry[1]}"
+
+
+def without_root_frames(module_entries: Any) -> tuple[Any, ...]:
+    """Return the module-stack entries with the root module's own frames removed."""
+
+    return tuple(
+        entry for entry in module_entries or () if _entry_address(entry) != ROOT_MODULE_ADDRESS
+    )
 
 
 def site_axis(module_entries: Any) -> tuple[str, ...]:
@@ -200,8 +209,16 @@ class SiteKeyMinter:
         layer_type: str,
         output_slot: int | None,
     ) -> str:
-        """Mint the site key for the next retained op at this position."""
+        """Mint the site key for the next retained op at this position.
 
+        The root module's own frames (address :data:`ROOT_MODULE_ADDRESS`)
+        never sit on the site axis: a plain root is never pushed on the
+        module stack, and a bound-method root's owner, which is, reads the
+        same way once its frames are dropped. The live intervention minter
+        skips the root frame for the same reason.
+        """
+
+        module_entries = without_root_frames(module_entries)
         return self.mint_at(
             site_axis(module_entries),
             call_instance_id(module_entries),
