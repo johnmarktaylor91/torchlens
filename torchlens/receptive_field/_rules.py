@@ -86,6 +86,22 @@ def _loaded_parent_shapes(op: Op) -> tuple[Any, ...]:
     return tuple(getattr(by_label.get(label), "shape", None) for label in tuple(op.parents or ()))
 
 
+def operand_shapes(op: Op) -> tuple[Any, ...]:
+    """Input shapes of ``op`` in ``parents`` order, ``None`` where unavailable.
+
+    A live op answers from ``Op.input_shapes``. An op of a loaded trace
+    refuses its live-trace accessors (it is detached by design); its parents'
+    recorded output shapes are the same metadata, read through the loaded
+    trace that owns it. Rules read operand shapes here, never from
+    ``Op.input_shapes`` directly, so a reloaded trace validates.
+    """
+
+    try:
+        return tuple(op.input_shapes)
+    except AttributeError:
+        return _loaded_parent_shapes(op)
+
+
 class ReceptiveFieldRuleContext:
     """Metadata and result constructors available to receptive-field rules.
 
@@ -111,17 +127,16 @@ class ReceptiveFieldRuleContext:
         self.op = op
 
     @property
+    def parent_shapes(self) -> tuple[Any, ...]:
+        """Return input shapes in ``parents`` order, ``None`` where unavailable."""
+
+        return operand_shapes(self.op)
+
+    @property
     def in_shapes(self) -> tuple[tuple[int, ...], ...]:
         """Return captured input shapes, omitting unavailable inputs."""
 
-        try:
-            shapes = self.op.input_shapes
-        except AttributeError:
-            # An op of a loaded trace refuses its live-trace accessors (it is
-            # detached by design); its parents' recorded output shapes are the
-            # same metadata, read through the loaded trace that owns it.
-            shapes = _loaded_parent_shapes(self.op)
-        return tuple(tuple(shape) for shape in shapes if shape is not None)
+        return tuple(tuple(shape) for shape in self.parent_shapes if shape is not None)
 
     @property
     def out_shape(self) -> tuple[int, ...]:
