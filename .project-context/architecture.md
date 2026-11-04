@@ -239,6 +239,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_errors.py` | Shared internal exception types and actionable-message helpers built on `errors/_base` |
 | `_fast_run.py` | Explicit guarded fast paths for repeated static-model execution (`run(fast=True)`) |
 | `_input_coerce.py` | Duck-typed ergonomic input coercion for TorchLens entry points |
+| `_input_route.py` | The one input-routing door: installed auto-route resolution (text, modality dict, image) and processor key spelling shared by every entry that takes model inputs |
 | `_input_walk.py` | Single-sourced model-input boundary traversal (normative dispatch for all input-tree walkers) |
 | `_literals.py` | Shared `Literal` aliases for public option strings |
 | `_robustness.py` | Tensor-variant detection and pre-flight guards for `trace` (meta/sparse/fake refusals) |

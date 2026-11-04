@@ -186,49 +186,78 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_processor_gate_probes_cache_only(monkeypatch: Any) -> None:
-    """The multimodal gate must resolve AutoProcessor with local_files_only=True.
+def test_processor_gate_claims_on_shape_without_io(monkeypatch: Any) -> None:
+    """The multimodal gate claims a ``PreTrainedModel`` on shape and never downloads.
 
-    The fake AutoProcessor simulates an offline box: any non-cache-only call
-    raises (as a real Hub retry loop eventually would). If the gate is
-    cache-only it resolves; the recorded kwargs prove local_files_only was set.
+    A ``transformers`` ``PreTrainedModel`` with a ``name_or_path`` is claimed
+    with no processor load at all (the bridge resolves it later, so a cold
+    cache still routes). Any other named model is probed in the local cache
+    only: the fake AutoProcessor raises on any non-cache-only call, and an
+    uncached name declines. A model without a ``name_or_path`` is declined.
     """
 
     import sys
 
-    recorded: list[dict[str, Any]] = []
+    recorded: list[tuple[str, dict[str, Any]]] = []
+
+    class FakePreTrainedModel:
+        name_or_path = "fixture/hf-model"
 
     class FakeAutoProcessor:
         @classmethod
         def from_pretrained(cls, name_or_path: str, **kwargs: Any) -> Any:
-            recorded.append(kwargs)
+            recorded.append((name_or_path, kwargs))
             if not kwargs.get("local_files_only"):
                 raise RuntimeError("network access attempted in a detection heuristic")
+            if name_or_path == "fixture/uncached":
+                raise OSError("not found in the local cache")
             return object()
 
     monkeypatch.setitem(
-        sys.modules, "transformers", SimpleNamespace(AutoProcessor=FakeAutoProcessor)
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoProcessor=FakeAutoProcessor, PreTrainedModel=FakePreTrainedModel),
     )
 
-    model = SimpleNamespace(name_or_path="fixture/model")
-    assert hf._can_resolve_hf_processor(model) is True
-    assert recorded == [{"local_files_only": True}]
+    assert hf._can_resolve_hf_processor(FakePreTrainedModel()) is True
+    assert recorded == []
+    assert hf._can_resolve_hf_processor(SimpleNamespace(name_or_path="fixture/model")) is True
+    assert hf._can_resolve_hf_processor(SimpleNamespace(name_or_path="fixture/uncached")) is False
+    assert recorded == [
+        ("fixture/model", {"local_files_only": True}),
+        ("fixture/uncached", {"local_files_only": True}),
+    ]
+    assert hf._can_resolve_hf_processor(SimpleNamespace()) is False
 
 
-def test_processor_gate_declines_when_uncached(monkeypatch: Any) -> None:
-    """An uncached model declines the route (no network) instead of downloading."""
+def test_uncached_processor_refuses_typed_instead_of_declining(monkeypatch: Any) -> None:
+    """An uncached, unreachable processor is a typed refusal, not a silent decline.
+
+    Before, the gate declined and the modality dict reached the forward as a
+    positional ``input_ids``; now the route resolves the processor itself and
+    refuses ``preprocessing_unresolved`` with the attach-it-yourself remedy.
+    """
 
     import sys
+
+    from torchlens._errors import InvalidArgumentError
+    from torchlens.bridge._hf_processor import _resolve_hf_processor
 
     class FakeAutoProcessor:
         @classmethod
         def from_pretrained(cls, name_or_path: str, **kwargs: Any) -> Any:
-            # Simulate a cache miss under local_files_only=True.
-            raise OSError("not found in local cache")
+            raise OSError("not found in local cache and the Hub is unreachable")
 
     monkeypatch.setitem(
         sys.modules, "transformers", SimpleNamespace(AutoProcessor=FakeAutoProcessor)
     )
 
     model = SimpleNamespace(name_or_path="fixture/uncached")
-    assert hf._can_resolve_hf_processor(model) is False
+    try:
+        _resolve_hf_processor(model, "fixture/uncached")
+    except InvalidArgumentError as exc:
+        assert exc.fields["code"] == "preprocessing_unresolved"
+        assert exc.fields["resolution_attempt"]["name_or_path"] == "fixture/uncached"
+        assert "AutoProcessor.from_pretrained" in exc.fields["remedy"]
+    else:
+        raise AssertionError("an unresolvable processor must refuse typed")
