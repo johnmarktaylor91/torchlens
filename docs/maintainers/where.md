@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1493 modules, 656353 lines, 0 modules without a docstring.
+83 packages, 1493 modules, 656370 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26637 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4664 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 97 | 38332 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 97 | 38344 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10665 |
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 49 | 17330 |
-| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6355 |
+| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6358 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44598 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6365 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 115 | 55577 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 115 | 55578 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8853 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9100 |
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13934 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13935 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 27 | 7559 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -295,7 +295,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (97 modules, 38332 lines)
+Core data structures for representing a logged forward pass. (97 modules, 38344 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -304,7 +304,7 @@ Core data structures for representing a logged forward pass. (97 modules, 38332 
 | `_aten_display` | ATen cards over recorded tensor metadata, never retained tensor values. | 121 |
 | `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 83 |
 | `_bound_owner_alias` | Bare module addresses for a bound-method trace. | 56 |
-| `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 278 |
+| `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 312 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 139 |
 | `_conditional_arms` | Derived reads over the arms of a recorded conditional. | 151 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
@@ -391,7 +391,7 @@ Core data structures for representing a logged forward pass. (97 modules, 38332 
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 481 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1777 |
-| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2636 |
+| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2614 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3466 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1087 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 220 |
@@ -864,21 +864,21 @@ Shared helpers used by two or more TorchLens packages. (49 modules, 17330 lines)
 
 ### `torchlens._utils.rng`
 
-RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (17 modules, 6355 lines)
+RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (17 modules, 6358 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 60 |
 | `autocast` | Autocast (and grad/inference mode) state capture and re-entry for replay. | 177 |
 | `call_sites` | Bytecode decoding of a held-reference clock call site (explicit-time argument proofs). | 149 |
-| `channels` | Thread routing and owner-join settlement of monitor channel touches. | 695 |
+| `channels` | Thread routing and owner-join settlement of monitor channel touches. | 707 |
 | `deep_inventory` | Frame-reachable deep inventory of RNG instances at capture entry. | 370 |
 | `digest` | Exact state digests of witnessed RNG instances (NumPy generators, bit generators, ''random''). | 132 |
 | `engine_state` | Python and NumPy global-engine STATE rows (''getstate''/''setstate''/''seed'' surface). | 138 |
 | `generator_sweep` | Model-held torch generator sweep: digests every generator a model can reach. | 394 |
 | `inventory_types` | Receiver, holder and leaf type tables for the monitor's RNG instance inventory. | 564 |
 | `inventory_walk` | Holder, leaf and namespace walk rules of the monitor's RNG instance inventory. | 516 |
-| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1569 |
+| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1560 |
 | `monitor_state` | Process-wide slots of the host-nondeterminism monitor: the active window and patch stacks. | 171 |
 | `numpy_frames` | Candidate children of a NumPy frame for the frame-local RNG snapshot. | 199 |
 | `registry` | The frozen host-nondeterminism channel registry and the torch RNG surface tables. | 750 |
@@ -1275,7 +1275,7 @@ tinygrad backend preview. (9 modules, 4474 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (115 modules, 55577 lines)
+Torch backend implementation package for TorchLens capture. (115 modules, 55578 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1293,7 +1293,7 @@ Torch backend implementation package for TorchLens capture. (115 modules, 55577 
 | `_completeness_dispatch` | Dispatch census and runnable-ledger processing. | 801 |
 | `_completeness_dispatch_names` | Dispatch operator naming and callsite helpers. | 618 |
 | `_completeness_escape_state` | Host-escape state and caller authorization. | 416 |
-| `_completeness_finalize` | Witness finalization and capture scope. | 619 |
+| `_completeness_finalize` | Witness finalization and capture scope. | 620 |
 | `_completeness_metadata` | Input and state metadata witness bookkeeping. | 773 |
 | `_completeness_origins` | Tensor-origin classification and propagation. | 528 |
 | `_completeness_patches` | Scoped tensor and metadata observer patches. | 754 |
@@ -1832,7 +1832,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13934 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13935 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1858,7 +1858,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13934
 | `_query_causal` | Per-unit index-set mapping for causal attention windows. | 179 |
 | `_query_maps` | Index-set maps for the geometry-specific window families. | 232 |
 | `_reshape_blocks` | Block decomposition of general reshapes for the receptive-field engines. | 233 |
-| `_rules` | Extensible receptive-field operation-rule registry. | 536 |
+| `_rules` | Extensible receptive-field operation-rule registry. | 537 |
 | `_set_query` | Index-set seeded geometric queries: one walk for a whole block of units. | 221 |
 | `_table` | Tabular summaries of trace-wide receptive-field solutions. | 380 |
 | `_trace_tables` | Trace receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 65 |

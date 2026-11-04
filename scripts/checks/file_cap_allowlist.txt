@@ -98,7 +98,7 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	837
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
 torchlens/_data_classes/layer.py	1767
-torchlens/_data_classes/module.py	2620
+torchlens/_data_classes/module.py	2598
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
@@ -529,7 +529,7 @@ torchlens/_utils/rng/deep_inventory.py::_deep_inventory_frame_reachable	332
 torchlens/_utils/rng/digest.py::_digest_rng_instance	61
 torchlens/_utils/rng/generator_sweep.py::_sweep_model_generators	371
 torchlens/_utils/rng/inventory_walk.py::_inert_gc_children	146
-torchlens/_utils/rng/monitor.py	1569
+torchlens/_utils/rng/monitor.py	1560
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor.__init__	114
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._classify_c_call	107
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._install_profile_hooks	77
