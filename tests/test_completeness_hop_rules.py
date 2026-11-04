@@ -15,6 +15,7 @@ carried a rule per HOP, ``tl.validate`` raised ``NotImplementedError``
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import operator
 import warnings
 from collections.abc import Callable, Iterator
@@ -78,10 +79,17 @@ def _hop_function(module: str, name: str) -> Callable[..., object]:
         The entry point.
     """
 
-    try:
-        mod = importlib.import_module(f"torch._higher_order_ops.{module}")
-    except ImportError:
-        pytest.skip(f"torch {torch.__version__} has no torch._higher_order_ops.{module}")
+    qualname = f"torch._higher_order_ops.{module}"
+    # Presence is probed with ``find_spec`` (parent package first, so a torch
+    # without the package answers None instead of raising), never by catching
+    # ImportError: a HOP module that exists but fails to import must fail
+    # loudly rather than skip.
+    if (
+        importlib.util.find_spec("torch._higher_order_ops") is None
+        or importlib.util.find_spec(qualname) is None
+    ):
+        pytest.skip(f"torch {torch.__version__} has no {qualname}")
+    mod = importlib.import_module(qualname)
     fn = getattr(mod, name, None)
     if fn is None:
         pytest.skip(f"torch {torch.__version__} has no {module}.{name}")
