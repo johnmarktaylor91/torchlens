@@ -45,10 +45,10 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
+from .._utils._display_constructor import bind_template_keys
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
-from ..intervention._display import bind_template_keys
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
     _make_public_conditional_ids,

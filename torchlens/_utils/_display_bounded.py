@@ -74,10 +74,16 @@ def short_dataclass_repr(obj: Any, *, width: int = REPR_COLS) -> str:
     if not dataclasses.is_dataclass(obj):
         return f"<{name}>"
     if name == "OpRecord":
-        return one_line(f"OpRecord {display_key(obj)}", [f"kind {obj.kind}", f"sequence {obj.seq}"])
+        return one_line(
+            f"OpRecord {display_key(obj)}",
+            [f"kind {_read_field(obj, 'kind')}", f"sequence {_read_field(obj, 'seq')}"],
+        )
     parts: list[str] = []
     identity = ("class_name", "label", "op_label", "label_raw", "name", "kind")
-    ordered = sorted(dataclasses.fields(obj), key=lambda field: field.name not in identity)
+    ordered = sorted(
+        dataclasses.fields(obj),
+        key=lambda field: identity.index(field.name) if field.name in identity else len(identity),
+    )
     for field in ordered:
         if not field.repr or field.name.endswith("object_id"):
             continue

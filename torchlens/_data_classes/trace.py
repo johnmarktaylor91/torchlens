@@ -3420,25 +3420,6 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _forward_summary(_doors.report()._trace_summary.summary, locals())
 
-    def to_dagua_graph(
-        self,
-        rolled: bool = False,
-        depth: int = 1000,
-        show_buffers: bool = False,
-        direction: str = "bottomup",
-        include_grad_edges: bool | None = None,
-    ) -> Any:
-        """Translate this model log into an experimental Dagua graph."""
-
-        return _doors.visualization()._trace_draw.to_dagua_graph(
-            self,
-            rolled=rolled,
-            depth=depth,
-            show_buffers=show_buffers,
-            direction=direction,
-            include_grad_edges=include_grad_edges,
-        )
-
     def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
         """Render this trace's events in the live-narration grammar."""
         return _doors.report()._narrate.narrate(self, last=last, select=select)

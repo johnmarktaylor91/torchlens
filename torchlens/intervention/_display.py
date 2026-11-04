@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from .._utils._display_card import LIST_LIMIT, render_card
 from .._utils._display_constructor import clipped, display_guard, value_text
-from .._utils._display_keys import display_key
 from .._utils._display_numbers import plural
 from .._utils.fail_open import fail_open
 
@@ -213,25 +212,3 @@ def bound_model_card(binding: Any) -> str:
         ],
         (".recipe", ".model", ".last_report"),
     )
-
-
-def bind_template_keys(template: Any, records: Any) -> None:
-    """Cache display keys after relabeling; replay components stay unchanged."""
-
-    fail_open(lambda: _bind_template_keys(template, records), lambda _error: None)
-
-
-def _bind_template_keys(value: Any, records: Any) -> None:
-    if type(value).__name__ == "ParentRef":
-        record = records.get(value.parent_label)
-        if record is not None:
-            object.__setattr__(value, "_display_key", display_key(record))
-    elif type(value).__name__ == "CapturedArgTemplate":
-        _bind_template_keys(value.args, records)
-        _bind_template_keys(value.kwargs, records)
-    elif isinstance(value, (tuple, list)):
-        for member in value:
-            _bind_template_keys(member, records)
-    elif isinstance(value, dict):
-        for member in value.values():
-            _bind_template_keys(member, records)

@@ -378,7 +378,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `site_selector_not_live` | `tl.site(...)` was given as a live hook application site; structural site keys do not exist mid-attach (`SelectorCapabilityError`; spelling DOCUMENTED-UNSTABLE) | Resolve the site on the finished trace (`trace[...]`, `do`) or pass the selector through `trace(save=/intervene=)` |
 | `followed_by_selector_unsupported` | `tl.followed_by(...)` was evaluated outside capture-time save predicates; the lifecycle has no retroactive window (`SelectorCapabilityError`; spelling DOCUMENTED-UNSTABLE) | Use it only in `trace(save=...)` / `record(save=...)` with `lookback=N` |
 | `preceded_by_selector_unsupported` | `tl.preceded_by(...)` was evaluated outside capture-time save predicates (`SelectorCapabilityError`; spelling DOCUMENTED-UNSTABLE) | Use it only in `trace(save=...)` / `record(save=...)` predicates |
-| `facet_selector_unsupported` | A `tl.facet(...)` / `tl.head(...)` selector was given where facets do not resolve (`find_sites`, a composite selector) (`SelectorCapabilityError`; spelling DOCUMENTED-UNSTABLE) | Resolve facets through `Trace.set`, `do` or `trace[selector]` |
+| `facet_selector_unsupported` | A `tl.facet(...)` / `tl.head(...)` selector was given where facets do not resolve (`find_sites`, a composite selector other than a union of facet selectors given to `do`) (`SelectorCapabilityError`; spelling DOCUMENTED-UNSTABLE) | Resolve facets through `Trace.set`, `do` (several at once as a union of facet selectors) or `trace[selector]` |
 | `site_selector_no_match` | A post-capture selector given as an intervention or hook target matched no site on this trace (`SiteResolutionError`; spelling DOCUMENTED-UNSTABLE) | Run `find_sites(...)` or `trace[selector]` to discover labels and widen or correct the selector |
 | `site_selector_excess_fanout` | A selector matched more sites than `max_fanout` allows (`AmbiguousSiteError`; spelling DOCUMENTED-UNSTABLE) | Pass a larger `max_fanout` explicitly or narrow the selector |
 | `max_fanout_invalid` | `max_fanout` was `None` or below 1 (`SiteResolutionError` / `AmbiguousSiteError`; spelling DOCUMENTED-UNSTABLE) | Pass an explicit integer of at least 1 |
@@ -439,7 +439,6 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `custom_callable_not_pure` | Bundle-supplied callable is not a pure forward/tensor op (`UntrustedCallableError`) | Use pure forward/tensor ops in portable specs |
 | `custom_callable_private_first_party` | Torchlens-owned callable is private or side-effecting; only vetted-inert public helpers auto-trust (`UntrustedCallableError`) | Reference a public facet recipe/transform/intervention helper |
 | `custom_callable_untrusted` | Foreign custom callable resolution was not trusted (`UntrustedCallableError`) | Pass `allowed_custom_callable_modules={<named module>}` for a trusted spec |
-| `dagua_renderer_not_opted_in` | Experimental dagua renderer used without opt-in | Import `torchlens.experimental.dagua` first |
 | `capture_context_required` | Capture-only helper called outside `trace()` | Call it from the captured forward |
 | `forward_raised` | The model's forward raised a non-TorchLens exception during a capture (the model's own code, a user hook, or a torch op it called; origin `user_op`, or `unknown` when no frame could be attributed). Every capture door raises `TraceCaptureError` chained `from` the original (`exc.__cause__`), with `exc.partial_trace` holding what was captured before the failure (spelling DOCUMENTED-UNSTABLE) | Fix the model's own error (read `exc.__cause__` and its traceback); inspect `exc.partial_trace` for the ops captured before it |
 | `capture_internal_error` | The forward raised a non-TorchLens exception whose innermost attributable frame is inside TorchLens (`TraceCaptureError`, origin `torchlens`): most likely a TorchLens bug, never the model's code (spelling DOCUMENTED-UNSTABLE) | Report it with the chained traceback (`exc.__cause__`); run the forward outside `tl.trace` to confirm the model itself is fine |
@@ -1250,7 +1249,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `visualization_intervention_mode_invalid` | Intervention rendering mode is unknown | Choose `node_mark` or `as_node` |
 | `visualization_layout_invalid` | Visualization layout is unknown | Choose `auto`, `dot`, or `rank` |
 | `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, `leftright`, or `rightleft` |
-| `visualization_renderer_invalid` | Visualization renderer is unknown | Choose `graphviz` or `dagua` |
+| `visualization_renderer_invalid` | Visualization renderer is unknown | Choose `graphviz` or a registered renderer |
 | `visualization_theme_invalid` | Visualization theme is unknown | Choose a supported theme |
 | `visualization_mode_invalid` | Backend visualization mode is unsupported | Choose a backend-supported mode |
 | `visualization_node_style_invalid` | Node style is unknown | Choose a documented style |

@@ -101,7 +101,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/stats/` | Streaming stats and `aggregate()` | Dataset-scale activation summaries |
 | `torchlens/callbacks/` | Lightning callback integration | Training-loop adapters |
 | `torchlens/_partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
-| `torchlens/experimental/` | Unstable helpers, Dagua opt-in, node styles | Experimental APIs |
+| `torchlens/experimental/` | Unstable helpers, node styles | Experimental APIs |
 | `torchlens/viz/` | Convenience visual namespace | Bundle diff and heatmap helpers |
 | `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |
@@ -276,9 +276,10 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 
 | Location | Contents |
 |----------|----------|
-| `examples/5min/` | Seven quickstart notebooks plus README |
-| `examples/50min/` | Nine longer workflow notebooks plus README |
-| `examples/recipes/` | Five recipe notebooks plus README |
+| `examples/quick/` | One-screen recipe notebooks plus README |
+| `examples/workflows/` | Longer workflow notebooks plus README |
+| `examples/methods/` | Recent-method notebooks plus README |
+| `examples/replications/` | Paper-replication scripts on GPT-2 small plus README |
 | `examples/intervention/` | Sixteen numbered Python intervention examples plus README |
 | `examples/demos/` | Bundle-diff hero demo notebook and SVG artifact |
 | `notebooks/audit/` | User-facing 2.x audit notebooks |
