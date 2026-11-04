@@ -1339,6 +1339,7 @@ docs-md	docs/field-guide/seeded_subsample.md	224
 docs-md	docs/field-guide/seeded_subsample.md	224,
 docs-md	docs/field-guide/seeded_subsample.md	512,
 docs-md	docs/field-guide/seeded_subsample.md	64
+docs-md	docs/field-guide/seeded_subsample.md	91
 docs-md	docs/field-guide/tcav.md	1.0
 docs-md	docs/field-guide/tcav.md	100
 docs-md	docs/field-guide/tcav.md	100,
@@ -1842,6 +1843,7 @@ docs-md	docs/index.md	1.2
 docs-md	docs/index.md	12
 docs-md	docs/index.md	14
 docs-md	docs/index.md	15
+docs-md	docs/index.md	91
 docs-md	docs/internal/agent-reference/architecture.md	0.1.5
 docs-md	docs/internal/agent-reference/architecture.md	0.3.2
 docs-md	docs/internal/agent-reference/architecture.md	1.0
@@ -2267,9 +2269,11 @@ docs-md	docs/maintainers/persisted_fields.md	10.
 docs-md	docs/maintainers/persisted_fields.md	11
 docs-md	docs/maintainers/persisted_fields.md	11.
 docs-md	docs/maintainers/persisted_fields.md	12
+docs-md	docs/maintainers/persisted_fields.md	121
 docs-md	docs/maintainers/persisted_fields.md	14
 docs-md	docs/maintainers/persisted_fields.md	157
 docs-md	docs/maintainers/persisted_fields.md	174
+docs-md	docs/maintainers/persisted_fields.md	18
 docs-md	docs/maintainers/persisted_fields.md	183
 docs-md	docs/maintainers/persisted_fields.md	185
 docs-md	docs/maintainers/persisted_fields.md	18896
@@ -2284,9 +2288,12 @@ docs-md	docs/maintainers/persisted_fields.md	33
 docs-md	docs/maintainers/persisted_fields.md	34
 docs-md	docs/maintainers/persisted_fields.md	38
 docs-md	docs/maintainers/persisted_fields.md	41
+docs-md	docs/maintainers/persisted_fields.md	44
+docs-md	docs/maintainers/persisted_fields.md	4465
 docs-md	docs/maintainers/persisted_fields.md	45
 docs-md	docs/maintainers/persisted_fields.md	46
 docs-md	docs/maintainers/persisted_fields.md	461249
+docs-md	docs/maintainers/persisted_fields.md	49
 docs-md	docs/maintainers/persisted_fields.md	51
 docs-md	docs/maintainers/persisted_fields.md	51861
 docs-md	docs/maintainers/persisted_fields.md	53
@@ -2299,13 +2306,16 @@ docs-md	docs/maintainers/persisted_fields.md	64
 docs-md	docs/maintainers/persisted_fields.md	64367
 docs-md	docs/maintainers/persisted_fields.md	66
 docs-md	docs/maintainers/persisted_fields.md	6694
+docs-md	docs/maintainers/persisted_fields.md	70089
 docs-md	docs/maintainers/persisted_fields.md	74
+docs-md	docs/maintainers/persisted_fields.md	7451
 docs-md	docs/maintainers/persisted_fields.md	780
 docs-md	docs/maintainers/persisted_fields.md	78348
 docs-md	docs/maintainers/persisted_fields.md	82
 docs-md	docs/maintainers/persisted_fields.md	833
 docs-md	docs/maintainers/persisted_fields.md	8527538
 docs-md	docs/maintainers/persisted_fields.md	8575
+docs-md	docs/maintainers/persisted_fields.md	891
 docs-md	docs/maintainers/persisted_fields.md	92
 docs-md	docs/maintainers/persisted_fields.md	99953529
 docs-md	docs/maintainers/review_checklist.md	60
@@ -2783,6 +2793,7 @@ docs-md	docs/maintainers/where.md	357
 docs-md	docs/maintainers/where.md	358
 docs-md	docs/maintainers/where.md	359
 docs-md	docs/maintainers/where.md	36
+docs-md	docs/maintainers/where.md	36071
 docs-md	docs/maintainers/where.md	362
 docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	364
@@ -2988,6 +2999,7 @@ docs-md	docs/maintainers/where.md	580
 docs-md	docs/maintainers/where.md	581
 docs-md	docs/maintainers/where.md	582
 docs-md	docs/maintainers/where.md	584
+docs-md	docs/maintainers/where.md	585
 docs-md	docs/maintainers/where.md	586
 docs-md	docs/maintainers/where.md	587
 docs-md	docs/maintainers/where.md	588
@@ -3046,7 +3058,7 @@ docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	656
-docs-md	docs/maintainers/where.md	656121
+docs-md	docs/maintainers/where.md	656179
 docs-md	docs/maintainers/where.md	657
 docs-md	docs/maintainers/where.md	66
 docs-md	docs/maintainers/where.md	660
@@ -5419,6 +5431,7 @@ package-docstrings	torchlens/_io/_pre3_module_paths.py	17
 package-docstrings	torchlens/_io/_pre3_module_paths.py	2.16
 package-docstrings	torchlens/_io/_pre3_module_paths.py	2.16.
 package-docstrings	torchlens/_io/_pre3_module_paths.py	3.0,
+package-docstrings	torchlens/_io/_root_manifest.py	2.16
 package-docstrings	torchlens/_io/_safe_unpickle.py	21
 package-docstrings	torchlens/_io/_safe_unpickle.py	49
 package-docstrings	torchlens/_io/_safe_unpickle.py	49_
@@ -5472,9 +5485,13 @@ package-docstrings	torchlens/_io/format3/contract.py	3.0
 package-docstrings	torchlens/_io/format3/reader.py	3.0
 package-docstrings	torchlens/_io/format3/runnable.py	3.0
 package-docstrings	torchlens/_io/format3/writer.py	3.0
+package-docstrings	torchlens/_io/format_contract.py	11
 package-docstrings	torchlens/_io/format_contract.py	17
+package-docstrings	torchlens/_io/format_contract.py	2.37
+package-docstrings	torchlens/_io/format_contract.py	2.38.0
 package-docstrings	torchlens/_io/format_contract.py	3.2
 package-docstrings	torchlens/_io/format_contract.py	3.3
+package-docstrings	torchlens/_io/format_contract.py	38,
 package-docstrings	torchlens/_io/format_errors.py	2.16
 package-docstrings	torchlens/_io/format_errors.py	2.36.
 package-docstrings	torchlens/_io/format_errors.py	3.2
@@ -9430,6 +9447,9 @@ test-docstrings	tests/test_lit_bridge_real.py	19
 test-docstrings	tests/test_lit_bridge_real.py	20
 test-docstrings	tests/test_lit_bridge_real.py	2024
 test-docstrings	tests/test_live_op_view_surface.py	111
+test-docstrings	tests/test_load_refuses_earlier_major.py	2.37.1
+test-docstrings	tests/test_load_refuses_earlier_major.py	2.38.0
+test-docstrings	tests/test_load_refuses_saved_by_2x.py	11
 test-docstrings	tests/test_load_refuses_saved_by_2x.py	2.16
 test-docstrings	tests/test_log_injections_s2_forgery.py	2026
 test-docstrings	tests/test_log_injections_s2_nested_matrix.py	40
@@ -10662,6 +10682,8 @@ test-names	tests/test_large_graphs.py	100
 test-names	tests/test_large_graphs.py	20
 test-names	tests/test_large_graphs.py	250
 test-names	tests/test_large_graphs.py	50
+test-names	tests/test_load_refuses_earlier_major.py	2_37_1_
+test-names	tests/test_load_refuses_earlier_major.py	2_38_0_
 test-names	tests/test_load_refuses_saved_by_2x.py	2_16_
 test-names	tests/test_lovely_containers_reprs.py	10_
 test-names	tests/test_merged_engine.py	10
