@@ -57,6 +57,40 @@ def _is_blue(color: str) -> bool:
     return 180 <= hue * 360 <= 260 and saturation >= 0.15 and value >= 0.15
 
 
+class _PassOp:
+    """One pass of a fake terminal boolean Layer."""
+
+    def __init__(self, pass_number: int, value: bool) -> None:
+        self.pass_number = pass_number
+        self.bool_value = value
+
+
+class _RolledTest:
+    """A fake rolled if-test Layer: per-pass ops keyed like ``Layer.ops``."""
+
+    def __init__(self, *values: bool) -> None:
+        self.ops = {index: _PassOp(index + 1, value) for index, value in enumerate(values)}
+
+
+def test_mixed_if_test_splits_hard_in_pass_order_in_every_skin() -> None:
+    """A rolled test whose passes differ splits at its first outcome's share."""
+
+    from torchlens._visualization._bool_outcomes import BOOL_FALSE_NODE_COLOR, bool_node_fill
+    from torchlens._visualization.themes import _worst_contrast
+
+    true_fill = "#F7D460"
+    fill = bool_node_fill(_RolledTest(False, False, True), true_fill)
+    assert fill == f"{BOOL_FALSE_NODE_COLOR};0.67:{true_fill}"
+    reverse = bool_node_fill(_RolledTest(True, False, True), true_fill)
+    assert reverse == f"{true_fill};0.67:{BOOL_FALSE_NODE_COLOR}"
+    for skin in sorted(THEME_PRESETS):
+        painted = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=fill), resolve_theme(skin))
+        assert re.fullmatch(r"#[0-9A-Fa-f]{6};0\.67:#[0-9A-Fa-f]{6}", str(painted.fillcolor)), skin
+        assert not any(_is_blue(color) for color in _hexes(painted.fillcolor)), skin
+        contrast = _worst_contrast(str(painted.fontcolor), str(painted.fillcolor))
+        assert contrast is not None and contrast >= 4.5, (skin, painted.fontcolor, contrast)
+
+
 @pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
 def test_no_skin_draws_blue(skin: str) -> None:
     """No skin, light or dark, carries a blue in its palette, ramp, inks or collapse tokens."""

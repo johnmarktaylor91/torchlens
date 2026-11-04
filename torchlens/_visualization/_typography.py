@@ -65,21 +65,23 @@ class TypographyRecord:
         Ordinary node-label size in points (Graphviz default 14).
     annotation_size:
         Edge annotation channels: argument labels, ``xN`` multiplicity,
-        ``accum``/``bwd`` markers. 11 pt (was 8) so ``In 1-3`` and
-        ``arg 0`` stay readable when a drawing is scaled to page width.
+        ``accum``/``bwd`` markers. 13 pt (was 8), one point under node text, so
+        ``In 1-3`` and ``arg 0`` stay readable when a drawing is scaled to a
+        notebook pane.
     secondary_size:
         De-emphasized captions such as the orphans cluster (the historical
         literal 10).
     emphasis_size:
-        Emphasized standalone edge labels such as conditional-arm markers
-        (the historical literal 18).
+        Emphasized standalone edge labels such as conditional-arm markers.
+        14 pt (was 18), the node-title size, so a branch marker never
+        outranks the operations it routes between.
     """
 
     family: str
     base_size: float = 14.0
-    annotation_size: float = 11.0
+    annotation_size: float = 13.0
     secondary_size: float = 10.0
-    emphasis_size: float = 18.0
+    emphasis_size: float = 14.0
 
     @property
     def annotation_ratio(self) -> float:

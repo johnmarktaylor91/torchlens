@@ -18,6 +18,7 @@ DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -165,7 +166,8 @@ def drawn_legend_roles(
         shape = str(attrs.get("shape", "")).lower()
         if shape in _NON_ROLE_SHAPES or "invis" in str(attrs.get("style", "")):
             continue
-        fill = str(attrs.get("fillcolor", "")).lower()
+        # Drop Graphviz segment weights: a mixed if-test's split is weighted.
+        fill = re.sub(r";[0-9.]+", "", str(attrs.get("fillcolor", "")).lower())
         classes = str(attrs.get("class", "")).split()
         if EDITED_NODE_CLASS in classes:
             roles.add("edited")

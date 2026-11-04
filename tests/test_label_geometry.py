@@ -216,8 +216,8 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
         path=str(tmp_path / "container_labels"),
     ).dot
 
-    assert '<FONT POINT-SIZE="11">left</FONT>' in gv_source
-    assert '<FONT POINT-SIZE="11">right</FONT>' in gv_source
+    assert '<FONT POINT-SIZE="13">left</FONT>' in gv_source
+    assert '<FONT POINT-SIZE="13">right</FONT>' in gv_source
     assert "headlabel=" not in gv_source
     assert "taillabel=" not in gv_source
     assert "labeldistance=" not in gv_source

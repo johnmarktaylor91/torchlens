@@ -412,18 +412,20 @@ def _skin_fill_for(spec_fill: str | None, theme: VisualizationTheme) -> str | No
         # The trainable:frozen gradient translates as ONE role so a skin can
         # keep a two-tone gradient (the historical dark remap).
         return theme.semantic_palette.get("params_gradient", fill_text)
-    segments = fill_text.split(":")
-    roles = [_CONSTANT_ROLES.get(segment) for segment in segments]
+    # A segment may carry a Graphviz weight (``#FBEAB0;0.67``): translate the
+    # colour and keep the weight.
+    segments = [segment.partition(";") for segment in fill_text.split(":")]
+    roles = [_CONSTANT_ROLES.get(color) for color, _, _ in segments]
     if not any(roles):
         return None
     translated = [
-        _role_fill(theme, role, segment) if role is not None else segment
-        for role, segment in zip(roles, segments, strict=True)
+        (_role_fill(theme, role, color) if role is not None else color) + sep + weight
+        for role, (color, sep, weight) in zip(roles, segments, strict=True)
     ]
     return ":".join(translated)
 
 
-#: Share of the boolean colour in a False test's fill (the rest is the page).
+#: Share of the boolean colour in a False test's fill (the rest is white).
 _FALSE_TEST_SHARE = 0.45
 
 
@@ -522,7 +524,8 @@ def _contrast_ratio(color_a: str, color_b: str) -> float | None:
 def _worst_contrast(ink: str, fill: str) -> float | None:
     """Return ``ink``'s lowest contrast over a fill's gradient segments, or ``None``."""
 
-    ratios = [_contrast_ratio(ink, segment) for segment in fill.split(":")]
+    segments = [segment.partition(";")[0] for segment in fill.split(":")]
+    ratios = [_contrast_ratio(ink, segment) for segment in segments]
     known = [ratio for ratio in ratios if ratio is not None]
     if not known or len(known) != len(ratios):
         return None

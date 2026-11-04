@@ -4,7 +4,8 @@ A rolled node stands for every pass of its Layer, so its value row must not
 print one pass's truth value as if it held for all of them, and its fill must
 not claim one outcome when the passes disagree. A True test fills with the
 boolean role colour, a False test with its pale form, and a rolled test whose
-passes disagree with the two-tone split of both. A test that decides an
+passes disagree with a hard two-tone split: the first pass's outcome on the
+left, each tone's width its share of the passes. A test that decides an
 ``if``/``elif`` (or a ternary) names its kind on its own value row, so the
 reader sees ``IF: TRUE`` on the test rather than on an edge upstream of it.
 """
@@ -157,8 +158,10 @@ def bool_node_fill(node: Any, true_fill: str) -> str:
     -------
     str
         ``true_fill`` when every known pass was True (or no value was kept),
-        ``BOOL_FALSE_NODE_COLOR`` when every known pass was False, and the
-        two-tone split when the passes disagree.
+        ``BOOL_FALSE_NODE_COLOR`` when every known pass was False, and when
+        the passes disagree a weighted Graphviz colour list
+        (``first;share:second``), which Graphviz paints as a hard split with
+        the first pass's outcome on the left over its share of the passes.
 
     Examples
     --------
@@ -168,9 +171,12 @@ def bool_node_fill(node: Any, true_fill: str) -> str:
     True
     """
 
-    known = {value for value in bool_outcomes(node) if value is not None}
-    if known == {False}:
+    known = [value for value in bool_outcomes(node) if value is not None]
+    if set(known) == {False}:
         return BOOL_FALSE_NODE_COLOR
-    if known == {True, False}:
-        return f"{true_fill}:{BOOL_FALSE_NODE_COLOR}"
-    return true_fill
+    if set(known) != {True, False}:
+        return true_fill
+    tones = {True: true_fill, False: BOOL_FALSE_NODE_COLOR}
+    first = known[0]
+    share = known.count(first) / len(known)
+    return f"{tones[first]};{share:.2f}:{tones[not first]}"
