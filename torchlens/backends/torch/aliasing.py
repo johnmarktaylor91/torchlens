@@ -11,9 +11,9 @@ from ... import _state
 from ..._entry_refusals import refuse_aliasing_parent_not_in_call_args
 from ..._ir.intervention import FunctionEventInput
 from ..._ir.semantics import BackendSemantics
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.collections import index_nested
 from ..._utils.tensor_utils import tensor_nanequal
-from ._internal_read import tensor_read
 
 
 def detect_torch_alias_contract(

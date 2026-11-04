@@ -29,6 +29,27 @@ side effect. Class roots (``torch.Tensor`` / ``torch._C`` / ``torch.backends``) 
 
 :func:`shadowed_torch_submodule` is the dotted-path companion: it recovers an imported torch
 submodule that a same-named package attribute hides from attribute resolution.
+
+:func:`tensor_read` and :func:`tensor_reads` resolve a ``torch.Tensor`` METHOD for TorchLens's
+own bookkeeping reads (storage identity, element counts, layout flags), made tens of thousands of
+times per capture under ``pause_logging``. Each read used to re-enter the per-op wrapper only to
+take its logging-off fast path and call the original. The returned callable (called with the
+receiver as its only argument) is the saved original, the unwrap ledger's entry for the TorchLens
+wrapper on the receiver's class, only when that wrapper's fast path would be a pure pass-through:
+
+* the backend registered its pass-through predicate and unwrap ledger (:data:`_INTERNAL_READS`)
+  and the predicate holds: logging is off, no guarded fast re-run collector is observing wrapped
+  calls, and the call fingerprint would not count the call;
+* the receiver's class is exactly ``torch.Tensor`` or ``torch.nn.Parameter``, so no subclass
+  override or ``__torch_function__`` decline redispatch can apply;
+* the name is in :data:`ROUTED_TENSOR_READS`, whose wrappers carry no fast-path side effect (no
+  clone-on-write materialization, device injection, subclass construction or detached-activation
+  propagation; ``tests/test_internal_call_fastpath.py`` reads each wrapper's closure to prove it).
+
+Otherwise the callable is ``operator.methodcaller(name)``, the exact spelling the call site used
+before (``t.untyped_storage()``), so the wrapper runs as it always did. The class attribute is
+re-read on every call, so a re-wrap, an unwrap or a peer patch over the wrapper is honoured
+immediately. Callers keep their ``pause_logging`` scope.
 """
 
 from __future__ import annotations
@@ -257,3 +278,120 @@ def enumerated_torch_callable(stock_path: str) -> tuple[Callable[..., Any], str]
     if func is None:
         return None
     return func, f"{namespace}.{qualname}"
+
+
+ROUTED_TENSOR_READS: frozenset[str] = frozenset(
+    {
+        "data_ptr",
+        "element_size",
+        "is_conj",
+        "is_contiguous",
+        "is_inference",
+        "is_neg",
+        "nelement",
+        "numel",
+        "storage_offset",
+        "untyped_storage",
+    }
+)
+"""Zero-argument tensor reads whose wrapper fast path is a pure pass-through."""
+
+_SPELLED: dict[str, Callable[[Any], Any]] = {
+    name: operator.methodcaller(name) for name in ROUTED_TENSOR_READS
+}
+_TENSOR = torch.Tensor
+_PARAMETER = torch.nn.Parameter
+
+_INTERNAL_READS: tuple[Callable[[], bool], Mapping[int, Callable[..., Any]]] | None = None
+"""The backend's pass-through predicate and unwrap ledger; ``None`` routes nothing."""
+
+
+def register_internal_reads(
+    pass_through: Callable[[], bool], ledger: Mapping[int, Callable[..., Any]]
+) -> None:
+    """Install the predicate and unwrap ledger :func:`tensor_read` consults.
+
+    Parameters
+    ----------
+    pass_through:
+        Returns whether a wrapped pure read would only pass through its wrapper now.
+    ledger:
+        The append-only ``id(wrapper) -> original`` unwrap ledger (read only).
+    """
+
+    global _INTERNAL_READS
+    _INTERNAL_READS = (pass_through, ledger)
+
+
+def _route_ledger(tensor: Any) -> Mapping[int, Callable[..., Any]] | None:
+    """Return the unwrap ledger when a routed read on ``tensor`` would pass through, else None.
+
+    Parameters
+    ----------
+    tensor:
+        The receiver of the read.
+
+    Returns
+    -------
+    Mapping[int, Callable[..., Any]] | None
+        The ledger when the wrapper's fast path would only call the original.
+    """
+
+    bound = _INTERNAL_READS
+    if bound is None:
+        return None
+    cls = type(tensor)
+    if (cls is _TENSOR or cls is _PARAMETER) and bound[0]():
+        return bound[1]
+    return None
+
+
+def tensor_read(tensor: Any, name: str) -> Callable[[Any], Any]:
+    """Return the callable for one routed read of ``tensor`` (call it with ``tensor``).
+
+    Parameters
+    ----------
+    tensor:
+        The receiver of the read.
+    name:
+        A name in :data:`ROUTED_TENSOR_READS`.
+
+    Returns
+    -------
+    Callable[[Any], Any]
+        The saved original when the wrapper would pass through, else the method call.
+    """
+
+    spelled = _SPELLED[name]
+    ledger = _route_ledger(tensor)
+    if ledger is None:
+        return spelled
+    original = ledger.get(id(getattr(type(tensor), name, None)))
+    return spelled if original is None else original
+
+
+def tensor_reads(tensor: Any, *names: str) -> tuple[Callable[[Any], Any], ...]:
+    """Return the callables for several routed reads of ``tensor``, in ``names`` order.
+
+    Parameters
+    ----------
+    tensor:
+        The receiver of the reads.
+    *names:
+        Names in :data:`ROUTED_TENSOR_READS`.
+
+    Returns
+    -------
+    tuple[Callable[[Any], Any], ...]
+        One callable per name, each as :func:`tensor_read` would return it.
+    """
+
+    ledger = _route_ledger(tensor)
+    if ledger is None:
+        return tuple(_SPELLED[name] for name in names)
+    cls = type(tensor)
+    resolved = []
+    for name in names:
+        original = ledger.get(id(getattr(cls, name, None)))
+        resolved.append(_SPELLED[name] if original is None else original)
+    return tuple(resolved)

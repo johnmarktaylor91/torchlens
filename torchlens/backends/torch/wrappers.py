@@ -49,6 +49,7 @@ from ..._utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.display import identity
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import get_vars_of_type_from_obj
@@ -81,7 +82,6 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._internal_read import tensor_read
 from ._logged_arguments import logged_args
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers

@@ -56,6 +56,7 @@ from ..._ir.selector_eval import module_union_matches
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils._call_site import call_site_class
+from ..._utils._torch_symbols import tensor_reads
 from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
@@ -65,7 +66,6 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
 )
-from ._internal_read import tensor_reads
 from ._tl import (
     get_label_list,
     get_live_tensor_label,

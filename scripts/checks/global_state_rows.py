@@ -722,6 +722,10 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # torch-aware snapshot at import; the basis module falls back to the torch
         # compat snapshot when nothing is registered.
         ("torchlens/_doctor_types.py", "_CAPABILITY_SNAPSHOT_PROVIDER"),
+        # Internal-read routing slot: backends/torch/_internal_read registers the wrapper
+        # pass-through predicate and unwrap ledger at import; the low-level routed tensor
+        # reads fall back to the method call when nothing is registered.
+        ("torchlens/_utils/_torch_symbols.py", "_INTERNAL_READS"),
         # Facet-snapshot provider slot: the capture door registers a lazy loader and
         # _semantic.facets registers snapshot() when it loads; the engine reads it.
         ("torchlens/_registry/_facet_snapshot.py", "_PROVIDER"),

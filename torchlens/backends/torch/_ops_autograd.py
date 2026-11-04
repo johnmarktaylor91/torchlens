@@ -19,12 +19,12 @@ from ..._ir.container_registry import (
     walk_container,
 )
 from ..._state import pause_logging
+from ..._utils._torch_symbols import tensor_read, tensor_reads
 from ..._utils.collections import ensure_iterable
 from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
-from ._internal_read import tensor_read, tensor_reads
 from ._tl import (
     get_tensor_label,
 )

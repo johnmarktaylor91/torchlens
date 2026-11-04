@@ -25,7 +25,6 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._internal_read import tensor_read, tensor_reads
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._sparse_parts import sparse_component_tensors
 from ._torch_compat import (
@@ -33,7 +32,7 @@ from ._torch_compat import (
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
 )
-from ._torch_symbols import torch_attr
+from ._torch_symbols import tensor_read, tensor_reads, torch_attr
 from .env_flags import closed_bool_env
 
 

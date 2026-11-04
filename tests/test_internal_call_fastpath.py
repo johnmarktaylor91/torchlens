@@ -9,7 +9,8 @@ take its logging-off fast path. These tests pin that:
 * during a capture no paused wrapper entry is spent on a routed read, and capture makes
   fewer Python calls per op than with the routing switched off;
 * the routing honours every gate (logging on, a fast-run collector, an uncounted
-  fingerprint call, a tensor subclass, an unwrapped class) by returning the old spelling;
+  fingerprint call, a tensor subclass, an unwrapped class, no registered backend) by
+  returning the old spelling;
 * the logged ops are field-for-field identical with the routing on and off across the
   classics smoke corpus and the bound-generate toys (under a fake clock, so timing cells
   compare too).
@@ -130,7 +131,7 @@ def _capture_census(model: nn.Module, x: torch.Tensor) -> tuple[Counter[str], in
 def test_routed_names_are_the_census_names() -> None:
     """The routing table holds exactly the census read names."""
 
-    from torchlens.backends.torch._internal_read import ROUTED_TENSOR_READS
+    from torchlens._utils._torch_symbols import ROUTED_TENSOR_READS
 
     assert ROUTED_TENSOR_READS == _EXPECTED_ROUTED
 
@@ -175,10 +176,10 @@ def test_capture_spends_no_wrapper_entry_on_routed_reads() -> None:
 def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Capture makes fewer Python calls per op with the routing on than off."""
 
-    from torchlens.backends.torch import _internal_read
+    from torchlens._utils import _torch_symbols
 
     paused_on, calls_on, ops_on = _capture_census(_chain(), torch.zeros(2, 4))
-    monkeypatch.setattr(_internal_read, "_route_open", lambda tensor: False)
+    monkeypatch.setattr(_torch_symbols, "_route_ledger", lambda tensor: None)
     paused_off, calls_off, ops_off = _capture_census(_chain(), torch.zeros(2, 4))
     assert ops_on == ops_off
     skipped = sum(paused_off[name] for name in _EXPECTED_ROUTED)
@@ -191,7 +192,7 @@ def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.Monke
 def test_gates_fall_back_to_the_method_call_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every gate that would make the wrapper do more than pass through keeps it."""
 
-    from torchlens.backends.torch import _internal_read as io
+    from torchlens._utils import _torch_symbols as io
 
     tl.trace(_chain(), torch.zeros(2, 4))  # wraps torch
     t = torch.zeros(3)
@@ -213,11 +214,38 @@ def test_gates_fall_back_to_the_method_call_spelling(monkeypatch: pytest.MonkeyP
         monkeypatch.setattr(_state, "_call_fingerprint", None)
         monkeypatch.setattr(torch.Tensor, "numel", original)  # a class not wrapped
         assert io.tensor_read(t, "numel") is io._SPELLED["numel"]
+        monkeypatch.undo()
+        assert io.tensor_read(t, "numel") is original
+        monkeypatch.setattr(io, "_INTERNAL_READS", None)  # nothing registered
+        assert io.tensor_reads(t, "numel")[0] is io._SPELLED["numel"]
     monkeypatch.undo()
     monkeypatch.setattr(_state, "_logging_enabled", True)
     assert io.tensor_read(t, "numel") is io._SPELLED["numel"]
     monkeypatch.undo()
     assert io._SPELLED["untyped_storage"](t).data_ptr() == t.untyped_storage().data_ptr()
+
+
+def test_unregistered_slot_keeps_the_method_call_spelling() -> None:
+    """With the backend never imported, every routed read is the old method call."""
+
+    import importlib.util
+
+    import torchlens._utils._torch_symbols as installed
+
+    spec = importlib.util.spec_from_file_location("_fresh_torch_symbols", installed.__file__)
+    assert spec is not None and spec.loader is not None
+    fresh = importlib.util.module_from_spec(spec)  # a copy no backend has registered with
+    spec.loader.exec_module(fresh)
+    assert fresh._INTERNAL_READS is None
+    t = torch.zeros(3)
+    with _state.pause_logging():
+        for name in sorted(_EXPECTED_ROUTED):
+            assert fresh.tensor_read(t, name) is fresh._SPELLED[name]
+        assert fresh.tensor_reads(t, "numel", "untyped_storage") == (
+            fresh._SPELLED["numel"],
+            fresh._SPELLED["untyped_storage"],
+        )
+        assert fresh.tensor_read(t, "numel")(t) == 3
 
 
 def _canon(value: Any) -> str:
@@ -329,11 +357,11 @@ def test_logged_ops_identical_with_and_without_routing(
 ) -> None:
     """Every run-stable op-store field is identical with the routing on and off."""
 
-    from torchlens.backends.torch import _internal_read
+    from torchlens._utils import _torch_symbols
 
     build = dict(_corpus())[spec]
     with monkeypatch.context() as closed:
-        closed.setattr(_internal_read, "_route_open", lambda tensor: False)
+        closed.setattr(_torch_symbols, "_route_ledger", lambda tensor: None)
         base_a = _op_fields(build)
         base_b = _op_fields(build)
     routed = _op_fields(build)
