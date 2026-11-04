@@ -1113,11 +1113,10 @@ torchlens/intervention/binding.py::_make_boundary_hook	61
 torchlens/intervention/compose.py::compose	103
 torchlens/intervention/edge_substitution.py::_recompute_with_substitution	65
 torchlens/intervention/edge_substitution.py::apply_edge_substitution_do	150
-torchlens/intervention/helpers.py	1249
+torchlens/intervention/helpers.py	1240
 torchlens/intervention/helpers.py::add_noise	61
 torchlens/intervention/helpers.py::helper_from_serialized	75
 torchlens/intervention/helpers.py::patch_from	110
-torchlens/intervention/helpers.py::rebuild_builtin_helper	68
 torchlens/intervention/helpers.py::scramble_elements	88
 torchlens/intervention/helpers.py::splice_module	81
 torchlens/intervention/helpers.py::swap_with	69
@@ -1129,7 +1128,7 @@ torchlens/intervention/hooks.py::expand_facet_hook_entries	70
 torchlens/intervention/hooks.py::normalize_hook_plan	69
 torchlens/intervention/injection.py	858
 torchlens/intervention/injection.py::injection_recorder._record_call	63
-torchlens/intervention/masked_edit.py::_derive_masked_edit	74
+torchlens/intervention/masked_edit.py::_derive_masked_edit	73
 torchlens/intervention/masked_edit.py::_row_equivariance_facts	69
 torchlens/intervention/param_substitution.py::_derive_entry_occurrences	65
 torchlens/intervention/param_substitution.py::_stage_param_entry	66
