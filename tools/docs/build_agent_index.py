@@ -414,9 +414,8 @@ def render_index(card_set: CardSet, link_base: str, summary: str) -> str:
         )
     lines += [
         "",
-        f"Capabilities by name: {CAPABILITIES_PATH.as_posix()}. "
-        "Read-only tools over saved artifacts: `torchlens guide`. "
-        f"Tested examples by name and task: `{EXAMPLE_BANK_INDEX}` (installed package).",
+        f"Capabilities: {CAPABILITIES_PATH.as_posix()}. Saved traces: `torchlens guide`. "
+        f"Examples: {EXAMPLE_BANK_INDEX}.",
     ]
     return "\n".join(lines) + "\n"
 
