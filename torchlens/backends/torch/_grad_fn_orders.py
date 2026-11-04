@@ -8,7 +8,7 @@ measure the coverage of the attribution for one backward pass.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ def _max_call_order(
     return max(call_orders) if call_orders else None
 
 
-def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
+def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> bool:
     """Populate resolved GradFn order values from creators and known topology.
 
     A creator-attributed node sits one order above its creator. A creator-less
@@ -138,7 +138,8 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
     The two rules run to a fixed point: inferring a node upward re-derives the
     orders of the nodes its own differentiation created, so every
     creator-attributed order stays ``creator.order + 1`` even when the
-    creator itself was only inferred.
+    creator itself was only inferred. Returns whether the sweeps reached the
+    fixed point (``False`` only when the cycle guard stopped them).
     """
 
     for grad_fn_record in grad_fn_logs.values():
@@ -153,7 +154,38 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
     # invariants then report.
     for _sweep in range(len(grad_fn_logs) + 1):
         if not _raise_grad_fn_orders_once(grad_fn_logs):
-            break
+            return True
+    return False
+
+
+def _assign_new_grad_fn_orders(
+    grad_fn_logs: Mapping[int, GradFn], new_records: Mapping[int, GradFn]
+) -> bool:
+    """Resolve orders for creator-less records appended after converged ``grad_fn_logs``.
+
+    No existing record feeds or is created by an appended one, so the existing
+    orders stay at their fixed point and the appended records rise to theirs
+    alone, as in a scratch ``_assign_grad_fn_orders``. Returns ``False`` when
+    the appended records do not converge (a cycle), so the caller rebuilds.
+    """
+
+    for grad_fn_record in new_records.values():
+        grad_fn_record.order = 1
+    for _sweep in range(len(new_records) + 1):
+        changed = False
+        for grad_fn_record in new_records.values():
+            child_orders = [
+                child.order
+                for child_id in grad_fn_record.next_grad_fn_ids
+                if (child := new_records.get(child_id) or grad_fn_logs.get(child_id)) is not None
+                and child.order is not None
+            ]
+            if child_orders and max(child_orders) > 1 and grad_fn_record.order != max(child_orders):
+                grad_fn_record.order = max(child_orders)
+                changed = True
+        if not changed:
+            return True
+    return False
 
 
 def _raise_grad_fn_orders_once(grad_fn_logs: dict[int, GradFn]) -> bool:

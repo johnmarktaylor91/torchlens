@@ -40,6 +40,14 @@ Core capture path:
 - `_grad_fn_pairing.py` — pairs `GradFn` nodes with the forward ops that record
   their identity; the projection rebuild re-pairs discoveries from a backward walk
   that ran inside the forward, before any layer existed.
+- `_grad_fn_membership.py` — module membership of `GradFn` records (paired
+  addresses, inferred containment swept to a fixed point, and the replay of those
+  sweeps for appended records); `_grad_fn_graph.py` — parent, child, sibling and
+  co-parent relations, from scratch or extended for appended records;
+  `_grad_fn_growth.py` — the projection fold that appends the nodes a new
+  `autograd.grad` or `backward` call discovers, refusing (so the caller rebuilds)
+  whenever appending could change an existing record. All three were split out of
+  `backward.py` under its size ratchet.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage

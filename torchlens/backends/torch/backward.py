@@ -31,7 +31,6 @@ from ..._capture.peak_memory import (
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
-    _grad_fn_type_from_class_name,
     _normalize_grad_fn_type,
 )
 from ..._data_classes.backward_pass import BackwardPass
@@ -79,6 +78,19 @@ from ._fire_timing import (
     _fire_timing_stamp_list,
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
+)
+from ._grad_fn_graph import _sync_grad_fn_graph_relations
+from ._grad_fn_growth import (
+    _commit_grad_fn_growth,
+    _grad_fn_record_from_discovery,
+    _GradFnGrowth,
+    _layer_grad_fn_ids,
+    _plan_grad_fn_growth,
+)
+from ._grad_fn_membership import (
+    MembershipSweeps,
+    _infer_grad_fn_module_membership,
+    _prefer_direct_pairing_source_for_paired_ops,
 )
 from ._grad_fn_orders import (
     _assign_grad_fn_orders,
@@ -787,127 +799,6 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
     return layer_label is not None and _should_save_grad_payload(trace, layer_label)
 
 
-def _sync_grad_fn_graph_relations(trace: Any) -> None:
-    """Populate backward-oriented GradFn graph relation labels.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` should be synchronized.
-    """
-
-    id_to_label = {
-        grad_fn_object_id: grad_fn.label
-        for grad_fn_object_id, grad_fn in trace._grad_fn_logs.items()
-    }
-    child_map: dict[str, list[str]] = {}
-    parent_map: dict[str, list[str]] = {
-        grad_fn.label: [] for grad_fn in trace._grad_fn_logs.values()
-    }
-    parent_membership: dict[str, set[str]] = {
-        grad_fn.label: set() for grad_fn in trace._grad_fn_logs.values()
-    }
-
-    for grad_fn in trace._grad_fn_logs.values():
-        children = [
-            id_to_label[next_grad_fn_id]
-            for next_grad_fn_id in grad_fn.next_grad_fn_ids
-            if next_grad_fn_id in id_to_label
-        ]
-        child_map[grad_fn.label] = children
-        for child_label in children:
-            if grad_fn.label not in parent_membership[child_label]:
-                parent_map[child_label].append(grad_fn.label)
-                parent_membership[child_label].add(grad_fn.label)
-
-    for grad_fn in trace._grad_fn_logs.values():
-        grad_fn.children = child_map[grad_fn.label]
-        grad_fn.parents = parent_map[grad_fn.label]
-        sibling_labels: list[str] = []
-        sibling_membership: set[str] = set()
-        for parent_label in grad_fn.parents:
-            for sibling_label in child_map.get(parent_label, []):
-                if sibling_label != grad_fn.label and sibling_label not in sibling_membership:
-                    sibling_labels.append(sibling_label)
-                    sibling_membership.add(sibling_label)
-        grad_fn.siblings = sibling_labels
-
-        co_parent_labels: list[str] = []
-        co_parent_membership: set[str] = set()
-        for child_label in grad_fn.children:
-            for co_parent_label in parent_map.get(child_label, []):
-                if co_parent_label != grad_fn.label and co_parent_label not in co_parent_membership:
-                    co_parent_labels.append(co_parent_label)
-                    co_parent_membership.add(co_parent_label)
-        grad_fn.co_parents = co_parent_labels
-
-
-def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
-    """Return the owning module address for a parameter reference.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing parameter logs.
-    param_ref:
-        Parameter address recorded on an ``AccumulateGrad`` discovery event.
-
-    Returns
-    -------
-    str | None
-        Owning module address, or ``None`` when the parameter is unknown.
-    """
-
-    if not isinstance(param_ref, str):
-        return None
-    param_logs = trace._param_logs
-    if param_ref not in param_logs:
-        return None
-    param_log = param_logs[param_ref]
-    return None if param_log is None else getattr(param_log, "module_address", None)
-
-
-def _op_module_address(
-    trace: Any,
-    op_label: str | None,
-    grad_fn_object_id: int | None = None,
-) -> str | None:
-    """Return the containing module address for a paired forward op label.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing op logs.
-    op_label:
-        Forward layer label paired to a grad-fn record.
-    grad_fn_object_id:
-        Autograd identity of the grad-fn node, selecting its own pass on a
-        multi-pass layer.
-
-    Returns
-    -------
-    str | None
-        Module address for the paired op, if known.
-    """
-
-    op = _paired_pass_op(trace, op_label, grad_fn_object_id)
-    if op is None:
-        return None
-    module_address = getattr(op, "module_address", None)
-    if module_address is not None:
-        return cast(str, module_address)
-    atomic_module_address = getattr(op, "atomic_module_address", None)
-    if atomic_module_address is not None:
-        return cast(str, atomic_module_address)
-    output_module_calls = list(getattr(op, "output_of_module_calls", []) or [])
-    if output_module_calls:
-        return str(output_module_calls[-1]).rsplit(":", 1)[0]
-    module_calls = list(getattr(op, "modules", []) or [])
-    if not module_calls:
-        return None
-    return str(module_calls[-1]).rsplit(":", 1)[0]
-
-
 def _resolve_op_grad_event_label(trace: Any, op_label: str) -> str:
     """Return the final lookup label for an ``OpGradObserved`` event.
 
@@ -934,159 +825,6 @@ def _resolve_op_grad_event_label(trace: Any, op_label: str) -> str:
     return op_label
 
 
-def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
-    """Return the forward raw index backing a grad-fn's module attribution.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing op logs.
-    grad_fn_record:
-        GradFn whose attributed op position should be inspected.
-
-    Returns
-    -------
-    int | None
-        Forward raw index, or ``None`` for parameter-only and unresolved records.
-    """
-
-    op = _paired_pass_op(trace, grad_fn_record.op_label, grad_fn_record.grad_fn_object_id)
-    if op is None:
-        return None
-    return int(getattr(op, "raw_index"))
-
-
-def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
-    """Return loss-construction grad-fn ids before the first op-anchored node.
-
-    Parameters
-    ----------
-    grad_fn_logs:
-        Projected GradFn records in backward discovery order.
-
-    Returns
-    -------
-    set[int]
-        Unpaired, non-creator-attributed ids that should not receive inferred
-        module containment.
-    """
-
-    op_steps = [
-        grad_fn_record.step_index
-        for grad_fn_record in grad_fn_logs.values()
-        if grad_fn_record.has_op
-    ]
-    if not op_steps:
-        return set()
-    first_op_step = min(op_steps)
-    return {
-        object_id
-        for object_id, grad_fn_record in grad_fn_logs.items()
-        if (
-            grad_fn_record.step_index < first_op_step
-            and not grad_fn_record.has_op
-            and grad_fn_record.creator_object_id is None
-        )
-    }
-
-
-def _candidate_module_sort_key(trace: Any, candidate: GradFn) -> tuple[int, int, str]:
-    """Return the deterministic P5 tie-break key for a containment candidate.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing forward op logs.
-    candidate:
-        Neighbor GradFn with resolved module containment.
-
-    Returns
-    -------
-    tuple[int, int, str]
-        Sort key where smaller values are preferred.
-    """
-
-    raw_index = _op_raw_index(trace, candidate)
-    consumer_rank = -(raw_index if raw_index is not None else -1)
-    return (consumer_rank, candidate.step_index, candidate.label)
-
-
-def _infer_grad_fn_module_membership(trace: Any) -> None:
-    """Populate inferred module containment for intervening backward nodes.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` already have graph relations synchronized.
-
-    Returns
-    -------
-    None
-        GradFn ``modules``, ``module_address``, and ``module_membership_source``
-        fields are updated in place.
-    """
-
-    grad_fn_logs = trace._grad_fn_logs
-    label_to_id = {grad_fn.label: object_id for object_id, grad_fn in grad_fn_logs.items()}
-    carve_out_ids = _post_forward_grad_fn_ids(grad_fn_logs)
-    changed = True
-    while changed:
-        changed = False
-        for object_id, grad_fn_record in grad_fn_logs.items():
-            if (
-                object_id in carve_out_ids
-                or grad_fn_record.module_membership_source is not None
-                or grad_fn_record.creator_object_id is not None
-            ):
-                continue
-            neighbor_ids = [
-                label_to_id[label]
-                for label in [*grad_fn_record.parents, *grad_fn_record.children]
-                if label in label_to_id
-            ]
-            candidates = [
-                grad_fn_logs[neighbor_id]
-                for neighbor_id in neighbor_ids
-                if grad_fn_logs[neighbor_id].module_membership_source is not None
-            ]
-            if not candidates:
-                continue
-            winner = min(
-                candidates, key=lambda candidate: _candidate_module_sort_key(trace, candidate)
-            )
-            if winner.module_address is None:
-                continue
-            grad_fn_record.module_address = winner.module_address
-            grad_fn_record.modules = list(winner.modules) or [winner.module_address]
-            grad_fn_record.module_membership_source = "inferred"
-            changed = True
-
-
-def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
-    """Mark direct op pairings as paired after containment inference.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` should be normalized.
-
-    Returns
-    -------
-    None
-        Directly paired GradFn records keep any inferred module address but expose
-        ``module_membership_source="paired"``.
-    """
-
-    for grad_fn_record in trace._grad_fn_logs.values():
-        op = grad_fn_record.op
-        if (
-            op is not None
-            and (getattr(op, "is_compute_op", False) or getattr(op, "is_compute_layer", False))
-            and grad_fn_record.module_membership_source == "inferred"
-        ):
-            grad_fn_record.module_membership_source = "paired"
-
-
 @dataclass
 class _BackwardFoldState:
     """Cross-fold accumulators for incremental backward projection.
@@ -1109,12 +847,25 @@ class _BackwardFoldState:
     built_pass_indices: set[int] = field(default_factory=set)
     op_grad_passes: set[int] = field(default_factory=set)
     param_grad_passes: set[int] = field(default_factory=set)
+    # Growth fold inputs (``_grad_fn_growth``): set by the scratch rebuild,
+    # extended by each fold that appends records.
+    grows_in_place: bool = False
+    orders_converged: bool = False
+    type_counter: dict[str, int] = field(default_factory=dict)
+    membership_sweeps: MembershipSweeps = field(default_factory=dict)
+    referenced_ids: set[int] = field(default_factory=set)
+    label_to_id: dict[str, int] = field(default_factory=dict)
+    layer_grad_fn_ids: frozenset[int] = frozenset()
 
 
-def _backward_tail_is_foldable(state: _BackwardFoldState, tail: list[Any]) -> bool:
+def _backward_tail_is_foldable(
+    state: _BackwardFoldState, tail: list[Any], new_events: list[Any] | None = None
+) -> bool:
     """Return whether an appended event tail can fold without a full rebuild.
 
-    Foldable means the tail introduces no new grad-fn node, no merge that
+    Foldable means the tail introduces no new grad-fn node (with
+    ``new_events``, new-node discoveries are collected there instead, for
+    ``_plan_grad_fn_growth`` to accept or refuse), no merge that
     would retroactively change an already-assigned label or field, no
     topology change (which would require re-running the global order and
     module-inference passes), and no event for an already-built pass. Any
@@ -1132,7 +883,10 @@ def _backward_tail_is_foldable(state: _BackwardFoldState, tail: list[Any]) -> bo
         elif isinstance(event, GradFnDiscovered):
             existing = state.discovered.get(event.object_id)
             if existing is None:
-                return False
+                if new_events is None:
+                    return False
+                new_events.append(event)
+                continue
             if existing.op_label is None and event.op_label is not None:
                 return False
             if existing.param_ref is None and event.param_ref is not None:
@@ -1175,8 +929,11 @@ def _materialize_backward_projections(trace: Any) -> None:
     if getattr(trace, "_tl_materializing_backward_projection", False):
         return
     stream = _ensure_backward_event_stream(trace)
-    events = list(getattr(stream, "backward_events", ()))
-    if not events:
+    # Read the live list without copying it: a fold reads only the tail, so
+    # per-call work does not grow with the passes already projected.
+    stream_events = getattr(stream, "backward_events", ())
+    event_count = len(stream_events)
+    if not event_count:
         return
     # Checkpoint witness (memo 2.3): every backward-capturing trace gets the
     # projected summary, so the affirmative zero-token verdict is available
@@ -1186,7 +943,7 @@ def _materialize_backward_projections(trace: Any) -> None:
     if revision is None:
         # Legacy stream (e.g. unpickled from an older version) without a
         # revision counter: fall back to the event count as a change signal.
-        revision = len(events)
+        revision = event_count
     if getattr(trace, "_backward_projection_revision", None) == revision:
         from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
@@ -1196,28 +953,29 @@ def _materialize_backward_projections(trace: Any) -> None:
     try:
         state = getattr(trace, "_backward_projection_fold_state", None)
         watermark = getattr(trace, "_backward_projection_event_count", None)
+        tail = (
+            list(stream_events[watermark:])
+            if isinstance(watermark, int) and 0 < watermark < event_count
+            else []
+        )
+        new_events: list[Any] = []
+        growth = None
+        fold_rows = None
         if (
             isinstance(state, _BackwardFoldState)
-            and isinstance(watermark, int)
-            and 0 < watermark < len(events)
-            and _backward_tail_is_foldable(state, events[watermark:])
+            and tail
+            and _backward_tail_is_foldable(state, tail, new_events)
+            and (growth := _plan_grad_fn_growth(trace, state, new_events)) is not None
         ):
-            _fold_backward_projection_tail(trace, state, events[watermark:])
-            full_rebuild = False
+            fold_rows = _fold_backward_projection_tail(trace, state, tail, growth)
         else:
-            _materialize_backward_projections_impl(trace, events, stream=stream)
-            full_rebuild = True
-        _bind_backward_epoch(
-            trace,
-            full_rebuild=full_rebuild,
-            revision=revision,
-            watermark=len(events),
-        )
+            _materialize_backward_projections_impl(trace, list(stream_events), stream=stream)
+        _bind_backward_epoch(trace, fold_rows=fold_rows, revision=revision, watermark=event_count)
         # Publication is the LAST step: the lazy-invalidation stamps only
         # advance once the facade projection AND the core epoch both hold
         # the complete result, so a failure anywhere above cannot suppress
         # the retry (sol review finding 2).
-        trace._backward_projection_event_count = len(events)
+        trace._backward_projection_event_count = event_count
         trace._backward_projection_revision = revision
         from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
@@ -1238,7 +996,9 @@ def _materialize_backward_projections(trace: Any) -> None:
         trace.__dict__.pop("_tl_materializing_backward_projection", None)
 
 
-def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, watermark: Any) -> None:
+def _bind_backward_epoch(
+    trace: Any, *, fold_rows: tuple[list[Any], ...] | None, revision: Any, watermark: Any
+) -> None:
     """Bind the projected backward records to the core's backward epoch (M9).
 
     Runs AFTER a successful projection and BEFORE the trace-side stamp
@@ -1246,9 +1006,10 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     row into a STAGED fresh epoch and only then replaces the epoch list, so
     a failed adoption leaves ``core.backward_epochs`` untouched (the caller
     poisons the lazy-invalidation stamps and the next access rebuilds from
-    scratch). A clean tail fold extends the live epoch; ``adopt_rows``
-    skips already-adopted records, so folds only add the new tail rows and
-    a failed fold is healed by the caller-forced full rebuild. The epoch
+    scratch). A clean tail fold (``fold_rows``: the grad-fn, call and pass
+    records it created) extends the live epoch with exactly those rows, so
+    a fold's cost does not grow with the rows already adopted; a failed fold
+    is healed by the caller-forced full rebuild. The epoch
     stamps ``revision``/``watermark`` (its generation) last, after every
     adoption succeeded. Non-core-backed traces (loaded artifacts, previews)
     keep detached-backed records.
@@ -1260,15 +1021,17 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
 
     epochs = core.backward_epochs
-    staged = full_rebuild or not epochs
+    staged = fold_rows is None or not epochs
     epoch = BackwardEpoch() if staged else epochs[-1]
-    grad_fn_logs = trace._grad_fn_logs or {}
-    grad_fns = list(grad_fn_logs.values())
-    calls: list[Any] = []
-    for grad_fn_record in grad_fns:
-        call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
-        calls.extend(call_map.values())
-    passes = list((trace._backward_pass_logs or {}).values())
+    if fold_rows is not None and not staged:
+        grad_fns, calls, passes = fold_rows
+    else:
+        grad_fns = list((trace._grad_fn_logs or {}).values())
+        calls = []
+        for grad_fn_record in grad_fns:
+            call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
+            calls.extend(call_map.values())
+        passes = list((trace._backward_pass_logs or {}).values())
     adopt_rows(epoch.stores, "grad_fn", grad_fns)
     adopt_rows(epoch.stores, "grad_fn_call", calls)
     adopt_rows(epoch.stores, "backward_pass", passes)
@@ -1380,51 +1143,14 @@ def _materialize_backward_projections_impl(
     ordinal_offset = len(preserved_grad_fn_logs)
     object_to_label: dict[int, str] = {}
     for ordinal_index, (object_id, event) in enumerate(discovered.items(), start=ordinal_offset):
-        grad_fn_type = _grad_fn_type_from_class_name(event.class_name)
-        step_index = ordinal_index + 1
-        type_index, step_index, label = _grad_fn_label_parts(
+        grad_fn_record = _grad_fn_record_from_discovery(
             trace,
-            grad_fn_type,
-            event.op_label,
+            object_id,
+            event,
+            latest_topology.get(object_id, event.topology),
+            ordinal_index,
             type_counter,
-            step_index,
         )
-        source_fields = cast(dict[str, Any], dict(event.source))
-        modules: list[str] = []
-        module_address = None
-        module_membership_source = None
-        op_module_address = _op_module_address(trace, event.op_label, object_id)
-        param_module_address = _param_module_address(trace, event.param_ref)
-        if op_module_address is not None:
-            module_address = op_module_address
-            modules = [module_address]
-            module_membership_source = "paired"
-        elif param_module_address is not None:
-            module_address = param_module_address
-            modules = [module_address]
-            module_membership_source = "paired"
-        grad_fn_record = GradFn(
-            grad_fn_object_id=object_id,
-            class_name=event.class_name,
-            class_qualname=event.class_qualname,
-            label=label,
-            type=grad_fn_type,
-            type_index=type_index,
-            ordinal_index=ordinal_index,
-            step_index=step_index,
-            is_custom=event.is_custom,
-            has_op=event.op_label is not None,
-            op_label=event.op_label,
-            order=None,
-            origin_backward_pass=event.created_in_pass,
-            creator_object_id=event.creator_object_id,
-            modules=modules,
-            module_address=module_address,
-            module_membership_source=module_membership_source,
-            next_grad_fn_ids=list(latest_topology.get(object_id, event.topology)),
-            **source_fields,
-        )
-        grad_fn_record.trace = trace
         prior_record = prior_grad_fn_logs.get(object_id)
         if prior_record is not None:
             # A rediscovered node predating the detach keeps its at-or-below-
@@ -1439,9 +1165,12 @@ def _materialize_backward_projections_impl(
             if grad_fn_record.origin_backward_pass is None:
                 grad_fn_record.origin_backward_pass = prior_record.origin_backward_pass
         grad_fn_logs[object_id] = grad_fn_record
-        object_to_label[object_id] = label
+        object_to_label[object_id] = grad_fn_record.label
+        state.referenced_ids.update(grad_fn_record.next_grad_fn_ids)
+        if grad_fn_record.creator_object_id is not None:
+            state.referenced_ids.add(grad_fn_record.creator_object_id)
 
-    _assign_grad_fn_orders(grad_fn_logs)
+    state.orders_converged = _assign_grad_fn_orders(grad_fn_logs)
 
     for object_id, grad_fn_record in grad_fn_logs.items():
         if grad_fn_record.creator_object_id is not None:
@@ -1458,8 +1187,12 @@ def _materialize_backward_projections_impl(
     _fold_fired_events(trace, state, fired_events, pass_to_calls)
 
     _sync_grad_fn_graph_relations(trace)
-    _infer_grad_fn_module_membership(trace)
+    state.membership_sweeps = _infer_grad_fn_module_membership(trace)
     _prefer_direct_pairing_source_for_paired_ops(trace)
+    state.grows_in_place = not pass_index_base
+    state.type_counter = type_counter
+    state.label_to_id = {record.label: object_id for object_id, record in grad_fn_logs.items()}
+    state.layer_grad_fn_ids = _layer_grad_fn_ids(trace)
 
     # Gradient records at or below the pass-index base are preserved facts
     # from before the stream detach; only the stream's own window rebuilds.
@@ -1511,14 +1244,20 @@ def _materialize_backward_projections_impl(
     trace._backward_projection_fold_state = state
 
 
-def _fold_backward_projection_tail(trace: Any, state: _BackwardFoldState, tail: list[Any]) -> None:
+def _fold_backward_projection_tail(
+    trace: Any, state: _BackwardFoldState, tail: list[Any], growth: _GradFnGrowth
+) -> tuple[list[Any], ...]:
     """Fold a clean appended event tail into the existing projections.
 
     Only called after ``_backward_tail_is_foldable`` proved the tail contains
-    no new grad-fn nodes, no retroactive merges, no topology changes, and no
-    events for already-built passes, so the global order / graph-relation /
-    module-inference passes provably do not need to re-run.
+    no retroactive merges, no topology changes, and no events for
+    already-built passes, and ``_plan_grad_fn_growth`` planned any new nodes
+    so that no existing record changes: the global order / graph-relation /
+    module-inference passes provably do not need to re-run. Returns the
+    grad-fn, call and pass records the fold created.
     """
+
+    _commit_grad_fn_growth(trace, state, growth)
 
     fired_events: list[GradFnFired] = []
     op_grad_events: list[OpGradObserved] = []
@@ -1554,6 +1293,9 @@ def _fold_backward_projection_tail(trace: Any, state: _BackwardFoldState, tail: 
         trace, state, new_pass_indices, pass_to_calls, trace._backward_pass_logs
     )
     _refresh_backward_pass_counters(trace, state)
+    new_calls = [call for calls in pass_to_calls.values() for call in calls]
+    new_passes = [trace._backward_pass_logs[pass_index] for pass_index in new_pass_indices]
+    return list(growth.records.values()), new_calls, new_passes
 
 
 def _fold_fired_events(
