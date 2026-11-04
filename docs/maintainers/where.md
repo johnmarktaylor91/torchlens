@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1509 modules, 658379 lines, 0 modules without a docstring.
+83 packages, 1509 modules, 658395 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 33800 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 33816 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1439 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -99,11 +99,11 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (77 modules, 33800 lines)
+TorchLens - extract outs and metadata from PyTorch models. (77 modules, 33816 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 820 |
+| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 814 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
 | `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 264 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
@@ -123,7 +123,7 @@ TorchLens - extract outs and metadata from PyTorch models. (77 modules, 33800 li
 | `_doctor_types` | Doctor report types: the compatibility truth-table row and the report that holds them. | 347 |
 | `_episode_spec` | The episode declaration dataclass for ''tl.trace(..., episode=...)''. | 181 |
 | `_errors` | Shared TorchLens exception types. | 944 |
-| `_extract_fast` | Fast path for :func:'torchlens.extract' when every request is a module's output. | 130 |
+| `_extract_fast` | Fast path for :func:'torchlens.extract' when every request is a module's output. | 152 |
 | `_extract_refusals` | Typed refusals and capture options used by ''extract'' and ''pluck''. | 43 |
 | `_extraction_provenance` | Input-preprocessing provenance seam for dataset extraction (tvscope B4/B5). | 358 |
 | `_fast_live_events` | Nested wrapped-call bookkeeping for the guarded fast live run. | 121 |
