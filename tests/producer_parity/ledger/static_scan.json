@@ -5620,7 +5620,7 @@
   "field": "modules",
   "file": "torchlens/attribution/graph/_build.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
