@@ -1829,7 +1829,6 @@ docs-md	docs/guides/treescope_cards.md	2.75
 docs-md	docs/guides/treescope_cards.md	20
 docs-md	docs/guides/treescope_cards.md	2025
 docs-md	docs/guides/treescope_cards.md	2026
-docs-md	docs/guides/treescope_cards.md	3.0
 docs-md	docs/guides/treescope_cards.md	82.9
 docs-md	docs/index.md	1.2
 docs-md	docs/index.md	12
@@ -2332,8 +2331,6 @@ docs-md	docs/maintainers/saved_format_3.md	26
 docs-md	docs/maintainers/saved_format_3.md	26,
 docs-md	docs/maintainers/saved_format_3.md	28
 docs-md	docs/maintainers/saved_format_3.md	28,
-docs-md	docs/maintainers/saved_format_3.md	3.0
-docs-md	docs/maintainers/saved_format_3.md	3.0.0
 docs-md	docs/maintainers/saved_format_3.md	3.11.9
 docs-md	docs/maintainers/saved_format_3.md	32
 docs-md	docs/maintainers/saved_format_3.md	412,
@@ -4179,7 +4176,6 @@ docs-md	docs/reference/glossary.md	256
 docs-md	docs/reference/glossary.md	256,
 docs-md	docs/reference/glossary.md	28
 docs-md	docs/reference/glossary.md	299,
-docs-md	docs/reference/glossary.md	3.0
 docs-md	docs/reference/glossary.md	3.3
 docs-md	docs/reference/glossary.md	30
 docs-md	docs/reference/glossary.md	300
@@ -4879,7 +4875,6 @@ error-strings	torchlens/_extraction/resume.py	32
 error-strings	torchlens/_io/_safe_unpickle.py	2.36.2
 error-strings	torchlens/_io/bundle.py	256
 error-strings	torchlens/_io/format3/contract.py	11
-error-strings	torchlens/_io/format3/contract.py	3.0
 error-strings	torchlens/_io/lazy.py	256
 error-strings	torchlens/_io/manifest.py	256
 error-strings	torchlens/_io/manifest.py	440
@@ -5469,11 +5464,6 @@ package-docstrings	torchlens/_io/forgery_validation.py	30
 package-docstrings	torchlens/_io/forgery_validation.py	33
 package-docstrings	torchlens/_io/forgery_validation.py	44
 package-docstrings	torchlens/_io/forgery_validation.py	64
-package-docstrings	torchlens/_io/format3/__init__.py	3.0
-package-docstrings	torchlens/_io/format3/contract.py	3.0
-package-docstrings	torchlens/_io/format3/reader.py	3.0
-package-docstrings	torchlens/_io/format3/runnable.py	3.0
-package-docstrings	torchlens/_io/format3/writer.py	3.0
 package-docstrings	torchlens/_io/format_contract.py	17
 package-docstrings	torchlens/_io/format_contract.py	3.2
 package-docstrings	torchlens/_io/format_contract.py	3.3
