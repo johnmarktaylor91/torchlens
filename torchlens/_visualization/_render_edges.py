@@ -1923,22 +1923,13 @@ def _label_rolled_call_indexs(
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
 
-    In rolled mode, a single edge may represent connections from different
-    ops.  An end used by a strict subset of its node's passes names them,
-    e.g. ``"Out 1,3"`` / ``"In 2,4"`` (``int_list_to_compact_str``: ``"1-3"``);
-    an end every pass uses carries no label.
-
-    Each annotation sits at the node it describes: ``Out`` is the tail label
-    (the passes the edge leaves its source on), ``In`` the head label (the
-    passes it enters its destination on), so neither floats mid-edge between
-    two nodes.  This restores TorchLens's original head/tail placement (JMT, 3
-    Nov 2026), which midpoint merging had replaced.  Where each pair sits is
-    chosen after layout from the drawn geometry (``_pass_label_placement``),
-    and a labelled straight edge keeps two ranks of length (``pass_label_spacing``).
-    A recurrence self-loop has one node at both ends, so its In/Out pair merges
-    into one label beside the loop, ``In`` above ``Out`` unless flow runs down.
-    Labels are HTML tables with a small even margin, so the text keeps a gap
-    from the node and the arrowhead.
+    An end used by a strict subset of its node's passes names them, e.g.
+    ``"Out 1,3"`` / ``"In 2,4"``; an end every pass uses carries no label.
+    ``Out`` is the tail label and ``In`` the head label, so each sits at the node
+    it describes (restored head/tail placement, JMT, 3 Nov 2026); where is chosen
+    after layout (``_pass_label_placement``), and a labelled straight edge keeps two
+    ranks of length (``pass_label_spacing``).  A self-loop's pair merges into one
+    label beside the loop, ``In`` above ``Out`` unless flow runs down.
 
     Args:
         child_node: The child Layer node.

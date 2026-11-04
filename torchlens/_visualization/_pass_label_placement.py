@@ -50,6 +50,10 @@ _CANDIDATES: tuple[tuple[float, float], ...] = tuple(
     for angle in range(-165, 166, 15)
     if abs(angle) > 15
 )
+#: (pt) distances from its edge end at which a label that still collides or strays is
+#: tried on its own, every 15 degrees, by padding its HTML table on one side
+_NUDGE_RADII = (8.0, 11.0, 14.0, 17.0, 20.0, 24.0, 28.0, 34.0, 40.0)
+_LABEL_HTML = r"(?<![a-z]){kind}=<(<TABLE.*?</TABLE>)>"
 
 
 def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]:
@@ -83,7 +87,11 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
         line_index = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
         if line_index is None or not edge["labels"]:
             continue
-        new_body[line_index] = _with_placement(new_body[line_index], scene.choose(edge))
+        choice, shifts = scene.choose(edge)
+        line = _with_placement(new_body[line_index], choice)
+        for label, shift in zip(edge["labels"], shifts, strict=True):
+            line = _shift_label(line, f"{label['kind']}label", shift)
+        new_body[line_index] = line
     return new_body
 
 
@@ -179,6 +187,32 @@ def _unquote(name: str) -> str:
     return name
 
 
+def _shift_label(line: str, kind: str, shift: Point) -> str:
+    """Move one HTML head/tail label's text by ``shift`` (pt, y up) with blank padding.
+
+    One ``labeldistance``/``labelangle`` pair places both labels of an edge; padding
+    a label's table on the side away from where its text should go moves that text
+    alone, by half the padding, without changing the layout.
+    """
+
+    width, height = round(abs(shift[0]) * 2), round(abs(shift[1]) * 2)
+    if not width and not height:
+        return line
+    left = f'<TD WIDTH="{width}"></TD>' if width and shift[0] > 0 else ""
+    right = f'<TD WIDTH="{width}"></TD>' if width and shift[0] < 0 else ""
+    columns = 2 if width else 1
+    pad_row = f'<TR><TD COLSPAN="{columns}" HEIGHT="{height}"></TD></TR>' if height else ""
+    above, below = (pad_row, "") if shift[1] < 0 else ("", pad_row)
+
+    def wrap(match: re.Match[str]) -> str:
+        return (
+            f'{kind}=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
+            f"{above}<TR>{left}<TD>{match.group(1)}</TD>{right}</TR>{below}</TABLE>>"
+        )
+
+    return re.sub(_LABEL_HTML.format(kind=kind), wrap, line, count=1)
+
+
 def _with_placement(line: str, choice: tuple[float, float]) -> str:
     stripped = line.rstrip("\n")
     newline = line[len(stripped) :]
@@ -246,22 +280,49 @@ class _Scene:
                 self.rects.extend(lines)
         self.edges.append({"tail": tail, "head": head, "occurrence": occurrence, "labels": labels})
 
-    def choose(self, edge: dict[str, Any]) -> tuple[float, float]:
+    def choose(self, edge: dict[str, Any]) -> tuple[tuple[float, float], list[Point]]:
         """Pick the edge's placement and record its labels as obstacles for later edges.
 
         Always an explicit pair: Graphviz's default spot for an unplaced label is
         chosen around the other labels, so it moves when they move and cannot be
-        trusted from this layout.
+        trusted from this layout.  A label the shared pair leaves colliding or far
+        from its node then gets its own offset (one per label, in label order).
         """
 
         placements = (
             ((distance, angle), [self._placed(label, distance, angle) for label in edge["labels"]])
             for distance, angle in _CANDIDATES
         )
-        choice, boxes = min(placements, key=lambda item: self._score(edge, item[1]))
+        choice, chosen = min(placements, key=lambda item: self._score(edge, item[1]))
+        boxes, shifts = list(chosen), []
+        for index, label in enumerate(edge["labels"]):
+            others = [r for j, lines in enumerate(boxes) if j != index for r in lines]
+            shift = self._nudge(label, boxes[index], others)
+            boxes[index] = _shifted(boxes[index], shift)
+            shifts.append(shift)
         for lines in boxes:
             self.rects.extend(lines)
-        return choice
+        return choice, shifts
+
+    def _nudge(self, label: dict[str, Any], lines: list[Rect], others: list[Rect]) -> Point:
+        """Return the offset that moves one label clear and beside its node, if it needs one."""
+
+        single = {"labels": [label]}
+        best = (self._score(single, [lines], others), (0.0, 0.0))
+        if best[0][0] == 0.0 and not best[0][1]:
+            return best[1]
+        (ex, ey), (x0, y0, x1, y1) = label["end"], _union(lines)
+        for radius in _NUDGE_RADII:
+            for step in range(24):
+                phi = step * math.pi / 12
+                shift = (
+                    round((ex + radius * math.cos(phi) - (x0 + x1) / 2) * 2) / 2,
+                    round((ey + radius * math.sin(phi) - (y0 + y1) / 2) * 2) / 2,
+                )
+                score = self._score(single, [_shifted(lines, shift)], others)
+                if score < best[0]:
+                    best = (score, shift)
+        return best[1]
 
     def _placed(self, label: dict[str, Any], distance: float, angle: float) -> list[Rect]:
         """Return the label's text boxes for one ``labeldistance``/``labelangle`` pair."""
@@ -273,7 +334,7 @@ class _Scene:
         return [(cx + o[0], cy + o[1], cx + o[2], cy + o[3]) for o in label["offsets"]]
 
     def _score(
-        self, edge: dict[str, Any], boxes: list[list[Rect]]
+        self, edge: dict[str, Any], boxes: list[list[Rect]], extra: Sequence[Rect] = ()
     ) -> tuple[float, bool, float, float]:
         """Rank one placement of an edge's labels; lower is better.
 
@@ -284,7 +345,7 @@ class _Scene:
 
         depth, clearance, far = 0.0, math.inf, 0.0
         for label, lines in zip(edge["labels"], boxes, strict=True):
-            others = [r for other in boxes if other is not lines for r in other]
+            others = [r for other in boxes if other is not lines for r in other] + list(extra)
             for rect in lines:
                 gap = self._clearance(rect, others)
                 depth += max(0.0, -gap - _PEN_EPS)
@@ -308,6 +369,20 @@ class _Scene:
         for edge in self.edges:
             if (edge["tail"], edge["head"], edge["occurrence"]) not in targeted:
                 self.rects.extend(r for label in edge["labels"] for r in label["default"])
+
+
+def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:
+    dx, dy = shift
+    return [(r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy) for r in lines]
+
+
+def _union(rects: Sequence[Rect]) -> Rect:
+    return (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
 
 
 def _bb(text: str) -> Rect:
