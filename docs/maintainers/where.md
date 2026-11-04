@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1458 modules, 651701 lines, 0 modules without a docstring.
+83 packages, 1458 modules, 651700 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -93,7 +93,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5344 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30853 |
-| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4773 |
+| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4772 |
 
 ## Modules by package
 
@@ -2120,7 +2120,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 
 ### `torchlens.viz`
 
-Visualization convenience namespace for TorchLens. (11 modules, 4773 lines)
+Visualization convenience namespace for TorchLens. (11 modules, 4772 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2129,7 +2129,7 @@ Visualization convenience namespace for TorchLens. (11 modules, 4773 lines)
 | `_heatmap_axes` | Heatmap axis-label layout: margins, overlap selection, honest omission. | 698 |
 | `_node_visualizers` | Node visualizer factories for ''trace.draw(node_spec_fn=...)'' (''torchlens.viz.nodes''). | 378 |
 | `_rgb_scale` | Scale a three-channel image into ''[0, 1]'' for display. | 56 |
-| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 270 |
+| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 269 |
 | `_tensor_images` | Image views of a bare tensor: ''rgb'' and ''chans'' (views.4). | 149 |
 | `batch_summary` | Reusable batch summary renderers for TorchLens visualizations. | 121 |
 | `feature_maps` | Trace-aware activation feature-map node visualizations. | 1049 |
