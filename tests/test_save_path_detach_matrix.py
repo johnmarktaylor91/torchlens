@@ -177,8 +177,13 @@ def _site_after(path: str, model: _Net, trace: Any, x2: torch.Tensor) -> torch.T
         # carry_state=True keeps the declared-state restore out of this
         # attachment check; the restore's own backward contract is pinned with
         # the until= work.
-        return trace.run_transaction(inputs=x2, carry_state=True).trace[_SITE].out
-    return trace.run_transaction(inputs=x2, fast=True).trace[_SITE].out
+        result = trace.run_transaction(inputs=x2, carry_state=True)
+    else:
+        result = trace.run_transaction(inputs=x2, fast=True)
+    # The rerun's Trace is new; its records hold it weakly, so keep it in a
+    # variable while reading its site (trace_reference_collected otherwise).
+    rerun = result.trace
+    return rerun[_SITE].out
 
 
 # heavy, not unmarked: the 24 cells cost about 0.5s each, a heavy-class 11.6s
