@@ -244,7 +244,7 @@ def _validate_manifest_against_schema(
     # applies), so its supported range is enforced independently.
     _require_int(manifest, "tlspec_version", minimum=1)
     _validate_tlspec_version_ceiling(manifest["tlspec_version"])
-    _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle"})
+    _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle", "recipe"})
     _require_str(manifest, "created_at")
     _require_str(manifest, "torchlens_version")
     _require_str(manifest, "python_version")

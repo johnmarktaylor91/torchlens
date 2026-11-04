@@ -58,8 +58,9 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
 - [Paper](https://www.nature.com/articles/s41598-023-40807-0) |
   [Learn TorchLens: eleven notebooks](notebooks/learn/README.md) |
   [Facets tutorial](notebooks/facets_tutorial.ipynb) |
-  [5-minute gallery](examples/5min/README.md) |
-  [50-minute gallery](examples/50min/README.md)
+  [Examples](examples/README.md) |
+  [Quick recipes](examples/quick/README.md) |
+  [Workflows](examples/workflows/README.md)
 - [Choosing a fast path](docs/guides/fast_paths.md) |
   [Performance guide](docs/performance.md) |
   [Receptive & projective fields](docs/receptive_projective_fields.md) |

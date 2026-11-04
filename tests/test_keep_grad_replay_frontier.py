@@ -1,6 +1,6 @@
 """``keep_grad`` under differentiable replay discloses that nothing upstream is reached.
 
-``push(replay=ReplayOptions(differentiable=True))`` re-enters each edited site value as
+``do(site, edit, intervention=InterventionOptions(differentiable=True))`` re-enters each edited site value as
 a fresh leaf, so a graph-keeping edit passes the keep_grad check there yet no parameter
 upstream of the site gets a gradient. keep_grad says so once per session with the code
 ``keep_grad_replay_frontier``; ``fork.do`` (which does reach upstream) stays silent, and
@@ -55,10 +55,8 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
 
 
 def _push_differentiable(model: nn.Module) -> Any:
-    replay = tl.options.ReplayOptions(
-        hooks={tl.label("linear_1_1"): keep_grad(tl.scale(2.0))}, differentiable=True
-    )
-    return _ready(model).push(replay=replay)
+    options = tl.options.InterventionOptions(differentiable=True, confirm_mutation=True)
+    return _ready(model).do(tl.label("linear_1_1"), keep_grad(tl.scale(2.0)), intervention=options)
 
 
 def test_differentiable_replay_discloses_once_per_session() -> None:

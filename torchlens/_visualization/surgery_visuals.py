@@ -655,7 +655,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
             # rides beside the file that was actually written.
             try:
                 written: str | None = trace._last_render_geometry.output_path
-            except AttributeError:  # renderer that records no geometry (dagua)
+            except AttributeError:  # renderer that records no geometry
                 written = None
             outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"

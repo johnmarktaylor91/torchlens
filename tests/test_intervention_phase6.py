@@ -20,6 +20,10 @@ from torchlens.intervention.errors import (
     ReplayPreconditionError,
 )
 from torchlens.io import TraceState
+from torchlens.options import InterventionOptions
+
+_CONFIRM = InterventionOptions(confirm_mutation=True)
+_DIFFERENTIABLE = InterventionOptions(differentiable=True, confirm_mutation=True)
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
@@ -230,9 +234,7 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
         del out, ctx
         return patch
 
-    replayed = corrupt.push(
-        replay=tl.options.ReplayOptions(hooks={tl.func("relu"): patch_hook}, differentiable=True)
-    )
+    replayed = corrupt.do(tl.func("relu"), patch_hook, intervention=_DIFFERENTIABLE)
     replay_relu = _first_func(replayed, "relu")
     replay_output = replayed[replayed.output_layers[0]].out
 
@@ -280,11 +282,7 @@ def test_differentiable_replay_forks_isolated_records() -> None:
         save="all",
     )
 
-    replayed = log.push(
-        replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): _identity_hook}, differentiable=True
-        )
-    )
+    replayed = log.do(tl.func("relu"), _identity_hook, intervention=_DIFFERENTIABLE)
 
     fork_record = next(
         record
@@ -305,16 +303,15 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     assert replayed[outside_cone_label].edits is not log[outside_cone_label].edits
 
 
-def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
-    """``replay_from`` treats the origin as already mutated."""
+def test_do_value_preserves_origin_out_and_recomputes_children() -> None:
+    """``do(site, value)`` keeps the set origin value and recomputes its children."""
 
     torch.manual_seed(1)
     log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
     replacement = torch.full_like(relu_site.out, 2.0)
-    relu_site._internal_set("out", replacement)
 
-    log.push_from(relu_site)
+    log.do(tl.label(relu_site.layer_label), replacement, intervention=_CONFIRM)
 
     assert torch.equal(relu_site.out, replacement)
     assert log.state is TraceState.REPLAY_PROPAGATED
@@ -339,7 +336,7 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
         site._internal_set("func", counted_max)
 
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("max"): _identity_hook}))
+        log.do({tl.func("max"): _identity_hook}, intervention=_CONFIRM)
 
     assert calls["count"] == 1
 
@@ -352,7 +349,7 @@ def test_replay_warns_on_saved_edge_divergence() -> None:
     relu_site.parents = ()
 
     with pytest.warns(ControlFlowDivergenceWarning):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+        log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
 
 
 def test_replay_rejects_non_intervention_ready_logs() -> None:
@@ -361,7 +358,7 @@ def test_replay_rejects_non_intervention_ready_logs() -> None:
     log = tl.record(ResidualRelu(), torch.randn(2, 3), save=tl.func("relu")).to_trace()
 
     with pytest.raises(ReplayPreconditionError, match="argument templates"):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+        log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
 
 
 @pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
@@ -384,7 +381,7 @@ def test_replay_runs_on_default_capture() -> None:
 
     log = tl.trace(ResidualRelu(), torch.randn(2, 3))
 
-    log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+    log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
 
     assert log.last_run["engine"] == "replay"
 

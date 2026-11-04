@@ -36,10 +36,12 @@ shared root behind capture's orig grab, this oracle's restoration, and
 sparse-runnable callable resolution -- a ledger entry whose "orig" is
 itself a TorchLens wrapper (the orphaned prior-generation-snapshot
 failure mode) would make the "pristine" forward run a wrapper and bless
-coherently-corrupt captures. Wrappers are structurally identifiable
-(``__tl_wrapper_name__`` is stamped at construction), so the oracle
-scans the ledger before unwrapping and REFUSES on any wrapper-marked
-orig value rather than blessing through a poisoned restoration.
+coherently-corrupt captures. Wrappers are identified by ledger identity
+(the wrapper is itself a ``_decorated_to_orig`` key), never by the
+``__tl_wrapper_name__`` marker ``functools.wraps`` copies onto a foreign
+wrapper built over ours, so the oracle scans the ledger before unwrapping
+and REFUSES on any wrapper orig value rather than blessing through a
+poisoned restoration.
 
 If the wrappers cannot be removed (a capture is active on this thread --
 only reachable by calling validation from inside a traced forward), the
@@ -92,16 +94,10 @@ def pristine_torch_oracle() -> Iterator[bool]:
         return
 
     # Ledger integrity (r4 census MED-1): refuse before unwrapping if any
-    # recorded "orig" is itself a TorchLens wrapper -- restoring it would
-    # run the pristine forward THROUGH a wrapper and bless coherently.
-    poisoned = next(
-        (
-            orig
-            for orig in _state._decorated_to_orig.values()
-            if hasattr(orig, "__tl_wrapper_name__")
-        ),
-        None,
-    )
+    # recorded "orig" is itself a TorchLens wrapper (by ledger identity; see the
+    # module docstring) -- restoring it would bless a forward run THROUGH a wrapper.
+    ledger = _state._decorated_to_orig
+    poisoned = next((orig for orig in ledger.values() if id(orig) in ledger), None)
     if poisoned is not None:
         from .._errors import CaptureNotActiveError
 

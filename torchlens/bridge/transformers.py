@@ -14,7 +14,7 @@ import torch
 
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
-from torchlens.bridge._hf_refusals import refuse_preprocessing_unresolved
+from torchlens.bridge._image_preprocessing import accept_image_resolution
 from torchlens.bridge.hf_attention import (
     AttentionCall,
     AttentionRecording,
@@ -134,6 +134,23 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
         config = getattr(model, "config", None)
         via_config = getattr(config, "name_or_path", None) if config is not None else None
     return isinstance(via_config, str) and bool(via_config)
+
+
+def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
+    """Resolve image preprocessing through the neutral authority resolver.
+
+    Delegates to :func:`torchlens.preprocessing.resolve` (tvscope B2): the
+    model-attached no-network tiers first (a planted torchvision weights
+    handle, a torchvision model whose loaded state equals a cached preset
+    checkpoint, a timm ``default_cfg``), the network-gated HF processor fetch
+    last; a fetch failure yields ``unknown``, never a silently substituted
+    lower tier (memo D8). Nothing resolved refuses ``preprocessing_unresolved``
+    naming the explicit ImageNet-default opt-in.
+    """
+
+    from torchlens import preprocessing as _preprocessing
+
+    return accept_image_resolution(model, _preprocessing.resolve(model=model))
 
 
 def _is_hf_image_input(value: Any) -> bool:
@@ -658,69 +675,6 @@ def _tokenizer_preprocessing_record(
         verified=verified,
         config=config,
         description=f"AutoTokenizer: {identifier}",
-    )
-
-
-def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
-    """Resolve image preprocessing through the neutral authority resolver.
-
-    Delegates to :func:`torchlens.preprocessing.resolve` (tvscope B2), which
-    tries the model-attached no-network tiers first (a planted torchvision
-    weights handle, a timm ``default_cfg``) and the network-gated HF
-    processor fetch last, with the attempt disclosed on the record; a fetch
-    failure yields ``unknown``, never a silently substituted lower tier
-    (memo D8). Whatever the registry resolves is applied. When NOTHING
-    resolves the capture is refused typed: TorchLens never
-    applies a recipe the model was not shown to use. The refusal names the
-    explicit ImageNet-default opt-in.
-
-    Parameters
-    ----------
-    model:
-        Candidate image model.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing]
-        Transform and provenance record.
-
-    Raises
-    ------
-    InvalidArgumentError
-        ``preprocessing_unresolved`` when no authority resolves.
-    """
-
-    from torchlens import preprocessing as _preprocessing
-
-    resolution = _preprocessing.resolve(model=model)
-    record = resolution.preprocessing
-    if resolution.input_transform is not None and record.source != "unknown":
-        if record.source == "hf_image_processor":
-            # Legacy source token for the model-discovered HF tier (pinned by
-            # the autoroute contract tests since before the neutral resolver).
-            record.source = "hf_auto_image_processor"
-            record.description = f"AutoImageProcessor: {record.identifier}"
-        return resolution.input_transform, record
-    reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    refuse_preprocessing_unresolved(
-        model,
-        f"no preprocessing authority resolved for the PIL image input to "
-        f"{type(model).__name__} ({reason or 'nothing resolved'}). "
-        "TorchLens refuses to guess a recipe the model may not have been "
-        "trained with.",
-        remedy=(
-            "record the weights the model was built with, e.g. "
-            "torchlens.preprocessing.attach_authority(model, weights) (torchvision models "
-            "keep no handle to their weights preset); or pass your loader's own "
-            "transform, e.g. "
-            "capture=tl.options.CaptureOptions(input_transform=weights.transforms()); "
-            "or opt in to the ImageNet default (resize 256, center-crop 224, "
-            "ImageNet mean/std) with "
-            "capture=tl.options.CaptureOptions("
-            "input_transform=torchlens.preprocessing.imagenet_default()); "
-            "or pass an already-preprocessed tensor"
-        ),
-        resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
 
 

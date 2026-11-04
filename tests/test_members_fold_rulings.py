@@ -176,7 +176,12 @@ def test_do_with_a_hook_and_set_only_stages_it_sticky(log: Any) -> None:
     assert len(log._intervention_spec.hook_specs) == 1
     assert not log._intervention_spec.target_value_specs
     torch.testing.assert_close(log[_relu_label(log)].out, before)
-    log.push()
+    # The next propagating do fires the staged hook (push folded into do).
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        intervention=InterventionOptions(confirm_mutation=True),
+    )
     torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
 
 

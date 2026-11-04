@@ -22,12 +22,27 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute(log, method, target=None, *, inputs=None, **kwargs)`,
-  `layer()` (extra: `torchlens[captum]`; `layer()` is `_utils.module_for_site`).
+- `captum.py`: `attribute(trace, method, target=None, *, inputs=None, **kwargs)`,
+  `layer(trace, site, *, pass_index=None)` (extra: `torchlens[captum]`).
   `target=` is forwarded only when given (LayerActivation and most Neuron*
   classes reject it); without `inputs=` every logged input is forwarded (the
   tensor, or the positional tuple in `forward` order); a keyword-only, nested
-  or unsaved input refuses `bridge_captum_inputs_unresolved`.
+  or unsaved input refuses `bridge_captum_inputs_unresolved`. `layer()` tries
+  `_utils.module_for_site` first; on its three refusals it returns a
+  `_SiteProbe` (identity module remembering the op's `site_key`, label and
+  execution-order ordinal among ops sharing that key). `attribute()` with a
+  probe in `method.layer` swaps the method's `forward_func` (and nested
+  Captum objects sharing it) for a forward that runs `tl.trace(model, ...,
+  save=nothing, intervene=tl.when(site(key), splice))` with a root forward
+  hook keeping the model's own output; `splice` calls the probe on the
+  ordinal-th firing and hands a clone downstream (in-place consumers such as
+  the block's `ReLU(inplace=True)` would overwrite the tensor Captum's hook
+  saved), so a Captum hook on the probe sees exactly that tensor. The capture
+  lane is the only door that minted the key: `spec.bind` names a `+=` site
+  `add` where capture names it `iadd`, and `tl.record` tracks no module
+  stack. A forward that fires the site fewer times than the ordinal refuses
+  `bridge_captum_site_not_reached`; `pass_index` folds into `"address:N"`
+  for a module address and picks one op of a multi-pass label otherwise.
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
