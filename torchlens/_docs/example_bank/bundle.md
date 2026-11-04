@@ -410,6 +410,55 @@ print(sorted(shown), type(shown["clean"]).__name__)
 # ['clean', 'shifted'] str
 ```
 
+## Summaries and exports
+
+### bundle-summary
+`summary` returns the bundle card as text: members, outcomes, baseline and relations.
+
+- covers: `Bundle.summary`
+- tasks: compare-runs, summary
+- fixture: toy
+
+```python
+bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)}, baseline="clean")
+print(bundle.summary())
+# Output:
+# TODO
+```
+
+### bundle-to-pandas
+One table for the whole bundle: a `member` column, then each member's layer rows.
+
+- covers: `Bundle.to_pandas`
+- tasks: compare-runs, table
+- fixture: toy
+
+```python
+bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)}, baseline="clean")
+frame = bundle.to_pandas()
+print(len(frame), list(frame.columns)[:2])
+print(frame.groupby("member").size().to_dict())
+# Output:
+# TODO
+```
+
+### bundle-to-agent-json
+A machine-readable dump of the bundle for an agent: card facts plus each member's dump.
+
+- covers: `Bundle.to_agent_json`
+- tasks: compare-runs, agent
+- fixture: toy
+
+```python
+bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)}, baseline="clean")
+dump = bundle.to_agent_json(max_ops=3)
+print(dump["schema"], dump["member_count"], dump["baseline_name"])
+print(dump["outcome"], dump["structurally_consistent"])
+print(sorted(dump["members"]), sorted(dump["members"]["clean"])[:3])
+# Output:
+# TODO
+```
+
 ## Relations between members
 
 ### bundle-relate-upstream-downstream
