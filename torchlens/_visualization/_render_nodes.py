@@ -13,7 +13,7 @@ from ._encoding_aggregate import (
     collapsed_box_scope,
     segment_encoding_attrs,
 )
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
+from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -2028,7 +2028,7 @@ def compute_default_node_lines(
     shape_summary = getattr(layer_log, "shape_summary", None)
     if isinstance(shape_summary, str) and shape_summary:
         lines.append(shape_summary)
-    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.activation_memory)}")
+    lines.extend(shape_rows(layer_log, with_memory=True))
 
     if show_saved_for_backward and (saved := saved_for_backward_line(layer_log, vis_mode)):
         lines.append(saved)

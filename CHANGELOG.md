@@ -15,6 +15,10 @@
   Okabe-Ito with grey weights. The default `torchlens` skin keeps the released fills. A branch
   test names its kind and every pass's outcome on its first row (`IF: FALSE, FALSE, TRUE`) instead
   of labelling an edge, and edge annotations are 13 pt (were 8 pt).
+- **viz**: a 0-d node's shape row reads `scalar, 4 B` instead of `(), 4 B`, and a saved 0-d value
+  prints on the next row (`= 2.31`; one value per pass on a rolled node, `= 0.87, 1.02, 0.95`).
+  If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
+  `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
 
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
   written; the default never does) in place of `vis_save_only=`. `Trace.to_dagua_graph` and

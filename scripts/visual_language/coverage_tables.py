@@ -134,6 +134,7 @@ VISUAL_TOKENS: Mapping[str, str] = {
 LABEL_TEMPLATES: Mapping[str, str] = {
     "()": "VL02",
     "... +": "VN13",
+    ".3g": "VL02",
     "CollapseTokens.ellipsis_border": "VT04",
     "CollapseTokens.ellipsis_fill": "VT04",
     "CollapseTokens.ellipsis_font": "VT04",
@@ -159,6 +160,7 @@ LABEL_TEMPLATES: Mapping[str, str] = {
     "mixed": "VE06",
     "root": "VR09",
     "saved for backward:": "VL04",
+    "scalar": "VL02",
     "via": "VE07",
     "xlabel": "exempt: Graphviz attribute name returned by the label-placement helper, not text",
 }

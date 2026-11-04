@@ -171,6 +171,119 @@ def format_shape(shape: Any) -> str:
     return f"({', '.join(str(dim) for dim in dims)})"
 
 
+#: Most per-pass values a rolled scalar node's value row lists; beyond it the
+#: row keeps the first and last pass around ``...``.
+MAX_LISTED_SCALAR_VALUES: Final[int] = 4
+
+
+def format_output_shape(shape: Any) -> str:
+    """Render a node's output shape for its label's shape row.
+
+    A 0-d tensor reads ``scalar``: ``()`` is the honest Python literal but
+    reads as "empty" on a drawing. Every other shape is :func:`format_shape`,
+    which kwarg values and parameter brackets keep using unchanged.
+
+    Parameters
+    ----------
+    shape:
+        The node's output shape.
+
+    Returns
+    -------
+    str
+        ``"scalar"`` for an empty shape, else the tuple notation.
+
+    Examples
+    --------
+    >>> format_output_shape(())
+    'scalar'
+    >>> format_output_shape((1,))
+    '(1,)'
+    """
+
+    if shape is not None and len(_shape_tuple(shape)) == 0:
+        return "scalar"
+    return format_shape(shape)
+
+
+def scalar_value_line(layer_log: Any) -> str | None:
+    """Return a 0-d node's value row (``= 2.31``), or ``None``.
+
+    Only saved activations are read (never recomputed), one ``.item()`` per
+    pass. A rolled node lists its passes in order (``= 0.87, 1.02, 0.95``), at
+    most :data:`MAX_LISTED_SCALAR_VALUES`, else first, ``...``, last. A
+    terminal boolean already prints its outcome on its first row, so it gets
+    none; a missing or unreadable value claims nothing.
+
+    Parameters
+    ----------
+    layer_log:
+        The drawn Op or rolled Layer.
+
+    Returns
+    -------
+    str | None
+        The value row, or ``None`` when there is nothing honest to print.
+    """
+
+    if layer_log.shape is None or len(_shape_tuple(layer_log.shape)) != 0:
+        return None
+    if getattr(layer_log, "is_terminal_bool", False):
+        return None
+    source = getattr(layer_log, "original", layer_log)  # a drawn wrapper names its record
+    ops = getattr(getattr(source, "ops", None), "values", None)
+    passes = sorted(ops(), key=lambda op: op.pass_number) if callable(ops) else [source]
+    texts = [_saved_scalar_text(op) for op in passes]
+    if not texts or None in texts:
+        return None
+    if len(texts) > MAX_LISTED_SCALAR_VALUES:
+        texts = [texts[0], "...", texts[-1]]
+    return "= " + ", ".join(str(text) for text in texts)
+
+
+def shape_rows(layer_log: Any, *, with_memory: bool = False) -> list[str]:
+    """Return a node's shape row, plus the value row a 0-d node carries.
+
+    Parameters
+    ----------
+    layer_log:
+        The drawn Op or rolled Layer.
+    with_memory:
+        Append the activation memory to the shape row (``scalar, 4 B``), as
+        the default label does.
+
+    Returns
+    -------
+    list[str]
+        The shape row, then the value row when :func:`scalar_value_line` has one.
+    """
+
+    shape_row = format_output_shape(layer_log.shape)
+    if with_memory:
+        shape_row = f"{shape_row}, {format_memory(layer_log.activation_memory)}"
+    value_row = scalar_value_line(layer_log)
+    return [shape_row] if value_row is None else [shape_row, value_row]
+
+
+def _saved_scalar_text(op: Any) -> str | None:
+    """Return one pass's saved 0-d value as label text, or ``None``."""
+
+    out = getattr(op, "out", None)
+    if not getattr(op, "has_saved_activation", False) or getattr(out, "ndim", None) != 0:
+        return None
+    try:
+        value = out.item()
+    except (RuntimeError, ValueError):  # meta or fake tensors hold no value to print
+        return None
+    if isinstance(value, bool):
+        return str(value).upper()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.3g}"
+    return str(value)
+
+
 def format_dtype(dtype: Any) -> str | None:
     """Format an output dtype for a node label row.
 
@@ -488,7 +601,7 @@ def compute_selected_node_lines(
         elif field_name in {"type", "op", "operation"}:
             rows.append(str(getattr(layer_log, "func_name", None) or record_type(layer_log)))
         elif field_name == "shape":
-            rows.append(format_shape(layer_log.shape))
+            rows.extend(shape_rows(layer_log))
         elif field_name == "shape_summary":
             # L1's across-pass summary: row only when the field is set
             # (same skip-when-absent semantics as "params").

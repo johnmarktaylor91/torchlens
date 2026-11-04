@@ -3068,6 +3068,14 @@ deprecation shim owed*
   renders the summary automatically on rolled varying multi-pass nodes,
   directly after the title row.
 
+**"shape" node_label_fields token** — *unstable — no deprecation shim owed*
+: Selector token rendering the node's output shape row, the same row the default label draws
+  (there with the activation memory appended: `(1, 4), 16 B`). Shapes print as Python tuples,
+  except a 0-d output, which reads `scalar` (`scalar, 4 B`) and, when its activation was saved,
+  gains a value row: `= 2.31`, or one value per pass on a rolled node (`= 0.87, 1.02, 0.95`; past
+  four passes the first, `...`, the last). A terminal boolean (an if-test) prints its outcome on
+  its first row instead. Kwarg values, parameter brackets and collapse summaries keep `()`.
+
 **"dtype" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering the node's output dtype as a label row with the
   framework namespace dropped (`"float16"`, `"bfloat16"`; Keras `show_dtype`
