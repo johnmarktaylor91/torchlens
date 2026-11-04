@@ -4467,3 +4467,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: fc7ac6f3fa7701948e18a22f56a5687c2e9c9624 (dirty)
 recorded: 2026-11-03T23:34:25.035645+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: drawn node titles read layer_label, so _render_nodes no longer reads step_index
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 172ccea9defc05538a063cafde3a91fb2dc946ef (dirty)
+recorded: 2026-11-04T00:05:04.290760+00:00

@@ -2001,17 +2001,15 @@ def compute_default_node_lines(
         append_overlay_lines(selected_lines, layer_log, node_overlay)
         return selected_lines
 
+    # Titles are trace keys: ``layer_label`` (plus ``:pass`` when unrolled), never a
+    # ``{type}_{type_index}_{step_index}`` rebuild. ``step_index`` is renumbered per op
+    # after labeling, so in a recurrent graph it names no layer (sum_1_14 for sum_1_5).
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        # F2: show the RESOLVABLE trace identity ``layer_label:pass`` (== op.label,
-        # e.g. linear_1_1:2) instead of ``{type}_{type_index}_{step_index}:{pass}``.
-        # The latter renumbers the ordinal from this pass's step_index and yields an
-        # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
-        # users copying the displayed name got a "not found" ValueError.
         title = f"{layer_log.layer_label}:{layer_log.pass_number}"
     elif (layer_type := record_type(layer_log)) in ["input", "output", "buffer"]:
         title = f"{layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        title = f"{layer_log.layer_label}{call_label}"
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:
