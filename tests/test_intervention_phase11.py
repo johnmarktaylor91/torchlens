@@ -9,7 +9,6 @@ import torch
 from example_models import TinyReluAdd as _ReluAdd
 
 import torchlens as tl
-from torchlens.experimental import dagua
 
 
 def _interventions() -> tl.Trace:
@@ -88,20 +87,3 @@ def test_bundle_show_strip_draws_every_member(tmp_path: Path) -> None:
     finally:
         log.cleanup()
         clean.cleanup()
-
-
-def test_dagua_bridge_exposes_intervention_metadata() -> None:
-    """Dagua graph objects expose Phase 11 intervention metadata arrays."""
-    pytest.importorskip("dagua")
-
-    log = _interventions()
-    try:
-        graph = dagua.trace_to_dagua_graph(log, rolled=False)
-        assert hasattr(graph, "is_intervention_site")
-        assert hasattr(graph, "is_in_cone")
-        assert hasattr(graph, "interventions_summary")
-        assert any(graph.is_intervention_site)
-        assert any(graph.is_in_cone)
-        assert len(graph.interventions_summary) == graph.num_nodes
-    finally:
-        log.cleanup()

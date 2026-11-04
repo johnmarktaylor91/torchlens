@@ -16,7 +16,7 @@ from ._backward_inventory import (
     compute_backward_style_inventory,
 )
 from ._render_common import *
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import DEFAULT_TYPOGRAPHY, edge_annotation_pt, edge_emphasis_pt
 
 # Bound the forward walk that maps a branch-entry edge to its condition bool, so a
 # malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
@@ -2105,9 +2105,7 @@ def _format_branch_edge_label_html(label_text: str) -> str:
     str
         Graphviz HTML edge-label string.
     """
-    return (
-        f'<<FONT POINT-SIZE="{DEFAULT_TYPOGRAPHY.emphasis_pt}"><b><u>{label_text}</u></b></FONT>>'
-    )
+    return f'<<FONT POINT-SIZE="{edge_emphasis_pt()}"><b><u>{label_text}</u></b></FONT>>'
 
 
 def _container_component_role(component: OutputPathComponent) -> str:
@@ -2201,7 +2199,7 @@ def _add_grad_edge(
             "fontcolor": GRADIENT_ARROW_COLOR,
             "style": edge_style,
             "arrowsize": ".7",
-            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+            "labelfontsize": edge_annotation_pt(),
         }
         if (
             grad_passes
