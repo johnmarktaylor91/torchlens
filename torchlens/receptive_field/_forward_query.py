@@ -110,43 +110,42 @@ def box_for_source_unit(
     )
 
 
-def _target_identity(target: Any) -> str:
-    """The op label a projective target names.
+def _target_identities(target: Any) -> tuple[str, ...]:
+    """The op labels a projective target names.
 
     A string or an Op names itself; a Module or ModuleCall (what ``trace[...]``
-    gives for a module address) names its one output op.
+    gives for a module address) names its output ops.
     """
 
     if isinstance(target, str):
-        return target
-    if type(target).__name__ not in {"Module", "ModuleCall"}:
-        return str(target.label)
-    outputs = list(target.output_ops)
-    if len(outputs) != 1:
-        raise AmbiguousTargetError(
-            f"Target module {target.address!r} has {len(outputs)} output ops "
-            f"({', '.join(map(str, outputs))}); pass one of them as target=."
-        )
-    return str(outputs[0])
+        return (target,)
+    if type(target).__name__ in {"Module", "ModuleCall"}:
+        return tuple(map(str, target.output_ops))
+    return (str(target.label),)
 
 
 def _select_target_descriptor(
-    descriptors: Mapping[str, ReceptiveField], target: Op | str | None
+    descriptors: Mapping[str, ReceptiveField], target: Any
 ) -> ReceptiveField:
-    """Resolve one projective result descriptor without choosing silently."""
+    """Resolve one projective result descriptor without choosing silently.
 
-    if target is None:
-        if len(descriptors) != 1:
-            roles = ", ".join(descriptors)
-            raise AmbiguousTargetError(
-                f"Select one reachable target; available target roles: {roles}."
-            )
-        return next(iter(descriptors.values()))
-    identity = _target_identity(target)
-    for role, descriptor in descriptors.items():
-        if identity in {role, descriptor.input_op_label}:
-            return descriptor
-    raise ReceptiveFieldError(f"Target {identity!r} is not reachable from this source.")
+    A target naming several ops (a multi-output module) must reach exactly one
+    of them from this source, else the query refuses with the reachable roles.
+    """
+
+    names = None if target is None else _target_identities(target)
+    matched = [
+        (role, descriptor)
+        for role, descriptor in descriptors.items()
+        if names is None or {role, descriptor.input_op_label} & set(names)
+    ]
+    if names is not None and not matched:
+        shown = names[0] if len(names) == 1 else ", ".join(names)
+        raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
+    if len(matched) != 1 and (names is None or len(names) != 1):
+        roles = ", ".join(role for role, _ in matched)
+        raise AmbiguousTargetError(f"Select one reachable target; available target roles: {roles}.")
+    return matched[0][1]
 
 
 def _labels_reaching(

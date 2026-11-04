@@ -564,6 +564,8 @@ def enumerate_trace_sites(
     for requested in requested_list:
         lookup = str(requested)
         record = trace[lookup]
+        if type(record).__name__ in {"Module", "ModuleCall"}:
+            record = trace.ops[lookup]  # a module address names its output Op
         layer_label = str(getattr(record, "layer_label", lookup))
         if int(getattr(record, "num_passes", 1)) > 1 and not _is_pass_qualified(record):
             alternatives = [str(op.label) for op in getattr(record, "ops", {}).values()]
