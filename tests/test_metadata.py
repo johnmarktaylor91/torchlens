@@ -6,6 +6,7 @@ fields are populated correctly across different model types.
 
 import linecache
 import pickle
+from pathlib import Path
 
 import example_models
 import pytest
@@ -506,10 +507,11 @@ def test_repr_contains_key_info(small_input):
             break
     assert loc is not None
     r = repr(loc)
-    assert loc.file in r
+    assert Path(loc.file).name in r
     assert str(loc.line_number) in r
     assert loc.func_name in r
-    assert "--->" in r
+    assert len(r) <= 100 and "\n" not in r
+    assert "--->" in loc.code_context_labeled
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/func_call_location.py.
@@ -527,7 +529,8 @@ def test_repr_source_unavailable():
         source_context_lines=0,
     )
     r = repr(loc)
-    assert "source unavailable" in r
+    assert r == "FuncCallLocation: test.py:1, in test"
+    assert loc.code_context is None
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/func_call_location.py.

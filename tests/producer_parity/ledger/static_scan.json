@@ -1200,9 +1200,9 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/_data_classes/_value_repr.py",
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_data_classes/_value_ops.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -1210,7 +1210,23 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/_data_classes/_value_repr.py",
+  "file": "torchlens/_data_classes/_value_ops.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/_data_classes/_value_ops.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/_data_classes/_value_state.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -1218,15 +1234,7 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/_data_classes/_value_repr.py",
-  "has_default": false,
-  "sites": 3,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/_data_classes/_value_repr.py",
+  "file": "torchlens/_data_classes/_value_state.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -1297,18 +1305,10 @@
  },
  {
   "ambiguous": true,
-  "field": "label_raw",
-  "file": "torchlens/_data_classes/interface.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -4294,6 +4294,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_utils/_display_records.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -9496,38 +9504,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "source_trace",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/report/_notebook/cardtree.py",
@@ -9741,6 +9717,14 @@
   "file": "torchlens/stats/_aggregate_cache.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/stats/_record_values.py",
+  "has_default": false,
+  "sites": 4,
   "via_getattr": false
  },
  {
