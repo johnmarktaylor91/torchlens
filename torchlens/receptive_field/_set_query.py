@@ -158,7 +158,7 @@ def box_for_units(
     the caller checked. ``memo`` lets the rectangles of one query share the
     walk memo.
     """
-    _validate_descriptor_for_query(descriptor)
+    _validate_descriptor_for_query(descriptor, require_windowed=False)
     initial = _seed_axis_sets(op, descriptor, seed)
     operations, by_reference = _query_graph(op.source_trace, solution)
     ancestry = _shared_reach(
@@ -196,7 +196,7 @@ def box_for_source_units(
     the caller already resolved from ``solution.per_op[op.label]`` for its
     target, as in :func:`box_for_units`.
     """
-    _validate_descriptor_for_query(descriptor)
+    _validate_descriptor_for_query(descriptor, require_windowed=False)
     initial = _seed_axis_sets(op, descriptor, seed)
     operations, by_reference = _query_graph(op.source_trace, solution)
     target_label = descriptor.input_op_label

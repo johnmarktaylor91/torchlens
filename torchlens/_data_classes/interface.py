@@ -286,12 +286,48 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             )
             raise AmbiguousOpLookupError(
                 f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
-                f"{matches_str}{suffix}. Please use a more specific key."
+                f"{matches_str}{suffix}. Please use a more specific key.{_bound_owner_hint(self, ix)}"
             )
 
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
+
+
+def _bound_owner_hint(self: "Trace", ix: str) -> str:
+    """Name the ``owner.``-prefixed address when ``ix`` is a module of a bound-method root.
+
+    ``tl.trace(model.generate, ...)`` registers ``model`` as the ``owner`` submodule
+    of a TorchLens-authored root, so its modules read ``owner.<address>``. A reader
+    who types the plain module address gets that spelling named in the error.
+
+    Parameters
+    ----------
+    self:
+        Trace being queried.
+    ix:
+        The lookup key, with or without a ``:N`` call suffix.
+
+    Returns
+    -------
+    str
+        A sentence naming ``owner.<ix>``, or ``""`` when it does not apply.
+    """
+
+    root_fact = self.provenance.root_entry_point
+    if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
+        return ""
+    module_logs = self._module_logs
+    owner_key = f"owner.{ix}"
+    # ``_module_logs`` is ``None`` inside the pickle-restore window; no modules means no hint.
+    if not module_logs or (
+        owner_key.rsplit(":", 1)[0] not in module_logs and owner_key not in module_logs
+    ):
+        return ""
+    return (
+        " This trace's root is a bound method (e.g. model.generate), so the model's "
+        f"modules read 'owner.<address>': use '{owner_key}'."
+    )
 
 
 def _layer_label_lookup(self: "Trace", ix: str) -> Any:
