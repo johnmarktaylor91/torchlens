@@ -20,6 +20,7 @@ from functools import cache
 from typing import Any
 
 from ..._data_classes.field_policy import StorageKind
+from ...backends.registry import registered_backend_specs
 from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
@@ -111,8 +112,6 @@ def known_backend(name: str) -> bool:
 
     if name in contract.BACKENDS:
         return True
-    from ...backends.registry import registered_backend_specs
-
     return any(spec.name == name for spec in registered_backend_specs())
 
 
@@ -121,8 +120,6 @@ def backend_materializes(backend: str) -> bool:
 
     if backend == contract.DEFAULT_BACKEND:
         return True
-    from ...backends.registry import registered_backend_specs
-
     return any(
         spec.name == backend and spec.capabilities.payload_materialization
         for spec in registered_backend_specs()
