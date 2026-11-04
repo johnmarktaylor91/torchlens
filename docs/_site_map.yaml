@@ -431,6 +431,12 @@ pages:
   - path: neuroai/netrep.md
     section: field-guide
     group: Neuroscience
+  - path: neuroai/protein_language_model.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/task_rnn_circuits.md
+    section: field-guide
+    group: Neuroscience
   - path: non_goals.md
     section: concepts
   - path: performance.md

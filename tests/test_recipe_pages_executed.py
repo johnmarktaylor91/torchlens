@@ -59,6 +59,8 @@ PAGES: dict[str, str] = {
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
+    "docs/neuroai/task_rnn_circuits.md": "torchlens",
+    "docs/neuroai/protein_language_model.md": "esm",
     "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
     "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
     "examples/methods/function_vectors_recipe.ipynb": "transformers",
@@ -103,6 +105,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
     "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
     "sklearn": ("sklearn", "transformers"),
+    "esm": ("transformers", "tokenizers", "matplotlib"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -128,6 +131,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: core (OMP_NUM_THREADS=1), before its streaming fence.
 #: The CRAFT page trains a small CNN for 150 steps and estimates Sobol indices
 #: over 32 images; it measured 12.4 s on a two-core worker.
+#: The task-RNN circuits page trains its RNN, captures 40 timesteps and runs a
+#: fixed-point search: 10.7 s on one thread of a two-core worker.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -145,6 +150,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
         "docs/field-guide/linear_probes.md",
         "docs/field-guide/craft_concepts.md",
+        "docs/neuroai/task_rnn_circuits.md",
     }
 )
 
@@ -175,6 +181,9 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: bound hook: 66 s and 329 s on a four-core worker under light and heavy host
 #: load. The entropy-vector page downloads GPT-2 small, samples continuations
 #: and decodes greedily under four steering settings: 48 s on four cores.
+#: The ESM-2 protein page downloads the public ``facebook/esm2_t6_8M_UR50D``
+#: checkpoint (31 MB) on first use: 14.1 s on one thread with a warm cache, in
+#: the slow tier with the other real-checkpoint pages.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
@@ -188,6 +197,7 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/leace_concept_erasure_recipe.ipynb",
         "docs/field-guide/das_gpt2.md",
         "docs/field-guide/entropy_steering.md",
+        "docs/neuroai/protein_language_model.md",
     }
 )
 

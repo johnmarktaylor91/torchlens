@@ -221,6 +221,8 @@ exclude_docs: |
   /neuroai/journey.md
   /neuroai/loaders.md
   /neuroai/netrep.md
+  /neuroai/protein_language_model.md
+  /neuroai/task_rnn_circuits.md
   /non_goals.md
   /performance.md
   /quickstart.md
