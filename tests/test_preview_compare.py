@@ -55,8 +55,8 @@ def _check_comparison(backend: str, model: Any, x: Any, alt: Any, tmp_path: Path
     assert spatial["total_units"].isna().all()
     explicit_dim = -1 if backend in {"jax", "tf", "mlx"} else 1
     explicit = tl.debug.dead_neurons(first, dim=explicit_dim).to_pandas()
-    # An explicit layout recovers the convolution's four channels.
-    assert explicit["total_units"].eq(4).any()
+    # Preview layer-output flags identify the two-unit model head.
+    assert explicit["total_units"].iloc[-1] == 2
 
 
 @pytest.mark.backend_jax
@@ -216,3 +216,17 @@ def test_comparison_tensor_decodes_bfloat16_storage_bits() -> None:
         )
         actual = _comparison_tensor(expected.view(torch.uint16).numpy(), codec)
         assert torch.equal(actual, expected)
+
+
+def test_comparison_tensor_spatial_units_need_explicit_dim() -> None:
+    """Spatial preview counts require layout evidence; torch keeps its channel axis."""
+
+    from torchlens.debug._graph import _feature_dim, _unit_axis_reason
+
+    out, op = torch.zeros(2, 3, 4, 5), SimpleNamespace()
+    for backend in ("jax", "tf", "mlx", "paddle", "tinygrad"):
+        trace = SimpleNamespace(_provenance_backend=backend)
+        assert _feature_dim(trace, op, out, None, {}) is None
+        assert "unit axis unavailable" in _unit_axis_reason(trace, out, None)
+        assert _feature_dim(trace, op, out, -1, {}) == 3
+    assert _feature_dim(SimpleNamespace(_provenance_backend="torch"), op, out, None, {}) == 1
