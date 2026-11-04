@@ -1,4 +1,4 @@
-"""``run(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix.
+"""``run_transaction(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix.
 
 The fast live tier cuts its native forward right after the ``until=`` site's
 output is collected, so nothing downstream runs, and the saved prefix comes back
@@ -118,7 +118,7 @@ def test_resnet18_until_fast_gradients_equal_hand_truncated_eager(save: Any) -> 
     handles = [getattr(model, name).register_forward_hook(_count(name)) for name in _DOWNSTREAM]
     try:
         x = _batch(1)
-        result = trace.run(inputs=x, until="layer2", fast=True)
+        result = trace.run_transaction(inputs=x, until="layer2", fast=True)
     finally:
         for handle in handles:
             handle.remove()
@@ -146,11 +146,11 @@ def test_until_fast_clears_skipped_sites_and_a_full_run_restores_them() -> None:
 
     model = _resnet18()
     trace = tl.trace(model, _batch(0), save=tl.module("layer2") | tl.module("layer3"))
-    cut = trace.run(inputs=_batch(1), until="layer2", fast=True)
+    cut = trace.run_transaction(inputs=_batch(1), until="layer2", fast=True)
     assert cut.trace["layer3"].out is None
     assert cut.trace["layer2"].out is not None
 
-    full = trace.run(inputs=_batch(1), fast=True)
+    full = trace.run_transaction(inputs=_batch(1), fast=True)
     assert full.output is not None
     assert full.trace["layer3"].out is not None
 
@@ -161,5 +161,5 @@ def test_until_fast_refuses_an_unsaved_site_typed() -> None:
     model = _resnet18()
     trace = tl.trace(model, _batch(0), save=tl.module("layer1"))
     with pytest.raises(RunCapabilityUnavailableError) as refused:
-        trace.run(inputs=_batch(1), until="layer3", fast=True)
+        trace.run_transaction(inputs=_batch(1), until="layer3", fast=True)
     assert refused.value.fields["detection_stage"] == "fast_until_site_unsaved"

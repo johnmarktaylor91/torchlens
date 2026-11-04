@@ -27,8 +27,10 @@ from torchlens._io.bundle import save as _save_bundle
 from torchlens.errors import TraceCaptureError
 from torchlens.recording._halt import StopSignal
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: The replay doors below edit a root capture in place on purpose.
-_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+_CONFIRM = tl.options.InterventionOptions()
 
 
 class ExplodingModel(nn.Module):
@@ -333,7 +335,7 @@ def test_run_on_cleaned_up_husk_refuses_with_the_n_gate(recwarn) -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
     trace.cleanup()
     with pytest.raises(CaptureOutcomeError) as excinfo:
-        trace.run(inputs=torch.ones(1, 3))
+        trace.run_transaction(inputs=torch.ones(1, 3))
     assert excinfo.value.fields["code"] == "N3"
     assert excinfo.value.fields["status"] == "unknown"
 
@@ -352,5 +354,5 @@ def test_run_on_halted_analysis_load_refuses_n5(tmp_path) -> None:
     halted.save(bundle, level="audit", overwrite=True)
     loaded = tl.load(bundle)
     with pytest.raises(CaptureOutcomeError) as excinfo:
-        loaded.run(inputs=torch.ones(1, 3))
+        loaded.run_transaction(inputs=torch.ones(1, 3))
     assert excinfo.value.fields["code"] == "N5"

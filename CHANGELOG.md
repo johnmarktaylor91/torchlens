@@ -3,20 +3,50 @@
 
 ## Unreleased
 
+### Fixed
+
+- **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
+  read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
+  or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
+  promise. Error codes, return values and labels are unchanged.
+
+<!-- version list -->
+
+## v2.38.0 (2026-11-04)
+
+Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; install
+`torchlens<2.38` to read them (`pip install "torchlens<2.38"`), or capture the model again.
+
 ### Behavior changes
+
+- **viz**: rolled drawings label each edge end with its passes only when a strict subset of that
+  node's passes uses it: an end every pass uses carries no pass label (it used to print, for
+  example, `In 1-3 / Out 1-3` whenever any edge of the node varied). Loops whose edges were
+  unlabelled stay unlabelled; branching and recurrent loops lose the labels on edges every pass
+  uses and keep partial ones such as `Out 1`, `In 2` or `In 3 / Out 2`. A loop's every-pass edge
+  keeps a blank label slot when its back edge joins the same two nodes, so the two curves stay apart.
+- **viz**: no skin draws blue. Backward edges and nodes are raspberry (`#B03A6A` / `#F8E1E7`), the
+  `dark` skin is neutral grey, value ramps run pale yellow to brown, and the `colorblind` skin keeps
+  Okabe-Ito with grey weights. The default `torchlens` skin keeps the released fills. A branch
+  test names its kind and every pass's outcome on its first row (`IF: FALSE, FALSE, TRUE`) instead
+  of labelling an edge, and edge annotations are 13 pt (were 8 pt).
+- **viz**: a 0-d node's shape row reads `scalar, 4 B` instead of `(), 4 B`, and a saved 0-d value
+  prints on the next row (`= 2.31`; one value per pass on a rolled node, `= 0.87, 1.02, 0.95`).
+  If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
+  `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
 
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
   written; the default never does) in place of `vis_save_only=`.
 - **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.
 - **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
   points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
-- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
-  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
-  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+- **io**: files saved by torchlens 2.37 and earlier do not load. A saved trace below `tlspec_version` 11, a
+  pickled pre-2.38 module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a pre-2.38 `torchlens_version` refuse at `tl.load` (and at
   `tl.validation.validate_tlspec` and the extraction readers) with one error,
-  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
-  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
-  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the pre-2.38
+  origin and the remedy: load the file with torchlens 2.36.x or 2.37.x (`pip install "torchlens<2.38"`) or
+  capture the model again with this release. Nothing migrates a pre-2.38 file, and there is no
   `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
   withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
 - **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
@@ -865,8 +895,6 @@
 
 - A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
   on any skip.
-
-<!-- version list -->
 
 ## v2.37.1 (2026-11-03)
 

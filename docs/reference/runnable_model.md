@@ -11,7 +11,7 @@ exhaustive contract disagree, the exhaustive contract and the behavior-free type
 
 A sparse runnable artifact records one observed execution path without embedding a model
 object or tensor-valued intermediates in its sparse core. It can be loaded for analysis and,
-when readiness succeeds, replayed through the transactional `Trace.run()` API.
+when readiness succeeds, replayed through the transactional `Trace.run_transaction()` API.
 
 Runnable saving requires the runnable apparatus from the original capture: callable registry
 keys, state snapshots, alias topology and escape records (every capture already records the
@@ -122,7 +122,7 @@ semantics are frozen in [section 11](runnable_tlspec_contract.md#11-honesty-dive
 
 ## Clean run, hooked run, and disclosure
 
-`run(inputs=)` means one thing: push new inputs through the recorded model. Verification is a
+`run_transaction(inputs=)` means one thing: push new inputs through the recorded model. Verification is a
 property the result reports, not part of that meaning. The clean-run promise of this contract
 (a `verified` path, `attested` numerics when eligible) is made for a run with nothing staged on
 the trace: no hooks, no value replacements, no capture-time intervention on the path it replays.
@@ -134,7 +134,7 @@ not pretend otherwise. Such a run settles `unverifiable` with the ceiling diagno
 never `verified`, and a subscription that fired nowhere is recorded under the zero-fire policy
 rather than passed over. From that point the trace reads `Trace.is_pristine == False`, a one-way reading derived
 from the evidence the trace keeps, so a later reader of the saved artifact sees that something
-once intervened even if the hooks were cleared afterwards. The ordinary `run(inputs=)` keeps
+once intervened even if the hooks were cleared afterwards. The ordinary `run_transaction(inputs=)` keeps
 refusing staged edits it would not apply (`run_staged_spec_unapplied`), so an edit is either
 applied and disclosed or refused, never silently dropped.
 
@@ -166,7 +166,7 @@ anchors, XOR rule, and validation order are in
 
 ## Transaction boundary
 
-`Trace.run(inputs=..., seed=...)` selects a live or loaded-sparse provider and returns
+`Trace.run_transaction(inputs=..., seed=...)` selects a live or loaded-sparse provider and returns
 `RunResult(output, trace, report)`. The source Trace is unchanged for ordinary runs. State,
 context, RNG, input binding, sparse calls, output reconstruction, honesty checks, and optional
 numeric attestation settle inside one transaction.
@@ -235,7 +235,7 @@ adds a descriptor field directly.
 `RunnableCoordinator` (`torchlens/_runnable/seam.py`): produce
 (`build_sparse_run_descriptor`), decode (`parse_sparse_run_descriptor`), prepare
 (`attach_sparse_run_readiness` plus preflight), execute (`run_loaded_sparse_trace` /
-`run_live_trace`). Provider dispatch is the one hardcoded ladder inside `Trace.run`; a new
+`run_live_trace`). Provider dispatch is the one hardcoded ladder inside `Trace.run_transaction`; a new
 run mode extends that ladder, never adds a second dispatch site. The settlement spine is
 single: every provider finalizes through `_finalize_provider_run`, and
 `mark_trace_path_status` / `refuse_poisoned_trace` are the shared verdict authorities. The
@@ -266,14 +266,14 @@ is contract surface. Fast mode
 composes with new run keywords only by explicit matrix entry; silence means typed
 refusal, never undefined behavior.
 
-**Public entry.** The one public verb is `Trace.run`, whose dispatch ladder and typed
+**Public entry.** The one transactional verb is `Trace.run_transaction` (`Trace.run` refreshes a live Trace in place), whose dispatch ladder and typed
 keyword-conflict matrix are contract surface: every new keyword lands with its
 conflict-matrix row, and consumers bind totality tests to the CODE list, not a count.
 
-**Protocol extension strategy.** `RunnableTraceProtocol.run` is the contract-pinned
+**Protocol extension strategy.** `RunnableTraceProtocol.run_transaction` is the contract-pinned
 stable typed minimum: its existing four parameters (`inputs`, `seed`, `fast`,
 `on_divergence`) never change, reorder, or disappear. New keywords land as additive
-keyword-only parameters with defaults on the concrete `Trace.run` while they are
+keyword-only parameters with defaults on the concrete `Trace.run_transaction` while they are
 documented-unstable; a ratified spelling joins the protocol as an additive
 keyword-only-with-default revision in the same change as its documentation.
 

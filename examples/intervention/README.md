@@ -21,3 +21,4 @@ small local PyTorch model unless noted otherwise.
 15. `15_publishing_for_reproducibility.py` - save a portable `.tlspec/` and load it back.
 17. `17_raw_forward_hook_replacement.py` - replace a module output with raw PyTorch `register_forward_hook`.
 18. `18_complement_under_reach.py` - select every site with `tl.all_sites()`, subtract a region, and grow a neighborhood from what remains.
+19. `19_controls_wrong_tensor.py` - rerun an ablation claim under zero, mean and resample baselines, matched random directions and neighbouring sites; an ablation aimed at the wrong tensor looks large until the controls show it is not.

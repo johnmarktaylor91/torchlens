@@ -1,4 +1,4 @@
-"""The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle.
+"""The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle.
 
 ``contract`` holds the constants every builder imports against (format name and
 major, the record index, the storage-kind to JSON type map, the typed-value tags,

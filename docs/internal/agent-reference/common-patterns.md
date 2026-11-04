@@ -109,14 +109,21 @@ ablated = tl.trace(
     intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
 # Reruns re-arm the capture predicate and apply the edit exactly once; the
-# staged spec never grows. Trace.save keeps the ablated values but not the recipe:
-# a loaded copy refuses run(model, x) with
-# run_intervention_spec_not_persisted, so save the recipe with save_intervention.
+# staged spec never grows. Trace.save keeps the ablated values and writes the
+# recipe (intervention.json); a loaded copy reruns it when every edit is built in,
+# and refuses run_intervention_spec_not_persisted when a custom callable was saved
+# as a placeholder.
 ablated.run(model, x)
 
 disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
+# A Recording has to_pandas(), summary() and narrate() but no draw() and no
+# facets; the cooked Trace has every Trace.draw option and modules[...].facets,
+# and groups a reused layer into passes like tl.trace.
+# Trace-parity verbs cook through to_trace(): to_agent_json, save, fork and do.
+card = recording.to_agent_json()
+recording.save("sparse.tlspec", overwrite=True)  # same artifact Trace.save writes
 
 # Selection algebra (L6): compose regions, resolve explicitly, edit with do().
 log = tl.trace(model, x)
@@ -229,7 +236,7 @@ Trace-then-rerun is a fast path when the staged spec targets modules: `trace.run
 runs the native forward with the staged hooks (the guarded fast engine, about 1.5x a plain hook,
 exact), admits a longer input when the model takes the same sequence of calls, and falls back to
 the capture engine with `last_run["fast_refused"]` naming the guard that refused;
-`trace.run(inputs=..., fast=True)` applies the staged spec the same way on a live trace. Value
+`trace.run_transaction(inputs=..., fast=True)` applies the staged spec the same way on a live trace. Value
 replacements and non-module targets still take the capture engine. Glossary: "Guarded fast
 rerun".
 
@@ -262,7 +269,8 @@ assert steered.last_report.num_fires == 5  # one firing per generated token
 # Steering plus evidence: one tl.record per forward; rec.output is the model output.
 rec = tl.record(lm, ids, save=site, intervene=spec)
 out = rec.output
-steered_mlp = rec.to_trace().find_sites(site).first().out  # the steered site output
+rec_trace = rec.to_trace()  # keep the Trace in a variable while reading its ops
+steered_mlp = rec_trace.find_sites(site).first().out  # the steered site output
 assert torch.equal(out.logits, logits)
 
 # Correctness oracle, once: a full trace with the same spec agrees exactly.
@@ -424,3 +432,26 @@ and `show()`. `str(report)` is the table that `show()` prints and returns.
 `details`, and `suggestion`. The statuses are `pass`, `known_broken`, `scope`, and
 `not_tested`; severities are `ok`, `info`, `warning`, and `error`. Constructors are
 internal; read the returned records.
+
+### Lookup doors: the kind you name is the kind you get
+
+`trace[key]` returns the kind the key names; a typed door returns its own kind and converts
+a key that names exactly one such object; several matches refuse `ambiguous_op_lookup`
+naming the `:N` spellings (glossary: *Indexing coherence*).
+
+```python
+# API sketch: illustrative module addresses and layer labels
+trace["encoder.mlp"]             # Module (called once or many times)
+trace["encoder.mlp:2"]           # ModuleCall
+trace["linear_3_7"]              # Layer, single- or multi-pass (.out reads one pass or refuses)
+trace["linear_3_7:2"]            # Op; also "linear_3_7:last"
+trace.ops["encoder.mlp"]         # the module's output Op (refuses when called twice)
+trace.layers["encoder.mlp"]      # its Layer
+trace.modules["linear_3_7"]      # the Module that op ran in
+trace.module_calls["linear_3_7"]  # the call that ran it
+trace.params["encoder.mlp"]      # its one Param, or a refusal listing the addresses
+module["child"]                  # a descendant Module; module.calls["linear_3_7"] its call
+```
+
+Internal code that accepts any lookup key but needs an Op calls
+`torchlens._data_classes._lookup_kinds.op_at(trace, key)`.

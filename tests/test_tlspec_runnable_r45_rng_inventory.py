@@ -52,7 +52,7 @@ def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tuple[tl.Trace, 
     path = tmp / "r45rng.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=x)
+    result = tl.load(path).run_transaction(inputs=x)
     return trace, result
 
 

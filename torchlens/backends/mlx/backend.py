@@ -52,6 +52,7 @@ from ...backends.registry import (
 from ...recording._halt import StopSignal
 from ...recording.types import CaptureSpec
 from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -179,8 +180,7 @@ class GradOptions:
             Hard cap on saved op boundaries for the tap producer and oracle.
         """
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
@@ -902,7 +902,7 @@ class MLXBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None = "all",
+        save: str | list[Any] | None = "all",
         keep_orphans: bool = False,
         output_device: str = "same",
         activation_transform: object | None = None,
@@ -936,7 +936,7 @@ class MLXBackend:
 
         reject_unsupported_trace_options(
             {
-                "layers_to_save": layers_to_save,
+                "save": save,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
                 "save_args": save_args,

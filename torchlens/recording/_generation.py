@@ -312,7 +312,8 @@ def _model_refusal(model: nn.Module, record_options: Mapping[str, Any]) -> tuple
     for option, reason in _UNSUPPORTED_RECORD_OPTIONS:
         if record_options.get(option) is not None:
             return reason, f"drop {option}= from the tl.record call"
-    if record_options.get("on_forward_error", "raise") != "raise":
+    # ``tl.record`` hands the recorder's own knobs over as one ``recording=`` bundle.
+    if getattr(record_options.get("recording"), "on_forward_error", "raise") != "raise":
         return (
             "partial forward-error modes cannot continue a generation",
             'drop on_forward_error= (the default "raise" holds)',
@@ -642,6 +643,7 @@ def record_generation(
         recorder_kwargs["save"] = _generation_save(recorder_kwargs.get("save"), generation)
     sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
+        recorder._trim_pass_cores = True  # linear retention in generated tokens (_run_cores)
         if generation is not None:
             sink = _StepSink(generation, recorder, partial(_max_new_tokens, settings))
         with _forwards_through(model, recorder, windows, sink):

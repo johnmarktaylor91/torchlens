@@ -9,7 +9,7 @@ It accepts a changed input length when the op structure is unchanged
 reports unsaved ops' shape metadata as unavailable (``None``) rather than stale.
 A real control-flow divergence, or an ineligible trace, falls back to the full
 capture rerun (``engine == "rerun"`` with a typed ``fast_refused`` code); the
-explicit ``run(inputs=..., fast=True)`` door raises ``PathDivergenceError``.
+explicit ``run_transaction(inputs=..., fast=True)`` door raises ``PathDivergenceError``.
 Every result is exact against a plain ``register_forward_hook`` reference that
 reproduces ``tl.steer``'s arithmetic (``out + direction.reshape(1, 1, d) * m``).
 """
@@ -27,6 +27,8 @@ import torchlens as tl
 from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 _VOCAB = 64
 _DIM = 16
@@ -436,18 +438,18 @@ def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
 
     explicit = _steered_trace(model, direction, short_ids)
     with pytest.raises(PathDivergenceError):
-        explicit.run(inputs=long_ids, fast=True)
+        explicit.run_transaction(inputs=long_ids, fast=True)
 
 
 # Kept: sole branch coverage of intervention/_trace_run.py.
 def test_fast_and_plain_run_inputs_both_apply_the_staged_spec() -> None:
-    """``run(inputs=)`` applies the steer on both live engines, with receipts on the result."""
+    """``run_transaction(inputs=)`` applies the steer on both live engines, with receipts on the result."""
 
     model, direction = _build()
     ids = _ids(_CAPTURE_LEN, seed=700)
     trace = _steered_trace(model, direction, ids)
 
-    plain = trace.run(inputs=ids)
+    plain = trace.run_transaction(inputs=ids)
     assert isinstance(plain, RunResult)
     assert _max_abs_diff(plain.output, _hooked(model, direction, ids)["output"]) == 0.0
     assert plain.trace.last_run["engine"] == "live"
@@ -457,12 +459,12 @@ def test_fast_and_plain_run_inputs_both_apply_the_staged_spec() -> None:
 
     for seed in (700, 701):
         run_ids = _ids(_CAPTURE_LEN, seed=seed)
-        result = trace.run(inputs=run_ids, fast=True)
+        result = trace.run_transaction(inputs=run_ids, fast=True)
         assert isinstance(result, RunResult)
         assert _max_abs_diff(result.output, _hooked(model, direction, run_ids)["output"]) == 0.0
 
     # The plain door keeps applying the spec after fast runs, on fresh inputs too.
-    again = trace.run(inputs=_ids(_CAPTURE_LEN, seed=702))
+    again = trace.run_transaction(inputs=_ids(_CAPTURE_LEN, seed=702))
     expected = _hooked(model, direction, _ids(_CAPTURE_LEN, seed=702))["output"]
     assert _max_abs_diff(again.output, expected) == 0.0
 
@@ -503,23 +505,22 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     model, direction = _build()
     ids = _ids(_CAPTURE_LEN, seed=11)
     trace = _steered_trace(model, direction, ids)
-    first = trace.run(inputs=ids, fast=True)
+    first = trace.run_transaction(inputs=ids, fast=True)
     assert _max_abs_diff(first.output, _hooked(model, direction, ids)["output"]) == 0.0
 
     other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
-    trace._clear_hooks(confirm_mutation=True)
+    trace._clear_hooks()
     trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(other, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
     )
-    restaged = trace.run(inputs=ids, fast=True)
+    restaged = trace.run_transaction(inputs=ids, fast=True)
     assert restaged.trace.last_run["engine"] == "guarded_fast"
     assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
 
-    trace._clear_hooks(confirm_mutation=True)
+    trace._clear_hooks()
     with pytest.raises(RunCapabilityUnavailableError) as refused:
-        trace.run(inputs=ids, fast=True)
+        trace.run_transaction(inputs=ids, fast=True)
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
     trace.run(model, ids)
     assert trace.last_run["engine"] == "rerun"
@@ -552,7 +553,6 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(direction, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
     )
     assert _SITE not in graph_fired_addresses(trace)
 

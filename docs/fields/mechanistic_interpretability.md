@@ -19,7 +19,7 @@ The lists below are in the order most people want them: see one site, edit it, t
 - [Stochastic and population edits](../stochastic_edits.md): mean ablation, resampling ablation and causal scrubbing from one population noun and one edit.
 - [Editing generation and the KV cache](../guides/kv_cache.md): what "intervene during generation" can mean and how each is spelled.
 - [Performance: choosing a fast path](../guides/fast_paths.md): full capture, replay and capture-free live hooks differ in cost by two orders of magnitude; pick before a sweep.
-- [Paired-prompt activation patching notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/paired_prompt_patching.ipynb): a single-site clean-versus-corrupt patching session.
+- [Paired-prompt activation patching notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/paired_prompt_patching.ipynb): patches each of GPT-2 small's 144 attention heads from a France prompt into an Italy prompt and maps which heads carry " Paris".
 - [Causal trace notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/causal_trace_recipe.ipynb): a full clean-versus-corrupt causal trace with a per-site heatmap.
 - [Ablation grid notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/ablations_grid.ipynb): an ablation sweep over discovered sites.
 - [Steering notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/steering.ipynb): build a steering vector and apply it at replay time.
@@ -30,12 +30,15 @@ The lists below are in the order most people want them: see one site, edit it, t
 - [The mech-interp kit](../reference/mechinterp.md): residual decomposition, direct logit contributions, per-head results, the component edge graph and patching grids.
 - [ACDC circuit discovery as a driver loop](../field-guide/acdc_ioi.md): edge pruning on IOI written as a loop over TorchLens calls.
 - [A tuned lens in TorchLens's logit lens](../field-guide/tuned_lens.md) and the [train a tuned lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/train_tuned_lens_recipe.ipynb).
-- [A Jacobian lens in a few lines](../field-guide/jacobian_lens.md): what a block's residual vector is disposed to make the model say.
+- [A Jacobian lens in a few lines](../field-guide/jacobian_lens.md) and the [Jacobian lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/jacobian_lens_recipe.ipynb): what a block's residual vector is disposed to make the model say, fitted on GPT-2 small and compared with the logit lens.
 - [Per-step attribution for generated text](../field-guide/generation_step_attribution.md): attribute each generated token to the tokens before it.
 - [Attribution graphs with transcoders notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/attribution_graph_transcoders_recipe.ipynb): GPT-2 small with public transcoders spliced in.
 - [Function vectors notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/function_vectors_recipe.ipynb): score every head's causal indirect effect and sum the top heads into a task vector.
 - [DAS causal basis notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/das_causal_basis_recipe.ipynb): distributed alignment search through a bound hook, tested against a random basis.
 - [Measure faithfulness notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/measure_faithfulness_recipe.ipynb): ranked removal, output drop and locality checks on an attribution.
+- [EAP-IG circuit notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/eap_ig_circuit_recipe.ipynb): edge attribution patching with integrated gradients on GPT-2 small's IOI task, with the circuit's faithfulness replayed by `patch_edges`.
+- [Vision logit lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/vision_logit_lens_recipe.ipynb): per-block class votes of a ViT classifier and CLIP's open-vocabulary readout of every vision block.
+- [LEACE concept erasure notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/leace_concept_erasure_recipe.ipynb): scrub grammatical number from every GPT-2 small block with bound `tl.when` rules and watch subject-verb agreement collapse.
 - [Layer-wise relevance propagation for transformers](../field-guide/lrp_transformers_lxt.md) and the [epsilon-LRP litmus test](../field-guide/lrp_epsilon_litmus.md).
 - [Conditional steering with a per-token audit](../field-guide/conditional_steering.md): steer only when a condition direction crosses a threshold.
 - [Transformer pictures](../reference/tviz.md): token-labelled attention heatmaps and grids, the attention atlas, coloured tokens.

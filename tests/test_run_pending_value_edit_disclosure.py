@@ -1,6 +1,6 @@
-"""``run(inputs=)`` on a fork carrying value-edits discloses their inertness.
+"""``run_transaction(inputs=)`` on a fork carrying value-edits discloses their inertness.
 
-D1 (2026-08-19): ``fork.do(sel, edit)`` then ``fork.run(inputs=new_x)`` is
+D1 (2026-08-19): ``fork.do(sel, edit)`` then ``fork.run_transaction(inputs=new_x)`` is
 COHERENT -- a do() edit rewrites saved values (path 1), while a new-input run
 is a fresh execution (path 2) -- but the un-edited VERIFIED result tripped a
 real user flow. The contract is a plain DISCLOSURE at the run door, never a
@@ -50,7 +50,7 @@ def _traced() -> tuple[Small, torch.Tensor, tl.Trace]:
 
 
 def test_new_input_run_on_value_edited_fork_discloses() -> None:
-    """A fork with a do() value-edit warns on run(inputs=new_x)."""
+    """A fork with a do() value-edit warns on run_transaction(inputs=new_x)."""
 
     _model, _x, log = _traced()
     fork = log.fork()
@@ -60,6 +60,6 @@ def test_new_input_run_on_value_edited_fork_discloses() -> None:
     )
 
     with pytest.warns(PendingValueEditsWarning, match="do NOT apply"):
-        result = fork.run(inputs=torch.randn(2, 4))
+        result = fork.run_transaction(inputs=torch.randn(2, 4))
     # Disclosure, not refusal: the run itself completes.
     assert result is not None

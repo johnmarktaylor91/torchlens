@@ -32,7 +32,6 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
     _build_option,
@@ -44,16 +43,12 @@ from ._option_receipt import (
 from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
-    _validate_buffer_visibility,
     _validate_capture_values,
-    _validate_collapse,
-    _validate_fold_repeats,
-    _validate_intervention_mode,
-    _validate_node_style,
-    _validate_visualization_flag_fields,
+    _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils._display_options import _OptionsDisplay
 from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
@@ -141,6 +136,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "open_viewer",
     "file_format",
     "show_buffers",
+    "show_edge_shapes",
     "direction",
     "graph_overrides",
     "node_style",
@@ -178,7 +174,6 @@ _REPLAY_FIELDS: Final[tuple[str, ...]] = (
 )
 _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "engine",
-    "confirm_mutation",
     "strict",
     "allow_changed_params",
     "differentiable",
@@ -267,7 +262,6 @@ _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
-    "confirm_mutation": "confirm_mutation",
     "strict": "strict",
     "allow_changed_params": "allow_changed_params",
     "differentiable": "differentiable",
@@ -277,9 +271,6 @@ _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "retain_in_memory": "retain_in_memory",
     "on_save": "on_save",
 }
-
-
-suppress_mutate_warnings = _MutateWarningSuppression()
 
 
 def _merge_grouped_options(
@@ -358,10 +349,9 @@ def _merge_grouped_options(
     return _build_option(option_factory, values, specified_fields)
 
 
-@dataclass(frozen=True, init=False)
-class CaptureOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class CaptureOptions(_OptionsDisplay):
     """Grouped capture options for ``trace``.
-
         Parameters
         ----------
         input_transform:
@@ -383,7 +373,7 @@ class CaptureOptions:
         layer_visualizers:
             Optional mapping from site selectors to per-layer thumbnail callables.
         save_visualizations:
-            Whether rendered visualizer image files should be copied into portable bundles.
+            Copy rendered visualizer images into portable bundles.
         keep_orphans:
             Whether island ops (computations unreachable from both the model inputs and
             outputs) are retained in raw metadata and exposed via ``trace.graph.orphans``. Defaults
@@ -461,7 +451,7 @@ class CaptureOptions:
             Whether the capture keeps the model state its forward changed
             (forward-equivalent: norm running statistics, buffer writes, training
             modes and plain attributes advance exactly as one direct ``model(x)``
-            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            would, the spelling ``trace.run_transaction(inputs=..., carry_state=True)`` uses; no capture
             advances the caller's random streams under either setting). The default
             ``False`` makes the capture a pure observer: buffers, random state,
             training modes and plain instance attributes are restored afterwards,
@@ -473,7 +463,7 @@ class CaptureOptions:
             the capture-state contract). A cache hit runs no forward, so nothing
             advances (DOCUMENTED-UNSTABLE).
         name:
-            Optional user-facing name for the returned log.
+            User-facing log name.
         cache:
             Whether to use the content-hash capture cache. The key covers model
             tensor content (including per-tensor device and ``requires_grad``),
@@ -830,8 +820,8 @@ _CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
 }
 
 
-@dataclass(frozen=True, init=False)
-class _SaveTransforms:
+@dataclass(frozen=True, init=False, repr=False)
+class _SaveTransforms(_OptionsDisplay):
     """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
 
     Built by :func:`_save_transforms_from_capture`; not a public option
@@ -910,8 +900,8 @@ class _SaveTransforms:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class VisualizationOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class VisualizationOptions(_OptionsDisplay):
     """Grouped visualization options for capture and graph-rendering APIs.
 
     Parameters
@@ -932,6 +922,8 @@ class VisualizationOptions:
         Graph output file format.
     show_buffers:
         Buffer visibility policy.
+    show_edge_shapes:
+        Label forward dataflow edges with their producer output shapes (default False).
     direction:
         Graph layout direction.
     graph_overrides:
@@ -1014,6 +1006,7 @@ class VisualizationOptions:
     open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
+    show_edge_shapes: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
@@ -1053,6 +1046,7 @@ class VisualizationOptions:
         open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+        show_edge_shapes: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1099,6 +1093,9 @@ class VisualizationOptions:
             ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
+            ),
+            "show_edge_shapes": _resolve_option_value(
+                "show_edge_shapes", show_edge_shapes, False, specified_fields
             ),
             "show_buffers": _resolve_option_value(
                 "show_buffers", show_buffers, "meaningful", specified_fields
@@ -1166,12 +1163,7 @@ class VisualizationOptions:
                 "order_siblings", order_siblings, True, specified_fields
             ),
         }
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -1204,21 +1196,16 @@ class VisualizationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
-        values = dict(values)
+        values = {"show_edge_shapes": False, **values}
         values["layout"] = _normalize_layout(values["layout"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class ReplayOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class ReplayOptions(_OptionsDisplay):
     """Grouped replay/rerun options for ``Trace`` propagation APIs.
 
     Parameters
@@ -1292,16 +1279,14 @@ class ReplayOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class InterventionOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class InterventionOptions(_OptionsDisplay):
     """Grouped intervention options for ``Trace.do``.
 
     Parameters
     ----------
     engine:
         Propagation engine: ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-    confirm_mutation:
-        Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
     allow_changed_params:
@@ -1323,7 +1308,6 @@ class InterventionOptions:
     """
 
     engine: str = "auto"
-    confirm_mutation: bool = False
     strict: bool = False
     allow_changed_params: bool = False
     differentiable: bool = False
@@ -1332,7 +1316,6 @@ class InterventionOptions:
     def __init__(
         self,
         engine: str | MissingType = MISSING,
-        confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
         differentiable: bool | MissingType = MISSING,
@@ -1342,9 +1325,6 @@ class InterventionOptions:
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "engine": _resolve_option_value("engine", engine, "auto", specified_fields),
-            "confirm_mutation": _resolve_option_value(
-                "confirm_mutation", confirm_mutation, False, specified_fields
-            ),
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
             "allow_changed_params": _resolve_option_value(
                 "allow_changed_params", allow_changed_params, False, specified_fields
@@ -1380,8 +1360,8 @@ class InterventionOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class StorageOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class StorageOptions(_OptionsDisplay):
     """Grouped streaming-save options for ``trace``.
 
     Parameters
@@ -1722,7 +1702,6 @@ __all__ = [
     "ReplayOptions",
     "StorageOptions",
     "VisualizationOptions",
-    "suppress_mutate_warnings",
 ]
 
 

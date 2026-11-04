@@ -12299,6 +12299,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -12474,6 +12475,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -12649,6 +12651,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -12824,6 +12827,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -13001,6 +13005,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -13178,6 +13183,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -13358,6 +13364,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -13538,6 +13545,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -13845,6 +13853,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -14204,6 +14213,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -14306,8 +14316,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -14321,6 +14331,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -14443,6 +14454,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -14458,6 +14470,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14699,8 +14712,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -14714,6 +14727,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -14836,6 +14850,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -14851,6 +14866,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15111,8 +15127,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -15124,6 +15140,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -15230,6 +15247,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15245,6 +15263,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15507,8 +15526,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -15520,6 +15539,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -15630,6 +15650,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15645,6 +15666,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15912,8 +15934,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -15925,6 +15947,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -16039,6 +16062,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -16054,6 +16078,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -16327,8 +16352,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -16340,6 +16365,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -16450,6 +16476,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -16465,6 +16492,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -16726,8 +16754,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -16739,6 +16767,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -16847,6 +16876,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -16862,6 +16892,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17119,8 +17150,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -17132,6 +17163,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17240,6 +17272,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -17255,6 +17288,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17512,8 +17546,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -17525,6 +17559,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17633,6 +17668,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -17648,6 +17684,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17875,8 +17912,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -17886,6 +17923,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17966,6 +18004,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -17981,6 +18020,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18253,8 +18293,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -18266,6 +18306,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -18386,6 +18427,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18401,6 +18443,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18703,8 +18746,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -18716,6 +18759,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -18832,6 +18876,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18847,6 +18892,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19149,8 +19195,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -19162,6 +19208,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -19270,6 +19317,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -19285,6 +19333,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19568,8 +19617,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -19581,6 +19630,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -19688,6 +19738,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -19703,6 +19754,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19983,8 +20035,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -19996,6 +20048,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -20104,6 +20157,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -20119,6 +20173,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20409,8 +20464,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -20422,6 +20477,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -20534,6 +20590,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -20549,6 +20606,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20793,8 +20851,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -20804,6 +20862,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -20909,6 +20968,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -20924,6 +20984,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -21188,8 +21249,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -21201,6 +21262,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -21314,6 +21376,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -21329,6 +21392,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -21583,8 +21647,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -21596,6 +21660,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -21705,6 +21770,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -21720,6 +21786,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -21974,8 +22041,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -21987,6 +22054,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -22096,6 +22164,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -22111,6 +22180,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -22376,8 +22446,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>",
@@ -22391,6 +22461,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -22529,6 +22600,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -22544,6 +22616,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -22810,8 +22883,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -22823,6 +22896,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -22932,6 +23006,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -22947,6 +23022,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -23200,8 +23276,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -23213,6 +23289,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -23324,6 +23401,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -23339,6 +23417,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -23601,8 +23680,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -23614,6 +23693,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -23727,6 +23807,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -23742,6 +23823,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24002,8 +24084,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -24017,6 +24099,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24128,6 +24211,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -24143,6 +24227,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24399,8 +24484,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -24414,6 +24499,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24525,6 +24611,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -24540,6 +24627,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24796,8 +24884,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -24811,6 +24899,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24922,6 +25011,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -24937,6 +25027,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -25189,8 +25280,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -25202,6 +25293,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -25317,6 +25409,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -25332,6 +25425,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -25602,8 +25696,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -25615,6 +25709,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -25726,6 +25821,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -25741,6 +25837,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26004,8 +26101,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -26017,6 +26114,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26125,6 +26223,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -26140,6 +26239,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26398,8 +26498,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -26413,6 +26513,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26522,6 +26623,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -26537,6 +26639,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26793,8 +26896,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -26808,6 +26911,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26917,6 +27021,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -26932,6 +27037,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -27188,8 +27294,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -27203,6 +27309,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -27312,6 +27419,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -27327,6 +27435,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -27587,8 +27696,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -27602,6 +27711,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -27712,6 +27822,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -27727,6 +27838,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -27990,8 +28102,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -28005,6 +28117,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28115,6 +28228,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -28130,6 +28244,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -28393,8 +28508,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -28408,6 +28523,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28518,6 +28634,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -28533,6 +28650,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -28792,8 +28910,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -28805,6 +28923,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28913,6 +29032,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -28928,6 +29048,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -34068,6 +34189,7 @@
     "__ref__": "Trace",
     "label": "tinytransformer_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -34081,7 +34203,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [
@@ -46391,6 +46513,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -46566,6 +46689,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -46741,6 +46865,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -46916,6 +47041,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -47093,6 +47219,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -47270,6 +47397,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -47450,6 +47578,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -47630,6 +47759,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -47937,6 +48067,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -48296,6 +48427,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -48413,6 +48545,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -48535,6 +48668,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -48550,6 +48684,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -48806,6 +48941,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -48928,6 +49064,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -48943,6 +49080,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -49216,6 +49354,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -49322,6 +49461,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -49337,6 +49477,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -49612,6 +49753,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -49722,6 +49864,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -49737,6 +49880,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50017,6 +50161,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -50131,6 +50276,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -50146,6 +50292,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50432,6 +50579,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -50542,6 +50690,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -50557,6 +50706,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50831,6 +50981,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -50939,6 +51090,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -50954,6 +51106,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -51224,6 +51377,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -51332,6 +51486,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -51347,6 +51502,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -51617,6 +51773,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -51725,6 +51882,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -51740,6 +51898,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -51978,6 +52137,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -52058,6 +52218,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -52073,6 +52234,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -52358,6 +52520,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -52478,6 +52641,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -52493,6 +52657,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -52808,6 +52973,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -52924,6 +53090,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -52939,6 +53106,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -53254,6 +53422,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -53362,6 +53531,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -53377,6 +53547,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -53673,6 +53844,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -53780,6 +53952,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -53795,6 +53968,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54088,6 +54262,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -54196,6 +54371,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -54211,6 +54387,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54514,6 +54691,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -54626,6 +54804,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -54641,6 +54820,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54896,6 +55076,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -55001,6 +55182,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -55016,6 +55198,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -55293,6 +55476,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -55406,6 +55590,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -55421,6 +55606,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -55688,6 +55874,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -55797,6 +55984,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -55812,6 +56000,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56079,6 +56268,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -56188,6 +56378,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -56203,6 +56394,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56483,6 +56675,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -56621,6 +56814,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -56636,6 +56830,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56915,6 +57110,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57024,6 +57220,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -57039,6 +57236,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -57305,6 +57503,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57416,6 +57615,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -57431,6 +57631,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -57706,6 +57907,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57819,6 +58021,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -57834,6 +58037,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58109,6 +58313,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -58220,6 +58425,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -58235,6 +58441,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58506,6 +58713,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -58617,6 +58825,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -58632,6 +58841,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58903,6 +59113,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59014,6 +59225,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -59029,6 +59241,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -59294,6 +59507,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59409,6 +59623,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -59424,6 +59639,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -59707,6 +59923,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59818,6 +60035,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -59833,6 +60051,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60109,6 +60328,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -60217,6 +60437,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -60232,6 +60453,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60505,6 +60727,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -60614,6 +60837,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -60629,6 +60853,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60900,6 +61125,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61009,6 +61235,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -61024,6 +61251,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -61295,6 +61523,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61404,6 +61633,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -61419,6 +61649,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -61694,6 +61925,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61804,6 +62036,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -61819,6 +62052,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62097,6 +62331,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -62207,6 +62442,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -62222,6 +62458,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62500,6 +62737,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -62610,6 +62848,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -62625,6 +62864,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62897,6 +63137,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -63005,6 +63246,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -63020,6 +63262,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -68190,6 +68433,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -68233,7 +68477,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [
@@ -80546,6 +80790,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -80721,6 +80966,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -80896,6 +81142,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -81071,6 +81318,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -81248,6 +81496,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -81425,6 +81674,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -81605,6 +81855,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -81785,6 +82036,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -82092,6 +82344,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -82451,6 +82704,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -82553,8 +82807,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -82568,6 +82822,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -82690,6 +82945,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -82705,6 +82961,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -82946,8 +83203,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -82961,6 +83218,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -83083,6 +83341,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -83098,6 +83357,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -83358,8 +83618,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -83371,6 +83631,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -83477,6 +83738,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -83492,6 +83754,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -83754,8 +84017,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -83767,6 +84030,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -83877,6 +84141,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -83892,6 +84157,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -84159,8 +84425,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -84172,6 +84438,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -84286,6 +84553,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -84301,6 +84569,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -84574,8 +84843,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -84587,6 +84856,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -84697,6 +84967,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -84712,6 +84983,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -84973,8 +85245,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -84986,6 +85258,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85094,6 +85367,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -85109,6 +85383,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -85366,8 +85641,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -85379,6 +85654,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85487,6 +85763,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -85502,6 +85779,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -85759,8 +86037,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -85772,6 +86050,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85880,6 +86159,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -85895,6 +86175,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -86122,8 +86403,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -86133,6 +86414,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -86213,6 +86495,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -86228,6 +86511,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -86500,8 +86784,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -86513,6 +86797,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -86633,6 +86918,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -86648,6 +86934,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -86950,8 +87237,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -86963,6 +87250,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -87079,6 +87367,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -87094,6 +87383,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -87396,8 +87686,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -87409,6 +87699,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -87517,6 +87808,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -87532,6 +87824,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -87815,8 +88108,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -87828,6 +88121,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -87935,6 +88229,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -87950,6 +88245,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -88230,8 +88526,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -88243,6 +88539,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -88351,6 +88648,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -88366,6 +88664,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -88656,8 +88955,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -88669,6 +88968,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -88781,6 +89081,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -88796,6 +89097,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89040,8 +89342,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -89051,6 +89353,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -89156,6 +89459,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -89171,6 +89475,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89435,8 +89740,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -89448,6 +89753,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -89561,6 +89867,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -89576,6 +89883,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89830,8 +90138,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -89843,6 +90151,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -89952,6 +90261,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -89967,6 +90277,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -90221,8 +90532,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -90234,6 +90545,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -90343,6 +90655,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -90358,6 +90671,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -90623,8 +90937,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>",
@@ -90638,6 +90952,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -90776,6 +91091,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -90791,6 +91107,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91057,8 +91374,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -91070,6 +91387,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -91179,6 +91497,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -91194,6 +91513,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91447,8 +91767,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -91460,6 +91780,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -91571,6 +91892,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -91586,6 +91908,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91848,8 +92171,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -91861,6 +92184,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -91974,6 +92298,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -91989,6 +92314,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -92249,8 +92575,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -92264,6 +92590,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -92375,6 +92702,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -92390,6 +92718,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -92646,8 +92975,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -92661,6 +92990,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -92772,6 +93102,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -92787,6 +93118,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93043,8 +93375,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -93058,6 +93390,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -93169,6 +93502,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -93184,6 +93518,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93436,8 +93771,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -93449,6 +93784,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -93564,6 +93900,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -93579,6 +93916,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93849,8 +94187,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -93862,6 +94200,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -93973,6 +94312,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -93988,6 +94328,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -94251,8 +94592,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -94264,6 +94605,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -94372,6 +94714,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -94387,6 +94730,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -94645,8 +94989,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -94660,6 +95004,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -94769,6 +95114,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -94784,6 +95130,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95040,8 +95387,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -95055,6 +95402,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -95164,6 +95512,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -95179,6 +95528,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95435,8 +95785,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -95450,6 +95800,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -95559,6 +95910,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -95574,6 +95926,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95834,8 +96187,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -95849,6 +96202,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -95959,6 +96313,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -95974,6 +96329,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -96237,8 +96593,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -96252,6 +96608,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -96362,6 +96719,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -96377,6 +96735,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -96640,8 +96999,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -96655,6 +97014,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -96765,6 +97125,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -96780,6 +97141,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -97039,8 +97401,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -97052,6 +97414,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -97160,6 +97523,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -97175,6 +97539,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -102325,6 +102690,7 @@
     "__ref__": "Trace",
     "label": "tinytransformer_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -102346,7 +102712,7 @@
     }
    ],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [
@@ -112702,7 +113068,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -112858,7 +113224,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113014,7 +113380,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113170,7 +113536,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113326,7 +113692,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113478,7 +113844,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113630,7 +113996,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -113788,11 +114154,11 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hook_effects": [],
     "func_calls_duration": "<measured>",
     "grad": null,
@@ -113980,7 +114346,7 @@
     ],
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_duration": "<measured>",
     "forward_kwargs": null,
     "forward_kwargs_summary": "{}",
@@ -114360,7 +114726,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -114644,6 +115010,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -114705,7 +115072,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -114819,6 +115186,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -114880,7 +115248,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -114994,6 +115362,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -115055,7 +115424,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -115169,6 +115538,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -115232,7 +115602,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -115346,6 +115716,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -115409,7 +115780,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 8), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -115523,6 +115894,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -115589,7 +115961,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -115703,6 +116075,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -115769,7 +116142,7 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
@@ -115883,6 +116256,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -115956,13 +116330,13 @@
     "facets": "<torchlens._semantic.facets.FacetView>",
     "forward_args": null,
     "forward_args_summary": "[Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32), Tensor(shape=(2, 3, 4), dtype=float32)]",
-    "forward_args_template": null,
+    "forward_args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_docstring": null,
     "forward_duration": "<measured>",
     "forward_hooks": [],
     "forward_kwargs": null,
     "forward_kwargs_summary": "{attn_mask: None, key_padding_mask: None, need_weights: False, is_causal: False}",
-    "forward_kwargs_template": null,
+    "forward_kwargs_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "forward_pre_hooks": [],
     "forward_signature": null,
     "forward_source_file": null,
@@ -116190,6 +116564,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -116549,6 +116924,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -116573,7 +116949,7 @@
   "ops": {
    "add_1_27:1": {
     "_address_normalized": "encoder",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -116666,6 +117042,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -116759,6 +117136,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -116774,6 +117152,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -116934,7 +117313,7 @@
    },
    "add_2_34:1": {
     "_address_normalized": "encoder",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>"
@@ -117027,6 +117406,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -117120,6 +117500,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -117135,6 +117516,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -117295,7 +117677,7 @@
    },
    "contiguous_1_7:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -117405,6 +117787,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -117494,6 +117877,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -117509,6 +117893,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -117665,7 +118050,7 @@
    },
    "dropout_1_26:1": {
     "_address_normalized": "encoder.dropout1",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -117678,7 +118063,11 @@
     "activation_transform": null,
     "address": "encoder.dropout1",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -117777,6 +118166,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -117871,6 +118261,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -117886,6 +118277,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -118049,7 +118441,7 @@
    },
    "dropout_2_31:1": {
     "_address_normalized": "encoder.dropout",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -118062,7 +118454,11 @@
     "activation_transform": null,
     "address": "encoder.dropout",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -118159,6 +118555,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -118257,6 +118654,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -118272,6 +118670,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -118439,7 +118838,7 @@
    },
    "dropout_3_33:1": {
     "_address_normalized": "encoder.dropout2",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -118452,7 +118851,11 @@
     "activation_transform": null,
     "address": "encoder.dropout2",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -118551,6 +118954,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -118645,6 +119049,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -118660,6 +119065,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -118823,7 +119229,7 @@
    },
    "getitem_1_8:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -118931,6 +119337,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119022,6 +119429,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -119037,6 +119445,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119196,7 +119605,7 @@
    },
    "getitem_2_9:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -119304,6 +119713,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119395,6 +119805,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -119410,6 +119821,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119569,7 +119981,7 @@
    },
    "getitem_3_10:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -119677,6 +120089,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119768,6 +120181,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -119783,6 +120197,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119942,7 +120357,7 @@
    },
    "input_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "input_1_raw",
     "_layer_label_raw": "input_1_raw",
@@ -120018,6 +120433,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -120098,6 +120514,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -120113,6 +120530,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -120266,7 +120684,7 @@
    },
    "layernorm_1_28:1": {
     "_address_normalized": "encoder.norm1",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -120291,7 +120709,14 @@
     "activation_transform": null,
     "address": "encoder.norm1",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -120388,6 +120813,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -120492,6 +120918,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -120507,6 +120934,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -120693,7 +121121,7 @@
    },
    "layernorm_2_35:1": {
     "_address_normalized": "encoder.norm2",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -120718,7 +121146,14 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -120812,6 +121247,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -120912,6 +121348,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -120927,6 +121364,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -121113,7 +121551,7 @@
    },
    "linear_1_2:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -121138,7 +121576,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "q",
+     "w",
+     "b"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -121235,6 +121677,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -121327,6 +121770,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -121342,6 +121786,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -121513,7 +121958,7 @@
    },
    "linear_2_23:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -121538,7 +121983,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "attn_output",
+     "out_proj_weight",
+     "out_proj_bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -121631,6 +122080,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -121723,6 +122173,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -121738,6 +122189,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -121907,7 +122359,7 @@
    },
    "linear_3_29:1": {
     "_address_normalized": "encoder.linear1",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -121932,7 +122384,11 @@
     "activation_transform": null,
     "address": "encoder.linear1",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -122024,6 +122480,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -122116,6 +122573,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -122131,6 +122589,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -122310,7 +122769,7 @@
    },
    "linear_4_32:1": {
     "_address_normalized": "encoder.linear2",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -122335,7 +122794,11 @@
     "activation_transform": null,
     "address": "encoder.linear2",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -122427,6 +122890,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -122523,6 +122987,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -122538,6 +123003,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -122719,7 +123185,7 @@
    },
    "output_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "output_1_raw",
     "_layer_label_raw": "output_1_raw",
@@ -122790,6 +123256,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -122879,6 +123346,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -122894,6 +123362,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -123046,7 +123515,7 @@
    },
    "permute_1_21:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -123059,7 +123528,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "2",
+     "0",
+     "1",
+     "3"
+    ],
     "arg_names": [
      "input",
      "dims"
@@ -123151,6 +123625,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -123247,6 +123722,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -123262,6 +123738,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -123423,7 +123900,7 @@
    },
    "relu_1_30:1": {
     "_address_normalized": "encoder",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -123436,7 +123913,9 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "input"
+    ],
     "arg_names": [
      "input",
      "inplace"
@@ -123524,6 +124003,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -123617,6 +124097,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -123632,6 +124113,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -123788,7 +124270,7 @@
    },
    "reshape_1_22:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -123801,7 +124283,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "bsz * tgt_len",
+     "embed_dim"
+    ],
     "arg_names": [
      "input",
      "shape"
@@ -123893,6 +124378,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -123985,6 +124471,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -124000,6 +124487,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124155,7 +124643,7 @@
    },
    "scaleddotproductattention_1_20:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>",
      "<torchlens.intervention.types.EdgeUseRecord>",
@@ -124170,7 +124658,14 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "q",
+     "k",
+     "v",
+     "attn_mask",
+     "dropout_p",
+     "is_causal"
+    ],
     "arg_names": [
      "query",
      "key",
@@ -124270,6 +124765,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -124363,6 +124859,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -124378,6 +124875,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124542,7 +125040,7 @@
    },
    "squeeze_1_6:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -124555,7 +125053,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "-2"
+    ],
     "arg_names": [
      "input: Tensor",
      "dim: Optional[Union[int",
@@ -124652,6 +125152,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -124743,6 +125244,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -124758,6 +125260,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124916,7 +125419,7 @@
    },
    "transpose_1_1:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -124929,7 +125432,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -125018,6 +125524,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -125113,6 +125620,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -125128,6 +125636,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -125287,7 +125796,7 @@
    },
    "transpose_2_5:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -125300,7 +125809,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "0",
+     "-2"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -125397,6 +125909,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -125492,6 +126005,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -125507,6 +126021,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -125668,7 +126183,7 @@
    },
    "transpose_3_12:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -125681,7 +126196,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -125776,6 +126294,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -125871,6 +126390,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -125886,6 +126406,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -126043,7 +126564,7 @@
    },
    "transpose_4_14:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -126056,7 +126577,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -126151,6 +126675,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126246,6 +126771,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -126261,6 +126787,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -126418,7 +126945,7 @@
    },
    "transpose_5_16:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -126431,7 +126958,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -126526,6 +127056,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126621,6 +127152,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -126636,6 +127168,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -126793,7 +127326,7 @@
    },
    "transpose_6_25:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -126806,7 +127339,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -126895,6 +127431,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126994,6 +127531,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -127009,6 +127547,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127176,7 +127715,7 @@
    },
    "unflatten_1_3:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -127189,7 +127728,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "-1",
+     "(3, E)"
+    ],
     "arg_names": [
      "input",
      "dim",
@@ -127286,6 +127828,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -127381,6 +127924,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -127396,6 +127940,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127558,7 +128103,7 @@
    },
    "unsqueeze_1_4:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -127571,7 +128116,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim"
@@ -127667,6 +128214,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -127758,6 +128306,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -127773,6 +128322,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127933,7 +128483,7 @@
    },
    "view_1_11:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -127946,7 +128496,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "tgt_len",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -128039,6 +128593,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -128132,6 +128687,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -128147,6 +128703,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -128305,7 +128862,7 @@
    },
    "view_2_13:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -128318,7 +128875,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "k.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -128411,6 +128972,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -128504,6 +129066,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -128519,6 +129082,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -128677,7 +129241,7 @@
    },
    "view_3_15:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -128690,7 +129254,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "v.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -128783,6 +129351,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -128876,6 +129445,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -128891,6 +129461,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129049,7 +129620,7 @@
    },
    "view_4_17:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -129062,7 +129633,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "tgt_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -129158,6 +129734,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -129252,6 +129829,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -129267,6 +129845,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129428,7 +130007,7 @@
    },
    "view_5_18:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -129441,7 +130020,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -129537,6 +130121,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -129631,6 +130216,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -129646,6 +130232,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129807,7 +130394,7 @@
    },
    "view_6_19:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -129820,7 +130407,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -129916,6 +130508,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -130010,6 +130603,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -130025,6 +130619,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -130186,7 +130781,7 @@
    },
    "view_7_24:1": {
     "_address_normalized": "encoder.self_attn",
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -130199,7 +130794,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "tgt_len",
+     "bsz",
+     "attn_output.size(1)"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -130290,6 +130889,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -130383,6 +130983,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -130398,6 +130999,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -130577,7 +131179,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130629,7 +131231,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130682,7 +131284,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130734,7 +131336,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130787,7 +131389,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130839,7 +131441,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130891,7 +131493,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130943,7 +131545,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -130995,7 +131597,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -131047,7 +131649,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -131100,7 +131702,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -131152,7 +131754,7 @@
     "grad_dtype": null,
     "grad_memory": "<measured>",
     "grad_shape": null,
-    "grads": "<raises TypeError>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -131199,7 +131801,7 @@
    "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
-   "_buffer_persistence": {},
+   "_buffer_persistence": null,
    "_by_pass": {
     "1": [
      0,
@@ -134187,7 +134789,7 @@
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
-   "_out_dedup_mode": null,
+   "_out_dedup_mode": "identity",
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
@@ -134377,8 +134979,8 @@
    "_tracing_finished": true,
    "_transform": null,
    "_visualizer_dir": null,
-   "_warned_direct_write": null,
-   "_warned_mutate_in_place": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
    "activation_payloads_by_raw_label": {
     "\"add_1_28_raw\"": {
      "__tensor__": true,
@@ -135207,6 +135809,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -135220,7 +135823,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],

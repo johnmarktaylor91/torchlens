@@ -109,6 +109,7 @@ from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importer
 )
 from ._op_out_read import (
     _out_read_state,
+    _refuse_read_without_trace,
     _synthesized_out_read_due,
     _validate_reference_out_not_mutated,
 )
@@ -179,6 +180,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_pending_grad_blob_id": None,
     "_pending_transformed_grad_blob_id": None,
     "annotations": {},
+    "is_constant": False,
     "autograd_memory": None,
     "num_autograd_tensors": None,
     "bytes_delta_at_call": None,
@@ -380,11 +382,11 @@ _FIDS_INIT_NONE = tuple(
 #     untouched and never enters the pool.
 # ---------------------------------------------------------------------------
 
-# Exact classes that are safe to share.  Exact-class (not isinstance) matching
-# keeps subclasses out, so a pooled value always has the original's type.
-# ``torch.dtype``/``torch.device`` are immutable value objects (process
-# singletons for dtypes), so sharing references is safe; they appear inside
-# per-op config dicts such as ``func_autocast_state``.
+# Exact immutable classes safe to share (exact class keeps a pooled value's type;
+# dtype/device are process value objects, e.g. in ``func_autocast_state``). Only a
+# ZERO ``Duration`` pools (the fixed placeholder of rows that ran nothing): measured
+# timings match only by chance, and sharing them made the saved graph's identity
+# (pickle memo back-references, ``metadata.pkl`` bytes) depend on the clock.
 _POOLED_CLASSES = frozenset(
     {str, bytes, DtypeRef, DeviceRef, Bytes, Flops, Macs, Duration, torch.dtype, torch.device}
 )
@@ -686,7 +688,7 @@ def _pool_key(value: Any) -> Any:
         return (cls, value)
     if cls is float:
         return (cls, value.hex())
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         return (cls, value.hex()) if cls is Duration else (cls, value)
     if value is None:
         return _NONE_POOL_KEY
@@ -719,7 +721,7 @@ def _pool_value(value: Any, pool: dict[Any, Any]) -> Any:
     """
 
     cls = value.__class__
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         key = (cls, value.hex()) if cls is Duration else (cls, value)
     elif (cls is tuple or cls is frozenset) and value:
         key = _pool_key(value)
@@ -1290,6 +1292,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         min_distance_to_output: Any
         max_distance_to_output: Any
         is_buffer: Any
+        is_constant: bool
         address: Any
         buffer_pass: Any
         buffer_source: Any
@@ -1412,7 +1415,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "var_names": FieldPolicy.KEEP,
-        ARG_EXPRESSIONS_FIELD: FieldPolicy.DROP,
+        ARG_EXPRESSIONS_FIELD: FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -1497,6 +1500,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         "max_distance_to_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
+        "is_constant": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,
@@ -1646,10 +1650,8 @@ class Op(OpAtenMixin, _SelectionOperand):
                     remedy="re-run with save=... to retain this activation",
                     label=str(label),
                 )
-            if out is None and slot("_tracing_finished") and source_trace is not None:
-                from ..stats._capture_stats import refuse_reduced_payload_read
-
-                refuse_reduced_payload_read(slot, source_trace)
+            if out is None:
+                _refuse_read_without_trace(self, out_trace=source_trace)
             _warn_synthesized_out_read(source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
                 _validate_reference_out_not_mutated(_out_read_state(slot, out))
@@ -1662,6 +1664,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
             if not name.startswith("_"):
                 refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
+                _refuse_read_without_trace(self, member=name)
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(
@@ -1744,7 +1747,7 @@ class Op(OpAtenMixin, _SelectionOperand):
             if value is None:
                 continue
             cls = value.__class__
-            if cls in pooled_classes:
+            if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:
@@ -1907,13 +1910,13 @@ class Op(OpAtenMixin, _SelectionOperand):
     def bytes_read(self) -> Bytes | None:
         """Theoretical ideal read-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[0])
 
     @property
     def bytes_written(self) -> Bytes | None:
         """Theoretical ideal write-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[1])
 
     @property
     def arithmetic_intensity(self) -> float | None:
@@ -2460,9 +2463,9 @@ class Op(OpAtenMixin, _SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; an Op does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
@@ -2519,7 +2522,8 @@ class Op(OpAtenMixin, _SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -2528,7 +2532,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         """Apply an intervention to this op through the owning Trace."""
 
         return _doors.intervention()._op_edits.do(
-            self, input_transform, model=model, inputs=inputs, intervention=intervention
+            self, edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def materialize_out(
@@ -2541,10 +2545,8 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         Parameters
         ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
+        map_location, payload_hints:
+            Target device for the materialized tensor; optional backend payload hints.
 
         Returns
         -------
@@ -2685,10 +2687,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         _ensure_detached_store(self)
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
-        default_fill_state(
-            state,
-            defaults=self._DEFAULT_FILL_STATE,
-        )
+        default_fill_state(state, defaults=self._DEFAULT_FILL_STATE)
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes
@@ -2912,10 +2911,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
-            self._internal_set(
-                "saved_kwargs",
-                {k: copy_arg_tree(v) for k, v in t_kwargs.items()},
-            )
+            self._internal_set("saved_kwargs", {k: copy_arg_tree(v) for k, v in t_kwargs.items()})
         else:
             self._internal_set("saved_args", None)
             self._internal_set("saved_kwargs", None)
@@ -3108,32 +3104,11 @@ class Op(OpAtenMixin, _SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Op card (F10; lovely D15: line 1 IS the repr).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Data-model contract: never raises. An Op detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of silently printing an unknown
-        denominator (``operation 1/?``) or propagating the typed relation
-        refusal out of ``repr()``/``print()`` (r5 b7-opus R52-B, matching
-        the Layer degradation). The historical 21-line dump is gone: the
-        preview, relation lists, and lookup keys live behind the card's
-        ``More:`` exits.
-        """
+        from ._value_repr import op_card
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_card
-
-            try:
-                return op_card(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_card(self)
 
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
@@ -3167,26 +3142,11 @@ class Op(OpAtenMixin, _SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Never raises: a detached Op degrades to the same placeholder as
-        ``__str__``, and a mid-capture Op keeps the during-pass form.
-        """
+        from ._value_repr import op_repr_line
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_repr_line
-
-            try:
-                return op_repr_line(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_repr_line(self)
 
 
 # ---------------------------------------------------------------------------

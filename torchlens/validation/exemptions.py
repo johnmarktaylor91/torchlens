@@ -367,7 +367,7 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
         if perturbed_label not in dest_labels:
             return False
         try:
-            perturbed_op = source_trace[perturbed_label]
+            perturbed_op = source_trace.ops[perturbed_label]
         except Exception:
             return False
         if not _uninitialized_value_origin(perturbed_op, source_trace):

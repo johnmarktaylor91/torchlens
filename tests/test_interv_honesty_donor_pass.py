@@ -59,7 +59,7 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
 
 def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     """A fire context without a pass on a multi-pass donor site refuses typed
-    and teaches every pass-qualified spelling."""
+    and teaches bounded pass-qualified display keys."""
 
     from torchlens.intervention.hooks import make_hook_context
 
@@ -74,8 +74,8 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
         hook_callable(base["relu_1_2:1"].out, ctx=context)
     message = str(excinfo.value)
     assert "multi-pass" in message
-    assert "'relu_1_2:1'" in message
-    assert "'relu_1_2:2'" in message
+    assert "'relu_1:1'" in message
+    assert "'relu_1:2'" in message
     assert excinfo.value.fields["code"] == "patch_donor_pass_ambiguous"
     remedy = excinfo.value.fields["remedy"]
     assert remedy and message.rstrip(".").endswith(remedy)

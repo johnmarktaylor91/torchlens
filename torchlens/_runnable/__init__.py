@@ -27,7 +27,7 @@ analysis-only (fail-closed), never "assume disabled".
 RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_tensor_slots_context_and_obligations_v3"
 """Frozen sparse call-recipe version string.
 
-v3 (r71 A) adds REQUIRED per-call obligation fields to every call record:
+v3 adds REQUIRED per-call obligation fields to every call record:
 ``control_obligations`` (owner-record scalar-bool/loop-predicate obligations) and
 ``control_dependencies`` (owner-record conditional arm-entry edges on the CHILD
 call). Absence of either field is a parse failure -- the explicit-schema-decision
@@ -59,7 +59,7 @@ WITNESS_FAMILY_REGISTRY_VERSION: Final = "witness_family_registry_v2"
 
 A parser only accepts an inventory authored against ITS OWN closed registry; any other
 discriminator refuses at parse (``context_field_invalid``), so a future registry change
-is an explicit schema decision, never a silent vocabulary drift. v2 (r71 A) extends the
+is an explicit schema decision, never a silent vocabulary drift. v2 extends the
 registry from the seven ``SHAPE_STRUCTURE_FACT`` prefixes to EVERY verdict-steering
 witness family -- the four direct control kinds included -- plus the two explicit
 claim-only families, each row a typed :class:`FamilySpec` naming its independent
@@ -170,7 +170,7 @@ class PathFaithfulness(str, Enum):
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.path_faithfulness in PathFaithfulness
     True
     >>> PathFaithfulness("verified") is PathFaithfulness.VERIFIED
@@ -196,7 +196,7 @@ class ReadinessStatus(str, Enum):
     >>> [status.value for status in ReadinessStatus]
     ['ready', 'unavailable']
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.status in ReadinessStatus
     True"""
 
@@ -210,7 +210,7 @@ class RunProvider(str, Enum):
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.provider is RunProvider.LIVE
     True
     >>> RunProvider("loaded_sparse") is RunProvider.LOADED_SPARSE
@@ -239,7 +239,7 @@ class NumericAttestationStatus(str, Enum):
     >>> NumericAttestationStatus.ATTESTED.value
     'attested'
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.numeric_attestation in NumericAttestationStatus
     True"""
 
@@ -1234,7 +1234,7 @@ class RunnableDiagnostic:
     >>> [field.name for field in dataclasses.fields(RunnableDiagnostic)][:3]
     ['code', 'message', 'registry_id']
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(c.diagnostic is None or isinstance(c.diagnostic, RunnableDiagnostic) for c in report.contract_checks)
     True"""
 
@@ -1488,7 +1488,7 @@ class ContractCheck:
     >>> check.passed
     True
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(isinstance(c, ContractCheck) for c in report.contract_checks)
     True"""
 
@@ -1580,7 +1580,7 @@ class RunReport:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> isinstance(report, RunReport), report.truncated
     (True, False)
     """
@@ -1675,10 +1675,10 @@ class RunResult:
 class RunnableTraceProtocol(Protocol):
     """Frozen type contract for ``Trace`` runnable methods across implementation stages."""
 
-    def run(
+    def run_transaction(
         self,
-        inputs: Any,
         *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         on_divergence: DivergencePolicy = DivergencePolicy.RAISE,

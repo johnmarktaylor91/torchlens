@@ -106,8 +106,9 @@ class LazyContextHistory(deque[RecordContext]):
     first and yields the last ``window`` ones, ``append`` takes an eagerly built
     context and ``len`` never exceeds the window, so ``append_context`` never
     trims. Only iteration, ``append``, ``len`` and ``clear`` are supported.
-    Deferred contexts reach ``all_contexts`` and ``op_context_by_raw_label``
-    when they are built; contexts that nothing reads are never built.
+    Deferred contexts reach ``op_context_by_raw_label`` (and, except unselected
+    op contexts, ``all_contexts``) when they are built; contexts that nothing
+    reads are never built.
     """
 
     def __init__(
@@ -211,7 +212,10 @@ class LazyContextHistory(deque[RecordContext]):
         for index in range(self._built, len(entries)):
             ctx = self._build(history=entries[max(0, index - window) : index], **entries[index])
             entries[index] = ctx
-            state.all_contexts.append(ctx)
+            # An eligible pass selects no op context (``append_context`` drops
+            # those from ``all_contexts`` on an eager pass too).
+            if ctx.kind != "op" or state.keep_all_contexts:
+                state.all_contexts.append(ctx)
             if ctx.kind == "op" and ctx.raw_label is not None:
                 state.op_context_by_raw_label[ctx.raw_label] = ctx
         self._built = len(entries)

@@ -212,7 +212,7 @@ def test_input_escape_cell_changed_input_is_never_verified(
 ) -> None:
     """A changed input restales the escape source -> never VERIFIED."""
     loaded = _save_load(factory(), cap_x, tmp_path)
-    result = loaded.run(inputs=changed_x, seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=changed_x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -230,7 +230,7 @@ def test_input_escape_cell_original_input_is_verified(
 ) -> None:
     """The original input recomputes the byte-identical escape source -> VERIFIED."""
     loaded = _save_load(factory(), cap_x, tmp_path)
-    result = loaded.run(inputs=cap_x, seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=cap_x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -328,7 +328,7 @@ def test_state_escape_cell_capture_equivalent_state_is_verified(
 ) -> None:
     """The embedded capture-equivalent state re-digests identically -> VERIFIED."""
     loaded = _save_load(factory(), x, tmp_path)
-    result = loaded.run(inputs=x, seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -427,9 +427,11 @@ def _make_fake_internal_model() -> nn.Module:
 # Kept: sole branch coverage of __init__.py.
 def test_fake_internal_escape_is_witnessed_not_classified_internal(tmp_path: Path) -> None:
     """A spoofed-``co_filename`` user escape is recorded, so a changed input is not VERIFIED."""
-    original = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(inputs=_TWO, seed=0)
+    original = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run_transaction(
+        inputs=_TWO, seed=0
+    )
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(
+    changed = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run_transaction(
         inputs=_TWO_CHANGED, seed=0, on_divergence="return"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
@@ -529,7 +531,7 @@ def test_data_alias_inplace_mutation_is_never_verified_with_dropped_write(
     cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
     changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
     for run_x in (cap_x, changed_x):
-        result = _save_load(factory(), cap_x.clone(), tmp_path).run(
+        result = _save_load(factory(), cap_x.clone(), tmp_path).run_transaction(
             inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
@@ -605,11 +607,11 @@ def test_public_to_dlpack_alias_export_is_witnessed_as_escape(tmp_path: Path) ->
     site; it must be observed as a host escape exactly like the covered spellings."""
     cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
     changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
-    original = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run(
+    original = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run_transaction(
         inputs=cap_x.clone(), seed=0, on_divergence="return"
     )
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run(
+    changed = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run_transaction(
         inputs=changed_x.clone(), seed=0, on_divergence="return"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
@@ -668,7 +670,7 @@ def test_r14_h1_writeback_with_tracked_inplace_is_never_verified(
 ) -> None:
     """A numpy write-back layered with a tracked in-place op is UNVERIFIABLE (both inputs)."""
     for run_x in (_R14_X, _R14_CHANGED):
-        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+        result = _save_load(factory(), _R14_X.clone(), tmp_path).run_transaction(
             inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
@@ -709,7 +711,7 @@ def test_r14_h2_labelled_view_of_data_alias_mutation_is_never_verified(
 ) -> None:
     """A dropped mutation through a labelled view of .data is UNVERIFIABLE (both inputs)."""
     for run_x in (_R14_X, _R14_CHANGED):
-        result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+        result = _save_load(factory(), _R14_X.clone(), tmp_path).run_transaction(
             inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
@@ -811,9 +813,11 @@ def test_r14_no_over_trigger_stays_verified_on_any_input(
     factory: Callable[[], nn.Module], tmp_path: Path
 ) -> None:
     """Read-only storage exposure and genuine labelled-alias in-place stay VERIFIED, no over-trigger."""
-    original = _save_load(factory(), _R14_X.clone(), tmp_path).run(inputs=_R14_X.clone(), seed=0)
+    original = _save_load(factory(), _R14_X.clone(), tmp_path).run_transaction(
+        inputs=_R14_X.clone(), seed=0
+    )
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    changed = _save_load(factory(), _R14_X.clone(), tmp_path).run(
+    changed = _save_load(factory(), _R14_X.clone(), tmp_path).run_transaction(
         inputs=_R14_CHANGED.clone(), seed=0
     )
     assert changed.report.path_faithfulness is PathFaithfulness.VERIFIED

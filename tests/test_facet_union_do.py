@@ -142,7 +142,9 @@ def test_saved_union_fork_reloads_like_the_chained_fork(case: Case, tmp_path: Pa
     """A saved and reloaded union fork holds the chained fork's values and reruns alike.
 
     ``trace.save`` keeps the edited values, not the facet hooks, so a rerun of
-    either loaded fork refuses the same way (the single-facet contract).
+    either loaded fork refuses the same way (the single-facet contract). A
+    ``patch_from`` edit is an audit-only rule in saved format 3, so the forks save at
+    ``level="executable_with_callables"``, the level that keeps activations with it.
     """
 
     model, corrupt_x, clean, corrupt = case
@@ -150,7 +152,9 @@ def test_saved_union_fork_reloads_like_the_chained_fork(case: Case, tmp_path: Pa
     chained = corrupt.fork().do(HEAD_A, tl.patch_from(clean)).do(HEAD_B, tl.patch_from(clean))
     loaded = {}
     for name, trace in (("union", union), ("chained", chained)):
-        trace.save(tmp_path / name, include_custom_attributes=False)
+        trace.save(
+            tmp_path / name, level="executable_with_callables", include_custom_attributes=False
+        )
         loaded[name] = tl.load(tmp_path / name)
 
     torch.testing.assert_close(_final(loaded["union"]), _final(union), atol=0, rtol=0)

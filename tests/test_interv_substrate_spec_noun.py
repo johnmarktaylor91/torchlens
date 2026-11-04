@@ -18,8 +18,10 @@ from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens.intervention.spec import classify_where
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _TinyModel(nn.Module):
@@ -81,7 +83,7 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(
             spec,
             tl.scale(0.5),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 

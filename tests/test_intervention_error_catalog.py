@@ -17,6 +17,8 @@ import torchlens as tl
 from torchlens.intervention import check_spec_compat, errors as terrors
 from torchlens.io import TraceState, list_traces, load_intervention_spec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 SeverityClass = type[BaseException]
 WarningClass = type[Warning]
 
@@ -300,6 +302,7 @@ def test_catalog_entry_contract(name: str) -> None:
     assert "(2, 3)" in message
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_axis_a_public_verbs_success_paths() -> None:
     """Public set, do (replay and set-only), rerun, fork, and append smoke paths work."""
 
@@ -307,12 +310,12 @@ def test_axis_a_public_verbs_success_paths() -> None:
     log.do(
         tl.func("relu"),
         torch.zeros(1, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     replay_result = log.do(
         tl.func("relu"),
         _zero_hook,
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
@@ -321,7 +324,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     do_log.do(
         tl.func("relu"),
         torch.ones(1, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert do_log.state is TraceState.SPEC_STALE
 
@@ -350,15 +353,13 @@ def test_axis_a_public_verbs_success_paths() -> None:
             lambda log: log.do(
                 tl.func("missing"),
                 torch.zeros(1, 3),
-                intervention=tl.options.InterventionOptions(
-                    engine="set_only", confirm_mutation=True
-                ),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
             ),
             terrors.SiteResolutionError,
         ),
         (
             "attach_hooks",
-            lambda log: log._attach_hooks(tl.func("missing"), _zero_hook, confirm_mutation=True),
+            lambda log: log._attach_hooks(tl.func("missing"), _zero_hook),
             terrors.SiteResolutionError,
         ),
         (
@@ -367,7 +368,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
                 tl.func("relu"),
                 _zero_hook,
                 inputs=torch.zeros(1, 3),
-                intervention=tl.options.InterventionOptions(confirm_mutation=True),
+                intervention=tl.options.InterventionOptions(),
             ),
             terrors.EngineDispatchError,
         ),
@@ -376,7 +377,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
             lambda log: log.do(
                 tl.func("relu"),
                 _zero_hook,
-                intervention=tl.options.InterventionOptions(confirm_mutation=True),
+                intervention=tl.options.InterventionOptions(),
             ),
             terrors.ReplayPreconditionError,
         ),
@@ -419,8 +420,8 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log = _capture(_ReluAdd(), x)
     rerun_log = _capture(_ReluAdd(), x)
 
-    confirm = tl.options.InterventionOptions(confirm_mutation=True)
-    stage = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+    confirm = tl.options.InterventionOptions()
+    stage = tl.options.InterventionOptions(engine="set_only")
     replay_log.do(tl.func("relu"), _zero_hook, intervention=confirm)
     rerun_log.do({tl.func("relu"): _zero_hook}, intervention=stage)
     rerun_log.run(_ReluAdd(), x)
@@ -519,7 +520,7 @@ def test_graph_shape_mismatch_error_raised_for_executable_spec(
 
     x = torch.randn(1, 3)
     log = _capture(_ReluAdd(), x)
-    log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "graph_shape_mismatch.tlspec"
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path)

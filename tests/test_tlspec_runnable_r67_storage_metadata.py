@@ -190,7 +190,10 @@ def test_r67_placement_read_canonical_state_identical_verdicts(
     assert kind in host_escape_state_metadata_reads(trace).get("b", frozenset()), spelling
     assert host_escape_state_metadata_observations(trace).get("b", {}).get(kind) is False
     loaded = tl.load(_save(trace, tmp_path / "canon.tlspec"))
-    assert loaded.run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        loaded.run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
 
 
 # Kept: a sole mutation kill; smoke tier id (frozen).
@@ -311,11 +314,11 @@ def test_r67_input_storage_nbytes_read_diverges_on_changed_base(
     x = torch.randn(4)
     trace = _trace(_InputGeomModel(_INPUT_GEOM_READERS[spelling]), x)
     path = _save(trace, tmp_path / "geom.tlspec")
-    original = tl.load(path).run(inputs=x.clone())
+    original = tl.load(path).run_transaction(inputs=x.clone())
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = torch.randn(100)[:4]
     with pytest.raises(Exception) as excinfo:
-        tl.load(path).run(inputs=twin)
+        tl.load(path).run_transaction(inputs=twin)
     assert "storage_nbytes" in str(excinfo.value)
 
 
@@ -344,7 +347,7 @@ def test_r67_unattributable_storage_access_fails_closed(tmp_path: Path) -> None:
         path = _save(trace, tmp_path / "foreign.tlspec")
     except RunnablePreflightError:
         return  # refusing at save is equally fail-closed
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -404,7 +407,7 @@ def test_r67_captured_storage_mutator_ceilings(tmp_path: Path) -> None:
         path = _save(trace, tmp_path / "mut.tlspec")
     except RunnablePreflightError:
         return  # refusing at save is equally fail-closed
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 

@@ -8,10 +8,13 @@ last ``do()`` inside the block staged when the block ends.
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
@@ -30,7 +33,7 @@ def test_do_applies_a_loaded_intervention_spec(tmp_path) -> None:
 
     spec = tl.io.load_intervention_spec(path)
     fresh = tl.trace(model, x, capture=options).fork()
-    reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+    reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions())
 
     assert torch.equal(reloaded.output_ops[-1].out, fork.output_ops[-1].out)
     row = reloaded.intervention_audit[-1]

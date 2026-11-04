@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._display_constructor import clipped, value_text
+from .._utils.fail_open import fail_open
+
 if TYPE_CHECKING:
     from .types import Edit
 
@@ -39,6 +42,13 @@ def render_edit_repr(spec: Edit) -> str:
         ``tl.<constructor>(args)`` for a builtin edit, else ``tl.Edit(...)``.
     """
 
+    return fail_open(lambda: clipped(_edit_repr(spec)), lambda _error: "tl.Edit(...)")
+
+
+def _edit_repr(spec: Edit) -> str:
+    """Render known public constructors or the bounded identity fallback."""
+
+    # Keep constructor/default ordering together; the inherited formatting branch set is cohesive.
     public = _public_constructor(spec)
     if public is not None:
         path, target = public
@@ -134,31 +144,4 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
     return type(default) is type(value) and bool(default == value)
 
 
-def _render_value(value: Any) -> str:
-    """Render one constructor argument for the edit repr.
-
-    Parameters
-    ----------
-    value:
-        Stored constructor argument.
-
-    Returns
-    -------
-    str
-        Readable rendering; tensors print by shape and dtype, functions by name.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return f"<tensor shape={tuple(value.shape)} dtype={value.dtype}>"
-    if (
-        callable(value)
-        and not isinstance(value, type)
-        and type(value).__name__ in {"function", "builtin_function_or_method", "method"}
-    ):
-        return f"<function {value.__qualname__}>"
-    if isinstance(value, tuple):
-        inner = ", ".join(_render_value(item) for item in value)
-        return f"({inner},)" if len(value) == 1 else f"({inner})"
-    if isinstance(value, list):
-        return f"[{', '.join(_render_value(item) for item in value)}]"
-    return repr(value)
+_render_value = value_text

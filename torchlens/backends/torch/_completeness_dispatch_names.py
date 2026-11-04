@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import sys
 from collections.abc import Iterator
@@ -13,6 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
+from ._consumer_kind import _classify_consumer_kind
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -22,6 +24,10 @@ from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
 )
+
+#: Resolved path of stdlib ``contextlib``, whose ``__exit__`` frames sit between
+#: a TorchLens context manager and the caller (see ``_external_warning_stacklevel``).
+_CONTEXTLIB_FILE = Path(contextlib.__file__).resolve()
 
 __all__ = (
     "_resolved_dispatch_origins",
@@ -523,15 +529,39 @@ def _external_warning_stacklevel() -> int:
     try:
         frame = frame.f_back if frame is not None else None
         while frame is not None:
-            try:
-                Path(frame.f_code.co_filename).resolve().relative_to(_TORCHLENS_ROOT)
-            except ValueError:
+            # A ``contextlib`` frame is the ``__exit__`` of a TorchLens context
+            # manager, never the caller's line: skip it like a package frame,
+            # or every advisory would point at ``contextlib.py``.
+            if not _is_package_or_contextlib_frame(frame.f_code.co_filename):
                 return level
             level += 1
             frame = frame.f_back
     finally:
         del frame
     return level
+
+
+def _is_package_or_contextlib_frame(filename: str) -> bool:
+    """Return whether a frame's file is inside TorchLens or is stdlib ``contextlib``.
+
+    Parameters
+    ----------
+    filename:
+        The frame's ``co_filename``.
+
+    Returns
+    -------
+    bool
+        ``True`` for a TorchLens source file or the ``contextlib`` module file.
+    """
+    path = Path(filename).resolve()
+    if path == _CONTEXTLIB_FILE:
+        return True
+    try:
+        path.relative_to(_TORCHLENS_ROOT)
+    except ValueError:
+        return False
+    return True
 
 
 def _iter_dispatch_tensors(
@@ -586,4 +616,3 @@ from .completeness_witness import (  # noqa: E402
     _TORCHLENS_ROOT,
     _DispatchCallsite,
 )
-from .structure_only_belt import _classify_consumer_kind  # noqa: E402

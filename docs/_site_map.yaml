@@ -56,6 +56,9 @@ pages:
     section: project
   - path: activation_transform_persistence.md
     section: concepts
+  - path: also_in_torchlens.md
+    section: get-started
+    note: every feature the README tour does not show, grouped by task; the README's "Also in TorchLens" list links here
   - path: internal/agent-reference/architecture.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
@@ -72,6 +75,9 @@ pages:
     section: internal
     note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/current-2-x-surface.md
+    section: internal
+    note: agent and contributor reference; AGENTS.md points here
+  - path: internal/agent-reference/feature-inspection.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
@@ -146,6 +152,9 @@ pages:
     section: doors
   - path: facets.md
     section: concepts
+  - path: faq.md
+    section: get-started
+    publish: true
   - path: fields/debugging_and_training.md
     section: fields
     note: landing page for people debugging or training networks; linked from the README
@@ -169,6 +178,8 @@ pages:
   - path: field-guide/feature_visualisation.md
     section: field-guide
     moved_from: [recipes/feature_visualisation.md]
+  - path: field-guide/generation_attention.md
+    section: field-guide
   - path: field-guide/generation_step_attribution.md
     section: field-guide
     moved_from: [recipes/generation_step_attribution.md]
@@ -214,6 +225,8 @@ pages:
   - path: field-guide/tcav.md
     section: field-guide
     moved_from: [recipes/tcav.md]
+  - path: field-guide/tensor_images.md
+    section: field-guide
   - path: field-guide/torchcam.md
     section: field-guide
     moved_from: [recipes/torchcam.md]
@@ -263,6 +276,9 @@ pages:
   - path: maintainers/saved_format_3.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/saved_format_3_design.md
+    section: internal
+    note: maintainer page; saved_format_3.md links it
   - path: maintainers/testing.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
@@ -277,12 +293,18 @@ pages:
   - path: guides/kv_cache.md
     section: field-guide
     group: Intervene
+  - path: guides/model_conveniences.md
+    section: concepts
   - path: guides/offline_report.md
     section: field-guide
     group: See and inspect
   - path: guides/treescope_cards.md
     section: field-guide
     group: See and inspect
+  - path: guides/visualization.md
+    section: field-guide
+    group: See and inspect
+    publish: true
   - path: index.md
     section: home
     publish: true

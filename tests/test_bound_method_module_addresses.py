@@ -1,10 +1,10 @@
-"""A trace of ``model.generate`` names the model and takes its bare module addresses.
+"""A trace of ``model.generate`` names the model and uses its own module addresses.
 
-The bound-method root registers the model as its ``owner`` submodule, so the
-recorded addresses read ``owner.body.0``. The trace is still named after the
-model class, and ``body.0`` resolves to the same Module a plain trace would
-call ``body.0``. A plain model that has a real ``owner`` submodule gets no such
-mapping.
+The bound-method root presents the model as the trace's root ``self``, so the
+recorded addresses are the model's own (``body.0``, never ``owner.body.0``):
+the same spelling a plain trace of the model gives, in module lookups and in
+selectors such as ``tl.in_module``. A plain model with a real submodule called
+``owner`` keeps that name. The trace is named after the model class.
 """
 
 from __future__ import annotations
@@ -54,14 +54,36 @@ def test_bound_method_trace_is_named_after_the_model_class() -> None:
 
 
 @pytest.mark.parametrize("address", ["body", "body.0", "body.1", "head"])
-def test_bare_module_address_resolves_on_a_bound_method_trace(address: str) -> None:
-    trace = tl.trace(Gen().generate, torch.randn(1, 4))
+def test_module_addresses_are_the_models_own_on_a_bound_method_trace(address: str) -> None:
+    model = Gen()
+    plain = tl.trace(model, torch.randn(1, 4))
+    trace = tl.trace(model.generate, torch.randn(1, 4))
     assert address in trace.modules
-    assert trace.modules[address] is trace.modules[f"owner.{address}"]
+    assert f"owner.{address}" not in trace.modules
     assert trace.modules[address].num_calls == 3
+    assert [str(m.address) for m in trace.modules] == [str(m.address) for m in plain.modules]
 
 
-def test_plain_trace_gains_no_owner_mapping() -> None:
+def test_in_module_selector_takes_the_bare_address_on_a_bound_method_trace() -> None:
+    model = Gen()
+    plain = tl.trace(model, torch.randn(1, 4))
+    trace = tl.trace(model.generate, torch.randn(1, 4))
+    plain_labels = [str(label) for label in plain[tl.in_module("body.0")].labels]
+    gen_labels = [str(label) for label in trace[tl.in_module("body.0")].labels]
+    assert len(plain_labels) == 1
+    assert len(gen_labels) == 3  # one body.0 op per generate step
+    body_layers = set(trace.modules["body.0"].layer_labels)
+    assert {
+        label.rsplit(":", 1)[0] for label in gen_labels
+    } == body_layers  # one layer, three passes
+    try:
+        stale = list(trace[tl.in_module("owner.body.0")].labels)
+    except LookupError:
+        stale = []
+    assert stale == []
+
+
+def test_plain_trace_keeps_a_real_owner_submodule() -> None:
     trace = tl.trace(HasOwner(), torch.randn(1, 4))
     assert "owner.0" in trace.modules
     assert "0" not in trace.modules

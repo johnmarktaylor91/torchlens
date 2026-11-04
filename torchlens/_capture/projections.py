@@ -19,11 +19,10 @@ from .._ir.events import (
     FunctionCallRef,
     ModuleFrame,
     OpEvent,
-    OutputRef,
     ParentEdge,
 )
 from .._ir.predicate import EventKind, coerce_deferred_value
-from .._ir.refs import DeviceRef, DtypeRef, TensorRef
+from .._ir.refs import DeviceRef, DtypeRef, ParamRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
@@ -43,8 +42,16 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
+from ._forward_helpers import _normalize_module_stack
 from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
-from ._sparse_shell import _sparse_function_ref
+from ._sparse_refs import (
+    _module_frames_from_record_context,
+    _sparse_function_ref,
+    _sparse_graph_facet,
+    _sparse_output_ref,
+    _sparse_params_facet,
+    _SparseFreezeValues,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -128,6 +135,11 @@ class RecordingState:
     event_index: int = 0
     step_index: int = 0
     no_tensor_capture: bool = False
+    # Op contexts the predicate did not select are dropped from ``all_contexts``
+    # once committed: ``Recording.backward`` reads only the selected ones, so a
+    # long forward no longer retains one context per op for the recording's
+    # lifetime. A dry run keeps every context (its result is the context list).
+    keep_all_contexts: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
@@ -151,9 +163,26 @@ class RecordingState:
     # exit: the latest op context per raw label (last-wins, like a dict built
     # over ``all_contexts``) and the retained records' keys. Rebuilding both
     # per exit made that step quadratic in model size. ``clear_pass_indexes``
-    # empties both at each ``Recorder`` pass start.
+    # empties both at each ``Recorder`` pass start; the raw-label index also
+    # empties when a pass ends, since it serves module exits inside the forward.
     op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
     retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
+    # Capture-time parameter identity for predicate records, ``id -> ParamRef``,
+    # plus the ``Param`` logs a cooked Trace resolves those refs against. Both
+    # are built once at prep from the model's own Parameters and hold no
+    # tensor references, so recorded ops can carry the same parameter
+    # equivalence class exhaustive capture gives them and
+    # ``Recording.to_trace()`` groups recurrent layers the way ``tl.trace`` does.
+    prepared_param_refs: dict[int, ParamRef] = field(default_factory=dict)
+    prepared_param_logs: dict[str, Any] = field(default_factory=dict)
+    # Call-site grouping evidence (``callsite_v1``) for predicate records: the
+    # per-capture key table and ``raw label -> call-site class`` side table,
+    # the recording's counterpart of ``RawGraphWorkspace._call_site_index`` and
+    # ``_call_site_classes``. The key table holds code objects and never leaves
+    # the state; the class table travels to the cooked Trace's workspace so
+    # step 7 groups a cooked recording by call site like ``tl.trace``.
+    call_site_index: dict[Any, int] = field(default_factory=dict)
+    call_site_classes: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -168,10 +197,16 @@ class RecordingState:
 
             self.storage_backend = RamStorageBackend(self.recording)
 
-    def append_context(self, ctx: RecordContext) -> None:
-        """Append an event context to the bounded sliding window."""
+    def append_context(self, ctx: RecordContext, *, selected: bool = True) -> None:
+        """Append an event context to the bounded sliding window.
 
-        self.all_contexts.append(ctx)
+        ``selected`` is the forward's capture decision for an op context; an op the
+        predicate skipped is kept only in the lookback window and the raw-label index,
+        unless ``keep_all_contexts`` holds every context for a dry run.
+        """
+
+        if selected or self.keep_all_contexts:
+            self.all_contexts.append(ctx)
         if ctx.kind == "op" and ctx.raw_label is not None:
             self.op_context_by_raw_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
@@ -351,29 +386,6 @@ def _read_field(source: Any, name: str, default: Any = None) -> Any:
     return getattr(source, name, default)
 
 
-def _normalize_module_stack(
-    module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None,
-) -> tuple[ModuleStackFrame, ...]:
-    """Normalize module stack input to ModuleStackFrame instances."""
-
-    if module_stack is None:
-        return ()
-    frames: list[ModuleStackFrame] = []
-    for frame in module_stack:
-        if isinstance(frame, ModuleStackFrame):
-            frames.append(frame)
-            continue
-        frames.append(
-            ModuleStackFrame(
-                address=str(frame.get("address", "")),
-                module_type=str(frame.get("module_type", "")),
-                module_id=int(frame.get("module_id", 0)),
-                pass_number=int(frame.get("pass_number", 0)),
-            )
-        )
-    return tuple(frames)
-
-
 def _recent_ops_for_event(
     recent_events: Sequence[RecordContext],
     include_source_events: bool,
@@ -467,39 +479,6 @@ def _build_record_context(
     )
 
 
-def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame, ...]:
-    """Convert fastlog module-stack frames to IR module frames."""
-
-    return tuple(
-        ModuleFrame(
-            address=_module_frame_address(frame),
-            address_normalized=None,
-            module_type=frame.module_type,
-            call_index=frame.pass_number,
-            fx_qualpath=None,
-            entry_argnames=(),
-        )
-        for frame in ctx.module_stack
-    )
-
-
-def _module_frame_address(frame: ModuleStackFrame) -> str:
-    """Return the Trace-facing address for a predicate module-stack frame.
-
-    Parameters
-    ----------
-    frame
-        Predicate module frame from a capture-time ``RecordContext``.
-
-    Returns
-    -------
-    str
-        Public module address used by postprocess.
-    """
-
-    return frame.address or "self"
-
-
 def _record_context_from_event(event: OpEvent) -> RecordContext:
     """Project one ``OpEvent`` back into the fastlog predicate schema."""
 
@@ -554,19 +533,6 @@ def _capture_policy_from_spec(spec: CaptureSpec) -> CapturePolicy:
         )
         _CAPTURE_POLICY_CACHE[key] = policy
     return policy
-
-
-@dataclass(slots=True)
-class _SparseFreezeValues:
-    """Shared value bundle both sparse freeze shapes construct from."""
-
-    label_raw: str
-    tensor_ref: TensorRef
-    transformed_ref: TensorRef | None
-    module_stack: tuple[ModuleFrame, ...]
-    modules: tuple[tuple[str, int], ...]
-    is_scalar_bool: bool | None
-    bool_value: bool | None
 
 
 def _sparse_freeze_values(
@@ -639,37 +605,6 @@ def _sparse_freeze_values(
     )
 
 
-def _sparse_output_ref(
-    ctx: RecordContext,
-    values: _SparseFreezeValues,
-    *,
-    has_saved_activation: bool,
-    detach_saved_activations: bool,
-    container_path: tuple[Any, ...],
-) -> OutputRef:
-    """Return the sparse commit's output ref (shared by both freeze shapes).
-
-    The caller resolves both flags from the capture spec: the recorded detach
-    flag is ``False`` whenever the payload was kept graph-connected, either by
-    ``save_grad`` or by an attached session.
-    """
-
-    return OutputRef(
-        tensor=values.tensor_ref,
-        transformed_tensor=values.transformed_ref,
-        has_saved_activation=has_saved_activation,
-        output_device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
-        activation_transform=None,
-        detach_saved_activations=detach_saved_activations,
-        visualizer_path=None,
-        multi_output_index=ctx.output_index,
-        in_multi_output=bool(container_path),
-        container_path=container_path,
-        container_spec=None,
-        child_versions=(),
-    )
-
-
 def _record_from_record_context(
     ctx: RecordContext,
     spec: CaptureSpec,
@@ -687,6 +622,8 @@ def _record_from_record_context(
     ]
     | None = None,
     detach_unkept: bool = True,
+    equivalence_class: str | None = None,
+    params: tuple[ParamRef, ...] = (),
 ) -> OpRecord:
     """Sparse-pipeline decomposed freeze: ``OpCore`` + facets, no ``OpEvent``.
 
@@ -700,7 +637,6 @@ def _record_from_record_context(
     from .._ir.op_record import (
         AnnotationsFacet,
         ControlFacet,
-        GraphFacet,
         ModulesFacet,
         OpCore,
         OpRecord,
@@ -750,15 +686,13 @@ def _record_from_record_context(
         core=core,
         function=_sparse_function_ref(ctx, function),
         templates=_EMPTY_ARG_TEMPLATE_REF,
-        graph=GraphFacet(
-            parent_arg_positions={"args": {}, "kwargs": {}},
-            is_output_parent=ctx.is_output_parent,
-        ),
+        graph=_sparse_graph_facet(ctx, equivalence_class),
         modules_facet=(
             ModulesFacet(module_stack=values.module_stack, modules=values.modules)
             if values.module_stack or values.modules
             else None
         ),
+        params_facet=_sparse_params_facet(params),
         control=control,
         annotations_facet=(
             AnnotationsFacet(annotations=dict(annotations_payload)) if annotations_payload else None
@@ -844,6 +778,11 @@ class SparseOpDraft:
     )
     #: The session's ``detach_saved_activations`` choice at draft time.
     detach_unkept: bool = True
+    #: Capture-time equivalence class (the loop-grouping fingerprint) and the
+    #: parameters this op read, both ``None``/empty when the emitter had no
+    #: prepared-parameter registry to resolve against.
+    equivalence_class: str | None = None
+    params: tuple[ParamRef, ...] = ()
 
     pipeline: str = field(default="sparse", init=False)
 
@@ -862,6 +801,8 @@ class SparseOpDraft:
             container_path=self.container_path,
             module_fields=self.module_fields,
             detach_unkept=self.detach_unkept,
+            equivalence_class=self.equivalence_class,
+            params=self.params,
         )
 
 
@@ -898,6 +839,8 @@ def append_projected_event(
     backend_semantics: BackendSemantics | None = None,
     function: FunctionCallRef | None = None,
     container_path: tuple[Any, ...] = (),
+    equivalence_class: str | None = None,
+    params: tuple[ParamRef, ...] = (),
 ) -> None:
     """Append one lightweight predicate record to ``trace.capture_events``."""
 
@@ -933,6 +876,8 @@ def append_projected_event(
             container_path=container_path,
             module_fields=module_fields,
             detach_unkept=detach_unkept,
+            equivalence_class=equivalence_class,
+            params=params,
         ),
     )
 

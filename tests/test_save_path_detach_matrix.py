@@ -3,7 +3,7 @@
 The matrix crosses the three save forms (the default save-all, a ``tl.module``
 union and a ``tl.in_module`` union) with the four places a saved activation
 comes back (the source trace, the legacy ``run(model, x)`` rerun, the
-transactional ``run(inputs=...)`` and the guarded ``run(inputs=..., fast=True)``)
+transactional ``run_transaction(inputs=...)`` and the guarded ``run_transaction(inputs=..., fast=True)``)
 and both settings of the knob. ``False`` (the default) returns graph-connected
 payloads whose backward reaches the parameters upstream of the site; ``True``
 returns detached payloads. The model reuses one ``ReLU`` per residual block and
@@ -177,8 +177,13 @@ def _site_after(path: str, model: _Net, trace: Any, x2: torch.Tensor) -> torch.T
         # carry_state=True keeps the declared-state restore out of this
         # attachment check; the restore's own backward contract is pinned with
         # the until= work.
-        return trace.run(inputs=x2, carry_state=True).trace[_SITE].out
-    return trace.run(inputs=x2, fast=True).trace[_SITE].out
+        result = trace.run_transaction(inputs=x2, carry_state=True)
+    else:
+        result = trace.run_transaction(inputs=x2, fast=True)
+    # The rerun's Trace is new; its records hold it weakly, so keep it in a
+    # variable while reading its site (trace_reference_collected otherwise).
+    rerun = result.trace
+    return rerun[_SITE].out
 
 
 # heavy, not unmarked: the 24 cells cost about 0.5s each, a heavy-class 11.6s
@@ -223,7 +228,9 @@ def test_extract_knob_returns_attached_outs_on_request() -> None:
     assert attached.grad_fn is not None
     assert torch.equal(default, attached.detach())
     attached.sum().backward()
-    assert model.layer1[0].conv1.weight.grad is not None
+    first_block = model.layer1[0]
+    assert isinstance(first_block, _Block)
+    assert first_block.conv1.weight.grad is not None
 
 
 def test_record_knob_returns_attached_payloads_on_request() -> None:

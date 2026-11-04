@@ -1,4 +1,4 @@
-"""Apply a trace's staged intervention spec on a ``run(inputs=)`` live forward.
+"""Apply a trace's staged intervention spec on a ``run_transaction(inputs=)`` live forward.
 
 The ordinary live provider refreshes a transactional fork from an internal
 capture of the new inputs. When the source trace stages user edits (sticky
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .._runnable import RunnableDiagnostic
 
-#: ``last_run["engine"]`` of a live ``run(inputs=)`` that applied the staged spec.
+#: ``last_run["engine"]`` of a live ``run_transaction(inputs=)`` that applied the staged spec.
 LIVE_STAGED_ENGINE = "live"
 
 
@@ -56,7 +56,7 @@ class StagedRunReceipt:
 
 
 class StagedRunPlan:
-    """The staged spec of one source trace, planned for one live ``run(inputs=)``.
+    """The staged spec of one source trace, planned for one live ``run_transaction(inputs=)``.
 
     Built by :func:`build_staged_run_plan` on the run door and threaded through
     the live provider as an opaque object: the refresh capture runs inside

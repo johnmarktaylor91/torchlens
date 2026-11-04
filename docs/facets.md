@@ -15,6 +15,10 @@ q = log.modules["blocks.0.attn"].facets["q"]
 h_n = log.modules["lstm"].facets["h_n"]
 ```
 
+Facets live on a `Trace`. `tl.record` takes no facet keyword and a `Recording` has no
+`modules[...].facets`; cook it first with `recording.to_trace()` and read the facets there
+(a facet whose inputs the `save=` predicate did not keep fails explicitly).
+
 Attribute access is convenience sugar for valid Python identifiers that do not
 collide with `FacetView` methods:
 
@@ -137,6 +141,11 @@ log = tl.trace(model, x, facets=[my_attention])
 with tl.facets.adding(my_attention):
     log = tl.trace(model, x)
 ```
+
+The guide [Adding conveniences for your model](guides/model_conveniences.md)
+builds a custom facet next to a custom input detector (`tl.preprocessing.register`)
+and output decoder (`tl.postprocessing.register`); [Semantic input and output](semantic_io.md)
+covers the built-in routes those registries already hold.
 
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.describe(class_name)` expose registry metadata.

@@ -7,7 +7,7 @@ import contextlib
 import sys
 import time
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from torchlens import _state
@@ -455,7 +455,7 @@ def _run_predicate_forward_with_root_frame(
             state.append_context(enter_ctx)
     outputs = None
     try:
-        with _timed_phase(trace, "dispatch:forward_model"):
+        with _timed_phase(trace, "dispatch_forward_model"):
             with _forward_peak_memory_bracket(trace, model_device):
                 with backend.inference_context(trace):
                     outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)
@@ -635,3 +635,30 @@ def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any)
         self._runnable.host_rng_consumed = global_advanced
         self._runnable.rng_monitor_uncertain = True
         self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)
+
+
+# Module-stack frames for capture-time record contexts (hosted here, inside the
+# capture import cycle, so the layering ratchet does not grow by a module).
+
+
+def _normalize_module_stack(
+    module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None,
+) -> tuple[ModuleStackFrame, ...]:
+    """Normalize module stack input to ModuleStackFrame instances."""
+
+    if module_stack is None:
+        return ()
+    frames: list[ModuleStackFrame] = []
+    for frame in module_stack:
+        if isinstance(frame, ModuleStackFrame):
+            frames.append(frame)
+            continue
+        frames.append(
+            ModuleStackFrame(
+                address=str(frame.get("address", "")),
+                module_type=str(frame.get("module_type", "")),
+                module_id=int(frame.get("module_id", 0)),
+                pass_number=int(frame.get("pass_number", 0)),
+            )
+        )
+    return tuple(frames)

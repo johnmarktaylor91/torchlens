@@ -181,7 +181,7 @@ def try_guarded_fast_rerun(
         session = _FastLiveSession(trace, model)
         session.poison_on_divergence = False
         # The legacy door returns the refreshed Trace, not a run verdict; the
-        # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
+        # hooked-run ceiling belongs to the explicit run_transaction(inputs=, fast=True) door.
         session.reports_hooked_ceiling = False
         session.output_transform = output_transform
         session.run(_fast_run_inputs(inputs), seed=None)
@@ -295,7 +295,7 @@ def _warn_pending_value_edits_on_new_input_run(
     push the effect downstream on the captured DAG (``do()`` or direct
     writes), and (2) intervene on a FRESH execution (``engine="rerun"``
     with a model and input, or a new capture with ``intervene=``). A
-    ``run(inputs=...)`` on a trace carrying path-1 edits is a fresh execution:
+    ``run_transaction(inputs=...)`` on a trace carrying path-1 edits is a fresh execution:
     the edits say nothing about the new inputs, so the run is coherent but the
     edits have NO effect on it. That combination tripped a real user flow, so
     it is disclosed plainly instead of silently returning an un-edited
@@ -335,7 +335,7 @@ def _warn_pending_value_edits_on_new_input_run(
     if not has_value_edits:
         return
     warnings.warn(
-        "run(inputs=...) is a FRESH execution of the live model, but this trace "
+        "run_transaction(inputs=...) is a FRESH execution of the live model, but this trace "
         "carries value-edits (do()/push/direct writes) applied to its SAVED "
         "values -- those edits do NOT apply to a new-input run and its result "
         "reflects the un-edited model. To intervene on new inputs, rerun with "
@@ -351,6 +351,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     trace: Trace,
     model: Any = None,
     x: Any = None,
+    /,
     *,
     inputs: Any | MissingType = MISSING,
     seed: int | None = None,
@@ -364,8 +365,14 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
     output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
     on_zero_fire: str | MissingType = MISSING,
+    transaction: bool = True,
 ) -> Trace | RunResult:
-    """Body of ``Trace.run``; the method carries the documented contract."""
+    """Body of ``Trace.run`` (``transaction=False``) and ``Trace.run_transaction``.
+
+    The methods carry the documented contracts: ``run`` reruns the live model
+    and returns the refreshed Trace; ``run_transaction`` returns a
+    ``RunResult`` and leaves the source Trace unchanged.
+    """
 
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
     if seed is not None:
@@ -424,6 +431,17 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             RunProvider.LOADED_ANALYSIS,
         }
     )
+    if use_unified_provider and not transaction:
+        # Trace.run never returns a RunResult: a loaded artifact has no live
+        # model to rerun in place, so its fresh execution is run_transaction.
+        raise RunCapabilityUnavailableError(
+            "trace.run(...) reruns the live model in place, and a loaded artifact "
+            "has no live model to rerun; its verified fresh execution is "
+            "trace.run_transaction(inputs=...), which returns a RunResult.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="run_loaded_needs_transaction",
+            remedy="call trace.run_transaction(inputs=...) on the loaded trace",
+        )
     if use_unified_provider:
         # C03 honesty gate, narrowed to the loaded providers: a loaded artifact
         # has no model to install the staged intervention spec on, and silently
@@ -436,39 +454,18 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
         loaded_run = loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
         if (staged_user_hooks or staged_value_specs) and loaded_run:
             raise EngineDispatchError(
-                "run(inputs=...) on a loaded artifact cannot apply this trace's "
+                "run_transaction(inputs=...) on a loaded artifact cannot apply this trace's "
                 f"staged intervention spec ({len(staged_user_hooks)} sticky hook(s), "
                 f"{len(staged_value_specs)} value replacement(s) staged); running "
                 "would silently return an un-intervened result. Run the live trace "
-                "(trace.run(inputs=...) applies the spec there) or capture fresh with "
+                "(trace.run_transaction(inputs=...) applies the spec there) or capture fresh with "
                 "tl.trace(model, x, intervene=...); to run without it, detach the "
                 "staged spec first (trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
                 code="run_staged_spec_unapplied",
                 remedy="run the live trace or tl.trace(..., intervene=...), or detach "
-                "the staged hooks before run(inputs=...) on the loaded artifact",
+                "the staged hooks before run_transaction(inputs=...) on the loaded artifact",
             )
-        if inputs is not MISSING:
-            if model is not None or x is not None:
-                raise KeywordConflictError(
-                    "Pass inputs= without the legacy model/x arguments",
-                    code="run_legacy_arguments_conflict",
-                    remedy="pass only inputs= on the unified run surface",
-                )
-            run_inputs = inputs
-        else:
-            if x is not None:
-                raise KeywordConflictError(
-                    "Loaded sparse run accepts one input tree",
-                    code="run_legacy_arguments_conflict",
-                    remedy="pass one input tree, preferably via inputs=",
-                )
-            run_inputs = model
-        if chunk_paths is not None or replay is not None:
-            raise KeywordConflictError(
-                "Sparse/unified run does not accept legacy rerun options",
-                code="run_legacy_options_conflict",
-                remedy="drop chunk_paths/replay from the unified run call",
-            )
+        run_inputs = inputs
         if fast and DivergencePolicy(on_divergence) is not DivergencePolicy.RAISE:
             raise InvalidArgumentError(
                 "fast=True always fails closed and requires on_divergence='raise'",
@@ -567,7 +564,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             staged_spec = None
         # The live provider applies the staged spec (fast or not); a previous
         # live run's own RERUN_PROPAGATED trail is a fresh execution, not a
-        # value edit (repeated training steps through run(inputs=...)).
+        # value edit (repeated training steps through run_transaction(inputs=...)).
         _warn_pending_value_edits_on_new_input_run(
             trace,
             staged_spec_applies=bool(
@@ -602,35 +599,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             )
         return _apply_run_save_selection(live_result, run_save_labels)
 
-    if fast:
-        raise KeywordConflictError(
-            "fast=True is available only with the unified inputs= surface",
-            code="run_fast_requires_inputs",
-            remedy="call trace.run(inputs=..., fast=True) instead of the legacy surface",
-            argument="fast",
-        )
-    if carry_state:
-        raise KeywordConflictError(
-            "carry_state= is a unified-run option and cannot mix with the "
-            "legacy run surface (which never snapshot-restores state)",
-            code="run_legacy_options_conflict",
-            remedy="call trace.run(inputs=..., carry_state=True) instead of the legacy surface",
-            argument="carry_state",
-        )
-    if until is not None:
-        raise KeywordConflictError(
-            "until= is a unified-run option and cannot mix with the legacy run surface",
-            code="run_legacy_options_conflict",
-            remedy="call trace.run(inputs=..., until=...) instead of the legacy surface",
-            argument="until",
-        )
-    if save is not None:
-        raise KeywordConflictError(
-            "save= is a unified-run option and cannot mix with the legacy run surface",
-            code="run_legacy_options_conflict",
-            remedy="call trace.run(inputs=..., save=...) instead of the legacy surface",
-            argument="save",
-        )
     _refuse_state_compromised_live_run(trace)
     refuse_unpersisted_intervention_rerun(trace, loaded_provider)
 

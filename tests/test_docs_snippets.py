@@ -53,8 +53,13 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "native-torch.md",
         "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
+        # tl.preprocessing / tl.postprocessing / tl.facets registration walkthrough.
+        "guides/model_conveniences.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
+        # Agent-reference pages whose fences are self-contained programs.
+        "internal/agent-reference/current-2-x-surface.md",
+        "internal/agent-reference/feature-inspection.md",
     ),
     "reference_tooling": (
         "reference/debug.md",
@@ -658,6 +663,8 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_attention.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tensor_images.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,

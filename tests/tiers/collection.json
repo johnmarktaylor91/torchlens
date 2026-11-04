@@ -1,73 +1,73 @@
 {
   "schema": 1,
-  "source_commit": "796fb767b",
+  "source_commit": "7bbf6ee6a",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
   "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
   "tiers": {
     "smoke": {
-      "count": 383,
-      "files": 160,
-      "id_digest": 189729535975810,
+      "count": 381,
+      "files": 159,
+      "id_digest": 73109156703730,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"smoke\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 328,
+        "tests_with_duration": 326,
         "tests_without_duration": 55,
-        "serial_seconds": 229.4,
-        "n4_seconds": 57.3
+        "serial_seconds": 228.2,
+        "n4_seconds": 57.1
       }
     },
     "mid": {
-      "count": 15540,
-      "files": 1596,
-      "id_digest": 144195061443009,
+      "count": 17281,
+      "files": 1653,
+      "id_digest": 144484820004131,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow and not heavy\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 12966,
-        "tests_without_duration": 2574,
-        "serial_seconds": 6548.9,
-        "n4_seconds": 1637.2
+        "tests_with_duration": 13198,
+        "tests_without_duration": 4083,
+        "serial_seconds": 6665.8,
+        "n4_seconds": 1666.4
       }
     },
     "not_slow": {
-      "count": 16495,
-      "files": 1667,
-      "id_digest": 72562043869758,
+      "count": 18494,
+      "files": 1730,
+      "id_digest": 279004027912392,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 13715,
-        "tests_without_duration": 2780,
-        "serial_seconds": 7997.1,
-        "n4_seconds": 1999.3
+        "tests_with_duration": 13949,
+        "tests_without_duration": 4545,
+        "serial_seconds": 8129.1,
+        "n4_seconds": 2032.3
       }
     },
     "all": {
-      "count": 19066,
-      "files": 1705,
-      "id_digest": 85150370721656,
+      "count": 21113,
+      "files": 1769,
+      "id_digest": 258034343109117,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 14196,
-        "tests_without_duration": 4870,
-        "serial_seconds": 9135.9,
-        "n4_seconds": 2284.0
+        "tests_with_duration": 14434,
+        "tests_without_duration": 6679,
+        "serial_seconds": 9270.6,
+        "n4_seconds": 2317.7
       }
     },
     "unmarked": {
-      "count": 15157,
-      "files": 1589,
-      "id_digest": 114226728521856,
+      "count": 16900,
+      "files": 1646,
+      "id_digest": 218256794293776,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not smoke and not heavy and not slow and not rare\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 12638,
-        "tests_without_duration": 2519,
-        "serial_seconds": 6319.5,
-        "n4_seconds": 1579.9
+        "tests_with_duration": 12872,
+        "tests_without_duration": 4028,
+        "serial_seconds": 6437.6,
+        "n4_seconds": 1609.4
       }
     }
   }

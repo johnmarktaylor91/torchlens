@@ -117,7 +117,7 @@ def _assert_storage_rebind_closed(
     for run_input in run_inputs:
         oracle = model_factory()(run_input.clone())
         try:
-            result = loaded.run(inputs=run_input.clone())
+            result = loaded.run_transaction(inputs=run_input.clone())
         except (RunnablePreflightError, PathDivergenceError):
             exercised += 1
             continue  # run-side fail-closed is equally acceptable
@@ -132,7 +132,7 @@ def _verified(model: nn.Module, capture_input: torch.Tensor, tmp_path: Path) -> 
     path = tmp_path / "honest.tlspec"
     trace = tl.trace(model, capture_input, capture=_CAPTURE)
     trace.save(path, level="runnable", include_weights=True)
-    return tl.load(path).run(inputs=capture_input.clone())
+    return tl.load(path).run_transaction(inputs=capture_input.clone())
 
 
 # --------------------------------------------------------------------------- #

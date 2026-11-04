@@ -26,6 +26,8 @@ from torchlens._capture.outcome import (
 )
 from torchlens.errors import TorchLensWarning, TraceCaptureError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
 
@@ -130,7 +132,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
         cooked.do(
             tl.func("linear"),
             tl.scale(1.0),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     assert exc_info.value.fields["code"] == "N5"
 

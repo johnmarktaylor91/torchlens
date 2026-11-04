@@ -49,6 +49,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._entry_refusals import refuse_brain_score_benchmark, refuse_brain_score_not_scalar
 from ._utils import tensor_layers
 
 #: TorchLens lookup used for Brain-Score's special ``"logits"`` layer name.
@@ -184,10 +185,7 @@ def score_parts(score: Any) -> ScoreParts:
     attrs = getattr(score, "attrs", None)
     value = _scalar_or_none(score)
     if value is None:
-        raise TypeError(
-            f"score_parts needs a single-number score; got {type(score).__name__} "
-            "without one value."
-        )
+        refuse_brain_score_not_scalar(score)
     attrs = attrs if isinstance(attrs, Mapping) else {}
     error = _scalar_or_none(attrs.get("error"))
     if error is None and "aggregation" in getattr(score, "dims", ()):
@@ -270,7 +268,7 @@ def per_layer(
     """
 
     if not callable(benchmark):
-        raise TypeError("Brain-Score bridge currently requires a callable offline benchmark.")
+        refuse_brain_score_benchmark(benchmark)
 
     scores: dict[str, ScoreParts] = {}
     for layer in tensor_layers(trace, sites, verb="bridge.brain_score.per_layer"):

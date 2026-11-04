@@ -20,7 +20,7 @@ from ..._data_classes.op import (
     validate_train_mode_transform_output,
 )
 from ..._robustness import UnsupportedTensorVariantError
-from ..._utils._call_site import CALL_SITE_CLASS_MARKER
+from ..._utils._call_site import call_site_class
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
@@ -31,10 +31,10 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
+from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
-    pop_same_object_mutation,
 )
 from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
 from .tensor_tracking import (
@@ -77,14 +77,7 @@ def _call_site_equivalence_class(
     scope = modules[-1][0] if modules else ""
     slot = i if fields_dict["in_multi_output"] else None
     key = (scope, pending[1], fields_dict["func_name"], slot)
-    index = ws._call_site_index.get(key)
-    if index is None:
-        index = len(ws._call_site_index) + 1
-        ws._call_site_index[key] = index
-    site_class = f"{layer_type}{CALL_SITE_CLASS_MARKER}{index}"
-    if slot is not None:
-        site_class += f"_outindex{slot}"
-    return site_class
+    return call_site_class(ws._call_site_index, key, layer_type, slot)
 
 
 def _metadata_shape(t: torch.Tensor, op_label: str | None = None) -> tuple[int, ...]:
@@ -584,7 +577,7 @@ def _save_activation_fields(
             # materializes directly on the retention device (one copy); the
             # other save modes ignore the target and keep the follow-up move.
             raw_out = safe_copy(
-                t,
+                reference_payload_source(t, save_mode),
                 fields_dict["detach_saved_activations"],
                 save_mode=save_mode,
                 target_device=fields_dict["output_device"],
