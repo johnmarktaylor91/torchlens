@@ -66,10 +66,12 @@ python benchmarks/live_index_append_counters.py --out live_index_counters.json
 ## Save-path counters
 
 `save_path_counters.py` counts the work one `trace.save` of the `tinynet` capture
-does on the default portable path: canonical-pickler passes and `save` calls,
-verifying re-reads of the metadata, `fsync` calls, Python-level opens, and the
-files and bytes written (split into manifest, metadata and blobs). It is the
-save-time baseline the next format writer is measured against. The pinned values
+does on the default portable path (saved format 3): record-table write passes and
+encoder calls, verifying re-reads of the record tables, `fsync` calls, Python-level
+opens, and the files and bytes written (split into manifest, metadata and blobs).
+Byte counts hold each wall-clock timing float (`TIMING_FLOAT_PATHS`) at a fixed
+width, since format 3 writes floats by exact repr; every other byte counts as
+written, and the raw size is information only. The pinned values
 sit beside the `aux_save` row of `perf_baselines/linux-cpu-provisional.json`
 (`metadata.save_path_counters`) and `tests/test_save_path_counters.py` holds them.
 Counters gate; wall time and the profiled call count are context only:
