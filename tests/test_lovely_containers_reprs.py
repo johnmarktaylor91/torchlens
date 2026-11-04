@@ -44,11 +44,13 @@ def deep_trace():
 def test_trace_repr_carries_health_proof(deep_trace) -> None:
     """The identity repr gains the whole-trace proof line when earned."""
 
+    verdict = deep_trace.nonfinite_verdict
     line = repr(deep_trace)
     assert "\n" not in line
-    assert "Trace(" in line
+    assert line.startswith("Trace ")
+    assert len(line) <= 100
     # Default full-save captures derive the verdict from saved payloads.
-    if deep_trace.nonfinite_verdict == "checked_and_clean":
+    if verdict == "checked_and_clean":
         assert "no NaN/Inf (exact)" in line
 
 
@@ -58,9 +60,11 @@ def test_trace_str_is_bounded_with_folds(deep_trace) -> None:
 
     text = str(deep_trace)
     lines = text.splitlines()
-    assert len(lines) < 80, f"bounded execution log regressed to {len(lines)} lines"
-    assert any("buffer rows folded" in line for line in lines)
-    assert any("more layers (see .ops)" in line for line in lines)
+    assert len(lines) <= 13, f"bounded execution log regressed to {len(lines)} lines"
+    assert lines[0] == repr(deep_trace)
+    assert "  model" in text and "  graph" in text
+    assert ".summary()" in lines[-1]
+    assert "Module Hierarchy" not in text
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/interface.py and a sole campaign mutation kill.
@@ -74,9 +78,8 @@ def test_trace_str_honesty_header_on_not_checked() -> None:
     )
     text = str(trace)
     assert trace.nonfinite_verdict == "not_checked"
-    assert "Health: NOT-CHECKED" in text
-    # The header sits ABOVE structure/tensor detail (state precedes detail).
-    assert text.index("Health: NOT-CHECKED") < text.index("Structure:")
+    assert "NaN/Inf not checked" in text.splitlines()[0]
+    assert text.index("NaN/Inf not checked") < text.index("  model")
     trace.cleanup()
 
 
@@ -87,7 +90,8 @@ def test_accessors_point_never_dump(deep_trace) -> None:
     for accessor in (deep_trace.layers, deep_trace.params, deep_trace.modules, deep_trace.buffers):
         line = repr(accessor)
         assert "\n" not in line
-        assert ".head()" in line and ".search()" in line
+        assert ".head()" not in line
+        assert ".head()" in str(accessor) and ".search()" in str(accessor)
     assert "buffers" in repr(deep_trace.layers)  # composition note names buffers
     view = str(deep_trace.layers)
     assert len(view.splitlines()) <= 24  # voice rule 9 collection budget
