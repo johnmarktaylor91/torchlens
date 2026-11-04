@@ -54,9 +54,9 @@ def root_edits_in_place():
     for its own duration. Tests that assert the warning never request this fixture.
     """
 
-    from torchlens.io import suppress_mutate_warnings
+    from torchlens.errors import quiet
 
-    with suppress_mutate_warnings():
+    with quiet():
         yield
 
 

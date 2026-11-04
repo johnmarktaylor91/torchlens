@@ -157,7 +157,7 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     baseline = _hook_count(model)
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
-    result = trace.run(inputs=new_x, fast=True)
+    result = trace.run_transaction(inputs=new_x, fast=True)
     product = result.trace
     assert product.last_run["engine"] == "guarded_fast", product.last_run.get("fast_refused")
     with torch.no_grad():
@@ -239,7 +239,7 @@ def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     assert any(address.endswith("embedding") for address in _marked(model))
-    trace.run(inputs=inputs, fast=True)
+    trace.run_transaction(inputs=inputs, fast=True)
     session = trace.__dict__["_fast_run_session"]
     assert session.module_index >= 2
     _assert_no_routed_forward(model)
@@ -251,8 +251,8 @@ def test_fast_run_reruns_urbandriver() -> None:
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     full_trace = tl.trace(model, inputs)
-    fast = trace.run(inputs=inputs, fast=True)
-    full = full_trace.run(inputs=inputs)
+    fast = trace.run_transaction(inputs=inputs, fast=True)
+    full = full_trace.run_transaction(inputs=inputs)
     _assert_same(full.output, fast.output)
     _assert_same_payloads(full.trace, fast.trace)
     _assert_no_routed_forward(model)
@@ -306,8 +306,8 @@ def test_fast_run_reruns_a_direct_forward_with_an_inplace_activation() -> None:
     assert _marked(model) == {"embedding"}
     assert {"relu_", "relu"} <= {str(op.func_name) for op in trace._layer_list}
     fresh = _direct_inplace_inputs(1)
-    fast = trace.run(inputs=fresh, fast=True)
-    full = tl.trace(model, _direct_inplace_inputs(0)).run(inputs=fresh)
+    fast = trace.run_transaction(inputs=fresh, fast=True)
+    full = tl.trace(model, _direct_inplace_inputs(0)).run_transaction(inputs=fresh)
     _assert_same(full.output, fast.output)
     _assert_same_payloads(full.trace, fast.trace)
     _assert_no_routed_forward(model)

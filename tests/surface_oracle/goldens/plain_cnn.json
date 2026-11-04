@@ -1529,6 +1529,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -1727,6 +1728,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -1876,6 +1878,7 @@
       "\"conv2d_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1216,
     "flops_forward": 608,
@@ -2023,6 +2026,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2292,6 +2296,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -2386,6 +2391,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2610,6 +2616,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -2732,6 +2739,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2987,6 +2995,7 @@
       "\"relu_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 32,
     "flops_forward": 32,
@@ -3109,6 +3118,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -4160,6 +4170,7 @@
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -5711,6 +5722,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -5909,6 +5921,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -6058,6 +6071,7 @@
       "\"conv2d_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1216,
     "flops_forward": 608,
@@ -6205,6 +6219,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -6474,6 +6489,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -6568,6 +6584,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -6792,6 +6809,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -6914,6 +6932,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -7169,6 +7188,7 @@
       "\"relu_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 32,
     "flops_forward": 32,
@@ -7291,6 +7311,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -8339,6 +8360,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -9895,6 +9917,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -10093,6 +10116,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -10242,6 +10266,7 @@
       "\"conv2d_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1216,
     "flops_forward": 608,
@@ -10389,6 +10414,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -10658,6 +10684,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -10752,6 +10779,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -10976,6 +11004,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -11098,6 +11127,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -11353,6 +11383,7 @@
       "\"relu_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 32,
     "flops_forward": 32,
@@ -11475,6 +11506,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -12460,6 +12492,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -14011,6 +14044,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -14209,6 +14243,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -14358,6 +14393,7 @@
       "\"conv2d_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1216,
     "flops_forward": 608,
@@ -14505,6 +14541,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14774,6 +14811,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -14868,6 +14906,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15092,6 +15131,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -15214,6 +15254,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15469,6 +15510,7 @@
       "\"relu_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 32,
     "flops_forward": 32,
@@ -15591,6 +15633,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -16653,6 +16696,7 @@
     "__ref__": "Trace",
     "label": "plaincnn_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -18199,6 +18243,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -18397,6 +18442,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -18546,6 +18592,7 @@
       "\"conv2d_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1216,
     "flops_forward": 608,
@@ -18676,6 +18723,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18942,6 +18990,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -19036,6 +19085,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19257,6 +19307,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -19362,6 +19413,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19601,6 +19653,7 @@
       "\"relu_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 32,
     "flops_forward": 32,
@@ -19706,6 +19759,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20682,6 +20736,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",

@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from .._output_slot import read_output
+from ._moe_views import _TraceRouting
 
 
-class TraceOutputMixin:
+class TraceOutputMixin(_TraceRouting):
     """Expose the forward's exact return object, held in memory only.
 
     ``self`` is typed ``Any``: importing ``Trace`` here, even for type checking,

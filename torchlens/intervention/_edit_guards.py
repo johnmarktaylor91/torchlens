@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from torch import nn
 
 from .._errors import InvalidArgumentError
-from ..options import suppress_mutate_warnings
+from ..errors._quiet import quiet, quiet_all_active
 from .errors import EngineDispatchError, TraceMutationWarning
 
 if TYPE_CHECKING:
@@ -64,7 +64,7 @@ def warn_if_root_mutation(trace: Trace) -> None:
 
     The guard reads only the trace: a fork (``trace._parent_run`` set) is an
     isolated copy and never warns; a root trace warns once, unless the
-    session-level ``torchlens.io.suppress_mutate_warnings()`` context is active.
+    session-level ``torchlens.errors.quiet()`` context is active.
     There is no per-call opt-out keyword.
 
     Parameters
@@ -75,12 +75,12 @@ def warn_if_root_mutation(trace: Trace) -> None:
 
     if trace._parent_run is not None or trace._warned_mutate_in_place:
         return
-    if suppress_mutate_warnings.is_suppressed:
+    if quiet_all_active():
         return
     warnings.warn(
         "TraceMutationWarning: Trace mutators modify root logs in place. "
         "Use trace.fork(...) for isolated edits, or wrap intentional in-place "
-        "edits in torchlens.io.suppress_mutate_warnings().",
+        "edits in torchlens.errors.quiet().",
         TraceMutationWarning,
         stacklevel=4,
     )
@@ -93,10 +93,10 @@ def internal_mutation() -> Any:
     Returns
     -------
     Any
-        The ``suppress_mutate_warnings`` context manager, entered for the step.
+        The ``torchlens.errors.quiet()`` scope, entered for the step.
     """
 
-    return suppress_mutate_warnings()
+    return quiet()
 
 
 def detach_handles(trace: Trace, handle_ids: list[str] | tuple[str, ...]) -> None:

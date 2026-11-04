@@ -34,7 +34,7 @@ from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
-    split_backend_save_keyword,
+    pop_static_label_save_predicate,
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
@@ -263,7 +263,7 @@ class TinygradBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -306,7 +306,7 @@ class TinygradBackend:
         input_kwargs
             Keyword arguments. Unsupported in this preview.
         save
-            ``"all"`` or a static-label selector, as ``tl.trace(save=)``; other shaping refuses.
+            ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -374,13 +374,12 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
-        save, save_predicate = split_backend_save_keyword(save, backend_name="tinygrad")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="tinygrad")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -463,7 +462,7 @@ class TinygradBackend:
             cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,

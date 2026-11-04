@@ -66,7 +66,7 @@ tl.trace(model, x)                       __init__.py -> user_funcs.trace
   return Trace                           _data_classes/trace.py
 trace.save(path)                         _io/bundle.py (metadata plus safetensors blobs)
 tl.load(path)                            _io/bundle.py (allowlist unpickler, manifest validation)
-trace.run(inputs=x)                      _runnable_*.py (sparse replay) or the live refresh path
+trace.run_transaction(inputs=x)                      _runnable_*.py (sparse replay) or the live refresh path
 tl.validate(model, x)                    validation/consolidated.py -> validation/core.py (forward replay),
                                          validation/backward.py, _invariants_*.py
 ```

@@ -12299,6 +12299,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -12474,6 +12475,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -12649,6 +12651,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -12824,6 +12827,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -13001,6 +13005,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -13178,6 +13183,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -13358,6 +13364,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -13538,6 +13545,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -13845,6 +13853,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -14204,6 +14213,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -14321,6 +14331,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -14459,6 +14470,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14715,6 +14727,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -14853,6 +14866,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15126,6 +15140,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -15248,6 +15263,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15523,6 +15539,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -15649,6 +15666,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15929,6 +15947,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -16059,6 +16078,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -16345,6 +16365,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -16471,6 +16492,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -16745,6 +16767,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -16869,6 +16892,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17139,6 +17163,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17263,6 +17288,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17533,6 +17559,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17657,6 +17684,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -17895,6 +17923,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -17991,6 +18020,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18276,6 +18306,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -18412,6 +18443,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18727,6 +18759,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -18859,6 +18892,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19174,6 +19208,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -19298,6 +19333,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19594,6 +19630,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -19717,6 +19754,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20010,6 +20048,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -20134,6 +20173,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20437,6 +20477,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -20565,6 +20606,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -20820,6 +20862,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -20941,6 +20984,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -21218,6 +21262,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -21347,6 +21392,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -21614,6 +21660,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -21739,6 +21786,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -22006,6 +22054,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -22131,6 +22180,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -22411,6 +22461,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -22565,6 +22616,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -22844,6 +22896,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -22969,6 +23022,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -23235,6 +23289,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -23362,6 +23417,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -23637,6 +23693,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -23766,6 +23823,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24041,6 +24099,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24168,6 +24227,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24439,6 +24499,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24566,6 +24627,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -24837,6 +24899,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -24964,6 +25027,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -25229,6 +25293,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -25360,6 +25425,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -25643,6 +25709,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -25770,6 +25837,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26046,6 +26114,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26170,6 +26239,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26443,6 +26513,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26568,6 +26639,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -26839,6 +26911,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -26964,6 +27037,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -27235,6 +27309,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -27360,6 +27435,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -27635,6 +27711,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -27761,6 +27838,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -28039,6 +28117,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28165,6 +28244,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -28443,6 +28523,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28569,6 +28650,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -28841,6 +28923,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -28965,6 +29048,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -34105,6 +34189,7 @@
     "__ref__": "Trace",
     "label": "tinytransformer_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -46428,6 +46513,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -46603,6 +46689,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -46778,6 +46865,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -46953,6 +47041,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -47130,6 +47219,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -47307,6 +47397,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -47487,6 +47578,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -47667,6 +47759,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -47974,6 +48067,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -48333,6 +48427,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -48450,6 +48545,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -48588,6 +48684,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -48844,6 +48941,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -48982,6 +49080,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -49255,6 +49354,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -49377,6 +49477,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -49652,6 +49753,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -49778,6 +49880,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50058,6 +50161,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -50188,6 +50292,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50474,6 +50579,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -50600,6 +50706,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -50874,6 +50981,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -50998,6 +51106,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -51268,6 +51377,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -51392,6 +51502,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -51662,6 +51773,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -51786,6 +51898,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -52024,6 +52137,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -52120,6 +52234,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -52405,6 +52520,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -52541,6 +52657,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -52856,6 +52973,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -52988,6 +53106,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -53303,6 +53422,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -53427,6 +53547,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -53723,6 +53844,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -53846,6 +53968,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54139,6 +54262,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -54263,6 +54387,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54566,6 +54691,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -54694,6 +54820,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -54949,6 +55076,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -55070,6 +55198,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -55347,6 +55476,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -55476,6 +55606,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -55743,6 +55874,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -55868,6 +56000,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56135,6 +56268,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -56260,6 +56394,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56540,6 +56675,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -56694,6 +56830,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -56973,6 +57110,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57098,6 +57236,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -57364,6 +57503,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57491,6 +57631,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -57766,6 +57907,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -57895,6 +58037,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58170,6 +58313,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -58297,6 +58441,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58568,6 +58713,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -58695,6 +58841,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -58966,6 +59113,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59093,6 +59241,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -59358,6 +59507,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59489,6 +59639,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -59772,6 +59923,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -59899,6 +60051,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60175,6 +60328,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -60299,6 +60453,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60572,6 +60727,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -60697,6 +60853,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -60968,6 +61125,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61093,6 +61251,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -61364,6 +61523,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61489,6 +61649,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -61764,6 +61925,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -61890,6 +62052,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62168,6 +62331,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -62294,6 +62458,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62572,6 +62737,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -62698,6 +62864,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -62970,6 +63137,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -63094,6 +63262,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -68264,6 +68433,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -80620,6 +80790,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -80795,6 +80966,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -80970,6 +81142,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -81145,6 +81318,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -81322,6 +81496,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -81499,6 +81674,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -81679,6 +81855,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -81859,6 +82036,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -82166,6 +82344,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -82525,6 +82704,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -82642,6 +82822,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -82780,6 +82961,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -83036,6 +83218,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -83174,6 +83357,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -83447,6 +83631,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -83569,6 +83754,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -83844,6 +84030,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -83970,6 +84157,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -84250,6 +84438,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -84380,6 +84569,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -84666,6 +84856,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -84792,6 +84983,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -85066,6 +85258,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85190,6 +85383,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -85460,6 +85654,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85584,6 +85779,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -85854,6 +86050,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -85978,6 +86175,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -86216,6 +86414,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -86312,6 +86511,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -86597,6 +86797,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -86733,6 +86934,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -87048,6 +87250,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -87180,6 +87383,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -87495,6 +87699,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -87619,6 +87824,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -87915,6 +88121,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -88038,6 +88245,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -88331,6 +88539,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -88455,6 +88664,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -88758,6 +88968,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -88886,6 +89097,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89141,6 +89353,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -89262,6 +89475,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89539,6 +89753,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -89668,6 +89883,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -89935,6 +90151,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -90060,6 +90277,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -90327,6 +90545,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -90452,6 +90671,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -90732,6 +90952,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -90886,6 +91107,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91165,6 +91387,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -91290,6 +91513,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91556,6 +91780,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -91683,6 +91908,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -91958,6 +92184,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -92087,6 +92314,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -92362,6 +92590,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -92489,6 +92718,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -92760,6 +92990,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -92887,6 +93118,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93158,6 +93390,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -93285,6 +93518,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93550,6 +93784,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -93681,6 +93916,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -93964,6 +94200,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -94091,6 +94328,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -94367,6 +94605,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -94491,6 +94730,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -94764,6 +95004,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -94889,6 +95130,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95160,6 +95402,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -95285,6 +95528,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95556,6 +95800,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -95681,6 +95926,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -95956,6 +96202,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -96082,6 +96329,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -96360,6 +96608,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -96486,6 +96735,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -96764,6 +97014,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -96890,6 +97141,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -97162,6 +97414,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -97286,6 +97539,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -102436,6 +102690,7 @@
     "__ref__": "Trace",
     "label": "tinytransformer_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -114755,6 +115010,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -114930,6 +115186,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 192,
@@ -115105,6 +115362,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -115280,6 +115538,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 96,
@@ -115457,6 +115716,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1296,
@@ -115634,6 +115894,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1224,
@@ -115814,6 +116075,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -115994,6 +116256,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 420,
@@ -116301,6 +116564,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 4356,
@@ -116660,6 +116924,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 8292,
@@ -116777,6 +117042,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -116886,6 +117152,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -117139,6 +117406,7 @@
       "\"add_2_34:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 24,
     "flops_forward": 24,
@@ -117248,6 +117516,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -117518,6 +117787,7 @@
       "\"contiguous_1_7:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -117623,6 +117893,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -117895,6 +118166,7 @@
       "\"dropout_1_26:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -118005,6 +118277,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -118282,6 +118555,7 @@
       "\"dropout_2_31:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 96,
     "flops_forward": 96,
@@ -118396,6 +118670,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -118679,6 +118954,7 @@
       "\"dropout_3_33:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -118789,6 +119065,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119060,6 +119337,7 @@
       "\"getitem_1_8:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119167,6 +119445,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119434,6 +119713,7 @@
       "\"getitem_2_9:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119541,6 +119821,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -119808,6 +120089,7 @@
       "\"getitem_3_10:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -119915,6 +120197,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -120150,6 +120433,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -120246,6 +120530,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -120528,6 +120813,7 @@
       "\"layernorm_1_28:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -120648,6 +120934,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -120960,6 +121247,7 @@
       "\"layernorm_2_35:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 300,
     "flops_forward": 120,
@@ -121076,6 +121364,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -121388,6 +121677,7 @@
       "\"linear_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1296,
     "flops_forward": 648,
@@ -121496,6 +121786,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -121789,6 +122080,7 @@
       "\"linear_2_23:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 432,
     "flops_forward": 216,
@@ -121897,6 +122189,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -122187,6 +122480,7 @@
       "\"linear_3_29:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 864,
     "flops_forward": 432,
@@ -122295,6 +122589,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -122595,6 +122890,7 @@
       "\"linear_4_32:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 816,
     "flops_forward": 408,
@@ -122707,6 +123003,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -122959,6 +123256,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -123064,6 +123362,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -123326,6 +123625,7 @@
       "\"permute_1_21:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -123438,6 +123738,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -123702,6 +124003,7 @@
       "\"relu_1_30:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 48,
     "flops_forward": 48,
@@ -123811,6 +124113,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124075,6 +124378,7 @@
       "\"reshape_1_22:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -124183,6 +124487,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124460,6 +124765,7 @@
       "\"scaleddotproductattention_1_20:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 1260,
     "flops_forward": 504,
@@ -124569,6 +124875,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -124845,6 +125152,7 @@
       "\"squeeze_1_6:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -124952,6 +125260,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -125215,6 +125524,7 @@
       "\"transpose_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -125326,6 +125636,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -125598,6 +125909,7 @@
       "\"transpose_2_5:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -125709,6 +126021,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -125981,6 +126294,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126092,6 +126406,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -126360,6 +126675,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126471,6 +126787,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -126739,6 +127056,7 @@
       "\"transpose_5_16:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -126850,6 +127168,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127112,6 +127431,7 @@
       "\"transpose_6_25:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -127227,6 +127547,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127507,6 +127828,7 @@
       "\"unflatten_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -127618,6 +127940,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -127891,6 +128214,7 @@
       "\"unsqueeze_1_4:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -127998,6 +128322,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -128268,6 +128593,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -128377,6 +128703,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -128645,6 +128972,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -128754,6 +129082,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129022,6 +129351,7 @@
       "\"view_3_15:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -129131,6 +129461,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129403,6 +129734,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -129513,6 +129845,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -129788,6 +130121,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -129898,6 +130232,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -130173,6 +130508,7 @@
       "\"view_6_19:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -130283,6 +130619,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -130552,6 +130889,7 @@
       "\"view_7_24:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -130661,6 +130999,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -135470,6 +135809,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",

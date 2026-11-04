@@ -249,6 +249,9 @@ DOCS: dict[str, str] = {
             Node label style: ``"default"`` or ``"profiling"``.
         show_buffers:
             Buffer visibility: ``"never"``, ``"meaningful"`` or ``"always"``.
+        show_edge_shapes:
+            Label forward dataflow edges with producer output shapes (default False);
+            multi-output calls label each tensor slot separately.
         show_legend:
             Tri-state legend visibility. ``None`` (default) draws a legend only
             when an encoding channel is active, and the key on a ``module=``

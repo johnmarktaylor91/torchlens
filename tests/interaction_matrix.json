@@ -172,9 +172,7 @@
   "input_shape",
   "forward_kwargs"
  ],
- "plain_options": [
-  "suppress_mutate_warnings"
- ],
+ "plain_options": [],
  "cells": [
   {
    "a": "backend",
@@ -1654,7 +1652,7 @@
    "status": "asymmetry",
    "asymmetry": "A21",
    "confidence": "high",
-   "note": "fast= exists only on the unified run(inputs=...) door; the legacy run(model, x) door refuses run_fast_requires_inputs and carry_state is unified-only."
+   "note": "fast= and carry_state exist only on Trace.run_transaction(inputs=...); Trace.run(model, x) does not take them."
   },
   {
    "a": "fast_run",
@@ -2123,7 +2121,7 @@
    "status": "composes",
    "evidence": "tests/test_interaction_battery.py::test_intervene_x_rerun_applies_the_edit_once",
    "confidence": "high",
-   "note": "The live run(inputs=...) door applies a staged spec and stamps fire receipts on the fork's last_run (engine \"live\", hooks, hooks_fired, hooks_unfired, unfired_plan_ids, divergence_count); zero-fire entries follow on_zero_fire (warn/error, code rerun_zero_fire). The legacy run(model, x) door and fast=True apply it too; only a loaded artifact refuses with run_staged_spec_unapplied."
+   "note": "The live run_transaction(inputs=...) door applies a staged spec and stamps fire receipts on the fork's last_run (engine \"live\", hooks, hooks_fired, hooks_unfired, unfired_plan_ids, divergence_count); zero-fire entries follow on_zero_fire (warn/error, code rerun_zero_fire). The legacy run(model, x) door and fast=True apply it too; only a loaded artifact refuses with run_staged_spec_unapplied."
   },
   {
    "a": "intervene",
@@ -2525,7 +2523,7 @@
     "backend",
     "fast_run"
    ],
-   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report backend_replay_unsupported.",
+   "summary": "run_transaction(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report backend_replay_unsupported.",
    "evidence": "docs/reference/runnable_tlspec_contract.md",
    "recommendation": "document",
    "ruling": "document"
@@ -2723,7 +2721,7 @@
     "fast_run",
     "rerun"
    ],
-   "summary": "fast= and carry_state exist only on the unified run(inputs=...) door; legacy run(model, x) refuses fast=True (run_fast_requires_inputs) and mixing option families refuses run_legacy_options_conflict.",
+   "summary": "fast= and carry_state exist only on Trace.run_transaction(inputs=...); Trace.run(model, x) does not take them (a TypeError at the call).",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "close"
@@ -2919,7 +2917,7 @@
   {
    "id": "A41",
    "pair": [],
-   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, the live run(inputs=...) applies it too and stamps fire receipts on the fork's last_run (zero-fire entries follow on_zero_fire, code rerun_zero_fire) while only a loaded artifact refuses it (run_staged_spec_unapplied), and carry_state, fast and until are unified-only.",
+   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, the live run_transaction(inputs=...) applies it too and stamps fire receipts on the fork's last_run (zero-fire entries follow on_zero_fire, code rerun_zero_fire) while only a loaded artifact refuses it (run_staged_spec_unapplied), and carry_state, fast and until are unified-only.",
    "evidence": "docs/guides/fast_paths.md",
    "recommendation": "document",
    "ruling": "close"

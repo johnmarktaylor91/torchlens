@@ -170,7 +170,7 @@ class PathFaithfulness(str, Enum):
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.path_faithfulness in PathFaithfulness
     True
     >>> PathFaithfulness("verified") is PathFaithfulness.VERIFIED
@@ -196,7 +196,7 @@ class ReadinessStatus(str, Enum):
     >>> [status.value for status in ReadinessStatus]
     ['ready', 'unavailable']
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.status in ReadinessStatus
     True"""
 
@@ -210,7 +210,7 @@ class RunProvider(str, Enum):
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.readiness.provider is RunProvider.LIVE
     True
     >>> RunProvider("loaded_sparse") is RunProvider.LOADED_SPARSE
@@ -239,7 +239,7 @@ class NumericAttestationStatus(str, Enum):
     >>> NumericAttestationStatus.ATTESTED.value
     'attested'
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> report.numeric_attestation in NumericAttestationStatus
     True"""
 
@@ -1234,7 +1234,7 @@ class RunnableDiagnostic:
     >>> [field.name for field in dataclasses.fields(RunnableDiagnostic)][:3]
     ['code', 'message', 'registry_id']
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(c.diagnostic is None or isinstance(c.diagnostic, RunnableDiagnostic) for c in report.contract_checks)
     True"""
 
@@ -1488,7 +1488,7 @@ class ContractCheck:
     >>> check.passed
     True
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> all(isinstance(c, ContractCheck) for c in report.contract_checks)
     True"""
 
@@ -1580,7 +1580,7 @@ class RunReport:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report = trace.run_transaction(inputs=torch.randn(1, 3, 8, 8)).report
     >>> isinstance(report, RunReport), report.truncated
     (True, False)
     """
@@ -1675,10 +1675,10 @@ class RunResult:
 class RunnableTraceProtocol(Protocol):
     """Frozen type contract for ``Trace`` runnable methods across implementation stages."""
 
-    def run(
+    def run_transaction(
         self,
-        inputs: Any,
         *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         on_divergence: DivergencePolicy = DivergencePolicy.RAISE,

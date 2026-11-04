@@ -4,7 +4,7 @@ names.13: ``Trace.do`` takes its site positionally; the parameter is ``site``
 and a do refusal names ``argument="site"``.
 names.14: ``InterventionOptions.confirm_mutation`` is gone; a root trace edit
 warns ``TraceMutationWarning`` once, a fork and the session-level
-``suppress_mutate_warnings()`` context stay quiet.
+``torchlens.errors.quiet()`` context stay quiet.
 names.9: ``Trace.run`` takes ``model`` and ``x`` positionally only; the
 transactional ``inputs=`` form is unchanged.
 """
@@ -21,8 +21,8 @@ from example_models import TinyReluAdd as ReluAdd
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._runnable import RunResult
+from torchlens.errors import quiet
 from torchlens.intervention.errors import TraceMutationWarning
-from torchlens.io import suppress_mutate_warnings
 from torchlens.options import CaptureOptions, InterventionOptions
 
 
@@ -84,7 +84,7 @@ def test_intervention_options_has_no_confirm_mutation() -> None:
 
 
 def test_root_do_warns_once_fork_and_context_stay_quiet() -> None:
-    """A root edit warns; a fork and ``suppress_mutate_warnings()`` do not."""
+    """A root edit warns; a fork and ``torchlens.errors.quiet()`` do not."""
 
     root = _capture()
     with pytest.warns(TraceMutationWarning):
@@ -99,7 +99,7 @@ def test_root_do_warns_once_fork_and_context_stay_quiet() -> None:
     session = _capture()
     with warnings.catch_warnings(record=True) as record:
         warnings.simplefilter("always")
-        with suppress_mutate_warnings():
+        with quiet():
             session.do(tl.func("relu"), torch.zeros(2, 3), intervention=_set_only())
     assert record == []
 

@@ -57,6 +57,9 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "guides/model_conveniences.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
+        # Agent-reference pages whose fences are self-contained programs.
+        "internal/agent-reference/current-2-x-surface.md",
+        "internal/agent-reference/feature-inspection.md",
     ),
     "reference_tooling": (
         "reference/debug.md",

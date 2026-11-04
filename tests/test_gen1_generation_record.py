@@ -103,6 +103,35 @@ def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
             )
 
 
+class _PromptTokenizer:
+    """Tokenizer stand-in that encodes any text as ``PROMPT``."""
+
+    padding_side = "right"
+    model_max_length = 64
+
+    def __call__(self, text: Any, **kwargs: Any) -> dict[str, torch.Tensor]:
+        return {"input_ids": PROMPT.clone(), "attention_mask": torch.ones_like(PROMPT)}
+
+
+def test_text_prompt_is_tokenized_as_tl_trace_does(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``tl.record(model, text, generate_kwargs=...)`` generates from the routed tokens."""
+
+    import torchlens.bridge.transformers as hf_bridge
+
+    monkeypatch.setattr(hf_bridge, "_resolve_tokenizer", lambda model: _PromptTokenizer())
+    model = build_distilgpt2("eager")
+    model.config.name_or_path = "distilgpt2"  # a hub model names its tokenizer this way
+    plain = model.generate(PROMPT, attention_mask=torch.ones_like(PROMPT), **_greedy(3))
+
+    generation = tl.record(
+        model, "a text prompt", save=tl.module("transformer.ln_f"), generate_kwargs=_greedy(3)
+    )
+
+    assert isinstance(generation, GenerationRecording)
+    assert torch.equal(generation.sequences, plain)
+    assert generation.n_steps == 3
+
+
 def _rewritable(ctx: Any, label_map: dict[str, str]) -> bool:
     raw = ctx.raw_label if ctx.raw_label is not None else ctx.label_raw or None
     return bool(raw) and raw in label_map

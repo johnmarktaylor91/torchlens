@@ -2522,7 +2522,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
         /,
         *,
         model: Any = None,
@@ -2532,7 +2532,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         """Apply an intervention to this op through the owning Trace."""
 
         return _doors.intervention()._op_edits.do(
-            self, input_transform, model=model, inputs=inputs, intervention=intervention
+            self, edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def materialize_out(

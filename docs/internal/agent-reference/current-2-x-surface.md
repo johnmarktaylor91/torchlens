@@ -4,6 +4,66 @@
   vocabulary. The frozen carrier preserves `type_name`, bounded `repr_text`, and `at`
   (the original record, row and column). Inspect it with
   `isinstance(value, tl.types.UnencodableValue)`; resaving preserves its disclosure.
+
+### MoE routing identity and tables
+
+`Op.is_router` and `Op.expert` are lazy structural identity facts, with no
+stored per-op fields or capture hooks. Recognition requires a live source
+model, a homogeneous `ModuleList` or `ModuleDict` of experts (or an indexed
+bank of expert matrices), a sibling gate, and captured expert-index dataflow
+from softmax/top-k or argmax/gather into expert computation. A top-k over
+logits followed by softmax is supported too. ModuleDict expert numbers follow
+registration order. A repeated
+module collection or an unrelated top-k calculation alone proves nothing.
+Expert writer coordinates use the existing `expert` kind and expert number.
+
+`Module.routing_table` returns rows for that MoE block, or `None` for an
+unrecognized/non-MoE module. `Trace.routing_table` returns all blocks' rows,
+or `[]`. Rows are plain dictionaries containing `module`, `router`, `call`,
+`token_shape`, `expert_indices`, `gate_weights`, `tokens_per_expert` and `load`.
+Token axes flatten in row-major order; load divides each expert's assignments
+by the total assignments. Each router invocation has its own row. The numbers
+come from saved router outputs; `moe_routing_activation_missing` names a
+missing activation and teaches `save='all'`. Identity needs no activations.
+Fused batched expert math has `Op.expert is None` and still uses its router's
+table. A model whose live structure is no longer available is unrecognized.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+class Routed(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate = nn.Linear(4, 4)
+        self.experts = nn.ModuleList([nn.Linear(4, 4) for _ in range(4)])
+
+    def forward(self, x):
+        weights, indices = self.gate(x).softmax(-1).topk(2, dim=-1)
+        output = torch.zeros_like(x)
+        for number, expert in enumerate(self.experts):
+            token, slot = torch.where(indices == number)
+            output.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+        return output
+
+model = Routed().eval()
+trace = tl.trace(model, torch.randn(3, 4), save='all')
+router_ops = [op for op in trace.ops if op.is_router]
+expert_one = trace[tl.where(lambda op: op.expert == 1)]
+rows = trace.modules['self'].routing_table
+assert rows == trace.routing_table
+assert sum(rows[0]['tokens_per_expert']) == 6
+```
+
+For fused expert outputs whose token and selected-slot axes are retained,
+use the routing record with the existing unit selector. If `fused` is an
+`Op` with output shape `[tokens, selected_slots, channels]`, the expert-one
+selection is `trace[tl.units(fused.layer_label,
+(torch.tensor(rows[0]['expert_indices']) == 1).unsqueeze(-1).expand(fused.shape))]`.
+After an operation sums the expert axis, its output cannot be split into
+expert contributions from routing indices alone.
+
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
@@ -138,6 +198,13 @@
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
+- **`tl.errors.quiet(*codes)` is the one switch that silences TorchLens warnings**: `quiet()`
+  silences every TorchLens warning, `quiet("code", ...)` only the coded warnings whose
+  `fields["code"]` is listed; a bare call lasts for the session and `with tl.errors.quiet(...):`
+  restores the prior state at the end of the block. A capture that keeps more than 1 GiB of saved
+  activations warns once per session with code `capture_memory_threshold_exceeded`, naming
+  `save=` selectors and `save='stats'` as the remedy; `tl.errors.quiet("capture_memory_threshold_exceeded")`
+  hides it.
 - **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
@@ -149,7 +216,7 @@
   loaded trace, the record is never persisted; the record keeps what the forward bound alive as
   long as the trace). `CaptureOptions(carry_state=True)` keeps forward-equivalent state, writes
   included, and records the same rows (the same spelling as
-  `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
+  `trace.run_transaction(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
@@ -285,7 +352,7 @@
   geometry violations quarantine `episode_ledger_incoherent`); the annotations key AND the
   Bundle `member_relations` key persist plainly as of the tlspec v8 coordinated bump.
   DIAGNOSTIC-TIER cost, superlinear (gpt2-124M CPU: N=20 79 s / N=100 657 s, 947 MB, 5.4 GB
-  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which collects
+  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run_transaction(inputs=..., fast=True)`, which collects
   every site the capture saved, the save-all default and module saves included) is the engine for episode-scale re-runs and must reproduce wrapped
   tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
   on a module-targeted staged spec fires the staged hooks at module exit inside a native

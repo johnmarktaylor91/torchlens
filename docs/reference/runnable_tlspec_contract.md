@@ -1179,11 +1179,11 @@ forward. Analysis-level saves of halted captures remain allowed; the refusal sur
 `RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
 `user_intervention_unsupported` is also the RUN-time ceiling diagnostic (stage
-`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...)`,
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run_transaction(inputs=...)`,
 fast or not, on a live trace that applies its staged hooks or value replacements returns an
 edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
 `unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
-nothing staged keeps its verdict; only `run(inputs=)` on a loaded artifact (sparse or analysis
+nothing staged keeps its verdict; only `run_transaction(inputs=)` on a loaded artifact (sparse or analysis
 provider) refuses staged edits it cannot apply (`run_staged_spec_unapplied`).
 
 `user_intervention_unsupported` is the SAVE-time producer refusal (stage
@@ -2419,7 +2419,7 @@ remains owner-thread-scoped (a `TorchDispatchMode` is thread-local).
 
 ### Input site-set exactness (r42 corr1)
 
-Loaded sparse `.run(inputs=...)` must match the captured top-level model input site set exactly.
+Loaded sparse `.run_transaction(inputs=...)` must match the captured top-level model input site set exactly.
 Extra positional arguments or keyword arguments not present in the captured site set are observed
 input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
 Python variadic signatures whose recorded taken path contains only a finite concrete site set

@@ -1160,7 +1160,7 @@ class Recording(TraceLike):
     def do(
         self,
         site: Any,
-        value_or_hook: Any = None,
+        edit: Any = None,
         /,
         *,
         model: torch.nn.Module | None = None,
@@ -1171,9 +1171,7 @@ class Recording(TraceLike):
         """Cook this recording and run ``Trace.do`` on a fork of it (no shared root to warn about)."""
 
         fork = self.to_trace().fork()
-        return fork.do(
-            site, value_or_hook, model=model, inputs=inputs, intervention=intervention, loss=loss
-        )
+        return fork.do(site, edit, model=model, inputs=inputs, intervention=intervention, loss=loss)
 
     def _recover_halt_frontier(self) -> tuple[str, torch.Tensor]:
         """Recover the frontier (output-parent label, tensor) for a halted recording.

@@ -396,11 +396,11 @@ trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
 # (code "buffer_sink_routing_unsupported", provisional/documented-unstable).
-run_result = torch_trace.run(inputs=x, seed=42)
+run_result = torch_trace.run_transaction(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
-verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
+verified = loaded_trace.run_transaction(inputs=x, seed=42, on_divergence="raise")
 overview_svg = torch_trace.draw(collapse="auto", file_format="svg")
 module_scores = torch_trace.module_collapse_order
 

@@ -178,7 +178,7 @@ def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
     artifact = tmp_path / "architecture.tlspec"
     trace.save(artifact, level="runnable", include_weights=True)
     loaded = tl.load(artifact)
-    result = loaded.run(inputs=inputs, seed=42, on_divergence="raise")
+    result = loaded.run_transaction(inputs=inputs, seed=42, on_divergence="raise")
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 

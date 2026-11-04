@@ -100,3 +100,32 @@ def test_every_dont_care_slot_is_witnessed_or_gapped() -> None:
                 " row -- fund the witness or ledger the debt (D14)"
             )
     assert not problems, "\n".join(problems)
+
+
+def test_show_edge_shapes_is_capture_invariant() -> None:
+    """show_edge_shapes is a draw-only flag: no capture path can read it.
+
+    The flag (walk ruling names.1) lives on ``VisualizationOptions`` and
+    ``Trace.draw``; ``tl.trace`` takes no visualization group, and no module
+    under ``torchlens/_capture`` names it, so it cannot change a captured
+    product or the capture-cache key's inputs.
+    """
+
+    import inspect
+
+    import torchlens as tl
+
+    trace_params = inspect.signature(tl.trace).parameters
+    assert "show_edge_shapes" not in trace_params
+    assert not any(
+        "VisualizationOptions" in str(param.annotation) for param in trace_params.values()
+    ), "tl.trace now accepts VisualizationOptions; key show_edge_shapes instead"
+    readers = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in sorted((REPO_ROOT / "torchlens" / "_capture").rglob("*.py"))
+        if "show_edge_shapes" in path.read_text("utf-8")
+    ]
+    assert readers == [], (
+        f"capture code reads show_edge_shapes ({readers}) -- the dont-care"
+        " declaration for 'VisualizationOptions.show_edge_shapes' is FALSE; key it"
+    )

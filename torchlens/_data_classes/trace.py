@@ -2766,7 +2766,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def do(
         self,
         site: Any,
-        value_or_hook: Any = None,
+        edit: Any = None,
         /,
         *,
         model: nn.Module | None = None,
@@ -2779,7 +2779,7 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.intervention()._trace_edits.do(
             self,
             site,
-            value_or_hook,
+            edit,
             model=model,
             inputs=inputs,
             intervention=intervention,
@@ -3064,37 +3064,34 @@ class Trace(TraceOutputMixin, TraceLike):
         x: Any = None,
         /,
         *,
-        inputs: Any | MissingType = MISSING,
+        chunk_paths: Any | None = None,
+        replay: "ReplayOptions | None" = None,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
+    ) -> "Trace":
+        """Rerun the live model on new input and refresh this Trace."""
+        options = {name: value for name, value in locals().items() if name != "self"}
+        result = _doors.intervention()._trace_run.run(self, **options, transaction=False)
+        return cast("Trace", result)
+
+    def run_transaction(
+        self,
+        *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         carry_state: bool = False,
         until: Any = None,
         save: Any = None,
         on_divergence: Literal["raise", "return"] = "raise",
-        chunk_paths: Any | None = None,
-        replay: "ReplayOptions | None" = None,
         input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
-    ) -> "Trace | RunResult":
-        """Execute this Trace through its live or loaded provider."""
-        return _doors.intervention()._trace_run.run(
-            self,
-            model,
-            x,
-            inputs=inputs,
-            seed=seed,
-            fast=fast,
-            carry_state=carry_state,
-            until=until,
-            save=save,
-            on_divergence=on_divergence,
-            chunk_paths=chunk_paths,
-            replay=replay,
-            input_transform=input_transform,
-            output_transform=output_transform,
-            on_zero_fire=on_zero_fire,
-        )
+    ) -> "RunResult":
+        """Run a verified fresh execution with a report, leaving this Trace unchanged."""
+        options = {name: value for name, value in locals().items() if name != "self"}
+        return cast("RunResult", _doors.intervention()._trace_run.run(self, **options))
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log."""
@@ -3267,6 +3264,7 @@ class Trace(TraceOutputMixin, TraceLike):
         direction: VisDirectionLiteral | None = None,
         node_style: VisNodeModeLiteral = "default",
         show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_edge_shapes: bool = False,
         show_legend: bool | None = None,
         color_by: Any = None,
         size_by: str | Callable[[Any], Any] | None = None,
@@ -3383,8 +3381,7 @@ class Trace(TraceOutputMixin, TraceLike):
         # Internal plumbing from the one-call door (not public grammar).
         _execution_note: str | None = None,
         _input_synthesis: str | None = None,
-        # Anything else refuses typed (removed legacy spellings name their
-        # successor; unknown names get the nearest grammar option).
+        # Refuse unknown names with their replacement or nearest grammar option.
         **unsupported: Any,
     ) -> str:
         """Render a summary of this capture."""

@@ -2,10 +2,10 @@
 
 Confirming tests for an intended contract, not a behaviour change. The fast
 live engine applies a staged ``tl.module(address)`` intervention at the real
-module boundary, so ``run(inputs=..., fast=True)`` equals the same edit made
+module boundary, so ``run_transaction(inputs=..., fast=True)`` equals the same edit made
 with a plain eager forward hook. A ``tl.func(...)`` target has no module
 boundary to hook and refuses with ``fast_rerun_target_unsupported``. The
-transactional ``run(inputs=...)`` applies the staged spec too, inside its refresh
+transactional ``run_transaction(inputs=...)`` applies the staged spec too, inside its refresh
 capture (``last_run["engine"] == "live"``), and equals the eager edit. A fork whose hooks were attached after capture
 refuses the fast door with ``fast_rerun_graph_unsteered`` until one legacy
 rerun has recorded the edit in its graph.
@@ -105,11 +105,11 @@ def test_fast_door_applies_a_module_target_exactly() -> None:
     trace = tl.trace(model, _inputs(0), intervene=tl.when(tl.module("fc1"), tl.zero_ablate()))
     for seed in (1, 2):
         x = _inputs(seed)
-        result = trace.run(inputs=x, fast=True)
+        result = trace.run_transaction(inputs=x, fast=True)
         assert torch.equal(result.output.detach(), _eager_zeroed_fc1(model, x))
 
     # The ordinary live door applies the same module target on its fork.
-    live = trace.run(inputs=_inputs(1))
+    live = trace.run_transaction(inputs=_inputs(1))
     assert torch.equal(live.output.detach(), _eager_zeroed_fc1(model, _inputs(1)))
     assert live.trace.last_run["engine"] == "live"
     assert live.trace.last_run["hooks_fired"] >= 1
@@ -124,12 +124,14 @@ def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> No
     fork._attach_hooks(tl.module("fc1"), tl.zero_ablate())
 
     with pytest.raises(RunCapabilityUnavailableError) as unsteered:
-        fork.run(inputs=_inputs(1), fast=True)
+        fork.run_transaction(inputs=_inputs(1), fast=True)
     assert unsteered.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
 
     fork.run(model, _inputs(0))
     x = _inputs(3)
-    assert torch.equal(fork.run(inputs=x, fast=True).output.detach(), _eager_zeroed_fc1(model, x))
+    assert torch.equal(
+        fork.run_transaction(inputs=x, fast=True).output.detach(), _eager_zeroed_fc1(model, x)
+    )
 
 
 def test_fast_door_refuses_a_function_target_typed() -> None:
@@ -141,6 +143,6 @@ def test_fast_door_refuses_a_function_target_typed() -> None:
     fork._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with pytest.raises(RunCapabilityUnavailableError) as refused:
-        fork.run(inputs=_inputs(1), fast=True)
+        fork.run_transaction(inputs=_inputs(1), fast=True)
     assert refused.value.fields["code"] == "run_capability_unavailable"
     assert refused.value.fields["detection_stage"] == "fast_rerun_target_unsupported"

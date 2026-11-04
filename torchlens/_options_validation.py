@@ -10,7 +10,7 @@ stays with the dataclasses in ``options.py``; this module never imports it.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._literals import (
@@ -188,6 +188,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
 # truthily meant ON (R64-F3).
 _VISUALIZATION_BOOL_FIELDS = (
+    "show_edge_shapes",
     "rolled",
     "open_viewer",
     "show_cone",
@@ -411,9 +412,8 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``: the field names, with
-        ``container_path`` as ``path``; ``file_format`` only when explicit,
-        ``fold_repeats`` when set or explicit, the rest only when set.
+        ``Trace.draw`` field names, renaming ``container_path`` to ``path``;
+        include ``file_format`` only when explicit and ``fold_repeats`` when set or explicit.
     """
     explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
@@ -434,6 +434,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "open_viewer": visualization.open_viewer,
         "file_format": visualization.file_format if explicit("file_format") else None,
         "show_buffers": visualization.show_buffers,
+        "show_edge_shapes": visualization.show_edge_shapes,
         "direction": visualization.direction,
         "layout": visualization.layout,
         "renderer": visualization.renderer,
@@ -460,3 +461,13 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         if value is not None and value is not False or explicit(field_name):
             kwargs[field_name] = value
     return kwargs
+
+
+def _validate_visualization_values(values: Mapping[str, Any]) -> None:
+    """Validate resolved visualization values shared by both constructors."""
+    _validate_buffer_visibility(values["show_buffers"])
+    _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
+    _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
+    _validate_collapse(cast(CollapseLiteral, values["collapse"]))
+    _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
+    _validate_visualization_flag_fields(values)

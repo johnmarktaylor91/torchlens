@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-472 examples, 1220 public names, 147 tasks.
+474 examples, 1222 public names, 147 tasks.
 
 ## By task
 
@@ -47,7 +47,7 @@ By name lists the 3 most focused examples first;
 | diff | namespaces.md#namespaces-differential |
 | distributed | namespaces.md#namespaces-distributed, toplevel.md#toplevel-merge-ranks-refuses-local, toplevel.md#toplevel-merge-report-refuses-local |
 | doctor | namespaces.md#namespaces-report, tasks.md#tasks-doctor |
-| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
+| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-edge-shapes, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
 | episode | trace.md#trace-episode |
 | errors | namespaces.md#namespaces-errors, traps.md#traps-error-fields |
 | examples | namespaces.md#namespaces-examples |
@@ -124,7 +124,7 @@ By name lists the 3 most focused examples first;
 | record-many | tasks.md#tasks-record-many, toplevel.md#toplevel-classes-recording |
 | replay | layer.md#layer-call-records, op.md#op-arg-templates, op.md#op-saved-args, op.md#op-edge-records, options.md#options-save-args-rng, options.md#options-replay-knobs |
 | reproducibility | options.md#options-name-seed |
-| rerun | trace.md#trace-run-rerun, trace.md#trace-replace-state-from, trace.md#trace-load-state-dict |
+| rerun | trace.md#trace-run-rerun, trace.md#trace-run-transaction, trace.md#trace-replace-state-from, trace.md#trace-load-state-dict |
 | rsa | namespaces.md#namespaces-repgeom |
 | save | namespaces.md#namespaces-intervention, namespaces.md#namespaces-io, trace.md#trace-bill-of-materials, trace.md#trace-save-load, trace.md#trace-save-intervention |
 | save-load | bundle.md#bundle-save-load, op.md#op-lazy-out, op.md#op-lazy-grad, tasks.md#tasks-save-load, toplevel.md#toplevel-load-roundtrip, workflows.md#workflows-save-load-roundtrip, workflows.md#workflows-save-load-edited |
@@ -1314,6 +1314,7 @@ By name lists the 3 most focused examples first;
 | `Trace.root_module` | trace.md#trace-module-calls-root |
 | `Trace.root_trace` | trace.md#trace-fork-do |
 | `Trace.run` | trace.md#trace-run-rerun |
+| `Trace.run_transaction` | trace.md#trace-run-transaction |
 | `Trace.save` | tasks.md#tasks-save-load, trace.md#trace-save-load, workflows.md#workflows-save-load-roundtrip (+1 more) |
 | `Trace.save_intervention` | trace.md#trace-save-intervention |
 | `Trace.save_visualizations` | trace.md#trace-facts-capture-flags |
@@ -1375,6 +1376,7 @@ By name lists the 3 most focused examples first;
 | `VisualizationOptions.rolled` | options.md#options-vis-rolled |
 | `VisualizationOptions.show_buffers` | options.md#options-vis-buffers |
 | `VisualizationOptions.show_cone` | options.md#options-vis-intervention-args |
+| `VisualizationOptions.show_edge_shapes` | options.md#options-vis-edge-shapes |
 | `VisualizationOptions.show_legend` | options.md#options-vis-encodings |
 | `VisualizationOptions.show_redundant_args` | options.md#options-vis-intervention-args |
 | `VisualizationOptions.size_by` | options.md#options-vis-encodings |

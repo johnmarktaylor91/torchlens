@@ -39,6 +39,7 @@ from ._edges import (
 )
 from ._factored import FactoredMatrix
 from ._faithfulness import circuit_model_difference, circuit_performance_ratio
+from ._feature import visualize_feature
 from ._grids import PatchGrid, patch_grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._kv_heads import patch_query_heads_grid
@@ -107,4 +108,5 @@ __all__ = [
     "test_prompt",
     "token_directions",
     "translation_table",
+    "visualize_feature",
 ]

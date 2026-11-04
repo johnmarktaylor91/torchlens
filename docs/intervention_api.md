@@ -239,7 +239,7 @@ There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG
 (`do()` on a site or a resolved selection, direct writes), and (2)
 intervene on a FRESH execution (`do(..., model=..., inputs=..., intervention=InterventionOptions(engine="rerun"))`
-or a new capture with `intervene=...`). A new-input `run(inputs=...)` on a
+or a new capture with `intervene=...`). A new-input `run_transaction(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
 apply to it, and TorchLens discloses that at the run door with
 `PendingValueEditsWarning` (documented-unstable spelling) rather than

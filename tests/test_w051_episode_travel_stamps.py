@@ -73,7 +73,7 @@ def test_run_product_round_trips_save_load(tmp_path) -> None:
     model = _Greedy()
     trace = _episode(model)
     assert _stamped(trace)  # the source capture IS stamped
-    result = trace.run(inputs=torch.tensor([[9]]))
+    result = trace.run_transaction(inputs=torch.tensor([[9]]))
     product = result.trace
     assert product is not trace
     assert product.provenance.kind == "plain"
@@ -98,7 +98,7 @@ def test_guarded_fast_live_product_round_trips_save_load(tmp_path) -> None:
     model = _Greedy()
     trace = _episode(model, save=tl.func("cat"))
     assert _stamped(trace)
-    result = trace.run(inputs=torch.tensor([[1]]), fast=True)
+    result = trace.run_transaction(inputs=torch.tensor([[1]]), fast=True)
     product = result.trace
     assert product is not trace
     assert product.provenance.kind == "plain"
@@ -117,7 +117,7 @@ def test_at_step_never_answers_from_stale_stamps() -> None:
 
     model = _Greedy()
     trace = _episode(model)
-    product = trace.run(inputs=torch.tensor([[9]])).trace
+    product = trace.run_transaction(inputs=torch.tensor([[9]])).trace
     with pytest.raises(TorchLensError) as info:
         product[at_step(1)]
     assert info.value.fields["code"] == "episode_step_selector_without_episode"

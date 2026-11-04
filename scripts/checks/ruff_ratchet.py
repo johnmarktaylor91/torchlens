@@ -328,7 +328,13 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # moved from _render_flow into _focus_stubs and stays one count) and + 1 for
     # loop-if's _render_edges._is_rolled_back_edge (parent_node, child_node,
     # vis_mode, rolled_maps, parent_segment, child_segment). Same pinned mode.
-    "PLR0913": 454,
+    # 458 (2026-11-04 C-156 combined tip, same JMT d-90086c50): measured 458 at the
+    # merged tree (pinned ruff, isolated mode, torchlens/ scope) = the C-149 454 plus
+    # C-154 walk rulings' four new signatures, site lists diffed per file:
+    # Trace.run_transaction (names.11, _data_classes/trace.py) and the names.5
+    # feature door mechinterp/_feature.py visualize_feature, _optimize and
+    # _validate_settings. C-138 and C-133 add none.
+    "PLR0913": 458,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

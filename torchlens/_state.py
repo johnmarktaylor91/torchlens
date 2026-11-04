@@ -117,7 +117,7 @@ _active_fast_run_collector: Any | None = None
 
 The slot stays import-free so decorated torch wrappers can cheaply offer selected
 functional-op collection without importing the fast-run implementation. It is non-``None``
-only inside ``Trace.run(inputs=..., fast=True)`` and is restored in ``finally``.
+only inside ``Trace.run_transaction(inputs=..., fast=True)`` and is restored in ``finally``.
 """
 
 _pause_depth: int = 0

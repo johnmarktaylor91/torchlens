@@ -452,7 +452,7 @@ def test_refresh_shape_change_emits_single_aggregated_warning() -> None:
 
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
-        trace.run(inputs=torch.randn(8, 4))
+        trace.run_transaction(inputs=torch.randn(8, 4))
 
     shape_warnings = [w for w in caught if "Tensor shape changed" in str(w.message)]
     assert len(shape_warnings) == 1

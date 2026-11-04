@@ -250,7 +250,7 @@ def test_pure_dataclass_run_is_verified_and_faithful(tmp_path: Path) -> None:
     bundle = tmp_path / "pure_dc.tlspec"
     model = _PureDataclassModel().eval()
     tl.trace(model, x, capture=_CAP).save(bundle, level="runnable", include_weights=True)
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run_transaction(inputs=x)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert type(result.output) is _PureDataclassOut
@@ -276,7 +276,7 @@ def test_custom_init_model_output_run_is_unverifiable_but_reconstructs(tmp_path:
     tl.trace(_PureModelOutputModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x, on_divergence="return")
+    result = tl.load(bundle).run_transaction(inputs=x, on_divergence="return")
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert type(result.output) is _PureModelOutput

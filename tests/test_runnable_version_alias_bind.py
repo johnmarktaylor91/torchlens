@@ -109,7 +109,7 @@ def test_direct_alias_with_wrong_recorded_fields_diverges_at_bind(
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader(**recorded))
     with pytest.raises(PathDivergenceError) as caught:
-        _load_runnable(bundle).run(inputs=torch.randn(2, 4))
+        _load_runnable(bundle).run_transaction(inputs=torch.randn(2, 4))
     assert caught.value.fields["code"] == code.value
     assert ":alias" in str(caught.value)
 
@@ -120,6 +120,6 @@ def test_honest_direct_alias_runs_verified(tmp_path: Path) -> None:
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader())
     x = torch.randn(2, 4)
-    result = _load_runnable(bundle).run(inputs=x.clone())
+    result = _load_runnable(bundle).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
     torch.testing.assert_close(result.output, _ReluThenMean()(x))

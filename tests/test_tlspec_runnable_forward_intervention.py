@@ -100,9 +100,9 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     # Format 3 persists the recipe and the reader restages it, so a fresh verified run
     # refuses rather than silently dropping the recorded grad hook; detach it explicitly.
     with pytest.raises(EngineDispatchError, match="staged intervention spec"):
-        loaded.run(inputs=value, seed=0)
+        loaded.run_transaction(inputs=value, seed=0)
     loaded._clear_hooks()
-    result = loaded.run(inputs=value, seed=0)
+    result = loaded.run_transaction(inputs=value, seed=0)
 
     # The grad intervention never modified the forward output, so the sparse DAG
     # reproduces it byte-for-byte: an op-representable intervention still VERIFIES.

@@ -32,7 +32,6 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
     _build_option,
@@ -44,13 +43,8 @@ from ._option_receipt import (
 from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
-    _validate_buffer_visibility,
     _validate_capture_values,
-    _validate_collapse,
-    _validate_fold_repeats,
-    _validate_intervention_mode,
-    _validate_node_style,
-    _validate_visualization_flag_fields,
+    _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
@@ -142,6 +136,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "open_viewer",
     "file_format",
     "show_buffers",
+    "show_edge_shapes",
     "direction",
     "graph_overrides",
     "node_style",
@@ -276,9 +271,6 @@ _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "retain_in_memory": "retain_in_memory",
     "on_save": "on_save",
 }
-
-
-suppress_mutate_warnings = _MutateWarningSuppression()
 
 
 def _merge_grouped_options(
@@ -459,7 +451,7 @@ class CaptureOptions(_OptionsDisplay):
             Whether the capture keeps the model state its forward changed
             (forward-equivalent: norm running statistics, buffer writes, training
             modes and plain attributes advance exactly as one direct ``model(x)``
-            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            would, the spelling ``trace.run_transaction(inputs=..., carry_state=True)`` uses; no capture
             advances the caller's random streams under either setting). The default
             ``False`` makes the capture a pure observer: buffers, random state,
             training modes and plain instance attributes are restored afterwards,
@@ -930,6 +922,8 @@ class VisualizationOptions(_OptionsDisplay):
         Graph output file format.
     show_buffers:
         Buffer visibility policy.
+    show_edge_shapes:
+        Label forward dataflow edges with their producer output shapes (default False).
     direction:
         Graph layout direction.
     graph_overrides:
@@ -1012,6 +1006,7 @@ class VisualizationOptions(_OptionsDisplay):
     open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
+    show_edge_shapes: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
@@ -1051,6 +1046,7 @@ class VisualizationOptions(_OptionsDisplay):
         open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+        show_edge_shapes: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1097,6 +1093,9 @@ class VisualizationOptions(_OptionsDisplay):
             ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
+            ),
+            "show_edge_shapes": _resolve_option_value(
+                "show_edge_shapes", show_edge_shapes, False, specified_fields
             ),
             "show_buffers": _resolve_option_value(
                 "show_buffers", show_buffers, "meaningful", specified_fields
@@ -1164,12 +1163,7 @@ class VisualizationOptions(_OptionsDisplay):
                 "order_siblings", order_siblings, True, specified_fields
             ),
         }
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -1202,14 +1196,9 @@ class VisualizationOptions(_OptionsDisplay):
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
-        values = dict(values)
+        values = {"show_edge_shapes": False, **values}
         values["layout"] = _normalize_layout(values["layout"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
@@ -1713,7 +1702,6 @@ __all__ = [
     "ReplayOptions",
     "StorageOptions",
     "VisualizationOptions",
-    "suppress_mutate_warnings",
 ]
 
 

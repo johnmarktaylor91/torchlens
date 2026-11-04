@@ -29,7 +29,6 @@ from .._io.sidecar import (
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
-from ..options import suppress_mutate_warnings
 
 
 def list_traces() -> tuple[Any, ...]:
@@ -429,6 +428,5 @@ __all__ = [
     "materialize_nested",
     "reset_naming_counter",
     "save_intervention",
-    "suppress_mutate_warnings",
     "unregister_sidecar_family",
 ]

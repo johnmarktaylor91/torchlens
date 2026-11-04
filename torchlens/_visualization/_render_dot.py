@@ -13,6 +13,7 @@ from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
+from ._edge_shapes import _with_edge_shapes
 from ._edit_highlighter import (
     HighlighterStyle,
     HighlightJob,
@@ -686,8 +687,7 @@ def _finalize_forward_ir(
 
     request = context.request
     sibling_order_chains: tuple[SiblingOrderChain, ...] = ()
-    # Stacking fence (L5 M3): stack_by pins ranks, and two constraint systems
-    # fighting over dot's layout oscillate. Opt-in, so plain draw() never fires it.
+    # stack_by pins ranks; competing sibling constraints make dot oscillate.
     stack_channel_active = (
         request.encoding is not None and getattr(request.encoding, "stack_spec", None) is not None
     )
@@ -756,14 +756,14 @@ def _finalize_forward_ir(
         request.vis_mode,
         work.module_clusters,
         overrides,
-        # Cluster-scoped chains are already queued on their module cluster;
-        # re-emitting them at top level put clustered nodes in a root rankset.
+        # Cluster-scoped chains must not also enter the root rankset.
         [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
         container_ink=_theme_cluster_attrs(context.theme),
         flatten=flatten,
     )
-    return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
+    forward_render_ir = replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
+    return _with_edge_shapes(trace, forward_render_ir)
 
 
 def _forward_header_label(
@@ -1251,6 +1251,7 @@ def draw(
     code_panel: CodePanelOption = False,
     node_overlay: "str | OverlayScores | Callable[[Any], Any] | None" = None,
     node_label_fields: list[str] | None = None,
+    show_edge_shapes: bool = False,
     show_legend: bool | None = None,
     font_size: int | None = None,
     dpi: int | None = None,
@@ -1273,8 +1274,7 @@ def draw(
 
     Notes
     -----
-    ``Trace.draw`` owns the public parameter documentation. This internal
-    implementation validates and resolves one request before renderer dispatch.
+    ``Trace.draw`` documents this request validation and renderer dispatch pipeline.
 
     Returns
     -------
@@ -1286,6 +1286,7 @@ def draw(
         show_containers,
         vis_save_only=vis_save_only,
         vis_show_cone=vis_show_cone,
+        show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         order_siblings=order_siblings,
         show_input_transform_summary=show_input_transform_summary,
@@ -1293,9 +1294,7 @@ def draw(
     )
     from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 
-    # Option validation for the encoding channels: an unknown source refuses
-    # HERE, before any render work (encoding_source_invalid), and scale=
-    # without size_by refuses scale_requires_size_by.
+    # Refuse unknown encoding sources and scale without size_by before rendering.
     encoding_channel_spec = resolve_color_by(color_by)
     size_channel_spec = resolve_size_by(size_by)
     size_scale = resolve_size_scale(scale, size_by_active=size_channel_spec is not None)
@@ -1326,6 +1325,7 @@ def draw(
         code_panel=code_panel,
         node_overlay=node_overlay,
         node_label_fields=tuple(node_label_fields) if node_label_fields is not None else None,
+        show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         font_size=font_size,
         dpi=dpi,

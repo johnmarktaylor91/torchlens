@@ -124,12 +124,12 @@ def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
 def test_hooked_fast_run_agrees_with_the_flag() -> None:
     model = _model()
     plain = tl.trace(model, _x(), save=tl.module("block") | tl.module("head"))
-    plain_report = plain.run(inputs=_x(1), fast=True).report
+    plain_report = plain.run_transaction(inputs=_x(1), fast=True).report
     assert plain_report.path_faithfulness is PathFaithfulness.VERIFIED
     assert plain.is_pristine is True
 
     hooked = _steered(model)
-    result = hooked.run(inputs=_x(1), fast=True)
+    result = hooked.run_transaction(inputs=_x(1), fast=True)
     mismatch = result.report.first_mismatch
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert mismatch is not None and ("pristine", "false") in tuple(mismatch.details)
@@ -223,7 +223,7 @@ def test_bundle_without_a_pristine_member_refuses_typed() -> None:
 def test_runnable_model_doc_states_the_hooked_run_disclosure() -> None:
     """The short runnable model and the exhaustive contract tell one story.
 
-    ``run(inputs=)`` pushes inputs through the model; a hooked or intervened
+    ``run_transaction(inputs=)`` pushes inputs through the model; a hooked or intervened
     run settles ``unverifiable`` under ``hooked_run_unverified`` and the trace
     reads ``is_pristine == False``: disclosed, never silent. The user-facing
     model page must say so in the contract's own vocabulary.

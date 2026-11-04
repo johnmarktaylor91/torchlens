@@ -308,6 +308,32 @@ class TorchLensWarning(UserWarning):
             if derived_remedy:
                 self.fields["remedy"] = derived_remedy
         super().__init__("" if message is None else message)
+        if _QUIET_CODES and self.fields.get("code") in _QUIET_CODES:
+            # tl.errors.quiet(*codes): one "ignore" filter matches the marker base.
+            self.__class__ = _quieted_class(type(self))
+
+
+_QUIET_CODES: frozenset[object] = frozenset()
+"""Warning codes ``tl.errors.quiet(*codes)`` silences now (``errors/_quiet.py`` sets it)."""
+
+_QUIETED_CLASSES: dict[type, type] = {}
+
+
+class _QuietedWarning(TorchLensWarning):
+    """Marker base of a coded warning that ``tl.errors.quiet`` silenced."""
+
+
+def _quieted_class(cls: type) -> type:
+    """The cached same-named subclass of ``cls`` that carries the quiet marker."""
+
+    if issubclass(cls, _QuietedWarning):
+        return cls
+    quieted = _QUIETED_CLASSES.get(cls)
+    if quieted is None:
+        namespace = {"__module__": cls.__module__, "__qualname__": cls.__qualname__}
+        quieted = type(cls.__name__, (_QuietedWarning, cls), namespace)
+        _QUIETED_CLASSES[cls] = quieted
+    return quieted
 
 
 class TraceNotReproducibleWarning(TorchLensWarning):

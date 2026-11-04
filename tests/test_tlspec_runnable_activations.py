@@ -251,7 +251,7 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
         include_activations=True,
     )
 
-    result = tl.load(path).run(
+    result = tl.load(path).run_transaction(
         inputs=inputs.clone(),
         on_divergence="return",
     )
@@ -297,7 +297,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     before = _physical_outs(loaded)
 
     with pytest.raises(ReplayValueMismatchError) as caught:
-        loaded.run(inputs=inputs)
+        loaded.run_transaction(inputs=inputs)
 
     mismatch = caught.value.fields["first_mismatch"]
     details = dict(mismatch.details)
@@ -330,15 +330,15 @@ def test_random_state_changed_input_and_non_equivalent_state_are_not_applicable(
     path = tmp_path / "activation-only.tlspec"
     _capture(model, inputs).save(path, level="runnable", include_activations=True)
 
-    random_result = tl.load(path).run(inputs=inputs, seed=41)
+    random_result = tl.load(path).run_transaction(inputs=inputs, seed=41)
     changed = tl.load(path)
     changed.load_state_dict(model.state_dict())
-    changed_result = changed.run(inputs=torch.full_like(inputs, 2.0))
+    changed_result = changed.run_transaction(inputs=torch.full_like(inputs, 2.0))
     different_state = tl.load(path)
     different_state.load_state_dict(
         {name: torch.zeros_like(value) for name, value in model.state_dict().items()}
     )
-    different_result = different_state.run(inputs=inputs)
+    different_result = different_state.run_transaction(inputs=inputs)
 
     assert random_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert changed_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -372,6 +372,6 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
 
     fields = {record.field for record in loaded.archived_activations.values()}
     assert fields == {"out", "transformed_out"}
-    result = loaded.run(inputs=torch.ones(2, 3))
+    result = loaded.run_transaction(inputs=torch.ones(2, 3))
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

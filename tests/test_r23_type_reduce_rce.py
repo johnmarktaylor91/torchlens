@@ -333,5 +333,5 @@ def test_legit_runnable_bundle_round_trips(tmp_path: Path) -> None:
 
     loaded = tl.load(path)
     assert loaded.__class__.__name__ == "Trace"
-    result = loaded.run(inputs=torch.randn(2, 4))
+    result = loaded.run_transaction(inputs=torch.randn(2, 4))
     assert result.__class__.__name__ == "RunResult"

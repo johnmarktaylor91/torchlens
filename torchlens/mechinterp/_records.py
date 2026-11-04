@@ -36,12 +36,13 @@ __all__ = [
 StackGrading = Literal["complete", "closed_constant", "closed_unresolved"]
 
 #: Row-kind vocabulary for spine writers and constants. ``expert`` is carried
-#: from day one for future MoE per-expert rows (mikit plumbing ledger).
+#: by structurally recognized MoE per-expert writers.
 RowKind = Literal[
     "embedding",
     "attention",
     "mlp",
     "writer",
+    "expert",
     "constant",
     "unresolved_remainder",
     "residual",
@@ -65,14 +66,14 @@ class Coordinate:
         Pass qualifier of the op (within-forward reuse disambiguation).
     kind:
         Row-kind classification (embedding / attention / mlp / writer /
-        constant / unresolved_remainder / residual).
+        expert / constant / unresolved_remainder / residual).
     module_address:
         Innermost containing module address, when resolved.
     provenance:
         How the value was obtained (``"captured"``, ``"computed"``,
         ``"verified_constant"``, ``"injected"``), extension-open by design.
     expert:
-        MoE expert index when the writer is a routed expert; ``None`` today.
+        MoE expert index when the writer is a routed expert; otherwise ``None``.
 
     Examples
     --------

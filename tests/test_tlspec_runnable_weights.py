@@ -189,14 +189,14 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     assert torch.equal(stored_offset, model.offset)
 
     loaded = tl.load(sparse_path)
-    random_result = loaded.run(inputs=inputs, seed=1)
+    random_result = loaded.run_transaction(inputs=inputs, seed=1)
     assert torch.equal(random_result.output, model(inputs))
     assert torch.equal(random_result.output, torch.tensor([9.0]))
     assert random_result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert all("offset" not in slot_id for slot_id in random_result.report.random_filled_slot_ids)
 
     loaded.load_state_dict(model.state_dict())
-    staged_result = loaded.run(inputs=inputs, seed=1)
+    staged_result = loaded.run_transaction(inputs=inputs, seed=1)
     assert torch.equal(staged_result.output, model(inputs))
     assert staged_result.report.state_source is StateSource.USER_STATE_DICT
 
@@ -204,7 +204,7 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     weight_entries = weighted_manifest["runnable"]["state_dict_tensors"]
     assert list(weight_entries) == ["persistent_guard"]
     weighted = tl.load(weighted_path)
-    weighted_result = weighted.run(inputs=inputs, seed=1)
+    weighted_result = weighted.run_transaction(inputs=inputs, seed=1)
     assert torch.equal(weighted_result.output, model(inputs))
     assert weighted_result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
 
@@ -410,7 +410,7 @@ def test_weight_payload_preserves_canonical_alias_records(tmp_path: Path) -> Non
     assert len(tied_slots) == 2
     assert len({slot.state_binding.alias_group for slot in tied_slots}) == 1
     inputs = torch.tensor([[1.0, -2.0]])
-    assert torch.equal(loaded.run(inputs=inputs).output, model(inputs))
+    assert torch.equal(loaded.run_transaction(inputs=inputs).output, model(inputs))
 
 
 def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: Path) -> None:
@@ -445,12 +445,12 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     loaded = tl.load(path)
 
     # Successful run fork carries the embedded MappingProxyType state -> must pickle + deepcopy.
-    ok_fork = loaded.run(inputs=torch.ones(2, 3)).trace
+    ok_fork = loaded.run_transaction(inputs=torch.ones(2, 3)).trace
     assert pickle.loads(pickle.dumps(ok_fork)) is not None
     assert copy.deepcopy(ok_fork) is not None
 
     # A DIVERGED fork must round-trip its poison flag through pickle and deepcopy and stay refused.
-    diverged = loaded.run(inputs=torch.ones(5, 3), on_divergence="return").trace
+    diverged = loaded.run_transaction(inputs=torch.ones(5, 3), on_divergence="return").trace
     for revived in (pickle.loads(pickle.dumps(diverged)), copy.deepcopy(diverged)):
         assert revived._runnable.poisoned is True
         with pytest.raises(PoisonedRunError):

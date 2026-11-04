@@ -82,6 +82,7 @@ exclude_docs: |
   /internal/agent-reference/conventions.md
   /internal/agent-reference/critical-invariants.md
   /internal/agent-reference/current-2-x-surface.md
+  /internal/agent-reference/feature-inspection.md
   /internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
   /internal/agent-reference/known-gotchas.md
   /internal/agent-reference/package/architecture-overview.md

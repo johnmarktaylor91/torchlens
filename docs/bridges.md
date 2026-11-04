@@ -109,6 +109,11 @@ SAELens, or anything with `encode`/`decode`).
   returns the SHAP values and the explainer. `background` is required: SHAP
   values are contributions relative to a background's expected output, and
   explaining an input against itself gives all zeros, so there is no default.
+- Plots: TorchLens draws no SHAP plots; use shap's own. `explain` returns a
+  plain dict, so wrap its values in a `shap.Explanation` first:
+  `explanation = shap.Explanation(result["values"], base_values=result["explainer"].expected_value)`,
+  then `shap.plots.beeswarm(explanation)` or `shap.plots.waterfall(explanation[0])`.
+  For a model with several outputs, pick one output first (`explanation[..., 0]`).
 - Extra: `shap`.
 
 ### pytorch-grad-cam

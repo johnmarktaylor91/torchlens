@@ -185,7 +185,7 @@ def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) ->
     A module save keeps the trace eligible for the fast engine, which applies
     the staged spec through native module hooks. An edited steer tensor must
     refuse typed on both doors that reach that engine (the legacy
-    ``run(model, x)`` and the explicit ``run(inputs=..., fast=True)``), exactly
+    ``run(model, x)`` and the explicit ``run_transaction(inputs=..., fast=True)``), exactly
     as the capture rerun does, and leave the trace's saved values unchanged.
     """
 
@@ -197,7 +197,7 @@ def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) ->
     def rerun() -> Any:
         if door == "legacy":
             return trace.run(model, x)
-        return trace.run(inputs=x, fast=True).trace
+        return trace.run_transaction(inputs=x, fast=True).trace
 
     product = rerun()
     assert product.last_run["engine"] == "guarded_fast"

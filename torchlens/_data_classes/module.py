@@ -60,6 +60,7 @@ from ._call_tree import (
 from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
+from ._moe_views import _ModuleRouting
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -1167,7 +1168,7 @@ _MODULE_CONTAINER_DEFAULTS: dict[str, Any] = {
 
 
 @dataclass(init=False)
-class Module:
+class Module(_ModuleRouting):
     """Aggregate metadata for one nn.Module across all its invocations.
 
     The primary user-facing class for module inspection.  Provides both
@@ -1874,8 +1875,7 @@ class Module:
             self._sync_boundary_fields_from_calls()
 
     # --- Per-call delegating properties ---
-    # Mirror the Layer delegation pattern: single-pass modules transparently
-    # expose per-pass fields; multi-pass modules raise with guidance.
+    # Single-pass modules delegate; multi-pass modules raise with guidance.
 
     @property
     def facets(self) -> Any:

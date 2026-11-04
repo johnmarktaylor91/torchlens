@@ -189,7 +189,9 @@ def test_episode_coupled_replay_refuses_before_execution(episode_rig: dict[str, 
 
     products = build_episode_products()
     coupled = products["coupled"]
-    _assert_refuses("coupled_replay_run", lambda: coupled.run(inputs=products["example"]))
+    _assert_refuses(
+        "coupled_replay_run", lambda: coupled.run_transaction(inputs=products["example"])
+    )
 
 
 def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, Any]) -> None:

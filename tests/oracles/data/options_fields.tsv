@@ -104,6 +104,7 @@ VisualizationOptions.renderer
 VisualizationOptions.rolled
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
+VisualizationOptions.show_edge_shapes
 VisualizationOptions.show_legend
 VisualizationOptions.show_redundant_args
 VisualizationOptions.size_by

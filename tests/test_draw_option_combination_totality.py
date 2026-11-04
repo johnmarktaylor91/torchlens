@@ -162,6 +162,8 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "size_scale": (PAIRED, "linear"),
     "stack_by": (PAIRED, True),
     "show_redundant_args": (PAIRED, True),
+    # Walk ruling names.1: the edge-shape channel prints each edge's tensor shape.
+    "show_edge_shapes": (PAIRED, True),
     # highlight="interventions" routes through the surgery lens, which refuses
     # typed on this un-edited sweep trace (the rule in expected_refusal); the
     # edited-trace renders live in test_surgery_visuals_marks.py.
