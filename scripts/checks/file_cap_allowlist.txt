@@ -1497,7 +1497,7 @@ torchlens/viz/_heatmap_axes.py::_heatmap_axis_selection_fits	88
 torchlens/viz/_heatmap_axes.py::_select_heatmap_axis_indices	76
 torchlens/viz/_node_visualizers.py::channel_grid	75
 torchlens/viz/_node_visualizers.py::histogram	62
-torchlens/viz/_tensor_display.py::show_tensor	98
+torchlens/viz/_tensor_display.py::show_tensor	94
 torchlens/viz/feature_maps.py	1032
 torchlens/viz/feature_maps.py::_render_feature_map_grid	84
 torchlens/viz/feature_maps.py::feature_map_node_spec	139
