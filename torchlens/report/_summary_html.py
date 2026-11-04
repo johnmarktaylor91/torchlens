@@ -94,6 +94,6 @@ def render_html(  # noqa: PLR0913 - the four presentation slices are distinct re
         f'{_CSS}<div class="tl-summary">'
         f"<div><b>{html.escape(header_line)}</b></div>{banner}"
         f'<div class="tl-disclosure">{html.escape(view.disclosure)}</div>'
-        f'<div class="tl-table"><table><thead><tr>{head_cells}</tr></thead>'
+        f'<div class="tl-table" tabindex="0" role="region" aria-label="Model summary table"><table><thead><tr>{head_cells}</tr></thead>'
         f"<tbody>{body}</tbody></table></div>{footer}</div>"
     )
