@@ -6,8 +6,8 @@
 - The header's count names what it counts, and the count and the byte total
   cover the same nodes: the drawn nodes that show a tensor size (a focus's
   input and output stubs show none and are not counted).
-- Parameter counts carry thousands separators; every size uses the binary
-  unit its 1024 divisor implies (KiB, MiB).
+- Parameter counts carry thousands separators; every drawn size divides by
+  1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
   view and which the whole model, shows the key by default (the reading key is
@@ -33,6 +33,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import KEY_TABLE_ID, drawn_module_marks, key_swatches
 from torchlens._visualization._label_format import binary_size, format_memory
+from torchlens._visualization.modes import _compact_size
+from torchlens._visualization.overlays import format_overlay_value
 from torchlens._visualization.themes import (
     OKABE_ITO_SEMANTIC_PALETTE,
     RELEASED_SEMANTIC_PALETTE,
@@ -43,8 +45,8 @@ from torchlens.errors import ArgumentConflictError
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
 
 _FOCUS = "transformer.h.1.mlp"
-_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KiB|MiB|GiB))\)")
-_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KiB|MiB|GiB)<")
+_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KB|MB|GB))\)")
+_SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KB|MB|GB)<")
 _NODE = re.compile(r"^\t(\S+) \[label=<")
 _CLUSTER = re.compile(r'subgraph "?cluster_([^"\s{]+)')
 
@@ -172,13 +174,16 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 # -- header count and units (AGT-2536) ----------------------------------------
 
 
-def test_binary_units_match_the_1024_divisor() -> None:
+def test_drawn_sizes_use_the_released_unit_names() -> None:
     assert binary_size(0) == "0 B"
     assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1.0 KiB"
-    assert binary_size(1.5 * 1024**2) == "1.5 MiB"
-    assert binary_size(3 * 1024**3) == "3.0 GiB"
-    assert format_memory(61440) == "60.0 KiB"
+    assert binary_size(1024) == "1.0 KB"
+    assert binary_size(1.5 * 1024**2) == "1.5 MB"
+    assert binary_size(3 * 1024**3) == "3.0 GB"
+    assert binary_size(1024**2 - 1) == "1024.0 KB"
+    assert format_memory(61440) == "60.0 KB"
+    assert _compact_size(61440) == "60.0KB"
+    assert format_overlay_value("bytes", 61440) == "bytes: 60.0 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         binary_size(-1)

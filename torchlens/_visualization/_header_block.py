@@ -105,7 +105,7 @@ class KeySwatch:
 
 
 def params_caption_detail(trace: Trace) -> str:
-    """Return the header's parameter line, for example ``1,024 params (4.0 KiB, all trainable)``.
+    """Return the header's parameter line, for example ``1,024 params (4.0 KB, all trainable)``.
 
     Counts take thousands separators so a large model reads at a glance
     (``124,439,808 params``), and the memory uses the binary unit its 1024
