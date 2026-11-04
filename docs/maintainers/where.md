@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1469 modules, 656993 lines, 0 modules without a docstring.
+83 packages, 1469 modules, 656987 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 47 | 25317 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38125 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38119 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10643 |
@@ -289,7 +289,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38125 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38119 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -358,7 +358,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38125 
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 647 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
-| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 693 |
+| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 689 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 176 |
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 707 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
@@ -378,9 +378,9 @@ Core data structures for representing a logged forward pass. (90 modules, 38125 
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 662 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1819 |
-| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2643 |
+| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2642 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3509 |
-| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1090 |
+| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1089 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 216 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3486 |
 
