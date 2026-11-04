@@ -1354,10 +1354,10 @@ _FACTORY_FUNCS = [
     # and torch.empty_permuted, seen in real captures on the nightly fast tier.
     "emptystrided",
     "emptypermuted",
-    # NOTE: "tensor" (torch.tensor) is NOT a pure factory -- ``torch.tensor(data)``
-    # accepts an existing tensor as ``data`` (torch warns but executes), a real
-    # data-lineage edge. It gets an explicit spec below (round-22 F6).
+    # NOTE: not "tensor": ``torch.tensor(data)`` accepts a tensor ``data`` (torch warns but
+    # executes), a real data-lineage edge, so it gets an explicit spec below (round-22 F6).
     "astensor",
+    "getrngstate",  # torch.get_rng_state: reads the CPU generator, no tensor operand
     "fromnumpy",
     "fromfile",
     "scalartensor",
