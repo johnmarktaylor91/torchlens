@@ -55,6 +55,8 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "guides/grouping.md",
         # tl.preprocessing / tl.postprocessing / tl.facets registration walkthrough.
         "guides/model_conveniences.md",
+        # The internals guide: one self-contained fence (loop grouping, a replayed edit).
+        "how-it-works.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
         # Agent-reference pages whose fences are self-contained programs.

@@ -1,5 +1,9 @@
 ## Architecture
 
+Start with the narrative guide [How TorchLens works](../../how-it-works.md) and its maintainer
+companion [Architecture map](../../maintainers/architecture.md); they supersede the older maps for
+orientation. This page keeps the agent-facing entry points and the executed examples below.
+
 See `architecture.md` in `.project-context` for the older full map and
 `state_of_torchlens.md` in `.project-context` for the current 2.x map. See subpackage
 `AGENTS.md` files for per-module details.

@@ -305,6 +305,10 @@ pages:
     section: field-guide
     group: See and inspect
     publish: true
+  - path: how-it-works.md
+    section: concepts
+    publish: true
+    note: narrative guide to the internals; maintainers/architecture.md is its maintainer companion
   - path: index.md
     section: home
     publish: true
