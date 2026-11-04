@@ -19,6 +19,8 @@ from __future__ import annotations
 import torch
 from torch import nn
 
+from ._utils._torch_compat import get_force_original_view_tracking
+
 STORAGE_CONTEXT_RECEIVER_FUNCS = frozenset({"as_strided_", "resize_", "resize_as_"})
 """In-place storage-geometry calls whose receiver is saved with its whole storage.
 
@@ -239,7 +241,9 @@ def copy_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
     under original-view tracking, so the copy carries the same view chain for a
     later ``_view_func`` or ``_rev_view_func_unsafe`` call. A receiver without a
     view chain (a ``None`` from torch) or one whose chain does not rebuild its
-    geometry gets a compact detached clone, which replay refuses.
+    geometry gets a compact detached clone, which replay refuses. So does every
+    view when torch lacks original-view tracking (``HAS_ORIGINAL_VIEW_TRACKING``
+    reads ``False``): replay then fails loudly instead of running without it.
 
     Parameters
     ----------
@@ -252,9 +256,10 @@ def copy_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
         The rebuilt view, or a compact detached clone as described above.
     """
 
-    if tensor._is_view() and tensor._base is not None:
+    force_tracking = get_force_original_view_tracking() if tensor._is_view() else None
+    if force_tracking is not None and tensor._base is not None:
         base_copy = copy_with_storage_context(tensor._base.detach())
-        with torch.autograd._force_original_view_tracking(True):
+        with force_tracking(True):
             rebuilt = tensor._view_func_unsafe(base_copy)
         if isinstance(rebuilt, torch.Tensor) and has_view_geometry_of(rebuilt, tensor):
             return rebuilt
