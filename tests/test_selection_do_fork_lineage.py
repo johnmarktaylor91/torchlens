@@ -65,10 +65,15 @@ def test_fork_do_accepts_a_selection_resolved_on_the_clean_trace(clean) -> None:
 
 
 def test_grandchild_fork_accepts_the_root_selection(clean) -> None:
-    """The rebind follows the whole fork lineage, not only the direct parent."""
+    """The rebind follows the whole fork lineage, not only the direct parent.
+
+    Lineage is a weak reference and traces die by refcount, so the middle fork
+    is held: an unbound ``clean.fork().fork()`` has no live parent to walk.
+    """
 
     selection = clean[tl.func("relu")]
-    grandchild = clean.fork().fork()
+    child = clean.fork()
+    grandchild = child.fork()
     grandchild.do(selection, tl.scale(0.0))
     assert torch.count_nonzero(_output(grandchild)) == 0
 
