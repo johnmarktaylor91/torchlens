@@ -156,6 +156,8 @@ def relabel_focus_regions(render_ir: RenderIR, trace: Trace, module: Any) -> Ren
 def _relabelled_region(
     region: RenderIRRegion, trace: Trace, prefix: str | None, focus: str
 ) -> RenderIRRegion:
+    """Return a module region relabelled relative to the focus prefix; other regions unchanged."""
+
     address = region.key.split(":", 1)[0]
     if region.kind != "module" or not region.label.startswith(address):
         return region
