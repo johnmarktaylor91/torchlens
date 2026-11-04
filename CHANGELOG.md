@@ -5,6 +5,13 @@
 
 ### Fixed
 
+- **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
+  head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
+  `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
+  `mask_sha256` among its keywords (written through the tensor sidecar), and a reload applies
+  bit-identically. A malformed or tampered stored mask refuses
+  `intervention_helper_arguments_invalid` at load. An edit that needs user code still refuses
+  `intervention_spec_not_portable`. DOCUMENTED-UNSTABLE persisted form.
 - **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
   `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes
   `tl.validate(scope="forward")`. Each attention call is four native sibling ops that all

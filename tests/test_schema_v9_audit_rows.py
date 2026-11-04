@@ -73,18 +73,22 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
         "fixture must exercise the shipped per-site source disclosure"
     )
     path = tmp_path / "selection_intervened.tlspec"
-    # A masked edit is opaque_audit: a portable save refuses it, the audit level records it.
-    fork.save(path, level="audit")
+    # A masked builtin edit stores its mask and digest, so the default portable save takes it.
+    fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
 
 
-def test_masked_edit_refuses_a_default_portable_save(log, tmp_path):
-    """A masked built-in edit needs the audit level: the default save names the code and remedy."""
+def test_masked_user_callable_refuses_a_default_portable_save(log, tmp_path):
+    """A masked edit that needs user code needs the audit level: the default save names the code
+    and remedy."""
+
+    def _halve(out, *, ctx):
+        return out * 0.5
 
     fork = log.fork()
-    fork.do(fork[tl.units("relu_1_2", [(0, 0, 1, 1)])], tl.zero_ablate())
+    fork.do(fork[tl.units("relu_1_2", [(0, 0, 1, 1)])], _halve)
     with pytest.raises(OpaqueCallableError) as caught:
         fork.save(tmp_path / "masked_default.tlspec")
     assert caught.value.fields["code"] == "intervention_spec_not_portable"
