@@ -5,21 +5,21 @@
 that lifts closure parameters into operands and gives the eager kernels the
 structure torch tests; the capture's ``force_eager`` stance skips it. This
 module lets that one compile run, and hides helper frames from Dynamo.
-A sibling of :mod:`torchlens._utils._torch_compat` on the same cross-version
-boundary (every lookup feature-detected), imported directly so the compat
-module's eager import closure does not grow.
+The torch-private entry itself is reached only through
+:func:`torchlens._utils._torch_compat.swap_hop_entry_compile`; this module is
+imported directly so the compat module's eager import closure does not grow.
 """
 
 from __future__ import annotations
 
 import contextlib
-import sys
 import types
 from collections.abc import Callable, Iterator
 from typing import Any
 
 import torch
 
+from ._torch_compat import swap_hop_entry_compile
 from ._torch_symbols import torch_attr
 
 __all__ = ("compile_disabled", "hop_compile_stance_lift_scope")
@@ -48,9 +48,8 @@ def hop_compile_stance_lift_scope(
         operator utilities were never imported or lack the entry.
     """
 
-    utils = sys.modules.get("torch._higher_order_ops.utils")
-    original = None if utils is None else vars(utils).get("_hop_compile_and_call")
-    if not enabled or not callable(original):
+    original = swap_hop_entry_compile(None) if enabled else None
+    if original is None:
         yield False
         return
     copies: dict[Any, Any] = {}
@@ -79,11 +78,11 @@ def hop_compile_stance_lift_scope(
         with around(), torch.compiler.set_stance("default"):
             return original(target, args, kwargs)
 
-    setattr(utils, "_hop_compile_and_call", _lifted)
+    swap_hop_entry_compile(_lifted)
     try:
         yield True
     finally:
-        setattr(utils, "_hop_compile_and_call", original)
+        swap_hop_entry_compile(original)
 
 
 def _with_fresh_code(fn: Any) -> Any:
