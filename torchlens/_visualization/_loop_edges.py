@@ -12,7 +12,7 @@ Nov 2026).
 
 from __future__ import annotations
 
-__all__ = ["loop_edge_attrs", "self_loop_port_attrs"]
+__all__ = ["loop_edge_attrs", "pass_label_placement", "self_loop_port_attrs"]
 
 # self-loop: tail port (output side), head port (input side) per rank direction
 _LOOP_PORTS: dict[str, tuple[str, str]] = {
@@ -32,18 +32,25 @@ _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
     "LR": ("sw", "se"),
     "RL": ("se", "sw"),
 }
+# return arc's head/tail label placement (labeldistance, labelangle) per rank direction
+_BACK_EDGE_LABEL_PLACEMENT: dict[str, tuple[str, str]] = {
+    "BT": ("2", "-45"),
+    "TB": ("2", "-45"),
+    "LR": ("2", "-45"),
+    "RL": ("2", "-45"),
+}
 
 
-def float_back_edge_label(edge_dict: dict[str, str]) -> None:
-    """Move a back edge's midpoint label to an external label (``xlabel``).
+def pass_label_placement(rankdir: str) -> dict[str, str]:
+    """Return the head/tail label placement for a return arc's ``In``/``Out`` labels.
 
-    dot gives a ``constraint=false`` edge's midpoint label its own rank slot, which pushes
-    the return arc out to make room; an external label is placed after layout beside the
-    drawn arc, so the arc stays tight and the pass range still reads next to it.
+    The arc leaves the tail and enters the head at inner corners (``_BACK_EDGE_PORTS``),
+    so each label is placed relative to the arc's end tangent to sit beside its own
+    node's corner, clear of the box and the curve.
     """
 
-    if "label" in edge_dict:
-        edge_dict["xlabel"] = edge_dict.pop("label")
+    distance, angle = _BACK_EDGE_LABEL_PLACEMENT.get(rankdir, _BACK_EDGE_LABEL_PLACEMENT["BT"])
+    return {"labeldistance": distance, "labelangle": angle}
 
 
 def self_loop_port_attrs(rankdir: str) -> dict[str, str]:

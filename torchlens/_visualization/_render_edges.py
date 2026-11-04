@@ -17,8 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
-from ._loop_edges import float_back_edge_label, loop_edge_attrs
-from ._pass_marks import pass_label_fits, with_branch
+from ._loop_edges import loop_edge_attrs, pass_label_placement
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
@@ -1273,26 +1272,15 @@ def _add_edges_for_node(
             if isinstance(metadata_base_for_pass, Layer) and isinstance(
                 parent_base_for_pass, Layer
             ):
-                # A recurrence back-edge may only merge its In/Out annotations
-                # into a midpoint ``label`` if no conditional label was set above
-                # and the argument labeler below (which adds headlabel/xlabel)
-                # cannot fire for this edge; otherwise it keeps head/tail labels.
-                arg_labeler_may_fire = not child_is_collapsed_module and bool(
-                    _should_mark_arguments_on_edge(
-                        self, metadata_base_for_pass, show_buffer_layers, rolled_maps
-                    )
-                )
                 _label_rolled_call_indexs(
                     metadata_base_for_pass,
                     parent_base_for_pass,
                     edge_dict,
-                    is_self_loop=edge_is_self_loop or edge_is_back_edge,
+                    is_self_loop=edge_is_self_loop,
+                    is_back_edge=edge_is_back_edge,
                     rankdir=rankdir,
-                    allow_midpoint_merge=pass_label_fits(edge_dict) and not arg_labeler_may_fire,
                     rolled_maps=rolled_maps,
                 )
-                if edge_is_back_edge:
-                    float_back_edge_label(edge_dict)
 
         # Label the arguments to the next node if multiple inputs. An edge
         # whose rendered endpoint was projected onto a run-fold ellipsis gets
@@ -1929,8 +1917,8 @@ def _label_rolled_call_indexs(
     edge_dict: Dict[str, Any],
     *,
     is_self_loop: bool = False,
+    is_back_edge: bool = False,
     rankdir: str = "BT",
-    allow_midpoint_merge: bool = False,
     rolled_maps: "_RolledEdgeMaps | None" = None,
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
@@ -1940,27 +1928,27 @@ def _label_rolled_call_indexs(
     e.g. ``"Out 1,3"`` / ``"In 2,4"`` (``int_list_to_compact_str``: ``"1-3"``);
     an end every pass uses carries no label.
 
-    The annotations compose into ONE midpoint ``label``
-    whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
-    conditional label set, no argument label coming). Graphviz reserves layout
-    space for a midpoint label (a dummy node), so it never collides with a
-    node, spline or arrowhead, on any engine or font stack -- the endpoint
-    head/tail labels it replaces get no reserved space, which is why the
-    measured stock GPT-2 rolled page carried 38 more hard label violations
-    with them. The ``In`` line sits above ``Out`` for bottom-up graphs (flow
-    points up) and below it for top-down ones. Recurrence self-loops always
-    merge a full pair. An unvouched edge keeps head/tail labels, emitted as
-    HTML tables with small spacer cells so the text keeps an even gap from
-    the node and the arrowhead.
+    Each annotation sits at the node it describes: ``Out`` is the tail label
+    (the passes the edge leaves its source on), ``In`` the head label (the
+    passes it enters its destination on), so neither floats mid-edge between
+    two nodes.  This restores TorchLens's original head/tail placement (JMT, 3
+    Nov 2026), which midpoint merging had replaced.  A rolled loop's return arc
+    leaves and enters at inner corners, so its two labels get placement from
+    ``pass_label_placement`` for the drawing direction; straight edges keep
+    Graphviz's default endpoint placement, which avoids nodes and other labels.
+    A recurrence self-loop has one node at both ends, so its In/Out pair merges
+    into one label beside the loop, ``In`` above ``Out`` unless flow runs down.
+    Labels are HTML tables with a small even margin, so the text keeps a gap
+    from the node and the arrowhead.
 
     Args:
         child_node: The child Layer node.
         parent_node: The parent Layer node.
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
         is_self_loop: Whether this edge is a node's recurrence self-loop.
-        rankdir: Graphviz rank direction, used to order a combined label's lines.
-        allow_midpoint_merge: Whether the edge may take a midpoint ``label`` (no
-            conditional label present, no argument label coming).
+        is_back_edge: Whether this edge is a rolled loop's return arc.
+        rankdir: Graphviz rank direction, used to order a self-loop's lines and
+            to place a return arc's labels.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -1980,23 +1968,16 @@ def _label_rolled_call_indexs(
     if out_label is None and in_label is None:
         _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)
         return
-    # Measured on stock GPT-2 rolled: 97 -> 59 hard label violations.
-    if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
+    if is_self_loop and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
-        edge_dict["label"] = with_branch(edge_dict, _html_combined_recurrence_label(top, bottom))
-        return
-    single_label = out_label if out_label is not None else in_label
-    if (
-        allow_midpoint_merge
-        and single_label is not None
-        and (out_label is None or in_label is None)
-    ):
-        edge_dict["label"] = with_branch(edge_dict, _html_combined_recurrence_label(single_label))
+        edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
         return
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
+    if is_back_edge:
+        edge_dict.update(pass_label_placement(rankdir))
 
 
 def _get_lowest_module_for_two_render_nodes(
