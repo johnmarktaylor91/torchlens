@@ -24,6 +24,7 @@ from typing import Any
 
 import torch
 
+from .._semantic.recipes._helpers import relays_wrapped_core
 from ..errors._base import TorchLensError
 from ._errors import refuse
 from ._generation_attention import generation_attention_view
@@ -52,12 +53,14 @@ def _has_facet(module: Any, name: str) -> bool:
 
 
 def _modules_with_pattern(trace: Any) -> list[str]:
-    """Return module addresses exposing an available ``pattern`` facet."""
+    """Return module addresses exposing an available ``pattern`` facet, one per layer."""
 
     return [
         str(module.address)
         for module in getattr(trace, "modules", ())
-        if getattr(module, "address", None) != "self" and _has_facet(module, "pattern")
+        if getattr(module, "address", None) != "self"
+        and _has_facet(module, "pattern")
+        and not relays_wrapped_core(module, "pattern")
     ]
 
 

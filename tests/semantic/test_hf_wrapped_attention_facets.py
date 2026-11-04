@@ -18,6 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
+from torchlens.mechinterp._heads import _attention_modules
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")
 
@@ -157,6 +158,33 @@ def _output(trace: Any) -> torch.Tensor:
     return trace[trace.output_layers[0]].out
 
 
+def _zero_head_reference(model: nn.Module, core: str, x: torch.Tensor, head: int) -> torch.Tensor:
+    """Return the plain-PyTorch output with ``head`` zeroed in query, key and value."""
+
+    def zero_head(_module: nn.Module, _inputs: Any, out: torch.Tensor) -> torch.Tensor:
+        out = out.clone()
+        out.view(*out.shape[:-1], _HEADS, _D_HEAD)[..., head, :] = 0
+        return out
+
+    core_module = getattr(model.attn, core)
+    handles = [
+        getattr(core_module, name).register_forward_hook(zero_head)
+        for name in ("query", "key", "value")
+    ]
+    try:
+        with torch.no_grad():
+            return model(x)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+
+def _metric(trace: Any) -> torch.Tensor:
+    """Return one scalar of the trace output."""
+
+    return _output(trace)[0, 0, 0]
+
+
 @pytest.mark.parametrize(
     ("wrapper_cls", "core"), [(ViTAttention, "attention"), (BertAttention, "self")]
 )
@@ -170,7 +198,7 @@ def test_wrapper_serves_core_head_facets_and_module_head_edit(
     write-capable facets.
     """
 
-    _model, _x, clean = _trace(wrapper_cls(), seed=3)
+    model, x, clean = _trace(wrapper_cls(), seed=3)
     wrapper = clean.modules["attn"].facets
     inner = clean.modules[f"attn.{core}"].facets
     for name in ("q", "k", "v"):
@@ -187,7 +215,8 @@ def test_wrapper_serves_core_head_facets_and_module_head_edit(
     assert torch.count_nonzero(edited_q[..., 1, :]) == 0
     assert torch.equal(edited_q[..., 0, :], wrapper.q[..., 0, :])
     assert not torch.allclose(_output(ablated), _output(clean))
-    assert ablated.validate_forward_pass([_output(ablated)])
+    reference = _zero_head_reference(model, core, x, head=1)
+    assert torch.allclose(_output(ablated), reference, atol=1e-6)
 
 
 def test_bert_wrapper_attn_out_is_the_pre_residual_projection() -> None:
@@ -223,7 +252,7 @@ def test_wrapper_and_core_result_read_the_shared_output_projection(
 def test_whole_model_head_counts_each_bert_head_once() -> None:
     """Wrapper and core both match ``tl.head``; each q/k/v home is written once."""
 
-    _model, _x, clean = _trace(BertAttention(), seed=11)
+    model, x, clean = _trace(BertAttention(), seed=11)
     with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
         ablated = clean.fork().do(tl.head(1), tl.zero_ablate())
     assert [w.message.fields["site_count"] for w in fanout] == [3]
@@ -231,7 +260,32 @@ def test_whole_model_head_counts_each_bert_head_once() -> None:
         view = ablated.modules[address].facets
         for name in ("q", "k", "v"):
             assert torch.count_nonzero(view.head(1)[name]) == 0
-    assert ablated.validate_forward_pass([_output(ablated)])
+    reference = _zero_head_reference(model, "self", x, head=1)
+    assert torch.allclose(_output(ablated), reference, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("wrapper_cls", "core"), [(ViTAttention, "attention"), (BertAttention, "self")]
+)
+def test_layer_listings_count_wrapper_and_core_as_one_layer(
+    wrapper_cls: type[nn.Module], core: str
+) -> None:
+    """Per-layer listings return the core once, not the wrapper as a second layer.
+
+    Attention views, the head-contribution scan and the per-layer patching
+    sweeps each list one entry per attention layer.
+    """
+
+    model, x, clean = _trace(wrapper_cls(), seed=17)
+    views = tl.transformer.attention_views(clean)
+    assert [view.layer for view in views] == [f"attn.{core}"]
+    assert [module.address for module in _attention_modules(clean)] == [f"attn.{core}"]
+    corrupted = torch.randn(2, 5, _HIDDEN)
+    patching = tl.facets.patching
+    by_layer = patching.activation_patch_attention_output(model, x, corrupted, _metric)
+    assert tuple(by_layer.shape) == (1,)
+    by_head = patching.activation_patch_attention_heads(model, x, corrupted, _metric)
+    assert tuple(by_head.shape) == (1, _HEADS)
 
 
 def test_bert_core_alone_keeps_its_head_edit() -> None:

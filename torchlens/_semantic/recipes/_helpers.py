@@ -186,6 +186,40 @@ def wrapped_attention_core(module: Any) -> str | None:
     return None
 
 
+def relays_wrapped_core(module: Any, facet_name: str) -> bool:
+    """Return whether ``module`` wraps an attention core that also serves ``facet_name``.
+
+    Listings with one entry per attention layer skip such a wrapper, so the
+    wrapper and its core count as one layer, and the core keeps the address
+    those listings reported before wrappers had a recipe.
+    """
+
+    core_name = wrapped_attention_core(module)
+    core = child_module(module, core_name) if core_name is not None else None
+    if core is None:
+        return False
+    try:
+        return bool(core.facets.has(facet_name))
+    except Exception:  # noqa: BLE001 -- an unreadable core view cannot claim the facet
+        return False
+
+
+def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
+    """Return module addresses with a facet available, one per attention layer.
+
+    The root (``self``) is excluded, and so is a wrapper whose core serves the
+    same facet (:func:`relays_wrapped_core`).
+    """
+
+    return [
+        str(module.address)
+        for module in trace.modules
+        if getattr(module, "address", None) != "self"
+        and module.facets.has(facet_name)
+        and not relays_wrapped_core(module, facet_name)
+    ]
+
+
 def output_projection_child(module: Any) -> Any | None:
     """Return an attention module's output-projection Module record.
 
