@@ -724,6 +724,26 @@ print("relu zero", bool((trace.ops["relu_1_2"].out == 0).all()))
 # relu zero True
 ```
 
+### trace-run-transaction
+Run a verified fresh execution on a new input and read its report; the trace itself is left unchanged.
+
+- covers: `Trace.run_transaction`
+- tasks: rerun
+- fixture: toy
+
+```python
+trace = tl.trace(model, x)
+x2 = torch.randn(3, 4)
+result = trace.run_transaction(inputs=x2, seed=0)
+print(type(result).__name__)
+print(torch.allclose(result.output, model(x2)))
+print(torch.equal(trace.ops["relu_1_2"].out, tl.trace(model, x).ops["relu_1_2"].out))
+# Output:
+# RunResult
+# True
+# True
+```
+
 ### trace-save-intervention
 Save a fork's edit recipe so another session can re-apply it.
 

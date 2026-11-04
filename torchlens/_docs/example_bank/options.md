@@ -673,6 +673,24 @@ for mode in ["never", "meaningful", "always"]:
 # always 3
 ```
 
+### options-vis-edge-shapes
+Label each forward edge with the shape of the tensor it carries; the default drawing has no edge labels.
+
+- covers: `VisualizationOptions.show_edge_shapes`
+- tasks: draw
+- fixture: toy
+
+```python
+trace = tl.trace(model, x)
+plain = trace.draw(path="plain", file_format="gv")
+shaped = trace.draw(path="shaped", file_format="gv", show_edge_shapes=True)
+print("plain", "[3, 8]" in plain.dot)
+print("shaped", "[3, 8]" in shaped.dot)
+# Output:
+# plain False
+# shaped True
+```
+
 ### options-vis-backward-graph
 After a backward, the forward drawing gains gradient edges you can restyle, and `graph="backward"` draws the autograd graph itself.
 
