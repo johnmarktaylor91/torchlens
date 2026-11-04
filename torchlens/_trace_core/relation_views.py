@@ -202,6 +202,17 @@ def convert_row_cells(
                 row_cells[fid] = frozenset_view(value, pool)
 
 
+def _unpooled(cell: Any) -> Any:
+    """Return a staging cell's value, reading through a shared ``PooledCell``.
+
+    Sibling output rows of one multi-output call (``torch.lstm``,
+    ``torch.mkldnn_rnn_layer``) share one pooled ``parent_arg_positions`` cell; the
+    edge freeze must attribute their occurrences from it like a plain dict.
+    """
+
+    return cell.prototype if isinstance(cell, PooledCell) else cell
+
+
 def freeze_op_relation_views(
     core: TraceCore,
     store: OpRowStore,
@@ -280,9 +291,7 @@ def freeze_op_relation_views(
         parents = row_cells[parents_fid]
         if parents is _MISSING or not parents:
             continue
-        pap = row_cells[pap_fid]
-        if isinstance(pap, PooledCell):  # sibling output members share one pooled cell
-            pap = pap.prototype
+        pap = _unpooled(row_cells[pap_fid])
         positions_by_parent: dict[str, list[Any]] = {}
         if isinstance(pap, dict):
             for domain in ("args", "kwargs"):
