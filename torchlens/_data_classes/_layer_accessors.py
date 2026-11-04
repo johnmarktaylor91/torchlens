@@ -136,6 +136,13 @@ class OpAccessor(Accessor["Op"]):
         except (KeyError, IndexError, ValueError):
             return default
 
+    def _composition_note(self) -> str | None:
+        """Owning layer and the REAL read basis of ``ops[...]`` (bug 27), no members listed."""
+
+        basis = "0-based positions or pass-qualified labels"
+        layer = getattr(self._list[0], "layer_label", None) if self._list else None
+        return f"layer {layer}; {basis}" if layer else basis
+
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""
         if len(self._dict) == 1:
