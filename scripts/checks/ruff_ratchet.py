@@ -304,11 +304,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # Three more sites only moved (_query.py to _query_maps.py:
     # _interpolation_source, map_interpolation_index_set,
     # map_transposed_convolution_index_set). Measured 445 (same pinned mode).
-    # 445 + train 443 -> 448 (2026-11-03 merge of train 14510badb (C-139) into C-143,
-    # same JMT decision d-90086c50): the train's +3 (record-lazy, C-139) and C-143's
-    # +5 above are disjoint sites; the value is the union measured at the merged
-    # tree by run_all ruff_ratchet (pinned ruff, isolated mode, torchlens/ scope).
-    "PLR0913": 448,
+    # 445 -> 446 (2026-11-03 merges of trains 14510badb (C-139, ceiling 443) and
+    # 801bd8dbd (C-132) into C-143, same JMT decision d-90086c50): the value is the
+    # count measured at the merged tree 0ec91978d (fellows q5c143-plr-2, pinned ruff,
+    # isolated mode, torchlens/ scope): the train's sites plus C-143's five above.
+    "PLR0913": 446,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f
