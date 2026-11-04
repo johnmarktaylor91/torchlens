@@ -74,7 +74,7 @@ def test_routing_table_matches_independent_gate_oracle() -> None:
     assert trace.modules["self"].routing_table == trace.routing_table
     assert trace.modules["chooser"].routing_table is None
     assert trace.modules["bank.0"].routing_table is None
-    assert trace.validate_forward_pass()
+    assert trace.validate_forward_pass(model(x))
 
 
 def test_unsaved_routing_outputs_refuse_but_identity_remains() -> None:
@@ -130,3 +130,51 @@ def test_reused_block_has_one_routing_row_per_call() -> None:
     assert len(rows) == 2
     assert rows[0]["expert_indices"] != rows[1]["expert_indices"]
     assert trace.modules["block"].routing_table == rows
+
+
+def test_fused_experts_keep_table_without_single_expert_identity() -> None:
+    """Batched expert computation reads the same saved routing outputs."""
+
+    class Fused(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gate = nn.Linear(4, 4)
+            self.experts = nn.ModuleList([nn.Linear(4, 4, bias=False) for _ in range(4)])
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            weights, indices = self.gate(x).softmax(-1).topk(2, dim=-1)
+            matrices = torch.stack([expert.weight for expert in self.experts])
+            selected = matrices[indices]
+            values = torch.einsum("tkoi,ti->tko", selected, x)
+            return (values * weights.unsqueeze(-1)).sum(1)
+
+    model = Fused()
+    x = _input()
+    expected_weights, expected_indices = model.gate(x).softmax(-1).topk(2, dim=-1)
+    trace = tl.trace(model, x)
+    (row,) = trace.routing_table
+    assert row["expert_indices"] == expected_indices.tolist()
+    torch.testing.assert_close(torch.tensor(row["gate_weights"]), expected_weights)
+    fused = [op for op in trace.ops if op.func_name == "einsum"]
+    assert fused and all(op.expert is None for op in fused)
+
+
+def test_argmax_with_saved_probability_gather() -> None:
+    """Top-one routing takes probabilities from the saved gather output."""
+
+    class TopOne(_ToyMoE):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            probabilities = self.chooser(x).softmax(-1)
+            indices = probabilities.argmax(dim=-1, keepdim=True)
+            weights = probabilities.gather(-1, indices)
+            result = torch.zeros_like(x)
+            for number, expert in enumerate(self.bank):
+                token, slot = torch.where(indices == number)
+                result.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+            return result
+
+    model = TopOne()
+    trace = tl.trace(model, _input())
+    (row,) = trace.routing_table
+    assert row["expert_indices"] == [[0], [1], [2], [3]]
+    assert row["tokens_per_expert"] == [1, 1, 1, 1]

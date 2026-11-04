@@ -28,7 +28,7 @@ class _Route:
 
 def _inside(op: Op, address: str) -> bool:
     """Test captured module-call membership, never a substring match."""
-    return any(label.rsplit(":", 1)[0] == address for label in op.modules)
+    return not address or any(label.rsplit(":", 1)[0] == address for label in op.modules)
 
 
 def _join(address: str, child: str) -> str:
@@ -79,12 +79,23 @@ def _containers(model: nn.Module) -> list[tuple[str, tuple[str, ...], tuple[str,
 
 
 def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
-    """Pair top-k values/indices from the same call, never by proximity."""
+    """Pair top-k outputs or top-one softmax gathers by recorded dependency."""
     calls: dict[Any, dict[int, Op]] = {}
     for op in ops.values():
         if op.func_name == "topk" and _last_axis(op, 2, -1):
             calls.setdefault(op.func_call_id, {})[op.multi_output_index] = op
-    return [(rows[0], rows[1]) for rows in calls.values() if 0 in rows and 1 in rows]
+    pairs = [(rows[0], rows[1]) for rows in calls.values() if 0 in rows and 1 in rows]
+    for indices in ops.values():
+        if indices.func_name != "argmax" or not _last_axis(indices, 1, -1):
+            continue
+        for values in ops.values():
+            if (
+                values.func_name == "gather"
+                and _last_axis(values, 1, -1)
+                and indices.layer_label in _ancestors(ops, values.layer_label)
+            ):
+                pairs.append((values, indices))
+    return pairs
 
 
 def _weight_output(ops: dict[str, Op], values: Op) -> str | None:
@@ -119,7 +130,11 @@ def _routes(trace: Trace) -> list[_Route]:
                 continue
             for gate in gates:
                 gate_ops = {label for label in upstream if _inside(ops[label], gate)}
-                if not gate_ops or not _feeds_experts(ops, indices, experts, block):
+                if (
+                    not gate_ops
+                    or not _expert_width(ops, values, len(experts))
+                    or not _feeds_experts(ops, indices, experts, block)
+                ):
                     continue
                 routers = gate_ops | {values.layer_label, indices.layer_label, weights}
                 routers.update(
@@ -133,6 +148,15 @@ def _routes(trace: Trace) -> list[_Route]:
     return routes
 
 
+def _expert_width(ops: dict[str, Op], values: Op, count: int) -> bool:
+    """Require the selection's probability/logit input to span the expert axis."""
+    return any(
+        ops[label].shape and ops[label].shape[-1] == count
+        for label in values.parents
+        if label in ops
+    )
+
+
 def _feeds_experts(ops: dict[str, Op], indices: Op, experts: tuple[str, ...], block: str) -> bool:
     """Require recorded selection-index dependence inside each called expert."""
     called = []
@@ -141,7 +165,7 @@ def _feeds_experts(ops: dict[str, Op], indices: Op, experts: tuple[str, ...], bl
         members = [
             op
             for op in ops.values()
-            if _inside(op, expert) and block_calls.intersection(op.modules)
+            if _inside(op, expert) and (not block or block_calls.intersection(op.modules))
         ]
         if members:
             called.append(
@@ -155,8 +179,8 @@ def _feeds_fused(
 ) -> bool:
     """Recognize batched expert math only with indexed expert-parameter ancestry."""
     for op in ops.values():
-        if op.func_name not in {"bmm", "matmul", "einsum"} or not block_calls.intersection(
-            op.modules
+        if op.func_name not in {"bmm", "matmul", "einsum"} or (
+            block_calls and not block_calls.intersection(op.modules)
         ):
             continue
         upstream = _ancestors(ops, op.layer_label)

@@ -1978,6 +1978,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 ## Quantities and typed errors
 
+`moe_routing_activation_missing` is the `PayloadUnavailableError` code for a
+routing-table read without saved router weights or expert indices. Its
+`activation` field names the missing op; capture with `save='all'` to retain it.
+
 **Quantities**
 : `tl.types.Quantity` is the marker base for numeric quantity wrappers with unit-aware
   display: `tl.types.Bytes` (memory), `tl.types.Duration` (seconds), `tl.types.Flops` (floating-point
@@ -6290,7 +6294,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `expected=` | keyword of `tl.fingerprint.assert_unchanged` (required): Previously pinned structural hash, or `None` to bootstrap one |
 | `expected_ranks=` | keyword of `tl.merge_ranks` (keyword-only; default `None`): Optional declared world. Widens presence expectations only: a declared rank without a core is a presence gap; declaring fewer ranks than the recorded group memberships never narrows anything; keyword of `tl.merge_report` (keyword-only; default `None`) |
 | `expected_tokens=` | constructor keyword of `tl.options.EpisodeOptions` (default `None`): The cheap-tier product's per-step token column (one tuple per step), carried so the escalated capture can discharge the E-A3 fidelity obligation at write time: prefix-equal columns record `fidelity_basis="tokens"`; a mismatch records `"diverged"` — the escalated product is still a valid capture .. |
-| `expert=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): MoE expert index when the writer is a routed expert; `None` today |
+| `expert=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): MoE expert index when the writer is a routed expert; otherwise `None` |
 | `explainer_class=` | keyword of `tl.bridge.shap.explain` (keyword-only; default `None`): Optional explainer class or factory. Defaults to `shap.DeepExplainer` |
 | `exploding_threshold=` | keyword of `ChecksSession.register_magnitude_check` (keyword-only; default `10000.0`); keyword of `tl.debug.grad_health` (keyword-only; default `10000.0`): Norm above which a finite gradient is flagged exploding |
 | `extra=` | constructor keyword of `tl.attribution.AttributionMetric` (required): Additional disclosure (distributions, probes, qualifications); constructor keyword of `tl.backends.FrameworkRequirement` (required): The pyproject extra that installs the framework (`""` for a base dependency); keyword of `tl.trackers.build_manifest` (keyword-only; default `None`) |

@@ -49,7 +49,7 @@ def _innermost_module(op: Any) -> str | None:
 def _writer_kind(trace: Any, op: Any) -> str:
     """Classify a writer for display from its module chain (metadata only)."""
 
-    if op.expert is not None:
+    if getattr(op, "expert", None) is not None:
         return "expert"
     for address in reversed(_module_stack(op)):
         try:
@@ -287,7 +287,7 @@ def _writer_row(
             site_key=getattr(writer_op, "site_key", None),
             pass_index=getattr(writer_op, "pass_number", None),
             kind=_writer_kind(trace, ancestor),
-            expert=ancestor.expert,
+            expert=getattr(ancestor, "expert", None),
             module_address=_innermost_module(ancestor),
             provenance=f"captured/{verification}",
         ),
