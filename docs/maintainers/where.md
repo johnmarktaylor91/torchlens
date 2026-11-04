@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 676015 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 676045 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -34,8 +34,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10583 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 13 | 7130 |
-| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2990 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 13 | 7121 |
+| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3024 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 54 | 18047 |
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 29 | 9987 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 29 | 9989 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4149 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
@@ -90,7 +90,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 18 | 7259 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
-| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5401 |
+| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5404 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 71 | 31273 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4767 |
@@ -776,7 +776,7 @@ Selection: naming sites and resolving them on a trace. (21 modules, 10583 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (13 modules, 7130 lines)
+Semantic facet views for TorchLens records. (13 modules, 7121 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -790,18 +790,18 @@ Semantic facet views for TorchLens records. (13 modules, 7130 lines)
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 225 |
 | `facets` | Derived semantic facet views for TorchLens records. | 2105 |
 | `logit_lens` | Logit-lens appliance over semantic facets. | 1433 |
-| `patching` | Prebuilt activation and attribution patching helpers for facets. | 1103 |
+| `patching` | Prebuilt activation and attribution patching helpers for facets. | 1094 |
 | `reconstruction` | Read-only reconstruction helpers for semantic facets. | 649 |
 | `tolerances` | Cancellation-aware error model for semantic facet RECONSTRUCTION gates. | 195 |
 
 ### `torchlens._semantic.recipes`
 
-Built-in TorchLens semantic facet recipes. (9 modules, 2990 lines)
+Built-in TorchLens semantic facet recipes. (9 modules, 3024 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Built-in TorchLens semantic facet recipes. | 245 |
-| `_helpers` | Shared helpers for built-in semantic recipes. | 566 |
+| `_helpers` | Shared helpers for built-in semantic recipes. | 600 |
 | `attention` | Built-in semantic recipes for attention modules. | 780 |
 | `embedding` | Built-in semantic recipes for embedding modules. | 25 |
 | `lm_head` | Built-in semantic recipes for language-model unembedding heads. | 353 |
@@ -1831,7 +1831,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 432 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (29 modules, 9987 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (29 modules, 9989 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1852,7 +1852,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (29 modules, 
 | `_faithfulness` | Circuit faithfulness areas: CPR and CMD over a faithfulness curve. | 154 |
 | `_feature` | Feature optimization through the shared capture-free intervention binding. | 248 |
 | `_grids` | The generic patching-grid driver + thin presets (mikit section 7). | 458 |
-| `_heads` | Per-query-head attention contributions (mikit ; TLens | 342 |
+| `_heads` | Per-query-head attention contributions (mikit ; TLens | 344 |
 | `_interp_engine` | This trace's sites as interp-engine points: the points file and its writer. | 135 |
 | `_kv_heads` | Per-query-head patching under grouped-query attention (an op-level interceptor). | 552 |
 | `_lowered` | Lowered counterfactuals (mikit ) -- the TorchLens-original capability. | 298 |
@@ -2117,7 +2117,7 @@ Trackers: one engine, first-party sinks, measured relays. (15 modules, 5269 line
 
 ### `torchlens.transformer`
 
-torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5401 lines)
+torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5404 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2125,7 +2125,7 @@ torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5401 lin
 | `_bridge` | CircuitsVis bridge + BertViz tuple adapter. | 212 |
 | `_decomp` | Score decomposition: the BertViz neuron-view DATA, term-complete. | 227 |
 | `_errors` | Typed refusals for the transformer-pictures package (tviz memo). | 59 |
-| `_extract` | Trace-side extractors: attention views with mask provenance (/). | 456 |
+| `_extract` | Trace-side extractors: attention views with mask provenance (/). | 459 |
 | `_generation_attention` | Per-step attention pictures from a recorded generation (tviz ). | 256 |
 | `_lens_heatmap` | Layers-by-positions logit-lens heatmap over :class:'LogitLensResult'. | 385 |
 | `_metrics` | Per-token loss and per-context entropy strips (inspectus, matched). | 200 |
