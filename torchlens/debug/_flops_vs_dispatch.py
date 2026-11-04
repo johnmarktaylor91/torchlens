@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from .._debug_report import Report
+from .._input_coerce import _coerce_inputs
 from ..errors import CaptureError
 
 
@@ -129,6 +130,40 @@ def _first_tensor(value: Any) -> torch.Tensor | None:
     return None
 
 
+def _raw_call_inputs(
+    model: Any, inputs: Any, input_kwargs: dict[str, Any] | None
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Return the raw forward's call inputs, routed as the trace routed them.
+
+    Text, a modality dict or PIL images go through the one coercion door, so
+    the raw forward sees the same model inputs the trace did.
+
+    Parameters
+    ----------
+    model:
+        Model under comparison.
+    inputs:
+        Forward input as the caller passed it.
+    input_kwargs:
+        Keyword inputs as the caller passed them.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], dict[str, Any]]
+        Positional and keyword inputs for ``model(*args, **kwargs)``.
+    """
+
+    routed, routed_kwargs = _coerce_inputs(model, inputs, input_kwargs)
+    args: tuple[Any, ...]
+    if routed is None:
+        args = ()
+    elif isinstance(routed, (list, tuple)):
+        args = tuple(routed)
+    else:
+        args = (routed,)
+    return args, dict(routed_kwargs or {})
+
+
 def flops_vs_dispatch(
     model: Any,
     inputs: Any = None,
@@ -210,14 +245,7 @@ def flops_vs_dispatch(
         if name in training_flags:
             module.train(training_flags[name])
 
-    args: tuple[Any, ...]
-    if inputs is None:
-        args = ()
-    elif isinstance(inputs, (list, tuple)):
-        args = tuple(inputs)
-    else:
-        args = (inputs,)
-    kwargs = dict(input_kwargs or {})
+    args, kwargs = _raw_call_inputs(model, inputs, input_kwargs)
     with FlopCounterMode(display=False) as counter:
         raw_output = model(*args, **kwargs)
     native_total = int(counter.get_total_flops())

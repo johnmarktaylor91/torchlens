@@ -6,7 +6,7 @@ from typing import Any
 
 from torch import nn
 
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from ..options import CaptureOptions
 from ._recorder import Recorder
 from .exceptions import refuse_recorder_uninitialized
@@ -31,7 +31,7 @@ def dry_run(
     model:
         PyTorch module to execute.
     inputs:
-        Tensor, list, or tuple of positional model inputs.
+        Tensor, list, or tuple of positional model inputs; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Optional keyword arguments for the model call.
     save, history_size, include_source_events, seed:
@@ -50,7 +50,7 @@ def dry_run(
     ('DryRun', True, ())
     """
 
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
         "history_size": history_size,

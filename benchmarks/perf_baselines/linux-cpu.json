@@ -19499,7 +19499,7 @@
       },
       "input_summary": "(4, 3, 32, 32)",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156074
       },
       "model": "tinynet",
       "operation": "aux_save",
@@ -19602,7 +19602,7 @@
         "uss_delta_mb_memory_pass": 1.10546875
       },
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156074
       },
       "model": "tinynet",
       "operation": "aux_save",
@@ -19637,7 +19637,7 @@
       },
       "input_summary": "(4, 3, 32, 32)",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156072
       },
       "model": "tinynet",
       "operation": "aux_load",
@@ -19740,7 +19740,7 @@
         "uss_delta_mb_memory_pass": 4.48046875
       },
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156072
       },
       "model": "tinynet",
       "operation": "aux_load",
@@ -20043,7 +20043,7 @@
       },
       "input_summary": "(8, 3, 224, 224)",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243341
       },
       "model": "resnet18",
       "operation": "aux_save",
@@ -20146,7 +20146,7 @@
         "uss_delta_mb_memory_pass": 27.2421875
       },
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243341
       },
       "model": "resnet18",
       "operation": "aux_save",
@@ -20181,7 +20181,7 @@
       },
       "input_summary": "(8, 3, 224, 224)",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243354
       },
       "model": "resnet18",
       "operation": "aux_load",
@@ -20284,7 +20284,7 @@
         "uss_delta_mb_memory_pass": 5.80859375
       },
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243354
       },
       "model": "resnet18",
       "operation": "aux_load",
@@ -46928,9 +46928,9 @@
     },
     {
       "device": "cpu",
-      "label": "tl.save fresh tlspec path",
+      "label": "Trace.save fresh tlspec bundle",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156074
       },
       "model": "tinynet",
       "operation": "aux_save",
@@ -46967,7 +46967,7 @@
             "uss_delta_mb_memory_pass": 1.10546875
           },
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 2156074
           },
           "model": "tinynet",
           "operation": "aux_save",
@@ -47002,7 +47002,7 @@
           },
           "input_summary": "(4, 3, 32, 32)",
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 2156074
           },
           "model": "tinynet",
           "operation": "aux_save",
@@ -47080,7 +47080,7 @@
       "device": "cpu",
       "label": "tl.load saved fixture",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 2156072
       },
       "model": "tinynet",
       "operation": "aux_load",
@@ -47117,7 +47117,7 @@
             "uss_delta_mb_memory_pass": 4.48046875
           },
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 2156072
           },
           "model": "tinynet",
           "operation": "aux_load",
@@ -47152,7 +47152,7 @@
           },
           "input_summary": "(4, 3, 32, 32)",
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 2156072
           },
           "model": "tinynet",
           "operation": "aux_load",
@@ -47516,9 +47516,9 @@
     },
     {
       "device": "cpu",
-      "label": "tl.save fresh tlspec path",
+      "label": "Trace.save fresh tlspec bundle",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243341
       },
       "model": "resnet18",
       "operation": "aux_save",
@@ -47555,7 +47555,7 @@
             "uss_delta_mb_memory_pass": 27.2421875
           },
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 269243341
           },
           "model": "resnet18",
           "operation": "aux_save",
@@ -47590,7 +47590,7 @@
           },
           "input_summary": "(8, 3, 224, 224)",
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 269243341
           },
           "model": "resnet18",
           "operation": "aux_save",
@@ -47668,7 +47668,7 @@
       "device": "cpu",
       "label": "tl.load saved fixture",
       "metadata": {
-        "serialized_file_size_bytes": 4096
+        "serialized_file_size_bytes": 269243354
       },
       "model": "resnet18",
       "operation": "aux_load",
@@ -47705,7 +47705,7 @@
             "uss_delta_mb_memory_pass": 5.80859375
           },
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 269243354
           },
           "model": "resnet18",
           "operation": "aux_load",
@@ -47740,7 +47740,7 @@
           },
           "input_summary": "(8, 3, 224, 224)",
           "metadata": {
-            "serialized_file_size_bytes": 4096
+            "serialized_file_size_bytes": 269243354
           },
           "model": "resnet18",
           "operation": "aux_load",
@@ -48108,7 +48108,7 @@
     },
     {
       "device": "cuda",
-      "label": "tl.save fresh tlspec path",
+      "label": "Trace.save fresh tlspec bundle",
       "metadata": {
         "serialized_file_size_bytes": 4096
       },

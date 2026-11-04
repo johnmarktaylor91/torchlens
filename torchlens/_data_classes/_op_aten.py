@@ -1,17 +1,24 @@
-"""Per-op ATen-operation accessor for ``Op`` (``CaptureOptions(aten_ops=True)``)."""
+"""Per-op ATen-operation accessors for ``Op`` (``aten_ops`` and the ``gpu_kernels`` view)."""
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING, Any
 
 from ._trace_aten import _require_aten_profile
 
 if TYPE_CHECKING:
+    from .._kernel_telemetry import KernelLaunch
     from .aten_op import AtenOp
+
+#: The detachable kernel-telemetry lane. ``gpu_kernels`` resolves it by name on
+#: read, so ``Op`` always carries the view while neither this layer nor the
+#: package imports the lane (``torchlens/_kernel_telemetry.py``).
+_KERNEL_TELEMETRY_MODULE = "torchlens._kernel_telemetry"
 
 
 class OpAtenMixin:
-    """Adds ``aten_ops`` to :class:`Op`."""
+    """Adds ``aten_ops`` and ``gpu_kernels`` to :class:`Op`."""
 
     # Empty: Op is slotted (``_core``/``_row``); a slotless base would give every op a __dict__.
     __slots__ = ()
@@ -38,3 +45,22 @@ class OpAtenMixin:
             for row in profile.primitive_ops
             if any(ref.op_label == label for ref in row.parent_op_refs)
         )
+
+    @property
+    def gpu_kernels(self) -> tuple[KernelLaunch, ...]:
+        """The GPU kernel launches this op's ATen calls made, deduplicated across those calls.
+
+        The union of ``AtenOp.gpu_kernels`` over the rows in ``aten_ops``: kernels
+        matched to each ATen call by the profiler's correlation id, each launch
+        listed once. When kernel telemetry was off for the trace, the value is one
+        row with ``attribution_status="unavailable"``, never an empty tuple.
+        Reading it needs the optional kernel-telemetry adapter.
+
+        Returns
+        -------
+        tuple[KernelLaunch, ...]
+            The matched kernel launches, or one ``unavailable`` row.
+        """
+
+        telemetry = importlib.import_module(_KERNEL_TELEMETRY_MODULE)
+        return telemetry._op_gpu_kernels(self)
