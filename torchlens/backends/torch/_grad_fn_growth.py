@@ -30,7 +30,7 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ._grad_fn_graph import _extend_grad_fn_graph_relations
+from ._grad_fn_graph import _extend_grad_fn_graph_relations, _rename_appended_labels
 from ._grad_fn_membership import (
     MembershipSweeps,
     _op_module_address,
@@ -260,7 +260,7 @@ def _plan_grad_fn_growth(
         return None
     type_counter = dict(state.type_counter)
     records: OrderedDict[int, GradFn] = OrderedDict()
-    for ordinal_index, (object_id, event) in enumerate(events.items(), start=len(grad_fn_logs)):
+    for ordinal_index, (object_id, event) in enumerate(events.items(), len(state.discovered)):
         records[object_id] = _grad_fn_record_from_discovery(
             trace, object_id, event, event.topology, ordinal_index, type_counter
         )
@@ -284,7 +284,9 @@ def _appendable_discoveries(
     """Return the first discovery of each new node, or ``None`` if one cannot be appended.
 
     A node is appendable when its repeat discoveries agree, it is unpaired and
-    creator-less, and no existing record, forward op or layer names it.
+    creator-less, and no existing record, forward op or layer names it. The
+    live discovery walk may already hold a runtime record for a new node after
+    the projection's records; any other record outside the projection refuses.
     """
 
     events: dict[int, GradFnDiscovered] = {}
@@ -297,11 +299,14 @@ def _appendable_discoveries(
             event.op_label is not None
             or event.param_ref is not None
             or event.creator_object_id is not None
-            or object_id in grad_fn_logs
+            or object_id in state.discovered
             or object_id in state.referenced_ids
             or object_id in state.layer_grad_fn_ids
         ):
             return None
+    runtime_records = sum(object_id in grad_fn_logs for object_id in events)
+    if len(grad_fn_logs) != len(state.discovered) + runtime_records:
+        return None
     return events
 
 
@@ -327,11 +332,21 @@ def _new_record_neighbors(
 
 
 def _commit_grad_fn_growth(trace: Any, state: Any, growth: _GradFnGrowth) -> None:
-    """Append a planned growth to the trace's records and the fold state."""
+    """Append a planned growth to the trace's records and the fold state.
+
+    A runtime record the live walk made for a new node is replaced in place,
+    and its label is replaced in the relations the walk's sync gave it.
+    """
 
     if not growth.records:
         return
     grad_fn_logs = trace._grad_fn_logs
+    renames = {
+        runtime.label: grad_fn_record.label
+        for object_id, grad_fn_record in growth.records.items()
+        if (runtime := grad_fn_logs.get(object_id)) is not None
+        and runtime.label != grad_fn_record.label
+    }
     for object_id, grad_fn_record in growth.records.items():
         grad_fn_logs[object_id] = grad_fn_record
         event = growth.events[object_id]
@@ -342,4 +357,5 @@ def _commit_grad_fn_growth(trace: Any, state: Any, growth: _GradFnGrowth) -> Non
     trace._autograd_grad_fn_order = list(grad_fn_logs)
     state.type_counter = growth.type_counter
     state.membership_sweeps.update(growth.membership_sweeps)
+    _rename_appended_labels(grad_fn_logs, list(growth.records), renames, state.label_to_id)
     _extend_grad_fn_graph_relations(grad_fn_logs, list(growth.records), state.label_to_id)

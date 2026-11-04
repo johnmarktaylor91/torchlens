@@ -177,7 +177,7 @@ def _assign_new_grad_fn_orders(
             child_orders = [
                 child.order
                 for child_id in grad_fn_record.next_grad_fn_ids
-                if (child := new_records.get(child_id) or grad_fn_logs.get(child_id)) is not None
+                if (child := _record_for(child_id, new_records, grad_fn_logs)) is not None
                 and child.order is not None
             ]
             if child_orders and max(child_orders) > 1 and grad_fn_record.order != max(child_orders):
@@ -213,3 +213,12 @@ def _raise_grad_fn_orders_once(grad_fn_logs: dict[int, GradFn]) -> bool:
             grad_fn_record.order = inferred_order
             changed = True
     return changed
+
+
+def _record_for(
+    object_id: int, new_records: Mapping[int, GradFn], grad_fn_logs: Mapping[int, GradFn]
+) -> GradFn | None:
+    """Return the appended record for ``object_id``, else the existing one."""
+
+    record = new_records.get(object_id)
+    return record if record is not None else grad_fn_logs.get(object_id)

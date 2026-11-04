@@ -180,3 +180,50 @@ def _link_appended_records(
                 child.parents = [*child.parents, grad_fn_record.label]
                 touched_child_ids.setdefault(child_id, []).append(grad_fn_record.label)
     return touched_child_ids
+
+
+def _rename_appended_labels(
+    grad_fn_logs: Mapping[int, GradFn],
+    new_ids: Sequence[int],
+    renames: Mapping[str, str],
+    label_to_id: Mapping[str, int],
+) -> None:
+    """Replace runtime labels of appended records in their existing neighbors' relations.
+
+    The live discovery walk syncs relations over its runtime records, whose
+    type counters start from zero each walk; the projection labels the same
+    nodes as a scratch rebuild does. No existing record feeds an appended one,
+    so only an appended record's existing children (parents, siblings) and
+    those children's parents (co-parents) can name a runtime label.
+
+    Parameters
+    ----------
+    grad_fn_logs:
+        Every record, the appended ones in place of their runtime records.
+    new_ids:
+        Object ids of the appended records.
+    renames:
+        Runtime label to projection label, for labels that differ.
+    label_to_id:
+        Label to object id for every record, the appended ones included.
+    """
+
+    if not renames:
+        return
+    new_id_set = set(new_ids)
+
+    def renamed(labels: Sequence[str]) -> list[str]:
+        return [renames.get(label, label) for label in labels]
+
+    for object_id in new_ids:
+        for child_id in grad_fn_logs[object_id].next_grad_fn_ids:
+            child = grad_fn_logs.get(child_id)
+            if child is None or child_id in new_id_set:
+                continue
+            child.parents = renamed(child.parents)
+            child.siblings = renamed(child.siblings)
+            for parent_label in child.parents:
+                parent_id = label_to_id[parent_label]
+                if parent_id not in new_id_set:
+                    parent = grad_fn_logs[parent_id]
+                    parent.co_parents = renamed(parent.co_parents)
