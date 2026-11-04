@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1577 modules, 676487 lines, 0 modules without a docstring.
+83 packages, 1578 modules, 676672 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 54 | 18051 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6358 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46743 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46756 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37082 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 80 | 37254 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -935,7 +935,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46743 lines)
+Computational graph visualization via Graphviz. (89 modules, 46756 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -961,7 +961,7 @@ Computational graph visualization via Graphviz. (89 modules, 46743 lines)
 | `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 337 |
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 350 |
-| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 523 |
+| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 536 |
 | `_encoding` | Encoding-channel core (/L5): declarative value -> visual channels for draw. | 1834 |
 | `_encoding_aggregate` | Exact aggregates for encoding channels on collapsed module boxes and segments. | 409 |
 | `_encoding_request` | The ''EncodingChannelRequest'' carrier shared by ''_encoding'' and ''_color_sources''. | 27 |
@@ -1718,7 +1718,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37082 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (80 modules, 37254 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1732,7 +1732,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_do_target_doors` | Region and slice target doors of ''do'', reached from ''_trace_edits.apply_do_mutation''. | 54 |
 | `_edit_copy` | Field-wise deep copy for ''tl.Edit'' (the ''Edit'' dataclass). | 40 |
 | `_edit_guards` | Call guards shared by the trace edit verbs (''do'', ''set'', hook attachment). | 155 |
-| `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 147 |
+| `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 172 |
 | `_facet_save` | The capture-time save selector for ''trace(save=<facet selector>)''. | 102 |
 | `_facet_union` | Facet unions at the write doors: ''head_a \| head_b'' splits into its facet branches. | 170 |
 | `_facet_writes` | Facet writes: which records serve facet views, and the facet slice an edit is writing. | 191 |
@@ -1744,6 +1744,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_hooks_support` | Leaf helpers for hook normalization (including the hook signature check), live site proxies and facet bookkeeping. | 366 |
 | `_intervened_rerun_guard` | Refuse the legacy rerun of a loaded trace whose saved recipe holds a placeholder. | 167 |
 | `_live_hook_plan` | Hook-plan bookkeeping for the live engines: accounting ids and mid-run handle removal. | 133 |
+| `_masked_spec` | Portable element-masked builtin edits: the dense mask travels in the edit's keywords. | 150 |
 | `_metrics` | Pairwise distance metrics for the multi-trace subpackage. | 239 |
 | `_module_boundary` | Module-boundary live-hook application (the ''tl.module(...)'' door). | 630 |
 | `_op_edits` | Op-level intervention verbs: ''do'', ''grad_for'', facets. | 112 |
@@ -1785,7 +1786,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `helpers` | Built-in helper constructors for TorchLens interventions. | 1341 |
 | `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1720 |
 | `injection` | ''log_injections'' stages 0-2: anchored injected-op recording (/). | 858 |
-| `masked_edit` | Engine-owned masked-edit derivation for ''do(selection, edit)''. | 250 |
+| `masked_edit` | Engine-owned masked-edit derivation for ''do(selection, edit)''. | 247 |
 | `model_door` | The ONE audited model-argument funnel (surgery item 10, OP2). | 221 |
 | `param_substitution` | Parameter substitution: apply edits "as if" a parameter were changed. | 744 |
 | `population` | The public population noun for stochastic/population edits (edits ). | 651 |
