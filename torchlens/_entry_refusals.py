@@ -61,11 +61,11 @@ def refuse_aliasing_parent_not_in_call_args() -> NoReturn:
 
 
 def refuse_bound_root(method: object) -> NoReturn:
-    """Raise ``bound_root_method_invalid`` for a root that is not a bound module method."""
+    """Raise ``root_not_a_bound_module_method`` for a root that is not a bound module method."""
 
     raise ArgumentTypeError(
         f"TLBoundMethodRoot wraps a bound method of an nn.Module; got {type(method).__name__}",
-        code="bound_root_method_invalid",
+        code="root_not_a_bound_module_method",
         remedy="pass a bound method of an nn.Module instance, such as model.forward",
         received_type=type(method).__name__,
     )

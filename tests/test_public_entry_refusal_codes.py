@@ -37,7 +37,12 @@ HELPER_CASES: tuple[tuple[str, Callable[[], Any], type[BaseException], str], ...
         RuntimeError,
         "aliasing_parent_not_in_call_args",
     ),
-    ("bound_root", lambda: refusals.refuse_bound_root(len), TypeError, "bound_root_method_invalid"),
+    (
+        "bound_root",
+        lambda: refusals.refuse_bound_root(len),
+        TypeError,
+        "root_not_a_bound_module_method",
+    ),
     (
         "foreign_workspace",
         lambda: refusals.refuse_if_foreign_workspace(object(), object()),
