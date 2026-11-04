@@ -33,9 +33,9 @@ from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, Typograph
 
 #: The default ``torchlens`` skin's palette: the released look, ruled on
 #: 3 Nov 2026 to stay exactly as released. Pale green input, salmon output,
-#: grey weights (trainable lighter than frozen) and every other node white:
-#: a branch test and a buffer fill like an ordinary op (the test's outcome is
-#: on its label, the buffer's cylinder is its cue). It does not pass the CVD
+#: grey weights (trainable lighter than frozen), one yellow for every branch
+#: test (its outcome is on its label) and every other node white (a buffer's
+#: cylinder is its cue). It does not pass the CVD
 #: gate (input~params_frozen and params_generic~params_trainable collide under
 #: every simulation); the ``colorblind`` skin is the accessible choice.
 RELEASED_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
@@ -46,7 +46,8 @@ RELEASED_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
         "params_trainable": "#D9D9D9",
         "params_frozen": "#B0B0B0",
         "params_gradient": "#D9D9D9:#B0B0B0",
-        "boolean": "white",
+        "boolean": "#F7D460",
+        "boolean_false": "#F7D460",
         "buffer": "white",
         "intervention": "#CC79A7",
     }
@@ -458,19 +459,19 @@ _FALSE_TEST_SHARE = 0.45
 def _role_fill(theme: VisualizationTheme, role: str, constant: str) -> str:
     """Return the skin's fill for one role, deriving the False-test pale.
 
-    The pale is the boolean colour mixed toward white in every skin: mixing
+    A skin that names ``boolean_false`` (the released default) uses it as
+    given. Otherwise the pale is the boolean colour mixed toward white: mixing
     toward the dark skin's page gave a dark olive that black ink could not
     read on, and white keeps both halves of a mixed test light.
     """
 
     if role != "boolean_false":
         return theme.semantic_palette.get(role, constant)
-    named = theme.semantic_palette.get("boolean", "#F7D460")
-    boolean = _hex_rgb(named)
+    if "boolean_false" in theme.semantic_palette:
+        return theme.semantic_palette["boolean_false"]  # the released skin: one test fill
+    boolean = _hex_rgb(theme.semantic_palette.get("boolean", "#F7D460"))
     if boolean is None:
         return constant
-    if boolean == (255, 255, 255):
-        return named  # a white test (the default skin) stays the plain-op white
     mixed = (round(255 + (boolean[i] - 255) * _FALSE_TEST_SHARE) for i in range(3))
     return "#" + "".join(f"{channel:02X}" for channel in mixed)
 

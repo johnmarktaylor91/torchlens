@@ -400,7 +400,7 @@ SLIDES: tuple[Slide, ...] = (
         id="loop-rolled",
         title="Loops, rolled: pass counts",
         rule="(x3) means one node ran three times with the same weights; In and Out say which "
-        "passes used each edge.",
+        "passes used an edge when not every pass did.",
         panels=(
             Panel(
                 "a",
@@ -447,11 +447,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="branches",
         title="Branches: which arm ran",
-        rule="The IF test is the comparison that chose the arm; its first row reads IF: TRUE or "
-        "IF: FALSE. It has no outgoing arrow because it steered Python, not tensors.",
+        rule="The yellow IF test is the comparison that chose the arm; its first row reads IF: TRUE "
+        "or IF: FALSE. It has no outgoing arrow because it steered Python, not tensors.",
         panels=(Panel("a", "Branch"),),
         keys=(
-            Key("IF on the test, with its outcome; a dead end", "node(text~IF)"),
+            Key("Yellow boolean, a dead end", "node(fillcolor={bool_color})"),
+            Key("IF on the test, with its outcome", "node(text~IF)"),
             Key("THEN into the first op of the arm that ran", "edge(text~THEN)"),
             Key("The arm that did not run is absent", None),
         ),
@@ -1497,6 +1498,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("not from the input", "dashed", "a", "node(style^dashed, text~sigmoid)"),
             ("buffer", "buffers", "a", "node(shape=cylinder)"),
             ("fed by hidden buffers", "buffers", "a", "node(peripheries=2)"),
+            ("boolean that chose a branch", "branches", "a", "node(fillcolor={bool_color})"),
             ("IF test and its outcome", "branches", "a", "node(text~IF)"),
             ("whole module", "depth", "a", "node(shape=box3d)"),
             ("run of ops (segment)", "collapse-max", "a", "node(style^rounded)"),

@@ -392,8 +392,8 @@ def key_swatches(
 def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch | None:
     """Return one key entry with the skin's fill and border for its mark.
 
-    ``None`` for an oval the skin fills like a plain op (the default skin's
-    branch test): a swatch identical to every function call teaches nothing.
+    ``None`` for an oval the skin fills like a plain op: a swatch identical
+    to every function call teaches nothing.
     """
 
     from .node_spec import NodeSpec

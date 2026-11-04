@@ -48,7 +48,8 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
         "params_trainable": "#D9D9D9",
         "params_frozen": "#B0B0B0",
         "params_gradient": "#D9D9D9:#B0B0B0",
-        "boolean": "white",
+        "boolean": "#F7D460",
+        "boolean_false": "#F7D460",
         "buffer": "white",
         "intervention": "#CC79A7",
     }

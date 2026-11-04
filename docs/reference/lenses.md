@@ -94,7 +94,8 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
 - **Skins are live (N4).** Semantic role colours resolve through the
   active skin's palette at the one theme seam. The default `torchlens` skin keeps the
   released look: light green input, salmon output, light grey trainable and darker grey
-  frozen weights, and every other node white (a branch test reads `IF: TRUE` on its label).
+  frozen weights, yellow branch tests (the label reads `IF: TRUE` or `IF: FALSE`) and every
+  other node white.
   The `colorblind` skin renders the Okabe-Ito set with grey weights (green input, vermillion
   output), the set with CVD evidence attached; `paper` and `high_contrast` keep the legacy
   role colours and `dark` its dark remap. No skin draws blue.

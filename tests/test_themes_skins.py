@@ -85,9 +85,10 @@ def test_mixed_if_test_splits_hard_in_pass_order_in_every_skin() -> None:
     assert reverse == f"{true_fill};0.67:{BOOL_FALSE_NODE_COLOR}"
     for skin in sorted(THEME_PRESETS):
         painted = apply_theme_to_spec(NodeSpec(lines=["x"], fillcolor=fill), resolve_theme(skin))
-        if THEME_PRESETS[skin].semantic_palette["boolean"] == "white":
-            # The default skin fills every test like an ordinary op: one plain fill.
-            assert painted.fillcolor == "white", skin
+        palette = THEME_PRESETS[skin].semantic_palette
+        if "boolean_false" in palette:
+            # The released default fills every test one yellow; the label carries the outcome.
+            assert painted.fillcolor == palette["boolean"] == palette["boolean_false"], skin
             continue
         assert re.fullmatch(r"#[0-9A-Fa-f]{6};0\.67:#[0-9A-Fa-f]{6}", str(painted.fillcolor)), skin
         assert not any(_is_blue(color) for color in _hexes(painted.fillcolor)), skin
@@ -158,14 +159,15 @@ _RELEASED_DEFAULT_FILLS = {
     "params_generic": "#E6E6E6",
     "params_trainable": "#D9D9D9",
     "params_frozen": "#B0B0B0",
+    "boolean": "#F7D460",
 }
 
 
 def test_default_skin_fills_are_the_released_palette_edit_deliberately(tmp_path: Any) -> None:
     """A plain forward drawing in the default skin uses only white and the released fills.
 
-    Input pale green, output salmon, weights grey (trainable lighter than frozen), and
-    every other node, the branch test included, white.
+    Input pale green, output salmon, weights grey (trainable lighter than frozen), the
+    branch test yellow whatever its outcome, and every other node white.
     """
 
     torch.manual_seed(0)
@@ -179,9 +181,9 @@ def test_default_skin_fills_are_the_released_palette_edit_deliberately(tmp_path:
         for value in re.findall(r'(?:fillcolor|BGCOLOR)=("[^"]*"|[^\s\]>]+)', dot)
     }
     released = {value.lower() for value in _RELEASED_DEFAULT_FILLS.values()}
-    allowed = released | {"white", "#ffffff", "#d9d9d9:#b0b0b0"}
+    allowed = released | {"white", "#d9d9d9:#b0b0b0"}
     assert fills <= allowed, sorted(fills - allowed)
-    for role in ("input", "output", "params_trainable", "params_frozen"):
+    for role in ("input", "output", "params_trainable", "params_frozen", "boolean"):
         assert _RELEASED_DEFAULT_FILLS[role].lower() in fills, (role, sorted(fills))
 
 
