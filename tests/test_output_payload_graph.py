@@ -161,3 +161,14 @@ def test_detached_trace_keeps_the_function_output_detached() -> None:
         capture=CaptureOptions(detach_saved_activations=True),
     )
     assert _output_row(trace).out.grad_fn is None
+
+
+def test_recorded_trace_keeps_the_function_output_detached() -> None:
+    """A Trace cooked from a Recording stores detached payloads, the output row included."""
+
+    recording = tl.record(
+        _DirectFunctionOutput(), torch.randn(2, 3).requires_grad_(True), save=tl.func("__mul__")
+    )
+    output = _output_row(recording.to_trace())
+    assert output.out is not None
+    assert output.out.grad_fn is None
