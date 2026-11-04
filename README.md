@@ -687,7 +687,7 @@ saved activations are unaffected either way.
 
 | Resource | Description |
 |---|---|
-| [Learn TorchLens](notebooks/learn/README.md) | Start here: eleven notebooks in order, each runs on a laptop CPU in about a minute |
+| [Learn TorchLens](notebooks/learn/README.md) | Start here: eleven notebooks in order, each runs on a laptop CPU in seconds |
 | [00_quickstart.ipynb](notebooks/learn/00_quickstart.ipynb) | You have a model and want to see inside it |
 | [01_capture_and_look.ipynb](notebooks/learn/01_capture_and_look.ipynb) | A model in hand |
 | [02_address_and_read.ipynb](notebooks/learn/02_address_and_read.ipynb) | You want a number out |
