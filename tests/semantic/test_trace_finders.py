@@ -62,3 +62,55 @@ def test_trace_finders_use_available_now_semantics() -> None:
     assert list(log.modules_with_facet("normalized")) == []
     assert log.modules["attn"].facets.declared()["q"].status == "needs_capture"
     assert log.modules["norm"].facets.declared()["normalized"].status == "needs_capture"
+
+
+class _VitStyleModel(nn.Module):
+    """One attention block called once and one dropout reused around it (ViT layout)."""
+
+    def __init__(self) -> None:
+        """Initialize the single-call attention and the shared dropout."""
+
+        super().__init__()
+        self.attn = DistilBertSdpaAttention()
+        self.dropout = nn.Dropout(0.0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run dropout, attention, dropout."""
+
+        return self.dropout(self.attn(self.dropout(x)))
+
+
+class _AlbertStyleModel(nn.Module):
+    """One attention block whose weights are shared across two layer calls (ALBERT layout)."""
+
+    def __init__(self) -> None:
+        """Initialize the shared attention block."""
+
+        super().__init__()
+        self.shared = DistilBertSdpaAttention()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the shared block twice."""
+
+        return self.shared(self.shared(x))
+
+
+def test_modules_with_facet_skips_reused_modules_without_the_facet() -> None:
+    """A reused dropout no longer aborts the sweep; the single-call attention block is found."""
+
+    log = trace_fn(_VitStyleModel(), torch.randn(2, 3, 8))
+
+    assert log.modules["dropout"].num_calls == 2
+    assert [module.address for module in log.modules_with_facet("q")] == ["attn"]
+    assert [module.address for module in log.attention_blocks()] == ["attn"]
+
+
+def test_modules_with_facet_refuses_a_shared_layer_that_declares_the_facet() -> None:
+    """A shared attention layer is refused by name, never silently dropped from the sweep."""
+
+    log = trace_fn(_AlbertStyleModel(), torch.randn(2, 3, 8))
+
+    with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' has 2 calls") as info:
+        list(log.modules_with_facet("q"))
+    assert info.value.fields["code"] == "module_call_ambiguous"
+    assert list(log.modules_with_facet("normalized")) == []

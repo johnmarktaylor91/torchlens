@@ -1024,8 +1024,8 @@ torchlens/debug/_determinism.py::check_determinism	138
 torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
-torchlens/debug/_gradients.py::grad_health	66
-torchlens/debug/_gradients.py::gradient_flow_audit_rows	145
+torchlens/debug/_gradients.py::grad_health	65
+torchlens/debug/_gradients.py::gradient_flow_audit_rows	144
 torchlens/debug/_graph.py::_compare_rows	126
 torchlens/debug/_graph.py::dead_neurons_rows	76
 torchlens/debug/_graph.py::lineage	80
@@ -1085,7 +1085,6 @@ torchlens/intervention/_hooks_support.py::make_live_site_proxy	67
 torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	84
 torchlens/intervention/_patch_mapping.py::apply_position_map	72
 torchlens/intervention/_position_edits.py::positions	85
-torchlens/intervention/_replay_cone.py::cone_of_effect	65
 torchlens/intervention/_rerun_ledger.py::_build_ledger_record	66
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	367
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key._enforce_foreign_trust	69
@@ -1098,7 +1097,7 @@ torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_
 torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	108
 torchlens/intervention/_trace_edits.py::apply_do_mutation	79
-torchlens/intervention/_trace_edits.py::do_with_options	90
+torchlens/intervention/_trace_edits.py::do_with_options	65
 torchlens/intervention/_trace_edits.py::set_site	63
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	79
@@ -1142,12 +1141,12 @@ torchlens/intervention/regions.py	1048
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1679
+torchlens/intervention/replay.py	1678
 torchlens/intervention/replay.py::_commit_replay_updates	72
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
-torchlens/intervention/replay.py::_run_replay	153
+torchlens/intervention/replay.py::_run_replay	152
 torchlens/intervention/rerun.py	1640
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90

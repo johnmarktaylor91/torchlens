@@ -2757,7 +2757,7 @@ docs-md	docs/maintainers/where.md	1078
 docs-md	docs/maintainers/where.md	108
 docs-md	docs/maintainers/where.md	1083
 docs-md	docs/maintainers/where.md	1084
-docs-md	docs/maintainers/where.md	10929
+docs-md	docs/maintainers/where.md	10914
 docs-md	docs/maintainers/where.md	1097
 docs-md	docs/maintainers/where.md	11
 docs-md	docs/maintainers/where.md	11,
@@ -2888,7 +2888,7 @@ docs-md	docs/maintainers/where.md	1656
 docs-md	docs/maintainers/where.md	1667
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	1676
-docs-md	docs/maintainers/where.md	1679
+docs-md	docs/maintainers/where.md	1678
 docs-md	docs/maintainers/where.md	168
 docs-md	docs/maintainers/where.md	169
 docs-md	docs/maintainers/where.md	17
@@ -3043,7 +3043,7 @@ docs-md	docs/maintainers/where.md	2638
 docs-md	docs/maintainers/where.md	264
 docs-md	docs/maintainers/where.md	265
 docs-md	docs/maintainers/where.md	266
-docs-md	docs/maintainers/where.md	26636
+docs-md	docs/maintainers/where.md	26668
 docs-md	docs/maintainers/where.md	267
 docs-md	docs/maintainers/where.md	268
 docs-md	docs/maintainers/where.md	269
@@ -3168,7 +3168,7 @@ docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	369
 docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	37006
-docs-md	docs/maintainers/where.md	37020
+docs-md	docs/maintainers/where.md	37082
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
 docs-md	docs/maintainers/where.md	372
@@ -3353,7 +3353,7 @@ docs-md	docs/maintainers/where.md	563
 docs-md	docs/maintainers/where.md	564
 docs-md	docs/maintainers/where.md	565
 docs-md	docs/maintainers/where.md	566
-docs-md	docs/maintainers/where.md	56689
+docs-md	docs/maintainers/where.md	56757
 docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	57
@@ -3462,7 +3462,6 @@ docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	710
 docs-md	docs/maintainers/where.md	712
-docs-md	docs/maintainers/where.md	713
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	7145
 docs-md	docs/maintainers/where.md	715
@@ -3478,7 +3477,6 @@ docs-md	docs/maintainers/where.md	7259
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	731
 docs-md	docs/maintainers/where.md	732
-docs-md	docs/maintainers/where.md	735
 docs-md	docs/maintainers/where.md	739
 docs-md	docs/maintainers/where.md	74
 docs-md	docs/maintainers/where.md	740
@@ -3490,12 +3488,10 @@ docs-md	docs/maintainers/where.md	749
 docs-md	docs/maintainers/where.md	75
 docs-md	docs/maintainers/where.md	750
 docs-md	docs/maintainers/where.md	751
-docs-md	docs/maintainers/where.md	752
 docs-md	docs/maintainers/where.md	754
 docs-md	docs/maintainers/where.md	755
 docs-md	docs/maintainers/where.md	756
 docs-md	docs/maintainers/where.md	757
-docs-md	docs/maintainers/where.md	758
 docs-md	docs/maintainers/where.md	76
 docs-md	docs/maintainers/where.md	760
 docs-md	docs/maintainers/where.md	761
@@ -3506,6 +3502,7 @@ docs-md	docs/maintainers/where.md	7651
 docs-md	docs/maintainers/where.md	767
 docs-md	docs/maintainers/where.md	77
 docs-md	docs/maintainers/where.md	771
+docs-md	docs/maintainers/where.md	772
 docs-md	docs/maintainers/where.md	773
 docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
@@ -7679,7 +7676,14 @@ package-docstrings	torchlens/backends/torch/_tl.py	81
 package-docstrings	torchlens/backends/torch/_tl.py	83
 package-docstrings	torchlens/backends/torch/_tl.py	83.
 package-docstrings	torchlens/backends/torch/_tl.py	85
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	128
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	15232
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	16,
 package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	2.7
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	2.8,
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	2.8.3.
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	40
+package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	64,
 package-docstrings	torchlens/backends/torch/_trace_backward.py	21
 package-docstrings	torchlens/backends/torch/_transform_wrappers.py	39
 package-docstrings	torchlens/backends/torch/_view_writeback.py	31
