@@ -589,7 +589,7 @@ torchlens/_visualization/_render_flow.py::_enumerate_base_rendered_node_emission
 torchlens/_visualization/_render_flow.py::_enumerate_run_fold_ellipsis_emissions	116
 torchlens/_visualization/_render_flow.py::_expand_edges_through_skipped	86
 torchlens/_visualization/_render_flow.py::_render_edge_occurrences	80
-torchlens/_visualization/_render_leaf.py	2366
+torchlens/_visualization/_render_leaf.py	2262
 torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86

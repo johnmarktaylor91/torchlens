@@ -6,6 +6,7 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
     box_channel_spec,
@@ -1823,9 +1824,8 @@ def _is_only_non_buffer_in_module(
 def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
-    Maps node types to colors: input=green, output=red, boolean=yellow,
-    buffer=orange, parameterized layers=light gray (trainable), dark gray
-    (frozen) or a two-tone split (both), default=white.
+    Maps node types to role fills: input, output, boolean (pale when False, split
+    when passes disagree), buffer, weights (trainable, frozen, or split), plain.
 
     Args:
         node: node to add
@@ -1838,7 +1838,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_output:
         bg_color = OUTPUT_COLOR
     elif node.is_terminal_bool:
-        bg_color = BOOL_NODE_COLOR
+        bg_color = bool_node_fill(node, BOOL_NODE_COLOR)
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
@@ -2024,7 +2024,7 @@ def compute_default_node_lines(
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:
-        lines.append(str(layer_log.bool_value).upper())
+        lines.append(bool_value_line(layer_log))
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
     # data, escaped like every row by the S5 choke point).

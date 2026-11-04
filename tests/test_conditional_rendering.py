@@ -238,37 +238,52 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
-    """Condition-entry edges label the first test ``IF`` and each later test ``ELIF``.
+def _find_node_line(dot_source: str, layer_label: str) -> str:
+    """Return the DOT line that declares one rendered node.
 
-    Distinct from the arm-entry labels (THEN/ELIF N/ELSE): these are the edges entering each
-    branch *test*. Historically every one was hardcoded ``IF``; an if/elif ladder must show
-    ``IF`` for the leading test and ``ELIF`` for every subsequent one.
+    Parameters
+    ----------
+    dot_source:
+        Graphviz DOT source.
+    layer_label:
+        Layer label from the model log.
+
+    Returns
+    -------
+    str
+        Matching DOT line.
+    """
+    names = {layer_label.replace(":", "pass"), layer_label.split(":")[0]}
+    for line in dot_source.splitlines():
+        if "->" not in line and line.strip().split(" ", 1)[0] in names:
+            return line
+    raise AssertionError(f"Could not find node line for {layer_label!r}")
+
+
+def test_elif_ladder_tests_name_if_then_elif_on_the_test_node() -> None:
+    """The leading test node reads ``IF:`` and each later test ``ELIF:``.
+
+    Distinct from the arm-entry labels (THEN/ELIF N/ELSE) on edges: the test kind sits on
+    the test itself, and the edges entering each condition subgraph carry no ``IF`` label.
     """
     dot_source, trace = _render_dot_source(ElifLadderModel(), torch.tensor([[0.25]]))
     try:
-        # bool_layers is ordered [if_bool, elif_1_bool, elif_2_bool]; the mean feeding each
-        # bool is that test's condition-entry child.
         bool_layers = trace.graph.conditional_records[0].bool_layers
-        expected_by_bool = {bl: ("IF" if i == 0 else "ELIF") for i, bl in enumerate(bool_layers)}
-        # map each condition-entry child (mean_N) to its downstream bool via the single child
+        for index, bool_label in enumerate(bool_layers):
+            node_line = _find_node_line(dot_source, bool_label)
+            expected = "IF:" if index == 0 else "ELIF:"
+            assert expected in node_line, f"{bool_label} -> expected {expected}: {node_line}"
+            if index == 0:
+                assert "ELIF" not in node_line
         for parent_label, child_label in trace.graph.conditional_branch_edges:
-            downstream = trace[child_label].children[0]
-            expected = expected_by_bool[downstream]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
-            assert expected in edge_line, f"{child_label} -> expected {expected}, line: {edge_line}"
-        # sanity: exactly one IF, and at least one ELIF (it is a ladder)
-        kinds = [
-            expected_by_bool[trace[c].children[0]] for _, c in trace.graph.conditional_branch_edges
-        ]
-        assert kinds.count("IF") == 1
-        assert kinds.count("ELIF") == len(kinds) - 1
+            assert "<u>IF</u>" not in edge_line and "<u>ELIF</u>" not in edge_line
     finally:
         trace.cleanup()
 
 
 # Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
-def test_loop_repeated_if_condition_entries_remain_if() -> None:
+def test_loop_repeated_if_tests_remain_if() -> None:
     """Repeated evaluations of one source ``if`` never become an ELIF ladder."""
 
     dot_source, trace = _render_dot_source(LoopRepeatedIfModel(), torch.ones(2, 2))
@@ -280,12 +295,8 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
             == {"if_test"}
             for bool_label in event.bool_layers
         )
-        edge_lines = [
-            _find_edge_line(dot_source, parent_label, child_label)
-            for parent_label, child_label in trace.graph.conditional_branch_edges
-        ]
-        assert len(edge_lines) == 4
-        assert all("IF" in line and "ELIF" not in line for line in edge_lines)
+        node_lines = [_find_node_line(dot_source, label) for label in event.bool_layers]
+        assert all("IF:" in line and "ELIF" not in line for line in node_lines)
     finally:
         trace.cleanup()
 

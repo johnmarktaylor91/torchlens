@@ -97,6 +97,7 @@ _NON_ROLE_SHAPES = frozenset({"plaintext", "plain", "none", "point"})
 def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
     """Return each fill-coded role's rendered fills under ``theme``, lowercased."""
 
+    from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
     from ._render_common import (
         BOOL_NODE_COLOR,
         BUFFER_NODE_COLOR,
@@ -128,7 +129,9 @@ def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
             f"{TRAINABLE_PARAMS_BG_COLOR}:{FROZEN_PARAMS_BG_COLOR}",
         ),
         "buffer": themed(BUFFER_NODE_COLOR),
-        "boolean": themed(BOOL_NODE_COLOR),
+        "boolean": themed(
+            BOOL_NODE_COLOR, BOOL_FALSE_NODE_COLOR, f"{BOOL_NODE_COLOR}:{BOOL_FALSE_NODE_COLOR}"
+        ),
     }
 
 

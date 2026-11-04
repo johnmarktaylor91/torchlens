@@ -158,7 +158,7 @@ def _keys_kept_in_svg(source: str, svg: str) -> tuple[list[str], list[str]]:
 
     wanted: list[tuple[str, str, str]] = []
     for tail, head, attrs in re.findall(r"^\s*(\S+) -> (\S+) \[(.*)\]\s*$", source, re.MULTILINE):
-        key = re.search(r'POINT-SIZE="8">([^<]*)</FONT>', attrs)
+        key = re.search(r'POINT-SIZE="11">([^<]*)</FONT>', attrs)
         if key and "constraint=false" in attrs:
             wanted.append((tail, head, key.group(1)))
     edge_bodies: dict[str, list[str]] = {}
@@ -213,7 +213,7 @@ def test_nodes_mode_names_a_submodule_dict_returned_as_model_output(tmp_path: Pa
     # One solid keyed edge per head; no dashed member-of tie on a boundary container.
     assert len(into_sink) == 2
     assert all("style=solid" in attrs and "arrowhead=none" not in attrs for attrs in into_sink)
-    assert {re.search(r'POINT-SIZE="8">([^<]*)<', a).group(1) for a in into_sink} == {  # type: ignore[union-attr]
+    assert {re.search(r'POINT-SIZE="11">([^<]*)<', a).group(1) for a in into_sink} == {  # type: ignore[union-attr]
         "logits",
         "box",
     }

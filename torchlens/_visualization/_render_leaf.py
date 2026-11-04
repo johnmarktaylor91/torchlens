@@ -18,10 +18,6 @@ from ._backward_inventory import (
 from ._render_common import *
 from ._typography import DEFAULT_TYPOGRAPHY
 
-# Bound the forward walk that maps a branch-entry edge to its condition bool, so a
-# malformed/huge conditional subgraph can never turn edge labelling into a hot loop.
-_BRANCH_KIND_SEARCH_LIMIT = 256
-
 # the opt-in backward rows of the ``draw_backward`` call being rendered
 # (a ``_backward_rows.BackwardRowOptions``; ``None`` adds no rows).
 _BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
@@ -1635,8 +1631,9 @@ def _compute_edge_label(
 
     1. Arm-entry labels from ``Trace.graph.conditional_arm_entry_edges`` /
        ``Trace.graph.conditional_edge_call_indices``.
-    2. ``IF`` labels from ``Trace.graph.conditional_branch_edges``.
-    3. ``None`` when the edge has no branch semantics.
+    2. ``None`` otherwise. The ``IF``/``ELIF`` kind is drawn on the test node
+       itself (``_bool_outcomes.bool_value_line``), not on the edges entering
+       the condition subgraph.
 
     Args:
         parent_node:
@@ -1656,9 +1653,6 @@ def _compute_edge_label(
     arm_label = _compute_arm_entry_edge_label(parent_node, child_node, trace, vis_mode)
     if arm_label is not None:
         return _format_branch_edge_label_html(arm_label)
-
-    if _edge_is_conditional_branch(parent_node, child_node, trace, vis_mode):
-        return _format_branch_edge_label_html(_conditional_branch_edge_kind(child_node, trace))
 
     return None
 
@@ -1996,103 +1990,6 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
     return 10**9
 
 
-def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trace") -> str:
-    """Return the branch-test kind (``IF`` or ``ELIF``) for a branch-entry edge.
-
-    ``conditional_branch_edges`` records the edges that enter each condition test but carries
-    no kind. Map the edge's child to the nearest downstream branch bool via a bounded forward
-    walk, then use that bool's AST-derived ``conditional_context_kind``. This remains honest
-    when one source-level ``if`` is evaluated repeatedly in a loop: every evaluation is ``IF``
-    even though all evaluations accumulate in one conditional event. Static ``elif`` tests are
-    classified directly as ``elif_test`` and continue to render as ``ELIF``.
-
-    Parameters
-    ----------
-    child_node:
-        Destination node of the branch-entry edge (the condition-subgraph entry).
-    trace:
-        Owning trace with ``conditional_records`` metadata.
-
-    Returns
-    -------
-    str
-        ``"IF"`` or ``"ELIF"`` (falls back to ``"IF"`` if no bool is reachable).
-    """
-    bool_kind: dict[str, str] = {}
-    for event in trace._graph_conditional_records or ():
-        for bool_label in getattr(event, "bool_layers", ()) or ():
-            bool_layer = trace.layers[bool_label]
-            bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
-            context_kinds = (
-                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
-                if bool_ops
-                else {getattr(bool_layer, "conditional_context_kind", None)}
-            )
-            kind = "ELIF" if context_kinds == {"elif_test"} else "IF"
-            bool_kind[bool_label.split(":", 1)[0]] = kind
-    if not bool_kind:
-        return "IF"
-
-    start = child_node.layer_label.split(":", 1)[0]
-    seen: set[str] = {start}
-    frontier = deque([start])
-    steps = 0
-    while frontier and steps < _BRANCH_KIND_SEARCH_LIMIT:
-        steps += 1
-        current = frontier.popleft()
-        if current in bool_kind:
-            return bool_kind[current]
-        # ``label in trace`` disagrees with ``trace[label]`` for some intermediate
-        # condition ops, so resolve by indexing and treat a miss as a dead end.
-        try:
-            node = trace[current]
-        except (KeyError, ValueError):
-            continue
-        for child_label in getattr(node, "children", ()):
-            base = child_label.split(":", 1)[0]
-            if base not in seen:
-                seen.add(base)
-                frontier.append(base)
-    return "IF"
-
-
-def _edge_is_conditional_branch(
-    parent_node: Union["Op", "Layer"],
-    child_node: Union["Op", "Layer"],
-    trace: "Trace",
-    vis_mode: str,
-) -> bool:
-    """Return True when an edge is an ``IF`` branch-entry edge.
-
-    Args:
-        parent_node:
-            Source node for the edge.
-        child_node:
-            Destination node for the edge.
-        trace:
-            Owning model log containing conditional metadata.
-        vis_mode:
-            ``"unrolled"`` or ``"rolled"``.
-
-    Returns
-    -------
-    bool
-        True when the edge appears in ``conditional_branch_edges``.
-    """
-    if vis_mode == "unrolled":
-        return (
-            parent_node.layer_label,
-            child_node.layer_label,
-        ) in trace._graph_conditional_branch_edges
-    if vis_mode == "rolled":
-        edge_key = (parent_node.layer_label, child_node.layer_label)
-        return any(
-            (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
-            for branch_parent, branch_child in trace._graph_conditional_branch_edges
-        )
-    raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
-
-
 def _format_branch_edge_label_html(label_text: str) -> str:
     """Wrap plain branch-label text in the Graphviz HTML used by TorchLens.
 
@@ -2324,7 +2221,6 @@ __all__ = [
     "_container_group_id",
     "_container_kind",
     "_container_path_label",
-    "_edge_is_conditional_branch",
     "_first_tensor_in_obj",
     "_format_arm_entry_text",
     "_format_backward_output_shape",
