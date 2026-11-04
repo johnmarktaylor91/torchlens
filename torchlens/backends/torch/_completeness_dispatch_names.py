@@ -14,6 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
+from ._consumer_kind import _classify_consumer_kind
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -615,4 +616,3 @@ from .completeness_witness import (  # noqa: E402
     _TORCHLENS_ROOT,
     _DispatchCallsite,
 )
-from .structure_only_belt import _classify_consumer_kind  # noqa: E402
