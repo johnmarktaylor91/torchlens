@@ -38,10 +38,7 @@ def explain(
     Returns
     -------
     dict[str, Any]
-        Contract payload containing SHAP values and the explainer object. TorchLens
-        draws no SHAP plots: for shap's own, wrap the values first, as in
-        ``shap.plots.beeswarm(shap.Explanation(result["values"],
-        base_values=result["explainer"].expected_value))``.
+        SHAP values and explainer; for shap's plots wrap ``values`` in ``shap.Explanation``.
 
     Raises
     ------
