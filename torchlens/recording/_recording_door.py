@@ -62,29 +62,24 @@ def _unfold_recording_options(
         (``record_capture_option_unsupported``).
     """
 
-    knobs = _read_recording_door(recording, api_name=api_name)
+    if recording is None:
+        knobs = dict.fromkeys(_RECORDING_DOOR_FIELDS, MISSING)
+    else:
+        unread = sorted(set(recording._specified_fields) - set(_RECORDING_DOOR_FIELDS))  # noqa: SLF001
+        if unread:
+            raise ArgumentTypeError(
+                f"{api_name} does not read recording= field(s) {', '.join(unread)}: "
+                "keep_op and intervene are the constructor's save= and intervene=, and "
+                "postprocess is a tl.record enrichment, so they would be a silent no-op",
+                code="record_capture_option_unsupported",
+                remedy=f"pass the predicate as {api_name}(save=...) and the intervention as "
+                "intervene=; run postprocess through tl.record or Recording.enrich",
+                argument="recording",
+            )
+        knobs = {
+            name: getattr(recording, name) if recording._is_field_explicit(name) else MISSING  # noqa: SLF001
+            for name in _RECORDING_DOOR_FIELDS
+        }
     if lean is not MISSING:
         knobs["lean"] = lean
     return knobs
-
-
-def _read_recording_door(recording: RecordingOptions | None, *, api_name: str) -> dict[str, Any]:
-    """Return one entry per door field: the explicit value, else ``MISSING``."""
-
-    if recording is None:
-        return dict.fromkeys(_RECORDING_DOOR_FIELDS, MISSING)
-    unread = sorted(set(recording._specified_fields) - set(_RECORDING_DOOR_FIELDS))  # noqa: SLF001
-    if unread:
-        raise ArgumentTypeError(
-            f"{api_name} does not read recording= field(s) {', '.join(unread)}: "
-            "keep_op and intervene are the constructor's save= and intervene=, and "
-            "postprocess is a tl.record enrichment, so they would be a silent no-op",
-            code="record_capture_option_unsupported",
-            remedy=f"pass the predicate as {api_name}(save=...) and the intervention as "
-            "intervene=; run postprocess through tl.record or Recording.enrich",
-            argument="recording",
-        )
-    return {
-        name: getattr(recording, name) if recording._is_field_explicit(name) else MISSING  # noqa: SLF001
-        for name in _RECORDING_DOOR_FIELDS
-    }
