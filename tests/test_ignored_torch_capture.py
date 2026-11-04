@@ -10,7 +10,9 @@ validation plus live replay agree with a plain forward.
 
 from __future__ import annotations
 
+import io
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 import torch
@@ -208,3 +210,169 @@ def test_torchlens_rng_snapshots_record_no_rng_state_op() -> None:
     finally:
         log.cleanup()
     assert tl.validate(model, _input_4x4(), scope="forward") is True
+
+
+# ---------------------------------------------------------------------------
+# The rest of the ignored list that returns a tensor and escaped (ignored-funcs-triage).
+# View-function methods replay a view's chain onto a new base; ``_rev_view_func_unsafe``
+# exists only for views made under original-view tracking.
+# ---------------------------------------------------------------------------
+def _view_of(m: torch.Tensor) -> torch.Tensor:
+    """A transpose view of ``m`` that keeps its forward and reverse view functions."""
+
+    with torch.autograd._force_original_view_tracking(True):
+        return m.t()
+
+
+_VIEW_FUNC_FORWARDS: dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = {
+    "_view_func": lambda m, x: _view_of(m)._view_func(x * 2) * 2 + x,
+    "_view_func_unsafe": lambda m, x: _view_of(m)._view_func_unsafe(x * 2) * 2 + x,
+    "_rev_view_func_unsafe": lambda m, x: _view_of(m)._rev_view_func_unsafe(x * 2) * 2 + x,
+}
+_VIEW_FUNCS = tuple(name for name in _VIEW_FUNC_FORWARDS if hasattr(torch.Tensor, name))
+
+
+class _ViewFuncModel(nn.Module):
+    """Replays a recorded view's chain onto a recorded new base and consumes the result."""
+
+    def __init__(self, method: str) -> None:
+        super().__init__()
+        self.method = method
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return _VIEW_FUNC_FORWARDS[self.method](torch.relu(x), x)
+
+
+@pytest.mark.parametrize("method", _VIEW_FUNCS)
+def test_view_func_method_captured_validates_and_replays(method: str) -> None:
+    """The view-function method is decorated, records with the new base as a parent, validates."""
+
+    assert ("torch.Tensor", method) in _decorated_pairs()
+    model, x = _ViewFuncModel(method), _input_4x4()
+    log = tl.trace(model, x)
+    try:
+        (op,) = [op for op in log.ops if op.func_name == method]
+        new_base = [p for p in op.parents if p.startswith("mul")]
+        assert new_base and op.children, (op.parents, op.children)
+    finally:
+        log.cleanup()
+    _assert_validates_and_replays(model, x)
+
+
+class _MkldnnRnnLayerModel(nn.Module):
+    """One LSTM layer through ``torch.mkldnn_rnn_layer`` with parameter weights."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        gen = torch.Generator().manual_seed(0)
+        self.w_ih = nn.Parameter(torch.randn(8, 4, generator=gen) * 0.3)
+        self.w_hh = nn.Parameter(torch.randn(8, 2, generator=gen) * 0.3)
+        self.b_ih = nn.Parameter(torch.randn(8, generator=gen) * 0.1)
+        self.b_hh = nn.Parameter(torch.randn(8, generator=gen) * 0.1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        state = torch.zeros(1, 2)
+        weights = (self.w_ih, self.w_hh, self.b_ih, self.b_hh)
+        # mode 2 is LSTM; hidden 2, one layer, biases, not bidirectional or batch-first, eval.
+        out = torch.mkldnn_rnn_layer(
+            torch.relu(x).unsqueeze(1),
+            *weights,
+            state,
+            state,
+            False,
+            [],
+            2,
+            2,
+            1,
+            True,
+            False,
+            False,
+            False,
+        )
+        return out[0].sum() * 2 + x
+
+
+@pytest.mark.parametrize("name", tuple(n for n in ("mkldnn_rnn_layer",) if hasattr(torch, n)))
+def test_mkldnn_rnn_layer_captured_validates_and_replays(name: str) -> None:
+    """The fused RNN layer records with its input and weights as parents, validates, replays."""
+
+    assert ("torch", name) in _decorated_pairs()
+    model, x = _MkldnnRnnLayerModel(), _input_4x4()
+    log = tl.trace(model, x)
+    try:
+        (op,) = [op for op in log.ops if op.func_name == name]
+        assert len(op.parents) >= 5 and op.children, (op.parents, op.children)
+    finally:
+        log.cleanup()
+    _assert_validates_and_replays(model, x)
+
+
+class _DepTokenModel(nn.Module):
+    """Makes a dependency token, zeroes it, and threads it through a range constraint."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        token = torch._make_dep_token().zero_()
+        constrained = torch._functional_sym_constrain_range(3, 0, 10, token + x.sum())
+        return x * (constrained + 1)
+
+
+def test_dep_token_functions_captured_validate_and_replay() -> None:
+    """``_make_dep_token`` is a parentless factory op; the constraint op takes the token."""
+
+    assert ("torch", "_make_dep_token") in _decorated_pairs()
+    assert ("torch", "_functional_sym_constrain_range") in _decorated_pairs()
+    spec = FUNC_ARG_SPECS[_normalize_func_name("_make_dep_token")]
+    assert spec.positions == () and not spec.tensor_kwargs
+    model, x = _DepTokenModel(), _input_4x4()
+    log = tl.trace(model, x)
+    try:
+        by_name = {op.func_name: op for op in log.ops}
+        assert tuple(by_name["_make_dep_token"].parents) == ()
+        constrained = by_name["_functional_sym_constrain_range"]
+        assert constrained.parents and constrained.children, constrained.parents
+    finally:
+        log.cleanup()
+    _assert_validates_and_replays(model, x)
+
+
+# ---------------------------------------------------------------------------
+# ``torch.load`` in a forward is an exclusion on record (Lead 3, 4 Nov 2026): replay never
+# resolves a file load, so the loaded tensor stays sourceless, and the provenance warning
+# says so by name for both spellings.
+# ---------------------------------------------------------------------------
+def _saved_tensor_bytes() -> bytes:
+    """A 4x4 tensor serialized with ``torch.save``."""
+
+    buf = io.BytesIO()
+    torch.save(torch.arange(16.0).view(4, 4), buf)
+    return buf.getvalue()
+
+
+_LOAD_SPELLINGS: dict[str, Callable[..., Any]] = {
+    "torch": lambda f: torch.load(f, weights_only=True),
+    "torch.serialization": lambda f: torch.serialization.load(f, weights_only=True),
+}
+
+
+class _LoadModel(nn.Module):
+    """Loads a saved tensor inside forward and adds it to the input."""
+
+    def __init__(self, spelling: str) -> None:
+        super().__init__()
+        self.spelling = spelling
+        self.payload = _saved_tensor_bytes()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return _LOAD_SPELLINGS[self.spelling](io.BytesIO(self.payload)) + x
+
+
+@pytest.mark.parametrize("spelling", tuple(_LOAD_SPELLINGS))
+def test_torch_load_in_forward_warning_names_load(spelling: str) -> None:
+    """The provenance warning names ``torch.load`` and says replay will not reload files."""
+
+    assert (spelling, "load") in _decorated_pairs()
+    with pytest.warns(UserWarning, match="no graph/source provenance") as record:
+        log = tl.trace(_LoadModel(spelling), _input_4x4())
+    log.cleanup()
+    messages = " ".join(str(w.message) for w in record)
+    assert "torch.load" in messages and "replay will not reload files" in messages, messages
