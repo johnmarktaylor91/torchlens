@@ -493,7 +493,7 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
         dtype = str(getattr(value, "dtype", ""))
         param = Param(
             module_address=module_address,
-            name=address.rsplit(".", 1)[-1],
+            name=_param_name(address, module_address),
             shape=shape,
             dtype=dtype,  # type: ignore[arg-type]
             num_params=_numel(shape),
@@ -552,7 +552,7 @@ def nnx_param_logs(tree: NnxModuleTree, trace: Any) -> dict[str, Param]:
         dtype = str(getattr(value, "dtype", ""))
         param = Param(
             module_address=module_address,
-            name=address.rsplit(".", 1)[-1],
+            name=_param_name(address, module_address),
             shape=shape,
             dtype=dtype,  # type: ignore[arg-type]
             num_params=_numel(shape),
@@ -928,6 +928,35 @@ def _nnx_param_alias_addresses(
         if alias_address not in addresses:
             addresses.append(alias_address)
     return addresses
+
+
+def _param_name(address: str, module_address: str) -> str:
+    """Return a param's name: its pytree address relative to its owning module.
+
+    A leaf held in a non-module container field (Equinox ``Sequential.layers``
+    is a tuple) is owned by the nearest discovered module, so its name keeps
+    the container path (``layers.0.weight`` under the root), keeping the
+    record's ``address == <module address>.<name>`` identity true.
+
+    Parameters
+    ----------
+    address
+        Pytree leaf address.
+    module_address
+        Owning module address.
+
+    Returns
+    -------
+    str
+        Param name relative to ``module_address``.
+    """
+
+    if module_address in ("", "self"):
+        return address
+    prefix = f"{module_address}."
+    if address.startswith(prefix):
+        return address[len(prefix) :]
+    return address.rsplit(".", 1)[-1]
 
 
 def _deepest_module_prefix(address: str, module_addresses: set[str]) -> str | None:
