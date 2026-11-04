@@ -18,7 +18,7 @@ import torch
 from _hermetic_counters import quiet_gc
 
 import torchlens as tl
-from torchlens._data_classes import _removed_parent_refs, cleanup
+from torchlens._data_classes import cleanup
 from torchlens._postprocess import control_flow
 from torchlens.intervention.types import ParentRef, Unsupported
 
@@ -39,6 +39,31 @@ class _RepeatedSites(torch.nn.Module):
         return self.blocks(x)
 
 
+class _BranchedRepeatedSites(_RepeatedSites):
+    """The same repeated call sites inside a data-dependent ``if`` arm, so step 5 attributes."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.sum() > -1e9:
+            x = self.blocks(x)
+        return x
+
+
+def _frame_position_key(code_context: Any) -> tuple[tuple[Any, ...], ...]:
+    """The six frame fields branch attribution reads, per frame."""
+
+    return tuple(
+        (
+            frame.file,
+            frame.code_firstlineno,
+            frame.func_name,
+            frame.func_qualname,
+            frame.line_number,
+            frame.col_offset,
+        )
+        for frame in code_context
+    )
+
+
 def _count_calls(monkeypatch: pytest.MonkeyPatch, module: Any, name: str) -> list[Any]:
     calls: list[Any] = []
     real = getattr(module, name)
@@ -56,23 +81,41 @@ def test_branch_attribution_runs_once_per_distinct_stack(monkeypatch: pytest.Mon
 
     calls = _count_calls(monkeypatch, control_flow, "_translate_conditional_stack")
     with quiet_gc():
-        trace = tl.trace(_RepeatedSites().eval(), torch.randn(2, 4))
-    distinct = {control_flow._code_context_position_key(op.code_context) for op in trace.ops}
+        trace = tl.trace(_BranchedRepeatedSites().eval(), torch.randn(2, 4))
+    distinct = {_frame_position_key(op.code_context) for op in trace.ops}
     assert len(trace.ops) >= 12
+    assert any(op.conditional_branch_stack for op in trace.ops), "step 5 must attribute"
     assert len(calls) == len(distinct)
     assert len(calls) < len(trace.ops)
 
 
-def test_branch_stacks_are_private_per_op() -> None:
-    """Memoized stacks are copied: no two ops share one list object."""
+def test_branch_stacks_are_private_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Memoized stacks are copied: right after attribution no two ops share one list."""
 
-    trace = tl.trace(_RepeatedSites().eval(), torch.randn(2, 4))
-    stacks = [op.conditional_branch_stack for op in trace.ops]
-    assert len({id(stack) for stack in stacks}) == len(stacks)
+    seen: dict[str, list[int]] = {"ids": [], "nonempty": []}
+    real = control_flow._attribute_branches_forward
+
+    def recording(self: Any, events_by_key: Any) -> None:
+        real(self, events_by_key)
+        for label in self._raw_graph_ws.raw_layer_labels_list:
+            layer = self[label]
+            if getattr(layer, "is_orphan", False):
+                continue
+            stack = layer.conditional_branch_stack
+            seen["ids"].append(id(stack))
+            seen["nonempty"].append(len(stack))
+
+    monkeypatch.setattr(control_flow, "_attribute_branches_forward", recording)
+    tl.trace(_BranchedRepeatedSites().eval(), torch.randn(2, 4))
+    assert len(seen["ids"]) >= 12
+    assert sum(1 for depth in seen["nonempty"] if depth) >= 12
+    assert len(set(seen["ids"])) == len(seen["ids"])
 
 
 def test_orphan_removal_rebuilds_no_untouched_template(monkeypatch: pytest.MonkeyPatch) -> None:
     """Counter: pruning orphans rebuilds zero templates that name no removed op."""
+
+    from torchlens._data_classes import _removed_parent_refs
 
     scrubs = _count_calls(monkeypatch, cleanup, "_scrub_intervention_fields_after_removal")
     rebuilds = _count_calls(monkeypatch, _removed_parent_refs, "_replace_removed_parent_refs")
