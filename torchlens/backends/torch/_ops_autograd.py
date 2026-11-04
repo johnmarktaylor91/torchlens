@@ -24,6 +24,7 @@ from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
+from ._internal_originals import tensor_read, tensor_reads
 from ._tl import (
     get_tensor_label,
 )
@@ -75,14 +76,15 @@ def _add_autograd_saved_tensor(
         with pause_logging(), internal_scalar_read():
             if logging_enabled:
                 _st.next_func_call_id()
-            data_ptr = tensor.data_ptr()
+            data_ptr = tensor_read(tensor, "data_ptr")(tensor)
     except Exception:
         return 0, 0
     if data_ptr in seen_data_ptrs:
         return 0, 0
     seen_data_ptrs.add(data_ptr)
     with pause_logging():
-        return tensor.numel() * tensor.element_size(), 1
+        numel, element_size = tensor_reads(tensor, "numel", "element_size")
+        return numel(tensor) * element_size(tensor), 1
 
 
 def _get_autograd_saved_stats_by_output(
@@ -158,7 +160,7 @@ def _classify_saved_storage(trace: Any, tensor: torch.Tensor) -> tuple[str, int 
 
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             storage_ptr = storage.data_ptr()
             storage_nbytes = int(storage.nbytes())
     except (RuntimeError, TypeError, NotImplementedError):

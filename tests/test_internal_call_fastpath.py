@@ -11,14 +11,17 @@ take its logging-off fast path. These tests pin that:
 * the routing honours every gate (logging on, a fast-run collector, an uncounted
   fingerprint call, a tensor subclass, an unwrapped class) by returning the old spelling;
 * the logged ops are field-for-field identical with the routing on and off across the
-  classics smoke corpus and the bound-generate toys.
+  classics smoke corpus and the bound-generate toys (under a fake clock, so timing cells
+  compare too).
 """
 
 from __future__ import annotations
 
 import hashlib
+import itertools
 import re
 import sys
+import time
 from collections import Counter
 from collections.abc import Callable
 from typing import Any
@@ -243,20 +246,43 @@ def _op_fields(build: Callable[[], tuple[Any, Any, dict[str, Any]]]) -> dict[str
 
     from torchlens._trace_core.op_store import _MISSING
 
-    fn, inputs, kwargs = build()
-    torch.manual_seed(0)
-    trace = tl.trace(fn, inputs, input_kwargs=kwargs or None)
-    store = object.__getattribute__(trace.ops[0], "_core")
-    rows = getattr(store, "_n_rows", None) or len(store)
-    fields: dict[str, list[str]] = {}
-    for fid, name in enumerate(store.layout.names):
-        cells = []
-        for row in range(rows):
-            value = store.cell_get(row, fid)
-            cells.append("-" if value is _MISSING else _canon(value))
-        fields[name] = cells
-    trace.cleanup()
+    fn, inputs, kwargs = build()  # built before the fake clock
+    with pytest.MonkeyPatch.context() as clock:
+        _install_fake_clock(clock)
+        torch.manual_seed(0)
+        trace = tl.trace(fn, inputs, input_kwargs=kwargs or None)
+        store = object.__getattribute__(trace.ops[0], "_core")
+        rows = getattr(store, "_n_rows", None) or len(store)
+        fields: dict[str, list[str]] = {}
+        for fid, name in enumerate(store.layout.names):
+            cells = []
+            for row in range(rows):
+                value = store.cell_get(row, fid)
+                cells.append("-" if value is _MISSING else _canon(value))
+            fields[name] = cells
+        trace.cleanup()
     return fields
+
+
+def _install_fake_clock(clock: pytest.MonkeyPatch) -> None:
+    """Replace the ``time`` clocks with a fresh counter so timing cells are reproducible."""
+
+    ticks = itertools.count(1)
+
+    def tick() -> float:
+        """Return the next fake second."""
+
+        return 1_000_000.0 + next(ticks) * 0.001
+
+    def tick_ns() -> int:
+        """Return the next fake second in nanoseconds."""
+
+        return int(tick() * 1e9)
+
+    for name in ("time", "perf_counter", "monotonic", "process_time", "thread_time"):
+        clock.setattr(time, name, tick)
+    for name in ("time_ns", "perf_counter_ns", "monotonic_ns", "process_time_ns", "thread_time_ns"):
+        clock.setattr(time, name, tick_ns)
 
 
 def _corpus() -> list[tuple[str, Callable[[], tuple[Any, Any, dict[str, Any]]]]]:

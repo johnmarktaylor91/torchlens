@@ -81,6 +81,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
+from ._internal_originals import tensor_read
 from ._logged_arguments import logged_args
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
@@ -567,9 +568,9 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
                 with _state.pause_logging(), internal_scalar_read():
                     collected: set[int] = set()
                     for p in model.parameters():
-                        collected.add(p.untyped_storage().data_ptr())
+                        collected.add(tensor_read(p, "untyped_storage")(p).data_ptr())
                     for b in model.buffers():
-                        collected.add(b.untyped_storage().data_ptr())
+                        collected.add(tensor_read(b, "untyped_storage")(b).data_ptr())
                 ptrs = frozenset(collected)
             except Exception:
                 ptrs = None
@@ -790,11 +791,7 @@ def _propagate_mutation_label_to_storage_aliases(
 # corrupted interpreter state when exercised across several capture paths in
 # one process (segfault on torch 2.1.2) -- see
 # ``TensorSubclassUnsupportedError``.
-_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
-    "__new__": 0,
-    "_make_subclass": 0,
-    "as_subclass": 1,
-}
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {"__new__": 0, "_make_subclass": 0, "as_subclass": 1}
 
 
 def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
