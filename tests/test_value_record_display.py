@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from html import escape
 from types import SimpleNamespace
@@ -13,6 +14,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._value_params import buffer_card
 from torchlens._data_classes._value_state import LAZY_DISK, payload_facts, value_line
+from torchlens._utils._display_keys import display_key
 from torchlens.stats import _record_values, _tensor_stats
 from torchlens.stats._stats_kernel import SAMPLE_CAP
 from torchlens.stats._tensor_stats import FamilyEvidence, tensor_stats
@@ -195,9 +197,11 @@ def test_source_row_never_reads_current_source(captured, monkeypatch) -> None:
 
     monkeypatch.setattr(FuncCallLocation, "_source_text_state", no_source)
     trace, _ = captured
-    card = str(trace["tanh_1:2"])
-    assert "source    " in card and " in " in card
-    assert "(capture not finished)" not in card
+    from torchlens._data_classes._value_ops import _source
+
+    location = _source(trace["tanh_1:2"])
+    assert " in " in location
+    assert ".py:" in location
 
 
 def test_graph_count_names_output_descendants(captured) -> None:
@@ -206,5 +210,65 @@ def test_graph_count_names_output_descendants(captured) -> None:
     trace, _ = captured
     op = trace["tanh_1:2"]
     count = len(op.output_descendants)
-    noun = "output" if count == 1 else "outputs"
-    assert f"({count} {noun} downstream)" in str(op)
+    total = len(trace.output_layers)
+    noun = "model output" if total == 1 else "model outputs"
+    assert f"(reaches {count} of {total} {noun})" in str(op)
+
+
+def test_sampled_disclosure_survives_every_width_rung() -> None:
+    """Approximate evidence stays visible when optional statistics no longer fit."""
+
+    stats = replace(
+        tensor_stats(torch.tensor([-1.0, 2.0])),
+        mean_evidence=FamilyEvidence("sampled", population=100, sample_size=2),
+    )
+    for width in (1, 20, 35):
+        line = value_line(f"Op {'x' * width}", "float32 [1, 5, 3072] on cpu", stats)
+        assert "(~sampled)" in line
+        assert len(line) <= 100
+
+
+def test_graph_without_stored_total_names_model_outputs() -> None:
+    """Detached metadata can count descendants without inventing a total."""
+
+    from torchlens._data_classes._value_ops import _graph
+
+    op = SimpleNamespace(parents=(), children=(), output_descendants={"out"})
+    assert "(1 model output downstream)" in _graph(op)
+
+
+def test_buffer_and_layer_share_constant_value_words() -> None:
+    """Both captured snapshots use the same explicit constant summary."""
+
+    values = torch.ones(4)
+    buffer = SimpleNamespace(address="ones", _initial_value=values, versions=())
+    stats = tensor_stats(values)
+    assert "all 1.000" in buffer_card(buffer)
+    assert "all 1.000" in value_line("Layer ones", "float32 [4] on cpu", stats)
+
+
+def test_module_call_uses_stored_layer_count_and_singular_nouns() -> None:
+    from torchlens._data_classes._value_modules import module_call_repr_line, module_repr_line
+
+    module = SimpleNamespace(
+        address="fc",
+        class_name="Linear",
+        num_calls=1,
+        num_params=1,
+        layer_labels=("linear",),
+        training=False,
+    )
+    assert module_repr_line(module) == "Module fc: Linear, 1 call, 1 layer, 1 param, eval"
+    call = SimpleNamespace(address="fc", class_name="Linear", call_index=1, ops=("linear",))
+    assert module_call_repr_line(call) == "ModuleCall fc: call 1, Linear, 1 layer"
+
+
+def test_module_call_output_uses_full_card_value_spacing(captured) -> None:
+    """A real module output keeps the shared card's separated value pairs."""
+
+    trace, _model = captured
+    for index in range(1, 4):
+        call = trace.module_calls[f"fc:{index}"]
+        text = str(call)
+        assert f"  output    {display_key(trace.ops[call.output_ops[0]])}" in text
+        assert re.search(r" min \S+  max \S+", text)

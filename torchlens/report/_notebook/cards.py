@@ -7,17 +7,14 @@ Every HTML entry point uses the never-raise, escaping CardTree boundary.
 
 from __future__ import annotations
 
-from html import escape
 from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
-from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
-from ._value_cards import layer_value_card, op_value_card
+from ._value_cards import _from_text, layer_value_card, op_value_card
 from .cardtree import (
     Card,
     CardCollection,
-    CardHtml,
     CardNode,
     CardSection,
     CardText,
@@ -134,25 +131,7 @@ def layer_card(layer: Any, *, root: str | None = None) -> Card:
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """The same title and fact rows as ``print(trace)``, without analysis or a tree."""
 
-    rows = trace._repr_card_rows()
-    html = (
-        "<table>"
-        + "".join(
-            f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>" for label, value in rows
-        )
-        + "</table>"
-    )
-    hint = sdpa_attention_hint(trace)
-    notice = (CardText(hint, role="notice"),) if hint else ()
-    return Card(
-        title=repr(trace),
-        kind="trace",
-        children=(
-            CardHtml(html),
-            *notice,
-            CardText("more      .summary()  .modules  .layers  .ops  .params"),
-        ),
-    )
+    return _from_text(str(trace), "trace")
 
 
 def _first_nonfinite_text(trace: Any) -> str | None:

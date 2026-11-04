@@ -28,6 +28,8 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils._display_keys import display_key
+from .._utils._display_numbers import plural
 from ._factcore import factcore
 from ._summary_columns import (
     ATTENTION_FULL_SQUARE_FUNCS,
@@ -38,6 +40,7 @@ from ._summary_columns import (
     op_kernel_groups,
     training_mode,
 )
+from ._summary_op_metadata import _op_metadata
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -162,6 +165,8 @@ class _OpFact:
     kernel_size: tuple[int, ...] | None = None
     groups: int | None = None
     attention_full_square: bool = False
+    display_name: str = ""
+    pass_display_name: str = ""
 
 
 @dataclass
@@ -231,21 +236,8 @@ class _ModelIndex:
 
         self.core = factcore(trace)
         aggregation = self.core.compute
-        entry_meta: dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int, Any]] = {}
-        label_seen: dict[str, int] = {}
+        entry_meta = _op_metadata(trace)
         self.shapes = label_shapes(trace)
-        for index, op in enumerate(trace._layer_list or ()):
-            label = str(getattr(op, "layer_label", "?"))
-            occurrence = label_seen.get(label, 0)
-            label_seen[label] = occurrence + 1
-            shape = getattr(op, "shape", None)
-            entry_meta[(label, occurrence)] = (
-                index,
-                tuple(getattr(op, "module_call_stack", ()) or ()),
-                None if shape is None else tuple(int(dim) for dim in shape),
-                int(getattr(op, "pass_number", occurrence + 1) or (occurrence + 1)),
-                op,
-            )
         self.pass_facts: list[_OpFact] = []
         row_seen: dict[str, int] = {}
         for row in aggregation.rows:
@@ -260,6 +252,8 @@ class _ModelIndex:
             self.pass_facts.append(
                 _OpFact(
                     label=row.label,
+                    display_name=str(getattr(record, "short_layer_label", None) or row.label),
+                    pass_display_name=display_key(record) if record is not None else row.label,
                     exec_index=exec_index,
                     owner_address=_stack_owner(stack),
                     func_name=row.func_name,
@@ -710,7 +704,7 @@ def _op_row(op: _OpFact, depth: int, parent: str | None) -> ViewRow:
     return ViewRow(
         row_id=f"op:{op.label}",
         kind="op",
-        name=op.label,
+        name=op.display_name or op.label,
         class_name=op.func_name,
         address=None,
         depth=depth,
@@ -1201,11 +1195,7 @@ def resolve_view(
         rows = []
         for fact in index.pass_facts:
             row = _op_row(fact, 1, fact.owner_address or None)  # owner feeds where=
-            if len(fact.qualified_labels) == 1 and ":" in fact.qualified_labels[0]:
-                pass_index = fact.qualified_labels[0].rsplit(":", 1)[1]
-                layer_passes = sum(1 for f in index.pass_facts if f.label == fact.label)
-                if layer_passes > 1:
-                    row = replace(row, name=f"{fact.label}:{pass_index}")
+            row = replace(row, name=fact.pass_display_name or row.name)
             rows.append(row)
         return _finish(index, rows, "op", None, 0, max_rows or DEFAULT_ROW_BUDGET)
     if level == "module" or (level == "auto" and depth not in ("auto", None)):
@@ -1275,19 +1265,19 @@ def _disclosure(  # noqa: PLR0913 - mirrors _finish: the disclosure names exactl
     """The always-printed disclosure line naming what resolved."""
 
     if rung == "hybrid":
-        return f"view: hybrid, all {len(index.pass_facts)} ops"
+        return f"view: hybrid, all {plural(len(index.pass_facts), 'op')}"
     if rung == "op":
-        return f"view: op level, {len(rows)} rows"
+        return f"view: op level, {plural(len(rows), 'row')}"
     if rung == "elided" and depth is None:
         base = "hybrid"
     else:
         base = f"module tree, depth {depth} of {max(index.max_depth, 1)}"
     parts = [f"view: {base}"]
     if folds:
-        parts.append(f"{folds} fold{'s' if folds != 1 else ''}")
+        parts.append(plural(folds, "fold"))
     if elisions:
         hidden = sum(row.elided_count for row in rows if row.kind == "elision")
-        parts.append(f"{hidden} rows elided")
+        parts.append(f"{plural(hidden, 'row')} elided")
     if index.root_direct_ops and rung != "hybrid":
-        parts.append(f"{len(index.root_direct_ops)} root-level ops in totals")
+        parts.append(f"{plural(len(index.root_direct_ops), 'root-level op')} in totals")
     return ", ".join(parts)

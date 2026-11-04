@@ -226,9 +226,11 @@
   Doc of record: `docs/quickstart.md`.
 - BOUND-METHOD ROOTS (F41, by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
   (and `tl.validate`) accept an `nn.Module` OR a bound method of one — `tl.trace(model.generate,
-  ids, ...)`. The owner resolves via `method.__self__` and registers as the `owner` submodule of
-  a TL-authored wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the
-  exact bound method EXACTLY ONCE; module addresses read `owner.*`. The synthetic root reads
+  ids, ...)`. The owner resolves via `method.__self__` and is the root `self` of a TL-authored
+  wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the exact bound
+  method EXACTLY ONCE; the wrapper presents the owner's tree, so module addresses, labels,
+  drawings, exports and saved files read as on a plain trace (no `owner.` prefix) and the owner's
+  own calls are the root's calls `self:1..self:N`. The synthetic root reads
   `type(owner).__name__` (never "method") for `model_class_name`/`model_class_qualname`, writes
   `root_entry_point="bound_method:<owner_qualname>.<method>"`, and marks the root op record
   (output-boundary ops) `tl_authored_root=True` (both persisted, fail-closed load validation).
@@ -1154,7 +1156,7 @@
   (`AmbiguousSiteError`) on string/`tl.label` addressing
   (`do`/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
-  every pass-qualified spelling; bare labels on single-pass layers stay
+  up to five pass-qualified display keys and an exact remainder; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
   selection (`log[label].__selection__()`) is the all-passes spelling.
   Post-hoc `contains`/string addressing accepts pass-qualified needles
@@ -1887,6 +1889,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.ablation_grid`: Render the measured-intervention receipt grid (THE differentiator).
 - `tl.viz.attention`: Render an attention view to paper-ready PNG/SVG/PDF pages.
 - `tl.viz.attention_atlas`: Render the whole-model attention atlas (BertViz model view, matched).
+- `tl.viz.chans`: Draw a tensor's leading channels as a grid of grayscale tiles.
 - `tl.viz.contact_sheet`: Render one page of the ranked overview contact sheet.
 - `tl.viz.histogram_waterfall`: Render the histogram waterfall (step x signed-log2-bin density).
 - `tl.viz.image_scatter`: Render a bounded 2D scatter with optional PIL thumbnails.
@@ -1898,6 +1901,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.nodes.histogram`: Create a compact value-distribution histogram visualizer.
 - `tl.viz.nodes.text_table`: Render a text batch as a Graphviz HTML-like table label.
 - `tl.viz.quantile_fan`: Render the quantile-fan strip for one series (the default view).
+- `tl.viz.rgb`: Draw a three-channel tensor as one RGB picture.
 - `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
 - `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
 - `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.

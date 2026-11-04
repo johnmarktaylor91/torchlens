@@ -53,7 +53,7 @@ def test_owned_tuples_keep_value_semantics(trace):
         assert rows[:] == tuple(rows)
         assert type(rows[:]) is tuple
         assert len(repr(rows)) <= 100
-        assert len(str(rows).splitlines()) <= 7
+        assert len(str(rows).splitlines()) <= 8
     labels = RecordTuple(("one", "two"), "Labels", "labels")
     assert hash(labels) == hash(tuple(labels))
     restored = pickle.loads(pickle.dumps(labels))
@@ -98,8 +98,23 @@ def test_trace_display_never_derives_health_or_mutates(trace, monkeypatch):
     assert len(text.splitlines()) <= 13
     html = trace._repr_html_()
     assert len(html) < 20_000
-    assert ".summary()" in html and "<table>" in html
+    assert ".summary()" in html and '<table class="tl-record-facts">' in html
     assert trace.annotations == before
+
+
+def test_trace_flops_row_uses_only_existing_aggregation(trace):
+    from torchlens.report._factcore import _FACTCORE_CACHE
+
+    _FACTCORE_CACHE.pop(id(trace), None)
+    assert "  flops " not in str(trace)
+    assert id(trace) not in _FACTCORE_CACHE
+    assert "2 submodules, 20 params in 2 tensors" in str(trace)
+    aggregation = trace.factcore.compute
+    assert f"  flops     {aggregation.partition_total} forward, {aggregation.macs_total}" in str(
+        trace
+    )
+    assert "1 MAC = 2 FLOPs" in str(aggregation)
+    assert "rule" in str(aggregation)
 
 
 def test_accessor_renders_only_five_members():
@@ -124,7 +139,7 @@ def test_accessor_renders_only_five_members():
 def test_frame_display_does_not_load_source(monkeypatch):
     frame = FuncCallLocation(file="missing.py", line_number=12, func_name="forward")
     monkeypatch.setattr(frame, "_ensure_source_loaded", lambda: pytest.fail("source read"))
-    assert repr(frame) == "FuncCallLocation: missing.py:12, in forward"
+    assert repr(frame) == "FuncCallLocation: missing.py:12 in forward"
     assert "  function  forward" in str(frame)
     frame.file = "/very/long/" * 20 + "model/forward.py"
     assert len(repr(frame)) <= 100
