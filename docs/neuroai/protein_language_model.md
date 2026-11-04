@@ -155,7 +155,7 @@ RESULT = int((edited_logits.argmax(dim=-1) == native).sum())
 
 ## Where to go next
 
-- [The NeuroAI journey](../neuroai/journey.md) and [task RNN circuits](../neuroai/task_rnn_circuits.md)
+- [The NeuroAI journey](journey.md) and [task RNN circuits](task_rnn_circuits.md)
   use the same capture and edit calls on vision models and trained recurrent networks.
 - The larger ESM-2 checkpoints (35M to 15B parameters) have the same module names, so the
   selectors on this page carry over unchanged.

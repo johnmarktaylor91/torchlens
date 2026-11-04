@@ -235,8 +235,6 @@ pages:
     section: gallery
   - path: gallery/neuro_rdms.md
     section: gallery
-  - path: gallery/protein_language_model.md
-    section: gallery
   - path: gradient_contract.md
     section: concepts
   - path: guides/fast_paths.md
@@ -386,6 +384,9 @@ pages:
     section: field-guide
     group: Neuroscience
   - path: neuroai/netrep.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/protein_language_model.md
     section: field-guide
     group: Neuroscience
   - path: neuroai/task_rnn_circuits.md

@@ -55,7 +55,7 @@ PAGES: dict[str, str] = {
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
     "docs/neuroai/task_rnn_circuits.md": "torchlens",
-    "docs/gallery/protein_language_model.md": "esm",
+    "docs/neuroai/protein_language_model.md": "esm",
     "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
     "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
     "examples/methods/function_vectors_recipe.ipynb": "transformers",
@@ -164,7 +164,7 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/clip_head_attention_recipe.ipynb",
         "examples/methods/clip_text_decomposition_recipe.ipynb",
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
-        "docs/gallery/protein_language_model.md",
+        "docs/neuroai/protein_language_model.md",
     }
 )
 

@@ -142,7 +142,6 @@ exclude_docs: |
   /gallery/index.md
   /gallery/ioi_circuit.md
   /gallery/neuro_rdms.md
-  /gallery/protein_language_model.md
   /gradient_contract.md
   /guides/fast_paths.md
   /maintainers/architecture.md
@@ -205,6 +204,7 @@ exclude_docs: |
   /neuroai/journey.md
   /neuroai/loaders.md
   /neuroai/netrep.md
+  /neuroai/protein_language_model.md
   /neuroai/task_rnn_circuits.md
   /non_goals.md
   /performance.md
