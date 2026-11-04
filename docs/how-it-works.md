@@ -169,7 +169,8 @@ saved = tl.trace(model, x)
 edited = saved.fork("edited")
 edited.do(tl.module("1"), tl.zero_ablate())
 head_out = edited.find_sites(tl.module("2")).first().out
-assert torch.equal(head_out, model[2](torch.zeros(3, 8)))
+head_layer = model[2]
+assert torch.equal(head_out, head_layer(torch.zeros(3, 8)))  # the head saw a zeroed ReLU output
 ```
 
 ## Lookups and the typed collections
