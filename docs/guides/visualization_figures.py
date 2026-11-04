@@ -58,9 +58,10 @@ class ConvBlock(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(cin, cout, 3, padding=1)
         self.norm = nn.BatchNorm2d(cout)
+        self.act = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.relu(self.norm(self.conv(x)))
+        return self.act(self.norm(self.conv(x)))
 
 
 class SmallCNN(nn.Module):
@@ -77,25 +78,24 @@ class SmallCNN(nn.Module):
 
 
 class Block(nn.Module):
-    """A residual MLP block with a layer norm."""
+    """A residual block: layer norm, then a two-layer MLP submodule."""
 
     def __init__(self, dim: int = 16) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(dim)
-        self.fc1 = nn.Linear(dim, dim * 2)
-        self.fc2 = nn.Linear(dim * 2, dim)
+        self.mlp = nn.Sequential(nn.Linear(dim, dim * 2), nn.ReLU(), nn.Linear(dim * 2, dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.fc2(torch.relu(self.fc1(self.norm(x))))
+        return x + self.mlp(self.norm(x))
 
 
 class Stack(nn.Module):
-    """An embedding layer, four residual blocks and a readout."""
+    """An embedding layer, a stack of residual blocks and a readout."""
 
-    def __init__(self) -> None:
+    def __init__(self, num_blocks: int = 4) -> None:
         super().__init__()
         self.embed = nn.Linear(8, 16)
-        self.blocks = nn.Sequential(*[Block() for _ in range(4)])
+        self.blocks = nn.Sequential(*[Block() for _ in range(num_blocks)])
         self.readout = nn.Linear(16, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -160,11 +160,15 @@ def _mlp() -> tuple[nn.Module, torch.Tensor]:
 
 
 def _cnn() -> tuple[nn.Module, torch.Tensor]:
-    return SmallCNN().eval(), torch.randn(1, 3, 8, 8)
+    return SmallCNN(), torch.randn(1, 3, 8, 8)
 
 
 def _stack() -> tuple[nn.Module, torch.Tensor]:
     return Stack(), torch.randn(2, 8)
+
+
+def _deep_stack() -> tuple[nn.Module, torch.Tensor]:
+    return Stack(num_blocks=40), torch.randn(2, 8)
 
 
 def _loop() -> tuple[nn.Module, torch.Tensor]:
@@ -216,9 +220,10 @@ FIGURES: tuple[Figure, ...] = (
     Figure("depth_1", _cnn, {"depth": 1}),
     Figure("depth_2", _cnn, {"depth": 2}),
     Figure("collapse_none", _stack),
-    Figure("collapse_auto", _stack, {"collapse": "auto"}),
+    Figure("collapse_quarter", _stack, {"collapse": 0.25}),
     Figure("collapse_half", _stack, {"collapse": 0.5}),
     Figure("collapse_max", _stack, {"collapse": "max"}),
+    Figure("collapse_auto", _deep_stack, {"collapse": "auto"}),
     Figure("module_focus", _stack, {"module": "blocks.1"}),
     Figure("profiling", _cnn, {"node_style": "profiling"}),
     Figure("color_size", _cnn, {"color_by": "time", "size_by": "bytes"}),
@@ -228,12 +233,12 @@ FIGURES: tuple[Figure, ...] = (
         {"highlight": "interventions"},
         edit=("fc1", "zero_ablate"),
     ),
+    Figure("edited", _mlp, edit=("fc1", "zero_ablate")),
     Figure("show_cone", _mlp, {"show_cone": True}, edit=("fc1", "zero_ablate")),
     Figure("leftright", _mlp, {"direction": "leftright"}),
     Figure("buffers_always", _cnn, {"show_buffers": "always"}),
     Figure("label_fields", _mlp, {"node_label_fields": ["name", "shape", "dtype"]}),
     Figure("saved_for_backward", _mlp, {"show_saved_for_backward": True}),
-    Figure("backward", _mlp, {"graph": "backward"}, backward=True),
     Figure(
         "backward_paths",
         _mlp,
