@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1452 modules, 650460 lines, 0 modules without a docstring.
+83 packages, 1454 modules, 651122 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,13 +60,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 111 | 54726 |
-| `torchlens.bridge` | External-tool bridge namespace. | 27 | 8829 |
+| `torchlens.bridge` | External-tool bridge namespace. | 27 | 8831 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2036 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 26 | 10690 |
-| `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 4026 |
+| `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4283 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1272 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1929 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 9057 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 27 | 9460 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2751 |
@@ -1371,7 +1371,7 @@ Torch backend implementation package for TorchLens capture. (111 modules, 54726 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (27 modules, 8829 lines)
+External-tool bridge namespace. (27 modules, 8831 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1386,7 +1386,7 @@ External-tool bridge namespace. (27 modules, 8829 lines)
 | `captum` | Captum bridge helpers. | 573 |
 | `depyf` | depyf bridge helpers. | 103 |
 | `dialz` | dialz converter. | 75 |
-| `hf_attention` | TorchLens as a registered Hugging Face attention backend (DOCUMENTED-UNSTABLE). | 543 |
+| `hf_attention` | TorchLens as a registered Hugging Face attention backend (DOCUMENTED-UNSTABLE). | 545 |
 | `huggingface_hub` | Hugging Face Hub publishing and loading helpers. | 423 |
 | `inseq` | inseq bridge helpers. | 142 |
 | `mcp` | Model Context Protocol (MCP) bridge: serve the agent registry over stdio. | 268 |
@@ -1505,7 +1505,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 
 ### `torchlens.debug._checks`
 
-Training sanity checks -- the torcheck niche, honestly redefined. (11 modules, 4026 lines)
+Training sanity checks -- the torcheck niche, honestly redefined. (12 modules, 4283 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1520,6 +1520,7 @@ Training sanity checks -- the torcheck niche, honestly redefined. (11 modules, 4
 | `_records` | Immutable finding / report records for the checks kit (checks ). | 241 |
 | `_scan` | The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4). | 434 |
 | `_session` | The loop-session chassis + standalone check registry (checks /4.2). | 1649 |
+| `_sinks` | Attention-sink and outlier-residual-dimension probe over the public phase seam. | 257 |
 
 ### `torchlens.distributed`
 
@@ -1733,7 +1734,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 425 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 9057 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 9460 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1742,6 +1743,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 
 | `_anchors` | Shared dataflow anchors: the lm-head / final-norm resolution (internal). | 141 |
 | `_appliance` | The ''"mi"'' appliance behind ''trace.using("mi")''. | 76 |
 | `_compose` | Stack composition helpers: norm folding, generic stackers, full grain | 324 |
+| `_controls` | Controls for an ablation claim: does its effect survive other baselines, directions and sites? | 403 |
 | `_demo` | The TLens-agreement demo (mikit 's first public demo; RG21 interim). | 101 |
 | `_dla` | Direct logit contributions (mikit ; TLens ''logit_attrs''). | 584 |
 | `_eap` | Edge attribution patching (EAP and EAP-IG) over the component edge graph. | 492 |
