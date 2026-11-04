@@ -71,16 +71,9 @@ def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int)
     if mapping and not all(map(_is_atomic_copy_type, map(type, value))):
         return _NO_FLAT_COPY
     members = value.values() if mapping else value
-    if all(map(_is_atomic_copy_type, map(type, members))):
-        items = list(members)
-    else:
-        items = _memoized_members_copy(members, memo)
-        if items is _NO_FLAT_COPY:
-            items = _atomic_container_members_copy(members, memo, depth)
-        if items is _NO_FLAT_COPY:
-            items = _flat_copy_members(members, memo, depth)
-        if items is _NO_FLAT_COPY:
-            return _NO_FLAT_COPY
+    items = _copy_members(members, memo, depth)
+    if items is _NO_FLAT_COPY:
+        return _NO_FLAT_COPY
     if cls is defaultdict:
         return defaultdict(value.default_factory, zip(value, items, strict=True))
     if mapping:
@@ -88,6 +81,24 @@ def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int)
     if cls is tuple and all(map(is_, items, value)):
         return value
     return cls(items)
+
+
+def _copy_members(members: Any, memo: dict[Any, Any], depth: int) -> Any:
+    """Return the member copies by the first strategy that applies, or ``_NO_FLAT_COPY``.
+
+    Strategies, cheapest first: all members atomic (kept as they are); every
+    member atomic or already in the memo; every member a flat container of
+    atomic values; the general per-member flat copy.
+    """
+
+    if all(map(_is_atomic_copy_type, map(type, members))):
+        return list(members)
+    items = _memoized_members_copy(members, memo)
+    if items is _NO_FLAT_COPY:
+        items = _atomic_container_members_copy(members, memo, depth)
+    if items is _NO_FLAT_COPY:
+        items = _flat_copy_members(members, memo, depth)
+    return items
 
 
 def _memoized_members_copy(members: Any, memo: dict[Any, Any]) -> Any:
