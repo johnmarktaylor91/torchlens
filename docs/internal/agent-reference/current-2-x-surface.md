@@ -80,6 +80,13 @@
   step 0 the prefill; `.records_at(step)`; `.settings`; `.not_recorded`). Unsupported decoding
   (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
   `record_generation_unsupported`.
+  `generation=torchlens.recording.GenerationOptions(reducers=, kv_sites=, keep_last=, spill=,
+  max_saved_bytes=)` (DOCUMENTED-UNSTABLE) streams that recording at thousands of tokens: per-token
+  reducers from `torchlens.recording.reducers` (`norm`, `top_k`, `probe`; each a `Reducer`), KV-cache
+  slices as series, a ring buffer with disk spill, a retained-byte guard
+  (`record_generation_budget_exceeded`) and the release of each pass's unkept payloads (model
+  inputs, older logits) once it is reduced, so memory is linear in the token count; `GenerationRecording.series(name)` returns a
+  `TokenSeries` (`positions`, `values`), `.series_names`, `.peak_saved_bytes`, `.evicted_steps`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
@@ -1510,8 +1517,11 @@
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object
   `weights.transforms()` returns, an HF image processor) stamps that authority's own
-  record, any other transform honest `user_transform` provenance; `attach_authority`
-  records an authority a model cannot carry (torchvision weights), discovery also reads
+  record, any other transform honest `user_transform` provenance; a torchvision
+  model with no handle is matched by its loaded state against the preset checkpoints
+  already in the torch hub cache (exact tensor equality, one unique match, never a
+  download; `resolution_method="state_match"`), `attach_authority`
+  records an authority a model cannot carry otherwise, discovery also reads
   an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
   (recorded preprocessing against the model's card, warning
   `preprocessing_card_mismatch`; nothing runs it automatically).
@@ -1800,9 +1810,12 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.FacetFunction`: Registered facet recipe metadata.
 - `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
 - `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.child_output_spec`: Facet spec over a named child module's captured output, for custom recipes.
+- `tl.facets.config_value`: Read the first present attribute of a module or its config, for custom recipes.
 - `tl.facets.describe`: List registered facet function names and declared facets for a class name.
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.facets.parameter_spec`: Facet spec over a named module parameter, for custom recipes.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
@@ -1929,6 +1942,7 @@ object's docstring):
 - `tl.io.materialize_nested`: Replace any remaining nested portable blob refs on a loaded model log.
 - `tl.model_output`: Create an output selector.
 - `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
+- `tl.postprocessing.register`: Decorator registering a custom output detector (`name=`, `priority=`); the namespace also exports `unregister`, `list`, `info`, `snapshot`, `Detector` and `ResolvedPostprocessing`.
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
 - `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
 - `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
