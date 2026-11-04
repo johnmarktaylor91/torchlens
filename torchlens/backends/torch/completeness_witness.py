@@ -214,28 +214,28 @@ _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS: weakref.WeakKeyDictionary[
 # escape whose predicate is NOT covered by any of those nets is recorded in
 # ``_HOST_ESCAPE_UNATTRIBUTABLE_BOOL`` below so the runnable producer can fail closed.
 
-INVISIBLE_HOST_ESCAPE_FUNCS = frozenset({"tolist", "numpy", "__array__", "__dlpack__"})
+INVISIBLE_HOST_ESCAPE_FUNCS: frozenset[str] = frozenset(
+    {"tolist", "numpy", "__array__", "__dlpack__"}
+)
 """Torch-function / protocol METHOD names that hand a captured tensor's value to the
 Python host WITHOUT emitting any aten dispatch.
 
-``.tolist()`` / ``.numpy()`` / ``np.asarray(tensor)`` (``__array__``) convert a tensor
-to a Python/NumPy container, and ``tensor.__dlpack__()`` (used by ``np.from_dlpack`` /
-``torch.from_dlpack`` and every array library's zero-copy import) exports the tensor's
-buffer as a DLPack capsule. They emit NO ``aten._local_scalar_dense`` (they are
-dispatcher-invisible), so the aten census cannot see them. A scoped method patch
-(``_observe_invisible_host_escapes``) records the SOURCE tensor of each such call for the
-duration of one runnable forward, so an invisible escape is witnessed by the SAME
-source-digest machinery as a census (``.item()``) escape -- host ARITHMETIC on the escaped
-value (``sum(t.tolist())`` / ``np.from_dlpack(x)[0]``) is irrelevant because the SOURCE
-tensor is what changes on a changed-input/changed-state run. A patch is used rather than a
-``TorchFunctionMode`` because any active function mode flips ``has_torch_function`` globally
-and breaks TorchLens's own function-wrapping capture.
+``.tolist()`` / ``.numpy()`` / ``np.asarray(tensor)`` (``__array__``) convert a tensor to a
+Python/NumPy container, and ``tensor.__dlpack__()`` (used by ``np.from_dlpack`` /
+``torch.from_dlpack`` and every array library's zero-copy import) exports the tensor's buffer as a
+DLPack capsule. They emit NO ``aten._local_scalar_dense`` (they are dispatcher-invisible), so the
+aten census cannot see them. A scoped method patch (``_observe_invisible_host_escapes``) records
+the SOURCE tensor of each such call for the duration of one runnable forward, so an invisible
+escape is witnessed by the SAME source-digest machinery as a census (``.item()``) escape -- host
+ARITHMETIC on the escaped value (``sum(t.tolist())`` / ``np.from_dlpack(x)[0]``) is irrelevant
+because the SOURCE tensor is what changes on a changed-input/changed-state run. A patch is used
+rather than a ``TorchFunctionMode`` because any active function mode flips ``has_torch_function``
+globally and breaks TorchLens's own function-wrapping capture.
 
-Sibling zero-copy protocols audited: ``__cuda_array_interface__`` (a non-callable buffer
-PROPERTY) is patched separately as a source-recording property (see
-``INVISIBLE_HOST_ESCAPE_PROPERTIES``); ``__dlpack_device__`` returns only device metadata
-(a ``(device_type, device_id)`` pair, no data) and ``__array_interface__`` is absent on
-``torch.Tensor``, so neither is a value escape.
+Sibling zero-copy protocols audited: ``__cuda_array_interface__`` (a non-callable buffer PROPERTY)
+is patched separately as a source-recording property (see ``INVISIBLE_HOST_ESCAPE_PROPERTIES``);
+``__dlpack_device__`` returns only device metadata (a ``(device_type, device_id)`` pair, no data)
+and ``__array_interface__`` is absent on ``torch.Tensor``, so neither is a value escape.
 """
 
 MUTABLE_ALIAS_ESCAPE_FUNCS = frozenset({"numpy", "__array__"})
@@ -254,7 +254,7 @@ UNVERIFIABLE. ``.tolist()`` copies into Python lists (writes never reach the sou
 ``.numpy().sum()`` leaves the bytes unchanged and stays honestly VERIFIED.
 """
 
-STORAGE_BRIDGE_ESCAPE_FUNCS = frozenset(
+STORAGE_BRIDGE_ESCAPE_FUNCS: frozenset[str] = frozenset(
     {"untyped_storage", "storage", "_typed_storage", "data_ptr"}
 )
 """Census-invisible tensor methods that hand the host a ZERO-COPY handle onto the source
@@ -280,7 +280,7 @@ call fails closed to UNVERIFIABLE (see ``_HOST_ESCAPE_RAW_POINTER``), never rely
 watch alone.
 """
 
-INVISIBLE_HOST_ESCAPE_PROPERTIES = frozenset({"__cuda_array_interface__"})
+INVISIBLE_HOST_ESCAPE_PROPERTIES: frozenset[str] = frozenset({"__cuda_array_interface__"})
 """Zero-copy buffer PROTOCOL PROPERTIES (not methods) that expose a captured tensor's
 data pointer to the host.
 
@@ -292,7 +292,7 @@ If such a property can neither be wrapped nor its source recorded, its use must 
 (INCOMPLETE), never silently VERIFIED.
 """
 
-HOST_VALUE_ESCAPE_METHODS = frozenset(
+HOST_VALUE_ESCAPE_METHODS: frozenset[str] = frozenset(
     {
         # Tensor->Python SCALAR numeric protocol: each lowers to ``aten._local_scalar_dense``
         # under the census, BUT torch's own tensor string formatting (``_tensor_str._str``,
@@ -325,7 +325,7 @@ spelling transits patched ``item``/``tolist`` under ``_disable_current_modes`` (
 them is redundant and is pinned by regression tests instead.
 """
 
-HOST_VALUE_ESCAPE_MODULE_FUNCS = frozenset({"equal", "allclose", "is_nonzero"})
+HOST_VALUE_ESCAPE_MODULE_FUNCS: frozenset[str] = frozenset({"equal", "allclose", "is_nonzero"})
 """``torch.*`` MODULE predicate spellings of the pure tensor->``bool`` escapes (r39 hon2_1).
 
 The module-level ``equal`` / ``allclose`` / ``is_nonzero`` functions return a raw Python bool

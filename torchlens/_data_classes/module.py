@@ -2534,8 +2534,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __getitem__(self, key: int | str) -> "Module":
         """Return a Module by module-specific lookup rules."""
-        if key == "":
-            key = "self"
+        key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         if isinstance(key, str) and key in self._pass_dict:
@@ -2544,8 +2543,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
-        if key == "":
-            key = "self"
+        key = "self" if key == "" else key
         return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
 
     def __dir__(self) -> list[str]:
