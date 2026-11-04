@@ -346,6 +346,11 @@ class ValueEncoder:
         record_cls = record_type_table().get(class_path(type(value)))
         if record_cls is not None:
             return self._record_value(value, at, depth)
+        return self._encode_subclass(value, at, depth)
+
+    def _encode_subclass(self, value: Any, at: str, depth: int) -> Any:
+        """Encode a registered tuple or mapping subtype, a scalar subclass or a callable."""
+
         if isinstance(value, tuple) and type(value) in tuple_subtypes().values():
             return self._tuple(value, at, depth)
         if isinstance(value, Mapping) and type(value).__module__ == "collections":
