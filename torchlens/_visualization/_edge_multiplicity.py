@@ -213,10 +213,7 @@ def _set_argument_edge_label(
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.
         rolled:
-            The edge belongs to a rolled drawing. A rolled argument label with
-            no pass range beside it (every pass uses the edge, so it carries
-            none) takes the free midpoint, the slot it shares with a pass range
-            on the edges that have one.
+            Rolled drawing: a label with no pass range beside it takes the free midpoint.
 
     A head slot already taken (a rolled ``In 2-3`` pass range) moves both labels,
     stacked, to a free midpoint before the ``xlabel`` fallback: Graphviz reserves
@@ -228,12 +225,9 @@ def _set_argument_edge_label(
         ``"midpoint"`` (the free midpoint after a taken head slot; not merged with
         same-pair parallel edges, whose head labels differ), or ``"xlabel"``.
     """
-    if prefer_midpoint and "label" not in edge_dict:
+    if (prefer_midpoint or (rolled and "headlabel" not in edge_dict)) and "label" not in edge_dict:
         edge_dict["label"] = arg_label
-        return "label"
-    if rolled and "label" not in edge_dict and "headlabel" not in edge_dict:
-        edge_dict["label"] = arg_label
-        return "midpoint"
+        return "label" if prefer_midpoint else "midpoint"
     if "headlabel" not in edge_dict:
         edge_dict["headlabel"] = arg_label
         return "headlabel"
