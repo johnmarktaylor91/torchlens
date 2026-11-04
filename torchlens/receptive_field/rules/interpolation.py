@@ -5,7 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from math import floor
 
-from .._query import _IndexSet, map_interpolation_index_set
+from .._query import _IndexSet
+from .._query_maps import map_interpolation_index_set
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
 from ._utils import number_tuple
 

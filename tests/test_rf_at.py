@@ -13,7 +13,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
-from torchlens.receptive_field import _engine, _query, _rules
+from torchlens.receptive_field import _engine, _query, _query_maps, _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import ReceptiveFieldStatus
 
@@ -104,7 +104,7 @@ def _register_query_rules() -> None:
             for size, stride_value, pad, dil in zip(kernel, stride, padding, dilation, strict=True)
         )
         callback = partial(
-            _query.map_transposed_convolution_index_set,
+            _query_maps.map_transposed_convolution_index_set,
             kernel=kernel,
             stride=stride,
             padding=padding,
@@ -285,7 +285,7 @@ def test_interpolation_callback_exact_sets_match_real_operator(
         expected = frozenset(
             torch.nonzero(output[:, 0, output_index], as_tuple=False).flatten().tolist()
         )
-        mapped, exact = _query.map_interpolation_index_set(
+        mapped, exact = _query_maps.map_interpolation_index_set(
             0,
             _query._IndexSet.singleton(output_index),
             mode=mode,
@@ -311,7 +311,7 @@ def test_bicubic_callback_exact_sets_match_real_operator() -> None:
             expected_rows = frozenset((support // extent).tolist())
             expected_columns = frozenset((support % extent).tolist())
             for axis, index, expected in ((0, row, expected_rows), (1, column, expected_columns)):
-                mapped, exact = _query.map_interpolation_index_set(
+                mapped, exact = _query_maps.map_interpolation_index_set(
                     axis,
                     _query._IndexSet.singleton(index),
                     mode="bicubic",
@@ -336,7 +336,7 @@ def test_adaptive_pool_callback_exact_sets_match_real_operator() -> None:
         def map_interval(axis: int, interval: tuple[int, int]) -> tuple[_query._IndexSet, bool]:
             """Map every output in one inclusive interval to its adaptive bin."""
 
-            return _query.map_adaptive_pool_index_set(
+            return _query_maps.map_adaptive_pool_index_set(
                 axis,
                 _query._IndexSet.interval(*interval),
                 input_extent=input_extent,
@@ -360,7 +360,7 @@ def test_adaptive_pool_callback_exact_sets_match_real_operator() -> None:
         expected = frozenset(
             torch.nonzero(output[:, 0, output_index], as_tuple=False).flatten().tolist()
         )
-        mapped, exact = _query.map_adaptive_pool_index_set(
+        mapped, exact = _query_maps.map_adaptive_pool_index_set(
             0,
             _query._IndexSet.singleton(output_index),
             input_extent=input_extent,

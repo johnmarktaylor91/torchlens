@@ -372,8 +372,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective query. Not permitted together with ``source``.
+            Optional descendant graph point, or output IO role, naming the far
+            endpoint of a projective query. Not permitted together with ``source``.
         clip:
             Whether bounds are clipped to captured input extents.
 
@@ -559,8 +559,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective query. Not permitted together with ``source``.
+            Optional descendant graph point, or output IO role, naming the far
+            endpoint of a projective query. Not permitted together with ``source``.
         atol, rtol:
             Non-negative gradient support thresholds.
         retain_graph:
@@ -640,7 +640,7 @@ class ReceptiveFieldView:
         direction:
             Receptive or projective containment direction.
         target:
-            Optional descendant graph point for projective validation.
+            Optional descendant graph point, or output IO role, for projective validation.
         atol, rtol:
             Accepted for compatibility and ignored. Validation always uses exact
             finite nonzero gradient support.
@@ -757,8 +757,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective overlay.
+            Optional descendant graph point, or output IO role, naming the far
+            endpoint of a projective overlay.
         image:
             Optional source image override.
         grad:

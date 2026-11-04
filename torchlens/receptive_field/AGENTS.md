@@ -25,10 +25,16 @@ boundary is the property access itself, not the first view query.
 - `_engine_geometry.py` - `_AxisState` / `_InputState` and the affine window algebra
   (`_compose`, `_transpose_mapped`).
 - `_engine_descriptor.py` - `_descriptor()` builds public `ReceptiveField` records.
+- `_engine_causal.py` - the `per_parent` and `causal_window` rule kinds on both descriptor
+  walks (`local_result`, `apply_causal`, `transpose_causal`); `_causal.py` reads the causal
+  offset from a softmax's saved weights; `_engine_revision.py` holds the cache fingerprint.
 
 ## Queries and gradients
 - `_query.py` - `box_for_unit()` (receptive box for one output unit).
 - `_forward_query.py` - `box_for_source_unit()` (projective box for one input unit).
+- `_index_set.py` - `_IndexSet` / `_AxisSets`, the per-axis index sets both walks carry;
+  `_query_causal.py` narrows a causal hop on a set walk (the descriptor cannot);
+  `_reshape_blocks.py` maps sets through mixed-axis reshapes block by block.
 - Window and clip maps (`_standard_window_index_set`, `map_transposed_convolution_index_set`,
   `_IndexSet.clipped`) compute a one-progression index set in closed form and enumerate
   otherwise; both paths must return the same canonical set (`tests/test_perf5_rf_invariant_cost.py`).
@@ -39,6 +45,7 @@ boundary is the property access itself, not the first view query.
   `require_path()` own graph-point resolution and path checks.
 - `_gradient.py` - `gradient_for_unit()`, the empirical VJP probe; snapshots and
   restores probe state (`_ProbeSnapshot`) so probing never mutates the trace.
+  `_gradient_live.py` resolves a same-object logging clone (eval dropout) to the live tensor.
 - `_gradient_forward.py` - `projective_gradient_for_unit()` (double-VJP column).
 
 ## Views, tables, viz

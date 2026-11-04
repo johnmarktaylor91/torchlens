@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.receptive_field import _engine, _query
+from torchlens.receptive_field import _engine, _query, _query_maps
 from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._errors import ReceptiveFieldError
 from torchlens.receptive_field._types import ReceptiveFieldDirection
@@ -150,7 +150,7 @@ def test_transposed_map_closed_form_equals_enumeration() -> None:
             "dilation": rng.randint(1, 4),
         }
         extent = rng.randint(0, 50)
-        mapped, exact = _query.map_transposed_convolution_index_set(
+        mapped, exact = _query_maps.map_transposed_convolution_index_set(
             0, output_set, input_extent=extent, **params
         )
         assert exact is True

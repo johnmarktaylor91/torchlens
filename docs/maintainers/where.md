@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1451 modules, 650604 lines, 0 modules without a docstring.
+84 packages, 1459 modules, 652059 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -83,8 +83,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
-| `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13921 |
+| `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7160 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
@@ -1812,24 +1812,32 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12850 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13921 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 453 |
-| `_engine` | Whole-graph geometric receptive-field solver. | 1652 |
+| `_causal` | Structural causal-mask detection for attention receptive-field rules. | 174 |
+| `_engine` | Whole-graph geometric receptive-field solver. | 1579 |
+| `_engine_causal` | Engine support for per-parent rule results and causal sequence windows. | 255 |
 | `_engine_descriptor` | Public descriptor materialization for geometric receptive-field states. | 182 |
 | `_engine_forward` | Target-anchored projective-field descriptor solver. | 816 |
 | `_engine_geometry` | Internal rational geometry primitives for the receptive-field engine. | 277 |
+| `_engine_revision` | Structural fingerprint of a trace for the receptive-field solution caches. | 102 |
 | `_errors` | Exception types for receptive-field queries and validation. | 169 |
-| `_forward_query` | Exact per-unit projective queries via membership transposition. | 642 |
-| `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 903 |
+| `_forward_query` | Exact per-unit projective queries via membership transposition. | 645 |
+| `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 862 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 530 |
-| `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 583 |
+| `_gradient_live` | Resolve the graph-connected tensor behind a same-object logging copy. | 126 |
+| `_index_set` | Index sets of the per-unit receptive-field walks. | 232 |
+| `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 602 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
 | `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
-| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 340 |
-| `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 1329 |
+| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 374 |
+| `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 925 |
+| `_query_causal` | Per-unit index-set mapping for causal attention windows. | 179 |
+| `_query_maps` | Index-set maps for the geometry-specific window families. | 232 |
+| `_reshape_blocks` | Block decomposition of general reshapes for the receptive-field engines. | 233 |
 | `_rules` | Extensible receptive-field operation-rule registry. | 535 |
 | `_set_query` | Index-set seeded geometric queries: one walk for a whole block of units. | 221 |
 | `_table` | Tabular summaries of trace-wide receptive-field solutions. | 380 |
@@ -1841,20 +1849,20 @@ Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12850
 
 ### `torchlens.receptive_field.rules`
 
-Built-in receptive-field rules and idempotent pack registration. (10 modules, 1581 lines)
+Built-in receptive-field rules and idempotent pack registration. (10 modules, 1965 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Built-in receptive-field rules and idempotent pack registration. | 19 |
 | `_utils` | Typed captured-parameter normalization for receptive-field rules. | 231 |
-| `attention` | Attention and normalization-over-axis receptive-field rules. | 64 |
-| `conv_pool` | Convolution and pooling receptive-field rules. | 199 |
-| `elementwise` | Elementwise, broadcasting, reduction, and embedding RF rules. | 157 |
-| `interpolation` | Interpolation receptive-field rules with branch-correct source scales. | 291 |
-| `linear` | Dense mixing and cumulative-operation receptive-field rules. | 65 |
+| `attention` | Attention and normalization-over-axis receptive-field rules. | 169 |
+| `conv_pool` | Convolution and pooling receptive-field rules. | 200 |
+| `elementwise` | Elementwise, broadcasting, reduction, and embedding RF rules. | 195 |
+| `interpolation` | Interpolation receptive-field rules with branch-correct source scales. | 292 |
+| `linear` | Dense mixing and cumulative-operation receptive-field rules. | 138 |
 | `norms` | Mode-aware normalization receptive-field rules. | 186 |
 | `sequence` | Fail-closed rules for operations with nonlocal sequence semantics. | 22 |
-| `transforms` | Shape, ordering, slicing, concatenation, and padding RF rules. | 347 |
+| `transforms` | Shape, ordering, slicing, concatenation, and padding RF rules. | 513 |
 
 ### `torchlens.recording`
 

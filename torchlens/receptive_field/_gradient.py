@@ -23,6 +23,7 @@ from ._errors import (
     ReceptiveFieldError,
     ReceptiveFieldUnavailableError,
 )
+from ._gradient_live import _RECAPTURE_RECIPE, _saved_tensor
 from ._path import require_path, resolve_graph_point
 from ._types import GradReceptiveField, GridLayout, ReceptiveFieldDirection
 
@@ -31,12 +32,6 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._engine_geometry import _InputState
     from ._types import ReceptiveField
-
-
-_RECAPTURE_RECIPE = (
-    "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
-)
 
 
 @contextmanager
@@ -425,42 +420,6 @@ def _select_inputs(
             "input must be an input Op from this trace or its exact io_role mapping key."
         )
     return ((role, op, descriptors.get(role)),)
-
-
-def _saved_tensor(op: Op, purpose: str) -> torch.Tensor:
-    """Return one live saved tensor or raise the typed recapture diagnostic.
-
-    Parameters
-    ----------
-    op:
-        Operation whose payload is required.
-    purpose:
-        Human-readable purpose used in the error.
-
-    Returns
-    -------
-    torch.Tensor
-        Live saved tensor payload.
-
-    Raises
-    ------
-    ReceptiveFieldUnavailableError
-        If no graph-connected tensor payload is available.
-    """
-
-    try:
-        value = op.out
-    except (AttributeError, RuntimeError, ValueError) as exc:
-        raise ReceptiveFieldUnavailableError(
-            f"The {purpose} op {op.label!r} has no saved payload. Recapture with "
-            f"{_RECAPTURE_RECIPE}."
-        ) from exc
-    if not isinstance(value, torch.Tensor):
-        raise ReceptiveFieldUnavailableError(
-            f"The {purpose} op {op.label!r} does not expose a tensor payload. Recapture with "
-            f"{_RECAPTURE_RECIPE}."
-        )
-    return value
 
 
 def _source_recapture_recipe(source: Op, target: Op) -> str:

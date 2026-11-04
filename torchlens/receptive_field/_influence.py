@@ -66,6 +66,7 @@ from ._engine_forward import solve_projective
 from ._errors import ReceptiveFieldError, ReceptiveFieldUnavailableError
 from ._gradient import gradient_for_unit
 from ._gradient_forward import projective_gradient_for_unit, projective_supports_by_row_sweep
+from ._path import between_labels
 from ._query import _AxisSets, _IndexSet, _validate_descriptor_for_query
 from ._set_query import _IndexSetBox, box_for_source_units, box_for_units
 from ._types import GradReceptiveField, ReceptiveField, ReceptiveFieldStatus
@@ -294,14 +295,14 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
     """Refuse typed when the pair's descriptor cannot support per-unit geometry."""
 
     try:
-        _validate_descriptor_for_query(descriptor)
+        _validate_descriptor_for_query(descriptor, require_windowed=False)
     except ReceptiveFieldError as error:
         raise _unresolvable(
             "influence_geometry_unavailable",
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
             f"unavailable (field status {descriptor.status.value!r}): the field engine has no "
-            "per-unit index geometry along this path (data-dependent mixing such as "
-            "attention has none). For an empirical answer pass method='gradient' on a "
+            "per-unit index geometry along this path (data-dependent routing such as "
+            "index selection has none). For an empirical answer pass method='gradient' on a "
             f"trace captured with capture={_GRADIENT_CAPTURE}.",
             code="influence_geometry_unavailable",
             seed_site=seed_op.label,
@@ -562,6 +563,22 @@ def _site_numel(target: Any) -> int:
     return numel
 
 
+def _pair_connected(seed_op: Any, target: Any, direction: str) -> bool:
+    """Whether a directed seed-to-target path exists in the captured graph.
+
+    The geometric method answers an unreachable pair with an empty mask (no
+    influence), so the gradient method answers it the same way instead of
+    raising; a default target list routinely holds outputs the seed never
+    reaches, such as a cache entry from an earlier block.
+    """
+
+    trace = seed_op.source_trace
+    if trace is None or target.source_trace is not trace:
+        return False
+    source, sink = (seed_op, target) if direction == "projective" else (target, seed_op)
+    return sink.label in between_labels(trace, source, sink)
+
+
 def _probe_pair(
     seed_op: Any, unit: tuple[int, ...], target: Any, direction: str
 ) -> tuple[torch.Tensor, bool]:
@@ -571,6 +588,8 @@ def _probe_pair(
         support = torch.zeros(tuple(seed_op.shape), dtype=torch.bool)
         support[unit] = True
         return support, False
+    if not _pair_connected(seed_op, target, direction):
+        return torch.zeros(_site_shape(target), dtype=torch.bool), False
     if direction == "projective":
         result = projective_gradient_for_unit(seed_op, unit, target=target, retain_graph=True)
     else:
