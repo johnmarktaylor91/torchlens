@@ -142,9 +142,12 @@ RESULT = (len(report), len(no_site), not_live, site.module_address)
 
 Limits of the mapping:
 
-- interp-engine returns each point as `[n_tokens, width]`. TorchLens keeps the model's own
-  layout: flatten the batch dimension, and for `z.L` move the head dimension behind the
-  token dimension (`z[0].permute(1, 0, 2).reshape(n_tokens, -1)`) before comparing.
+- interp-engine returns one prompt without a batch dimension: `[n_tokens, width]` for most
+  points (`value.L` with its heads flattened into the width) and `[heads, query, key]` for
+  `attn_scores.L` and `attn_probs.L`. TorchLens keeps the model's own layout, so drop the
+  batch dimension, flatten `value.L`'s heads (`v[0].reshape(n_tokens, -1)`), and for `z.L`
+  move the head dimension behind the token dimension
+  (`z[0].permute(1, 0, 2).reshape(n_tokens, -1)`) before comparing.
 - `layer` is interp-engine's flattened forward order. It equals the block index on
   single-stack decoders (GPT-2, Llama-style models), which are the models this table was
   checked on; on other layouts check the engine's numbering before pairing.
@@ -157,9 +160,10 @@ Limits of the mapping:
   `gated_out`, `down_out`, the norms' `normalized` and `inv_rms`, the embedding `indices`
   and `final_norm_input` have no interp-engine point.
 
-On GPT-2 small and SmolLM2-135M (float32, CPU, interp-engine's eager backend) every
-address above that TorchLens has a site for was captured by interp-engine and matched the
-TorchLens tensor exactly.
+On GPT-2 small (158 addresses) and SmolLM2-135M (392 addresses), in float32 on CPU with
+interp-engine's eager backend, every address above that TorchLens has a site for was
+captured by interp-engine and matched the TorchLens tensor exactly. Attention scores match
+including the masked entries.
 
 ## Worked example: checking nnsight's hooks against TorchLens
 
