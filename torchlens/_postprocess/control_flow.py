@@ -24,9 +24,9 @@ from .._data_classes.op import Op
 from .._utils.display import identity
 from .._utils.tensor_utils import safe_copy, tensor_nanequal
 from . import ast_branches
+from ._branch_attribution import _code_context_position_key, _translate_conditional_stack
 
 if TYPE_CHECKING:
-    from .._data_classes.func_call_location import FuncCallLocation
     from .._data_classes.trace import ConditionalEvent, Trace
 
 
@@ -533,23 +533,7 @@ def _attribute_branches_forward(
     conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
 
-    # Ops from the same call site carry the same frame positions, and the
-    # attribution reads nothing else from a frame, so each distinct stack is
-    # attributed once per pass; every op still gets its own list.
-    translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
-    for layer_label in self._raw_graph_ws.raw_layer_labels_list:
-        layer = self[layer_label]
-        if getattr(layer, "is_orphan", False):
-            continue
-        code_context = layer.code_context
-        stack_key = _code_context_position_key(code_context)
-        translated = translated_by_stack.get(stack_key)
-        if translated is None:
-            translated = _translate_conditional_stack(code_context, events_by_key)
-            translated_by_stack[stack_key] = translated
-        layer.conditional_branch_stack = list(translated)
-        layer.conditional_branch_depth = len(layer.conditional_branch_stack)
-        layer.conditional_arm_children = {}
+    _assign_conditional_branch_stacks(self, events_by_key)
 
     for parent_label in self._raw_graph_ws.raw_layer_labels_list:
         parent_layer = self[parent_label]
@@ -581,6 +565,40 @@ def _attribute_branches_forward(
 
     self._graph_conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
     self._graph_conditional_edge_call_indices = dict(conditional_edge_call_indices)
+
+
+def _assign_conditional_branch_stacks(
+    self: Trace,
+    events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent],
+) -> None:
+    """Give every non-orphan op its conditional branch stack and reset its arm children.
+
+    Ops from the same call site carry the same frame positions, and the
+    attribution reads nothing else from a frame, so each distinct stack is
+    attributed once per pass; every op still gets its own list.
+
+    Parameters
+    ----------
+    self:
+        Model log being postprocessed.
+    events_by_key:
+        Structural-to-dense conditional event lookup created in phase 5c.
+    """
+
+    translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
+    for layer_label in self._raw_graph_ws.raw_layer_labels_list:
+        layer = self[layer_label]
+        if getattr(layer, "is_orphan", False):
+            continue
+        code_context = layer.code_context
+        stack_key = _code_context_position_key(code_context)
+        translated = translated_by_stack.get(stack_key)
+        if translated is None:
+            translated = _translate_conditional_stack(code_context, events_by_key)
+            translated_by_stack[stack_key] = translated
+        layer.conditional_branch_stack = list(translated)
+        layer.conditional_branch_depth = len(layer.conditional_branch_stack)
+        layer.conditional_arm_children = {}
 
 
 def _materialize_derived_views(self: Trace) -> None:
@@ -684,148 +702,6 @@ def _build_conditional_record_lookup(
             for conditional_record in scope.conditionals:
                 record_lookup[conditional_record.key] = (conditional_record, scope.qualname)
     return record_lookup
-
-
-def _code_context_position_key(
-    code_context: list[FuncCallLocation],
-) -> tuple[tuple[Any, ...], ...]:
-    """Return the frame fields branch attribution reads, as a hashable stack key.
-
-    ``ast_branches.attribute_op`` and the decorator fallback read exactly
-    these six fields of each frame, so two stacks with equal keys attribute
-    identically within one pass.
-    """
-
-    return tuple(
-        (
-            frame.file,
-            frame.code_firstlineno,
-            frame.func_name,
-            frame.func_qualname,
-            frame.line_number,
-            frame.col_offset,
-        )
-        for frame in code_context
-    )
-
-
-def _translate_conditional_stack(
-    code_context: list[FuncCallLocation],
-    events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent],
-) -> list[tuple[int, str]]:
-    """Translate a structural AST branch stack into dense conditional IDs.
-
-    Parameters
-    ----------
-    code_context:
-        Captured runtime call stack for one operation.
-    events_by_key:
-        Structural-to-dense conditional event lookup created in phase 5c.
-
-    Returns
-    -------
-    List[Tuple[int, str]]
-        Dense ``(conditional_id, branch_kind)`` pairs ordered outer-to-inner.
-        Structural keys that were never materialized are dropped.
-    """
-
-    translated_stack: list[tuple[int, str]] = []
-    for conditional_key, branch_kind in _attribute_op_with_scope_fallback(code_context):
-        if conditional_key not in events_by_key:
-            continue
-        translated_stack.append((events_by_key[conditional_key].id, branch_kind))
-    return translated_stack
-
-
-def _attribute_op_with_scope_fallback(
-    code_context: list[FuncCallLocation],
-) -> list[tuple[ast_branches.ConditionalKey, str]]:
-    """Attribute an op, retrying decorated-function scope resolution when needed.
-
-    Parameters
-    ----------
-    code_context:
-        Captured runtime call stack for one operation.
-
-    Returns
-    -------
-    List[Tuple[ast_branches.ConditionalKey, str]]
-        Structural ``(conditional_key, branch_kind)`` pairs ordered
-        outer-to-inner.
-    """
-
-    branch_stack = ast_branches.attribute_op(code_context)
-    if branch_stack:
-        return branch_stack
-
-    fallback_branch_stack: list[tuple[ast_branches.ConditionalKey, str]] = []
-    for frame in code_context:
-        file_index = ast_branches.get_file_index(frame.file)
-        if file_index is None:
-            continue
-
-        scope = _resolve_scope_with_decorator_fallback(file_index, frame)
-        if scope is None:
-            continue
-
-        for conditional_key, branch_kind, _depth in scope.query_intervals(
-            frame.line_number,
-            frame.col_offset,
-        ):
-            entry = (conditional_key, branch_kind)
-            if not fallback_branch_stack or fallback_branch_stack[-1] != entry:
-                fallback_branch_stack.append(entry)
-
-    return fallback_branch_stack
-
-
-def _resolve_scope_with_decorator_fallback(
-    file_index: ast_branches.FileIndex,
-    frame: FuncCallLocation,
-) -> ast_branches.ScopeEntry | None:
-    """Resolve a frame, tolerating decorator-line ``co_firstlineno`` offsets.
-
-    Parameters
-    ----------
-    file_index:
-        AST index for the frame's source file.
-    frame:
-        Runtime frame metadata captured in ``FuncCallLocation`` form.
-
-    Returns
-    -------
-    Optional[ast_branches.ScopeEntry]
-        Resolved scope entry, or ``None`` when the fallback still fails closed.
-    """
-
-    resolved_scope = file_index.resolve_scope(
-        code_firstlineno=frame.code_firstlineno,
-        func_name=frame.func_name,
-        func_qualname=frame.func_qualname,
-    )
-    if resolved_scope is not None:
-        return resolved_scope
-
-    candidate_firstlineno = frame.code_firstlineno + 1
-    if frame.func_qualname is not None:
-        qualname_matches = [
-            scope
-            for scope in file_index.scopes
-            if scope.qualname == frame.func_qualname
-            and scope.code_firstlineno == candidate_firstlineno
-        ]
-        if len(qualname_matches) == 1:
-            return qualname_matches[0]
-        return None
-
-    name_matches = [
-        scope
-        for scope in file_index.scopes
-        if scope.func_name == frame.func_name and scope.code_firstlineno == candidate_firstlineno
-    ]
-    if len(name_matches) == 1:
-        return name_matches[0]
-    return None
 
 
 def _get_gained_branch_entries(

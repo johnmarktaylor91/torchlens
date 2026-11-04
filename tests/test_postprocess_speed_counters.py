@@ -18,7 +18,7 @@ import torch
 from _hermetic_counters import quiet_gc
 
 import torchlens as tl
-from torchlens._data_classes import cleanup
+from torchlens._data_classes import _removed_parent_refs, cleanup
 from torchlens._postprocess import control_flow
 from torchlens.intervention.types import ParentRef, Unsupported
 
@@ -75,7 +75,7 @@ def test_orphan_removal_rebuilds_no_untouched_template(monkeypatch: pytest.Monke
     """Counter: pruning orphans rebuilds zero templates that name no removed op."""
 
     scrubs = _count_calls(monkeypatch, cleanup, "_scrub_intervention_fields_after_removal")
-    rebuilds = _count_calls(monkeypatch, cleanup, "_replace_removed_parent_refs")
+    rebuilds = _count_calls(monkeypatch, _removed_parent_refs, "_replace_removed_parent_refs")
     with quiet_gc():
         trace = tl.trace(_RepeatedSites().eval(), torch.randn(2, 4))
     removed = set().union(*(set(args[1]) for args in scrubs)) if scrubs else set()

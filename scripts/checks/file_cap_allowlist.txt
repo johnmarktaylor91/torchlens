@@ -88,7 +88,7 @@ torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	71
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_state_io.py::trace_getstate	103
 torchlens/_data_classes/_trace_state_io.py::trace_setstate	271
-torchlens/_data_classes/cleanup.py	1081
+torchlens/_data_classes/cleanup.py	1050
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1176
@@ -338,7 +338,7 @@ torchlens/_postprocess/ast_branches.py	2214
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
 torchlens/_postprocess/ast_branches.py::get_file_index	91
-torchlens/_postprocess/control_flow.py	1372
+torchlens/_postprocess/control_flow.py	1278
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
 torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
