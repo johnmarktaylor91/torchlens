@@ -4,9 +4,11 @@ Facet recipes are written against a Module record: they read
 ``module._single_call_or_error()``, ``module.calls[0]`` and the module's
 children by address. A module called more than once (an ALBERT layer shared
 across depth) refuses those single-call reads, so its recipes see nothing.
-:class:`CallBoundModule` wraps one ``ModuleCall`` so that every per-call read a
-recipe makes answers for that call, and every other read (class, config,
-parameters, trace) answers for the owning Module. Children resolve to the
+:class:`CallBoundModule` wraps one ``ModuleCall`` so that every read a
+ModuleCall can answer (outputs, input and output ops, its own facet view)
+answers for that call, as a single-call Module's delegating reads do, and
+every other read (class config, parameters, trace) answers for the owning
+Module. Children resolve to the
 child's call made inside the same parent call, so a recipe reading
 ``query``'s output gets the output of that pass.
 """
@@ -14,27 +16,6 @@ child's call made inside the same parent call, so a recipe reading
 from __future__ import annotations
 
 from typing import Any
-
-# Fields a ModuleCall carries for its own invocation; a recipe reading one of
-# these on the bound subject gets this call's value, never the Module's.
-_PER_CALL_FIELDS = frozenset(
-    {
-        "call_children",
-        "call_index",
-        "call_parent",
-        "code_context",
-        "forward_args",
-        "forward_kwargs",
-        "input_layers",
-        "input_ops",
-        "label",
-        "module_call_stack",
-        "output_layers",
-        "output_ops",
-        "output_paths",
-        "output_structure",
-    }
-)
 
 
 class CallBoundModule:
@@ -57,12 +38,13 @@ class CallBoundModule:
         self._call = call
 
     def __getattr__(self, name: str) -> Any:
-        """Answer per-call fields from the call and everything else from the Module."""
+        """Answer from the call when a ModuleCall has ``name``, else from the Module."""
 
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
-        if name in _PER_CALL_FIELDS:
-            return getattr(self._call, name)
+        call = self._call
+        if name in vars(call) or hasattr(type(call), name):
+            return getattr(call, name)
         return getattr(self._module, name)
 
     @property
@@ -83,19 +65,7 @@ class CallBoundModule:
 
         return 1
 
-    @property
-    def out(self) -> Any:
-        """The bound call's single output."""
-
-        return self._call.out
-
-    @property
-    def outs(self) -> Any:
-        """The bound call's outputs."""
-
-        return self._call.outs
-
-    def _single_call_or_error(self) -> Any:
+    def _single_call_or_error(self, remedy: str | None = None) -> Any:
         """Return the bound call; a bound subject is never ambiguous."""
 
         return self._call
