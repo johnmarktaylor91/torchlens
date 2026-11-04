@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.transformer as tviz
 from torchlens.errors import TorchLensWarning
 from torchlens.mechinterp._heads import _attention_modules
 
@@ -277,7 +278,7 @@ def test_layer_listings_count_wrapper_and_core_as_one_layer(
     """
 
     model, x, clean = _trace(wrapper_cls(), seed=17)
-    views = tl.transformer.attention_views(clean)
+    views = tviz.attention_views(clean)
     assert [view.layer for view in views] == [f"attn.{core}"]
     assert [module.address for module in _attention_modules(clean)] == [f"attn.{core}"]
     corrupted = torch.randn(2, 5, _HIDDEN)
