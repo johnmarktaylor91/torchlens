@@ -196,3 +196,21 @@ def test_cleanup_of_a_stale_fork_succeeds() -> None:
     _parent, edited = _stale_fork()
     edited.cleanup()
     assert "transformed_output" not in edited.__dict__
+
+
+def test_fork_output_refusal_names_the_fork_not_a_disk_load() -> None:
+    """``trace.output`` on a replay fork says it is a fork; an unpickled copy keeps the disk text."""
+
+    _parent, edited = _stale_fork()
+    with pytest.raises(PayloadUnavailableError) as caught:
+        _ = edited.output
+    message = str(caught.value)
+    assert caught.value.fields["code"] == "output_not_stored"
+    assert "fork" in message
+    assert "replay" in message
+    assert "loaded from disk" not in message
+    assert "rerun" in message
+    with pytest.raises(PayloadUnavailableError) as unpickled:
+        _ = pickle.loads(pickle.dumps(edited)).output
+    assert unpickled.value.fields["code"] == "output_not_stored"
+    assert "loaded from disk (or unpickled)" in str(unpickled.value)
