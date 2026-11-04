@@ -18,6 +18,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactTooOldError
 from torchlens._io._tlspec_identity import _backend_runtime
+from torchlens._io.format3.codec_policy import backend_materializes
+from torchlens.backends.registry import get_backend_spec
 from torchlens.errors import EngineDispatchError
 from torchlens.intervention.errors import OpaqueCallableError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
@@ -880,9 +882,10 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
 
     assert manifest["backend"] == "mlx"
     assert manifest["body_format"] == "safetensors"
-    assert manifest["payload_policy"]["policy"] == "array_payloads"
-    assert manifest["payload_policy"]["materialization_supported"] is True
-    assert manifest["payload_policy"]["payload_kinds"]
+    # Saved format 3 keeps only the include flags in payload_policy and reads the payload
+    # policy and its materialization from the backend spec; body_index carries the kinds.
+    assert get_backend_spec("mlx").serialization_policy.payload_policy == "array_payloads"
+    assert backend_materializes(manifest["backend"]) is True
     assert manifest["body_index"]
     assert all(entry["logical_backend"] == "mlx" for entry in manifest["body_index"])
     assert all(entry["codec"] == "numpy_safetensors_v1" for entry in manifest["body_index"])
