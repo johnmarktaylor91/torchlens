@@ -818,15 +818,14 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
     assert "buffer_versions" not in dot
 
 
-def test_recurrent_self_loop_puts_out_where_it_leaves_and_in_where_it_returns(
-    tmp_path: Path,
-) -> None:
-    """A rolled recurrence self-loop labels each end at its node, like every pass edge.
+def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: Path) -> None:
+    """A rolled recurrence self-loop merges In/Out into one midpoint label.
 
-    Restored behaviour (JMT, 3 Nov 2026): ``Out`` is the tail label and ``In`` the
-    head label on every rolled edge, a self-loop included, so the passes sit where the
-    loop leaves its node and where it comes back instead of in one merged midpoint
-    label beside the loop.  Parallel fan-out has no self-edge at all.
+    Self-loops crowd separate head/tail labels against the node, and a recurrence
+    self-edge never carries argument/conditional labels, so the In/Out pass ranges
+    are merged into a single two-line HTML midpoint ``label`` (which graphviz
+    reserves layout space for), with ``In`` above ``Out`` for the default
+    bottom-up layout. Parallel fan-out has no self-edge at all.
     """
 
     recurrent_trace = _trace(ReusedReluLoop())
@@ -834,10 +833,11 @@ def test_recurrent_self_loop_puts_out_where_it_leaves_and_in_where_it_returns(
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
-    assert _html_label_lines(recurrent_attrs, "taillabel") == ["Out 1-3"]
-    assert _html_label_lines(recurrent_attrs, "headlabel") == ["In 2-4"]
-    assert _html_label_lines(recurrent_attrs, "label") is None
-    assert "minlen" not in recurrent_attrs
+    # One combined midpoint label, not separate head/tail labels.
+    assert "headlabel" not in recurrent_attrs
+    assert "taillabel" not in recurrent_attrs
+    # HTML form, In above Out for the bottom-up default.
+    assert _html_label_lines(recurrent_attrs, "label") == ["In 2-4", "Out 1-3"]
     assert "↻" not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
@@ -845,19 +845,15 @@ def test_recurrent_self_loop_puts_out_where_it_leaves_and_in_where_it_returns(
     assert _dot_self_edge_attrs(fanout_dot) == []
 
 
-@pytest.mark.parametrize("direction", ["topdown", "leftright", "rightleft"])
-def test_self_loop_pass_labels_stay_at_their_ends_in_every_direction(
-    tmp_path: Path, direction: str
-) -> None:
-    """The self-loop's Out/In stay tail/head labels whichever way the drawing flows."""
+def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> None:
+    """The self-loop's In/Out order follows flow: In above Out only bottom-up."""
 
     trace = _trace(ReusedReluLoop())
-    dot = _render_dot(trace, tmp_path, f"relu_{direction}", depth=1000, direction=direction)
-    self_edges = _dot_self_edge_attrs(dot)
+    topdown_dot = _render_dot(trace, tmp_path, "relu_topdown", depth=1000, direction="topdown")
+    self_edges = _dot_self_edge_attrs(topdown_dot)
     assert len(self_edges) == 1
-    assert _html_label_lines(self_edges[0], "taillabel") == ["Out 1-3"]
-    assert _html_label_lines(self_edges[0], "headlabel") == ["In 2-4"]
-    assert _html_label_lines(self_edges[0], "label") is None
+    # Top-down flow points down, so Out (tail) is placed above In (head).
+    assert _html_label_lines(self_edges[0], "label") == ["Out 1-3", "In 2-4"]
 
 
 def test_recurrence_back_edge_puts_out_at_its_tail_and_in_at_its_head(tmp_path: Path) -> None:

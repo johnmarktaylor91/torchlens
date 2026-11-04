@@ -1278,6 +1278,7 @@ def _add_edges_for_node(
                     edge_dict,
                     is_self_loop=edge_is_self_loop,
                     is_back_edge=edge_is_back_edge,
+                    rankdir=rankdir,
                     rolled_maps=rolled_maps,
                 )
 
@@ -1874,19 +1875,24 @@ def _html_edge_label(text: str) -> str:
     )
 
 
-def _html_combined_recurrence_label(text: str) -> str:
-    """Return a one-line HTML midpoint label that sits against its edge.
+def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> str:
+    """Return an HTML combined recurrence label that sits against its edge.
 
-    Used for the blank slot an every-pass edge reserves beside its drawn reverse
-    edge (``_space_from_reverse_edge``). Graphviz routes the edge along a midpoint
-    label's left side, so the narrow left spacer keeps the text on its edge and
-    the wide right one keeps it off the next node.
+    Used for a node's self-loop arc, a merged recurrence back-edge, and merged
+    buffer-edge annotations. Graphviz routes the edge along a midpoint label's
+    left side, so the narrow left spacer keeps the text on its edge and the
+    wide right one keeps it off the next node; ``bottom=None`` gives one line.
+
+    ``top``/``bottom`` are escaped individually (not after joining) so the
+    literal ``<BR/>`` line-break tag inserted between them is preserved.
     """
 
+    top = html_escape(top)
+    text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
         f'<TR><TD WIDTH="{_PASS_LABEL_EDGE_GAP}"></TD>'
-        f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{html_escape(text)}</FONT></TD>'
+        f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD>'
         f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
     )
 
@@ -1912,6 +1918,7 @@ def _label_rolled_call_indexs(
     *,
     is_self_loop: bool = False,
     is_back_edge: bool = False,
+    rankdir: str = "BT",
     rolled_maps: "_RolledEdgeMaps | None" = None,
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
@@ -1928,8 +1935,8 @@ def _label_rolled_call_indexs(
     Nov 2026), which midpoint merging had replaced.  Where each pair sits is
     chosen after layout from the drawn geometry (``_pass_label_placement``),
     and a labelled straight edge keeps two ranks of length (``pass_label_spacing``).
-    A recurrence self-loop follows the same rule: ``Out`` where the loop leaves
-    its node, ``In`` where it comes back.
+    A recurrence self-loop has one node at both ends, so its In/Out pair merges
+    into one label beside the loop, ``In`` above ``Out`` unless flow runs down.
     Labels are HTML tables with a small even margin, so the text keeps a gap
     from the node and the arrowhead.
 
@@ -1939,6 +1946,7 @@ def _label_rolled_call_indexs(
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
         is_self_loop: Whether this edge is a node's recurrence self-loop.
         is_back_edge: Whether this edge is a rolled loop's return arc.
+        rankdir: Graphviz rank direction, used to order a self-loop's lines.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -1958,11 +1966,15 @@ def _label_rolled_call_indexs(
     if out_label is None and in_label is None:
         _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)
         return
+    if is_self_loop and out_label is not None and in_label is not None:
+        top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
+        edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
+        return
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
-    if not is_self_loop and "minlen" not in edge_dict:
+    if "minlen" not in edge_dict:
         edge_dict.update(pass_label_spacing(is_back_edge))
 
 
