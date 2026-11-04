@@ -95,8 +95,13 @@ def test_grad_fn_call_gradient_sides_match_their_glossary_rows() -> None:
     out = trace[trace.output_layers[0]].out
     upstream = torch.tensor([5.0, 7.0])
     trace.backward((out * upstream).sum())
-    mul = next(g for g in trace.autograd.grad_fns if g.class_name.startswith("MulBackward"))
-    call = mul.calls[0]
+    # The loss's own ``out * upstream`` is a MulBackward outside the traced
+    # graph with no retained payload; the model's ``x * 3.0`` node retains both.
+    call = next(
+        g.calls[0]
+        for g in trace.autograd.grad_fns
+        if g.class_name.startswith("MulBackward") and g.calls[0].grad_outputs is not None
+    )
 
     assert torch.equal(call.grad_outputs[0], upstream)
     assert torch.equal(call.grad_inputs[0], 3.0 * upstream)
