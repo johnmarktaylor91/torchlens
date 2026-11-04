@@ -78,7 +78,7 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
 | `TraceDict` over many layers | `log.find_sites(tl.in_module(...), max_fanout=...)` and iterate results | Equivalent discovery, different object model. |
 | Edit an activation in a trace | `log.fork().do(site, edit)` | Equivalent post-hoc mutation for stable graphs. |
 | Retain input/output tensors | TorchLens records activations and selected argument metadata in `Op` records | TorchLens is broader but heavier. |
-| Stop or replace module output inline | `tl.trace(model, x, intervene=tl.when(site, helper))` during capture, or `trace.run(inputs=x, until=site)` to stop early | Similar for visible module/op outputs. |
+| Stop or replace module output inline | `tl.trace(model, x, intervene=tl.when(site, helper))` during capture, or `trace.run_transaction(inputs=x, until=site)` to stop early | Similar for visible module/op outputs. |
 | Patch generated-token traces | Capture the generation loop, then `.do(site, edit)` (replay) or `.do(site, edit, model=model, inputs=x)` (run) at the target sites | Equivalent when the Python loop is visible. |
 | Lightweight context manager only | No exact equivalent | TorchLens creates a persistent `Trace`; lightweight tracing is deferred to v2.x. |
 | Causal tracing utilities | Build with `Bundle`, helpers, and metrics | Turnkey causal-tracing dashboards are deferred to v2.x. |
@@ -114,7 +114,7 @@ RESULT = (
 - A persistent `Trace` of the whole run: every executed op with its output, shape and module
   address, so the read of one module is a lookup into a record that also holds the rest.
 - Post-hoc edits on a fork (`.do(site, edit)`) that leave the original run untouched, and
-  `trace.run(inputs=x, until=site)` to stop early.
+  `trace.run_transaction(inputs=x, until=site)` to stop early.
 - Intervention during capture: `tl.trace(model, x, intervene=tl.when(site, helper))`.
 - Recipes saved as `.tlspec/` directories (`save_intervention(..., level=...)`).
 - Eager-attention captured ops and, on fused attention, reconstructed read-only facets

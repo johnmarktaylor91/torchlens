@@ -122,7 +122,7 @@ semantics are frozen in [section 11](runnable_tlspec_contract.md#11-honesty-dive
 
 ## Clean run, hooked run, and disclosure
 
-`run(inputs=)` means one thing: push new inputs through the recorded model. Verification is a
+`run_transaction(inputs=)` means one thing: push new inputs through the recorded model. Verification is a
 property the result reports, not part of that meaning. The clean-run promise of this contract
 (a `verified` path, `attested` numerics when eligible) is made for a run with nothing staged on
 the trace: no hooks, no value replacements, no capture-time intervention on the path it replays.
@@ -134,7 +134,7 @@ not pretend otherwise. Such a run settles `unverifiable` with the ceiling diagno
 never `verified`, and a subscription that fired nowhere is recorded under the zero-fire policy
 rather than passed over. From that point the trace reads `Trace.is_pristine == False`, a one-way reading derived
 from the evidence the trace keeps, so a later reader of the saved artifact sees that something
-once intervened even if the hooks were cleared afterwards. The ordinary `run(inputs=)` keeps
+once intervened even if the hooks were cleared afterwards. The ordinary `run_transaction(inputs=)` keeps
 refusing staged edits it would not apply (`run_staged_spec_unapplied`), so an edit is either
 applied and disclosed or refused, never silently dropped.
 
@@ -166,7 +166,7 @@ anchors, XOR rule, and validation order are in
 
 ## Transaction boundary
 
-`Trace.run(inputs=..., seed=...)` selects a live or loaded-sparse provider and returns
+`Trace.run_transaction(inputs=..., seed=...)` selects a live or loaded-sparse provider and returns
 `RunResult(output, trace, report)`. The source Trace is unchanged for ordinary runs. State,
 context, RNG, input binding, sparse calls, output reconstruction, honesty checks, and optional
 numeric attestation settle inside one transaction.

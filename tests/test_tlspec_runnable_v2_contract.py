@@ -62,7 +62,7 @@ def test_v2_descriptor_round_trips_with_required_context(tmp_path: Path) -> None
         # Disabled autocast is written affirmatively, never omitted.
         assert call.execution_context.autocast, call.call_id
         assert all(entry.enabled is False for entry in call.execution_context.autocast)
-    result = loaded.run(inputs=torch.randn(2, 4))
+    result = loaded.run_transaction(inputs=torch.randn(2, 4))
     assert result.report.path_faithfulness.value == "verified"
 
 
@@ -107,7 +107,7 @@ def test_legacy_v1_capability_loads_analysis_only(tmp_path: Path) -> None:
     assert "analysis-only" in joined
     assert "context" in joined
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
 
 
 def test_unenterable_recorded_device_refuses_execution_context_unavailable(
@@ -133,7 +133,7 @@ def test_unenterable_recorded_device_refuses_execution_context_unavailable(
     assert loaded._runnable.readiness.status is ReadinessStatus.READY
 
     with pytest.raises(RunPreconditionError) as captured:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert captured.value.fields["code"] == RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE.value
     assert captured.value.fields["context_field"] == "default_device"
 
@@ -151,7 +151,7 @@ def test_v2_descriptor_missing_call_context_is_rejected(tmp_path: Path) -> None:
     readiness = loaded._runnable.readiness
     assert readiness.status is ReadinessStatus.UNAVAILABLE
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
 
 
 def test_v2_descriptor_missing_ambient_context_is_rejected(tmp_path: Path) -> None:

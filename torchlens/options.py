@@ -461,7 +461,7 @@ class CaptureOptions:
             Whether the capture keeps the model state its forward changed
             (forward-equivalent: norm running statistics, buffer writes, training
             modes and plain attributes advance exactly as one direct ``model(x)``
-            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            would, the spelling ``trace.run_transaction(inputs=..., carry_state=True)`` uses; no capture
             advances the caller's random streams under either setting). The default
             ``False`` makes the capture a pure observer: buffers, random state,
             training modes and plain instance attributes are restored afterwards,

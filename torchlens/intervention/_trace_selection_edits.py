@@ -354,7 +354,7 @@ def attach_selection_plan_hooks(
         raise
     # These sticky hooks are the do() plan's edit-then-scatter residue of an
     # edit applied NOW (the caller propagates and appends the audit record),
-    # not user-staged future-run material, so the run(inputs=...) staged-spec
+    # not user-staged future-run material, so the run_transaction(inputs=...) staged-spec
     # honesty gate must skip them: a value-edited fork gets the
     # PendingValueEditsWarning disclosure at the run door, never a refusal.
     attached_ids = set(attached)

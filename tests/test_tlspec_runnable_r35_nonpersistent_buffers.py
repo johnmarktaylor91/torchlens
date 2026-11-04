@@ -76,7 +76,7 @@ def test_r35_mixed_buffer_original_run_attests(tmp_path: Path) -> None:
         include_weights=True,
         include_activations=True,
     )
-    result = tl.load(str(path)).run(inputs=x)
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED

@@ -235,7 +235,7 @@ Trace-then-rerun is a fast path when the staged spec targets modules: `trace.run
 runs the native forward with the staged hooks (the guarded fast engine, about 1.5x a plain hook,
 exact), admits a longer input when the model takes the same sequence of calls, and falls back to
 the capture engine with `last_run["fast_refused"]` naming the guard that refused;
-`trace.run(inputs=..., fast=True)` applies the staged spec the same way on a live trace. Value
+`trace.run_transaction(inputs=..., fast=True)` applies the staged spec the same way on a live trace. Value
 replacements and non-module targets still take the capture engine. Glossary: "Guarded fast
 rerun".
 

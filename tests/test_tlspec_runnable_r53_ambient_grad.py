@@ -78,7 +78,7 @@ def test_no_grad_capture_records_false_and_matches_no_grad_oracle(tmp_path: Path
     trace.save(path, level="runnable", include_weights=True)
 
     assert _descriptor_ambient(path)["grad_enabled"] is False
-    result = tl.load(path).run(inputs=x.clone())  # caller is grad-ON here
+    result = tl.load(path).run_transaction(inputs=x.clone())  # caller is grad-ON here
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(result.output, expected_no_grad)
 
@@ -110,4 +110,4 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     assert "context_field_invalid" in codes, codes
     assert "context_parse_validation" in stages, stages
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=torch.randn(2, 3))
+        loaded.run_transaction(inputs=torch.randn(2, 3))

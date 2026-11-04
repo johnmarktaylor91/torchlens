@@ -142,7 +142,7 @@ Row rationales, stated once:
   open.
 - **N5** converted two broken behaviors into typed refusals: halted refresh
   crashed with a misleading "computational graph changed" error, and halted
-  `run(inputs=..., fast=True)` SILENTLY SUCCEEDED against the full native
+  `run_transaction(inputs=..., fast=True)` SILENTLY SUCCEEDED against the full native
   forward (the false-blessing hole). The refusal names the re-arm follow-on:
   re-capture without `stop_after=`, or use loaded-sparse `run()`.
 - **N4** is a crash→typed conversion: no legacy workflow successfully saved a

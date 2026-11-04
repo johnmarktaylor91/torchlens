@@ -219,7 +219,7 @@ def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
     x = _nchw()
     path = _save(HiddenGlobalLayoutBranch().eval(), x, tmp_path / "hidden.tlspec")
 
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -237,6 +237,6 @@ def test_r75_direct_alias_consumption_is_replayable(tmp_path: Path) -> None:
     x = _nchw()
     path = _save(MixedCatDirectConsumption().eval(), x, tmp_path / "mixed.tlspec")
 
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.is_poisoned

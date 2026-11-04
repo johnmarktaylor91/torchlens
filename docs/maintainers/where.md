@@ -1673,7 +1673,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 389 |
 | `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 710 |
 | `_rule_match` | The overlap-law rule matcher shared by every intervention door. | 96 |
-| `_run_staged` | Apply a trace's staged intervention spec on a ''run(inputs=)'' live forward. | 222 |
+| `_run_staged` | Apply a trace's staged intervention spec on a ''run_transaction(inputs=)'' live forward. | 222 |
 | `_runtime_gradient` | Backward-pass and hook-identity helpers for live intervention hooks. | 300 |
 | `_runtime_probes` | Storage-mutation probes for live intervention hook outputs. | 199 |
 | `_runtime_sites` | Site-scope and provisional-site helpers for live intervention hooks. | 321 |

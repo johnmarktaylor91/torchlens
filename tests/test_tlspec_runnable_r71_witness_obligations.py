@@ -75,7 +75,7 @@ def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
     if readiness is not None and readiness.status is ReadinessStatus.UNAVAILABLE:
         return ("refused", {d.code.value for d in readiness.diagnostics})
     try:
-        result = loaded.run(inputs=inputs, on_divergence="return")
+        result = loaded.run_transaction(inputs=inputs, on_divergence="return")
         return ("ran", result.report.path_faithfulness)
     except Exception as exc:  # noqa: BLE001 -- typed refusal classification
         return ("raised", type(exc).__name__)
@@ -505,7 +505,7 @@ def test_r70_pin_corr2recover_repro_b_stale_escape_strips(tmp_path: Path) -> Non
     x = torch.tensor([5.0, 1.0, 1.0])
     changed = torch.tensor([99.0, 1.0, 1.0])
     source = _save(_trace(_Escape(), x.clone()), tmp_path / "pin_b.tlspec")
-    result = tl.load(source).run(inputs=x.clone())
+    result = tl.load(source).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     outcome, detail = _verdict(source, changed)
     assert outcome == "ran" and detail is PathFaithfulness.UNVERIFIABLE, (outcome, detail)
@@ -576,7 +576,7 @@ def test_r71_completeness_forgery_never_strengthens(tmp_path: Path) -> None:
     )
     descriptor = tl.load(source)._runnable.descriptor
     assert any(gap.gap_kind is WitnessGapKind.OPAQUE_INPUT_LEAF for gap in descriptor.coverage_gaps)
-    result = tl.load(source).run(inputs=[x.clone(), {"blob": (1 + 2j)}])
+    result = tl.load(source).run_transaction(inputs=[x.clone(), {"blob": (1 + 2j)}])
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
     def _force_complete(run: dict) -> None:
@@ -626,7 +626,7 @@ def test_r71_no_over_trigger_greens(tmp_path: Path) -> None:
     for index, (model, capture_inputs, run_inputs) in enumerate(cases):
         path = _save(_trace(model, capture_inputs), tmp_path / f"green_{index}.tlspec")
         effective = capture_inputs if run_inputs is None else run_inputs
-        result = tl.load(path).run(inputs=effective)
+        result = tl.load(path).run_transaction(inputs=effective)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, index
 
     # Metadata-OBLIVIOUS model: a changed-layout runtime input stays VERIFIED (the
@@ -643,7 +643,7 @@ def test_r71_no_over_trigger_greens(tmp_path: Path) -> None:
     path = _save(_trace(_Oblivious(), x.clone()), tmp_path / "green_layout.tlspec")
     noncontiguous = x.t().contiguous().t()
     assert not noncontiguous.is_contiguous()
-    result = tl.load(path).run(inputs=noncontiguous)
+    result = tl.load(path).run_transaction(inputs=noncontiguous)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

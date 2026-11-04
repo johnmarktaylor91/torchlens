@@ -32,9 +32,9 @@ class EpisodeOptions:
     verification oracle / deep-dive product for TENS of steps, not hundreds.
     Measured on gpt2-124M (CPU): N=20 costs 79 s / 146 MB artifact / 1.9 GB
     peak RSS; N=100 costs 657 s (323x native) / 947 MB / 5.4 GB. Cost is
-    SUPERLINEAR in step count. The guarded-fast tier (``trace.run(fast=True)``,
+    SUPERLINEAR in step count. The guarded-fast tier (``trace.run_transaction(inputs=..., fast=True)``,
     which needs a functional ``save=tl.func(...)`` on the capture; the default
-    capture re-runs through ``trace.run(inputs=...)``) is the engine for
+    capture re-runs through ``trace.run_transaction(inputs=...)``) is the engine for
     episode-scale re-runs.
 
     Parameters

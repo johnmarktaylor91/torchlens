@@ -114,7 +114,7 @@ def _roundtrip(
     trace.save(
         path, level="runnable", include_weights=True, include_activations=include_activations
     )
-    result = tl.load(path).run(inputs=x if run_inputs is None else run_inputs)
+    result = tl.load(path).run_transaction(inputs=x if run_inputs is None else run_inputs)
     return trace, result
 
 
@@ -729,7 +729,7 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     model = _PlainLinear()
     trace = _capture(model, x)
     with pytest.raises(PathDivergenceError) as exc:
-        trace.run(inputs=torch.randn(3, 5), on_divergence="return")
+        trace.run_transaction(inputs=torch.randn(3, 5), on_divergence="return")
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")
@@ -737,7 +737,7 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     # TraceCaptureError the divergence classification wraps.
     assert isinstance(exc.value.__cause__, TraceCaptureError)
     assert isinstance(exc.value.__cause__.__cause__, RuntimeError)
-    rerun = trace.run(inputs=x)
+    rerun = trace.run_transaction(inputs=x)
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert rerun.report.is_poisoned is False
 
@@ -758,7 +758,7 @@ def test_live_changed_batch_refresh_stays_verified() -> None:
     trace = _capture(model, x)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        result = trace.run(inputs=torch.randn(5, 4))
+        result = trace.run_transaction(inputs=torch.randn(5, 4))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.is_poisoned is False
 
@@ -781,7 +781,7 @@ def test_live_non_divergent_native_failure_reraises_raw() -> None:
     model = _ValueGate()
     trace = _capture(model, x)
     with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
-        trace.run(inputs=torch.full((2, 4), 100.0))
+        trace.run_transaction(inputs=torch.full((2, 4), 100.0))
     assert isinstance(_tce_info.value.__cause__, ValueError)
 
 
@@ -838,7 +838,7 @@ def test_tampered_device_literal_degrades_analysis_only(tmp_path: Path) -> None:
     assert readiness.status is ReadinessStatus.UNAVAILABLE
     assert any("torch.device" in (d.message or "") for d in readiness.diagnostics)
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=x)
+        loaded.run_transaction(inputs=x)
 
 
 # ======================================================================================
@@ -883,7 +883,7 @@ def test_raw_thread_captured_escape_ceilings(tmp_path: Path) -> None:
     path = tmp_path / "rawthread.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    result = tl.load(path).run_transaction(inputs=(torch.tensor([-1.0]), data))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -912,7 +912,7 @@ def test_owner_derived_alias_foreign_escape_ceilings(
     path = tmp_path / "ownerderived.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
+    result = tl.load(path).run_transaction(inputs=(torch.tensor([-1.0]), data))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 

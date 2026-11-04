@@ -96,7 +96,7 @@ def _assert_refuses(trace: tl.Trace, path: Path, *needles: str) -> None:
 
 def _assert_verified(model: nn.Module, x: torch.Tensor, path: Path) -> tl.Trace:
     loaded = tl.load(_save(_trace(model, x), path))
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     return loaded
 
@@ -244,7 +244,7 @@ def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     for slot_id, value in prepared.slot_values.items():
         assert value.device.type == "cuda", slot_id
         assert state_metadata_full_violations(value) == [], slot_id
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     # A CPU user state dict staged ACROSS devices to the CUDA slot stays canonical too.
     rebound = tl.load(path)
@@ -253,7 +253,7 @@ def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     for slot_id, value in prepared_rebound.slot_values.items():
         assert value.device.type == "cuda", slot_id
         assert state_metadata_full_violations(value) == [], slot_id
-    rerun = rebound.run(inputs=x.clone())
+    rerun = rebound.run_transaction(inputs=x.clone())
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -275,7 +275,7 @@ def test_r65_cuda_is_shared_read_stays_verified(tmp_path: Path) -> None:
     trace = _trace(model, x)
     assert "is_shared" in host_escape_state_metadata_reads(trace).get("b", frozenset())
     loaded = tl.load(_save(trace, tmp_path / "cuda_shared_read.tlspec"))
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -558,7 +558,7 @@ def test_r65_requires_grad_read_is_declared_fact_never_refusal(tmp_path: Path) -
         if slot_id in name_by_slot
     }
     assert staged_bits["lin.weight"] == recorded_bit
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     # Recorded bit WINS over a user-supplied state dict carrying the opposite bit.
     flipped = tl.load(path)
@@ -607,7 +607,7 @@ def test_r65_grad_fn_absent_state_read_stays_verified(tmp_path: Path) -> None:
     trace = _trace(GradFnRead(), x)
     assert host_escape_state_metadata_facts(trace).get("w", {}).get("grad_fn") is False
     loaded = tl.load(_save(trace, tmp_path / "gradfn_ok.tlspec"))
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -859,7 +859,7 @@ def _r69_assert_refused(path: Path) -> None:
         RunCapabilityUnavailableError,
         match="analysis-only and has no sparse run descriptor",
     ):
-        loaded.run(inputs=torch.randn(3))
+        loaded.run_transaction(inputs=torch.randn(3))
 
 
 def test_r69_state_inventory_member_strip_with_intact_fact_refuses(tmp_path: Path) -> None:

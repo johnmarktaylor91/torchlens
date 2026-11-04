@@ -3079,37 +3079,34 @@ class Trace(TraceOutputMixin, TraceLike):
         model: Any = None,
         x: Any = None,
         *,
-        inputs: Any | MissingType = MISSING,
+        chunk_paths: Any | None = None,
+        replay: "ReplayOptions | None" = None,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
+    ) -> "Trace":
+        """Rerun the live model on new input and refresh this Trace."""
+        options = {name: value for name, value in locals().items() if name != "self"}
+        result = _doors.intervention()._trace_run.run(self, **options, transaction=False)
+        return cast("Trace", result)
+
+    def run_transaction(
+        self,
+        *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         carry_state: bool = False,
         until: Any = None,
         save: Any = None,
         on_divergence: Literal["raise", "return"] = "raise",
-        chunk_paths: Any | None = None,
-        replay: "ReplayOptions | None" = None,
         input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
-    ) -> "Trace | RunResult":
-        """Execute this Trace through its live or loaded provider."""
-        return _doors.intervention()._trace_run.run(
-            self,
-            model,
-            x,
-            inputs=inputs,
-            seed=seed,
-            fast=fast,
-            carry_state=carry_state,
-            until=until,
-            save=save,
-            on_divergence=on_divergence,
-            chunk_paths=chunk_paths,
-            replay=replay,
-            input_transform=input_transform,
-            output_transform=output_transform,
-            on_zero_fire=on_zero_fire,
-        )
+    ) -> "RunResult":
+        """Run a verified fresh execution with a report, leaving this Trace unchanged."""
+        options = {name: value for name, value in locals().items() if name != "self"}
+        return cast("RunResult", _doors.intervention()._trace_run.run(self, **options))
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log."""

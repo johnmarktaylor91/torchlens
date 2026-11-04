@@ -145,7 +145,7 @@
   loaded trace, the record is never persisted; the record keeps what the forward bound alive as
   long as the trace). `CaptureOptions(carry_state=True)` keeps forward-equivalent state, writes
   included, and records the same rows (the same spelling as
-  `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
+  `trace.run_transaction(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
@@ -279,7 +279,7 @@
   geometry violations quarantine `episode_ledger_incoherent`); the annotations key AND the
   Bundle `member_relations` key persist plainly as of the tlspec v8 coordinated bump.
   DIAGNOSTIC-TIER cost, superlinear (gpt2-124M CPU: N=20 79 s / N=100 657 s, 947 MB, 5.4 GB
-  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which collects
+  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run_transaction(inputs=..., fast=True)`, which collects
   every site the capture saved, the save-all default and module saves included) is the engine for episode-scale re-runs and must reproduce wrapped
   tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
   on a module-targeted staged spec fires the staged hooks at module exit inside a native

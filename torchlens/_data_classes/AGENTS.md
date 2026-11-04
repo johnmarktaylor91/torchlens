@@ -244,7 +244,7 @@ layer.ops  # dict[int, Op]
   creates cycles. There is NO `Trace.load` — loading is module-level `tl.load`
   (see the sibling `AGENTS.md`) — and `replay`/`rerun` are deprecated warning
   aliases of `push`/`run`.
-- `run(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
+- `run_transaction(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
   legacy `run(model, x, ...)` remains the intervention-rerun compatibility path.
 - `graph_shape_hash` is computed before `_set_tracing_finished`.
 

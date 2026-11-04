@@ -281,7 +281,7 @@ def test_honest_amplifier_zoo_runs_verified(tmp_path: Path) -> None:
 
     x = torch.randn(6)
     bundle = _build(tmp_path, "zoo.tlspec", _AmplifierZoo(), x)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
+    result = tl.load(str(bundle)).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
 
 
@@ -311,7 +311,7 @@ def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone(), on_divergence="return")
+            loaded.run_transaction(inputs=x.clone(), on_divergence="return")
     fields = caught.value.fields
     assert fields.get("detection_stage") == "op_allocation_execution"
     assert int(fields["logical_elements"]) == 4 * 10**11
@@ -340,7 +340,7 @@ def test_e2e_tampered_input_slot_expand_view_refused_at_mirror(tmp_path: Path) -
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=torch.randn(1).expand(10**12))
+            loaded.run_transaction(inputs=torch.randn(1).expand(10**12))
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 

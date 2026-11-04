@@ -804,7 +804,7 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
         (ReplayPreconditionError, None),
     ),
     "run_inputs": (
-        lambda t, m, x: t.run(inputs=x),
+        lambda t, m, x: t.run_transaction(inputs=x),
         (RunCapabilityUnavailableError, "run_capability_unavailable"),
     ),
 }

@@ -176,7 +176,7 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
 
     loaded = tl.load(tampered)
     with pytest.raises(Exception) as excinfo:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert type(excinfo.value).__name__ != "AssertionError"
 
 
@@ -215,7 +215,7 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     # And run() must raise the resolver's ReattachError carrying the full report,
     # NOT the coarse analysis-only RunCapabilityUnavailableError.
     with pytest.raises(ReattachError) as captured:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert captured.value.fields["readiness"] is loaded.readiness
 
 

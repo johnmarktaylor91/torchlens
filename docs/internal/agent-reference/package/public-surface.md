@@ -27,8 +27,8 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
-live_result = relu_trace.run(inputs=x, seed=42)
-loaded_result = tl.load("architecture.tlspec").run(inputs=x, seed=42)
+live_result = relu_trace.run_transaction(inputs=x, seed=42)
+loaded_result = tl.load("architecture.tlspec").run_transaction(inputs=x, seed=42)
 ```
 
 The unified `inputs=` run surface returns `RunResult(output, trace, report)` without mutating its
@@ -49,7 +49,7 @@ Eligible original-input/capture-equivalent-state runs byte-attest raw saved slot
 transactional `replay_value_mismatch`), while changed-input (logical or physical),
 random/non-equivalent-state, and nondeterministic-capture-context runs are `not_applicable`;
 `attested` always implies `verified`.
-`trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
+`trace.run_transaction(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
 Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in

@@ -143,10 +143,11 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # recording_multipass_not_convertible: row DELETED (shrink-only lock-in);
         # tests/test_record_to_trace_multipass.py asserts the halted multi-pass
         # refusal by code.
-        # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
-        # run_legacy_options_conflict, run_source_model_collected: rows
+        # run_fast_divergence_policy_invalid, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins
-        # now provoke them.
+        # now provoke them. run_fast_requires_inputs and
+        # run_legacy_options_conflict left the contract when Trace.run split
+        # from Trace.run_transaction (the keywords no longer reach one door).
         "run_input_missing",
         "selector_function_pattern_type_invalid",
         # skip_fn_boundary_invalid: row DELETED (shrink-only lock-in) -- the

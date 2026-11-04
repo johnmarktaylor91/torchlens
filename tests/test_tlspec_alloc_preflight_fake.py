@@ -288,7 +288,7 @@ def test_numeric_literal_bomb_refused_op_agnostically(
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone())
+            loaded.run_transaction(inputs=x.clone())
     expected_stage = (
         "op_allocation_preflight"
         if name != "one_hot" or _ONE_HOT_FAKE_PROJECTION_SUPPORTED
@@ -463,7 +463,7 @@ def test_huge_materialized_slot_still_refused(
     bundle = _build(tmp_path, "huge_mat.tlspec", factory(), x, save=save)
     loaded = tl.load(str(bundle))
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
     assert int(caught.value.fields["available_bytes"]) == _HUGE_VIEW_HOST_BUDGET_BYTES
@@ -496,7 +496,7 @@ def test_admitted_view_unprojectable_at_run_time_fails_closed(
     else:
         monkeypatch.setattr(torchlens._runnable.call_arguments, "_tree_to_fake", _raise_projection)
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     labels = caught.value.fields.get("affected_op_labels") or ()
     assert any(str(label).startswith("expand") for label in labels)
@@ -517,7 +517,7 @@ def test_admitted_views_share_one_logical_ceiling(
     bundle = _build(tmp_path, "two_views.tlspec", _TwoHugeViews(), x, save=tl.func("sum"))
     loaded = tl.load(str(bundle))
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     assert int(caught.value.fields["logical_elements"]) == 2 * 4 * 10**7
 
@@ -590,7 +590,7 @@ def test_crafted_hidden_copy_of_view_refused(
     _tamper(bundle, mutate)
     loaded = tl.load(str(bundle))
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
     assert int(caught.value.fields["required_bytes"]) == 10**7 * 4 * 4
 
@@ -702,7 +702,7 @@ def test_version_alias_of_alias_refused_at_load(tmp_path: Path) -> None:
     diagnostics = " ".join(f"{d.code.value} {d.message}" for d in readiness.diagnostics)
     assert "context_field_invalid" in diagnostics and "one level deep" in diagnostics
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
 
 
 # Kept: sole branch coverage of _runnable/retention.py, _runnable/state.py.

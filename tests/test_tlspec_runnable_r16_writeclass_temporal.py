@@ -45,7 +45,7 @@ def _status(
     model: nn.Module, cap_x: torch.Tensor, run_x: torch.Tensor, tmp: Path
 ) -> PathFaithfulness:
     loaded = _save_load(model, cap_x, tmp)
-    result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=run_x.clone(), seed=0, on_divergence="return")
     return result.report.path_faithfulness
 
 

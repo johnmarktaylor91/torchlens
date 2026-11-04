@@ -62,7 +62,7 @@ def _live_until_relu(model_cls=_Chain):
         model.eval()
     x = torch.randn(2, 4)
     log = tl.trace(model, x)
-    result = log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
+    result = log.run_transaction(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
     return model, log, result
 
 
@@ -134,12 +134,12 @@ def test_truncated_run_never_settles_verified(tmp_path):
     assert live_result.report.truncation is not None
 
     loaded, x = _loaded_runnable(tmp_path)
-    loaded_result = loaded.run(inputs=x, until=_type_label(loaded, "relu"))
+    loaded_result = loaded.run_transaction(inputs=x, until=_type_label(loaded, "relu"))
     assert loaded_result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert loaded_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert loaded_result.report.truncation is not None
     # The counterfactual full run on the same pair settles clean (meta-pair (b)(ii)).
-    full = loaded.run(inputs=x)
+    full = loaded.run_transaction(inputs=x)
     assert full.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert full.report.truncated is False
 
@@ -165,7 +165,7 @@ def test_prefix_projection_mismatch_refuses_like_full():
     until_label = _type_label(log, "relu")
     model.flip = True
     with pytest.raises(ValueError, match="computational graph changed"):
-        log.run(inputs=torch.randn(2, 4), until=until_label)
+        log.run_transaction(inputs=torch.randn(2, 4), until=until_label)
 
 
 # Kept: sole branch coverage of _capture/projectors.py.
@@ -189,7 +189,7 @@ def test_until_x_bn_prefix_tamper_refuses_typed():
             tampered += 1
     assert tampered
     with pytest.raises(BufferSinkRoutingError):
-        log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
+        log.run_transaction(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
 
 
 # Kept: sole branch coverage of _runnable/execution.py, intervention/_trace_run.py.
@@ -198,7 +198,7 @@ def test_truncated_result_refuses_rerun():
 
     _model, _log, result = _live_until_relu()
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:
-        result.trace.run(inputs=torch.randn(2, 4))
+        result.trace.run_transaction(inputs=torch.randn(2, 4))
     assert exc_info.value.fields["code"] == RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value
     assert exc_info.value.fields["detection_stage"] == "truncated_result_rerun"
 
@@ -231,8 +231,8 @@ def test_until_requires_full_inputs(tmp_path):
     # relax a boundary check.
     relu_label = _type_label(loaded, "relu")
     with pytest.raises((ValueError, RuntimeError)):
-        loaded.run(inputs=[x], until=relu_label)
-    result = loaded.run(inputs=[x, y], until=relu_label)
+        loaded.run_transaction(inputs=[x], until=relu_label)
+    result = loaded.run_transaction(inputs=[x, y], until=relu_label)
     assert result.report.truncated is True
 
 
@@ -247,7 +247,7 @@ def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
     relu_label = _type_label(log, "relu")
-    result = log.run(inputs=torch.randn(2, 4), fast=True, until=relu_label)
+    result = log.run_transaction(inputs=torch.randn(2, 4), fast=True, until=relu_label)
     assert result.report.truncated is True
     assert result.report.stopped_at == relu_label
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
@@ -255,7 +255,9 @@ def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
 
     loaded, _x = _loaded_runnable(tmp_path)
     with pytest.raises(ValueError) as exc_info:
-        loaded.run(inputs=torch.randn(2, 4), fast=True, until=_type_label(loaded, "relu"))
+        loaded.run_transaction(
+            inputs=torch.randn(2, 4), fast=True, until=_type_label(loaded, "relu")
+        )
     assert exc_info.value.fields["code"] == "run_fast_until_unsupported"
 
 
@@ -266,7 +268,7 @@ def test_until_predicate_form_refuses_pre_s4():
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), until=lambda ctx: True)
+        log.run_transaction(inputs=torch.randn(2, 4), until=lambda ctx: True)
     assert exc_info.value.fields["detection_stage"] == "predicate_surface_pending"
 
 
@@ -277,7 +279,7 @@ def test_until_junk_form_refuses_typed():
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
     with pytest.raises(ValueError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), until=3)
+        log.run_transaction(inputs=torch.randn(2, 4), until=3)
     assert exc_info.value.fields["code"] == "run_until_form_invalid"
 
 
@@ -295,7 +297,7 @@ def test_until_substring_token_refuses_typed():
     log = tl.trace(model, torch.randn(2, 4))
     assert log["relu"] is not None  # the flexible lookup itself resolves
     with pytest.raises(ValueError) as exc_info:
-        log.run(inputs=torch.randn(2, 4), until=["relu"])
+        log.run_transaction(inputs=torch.randn(2, 4), until=["relu"])
     assert exc_info.value.fields["code"] == "run_until_form_invalid"
     assert "did not resolve to layers" in str(exc_info.value)
 
@@ -306,7 +308,7 @@ def test_run_save_retention_reselects():
 
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
-    result = log.run(inputs=torch.randn(2, 4), save=_type_label(log, "relu"))
+    result = log.run_transaction(inputs=torch.randn(2, 4), save=_type_label(log, "relu"))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.trace[_type_label(result.trace, "relu")].out is not None
     assert result.trace[_type_label(result.trace, "sigmoid")].out is None
@@ -321,7 +323,7 @@ def test_run_save_outside_until_window_refuses_typed():
     model = _Chain()
     log = tl.trace(model, torch.randn(2, 4))
     with pytest.raises(ValueError) as exc_info:
-        log.run(
+        log.run_transaction(
             inputs=torch.randn(2, 4),
             until=_type_label(log, "relu"),
             save=_type_label(log, "sigmoid"),

@@ -1228,7 +1228,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
     "torchlens._fast_live_until.FastUntilReached": (
-        "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
+        "internal control-flow cut signal (BaseException) for trace.run_transaction(inputs=..., fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
     "torchlens._runnable.execution._ProjectionCountExceeded": (

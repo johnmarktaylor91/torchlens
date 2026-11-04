@@ -71,7 +71,7 @@ you want to backpropagate through the returned activations.
   hooks and `forward` stay yours.
 - `tl.extract_dataset` runs the same lookup over a dataloader and writes the activations to
   disk with provenance; see [Multi-GPU extraction](multi_gpu_extraction.md) for sharded runs.
-- `trace.run(inputs=x, until=...)` stops a run at a site when you do not want the rest of
+- `trace.run_transaction(inputs=x, until=...)` stops a run at a site when you do not want the rest of
   the model to execute.
 
 ## What torchvision's feature extractor does that TorchLens does not
@@ -80,7 +80,7 @@ you want to backpropagate through the returned activations.
   training loop, script or export as a truncated network. `tl.extract` returns tensors for
   one call; it does not return a smaller model.
 - It drops the nodes after the last requested one, so later layers are not computed.
-  `tl.extract` runs the whole model unless you stop it with `trace.run(inputs=x, until=...)`.
+  `tl.extract` runs the whole model unless you stop it with `trace.run_transaction(inputs=x, until=...)`.
 - It works from the symbolic graph without any input, which is what `get_graph_node_names`
   uses. TorchLens needs a real input to list what ran.
 

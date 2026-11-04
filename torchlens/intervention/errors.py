@@ -132,7 +132,7 @@ class PendingValueEditsWarning(InterventionWarning):
     """A new-input run was requested on a trace carrying value-edits.
 
     ``do()``-style edits rewrite SAVED values and push them downstream on the
-    captured DAG (path 1); ``run(inputs=...)`` is a FRESH execution of the
+    captured DAG (path 1); ``run_transaction(inputs=...)`` is a FRESH execution of the
     live model, so those edits say nothing about the new inputs and are not
     applied. Emitted at the run door so the coherent-but-surprising
     combination is disclosed instead of silently returning an un-edited

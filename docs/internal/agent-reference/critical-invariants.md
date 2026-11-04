@@ -188,13 +188,13 @@
     mirror. No record deletion can improve a verdict; the ONE out-of-scope boundary is coherent
     reauthoring (an honest capture of a weaker program), documented in the contract's threat-model
     subsection.
-18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
+18. `Trace.run_transaction(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
     default divergence raises with rollback, while `on_divergence="return"` is the sole monotonic poisoned
     opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
     runs report numeric attestation as `not_applicable`.
-18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
+18a. `Trace.run_transaction(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
     traces must first settle an ordinary run as `verified`, then may reuse staged state, compiled
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
     functional collection only for the functional ops the capture saved (an explicit functional

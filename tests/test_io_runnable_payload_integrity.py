@@ -234,7 +234,7 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     assert activations["members"], "the archive really did ship blobs"
     assert activations["original_input_digests"] == []
 
-    result = tl.load(path).run(inputs=inputs.clone())
+    result = tl.load(path).run_transaction(inputs=inputs.clone())
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     named = [

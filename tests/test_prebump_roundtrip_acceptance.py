@@ -704,7 +704,7 @@ def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     trace = tl.trace(model, torch.randn(1, 4))
-    result = trace.run(inputs=torch.randn(1, 4), until="linear_1_1")
+    result = trace.run_transaction(inputs=torch.randn(1, 4), until="linear_1_1")
     assert result.report.truncated is True
     assert result.report.truncation.stopped_at == "linear_1_1"
     assert result.output is None  # disclosed, never a fabricated tail

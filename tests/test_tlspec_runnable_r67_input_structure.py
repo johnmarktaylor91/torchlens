@@ -67,7 +67,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
 
 def _assert_diverges(path: Path, twin) -> None:
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=twin)
+        tl.load(path).run_transaction(inputs=twin)
 
 
 # ======================================================================================
@@ -100,7 +100,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
 
     x = torch.randn(3)
     path = _save(_trace(_TwoArg(), (x, _EmptyA())), tmp_path / "empty.tlspec")
-    original = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    original = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     # Dropped argument: arity mismatch, never a silent replay.
     _assert_diverges(path, (x.clone(),))
@@ -112,7 +112,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
     # r67 code: saving a multi-positional-arg runnable artifact, or a diverged run of
     # one, breaks buffer-address resolution for the NEXT capture in the same process
     # until a loaded run heals it) -- reported to the r68 ledger, out of C2 scope.
-    replay = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    replay = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert replay.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -150,7 +150,7 @@ class _NTModel(nn.Module):
 def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_CfgModel(), _CfgA(True, x)), tmp_path / "cfg.tlspec")
-    original = tl.load(path).run(inputs=_CfgA(True, x.clone()))
+    original = tl.load(path).run_transaction(inputs=_CfgA(True, x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _CfgB(True, x.clone()))
 
@@ -158,7 +158,7 @@ def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
 def test_r67_namedtuple_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NTModel(), _NTA(x)), tmp_path / "nt.tlspec")
-    original = tl.load(path).run(inputs=_NTA(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_NTA(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _NTB(x.clone()))
 
@@ -178,7 +178,7 @@ class _NestedModel(nn.Module):
 def test_r67_nested_kind_swap_diverges(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NestedModel(), {"outer": [{"x": x}]}), tmp_path / "nested.tlspec")
-    original = tl.load(path).run(inputs={"outer": [{"x": x.clone()}]})
+    original = tl.load(path).run_transaction(inputs={"outer": [{"x": x.clone()}]})
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, {"outer": [_NTA(x.clone())]})
 
@@ -256,10 +256,10 @@ def test_r67_registered_container_round_trips_verified(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_RegModel(), _RegBox(x)), tmp_path / "reg.tlspec")
-    original = tl.load(path).run(inputs=_RegBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_RegBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = torch.randn(3)
-    rerun = tl.load(path).run(inputs=_RegBox(twin))
+    rerun = tl.load(path).run_transaction(inputs=_RegBox(twin))
     assert torch.equal(rerun.output, twin * 3.0)
     # Exact-class fence: a different registered class with identical schema diverges.
     _assert_diverges(path, _RegBoxB(x.clone()))
@@ -512,7 +512,7 @@ def test_r69_runtime_added_slot_state_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_SlotModel(), _UnsetSlotBox(x.clone())), tmp_path / "rt_slot.tlspec")
-    original = tl.load(path).run(inputs=_UnsetSlotBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_UnsetSlotBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = _UnsetSlotBox(x.clone())
     twin.maybe = "fast"  # flips the branch through slot state no snapshot declared
@@ -818,7 +818,7 @@ def _assert_context_field_invalid(path: Path, run_inputs) -> None:
     # An analysis-only load must refuse to run with the SPECIFIC typed capability error,
     # not merely "some exception" (a generic pytest.raises here is vacuous).
     with pytest.raises(RunCapabilityUnavailableError) as excinfo:
-        loaded.run(inputs=run_inputs)
+        loaded.run_transaction(inputs=run_inputs)
     assert excinfo.value.fields.get("code") == "run_capability_unavailable"
 
 
@@ -833,7 +833,7 @@ def _heal_capture_state(source_path: Path, run_inputs) -> None:
     must heal explicitly.
     """
 
-    result = tl.load(source_path).run(inputs=run_inputs)
+    result = tl.load(source_path).run_transaction(inputs=run_inputs)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -1047,12 +1047,12 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
     ]
     for model, capture_inputs, run_inputs, name in cases:
         path = _save(_trace(model, capture_inputs), tmp_path / f"pos_{name}.tlspec")
-        result = tl.load(path).run(inputs=run_inputs)
+        result = tl.load(path).run_transaction(inputs=run_inputs)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, name
     # Mixed positional + keyword sites.
     trace = tl.trace(_MixedKw(), [x.clone()], input_kwargs={"add": True}, capture=_CAPTURE)
     path = _save(trace, tmp_path / "pos_mixed.tlspec")
-    result = tl.load(path).run(inputs={"args": [x.clone()], "kwargs": {"add": True}})
+    result = tl.load(path).run_transaction(inputs={"args": [x.clone()], "kwargs": {"add": True}})
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

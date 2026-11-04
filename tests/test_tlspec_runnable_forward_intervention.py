@@ -95,7 +95,7 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     path = tmp_path / "grad.tlspec"
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
 
-    result = tl.load(path).run(inputs=value, seed=0)
+    result = tl.load(path).run_transaction(inputs=value, seed=0)
 
     # The grad intervention never modified the forward output, so the sparse DAG
     # reproduces it byte-for-byte: an op-representable intervention still VERIFIES.

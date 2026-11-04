@@ -248,7 +248,7 @@ def test_random_init_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert caught.value.fields.get("code") == "run_capability_unavailable"
     assert caught.value.fields.get("detection_stage") == "state_allocation_preflight"
 

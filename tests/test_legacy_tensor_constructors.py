@@ -170,7 +170,7 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
     path = tmp_path / "legacy.tlspec"
     trace.save(path, level="runnable", include_weights=True)
     with pytest.raises(ReattachError):
-        tl.load(path).run(inputs=x, seed=0)
+        tl.load(path).run_transaction(inputs=x, seed=0)
 
 
 def _installed_records(legacy_ctors):

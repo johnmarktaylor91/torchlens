@@ -282,9 +282,7 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
 RUN_DOOR_CONFLICT_CODES: frozenset[str] = frozenset(
     {
         "run_legacy_arguments_conflict",
-        "run_legacy_options_conflict",
         "run_fast_divergence_policy_invalid",
-        "run_fast_requires_inputs",
         "run_source_model_collected",
         "run_capability_unavailable",
     }

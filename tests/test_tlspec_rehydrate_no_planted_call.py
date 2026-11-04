@@ -196,7 +196,7 @@ def test_untampered_runnable_load_and_run_succeeds(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path)
     loaded = tl.load(str(bundle))
-    result = loaded.run(inputs=torch.randn(2, 4))
+    result = loaded.run_transaction(inputs=torch.randn(2, 4))
     assert result.report.path_faithfulness.value == "verified"
 
 

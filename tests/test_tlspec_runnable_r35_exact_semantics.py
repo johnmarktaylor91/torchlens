@@ -59,7 +59,7 @@ def test_r35_tied_nan_state_binds_and_saves(tmp_path: Path) -> None:
     loaded = tl.load(str(path))
     # Staging the model's own state_dict must also bind (same tied storage).
     loaded.load_state_dict(model.state_dict())
-    result = loaded.run(inputs=x)
+    result = loaded.run_transaction(inputs=x)
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert torch.isnan(result.output).all()
 
@@ -122,7 +122,7 @@ def test_r35_zero_fan_in_linear_runs_random_init(tmp_path: Path) -> None:
     trace = _capture(model, x)
     path = tmp_path / "zerofan.tlspec"
     trace.save(str(path), level="runnable")
-    result = tl.load(str(path)).run(inputs=x, seed=1)
+    result = tl.load(str(path)).run_transaction(inputs=x, seed=1)
     assert result.report.state_source is StateSource.RANDOM_INITIALIZATION
     # Weight is (2, 0): the output is exactly the bias broadcast over the batch.
     assert result.output.shape == (3, 2)
@@ -214,13 +214,13 @@ def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
     torch.cuda.init()
     cpu_before = torch.get_rng_state()
     cuda_before = torch.cuda.get_rng_state_all()
-    first = loaded.run(inputs=x, seed=11)
+    first = loaded.run_transaction(inputs=x, seed=11)
     cpu_after = torch.get_rng_state()
     cuda_after = torch.cuda.get_rng_state_all()
     assert torch.equal(cpu_before, cpu_after)
     assert all(torch.equal(b, a) for b, a in zip(cuda_before, cuda_after))
     # Fixed-seed determinism across runs.
-    second = loaded.run(inputs=x, seed=11)
+    second = loaded.run_transaction(inputs=x, seed=11)
     assert torch.equal(first.output, second.output)
 
 

@@ -85,7 +85,7 @@ def _save_load(
 def _verdict(loaded: tl.Trace, inputs: Any, **kwargs: Any) -> tuple[str, str]:
     """Run with ``on_divergence="return"`` and return (path_faithfulness, attestation) values."""
 
-    result = loaded.run(inputs=inputs, on_divergence="return", **kwargs)
+    result = loaded.run_transaction(inputs=inputs, on_divergence="return", **kwargs)
     return (
         result.report.path_faithfulness.value,
         result.report.numeric_attestation.value,
@@ -533,7 +533,7 @@ class TestCorr25LivePoisonSpine:
         # next GC pass, making the test GC-timing-dependent).
         model = _LossyLiveModel()
         trace = tl.trace(model, x, capture=_CAPTURE)
-        result = trace.run(inputs=x, on_divergence="return")
+        result = trace.run_transaction(inputs=x, on_divergence="return")
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
         assert result.report.is_poisoned is True
         with pytest.raises(PoisonedRunError):
@@ -611,7 +611,7 @@ from torchlens._utils._torch_compat import get_current_function_mode_stack
 
 before = get_current_function_mode_stack()
 assert before == [], before
-result = tl.load(sys.argv[1]).run(inputs=torch.tensor([1.0, 2.0], device="cpu"))
+result = tl.load(sys.argv[1]).run_transaction(inputs=torch.tensor([1.0, 2.0], device="cpu"))
 after = get_current_function_mode_stack()
 assert result.report.path_faithfulness.value == "verified", result.report.path_faithfulness
 assert after == [], after
@@ -648,7 +648,7 @@ class TestCorr26SubclassAdmission:
         loaded = _save_load(_AddPair(), (x, x.clone()), tmp_path, acts=True)
         exotic = torch.Tensor._make_subclass(_PropertyTrapTensor, x, False)
         with pytest.raises(PathDivergenceError) as excinfo:
-            loaded.run(inputs=(exotic, x.clone()), on_divergence=policy)
+            loaded.run_transaction(inputs=(exotic, x.clone()), on_divergence=policy)
         # The TYPED hard-precondition refusal, never the subclass's raw trap error.
         assert "subclass" in str(excinfo.value).lower()
         assert "property trap" not in str(excinfo.value)
@@ -679,7 +679,7 @@ loaded = tl.load(sys.argv[1])
 assert loaded.readiness is not None
 assert loaded.readiness.status is not ReadinessStatus.READY, loaded.readiness.status
 try:
-    loaded.run(inputs=torch.randn(2, 3))
+    loaded.run_transaction(inputs=torch.randn(2, 3))
 except (RunCapabilityUnavailableError, Exception) as exc:
     code = getattr(exc, "code", "")
     assert "run_capability_unavailable" in str(code) or type(exc).__name__ == "ReattachError", (
@@ -707,7 +707,7 @@ class TestCudaStagingAndReadiness:
     # Kept: id not measured per id (rare tier).
     def test_embedded_state_runs_verified_and_attested(self, tmp_path: Path) -> None:
         loaded, x, _ = self._loaded(tmp_path)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
         assert result.output.device.type == "cuda"
@@ -717,7 +717,7 @@ class TestCudaStagingAndReadiness:
         loaded, x, model = self._loaded(tmp_path)
         cpu_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
         loaded.load_state_dict(cpu_state)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # Kept: id not measured per id (rare tier).
@@ -739,7 +739,7 @@ class TestCudaStagingAndReadiness:
             descriptor = loaded._sparse_run_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
-            result = loaded.run(inputs=x, on_divergence="return")
+            result = loaded.run_transaction(inputs=x, on_divergence="return")
         finally:
             torch.use_deterministic_algorithms(deterministic_before)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -795,7 +795,7 @@ class TestHon14InferenceModeCapture:
         assert descriptor is not None
         assert all(call.execution_context.inference_mode for call in descriptor.calls)
         before_inference = torch.is_inference_mode_enabled()
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert torch.is_inference_mode_enabled() == before_inference
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
@@ -892,7 +892,7 @@ class TestOutputCapabilityTable:
     ) -> None:
         x = torch.tensor([1.0, 2.0])
         loaded = _save_load(_nt_model(factory), x, tmp_path)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert type(result.output) is factory
 
@@ -904,7 +904,7 @@ class TestOutputCapabilityTable:
 
         x = torch.tensor([[1.0, 5.0], [3.0, 2.0]])
         loaded = _save_load(_MaxModel(), x, tmp_path)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # Kept: a sole mutation kill.
@@ -917,7 +917,7 @@ class TestOutputCapabilityTable:
 
         x = torch.tensor([1.0])
         loaded = _save_load(_MixedOutput(), x, tmp_path)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert result.output["meta"] == 7
 
@@ -974,7 +974,7 @@ class TestContextFieldValidation:
         codes = " ".join(str(d.code.value) for d in readiness.diagnostics)
         if readiness.status.value == "ready":
             with pytest.raises(RunnableTLSPECError) as excinfo:
-                loaded.run(inputs=torch.randn(2, 4))
+                loaded.run_transaction(inputs=torch.randn(2, 4))
             assert "context_field_invalid" in str(excinfo.value), label
         else:
             assert "context_field_invalid" in codes, (label, codes)
@@ -1252,6 +1252,6 @@ class TestMappingInstanceState:
 
         x = torch.tensor([1.0, 2.0])
         loaded = _save_load(_Model(), x, tmp_path)
-        result = loaded.run(inputs=x)
+        result = loaded.run_transaction(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert type(result.output) is OrderedDict

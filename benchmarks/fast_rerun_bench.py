@@ -4,7 +4,7 @@ One record per JSON line (``--out``), then a markdown table on stdout. Paths mea
 model and sequence length: ``bare`` (no steering), ``hook`` (a plain forward hook adding the
 steering vector), ``rerun`` (``trace.run(model, ids)``; guarded fast engine with capture
 fallback), ``rerun_capture`` (the capture engine the legacy door used before), ``fast_door``
-(``trace.run(inputs=ids, fast=True)``) and ``bind`` (``spec.bind(model)``). ``--gen`` grows the
+(``trace.run_transaction(inputs=ids, fast=True)``) and ``bind`` (``spec.bind(model)``). ``--gen`` grows the
 input by one token per step from the captured length, the generation case the guarded fast
 engine must admit. Every TorchLens path is checked bit-exact against the plain hook.
 
@@ -245,7 +245,7 @@ def measure_paths(
         paths.logits(trace),
         {k: trace.last_run.get(k) for k in ("engine", "fast_refused")},
     )
-    times, _ = timed(lambda: trace.run(inputs=ids, fast=True), reps)
+    times, _ = timed(lambda: trace.run_transaction(inputs=ids, fast=True), reps)
     record("fast_door", times, paths.logits(trace), {"engine": trace.last_run.get("engine")})
     times, _ = timed(lambda: capture_rerun(trace, paths.model, ids), reps)
     record("rerun_capture", times, paths.logits(trace), {"engine": trace.last_run.get("engine")})

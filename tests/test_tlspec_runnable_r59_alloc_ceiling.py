@@ -247,7 +247,7 @@ def test_tensor_split_count_bomb_refused_typed_and_bounded(tmp_path: Path) -> No
     loaded = tl.load(str(bundle))
     start = time.perf_counter()
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     elapsed = time.perf_counter() - start
     assert caught.value.fields.get("detection_stage") == "op_output_count_preflight"
     assert elapsed < 10.0, f"count refusal took {elapsed:.2f}s -- should abort at ceiling+1"
@@ -291,7 +291,7 @@ def test_expand_view_tamper_refused_at_clone_guard(
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone())
+            loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
     assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
 
@@ -324,7 +324,7 @@ def test_retention_floor_refuses_cumulative_over_budget_when_nothing_is_saved(
 
     loaded = tl.load(str(bundle))
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=x.clone())
+        loaded.run_transaction(inputs=x.clone())
     assert caught.value.fields.get("detection_stage") == "run_retention_preflight"
     assert int(caught.value.fields["required_bytes"]) == floor
 
