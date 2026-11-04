@@ -21,9 +21,9 @@ from typing import Any
 import pytest
 import torch
 from torch import nn
-from torchlens._data_classes._op_columns import OpColumns, column_rows_by_label
 
 import torchlens as tl
+from torchlens._data_classes._op_columns import OpColumns, column_rows_by_label
 from torchlens._data_classes.op import _OP_SLOT_NAMES, _OP_STORE_LAYOUT, Op, _OpField
 from torchlens._trace_core.op_store import (
     _MISSING,
