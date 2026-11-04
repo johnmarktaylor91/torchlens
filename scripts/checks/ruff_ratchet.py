@@ -308,6 +308,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 801bd8dbd (C-132) into C-143, same JMT decision d-90086c50): the value is the
     # count measured at the merged tree 0ec91978d (fellows q5c143-plr-2, pinned ruff,
     # isolated mode, torchlens/ scope): the train's sites plus C-143's five above.
+    # Train side, 446 (2026-11-03, JMT d-90086c50 "yes u can raise the cap for lint"): the
+    # measured count of the merged tree, base 438 + the lean/lazy record's 3 +
+    # the recording-parity work's 5 (PredicateOpIdentity.for_call,
+    # _predicate_output_context, _predicate_equivalence_class, Recording.do,
+    # Recording.save). Same pinned mode.
     "PLR0913": 446,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
