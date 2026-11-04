@@ -52,11 +52,14 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._hop_entry_compile import compile_disabled, hop_compile_stance_lift_scope
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
+    "compile_disabled",
+    "hop_compile_stance_lift_scope",
     "torch_structseq_field_names",
     "AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED",
     "HAS_ACCUMULATE_GRAD_CLASS",
@@ -3376,11 +3379,10 @@ def force_eager_stance_scope() -> Iterator[bool]:
     Yields
     ------
     bool
-        ``True`` while a ``torch.compiler.set_stance("force_eager")`` stance is
-        active for the scope; ``False`` when the capability is structurally
-        unavailable (torch < 2.6), when Dynamo has never been imported in this
-        process (so the stance would be a semantic no-op bought at Dynamo's
-        import cost), or when entering the stance failed.
+        ``True`` while a ``torch.compiler.set_stance("force_eager")`` stance is active for the
+        scope; ``False`` when the capability is structurally unavailable (torch < 2.6), when Dynamo
+        has never been imported in this process (so the stance would be a semantic no-op bought at
+        Dynamo's import cost), or when entering the stance failed.
 
     Notes
     -----
@@ -3400,15 +3402,13 @@ def force_eager_stance_scope() -> Iterator[bool]:
     if not HAS_SET_STANCE or "torch._dynamo" not in sys.modules:
         yield False
         return
-    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its
-    # function-call form), so ``__exit__`` ownership must be established in the
-    # same guarded region as the construction -- binding the handle outside the
-    # try left an async-interrupt window between the bind and the try entry
-    # that stranded the process-wide stance. Once ``stance`` is bound, every
-    # exit path (including BaseException) reaches the ``finally``. The one
-    # residual is an interrupt INSIDE ``set_stance`` after it applied but
-    # before it returned: without a public prior-stance getter that window is
-    # unrecoverable and is accepted as atomic-API exposure.
+    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its function-call form), so
+    # ``__exit__`` ownership must be established in the same guarded region as the construction --
+    # binding the handle outside the try left an async-interrupt window between the bind and the
+    # try entry that stranded the process-wide stance. Once ``stance`` is bound, every exit path
+    # (including BaseException) reaches the ``finally``. The one residual is an interrupt INSIDE
+    # ``set_stance`` after it applied but before it returned: without a public prior-stance getter
+    # that window is unrecoverable and is accepted as atomic-API exposure.
     stance = None
     try:
         try:

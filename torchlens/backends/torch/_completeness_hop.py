@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ..._utils._torch_compat import (
+    compile_disabled,
     get_higher_order_eager_kernel,
     get_higher_order_operator,
     get_scan_eager_body,
@@ -206,6 +207,8 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     registered: list[str] = []
     for op, rule in _witness_hop_rules():
         if mode_type not in op.python_key_table:
-            op.py_impl(mode_type)(rule)
+            # The operator pops the mode before the rule; inside a lifted entry compile
+            # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
+            op.py_impl(mode_type)(compile_disabled(rule))
         registered.append(str(op.name()))
     return tuple(registered)
