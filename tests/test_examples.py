@@ -33,6 +33,7 @@ EXPECTED_EXAMPLE_STEMS = frozenset(
         "14_per_position_steering",
         "15_publishing_for_reproducibility",
         "17_raw_forward_hook_replacement",
+        "19_controls_wrong_tensor",
     }
 )
 
