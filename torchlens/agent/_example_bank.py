@@ -244,8 +244,15 @@ def examples_for(name: str) -> list[BankExample]:
     Returns
     -------
     list[BankExample]
-        Matching examples, ``right`` and plain examples before ``wrong`` ones.
+        Matching examples, most focused first: plain examples, then ``right``, then
+        ``wrong`` ones, each group ordered by how few names it covers.
     """
 
     found = [example for example in load_bank() if name in example.covers]
-    return sorted(found, key=lambda example: example.kind == "wrong")
+    return sorted(found, key=_focus_key)
+
+
+def _focus_key(example: BankExample) -> tuple[bool, bool, int]:
+    """Sort key putting the example most about one name first."""
+
+    return (example.kind == "wrong", example.kind == "right", len(example.covers))

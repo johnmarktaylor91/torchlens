@@ -29,8 +29,195 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "docs"))
 
 import example_bank  # noqa: E402
 
+#: Shared exclusion reasons (one per library finding that hides several names).
+_REASON_1 = (
+    "finding F-4: None even on a custom autograd.Function node (double_back_1_2, "
+    "is_custom True), because the source is read from the generated backward node class "
+    "(type(grad_fn)), which has no forward/backward/__init__ source, not from the user's "
+    "Function"
+)
+_REASON_2 = (
+    "set only by the optional JAX capture backend; the bank fixtures are torch models and"
+    " the bank environment has no JAX"
+)
+
 #: Owed public names the bank deliberately has no example for: ``name -> reason``.
-EXCLUDED: dict[str, str] = {}
+#: "finding F-n" marks a member that misbehaves on a normal call; fixing it means writing
+#: its example and deleting the entry here (the test checks both directions).
+EXCLUDED: dict[str, str] = {
+    **dict.fromkeys(
+        [
+            "GradFn.backward_docstring",
+            "GradFn.backward_source_line",
+            "GradFn.backward_source_location",
+            "GradFn.forward_docstring",
+            "GradFn.forward_signature",
+            "GradFn.forward_source_line",
+            "GradFn.forward_source_location",
+            "GradFn.init_docstring",
+            "GradFn.init_signature",
+            "GradFn.init_source_line",
+            "GradFn.init_source_location",
+        ],
+        _REASON_1,
+    ),
+    "GradFn.cls": (
+        "finding F-1: GradFn.cls is always None after a backward, built-in and custom nodes alike"
+    ),
+    "GradFn.differentiates": (
+        "finding F-5: never written (no differentiates= writer in the package), so it is "
+        "None even when op_label is set (addmm_back_1_3 pairs linear_2_3)"
+    ),
+    "Layer.terminal_bool_for": (
+        "finding F-4: None on the branch fixture gt layer while its single op reports "
+        "(cond_gt_1_3, 0)"
+    ),
+    "Module.backward_duration": (
+        "finding F-6: hard-coded to return None, even after a backward where "
+        "GradFn.backward_duration holds measured times; the glossary says None only when "
+        "backward timing is not available"
+    ),
+    "Module.cls": (
+        "finding F-1: Module.cls is always None, even while the model object is alive; "
+        "the glossary describes it as the live class"
+    ),
+    "Module.total_backward_duration": (
+        "finding F-6: hard-coded to return None, even after a backward with measured GradFn timings"
+    ),
+    "ModuleCall.class_name": (
+        "finding F-2: ModuleCall.class_name is the empty string on every non-root call "
+        "(fc1:1, cell:2); only the root call gives the class name"
+    ),
+    "ModuleCall.class_qualname": (
+        "finding F-2: ModuleCall.class_qualname is the empty string on every non-root "
+        "call; only the root call gives it"
+    ),
+    "ModuleCall.cls": "finding F-1: ModuleCall.cls is always None, even while the model object is alive",
+    "Op.is_in_conditional_body": (
+        "finding F-3: on the branch fixture it is False for the then-arm relu and True "
+        "for the if-test sum, the reverse of Layer.is_in_conditional_body and the "
+        "glossary meaning"
+    ),
+    "Param.device_ref": (
+        "finding F-3: Param.device_ref is never written anywhere in the package, so it is"
+        " always None"
+    ),
+    "Param.module_cls": (
+        "finding F-1: Param.module_cls is always None, even while the owning module is alive"
+    ),
+    "Trace.backend": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, x).backend);"
+        " declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.backend_runtime_config": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).backend_runtime_config); declared only as a class annotation, never set on "
+        "the Trace"
+    ),
+    "Trace.backend_runtime_version": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).backend_runtime_version); declared only as a class annotation, never set on "
+        "the Trace"
+    ),
+    "Trace.backward_ready": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).backward_ready); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.backward_root_grad_fn_object_ids": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).backward_root_grad_fn_object_ids); declared only as a class annotation, never"
+        " set on the Trace"
+    ),
+    "Trace.capture_end_time": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).capture_end_time); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.capture_start_time": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).capture_start_time); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.chunked_forward": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).chunked_forward); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.code_context": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).code_context); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.distributed_scope": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).distributed_scope); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.inference_only": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).inference_only); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.input_object_id": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).input_object_id); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.input_preprocessor": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).input_preprocessor); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.input_signature_hash": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).input_signature_hash); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.input_structure": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).input_structure); declared only as a class annotation, never set on the Trace"
+    ),
+    **dict.fromkeys(
+        [
+            "Trace.jax_capture_index_to_final_op_label",
+            "Trace.jax_closed_jaxpr",
+            "Trace.jax_equation_captures",
+            "Trace.jax_inlined_call_primitives",
+            "Trace.jax_outvar_key_to_capture_index",
+            "Trace.jax_static_argnums",
+        ],
+        _REASON_2,
+    ),
+    "Trace.model_object_id": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).model_object_id); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.module_identity_mode": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).module_identity_mode); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.op_equivalence_classes": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).op_equivalence_classes); declared only as a class annotation, never set on "
+        "the Trace"
+    ),
+    "Trace.output_postprocessor": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).output_postprocessor); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "Trace.param_source": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).param_source); declared only as a class annotation, never set on the Trace"
+    ),
+    "Trace.save_arg_templates": (
+        "finding F-1: AttributeError on a plain toy capture (tl.trace(model, "
+        "x).save_arg_templates); declared only as a class annotation, never set on the "
+        "Trace"
+    ),
+    "tl.callbacks": (
+        "its only content (tl.callbacks.lightning) builds Lightning callback classes and "
+        "needs the optional lightning package, which the bank test environment does not "
+        "install, so an example would only ever be skipped"
+    ),
+}
 
 _EXAMPLES = example_bank.load_examples()
 _FIXTURES = example_bank.load_fixtures()
