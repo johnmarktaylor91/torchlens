@@ -428,7 +428,7 @@ def _build_output_meta(
         if tokenizer is not None
         else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
-        "model_class_name": getattr(trace, "_source_class_name", None),
+        "model_class_name": trace._source_class_name,
     }
 
 
