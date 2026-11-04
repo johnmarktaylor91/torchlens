@@ -48,7 +48,7 @@ _NEAR_END = 12.0  # (pt) a label farther than this from its own edge's end no lo
 _ATTACH_REACH = 30.0  # (pt) the stretch of a label's own edge, from its end, it reads against
 _OTHER_REACH = 60.0  # (pt) other edges at the same node within this of the end compete for it
 _ATTACH_MARGIN = 4.0  # (pt) a label must be this much nearer its own edge than any other there
-#: outward normals of a node's sides; a label stays wholly beyond the side its edge meets
+#: outward normals of a node's sides; a label never reaches past a side another edge meets
 _SIDES: dict[str, Point] = {
     "left": (-1.0, 0.0),
     "right": (1.0, 0.0),
@@ -342,6 +342,7 @@ class _Scene:
                 }
                 heading = (ahead[0] - end[0], ahead[1] - end[1])
                 label["side"] = _side(label["box"], end, heading, used)
+                label["taken"] = used - {label["side"]}
                 label["other_lines"] = [
                     near
                     for other in self.edges
@@ -426,9 +427,10 @@ class _Scene:
 
         Collision depth first; then whether a label reads as belonging to another edge
         at its node (it is not clearly nearer its own edge's last stretch than every
-        other edge there, or it reaches back past the side of the node its edge meets); then whether it is more than ``_NEAR_END`` from its own
-        edge's end; then clearance short of ``_CLEAR_TARGET`` (half-point steps); then
-        the farthest distance from a label to its own edge's end.
+        other edge there, or it reaches past a side of the node another edge meets);
+        then whether it is more than ``_NEAR_END`` from its own edge's end; then
+        clearance short of ``_CLEAR_TARGET`` (half-point steps); then the farthest
+        distance from a label to its own edge's end.
         """
 
         depth, clearance, end_gap = 0.0, math.inf, 0.0
@@ -511,17 +513,21 @@ def _nearest_side(box: Rect, point: Point) -> str:
 
 
 def _wrong_side(label: dict[str, Any], lines: list[Rect]) -> bool:
-    """Whether a label reaches back past the side of its node where its edge meets it."""
+    """Whether a label reaches past a side of its node that another edge meets.
+
+    Beside such a side it reads as that edge's label; beyond its own edge's side, or
+    beyond a side no other edge meets, it can only be its own edge's.
+    """
 
     x0, y0, x1, y1 = _union(lines)
     nx0, ny0, nx1, ny1 = label["box"]
     beyond = {
-        "left": x1 <= nx0 + _MIN_GAP,
-        "right": x0 >= nx1 - _MIN_GAP,
-        "bottom": y1 <= ny0 + _MIN_GAP,
-        "top": y0 >= ny1 - _MIN_GAP,
+        "left": x0 < nx0 - _MIN_GAP,
+        "right": x1 > nx1 + _MIN_GAP,
+        "bottom": y0 < ny0 - _MIN_GAP,
+        "top": y1 > ny1 + _MIN_GAP,
     }
-    return not beyond[label["side"]]
+    return any(beyond[side] for side in label["taken"])
 
 
 def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:

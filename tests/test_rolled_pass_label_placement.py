@@ -109,20 +109,22 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
     assert result.hard_violation_count == 0, result.describe_violations(direction)
     attachments = _attachments(dot)
     assert sorted(text for text, *_ in attachments) == ["In 1", "In 2", "Out 1", "Out 2"]
-    for text, end_gap, own_gap, rival_gap, side, beyond in attachments:
+    for text, end_gap, own_gap, rival_gap, side, beyond, past_taken in attachments:
         assert end_gap <= _NEAR_END_PT, (direction, text, end_gap)
         assert rival_gap >= own_gap + _ATTACH_MARGIN_PT, (direction, text, own_gap, rival_gap)
+        assert not past_taken, (direction, text, past_taken)
         assert beyond, (direction, text, side)
-    sides = {text: side for text, *_, side, _ in attachments}
+    sides = {text: side for text, *_, side, _, _ in attachments}
     # the return arc meets its nodes off the chain's axis, where the chain edges do not
     chain = {"left", "right"} if direction in ("leftright", "rightleft") else {"top", "bottom"}
     assert sides["In 2"] not in chain and sides["Out 1"] not in chain, (direction, sides)
 
 
-def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool]]:
+def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool, list[str]]]:
     """Per pass label: its gap to its own edge's end, to that edge's last 30 pt, to
     the nearest other edge at the same node (within 60 pt of the end), the side of the
-    node's box its edge meets, and whether the label lies wholly beyond that side."""
+    node's box its edge meets, whether the label lies wholly beyond that side, and the
+    sides other edges meet that it reaches past."""
 
     layout = json.loads(
         subprocess.run(
@@ -185,6 +187,7 @@ def _attachments(dot: str) -> list[tuple[str, float, float, float, str, bool]]:
                     min((_box_point_gap(b, p) for b in boxes for p in rivals), default=math.inf),
                     side,
                     _beyond(label_box, node_boxes[node], side),
+                    sorted(_past(label_box, box) & (used - {side})),
                 )
             )
     return found
@@ -226,6 +229,19 @@ def _nearest_side(box: tuple[float, float, float, float], point: tuple[float, fl
         "top": abs(box[3] - point[1]),
     }
     return min(gaps, key=gaps.__getitem__)
+
+
+def _past(
+    label: tuple[float, float, float, float], box: tuple[float, float, float, float]
+) -> set[str]:
+    slack = 0.5
+    reach = {
+        "left": label[0] < box[0] - slack,
+        "right": label[2] > box[2] + slack,
+        "bottom": label[1] < box[1] - slack,
+        "top": label[3] > box[3] + slack,
+    }
+    return {side for side, past in reach.items() if past}
 
 
 def _beyond(
