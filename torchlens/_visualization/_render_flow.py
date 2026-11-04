@@ -4,6 +4,8 @@
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
+from ._focus_relabel import shape_size_row
+from ._focus_stubs import _boundary_module_path, _get_or_create_boundary_node
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -1271,9 +1273,11 @@ def _build_module_focus_entries(
                 input_boundaries,
                 parent_node,
                 target_module,
+                trace=trace,
                 vis_mode=vis_mode,
                 boundary_kind="input",
                 inner_node=node,
+                tensor_row=shape_size_row(parent_node),
             )
             if node.layer_label not in boundary.children:
                 boundary.children.append(node.layer_label)
@@ -1292,6 +1296,7 @@ def _build_module_focus_entries(
                 output_boundaries,
                 child_node,
                 target_module,
+                trace=trace,
                 vis_mode=vis_mode,
                 boundary_kind="output",
                 inner_node=node,
@@ -1301,12 +1306,8 @@ def _build_module_focus_entries(
             new_children.append(boundary.layer_label)
         node.children = new_children
 
-    _simplify_boundary_labels(input_boundaries, "input")
-    _simplify_boundary_labels(output_boundaries, "output")
-    for boundary_dict in (input_boundaries, output_boundaries):
-        for label, boundary in boundary_dict.items():
-            focused_entries[label] = boundary
-
+    focused_entries.update(input_boundaries)
+    focused_entries.update(output_boundaries)
     return focused_entries
 
 
@@ -1331,59 +1332,6 @@ def _copy_focus_node(node: GraphNode) -> GraphNode:
         children=list(node.children),
         modules=list(node.modules),
     )
-
-
-def _get_or_create_boundary_node(
-    boundary_nodes: dict[str, BoundaryNode],
-    external_node: GraphNode,
-    target_module: "Module",
-    *,
-    vis_mode: str,
-    boundary_kind: str,
-    inner_node: GraphNode,
-) -> BoundaryNode:
-    """Create or return a boundary node for one external layer next to ``inner_node``."""
-
-    external_label = external_node.layer_label.replace(":", "pass")
-    boundary_label = f"__module_focus_{boundary_kind}_{external_label}"
-    boundary = boundary_nodes.get(boundary_label)
-    if boundary is not None:
-        return boundary
-
-    inner = [inner_node.layer_label]
-    boundary = BoundaryNode(
-        layer_label=boundary_label,
-        display_label=f"ext: {external_node.layer_label}",
-        boundary_kind=boundary_kind,
-        children=inner if boundary_kind == "input" else [],
-        parents=inner if boundary_kind == "output" else [],
-        modules=_boundary_module_path(target_module, vis_mode, inner_node.modules),
-    )
-    boundary_nodes[boundary_label] = boundary
-    return boundary
-
-
-def _boundary_module_path(target_module: "Module", vis_mode: str, stack: Any) -> list[str]:
-    """Boundary cluster path: the inner op's called-module stack (no uncalled ModuleList)."""
-
-    addresses = [str(call).split(":", 1)[0] for call in stack]
-    if target_module.address in addresses:
-        path = [str(call) for call in stack][: addresses.index(target_module.address) + 1]
-    else:
-        path = [f"{target_module.address}:1"]
-    return [call.split(":", 1)[0] for call in path] if vis_mode == "rolled" else path
-
-
-def _simplify_boundary_labels(
-    boundary_nodes: dict[str, BoundaryNode],
-    fallback_label: str,
-) -> None:
-    """Use simple labels when a focus side has exactly one boundary."""
-
-    if len(boundary_nodes) != 1:
-        return
-    only_boundary = next(iter(boundary_nodes.values()))
-    only_boundary.display_label = fallback_label
 
 
 def _arg_path_key(arg_path: Iterable[Any]) -> tuple[Any, ...]:
@@ -2058,7 +2006,6 @@ __all__ = [
     "_render_edge_occurrences",
     "_resolve_svg_image_path",
     "_sibling_chain_lca_key",
-    "_simplify_boundary_labels",
     "_single_container_owner",
     "_walk_skipped_successors",
 ]

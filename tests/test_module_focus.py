@@ -197,19 +197,29 @@ class _ModuleListModel(nn.Module):
 
 
 @pytest.mark.parametrize(
-    "address",
-    ["blocks.1", "blocks.1.mlp", "blocks.1.mlp.0", "heads.out"],
+    ("address", "title"),
+    [
+        ("blocks.1", "@blocks.1"),
+        ("blocks.1.mlp", "@mlp"),
+        ("blocks.1.mlp.0", "@mlp.0"),
+        ("heads.out", "@out"),
+    ],
 )
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
-def test_module_focus_under_uncalled_container(tmp_path: Path, address: str, vis_mode: str) -> None:
-    """A module inside an uncalled ModuleList/ModuleDict focuses without a KeyError."""
+def test_module_focus_under_uncalled_container(
+    tmp_path: Path, address: str, title: str, vis_mode: str
+) -> None:
+    """A module inside an uncalled ModuleList/ModuleDict focuses without a KeyError.
+
+    The frame title leaves off the scope line's prefix (``blocks.1``, ``heads``).
+    """
 
     log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
     assert "blocks" not in log.modules
     assert "heads" not in log.modules
     dot = _render_dot(log, tmp_path, module=address, rolled=vis_mode == "rolled")
 
-    assert f"@{address}" in dot
+    assert f"<B>{title}</B>" in dot
     assert _boundary_node_count(dot, "input") >= 1
     assert _boundary_node_count(dot, "output") >= 1
 

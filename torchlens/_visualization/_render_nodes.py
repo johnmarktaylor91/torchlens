@@ -556,7 +556,7 @@ def _build_layer_node(
     if isinstance(node, BoundaryNode):
         fillcolor = INPUT_COLOR if node.boundary_kind == "input" else OUTPUT_COLOR
         spec = NodeSpec(
-            lines=[node.display_label],
+            lines=list(node.lines) or [node.display_label],
             shape="oval",
             fillcolor=fillcolor,
             fontcolor="black",
@@ -1980,7 +1980,7 @@ def compute_default_node_lines(
 
     layer_log = _unwrap_focus_node(layer_log)
     if isinstance(layer_log, BoundaryNode):
-        return [layer_log.display_label]
+        return list(layer_log.lines) or [layer_log.display_label]
 
     if node_label_fields is not None:
         selected_lines = _compute_selected_node_lines(

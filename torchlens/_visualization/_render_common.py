@@ -67,6 +67,7 @@ from .._quantities import Duration
 from .._utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from .._utils.env_flags import closed_bool_env
 from ..errors._base import CompatibilityError
+from ._focus_stubs import BoundaryNode
 from ._label_format import (
     format_memory,
     format_module_kwargs,
@@ -234,62 +235,6 @@ class RollingAnnotation:
 
     call_groups: tuple[tuple[int, ...], ...] = ()
     buffer_versions: tuple[int, ...] = ()
-
-
-@dataclass
-class BoundaryNode:
-    """Synthetic node representing a focused module boundary.
-
-    Parameters
-    ----------
-    layer_label:
-        DOT-safe synthetic label.
-    display_label:
-        Human-readable label shown in the node.
-    boundary_kind:
-        ``"input"`` for external upstreams, ``"output"`` for external sinks.
-    children:
-        Outgoing rendered labels.
-    parents:
-        Incoming rendered labels.
-    modules:
-        Module path used for cluster placement.
-    """
-
-    layer_label: str
-    display_label: str
-    boundary_kind: str
-    children: list[str]
-    parents: list[str]
-    modules: list[str]
-    is_buffer: bool = False
-    has_input_ancestor: bool = True
-    is_final_output: bool = False
-    is_atomic_module: bool = False
-    output_of_modules: list[str] = field(default_factory=list)
-    is_input: bool = False
-    is_output: bool = False
-    is_terminal_bool: bool = False
-    has_params: bool = False
-    num_param_tensors: int = 0
-    _param_logs: list[Any] = field(default_factory=list)
-    param_shapes: list[tuple[Any, ...]] = field(default_factory=list)
-    num_calls: int = 1
-    call_index: int = 1
-    type_index: int = 1
-    step_index: int = 1
-    shape: tuple[Any, ...] = ()
-    activation_memory: str = "0 B"
-    io_role: str = ""
-    layer_type: str = "input"
-
-    def __post_init__(self) -> None:
-        """Fill mutable defaults and role flags."""
-
-        self.is_input = self.boundary_kind == "input"
-        self.is_output = self.boundary_kind == "output"
-        self.layer_type = self.boundary_kind
-        self.io_role = self.boundary_kind
 
 
 GraphNode = BaseGraphNode | BoundaryNode | FocusNode

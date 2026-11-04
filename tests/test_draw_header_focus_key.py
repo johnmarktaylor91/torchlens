@@ -120,6 +120,12 @@ def _header(dot: str) -> str:
     return dot[dot.index("label=<") : dot.index("labeljust")]
 
 
+def _node_names(dot: str) -> list[str]:
+    """Names of the drawn nodes."""
+
+    return [m.group(1) for m in map(_NODE.match, dot.splitlines()) if m is not None]
+
+
 def _sized_nodes(dot: str) -> list[str]:
     """Names of the drawn nodes whose label shows a tensor size."""
 
@@ -203,13 +209,18 @@ def test_focus_count_skips_the_boundary_stubs(
     dot = _dot(trace, tmp_path, "focus", module=_FOCUS, rolled=rolled)
     header = _header(dot)
     count, noun, _size = _COUNT.search(header).groups()  # type: ignore[union-attr]
-    sized = _sized_nodes(dot)
+    stubs = [name for name in _sized_nodes(dot) if name.startswith("__module_focus")]
+    drawn = [name for name in _node_names(dot) if not name.startswith("__module_focus")]
     assert noun == ("layers" if rolled else "ops")
-    assert int(count) == len(sized)
-    assert not any(name.startswith("__module_focus") for name in sized)
+    assert int(count) == len(drawn)
+    # An input stub names the size of the tensor it brings (made outside the
+    # drawn module); an output stub none. Neither is counted. A drawn op shows
+    # its size where it differs from its inputs', so not every op is sized.
+    assert stubs and all(name.startswith("__module_focus_input") for name in stubs)
+    assert 0 < len(_sized_nodes(dot)) - len(stubs) < len(drawn)
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
-        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
+        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
         assert f"drawn: {count} ops ({binary_size(expected)})" in header
 

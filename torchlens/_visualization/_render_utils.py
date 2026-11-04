@@ -212,12 +212,13 @@ def run_bounded_subprocess(
             env=graphviz_font_env(),
         )
     except FileNotFoundError as exc:
-        # Lazy import: _render_common top-imports this module, so the typed
-        # class cannot be imported at module level without minting a cycle.
+        # The class is defined in _render_common, which top-imports this
+        # module: reach it through the public taxonomy (resolved on first
+        # use) so this module stays out of the renderer's import cycle.
         # The single most common cold-user viz failure: the Graphviz BINARY
         # is not installed (the python 'graphviz' package alone does not
         # ship it); the class carries the install remedy.
-        from ._render_common import GraphvizUnavailableError
+        from ..errors import GraphvizUnavailableError
 
         raise GraphvizUnavailableError(
             f"TorchLens could not render this graph: the Graphviz executable "

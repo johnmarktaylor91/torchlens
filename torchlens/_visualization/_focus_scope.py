@@ -7,6 +7,12 @@ scope line names them instead (``GPT2LMHeadModel > transformer > h.5 >
 mlp``), and the focused module's own frame is the outermost one, with frame
 widths measured from it.
 
+Inside the picture, module addresses leave off the path the scope line
+already printed (the focused module's enclosing path): under the scope
+``GPT2LMHeadModel > transformer > h.5 > mlp`` the frame reads ``@mlp`` and
+its children ``@mlp.c_fc`` (``relative_address``; the label rewriting lives
+in ``_focus_relabel``).
+
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
 
@@ -28,11 +34,13 @@ if TYPE_CHECKING:
 
 __all__ = [
     "drop_ancestor_regions",
-    "strip_focus_ancestors",
     "flatten_ancestor_frames",
     "focus_address",
     "focus_ancestor_keys",
+    "focus_parent_prefix",
+    "focus_relative_depth",
     "reading_notes",
+    "relative_address",
     "scope_caption_head",
 ]
 
@@ -58,6 +66,62 @@ def focus_address(module: Any) -> str | None:
     address = module if isinstance(module, str) else getattr(module, "address", None)
     if not isinstance(address, str) or address in {"", "self"}:
         return None
+    return address
+
+
+def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
+    """Return the module nesting depth to draw, counted from the focused module.
+
+    ``depth=`` is the maximum module nesting depth shown. A whole-model draw
+    counts it from the model (``depth=1`` draws the top-level modules as one
+    box each); a focused draw counts it from the focused module, so
+    ``depth=1`` draws the module's own child modules as one box each and
+    larger values open them, as the same value does for a whole-model draw of
+    a model that started at the focused module. The focused module's own
+    nesting level is read from the called-module stack of its first recorded
+    op (uncalled containers such as a ``ModuleList`` add no level).
+    """
+
+    focus = focus_address(module)
+    if focus is None:
+        return depth
+    focus_module = trace.modules.get(focus)
+    ops = list(getattr(focus_module, "ops", None) or ()) if focus_module is not None else []
+    if not ops:
+        return depth
+    stack = [str(call).split(":", 1)[0] for call in trace[ops[0]].modules]
+    level = stack.index(focus) + 1 if focus in stack else 0
+    return depth + level
+
+
+def focus_parent_prefix(module: Any) -> str | None:
+    """Return the address the scope line prints above the focused module, or ``None``.
+
+    Addresses drawn inside a focused picture leave this prefix off. A module
+    directly under the model (``pre_x``) has none. List indices stay with
+    their list: the prefix of ``transformer.h.5`` is ``transformer``.
+    """
+
+    focus = focus_address(module)
+    if focus is None:
+        return None
+    return ".".join(_breadcrumb(focus)[:-1]) or None
+
+
+def relative_address(address: str, prefix: str | None) -> str:
+    """Return ``address`` without the focused draw's scope prefix.
+
+    An address under the prefix drops it (``transformer.h.5.mlp.c_fc`` reads
+    ``mlp.c_fc`` under ``transformer.h.5``); the prefix module itself reads as
+    its last scope step (``h.5``); any other address is returned whole.
+    """
+
+    if prefix is None:
+        return address
+    if address == prefix:
+        return _breadcrumb(prefix)[-1]
+    if address.startswith(f"{prefix}."):
+        return address[len(prefix) + 1 :]
     return address
 
 
@@ -155,20 +219,6 @@ def drop_ancestor_regions(render_ir: RenderIR, flatten: frozenset[str]) -> Rende
         if region.key in kept
     )
     return replace(render_ir, nodes=nodes, edges=edges, regions=regions)
-
-
-def strip_focus_ancestors(
-    render_ir: RenderIR, payload_keys: Iterable[str], module: Any
-) -> tuple[RenderIR, frozenset[str]]:
-    """Drop a focused draw's ancestor frames from the IR; return it and the dropped keys.
-
-    The keys come from the module-cluster payloads and the IR regions both,
-    so a frame known to either is dropped; a whole-model draw changes nothing.
-    """
-
-    keys = [*payload_keys, *(region.key for region in render_ir.regions)]
-    flatten = focus_ancestor_keys(keys, module)
-    return drop_ancestor_regions(render_ir, flatten), flatten
 
 
 def _kept_parent(
@@ -274,7 +324,11 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
         return ()
     texts = [_TAG.sub(" ", str(attrs.get("label", ""))) for attrs in node_attrs]
     names = [str(attrs.get("name", "")) for attrs in node_attrs]
-    notes = ["@name: the module at that address (a frame title, or a module drawn as one box)"]
+    prefix = focus_parent_prefix(module)
+    under = f" under {prefix}" if prefix else ""
+    notes = [
+        f"@name: the module at that address{under} (a frame title, or a module drawn as one box)"
+    ]
     example = next(
         (m for m in map(_OP_NAME.match, names) if m and not m["kind"].startswith("_")), None
     )
@@ -283,7 +337,15 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
             f"{example.group(0)}: the {_ordinal(int(example['nth']))} {example['kind']} call,"
             f" op {example['op']} of the whole forward pass"
         )
-    notes.append("(shape), size: the op's output tensor and its memory")
+    notes.append(
+        "(shape), size: the op's output tensor and its memory, shown where it differs"
+        " from the op's inputs"
+    )
+    if any(name.startswith("__module_focus_") for name in names):
+        notes.append(
+            "from name, to name: the op outside this module that made its input,"
+            " or that takes its output"
+        )
     if any("params:" in text for text in texts):
         notes.append("params: the weights the op used (filled as the key shows)")
     if any(_ARGUMENT.search(text) for text in texts):

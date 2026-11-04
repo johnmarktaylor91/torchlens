@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 from ._focus_scope import scope_caption_head
 from ._label_format import format_memory
 from ._render_utils import html_escape
+from .themes import resolve_theme
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -145,9 +146,10 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
 
     The count and the size cover the same nodes: every drawn node whose label
     shows a tensor size (operations, input and output tensors, collapsed
-    module boxes). The input and output stubs of a ``module=`` focus show no
-    size and are not counted; nor are repeat-fold ellipses, segment capsules
-    and container summaries. The noun names what is counted: ``ops`` in the
+    module boxes). The input and output stubs of a ``module=`` focus stand
+    for ops outside the drawn module and are not counted (an input stub names
+    the size of the tensor it brings, made outside); nor are repeat-fold
+    ellipses, segment capsules and container summaries. The noun names what is counted: ``ops`` in the
     unrolled view and ``layers`` in the rolled one when every counted node is
     an operation, ``nodes`` when collapsed module boxes are among them.
     """
@@ -168,6 +170,16 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
     else:
         noun = "op" if count == 1 else "ops"
     return f"{count:,} {noun} ({format_memory(total)})"
+
+
+def graph_caption_html(
+    trace: Trace, universe: NodeUniverse, request: ResolvedRenderRequest, theme: VisualizationTheme
+) -> str:
+    """Return the complete graph caption: the header body in the theme's ink."""
+
+    count_line = drawn_count_line(trace, universe, request.vis_mode)
+    body = graph_caption_body(trace, count_line, request)
+    return f"<<FONT COLOR='{theme.default_font}'>{body}</FONT>>"
 
 
 def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderRequest) -> str:
@@ -194,6 +206,12 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     # The picture keeps a cited source location's file name and line only.
     for banner_line in honesty_banner_lines(trace):
         banner_text = html_escape(strip_path_directories(banner_line))
+        if banner_line.startswith("capture advisory:"):
+            # An advisory discloses a gap in source provenance, not a failed
+            # capture: it stays in the header, in the key's text size, unbolded.
+            size = resolve_theme(request.theme).typography.secondary_size
+            caption_body += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
+            continue
         caption_body += f"<B>{banner_text}</B><br align='left'/>"
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
