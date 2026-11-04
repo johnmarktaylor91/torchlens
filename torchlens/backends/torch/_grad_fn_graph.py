@@ -80,9 +80,35 @@ def _sync_grad_fn_graph_relations(trace: Any) -> None:
                 parent_membership[child_label].add(grad_fn.label)
 
     def children_of(label: str) -> list[str]:
+        """Return the child labels derived for a record in this sync.
+
+        Parameters
+        ----------
+        label:
+            Label of the record.
+
+        Returns
+        -------
+        list[str]
+            The record's children, empty for an unknown label.
+        """
+
         return child_map.get(label, [])
 
     def parents_of(label: str) -> list[str]:
+        """Return the parent labels derived for a record in this sync.
+
+        Parameters
+        ----------
+        label:
+            Label of the record.
+
+        Returns
+        -------
+        list[str]
+            The record's parents, empty for an unknown label.
+        """
+
         return parent_map.get(label, [])
 
     for grad_fn in trace._grad_fn_logs.values():
@@ -116,14 +142,53 @@ def _extend_grad_fn_graph_relations(
     """
 
     def record(label: str) -> GradFn:
+        """Return the record with a label, appended records included.
+
+        Parameters
+        ----------
+        label:
+            Label of the record.
+
+        Returns
+        -------
+        GradFn
+            The record in ``grad_fn_logs`` that ``label_to_id`` maps the label to.
+        """
+
         return grad_fn_logs[label_to_id[label]]
 
     touched_child_ids = _link_appended_records(grad_fn_logs, new_ids)
 
     def children_of(label: str) -> Sequence[str]:
+        """Return a record's current children, read live from the record.
+
+        Parameters
+        ----------
+        label:
+            Label of the record.
+
+        Returns
+        -------
+        Sequence[str]
+            The record's child labels.
+        """
+
         return record(label).children
 
     def parents_of(label: str) -> Sequence[str]:
+        """Return a record's current parents, appended parents included.
+
+        Parameters
+        ----------
+        label:
+            Label of the record.
+
+        Returns
+        -------
+        Sequence[str]
+            The record's parent labels.
+        """
+
         return record(label).parents
 
     new_id_set = set(new_ids)
@@ -213,6 +278,19 @@ def _rename_appended_labels(
     new_id_set = set(new_ids)
 
     def renamed(labels: Sequence[str]) -> list[str]:
+        """Return labels with each runtime label replaced by its projection label.
+
+        Parameters
+        ----------
+        labels:
+            Relation labels of one record.
+
+        Returns
+        -------
+        list[str]
+            The labels in order, renamed where ``renames`` has an entry.
+        """
+
         return [renames.get(label, label) for label in labels]
 
     for object_id in new_ids:
