@@ -19,6 +19,7 @@ import textwrap
 import pytest
 import torch
 import torch.nn as nn
+from _fresh_plant import needs_vmhwm_reset
 
 import torchlens as tl
 
@@ -83,7 +84,7 @@ def test_peak_pair_is_session_time_only() -> None:
 # mark, which only another process's memory pressure can disturb (kernel
 # reclaim of this process's cold pages mid-capture can offset the growth).
 @pytest.mark.serial
-@pytest.mark.skipif(sys.platform != "linux", reason="VmHWM reset is procfs-only")
+@needs_vmhwm_reset
 def test_multi_capture_resident_peak_is_non_degenerate() -> None:
     """Sweep-scale instrument oracle: capture N's resident peak is real.
 
