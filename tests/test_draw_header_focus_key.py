@@ -198,7 +198,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
     assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{trace.num_params:,} params" in dot
-    assert not re.search(r"\d (?:KB|MB|GB)\b", dot)
+    assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
 
 @pytest.mark.parametrize("rolled", [False, True])
@@ -278,7 +278,7 @@ def test_focus_draws_no_ancestor_frames(trace: tl.Trace, tmp_path: Path, rolled:
     assert frames, dot
     assert all(frame.startswith(_FOCUS) for frame in frames), frames
     widths = re.findall(r"penwidth=([\d.]+)", dot[dot.index("subgraph") :])
-    assert max(float(width) for width in widths) == 5.0  # the focus frame is the outermost
+    assert {float(width) for width in widths} == {1.5}  # one stroke at every depth
 
 
 def test_whole_model_draw_keeps_every_frame(trace: tl.Trace, tmp_path: Path) -> None:

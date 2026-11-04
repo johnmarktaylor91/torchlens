@@ -25,9 +25,8 @@ from ._render_module_scope import (
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
+from ._rolled_edges import _html_combined_recurrence_label, _self_loop_port_attrs
 from .collapse_plan import OpSegment
-
-_PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1216,11 +1215,10 @@ def _add_edges_for_node(
             "style": edge_style,
             "arrowsize": ".7",
             "labelfontsize": edge_annotation_pt(),
+            **(_self_loop_port_attrs(rankdir) if edge_is_self_loop else {}),
         }
         if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
             edge_dict["minlen"] = "2"
-        if edge_is_self_loop:
-            edge_dict.update(_self_loop_port_attrs(rankdir))
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%
@@ -1862,28 +1860,6 @@ def _html_edge_label(text: str) -> str:
     )
 
 
-def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> str:
-    """Return an HTML combined recurrence label that sits against its edge.
-
-    Used for a node's self-loop arc, a merged recurrence back-edge, and merged
-    buffer-edge annotations. Graphviz routes the edge along a midpoint label's
-    left side, so the narrow left spacer keeps the text on its edge and the
-    wide right one keeps it off the next node; ``bottom=None`` gives one line.
-
-    ``top``/``bottom`` are escaped individually (not after joining) so the
-    literal ``<BR/>`` line-break tag inserted between them is preserved.
-    """
-
-    top = html_escape(top)
-    text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
-    return (
-        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f'<TR><TD WIDTH="{_PASS_LABEL_EDGE_GAP}"></TD>'
-        f'<TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD>'
-        f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
-    )
-
-
 def _space_from_reverse_edge(
     child_node: "Layer", parent_node: "Layer", edge_dict: Dict[str, Any], maps: "_RolledEdgeMaps"
 ) -> None:
@@ -1893,30 +1869,6 @@ def _space_from_reverse_edge(
     holds a no-break space: Graphviz before 14 rejects an empty FONT element."""
     if parent_node.layer_label in maps.child_ops_per_layer(child_node) and "label" not in edge_dict:
         edge_dict["label"] = _html_combined_recurrence_label("\u00a0")
-
-
-#: Self-loop ports by rank direction: the loop leaves the node's downstream
-#: side and comes back on its upstream side, so it draws as a tall D-shaped
-#: arrow beside the node instead of Graphviz's default small curl.
-_SELF_LOOP_PORTS: dict[str, tuple[str, str]] = {
-    "BT": ("ne", "se"),
-    "TB": ("se", "ne"),
-    "LR": ("ne", "nw"),
-    "RL": ("nw", "ne"),
-}
-
-
-def _self_loop_port_attrs(rankdir: str) -> dict[str, str]:
-    """Return the tail and head ports that make a recurrence self-loop read as a loop.
-
-    A self-loop with no ports is a small curl on one side of the node that is
-    easy to miss next to a stack of straight arrows; anchoring it from the
-    output side back to the input side spans the node's height, so the loop
-    is unmistakable (JMT, 3 Nov 2026).
-    """
-
-    tail_port, head_port = _SELF_LOOP_PORTS.get(rankdir, _SELF_LOOP_PORTS["BT"])
-    return {"tailport": tail_port, "headport": head_port}
 
 
 def _label_rolled_call_indexs(

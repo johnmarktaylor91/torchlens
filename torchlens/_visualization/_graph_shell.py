@@ -8,6 +8,7 @@ import graphviz
 
 from ._focus_scope import focus_address
 from ._render_utils import direction_to_rankdir
+from ._rolled_edges import ROLLED_NODESEP
 from .request import RenderTarget, ResolvedRenderRequest
 from .themes import VisualizationTheme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
@@ -21,9 +22,6 @@ __all__ = ["FOCUS_RANKSEP", "ROLLED_NODESEP", "build_graphviz_shell"]
 #: is 0.5; a focused picture is one module's short chain of ops, and the
 #: tighter ranks keep its input and output on one screen.
 FOCUS_RANKSEP = "0.3"
-#: Node separation of a rolled draw, in inches (dot default 0.25): a self-loop
-#: is half of it wide, so a recurrence draws as an obvious loop.
-ROLLED_NODESEP = "0.5"
 
 
 def build_graphviz_shell(
