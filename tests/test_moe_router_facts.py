@@ -63,7 +63,7 @@ def test_routing_table_matches_independent_gate_oracle() -> None:
     model = _ToyMoE()
     x = _input()
     expected_weights, expected_indices = model.chooser(x).softmax(-1).topk(2, dim=-1)
-    trace = tl.trace(model, x)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     assert len(trace.routing_table) == 1
     row = trace.routing_table[0]
     assert row["module"] == "self"
