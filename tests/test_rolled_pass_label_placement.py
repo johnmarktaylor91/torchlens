@@ -42,6 +42,9 @@ from torchlens._visualization._pass_label_placement import (
 _NEAR_END_PT = 12.0
 #: how much nearer (pt) a pass label must be to its own edge than to any other edge at its node
 _ATTACH_MARGIN_PT = 4.0
+#: a pass label sits out along its own edge: its centre within this angle (degrees) of the
+#: edge's direction at its end, never beside the node next to another edge
+_MAX_OFF_EDGE_DEG = 60.0
 _DIRECTIONS = ("bottomup", "topdown", "leftright", "rightleft")
 
 
@@ -107,14 +110,16 @@ def test_pass_labels_sit_at_their_nodes_in_every_direction(direction: str, tmp_p
     assert result.hard_violation_count == 0, result.describe_violations(direction)
     attachments = _attachments(dot)
     assert sorted(text for text, *_ in attachments) == ["In 1", "In 2", "Out 1", "Out 2"]
-    for text, end_gap, own_gap, rival_gap in attachments:
+    for text, end_gap, own_gap, rival_gap, off_edge in attachments:
         assert end_gap <= _NEAR_END_PT, (direction, text, end_gap)
         assert rival_gap >= own_gap + _ATTACH_MARGIN_PT, (direction, text, own_gap, rival_gap)
+        assert off_edge <= _MAX_OFF_EDGE_DEG, (direction, text, off_edge)
 
 
-def _attachments(dot: str) -> list[tuple[str, float, float, float]]:
-    """Per pass label: its gap to its own edge's end, to that edge's last 30 pt, and
-    to the nearest other edge at the same node (within 60 pt of the end)."""
+def _attachments(dot: str) -> list[tuple[str, float, float, float, float]]:
+    """Per pass label: its gap to its own edge's end, to that edge's last 30 pt, to
+    the nearest other edge at the same node (within 60 pt of the end), and the angle
+    (degrees) between its own edge's direction at the end and the label's centre."""
 
     layout = json.loads(
         subprocess.run(
@@ -152,12 +157,19 @@ def _attachments(dot: str) -> list[tuple[str, float, float, float]]:
                 for p in other_samples
                 if math.dist(p, end) <= 60.0
             ]
+            ahead = min(own, key=lambda p: abs(math.dist(p, end) - 15.0))
+            (x0, y0) = (min(b[0] for b in boxes), min(b[1] for b in boxes))
+            (x1, y1) = (max(b[2] for b in boxes), max(b[3] for b in boxes))
+            turn = math.atan2((y0 + y1) / 2 - end[1], (x0 + x1) / 2 - end[0]) - math.atan2(
+                ahead[1] - end[1], ahead[0] - end[0]
+            )
             found.append(
                 (
                     texts[0],
                     min(_box_point_gap(b, end) for b in boxes),
                     min(_box_point_gap(b, p) for b in boxes for p in own),
                     min((_box_point_gap(b, p) for b in boxes for p in rivals), default=math.inf),
+                    math.degrees(abs((turn + math.pi) % (2 * math.pi) - math.pi)),
                 )
             )
     return found
