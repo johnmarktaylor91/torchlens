@@ -3,8 +3,8 @@
 ``unwrap_torch`` restores a namespace slot only when the CURRENT attribute is
 a known torchlens wrapper; a third-party wrapper installed on top of ours is
 (correctly) left in place. Left alone, that keeps the torchlens wrapper LIVE
-inside the foreign wrapper's ``__wrapped__``, closure cells or module globals
-(B8-6): the slot still runs torchlens code after "unwrap", and the user learns
+inside the foreign wrapper's ``__wrapped__``, closure cells or module globals:
+the slot still runs torchlens code after "unwrap", and the user learns
 nothing. A peer that patches torch at import after a capture (``nnsight``
 re-wraps ``torch.Tensor.backward`` with ``functools.wraps`` around whatever is
 installed) produces exactly this shape.
