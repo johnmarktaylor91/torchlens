@@ -22,8 +22,11 @@ plain torch too, so backward is checked for ``while_loop`` and ``scan``.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import warnings
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 import torch
@@ -37,14 +40,37 @@ from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
-_hop_cond = pytest.importorskip("torch._higher_order_ops.cond").cond
-_hop_while = pytest.importorskip("torch._higher_order_ops.while_loop").while_loop
-_hop_map = pytest.importorskip("torch._higher_order_ops.map").map
-_hop_scan = pytest.importorskip("torch._higher_order_ops.scan").scan
-
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
 
 _TRACING_TENSOR_NAMES = frozenset({"FakeTensor", "FunctionalTensor"})
+
+
+def _hop(module: str) -> Callable[..., Any]:
+    """Return ``torch._higher_order_ops.<module>.<module>``, or skip the test.
+
+    Parameters
+    ----------
+    module:
+        Submodule name, which is also its entry point's name.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The higher-order operator's entry point.
+    """
+
+    qualname = f"torch._higher_order_ops.{module}"
+    # Presence is probed with ``find_spec`` (parent package first, so a torch
+    # without the package answers None instead of raising), never by catching
+    # ImportError: a HOP module that exists but fails to import must fail
+    # loudly rather than skip. Only the tests that build this op's model skip.
+    if (
+        importlib.util.find_spec("torch._higher_order_ops") is None
+        or importlib.util.find_spec(qualname) is None
+    ):
+        pytest.skip(f"torch {torch.__version__} has no {qualname}")
+    entry: Callable[..., Any] = getattr(importlib.import_module(qualname), module)
+    return entry
 
 
 def _clean_mul(tensor: torch.Tensor, factor: object) -> torch.Tensor:
@@ -80,6 +106,7 @@ class _CondModel(nn.Module):
 
         super().__init__()
         self.take_true = take_true
+        self.cond = _hop("cond")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Double (true branch) or decrement (false branch), then add one.
@@ -96,11 +123,13 @@ class _CondModel(nn.Module):
         """
 
         pred = x.sum() > 0 if self.take_true else x.sum() < -1e9
-        return _hop_cond(pred, lambda t: t * 2, lambda t: t - 1, (x,)) + 1
+        return self.cond(pred, lambda t: t * 2, lambda t: t - 1, (x,)) + 1
 
 
 class _WhileModel(nn.Module):
     """``while_loop`` that scales its carry three times."""
+
+    hop_module = "while_loop"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the loop body runs.
@@ -113,6 +142,7 @@ class _WhileModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run three doubling iterations, then add one.
@@ -129,12 +159,14 @@ class _WhileModel(nn.Module):
         """
 
         start = torch.zeros((), dtype=torch.int64)
-        out = _hop_while(lambda i, t: i < 3, lambda i, t: (i + 1, self.mul(t, 2.0)), (start, x))
+        out = self.hop(lambda i, t: i < 3, lambda i, t: (i + 1, self.mul(t, 2.0)), (start, x))
         return out[1] + 1
 
 
 class _MapModel(nn.Module):
     """``map`` over the leading dimension."""
+
+    hop_module = "map"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the mapped function runs.
@@ -147,6 +179,7 @@ class _MapModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Map each row to ``2 * row + 1``.
@@ -162,11 +195,13 @@ class _MapModel(nn.Module):
             The stacked mapped rows.
         """
 
-        return _hop_map(lambda row: self.mul(row, 2.0) + 1, x)
+        return self.hop(lambda row: self.mul(row, 2.0) + 1, x)
 
 
 class _ScanModel(nn.Module):
     """``scan`` computing a scaled running sum."""
+
+    hop_module = "scan"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the combine step runs.
@@ -179,6 +214,7 @@ class _ScanModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return the summed running sums plus the final carry.
@@ -213,7 +249,7 @@ class _ScanModel(nn.Module):
             new = carry + row
             return new, self.mul(new, 2.0)
 
-        carry, ys = _hop_scan(combine, torch.zeros(4), x)
+        carry, ys = self.hop(combine, torch.zeros(4), x)
         return ys.sum(0) + carry
 
 
@@ -468,8 +504,9 @@ def test_map_grad_operand_capture_fails_loudly() -> None:
 
     torch.manual_seed(0)
     x = torch.randn(3, 4).requires_grad_(True)
+    model = _MapModel()
     with pytest.raises(TraceCaptureError, match="fake_mode"):
-        tl.trace(_MapModel(), x)
+        tl.trace(model, x)
 
 
 @pytest.mark.parametrize("name", _ALL_CASES)

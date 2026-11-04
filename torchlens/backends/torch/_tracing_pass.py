@@ -38,7 +38,7 @@ from ..._utils._torch_compat import (
     get_tracing_tensor_types,
 )
 
-__all__ = ["call_inside_tracing_pass", "inside_tracing_tensor_pass"]
+__all__ = ("call_inside_tracing_pass", "inside_tracing_tensor_pass")
 
 
 def _is_tracing_value(value: Any, tracing_types: tuple[type[Any], ...]) -> bool:
