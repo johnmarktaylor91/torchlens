@@ -342,28 +342,6 @@ def _refuse_2x_spec_layout(spec_path: Path) -> None:
     )
 
 
-def _load_trace_recipe_spec(path: str | Path) -> InterventionSpec:
-    """Return the staged spec a saved trace's ``intervention.json`` describes.
-
-    The trace reader attaches it as the loaded trace's ``_intervention_spec``,
-    so the rerun guard can tell a replayable recipe from one with
-    placeholders.
-
-    Parameters
-    ----------
-    path:
-        Trace artifact directory holding ``intervention.json``.
-
-    Returns
-    -------
-    InterventionSpec
-        The spec, with ``metadata["recipe_placeholders"]`` and
-        ``metadata["executable"]`` set.
-    """
-
-    return load_intervention_spec(path)
-
-
 def _spec_with_recipe_metadata(recipe: Mapping[str, Any], root: Path) -> InterventionSpec:
     """Rebuild the spec of a decoded recipe and stamp its persistence metadata."""
 
