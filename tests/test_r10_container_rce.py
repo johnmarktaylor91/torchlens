@@ -86,6 +86,13 @@ class _OrderedDictModel(nn.Module):
         return OrderedDict([("value", x + 1), ("meta", 3)])
 
 
+class _DictModel(nn.Module):
+    """Return a plain three-tensor dict output (three leaves, no type reference)."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        return {"a": x + 1, "b": x + 2, "c": x + 3}
+
+
 _CONTAINER_SPEC_TYPE = "torchlens._ir.container.ContainerSpec"
 
 
@@ -106,6 +113,27 @@ def _tampered_spec_cell(*, type_module: str, type_qualname: str, sentinel: Path)
     for key, value in tampered.items():
         object.__setattr__(spec, key, value)
     return ValueEncoder().encode(spec, "r10-tamper")
+
+
+def _tampered_mapping_spec_cell(*, sentinel: Path) -> Any:
+    """Return the typed-JSON cell of a three-slot ``dict`` spec whose type is ``subprocess.Popen``.
+
+    The three keys are the argv of a shell command and each key holds one leaf slot, so the
+    spec consumes exactly the three real output leaves: the leaf-count check passes and the
+    mapping-subtype rebuild reaches ``container_type(items)``, which for ``Popen`` would run
+    ``list(items)`` (the keys) as a command. Only the admissibility gate stands in between.
+    """
+
+    spec = ContainerSpec(kind="dict")
+    tampered = {
+        "type_module": "subprocess",
+        "type_qualname": "Popen",
+        "keys": ("/bin/sh", "-c", f"touch {sentinel}"),
+        "child_specs": (),
+    }
+    for key, value in tampered.items():
+        object.__setattr__(spec, key, value)
+    return ValueEncoder().encode(spec, "r10-tamper-mapping")
 
 
 def _replace_container_specs(node: Any, cell: Any) -> int:
@@ -143,20 +171,7 @@ def _tamper_output_container_type(
     cell = _tampered_spec_cell(
         type_module=type_module, type_qualname=type_qualname, sentinel=sentinel
     )
-    total = 0
-    for path in sorted(bundle.rglob("*.json")):
-        relpath = path.relative_to(bundle).as_posix()
-        if relpath == "manifest.json":
-            continue
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        replaced = _replace_container_specs(payload, cell)
-        if replaced:
-            path.write_text(
-                json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
-            )
-            redigest(bundle, relpath)
-            total += replaced
-    assert total, "the saved bundle carries no ContainerSpec to tamper"
+    _rewrite_container_spec_cells(bundle, cell)
 
 
 # --------------------------------------------------------------------------- #
@@ -186,6 +201,64 @@ def test_tampered_container_type_denies_code_execution(
     with pytest.raises(RunPreconditionError):
         loaded.run(inputs=torch.randn(1, 4))
     # The command must NEVER have run -- no sentinel, no side effect.
+    assert not sentinel.exists()
+
+
+def _rewrite_container_spec_cells(bundle: Path, cell: Any) -> None:
+    """Replace every saved ``ContainerSpec`` cell with ``cell``, re-digesting each file."""
+
+    total = 0
+    for path in sorted(bundle.rglob("*.json")):
+        relpath = path.relative_to(bundle).as_posix()
+        if relpath == "manifest.json":
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        replaced = _replace_container_specs(payload, cell)
+        if replaced:
+            path.write_text(
+                json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+            )
+            redigest(bundle, relpath)
+            total += replaced
+    assert total, "the saved bundle carries no ContainerSpec to tamper"
+
+
+def _chain_text(exc: BaseException) -> str:
+    """Return the messages of ``exc`` and every exception it was raised from."""
+
+    parts: list[str] = []
+    current: BaseException | None = exc
+    while current is not None and len(parts) < 16:
+        parts.append(str(current))
+        current = current.__cause__ or current.__context__
+    return " | ".join(parts)
+
+
+def test_leaf_shaped_tampered_mapping_type_is_stopped_by_the_admissibility_gate(
+    tmp_path: Path,
+) -> None:
+    """A tamper with exactly the real leaf count is stopped by the admissibility gate alone.
+
+    The case above is also stopped by the leaf-count check, so it stays green when the
+    gate is removed. Here the tampered spec declares one leaf slot per real output leaf,
+    the leaf-count check passes, and the refusal must name the disallowed type.
+    """
+
+    import subprocess  # noqa: F401  (the resolver only reads modules already loaded)
+
+    sentinel = tmp_path / "rce_proof_mapping.txt"
+    bundle = tmp_path / "rce_mapping.tlspec"
+    tl.trace(_DictModel(), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    _rewrite_container_spec_cells(bundle, _tampered_mapping_spec_cell(sentinel=sentinel))
+
+    loaded = tl.load(bundle)
+    with pytest.raises(RunPreconditionError) as caught:
+        loaded.run(inputs=torch.randn(1, 4))
+    chain = _chain_text(caught.value)
+    assert "disallowed type subprocess.Popen" in chain
+    assert "leaves supplied" not in chain
     assert not sentinel.exists()
 
 

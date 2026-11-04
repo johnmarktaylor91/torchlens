@@ -1,6 +1,6 @@
 """Error ownership for TorchLens intervention APIs."""
 
-from typing import Literal, NoReturn
+from typing import Any, Literal, NoReturn
 
 from .._errors import KeywordConflictError, SelectionError
 from .._io.format_errors import OpaqueCallableError as OpaqueCallableError
@@ -265,7 +265,7 @@ def _refuse_non_executable(message: str, *, remedy: str | None = None) -> NoRetu
         Always.
     """
 
-    payload = {} if remedy is None else {"remedy": remedy}
+    payload: dict[str, Any] = {} if remedy is None else {"remedy": remedy}
     raise NonExecutableSpecError(message, **payload)
 
 

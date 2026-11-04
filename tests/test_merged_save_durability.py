@@ -18,6 +18,7 @@ from tests.test_merged_load_identity import _rank_trace
 from torchlens._merged._artifact import load_merged, save_merged
 from torchlens._merged._enums import MergedErrorCode
 from torchlens._merged._errors import MergedArtifactError
+from torchlens.errors import TorchLensWarning
 
 
 def _merged():
@@ -111,7 +112,10 @@ def test_save_does_not_dereference_symlinks_into_the_artifact(tmp_path: Path) ->
     # Plant a symlink inside rank 0's core pointing at the private file.
     (core0 / "leak.link").symlink_to(secret)
 
-    merged = tl.merge_ranks([core0, core1])
+    # Format 3 never reads a file its manifest does not list and says so once
+    # (docs/maintainers/saved_format_3.md); the rank core still loads.
+    with pytest.warns(TorchLensWarning, match="unreferenced extra files.*leak.link"):
+        merged = tl.merge_ranks([core0, core1])
     out = tmp_path / "merged.tlspec"
     with pytest.raises(MergedArtifactError) as caught:
         merged.save(out)

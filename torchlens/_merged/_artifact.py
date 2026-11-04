@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import pickle
 import shutil
 import uuid
 from dataclasses import replace
@@ -42,6 +41,7 @@ from ._enums import (
 )
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
+from ._member_refusals import _is_bundle_integrity_refusal
 from ._presenter import MergedTrace, _RankHandle
 from ._rules import is_strict_int
 from ._witness import witness_consistency
@@ -202,39 +202,6 @@ _SCHEMA_REMEDY = (
     "supports. Re-generate it with tl.merge_ranks([...]).save(path) using a "
     "matching torchlens release."
 )
-
-
-# Bundle-load failures that are INTEGRITY signals (tamper), not environmental
-# degradation. A guarded-unpickler denylist refusal / corrupt pickle stream is
-# raised as ``pickle.UnpicklingError``/``EOFError`` and, at the ``bundle.load``
-# boundary, wrapped into a ``ArtifactError`` tagged with this code (A-R58-1).
-_BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
-
-
-def _is_bundle_integrity_refusal(exc: BaseException) -> bool:
-    """Return True if a member bundle-load failure is a tamper signal, not drift.
-
-    A guarded-unpickler denylist refusal or a corrupt/truncated pickle stream is
-    a bundle-INTEGRITY failure: it means the member core's bytes are inconsistent
-    with an honest capture, which is tamper. It is distinguished from genuine
-    environmental degradation (torch/codec import drift, a missing optional
-    dependency) both by the stable ``code`` the ``bundle.load`` boundary stamps
-    on it AND by walking the ``__cause__``/``__context__`` chain for the raw
-    ``pickle.UnpicklingError``/``EOFError`` (belt-and-braces: a refusal that
-    reaches here through any other wrapper is still caught).
-    """
-
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        if isinstance(current, (pickle.UnpicklingError, EOFError)):
-            return True
-        fields = getattr(current, "fields", None)
-        if isinstance(fields, dict) and fields.get("code") == _BUNDLE_INTEGRITY_CODE:
-            return True
-        current = current.__cause__ or current.__context__
-    return False
 
 
 def _tamper(detail: str, *, remedy: str = _TAMPER_REMEDY, **payload: Any) -> MergedArtifactError:
@@ -940,12 +907,12 @@ def load_merged(path: str | Path) -> MergedTrace:
             # denylist refusal into the "no longer parses on this runtime"
             # channel, silently capping the merge at partial off the remaining
             # members while the adjacent handler refused the same tamper class).
-            if _is_bundle_integrity_refusal(exc):
+            if _is_bundle_integrity_refusal(exc, member_path):
                 raise _tamper(
                     f"rank {declared_rank} member core {str(member_path)!r} failed "
                     f"a bundle-integrity check ({_bounded_exc(exc)}); a guarded-unpickler denylist "
-                    "refusal or corrupt pickle stream is a tampered artifact, never "
-                    "a runtime degradation to be laundered into a partial merge"
+                    "refusal, a corrupt pickle stream or a foreign root pickle (unopened) "
+                    "is a tampered artifact, never a degradation laundered into a partial merge"
                 ) from exc
             # A member bundle that no longer LOADS on this runtime is a genuine
             # environmental degradation (torch/codec drift). It caps the

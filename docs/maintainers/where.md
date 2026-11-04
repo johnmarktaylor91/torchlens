@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1469 modules, 656996 lines, 0 modules without a docstring.
+83 packages, 1470 modules, 657041 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -25,7 +25,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 60 | 36847 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8954 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11676 |
-| `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5951 |
+| `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 14 | 5996 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
@@ -561,12 +561,12 @@ Internal backend-neutral IR for TorchLens capture unification. (23 modules, 1167
 
 ### `torchlens._merged`
 
-Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5951 lines)
+Cross-rank trace merging (merge-ranks tier (c), rung ). (14 modules, 5996 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 56 |
-| `_artifact` | ''merged-directory'' artifact: canonical descriptor, tree hashes, load rederivation. | 1065 |
+| `_artifact` | ''merged-directory'' artifact: canonical descriptor, tree hashes, load rederivation. | 1032 |
 | `_boundary_membership` | Group-membership and tensor-role parse rules for ''collective_boundary_v1''. | 307 |
 | `_boundary_rules` | Per-boundary parse rules for ''collective_boundary_v1'' rank evidence. | 564 |
 | `_derive_steps` | Evidence stages of the merge derivation that need no join records. | 667 |
@@ -574,6 +574,7 @@ Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5951 lines)
 | `_enums` | Frozen vocabulary for cross-rank merged traces (merge-ranks rung ). | 216 |
 | `_errors` | Typed errors for cross-rank merged traces. | 165 |
 | `_evidence` | Rank-core evidence extraction for the merge engine. | 556 |
+| `_member_refusals` | Merged-artifact member-load classification: which member failures are tamper, not drift. | 78 |
 | `_presenter` | ''MergedTrace'': a presenter over lazy rank handles + the join table. | 937 |
 | `_relation_table` | The per-kind relation table the merge derivation checks at each join key. | 213 |
 | `_rules` | Shared identity, boundary and provenance rules over rank-core evidence. | 344 |
