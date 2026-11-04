@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1566 modules, 673521 lines, 0 modules without a docstring.
+83 packages, 1567 modules, 673800 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -35,7 +35,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10464 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 13 | 7145 |
-| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2969 |
+| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2961 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 52 | 17843 |
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 28 | 9805 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 29 | 9987 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4149 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5401 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 70 | 31008 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 70 | 31113 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4767 |
 
 ## Modules by package
@@ -795,16 +795,16 @@ Semantic facet views for TorchLens records. (13 modules, 7145 lines)
 
 ### `torchlens._semantic.recipes`
 
-Built-in TorchLens semantic facet recipes. (9 modules, 2969 lines)
+Built-in TorchLens semantic facet recipes. (9 modules, 2961 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Built-in TorchLens semantic facet recipes. | 245 |
-| `_helpers` | Shared helpers for built-in semantic recipes. | 528 |
+| `_helpers` | Shared helpers for built-in semantic recipes. | 516 |
 | `attention` | Built-in semantic recipes for attention modules. | 801 |
 | `embedding` | Built-in semantic recipes for embedding modules. | 25 |
 | `lm_head` | Built-in semantic recipes for language-model unembedding heads. | 353 |
-| `mlp` | Built-in semantic recipes for MLP and FFN modules. | 87 |
+| `mlp` | Built-in semantic recipes for MLP and FFN modules. | 91 |
 | `norm` | Built-in semantic recipes for normalization modules. | 81 |
 | `residual` | Built-in semantic recipes for transformer residual stream facets. | 420 |
 | `vision_head` | Built-in semantic recipes for vision-model output heads. | 429 |
@@ -1824,12 +1824,12 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 432 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (28 modules, 9805 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (29 modules, 9987 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 112 |
-| `_aliases` | The alias layer: a RESOLVER, not a dict (mikit ). | 496 |
+| `_aliases` | The alias layer: a RESOLVER, not a dict (mikit ). | 543 |
 | `_anchors` | Shared dataflow anchors: the lm-head / final-norm resolution (internal). | 141 |
 | `_appliance` | The ''"mechinterp"'' appliance behind ''trace.using("mechinterp")''. | 127 |
 | `_compose` | Stack composition helpers: norm folding, generic stackers, full grain | 324 |
@@ -1846,6 +1846,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (28 modules, 
 | `_feature` | Feature optimization through the shared capture-free intervention binding. | 248 |
 | `_grids` | The generic patching-grid driver + thin presets (mikit section 7). | 458 |
 | `_heads` | Per-query-head attention contributions (mikit ; TLens | 342 |
+| `_interp_engine` | This trace's sites as interp-engine points: the points file and its writer. | 135 |
 | `_kv_heads` | Per-query-head patching under grouped-query attention (an op-level interceptor). | 552 |
 | `_lowered` | Lowered counterfactuals (mikit ) -- the TorchLens-original capability. | 298 |
 | `_neurons` | Per-neuron MLP contributions (mikit identity gate at neuron grain). | 423 |
@@ -2151,7 +2152,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (70 modules, 31008 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (70 modules, 31113 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2178,9 +2179,9 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_backward_flow` | Backward event flow and intervention evidence. | 580 |
 | `_invariants_backward_graph` | Backward graph and grad-function invariants. | 584 |
 | `_invariants_buffers` | Parameter indexes and buffer ownership invariants. | 531 |
-| `_invariants_conditional_base` | Recurrence and foundational conditional invariants. | 503 |
+| `_invariants_conditional_base` | Recurrence and foundational conditional invariants. | 482 |
 | `_invariants_conditional_modules` | Conditional membership and module hierarchy invariants. | 535 |
-| `_invariants_conditionals` | Conditional labels, events, and branch-edge invariants. | 541 |
+| `_invariants_conditionals` | Conditional labels, events, and branch-edge invariants. | 667 |
 | `_invariants_connectivity` | Distance, connectivity, lookup, and contract helpers. | 847 |
 | `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 584 |
 | `_invariants_equivalence` | Equivalence, ordering, and loop-detection invariants. | 750 |
