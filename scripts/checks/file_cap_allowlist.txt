@@ -1440,7 +1440,7 @@ torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	73
 torchlens/validation/backward.py::validate_backward_pass	283
 torchlens/validation/consolidated.py::_intervention_report	69
-torchlens/validation/consolidated.py::validate	247
+torchlens/validation/consolidated.py::validate	233
 torchlens/validation/core.py	3767
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80

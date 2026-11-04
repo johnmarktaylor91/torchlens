@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._membership_perturbation import isin_membership_toggle_values
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -44,6 +46,8 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
+    if layer.func_name == "isin":
+        return isin_membership_toggle_values(layer, parent_label, parent_values)
     if not parent_values.is_floating_point():
         return None
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
