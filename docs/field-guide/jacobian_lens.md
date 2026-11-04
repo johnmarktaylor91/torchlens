@@ -20,7 +20,10 @@ DOCUMENTED-UNSTABLE.
 The page runs on a small randomly initialized GPT-2 built from a config, with
 no download. `examples/jacobian_lens_demo.py` runs the same recipe on the
 pretrained GPT-2 small checkpoint and cross-checks it the same way as the last
-section here.
+section here, and the [Jacobian lens
+notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/jacobian_lens_recipe.ipynb)
+runs it on GPT-2 small with its outputs saved, comparing the fitted lens with the
+logit lens block by block.
 
 ```text
 pip install torchlens transformers

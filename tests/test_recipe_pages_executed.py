@@ -62,6 +62,7 @@ PAGES: dict[str, str] = {
     "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
     "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
     "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
@@ -77,6 +78,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
@@ -148,6 +150,8 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: The Jacobian lens notebook downloads GPT-2 small and fits sixteen prompts of
+#: batched autograd through the whole model, then a jacrev check on two blocks.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
@@ -155,6 +159,7 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/clip_head_attention_recipe.ipynb",
         "examples/methods/clip_text_decomposition_recipe.ipynb",
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
     }
 )
 
