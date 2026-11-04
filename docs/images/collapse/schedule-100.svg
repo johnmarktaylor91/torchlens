@@ -24,7 +24,7 @@
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="396.38,-237.86 92.88,-237.86 92.88,-131.11 396.38,-131.11 396.38,-237.86"/>
+<polygon fill="#c0c0c0" stroke="black" points="396.38,-237.86 92.88,-237.86 92.88,-131.11 396.38,-131.11 396.38,-237.86"/>
 <text xml:space="preserve" text-anchor="start" x="206" y="-219.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
 <text xml:space="preserve" text-anchor="start" x="169.62" y="-198.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="102.88" y="-179.06" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(7, 7), stride=(2, 2), padding=(3, 3)</text>
@@ -40,7 +40,7 @@
 <!-- bn1pass1 -->
 <g id="node3" class="node">
 <title>bn1pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="331.5,-380.61 161.75,-380.61 157.75,-376.61 157.75,-273.86 327.5,-273.86 331.5,-277.86 331.5,-380.61"/>
+<polygon fill="#c0c0c0" stroke="black" points="331.5,-380.61 161.75,-380.61 157.75,-376.61 157.75,-273.86 327.5,-273.86 331.5,-277.86 331.5,-380.61"/>
 <polyline fill="none" stroke="black" points="327.5,-376.61 157.75,-376.61"/>
 <polyline fill="none" stroke="black" points="327.5,-376.61 327.5,-273.86"/>
 <polyline fill="none" stroke="black" points="327.5,-376.61 331.5,-380.61"/>
@@ -100,7 +100,7 @@
 <!-- layer4pass1 -->
 <g id="node7" class="node">
 <title>layer4pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="346.5,-821.61 146.75,-821.61 142.75,-817.61 142.75,-714.86 342.5,-714.86 346.5,-718.86 346.5,-821.61"/>
+<polygon fill="#c0c0c0" stroke="black" points="346.5,-821.61 146.75,-821.61 142.75,-817.61 142.75,-714.86 342.5,-714.86 346.5,-718.86 346.5,-821.61"/>
 <polyline fill="none" stroke="black" points="342.5,-817.61 142.75,-817.61"/>
 <polyline fill="none" stroke="black" points="342.5,-817.61 342.5,-714.86"/>
 <polyline fill="none" stroke="black" points="342.5,-817.61 346.5,-821.61"/>
@@ -147,7 +147,7 @@
 <!-- linear_1_61pass1 -->
 <g id="node10" class="node">
 <title>linear_1_61pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="378.75,-1170.78 110.5,-1170.78 110.5,-1083.78 378.75,-1083.78 378.75,-1170.78"/>
+<polygon fill="#c0c0c0" stroke="black" points="378.75,-1170.78 110.5,-1170.78 110.5,-1083.78 378.75,-1083.78 378.75,-1170.78"/>
 <text xml:space="preserve" text-anchor="start" x="207.88" y="-1152.48" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_69</text>
 <text xml:space="preserve" text-anchor="start" x="192.12" y="-1131.73" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="120.5" y="-1111.98" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 512) · bias (1000,)</text>

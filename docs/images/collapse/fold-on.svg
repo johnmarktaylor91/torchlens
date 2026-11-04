@@ -29,7 +29,7 @@
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="238.25,-237.86 0,-237.86 0,-131.11 238.25,-131.11 238.25,-237.86"/>
+<polygon fill="#c0c0c0" stroke="black" points="238.25,-237.86 0,-237.86 0,-131.11 238.25,-131.11 238.25,-237.86"/>
 <text xml:space="preserve" text-anchor="start" x="80.5" y="-219.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
 <text xml:space="preserve" text-anchor="start" x="62.88" y="-198.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 4, 8, 8), 1.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="17.5" y="-179.06" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
@@ -45,7 +45,7 @@
 <!-- blocks.0pass1 -->
 <g id="node3" class="node">
 <title>blocks.0pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="206,-380.61 36.25,-380.61 32.25,-376.61 32.25,-273.86 202,-273.86 206,-277.86 206,-380.61"/>
+<polygon fill="#c0c0c0" stroke="black" points="206,-380.61 36.25,-380.61 32.25,-376.61 32.25,-273.86 202,-273.86 206,-277.86 206,-380.61"/>
 <polyline fill="none" stroke="black" points="202,-376.61 32.25,-376.61"/>
 <polyline fill="none" stroke="black" points="202,-376.61 202,-273.86"/>
 <polyline fill="none" stroke="black" points="202,-376.61 206,-380.61"/>
@@ -89,7 +89,7 @@
 <!-- linear_1_35pass1 -->
 <g id="node6" class="node">
 <title>linear_1_35pass1</title>
-<polygon fill="#56b4e9" stroke="black" points="223.25,-734.71 15,-734.71 15,-647.71 223.25,-647.71 223.25,-734.71"/>
+<polygon fill="#c0c0c0" stroke="black" points="223.25,-734.71 15,-734.71 15,-647.71 223.25,-647.71 223.25,-734.71"/>
 <text xml:space="preserve" text-anchor="start" x="82.38" y="-716.41" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_35</text>
 <text xml:space="preserve" text-anchor="start" x="89.5" y="-695.66" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2), 8 B</text>
 <text xml:space="preserve" text-anchor="start" x="25" y="-675.91" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (2, 4) · bias (2,)</text>
