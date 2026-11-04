@@ -16,7 +16,7 @@ transformers = pytest.importorskip("transformers")
 import tokenizers  # noqa: E402  (a hard dependency of transformers)
 
 import torchlens as tl  # noqa: E402
-from torchlens._input_coerce import _input_owner  # noqa: E402
+from torchlens._input_route import _owner_of  # noqa: E402
 from torchlens.backends.torch.bound_root import TLBoundMethodRoot  # noqa: E402
 
 WORDS = ("[UNK]", "[PAD]", "the", "capital", "of", "france", "is")
@@ -55,9 +55,9 @@ def _model():
 
 def test_input_owner_resolves_bound_methods_and_their_root() -> None:
     model = _model()
-    assert _input_owner(model) is model
-    assert _input_owner(model.generate) is model
-    assert _input_owner(TLBoundMethodRoot(model.generate)) is model
+    assert _owner_of(model) is model
+    assert _owner_of(model.generate) is model
+    assert _owner_of(TLBoundMethodRoot(model.generate)) is model
 
 
 def test_generate_text_uses_the_owners_attached_tokenizer() -> None:

@@ -249,3 +249,33 @@ def _routed_payload(x: Any) -> Any:
     if not isinstance(x, _RoutedInputs):
         return x
     return x.input_args or x.input_kwargs
+
+
+def _owner_of(model: Any) -> Any:
+    """Return the object whose tokenizer and processors resolve ``model``'s inputs.
+
+    A bound method of a module (``tl.trace(model.generate, "text")``) and the
+    synthetic root TorchLens wraps it in both resolve through their owner
+    (``method.__self__``), so text, images and modality dicts reach
+    ``model.generate`` exactly as they reach ``model``: an attached
+    ``tokenizer``, a ``to_tokens`` method or the owner's ``name_or_path``.
+
+    Parameters
+    ----------
+    model:
+        Model, bound method of a module, or TorchLens's bound-method root.
+
+    Returns
+    -------
+    Any
+        The owning module for a bound method or its root; ``model`` otherwise.
+    """
+
+    # Duck-typed so this module adds no import edge to the backend layer: the
+    # root (``TLBoundMethodRoot``) exposes its owner as the ``tl_owner``
+    # property, and a bound method carries it as ``__self__``.
+    if isinstance(getattr(type(model), "tl_owner", None), property):
+        return model.tl_owner
+    if inspect.ismethod(model) and hasattr(model.__self__, "forward"):
+        return model.__self__
+    return model
