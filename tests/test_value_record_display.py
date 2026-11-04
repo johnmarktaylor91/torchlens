@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from html import escape
 from types import SimpleNamespace
@@ -270,4 +271,4 @@ def test_module_call_output_uses_full_card_value_spacing(captured) -> None:
         call = trace.module_calls[f"fc:{index}"]
         text = str(call)
         assert f"  output    {display_key(trace.ops[call.output_ops[0]])}" in text
-        assert "min  " in text and "  max  " in text
+        assert re.search(r" min \S+  max \S+", text)
