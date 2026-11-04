@@ -106,7 +106,10 @@ def test_coverage_flags_a_new_claim_paragraph() -> None:
     assert ledger_tool.uncovered(text, LEDGER) == [
         "TorchLens is 3x faster than hooks on every model."
     ]
-    covered = "# T\n\nSupported: **2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13** today.\n"
+    covered = (
+        "# T\n\nOne call **logs the result of every operation it executes, not just module "
+        "outputs**, on any model.\n"
+    )
     assert ledger_tool.uncovered(covered, LEDGER) == []
 
 

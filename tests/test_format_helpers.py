@@ -120,3 +120,26 @@ def test_drawn_zero_dim_node_reads_scalar_with_its_value(tmp_path: Any) -> None:
     assert "scalar, 4 B" in cells, cells
     assert any(re.match(r"^= -?\d", cell) for cell in cells), cells
     assert not any(cell.startswith("(), ") for cell in cells), cells
+
+
+def test_progress_bar_in_a_notebook_without_ipywidgets_uses_the_text_bar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ipywidgets a notebook gets tqdm's text bar, never a half-built widget bar.
+
+    tqdm.notebook raises mid-construction when ipywidgets is missing, and the
+    half-built bar prints "Exception ignored in tqdm.__del__" when collected.
+    """
+
+    from torchlens._utils import display
+
+    real_find_spec = display.importlib.util.find_spec
+    monkeypatch.setattr(display, "in_notebook", lambda: True)
+    monkeypatch.setattr(
+        display.importlib.util,
+        "find_spec",
+        lambda name, *args: None if name == "ipywidgets" else real_find_spec(name, *args),
+    )
+    bar = display.progress_bar(range(3), total=3, desc="x", threshold=0)
+    assert type(bar).__module__ == "tqdm.std"
+    assert list(bar) == [0, 1, 2]
