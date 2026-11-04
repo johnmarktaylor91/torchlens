@@ -889,7 +889,7 @@ SECTIONS: list[Section] = [
                     "show_legend=True appends a legend box decoding the node color/shape vocabulary.\n"
                     "CHECK: the legend does not overlap the graph. KNOWN NIT (FINDINGS F10): several legend "
                     "swatches have drifted from the actual node styling -- e.g. the legend draws "
-                    "'parameterized' as a blue rounded box while real parameter ops are grey rectangles, "
+                    "'parameterized' as a rounded box while real parameter ops are rectangles, "
                     "and swatch shapes are uniform rounded-rects while real nodes are ellipses/rectangles. "
                     "Trust the graph, not the legend, until the legend is re-synced."
                 ),
