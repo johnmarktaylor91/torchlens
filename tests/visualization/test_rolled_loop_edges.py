@@ -131,3 +131,11 @@ def test_rolled_back_edge_sideways_leaves_and_enters_from_below() -> None:
     (back,) = _edge_lines(_dot(rolled=True, direction="leftright"), "relu_", "linear_")
     assert "tailport=s" in back and "headport=s" in back, back
     assert "constraint=false" in back or 'constraint="false"' in back, back
+
+
+def test_rolled_loop_head_hides_the_redundant_in_features_like_its_body() -> None:
+    """fc's rolled node has two parents (entry and return edge) with one shape, so the
+    ``in_features`` row is as redundant there as on every other Linear node."""
+    for direction in ("bottomup", "leftright"):
+        dot_source = _dot(rolled=True, direction=direction)
+        assert "in_features" not in dot_source, direction
