@@ -13,6 +13,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import CaptureGapWarning
+from ..._utils._package_frames import external_warning_stacklevel
 from ..._utils._torch_symbols import torch_attr
 from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (
@@ -262,7 +263,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 f"{first['operator']} ({first['reason']}). The Trace is marked "
                 "capture_verified=False; inspect trace.completeness_diagnostics.",
                 CaptureGapWarning,
-                stacklevel=3,
+                stacklevel=external_warning_stacklevel(),
             )
             # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
             # Imported here so a capture without a gap never pays for the import.
