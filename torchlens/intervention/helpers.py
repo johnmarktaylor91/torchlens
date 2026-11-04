@@ -995,11 +995,9 @@ def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit
 def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
-    The single builtin-name registry shared by ``.tlspec`` intervention-spec
-    loads and ``Edit`` pickle restore: a builtin helper's runtime hook
-    factory is a local closure (never serialized), so both restore paths
-    re-derive the whole spec from its stable ``(name, args, kwargs)``
-    identity by re-invoking the constructor.
+    Shared by ``.tlspec`` loads and ``Edit`` pickle restore: the hook factory is a
+    local closure (never serialized), so both re-invoke the constructor on the stable
+    ``(name, args, kwargs)``; a stored element mask is re-applied (``_masked_spec``).
 
     Parameters
     ----------
@@ -1018,11 +1016,13 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     Raises
     ------
     InvalidArgumentError
-        ``intervention_helper_unknown`` if ``name`` is not a known builtin
-        helper; ``intervention_helper_renamed`` if it is the old name of a
-        renamed one (a clean break: a saved spec naming it no longer loads).
+        ``intervention_helper_unknown``, ``intervention_helper_renamed`` (a clean break) or
+        ``intervention_helper_arguments_invalid`` (foreign keywords, or a bad stored mask).
     """
 
+    from ._masked_spec import split_stored_mask, with_stored_mask
+
+    kwargs, stored_mask = split_stored_mask(name, kwargs)
     constructors, renamed_to = _builtin_constructor_lookup(name)
     if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
@@ -1059,7 +1059,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             ),
             argument="kwargs",
         ) from exc
-    return constructor(*args, **kwargs)
+    return with_stored_mask(constructor(*args, **kwargs), stored_mask)
 
 
 #: The one remedy text for the retired ``resample_ablate`` spelling, shared by

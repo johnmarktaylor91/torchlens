@@ -176,14 +176,14 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
 
     A whole-site mask short-circuits the scatter and returns the edit's
     behavior unchanged (only the recipe disclosure is stamped). Element
-    masks wrap the hook factory with the engine scatter; the derived spec's
-    factory is session-time (``FieldPolicy.DROP``) — the mask never enters
-    a persisted KEEP field, and the recipe rides the DROP-gated
-    ``selection_recipe`` family. The one exception is a builtin
-    ``subspace_edit`` (a projected builtin verb): it stores the dense mask and
-    its sha256 among its own arguments and stays portable.
+    masks wrap the hook factory with the engine scatter. A builtin verb
+    stores the dense mask and its sha256 among its own keywords and stays
+    portable (``_masked_spec``; a projected ``subspace_edit`` through its own
+    payload); any other edit is ``opaque_audit``. The recipe rides the
+    ``selection_recipe`` family.
     """
 
+    from ._masked_spec import masked_builtin_edit
     from ._subspace_projection import SUBSPACE_EDIT_NAME, masked_subspace_edit
 
     recipe = {
@@ -213,21 +213,18 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
             )
         if dict(edit.metadata).get("row_coherent"):
             disclosure = disclosure + _row_equivariance_facts(edit, entry, site_label)
-        if edit.name == SUBSPACE_EDIT_NAME and edit.portability == "builtin":
-            # A projected builtin verb stores its mask, so it stays portable.
-            return dataclasses.replace(
-                masked_subspace_edit(edit, entry._mask, site_label),
-                metadata=tuple(edit.metadata) + disclosure,
-                selection_recipe=recipe,
+        if edit.portability == "builtin":
+            # A builtin verb stores its mask, so it stays portable.
+            builder = (
+                masked_subspace_edit if edit.name == SUBSPACE_EDIT_NAME else masked_builtin_edit
             )
+            masked = builder(edit, entry._mask, site_label)
+        else:
+            # Any other edit cannot be rebuilt from its persisted form alone.
+            factory = _masked_factory(edit.factory, entry._mask, site_label)
+            masked = dataclasses.replace(edit, factory=factory, portability="opaque_audit")
         return dataclasses.replace(
-            edit,
-            factory=_masked_factory(edit.factory, entry._mask, site_label),
-            # The derived spec cannot be re-executed from its persisted form
-            # alone (the mask is session-time until the wave-3 bump).
-            portability="opaque_audit",
-            metadata=tuple(edit.metadata) + disclosure,
-            selection_recipe=recipe,
+            masked, metadata=tuple(edit.metadata) + disclosure, selection_recipe=recipe
         )
     if callable(edit):
         if entry._mask.form == "whole":
