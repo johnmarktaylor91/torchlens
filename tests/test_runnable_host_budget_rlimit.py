@@ -1,8 +1,8 @@
 """The host allocation budget never exceeds the process's address-space limit.
 
 The runnable preflight refuses a projected allocation that exceeds the host
-budget. That budget is available memory plus free swap, and on a host with
-about 2 TB available (a 224-CPU cluster node) a 1.6 TB allocation bomb fitted
+budget. That budget is available memory plus free swap, and on a cluster node with
+terabytes available a literal-tampered allocation bomb of a little less fitted
 inside it even when the process ran under an address-space limit
 (``RLIMIT_AS``) far below the bomb, so the preflight admitted an allocation
 that could never succeed and the refusal moved to the allocator. No single
