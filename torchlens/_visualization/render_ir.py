@@ -176,23 +176,19 @@ class RenderIROrderingConstraint:
 
 @dataclass(frozen=True)
 class RenderIRRankGroup:
-    """One stacking (rank) channel group: nodes pinned to one Graphviz rank.
+    """One rank group: nodes pinned to one Graphviz rank.
 
-    Parameters
-    ----------
-    kind:
-        Constraint kind; v1 emits ``"stack"`` only (the ``stack_by``
-        encoding channel; the license/cohort semantics live in
-        ``visualization._stacking``).
-    key:
-        Repr of the shared annotation value (rank key).
-    members:
-        Rendered node names pinned to the shared rank.
+    ``kind`` is the constraint kind: ``"stack"`` (the ``stack_by`` encoding
+    channel; semantics in ``visualization._stacking``) or ``"focus_stubs"``.
+    ``key`` is the repr of the shared rank key, ``members`` the rendered node
+    names, and ``rank`` the Graphviz rank the subgraph is given: ``"same"``,
+    or ``"source"`` / ``"sink"`` for a focused draw's input and output stubs.
     """
 
     kind: str
     key: str
     members: tuple[str, ...]
+    rank: str = "same"
 
 
 @dataclass(frozen=True)

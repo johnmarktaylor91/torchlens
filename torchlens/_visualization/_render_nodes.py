@@ -558,7 +558,7 @@ def _build_layer_node(
     if isinstance(node, BoundaryNode):
         fillcolor = INPUT_COLOR if node.boundary_kind == "input" else OUTPUT_COLOR
         spec = NodeSpec(
-            lines=[node.display_label],
+            lines=list(node.lines) or [node.display_label],
             shape="oval",
             fillcolor=fillcolor,
             fontcolor="black",
@@ -1987,7 +1987,7 @@ def compute_default_node_lines(
 
     layer_log = _unwrap_focus_node(layer_log)
     if isinstance(layer_log, BoundaryNode):
-        return [layer_log.display_label]
+        return list(layer_log.lines) or [layer_log.display_label]
 
     # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
     lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
