@@ -135,10 +135,12 @@ trace, `trace.do(tl.grad(<site>), <edit>, model=model, inputs=x)` reruns the for
 (audit status `"armed"` until a backward settles it); pass `loss=lambda t: ...` to arm and run the
 backward in one call. Replay cannot edit gradients (`replay_gradient_edit_unsupported`).
 
-Differentiable replay creates a new trace:
+Differentiable replay creates a new trace: `do` replays the edit onto a new fork and returns it
+(replay engine only; rerun and set-only ignore the option):
 
 ```python
-patched = source_trace.push(replay=tl.options.ReplayOptions(differentiable=True))
+options = tl.options.InterventionOptions(differentiable=True)
+patched = source_trace.do("relu_3", tl.scale(0.5), intervention=options)
 patched.backward(patched[patched.output_layers[0]].out.sum())
 ```
 

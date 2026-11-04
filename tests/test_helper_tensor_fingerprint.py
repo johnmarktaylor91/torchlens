@@ -61,6 +61,9 @@ def _truth(model: nn.Module, x: torch.Tensor, direction: torch.Tensor) -> torch.
         handle.remove()
 
 
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
+
 def _steer(direction: torch.Tensor) -> Any:
     """Return an additive steer along ``direction``."""
 
@@ -84,7 +87,7 @@ _EDITS: dict[str, Callable[[torch.Tensor], None]] = {
 
 
 @pytest.mark.parametrize("edit", sorted(_EDITS))
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
+@pytest.mark.parametrize("door", ["intervene_module", "stage"])
 def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> None:
     """An edited steer tensor refuses the rerun typed and leaves the trace unchanged."""
 

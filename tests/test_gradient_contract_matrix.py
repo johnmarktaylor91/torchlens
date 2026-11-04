@@ -271,7 +271,7 @@ def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
     return _out(trace)
 
 
-def _door_attach_run(model: nn.Module, edit: Any) -> torch.Tensor:
+def _door_stage_run(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
     trace._attach_hooks(tl.module("lin1"), edit)
     trace.run(model, _X)
@@ -282,14 +282,14 @@ def _door_bind(model: nn.Module, edit: Any) -> torch.Tensor:
     return tl.when(tl.module("lin1"), edit).bind(model)(_X)
 
 
-def _door_push_differentiable(model: nn.Module, edit: Any) -> torch.Tensor:
+def _door_do_differentiable(model: nn.Module, edit: Any) -> torch.Tensor:
     """Differentiable replay; a keep_grad edit that keeps the graph also discloses the frontier."""
 
-    replay = tl.options.ReplayOptions(hooks={tl.label(_SITE): edit}, differentiable=True)
+    options = tl.options.InterventionOptions(differentiable=True)
     _gradient_contract._WARNED_CODES.clear()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        output = _out(_ready(model).push(replay=replay))
+        output = _out(_ready(model).do(tl.label(_SITE), edit, intervention=options))
     codes = {getattr(record.message, "fields", {}).get("code") for record in caught}
     kept = dict(getattr(edit, "metadata", ())).get("keep_grad") or getattr(
         edit, "_torchlens_keep_grad", False
@@ -344,9 +344,9 @@ _DOORS: dict[str, tuple[Callable[[nn.Module, Any], torch.Tensor], Callable[..., 
     "capture InterventionDecision": (_door_decision, _plain),
     "fork.do (replay)": (_door_replay, _plain),
     "do(model=, inputs=) (rerun)": (_door_rerun, _plain),
-    "do(set_only) + run": (_door_attach_run, _plain),
+    "do(set_only) + run": (_door_stage_run, _plain),
     "spec.bind(model)": (_door_bind, _plain),
-    "push(differentiable=True)": (_door_push_differentiable, _frontier_hand),
+    "do(differentiable=True)": (_door_do_differentiable, _frontier_hand),
     "do(tl.units(...))": (_door_units, _units_hand),
     "do(tl.subspace(...))": (_door_subspace, None),
 }
@@ -486,7 +486,7 @@ def _sampled_cells() -> list[tuple[str, str, bool]]:
 _EVIDENCE_CELLS: tuple[tuple[str, str, bool], ...] = (
     # Sole killers of a recorded mutant.
     ("capture intervene=", "resample_rows_from", False),
-    ("push(differentiable=True)", "hook callable", True),
+    ("do(differentiable=True)", "hook callable", True),
     ("capture InterventionDecision", "mean_ablate(population, dim=(0, 1))", False),
     ("capture InterventionDecision", "mean_ablate(population, dim=(0, 1))", True),
     ("do(tl.subspace(...))", "mean_ablate(dim=0)", False),

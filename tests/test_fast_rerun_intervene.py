@@ -26,7 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
-from torchlens.intervention.errors import ControlFlowDivergenceWarning, EngineDispatchError
+from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -442,16 +442,20 @@ def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
 
 
 # Kept: sole branch coverage of intervention/_trace_run.py.
-def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() -> None:
-    """``run(inputs=, fast=True)`` applies the steer; plain ``run(inputs=)`` refuses."""
+def test_fast_and_plain_run_inputs_both_apply_the_staged_spec() -> None:
+    """``run(inputs=)`` applies the steer on both live engines, with receipts on the result."""
 
     model, direction = _build()
     ids = _ids(_CAPTURE_LEN, seed=700)
     trace = _steered_trace(model, direction, ids)
 
-    with pytest.raises(EngineDispatchError) as refused:
-        trace.run(inputs=ids)
-    assert refused.value.fields["code"] == "run_staged_spec_unapplied"
+    plain = trace.run(inputs=ids)
+    assert isinstance(plain, RunResult)
+    assert _max_abs_diff(plain.output, _hooked(model, direction, ids)["output"]) == 0.0
+    assert plain.trace.last_run["engine"] == "live"
+    assert plain.trace.last_run["hooks_fired"] >= 1
+    assert plain.trace.last_run["hooks_unfired"] == 0
+    assert plain.trace is not trace  # the run lands on a fork; the source is untouched
 
     for seed in (700, 701):
         run_ids = _ids(_CAPTURE_LEN, seed=seed)
@@ -459,9 +463,10 @@ def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() ->
         assert isinstance(result, RunResult)
         assert _max_abs_diff(result.output, _hooked(model, direction, run_ids)["output"]) == 0.0
 
-    with pytest.raises(EngineDispatchError) as refused_again:
-        trace.run(inputs=ids)
-    assert refused_again.value.fields["code"] == "run_staged_spec_unapplied"
+    # The plain door keeps applying the spec after fast runs, on fresh inputs too.
+    again = trace.run(inputs=_ids(_CAPTURE_LEN, seed=702))
+    expected = _hooked(model, direction, _ids(_CAPTURE_LEN, seed=702))["output"]
+    assert _max_abs_diff(again.output, expected) == 0.0
 
 
 # Kept: sole branch coverage of _fast_live_steer.py, _fast_run.py; a sole mutation kill.

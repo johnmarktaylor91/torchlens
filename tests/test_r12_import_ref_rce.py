@@ -38,6 +38,8 @@ from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import load_intervention_spec
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:

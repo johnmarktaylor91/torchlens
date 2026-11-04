@@ -27,6 +27,8 @@ from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Insertable(nn.Module):

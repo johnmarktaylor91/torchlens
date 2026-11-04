@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
@@ -21,6 +22,8 @@ from torchlens.intervention._spec_values import _serialize_value, _SerializedSta
 from torchlens.intervention.save import SaveLevel
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions, InterventionOptions
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class _SteerModel(nn.Module):
@@ -63,7 +66,13 @@ def _save_sticky_steer(tmp_path: Path, direction: torch.Tensor) -> tuple[Any, st
         tl.steer(direction),
         intervention=InterventionOptions(),
     )
-    log.push()  # a second fire record: one more reference to the same direction
+    # A later propagating do re-fires the sticky steer: a second fire record, one
+    # more reference to the same direction (an exact identity scale adds no tensor).
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        intervention=InterventionOptions(),
+    )
     path = tmp_path / "steer.tlspec"
     log.save_intervention(path, level="portable")
     return log, label, path

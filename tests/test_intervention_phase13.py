@@ -112,8 +112,11 @@ def test_last_run_records_returns_tuple_snapshot() -> None:
     """Fire records from the most recent propagated run are returned as a tuple."""
 
     log = _capture()
-    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
-    log.push()
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(),
+    )
 
     records = log.last_run_records()
 

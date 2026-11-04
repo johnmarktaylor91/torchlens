@@ -1,6 +1,6 @@
-"""``Layer.do``, ``Layer.set`` and the sticky ``Layer.do(engine="set_only")`` address every pass of a multi-pass layer.
+"""``Layer.do`` (edit or value, propagated or ``set_only``) addresses every pass of a multi-pass layer.
 
-A bare layer label addresses only a single-pass layer, so the three Layer doors
+A bare layer label addresses only a single-pass layer, so the Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
 loop would otherwise refuse with ``SiteAmbiguityError`` on every door. A Layer
 spans all its passes, so each door discloses the two-site fan-out. Each edit
@@ -9,6 +9,7 @@ here is checked against the same edit written in plain torch.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterator
 
 import pytest
@@ -17,7 +18,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
-from torchlens.options import InterventionOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -89,9 +89,20 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("set", "sticky"))
+def _double_hook(out: torch.Tensor, *, ctx: object = None) -> torch.Tensor:
+    """A plain callable hook that doubles the activation (``ctx`` is the hook context)."""
+
+    del ctx
+    return out * 2.0
+
+
+@pytest.mark.parametrize("door", ("do", "do_value", "set_only"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
-    """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
+    """Each Layer door on a two-pass layer edits both passes, matching plain torch.
+
+    ``do`` propagates at once (the fold of set or attach plus push); the ``set_only``
+    engine stages the value on both passes and leaves the outputs as captured.
+    """
 
     model, x, trace = captured
     shared, _fresh = _linear_labels(trace)
@@ -100,23 +111,121 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         if door == "do":
             layer.do(tl.scale(2.0))
-        elif door == "set":
+        elif door == "do_value":
+            layer.do(torch.zeros(2, 3))
+        else:
             layer.do(
                 torch.zeros(2, 3),
                 intervention=tl.options.InterventionOptions(engine="set_only"),
             )
-        else:
-            layer.do(
-                tl.scale(2.0),
-                intervention=InterventionOptions(engine="set_only"),
-            )
-        # The recipe doors apply on push, which re-resolves the same two sites.
-        if door != "do":
-            fork.push()
-    want = _oracle(model, x, shared_edit=_zero if door == "set" else _double)
+    if door == "set_only":
+        # One staged value entry covers both passes; nothing propagates yet.
+        assert len(fork._intervention_spec.target_value_specs) == 1
+        assert fork._intervention_spec.hook_specs == []
+        want = _oracle(model, x)
+        assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
+        return
+    want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
         assert fork[f"{shared}:{pass_index}"].edits
+
+
+def test_set_only_callable_on_multi_pass_layer_is_sticky_on_both_passes(captured) -> None:
+    """A callable staged by ``do(..., engine="set_only")`` is a sticky hook on both passes.
+
+    Walk ruling names.3: a callable passed to the set-only engine always becomes a sticky
+    hook, never a one-shot value. It changes no output when staged, fires on each pass of
+    the two-pass layer when a later ``do`` propagates, matching the same edit written in
+    plain torch, stays in the recipe after firing, and fires on both passes of a later
+    ``run`` on new inputs.
+    """
+
+    model, x, trace = captured
+    shared, fresh = _linear_labels(trace)
+    fork = trace.fork()
+    baseline = fork[fork.output_layers[0]].out.clone()
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        fork.layers[shared].do(
+            _double_hook,
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
+    # Staged as a hook, not a value, and nothing propagates yet.
+    assert fork._intervention_spec.target_value_specs == []
+    assert fork._intervention_spec.hook_specs
+    assert torch.equal(fork[fork.output_layers[0]].out, baseline)
+
+    # The next propagating do fires the staged hook on both passes. The hook keeps its
+    # two-site target, so re-resolving it may disclose the fan-out again; that disclosure
+    # is the only warning allowed here.
+    staged_handles = {hook.handle for hook in fork._intervention_spec.hook_specs}
+    assert None not in staged_handles
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always", MultiMatchWarning)
+        fork[fresh].do(tl.scale(1.0))
+    fan_out = [w for w in seen if issubclass(w.category, MultiMatchWarning)]
+    assert all("matched 2 sites" in str(w.message) for w in fan_out)
+    want = _oracle(model, x, shared_edit=_double)
+    assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
+    for pass_index in (1, 2):
+        assert fork[f"{shared}:{pass_index}"].edits
+    # Sticky: firing did not consume it. The staged hook is still in the recipe and no
+    # one-shot value took its place.
+    assert staged_handles <= {hook.handle for hook in fork._intervention_spec.hook_specs}
+    assert fork._intervention_spec.target_value_specs == []
+    # It stays attached: a fresh forward on new inputs fires it on both passes again.
+    x2 = torch.randn(2, 3)
+    rerun = fork.run(model, x2)
+    want2 = _oracle(model, x2, shared_edit=_double)
+    assert torch.allclose(rerun[rerun.output_layers[0]].out, want2, atol=1e-6)
+    for pass_index in (1, 2):
+        assert rerun[f"{shared}:{pass_index}"].edits
+
+
+@pytest.mark.parametrize("edit", ("hook", "helper"))
+def test_layer_door_hook_on_multi_pass_layer_refires_on_run(captured, edit: str) -> None:
+    """A hook or helper put on a two-pass layer by ``Layer.do`` refires on both passes of ``run``.
+
+    The Layer door stages one sticky entry addressed to every pass of the layer; a later
+    ``run`` on new inputs fires it on each pass, matching the same edit in plain torch.
+    """
+
+    model, x, trace = captured
+    shared, _fresh = _linear_labels(trace)
+    fork = trace.fork()
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        fork.layers[shared].do(_double_hook if edit == "hook" else tl.scale(2.0))
+    assert torch.allclose(
+        fork[fork.output_layers[0]].out, _oracle(model, x, shared_edit=_double), atol=1e-6
+    )
+    x2 = torch.randn(2, 3)
+    rerun = fork.run(model, x2)
+    want2 = _oracle(model, x2, shared_edit=_double)
+    assert torch.allclose(rerun[rerun.output_layers[0]].out, want2, atol=1e-6)
+    for pass_index in (1, 2):
+        assert rerun[f"{shared}:{pass_index}"].edits
+
+
+@pytest.mark.parametrize("engine", ("replay", "set_only"))
+def test_union_of_pass_labels_hook_refires_on_run(captured, engine: str) -> None:
+    """A hook staged through ``trace.do`` on the ``|`` of two pass labels refires on ``run``.
+
+    The union is the spelling the Layer door lowers a multi-pass layer to; written by hand
+    at the trace level it reaches the next ``run`` the same way and fires on both passes.
+    """
+
+    model, _x, trace = captured
+    shared, _fresh = _linear_labels(trace)
+    fork = trace.fork()
+    site = tl.label(f"{shared}:1") | tl.label(f"{shared}:2")
+    options = tl.options.InterventionOptions(engine="set_only") if engine == "set_only" else None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", MultiMatchWarning)
+        fork.do(site, _double_hook, intervention=options)
+    x2 = torch.randn(2, 3)
+    rerun = fork.run(model, x2)
+    want2 = _oracle(model, x2, shared_edit=_double)
+    assert torch.allclose(rerun[rerun.output_layers[0]].out, want2, atol=1e-6)
 
 
 def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None:

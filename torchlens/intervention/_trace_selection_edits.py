@@ -17,10 +17,12 @@ import torch
 
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
+    clear_staged_unfired,
     mark_intervention_spec_mutated,
+    staged_unfired_rules,
 )
 from .._errors import InvalidArgumentError
-from ..options import ReplayOptions
+from ..options import InterventionOptions, ReplayOptions
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -40,7 +42,7 @@ from ._replay_sites import _require_hook_origins
 from .audit import build_fire_record
 from .edge_substitution import apply_edge_substitution_do
 from .errors import EngineDispatchError
-from .hooks import _normalize_sticky_hook_specs, make_hook_context
+from .hooks import _normalize_sticky_hook_specs, _normalize_value_specs, make_hook_context
 from .param_substitution import apply_param_substitution_do, buffer_operand_selection
 from .replay import (
     _commit_replay_updates,
@@ -50,7 +52,7 @@ from .replay import (
     _refuse_armed_gradient_rules,
     _replay_site_key,
     _warn_if_direct_writes_will_be_overlaid,
-    push_from,
+    replay_from_op,
 )
 from .stochastic import assign_batch_donor_groups
 from .types import Edit
@@ -312,7 +314,7 @@ def apply_selection_do(
         apply_leaf_selection_edits(trace, leaf_items)
         if engine == "replay":
             for item in leaf_items:
-                push_from(trace, item["op"], replay=ReplayOptions(strict=strict))
+                replay_from_op(trace, item["op"], replay=ReplayOptions(strict=strict))
             trace.intervention_audit.append(audit)
             return "selection_replayed", ()
         trace.intervention_audit.append(audit)
@@ -517,7 +519,22 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
     _commit_replay_updates(trace, pending_updates, pending_records)
 
 
-def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) -> Trace:
+def _own_origin_entries(trace: Trace, wanted: frozenset[str]) -> Any:
+    """Normalize the sticky-hook specs one transaction attached, as replay origins."""
+
+    own_specs = [
+        spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
+    ]
+    return _normalize_sticky_hook_specs(own_specs, allow_replay_only_site_targets=True)
+
+
+def push_from_handles(
+    trace: Trace,
+    handle_ids: Iterable[str],
+    *,
+    strict: bool | None = None,
+    options: InterventionOptions | None = None,
+) -> Trace:
     """Push one transaction's freshly attached hooks downstream.
 
     Parameters
@@ -527,33 +544,45 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
     handle_ids:
         Sticky-hook handle ids this transaction attached. Empty when the
         transaction staged a value instead of hooks; every stored rule is
-        then an origin, as for a plain ``push()``.
+        then an origin, as for a replay with no fresh attachments.
     strict:
-        Whether divergence warnings should raise.
+        Site-resolution strictness when ``options`` is absent.
+    options:
+        The merged ``InterventionOptions``; ``strict`` and ``differentiable``
+        (replay onto a fresh fork keeping the autograd graph) are read from it.
 
     Returns
     -------
     Trace
-        The same model log, mutated in place.
+        The same model log, mutated in place; a new differentiable trace when
+        ``options.differentiable`` is set.
     """
 
-    wanted = frozenset(handle_ids)
-    _require_live_replay(trace)  # the capture gates Trace.push runs first
+    if options is not None:
+        strict, differentiable = options.strict, options.differentiable
+    else:
+        strict, differentiable = bool(strict), False
+    # Rules a set-only do staged and nothing fired yet start this replay too.
+    staged_handles, staged_values = staged_unfired_rules(trace)
+    wanted = frozenset(handle_ids) | staged_handles
+    _require_live_replay(trace)  # the capture gates of the replay door run first
     _preflight_log(trace)
     _refuse_armed_gradient_rules(trace, None)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, None)
     origin_entries = hook_entries
-    if wanted:
-        own_specs = [
-            spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
-        ]
-        origin_entries = _normalize_sticky_hook_specs(
-            own_specs, allow_replay_only_site_targets=True
-        )
+    if wanted or staged_values:
+        origin_entries = _own_origin_entries(trace, wanted) + _normalize_value_specs(staged_values)
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
-        # Through the module so a replay counter patched on it sees this push too.
-        return replay_module._run_replay(
-            trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-        )
+        if differentiable:
+            result = replay_module._run_differentiable_replay(
+                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+            )
+        else:
+            # Through the module so a replay counter patched on it sees this push too.
+            result = replay_module._run_replay(
+                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+            )
+    clear_staged_unfired(trace)
+    return result

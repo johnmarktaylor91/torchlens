@@ -29,6 +29,11 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
 _POLICIES = ("warn", "error", "disclose")
 
 

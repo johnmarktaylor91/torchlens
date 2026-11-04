@@ -22,6 +22,11 @@ import torchlens as tl
 from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_projection
 from torchlens.errors.episode import BundleExperimentError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
 
 class _ConvBN(nn.Module):
     def __init__(self) -> None:

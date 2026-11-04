@@ -302,8 +302,9 @@ def test_catalog_entry_contract(name: str) -> None:
     assert "(2, 3)" in message
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_axis_a_public_verbs_success_paths() -> None:
-    """Public set, attach_hooks, do, replay, rerun, fork, and append smoke paths work."""
+    """Public set, do (replay and set-only), rerun, fork, and append smoke paths work."""
 
     log = _capture()
     log.do(
@@ -311,8 +312,11 @@ def test_axis_a_public_verbs_success_paths() -> None:
         torch.zeros(1, 3),
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    log._attach_hooks(tl.func("relu"), _zero_hook)
-    replay_result = log.push()
+    replay_result = log.do(
+        tl.func("relu"),
+        _zero_hook,
+        intervention=tl.options.InterventionOptions(),
+    )
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
 
@@ -368,7 +372,15 @@ def test_axis_a_public_verbs_success_paths() -> None:
             ),
             terrors.EngineDispatchError,
         ),
-        ("replay", lambda log: log.push(), terrors.ReplayPreconditionError),
+        (
+            "replay",
+            lambda log: log.do(
+                tl.func("relu"),
+                _zero_hook,
+                intervention=tl.options.InterventionOptions(),
+            ),
+            terrors.ReplayPreconditionError,
+        ),
         # NOTE (untyped-error finding, follow-up): ``log.run(model)`` with no forward input
         # raises a bare ``ValueError`` instead of a typed catalog error. Pinned to the real
         # type so a wrong-exception mutation still fails; product raise is unchanged here.
@@ -391,7 +403,11 @@ def test_axis_a_public_verbs_failure_paths(
 
     log = _capture()
     if verb == "replay":
-        log._intervention_spec.clear()
+        # A predicate recording keeps no per-op argument templates (a default capture
+        # does), so the replay engine refuses before any edit runs.
+        log = tl.record(
+            _ReluAdd(), torch.tensor([[-1.0, 2.0, 3.0]]), save=tl.func("relu")
+        ).to_trace()
     with pytest.raises(expected_exc) as excinfo:
         operation(log)
     assert str(excinfo.value)
@@ -404,9 +420,10 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log = _capture(_ReluAdd(), x)
     rerun_log = _capture(_ReluAdd(), x)
 
-    replay_log._attach_hooks(tl.func("relu"), _zero_hook)
-    rerun_log._attach_hooks(tl.func("relu"), _zero_hook)
-    replay_log.push()
+    confirm = tl.options.InterventionOptions()
+    stage = tl.options.InterventionOptions(engine="set_only")
+    replay_log.do(tl.func("relu"), _zero_hook, intervention=confirm)
+    rerun_log.do({tl.func("relu"): _zero_hook}, intervention=stage)
     rerun_log.run(_ReluAdd(), x)
 
     replay_output = replay_log[replay_log.output_layers[0]].out

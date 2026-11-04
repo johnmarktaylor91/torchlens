@@ -29,6 +29,8 @@ from .._data_classes._trace_intervention_records import (
     do_event_extra,
     history_site_payload,
     mark_intervention_spec_mutated,
+    mark_staged_unfired,
+    recipe_is_clean,
     record_operation,
 )
 from .._errors import InvalidArgumentError
@@ -47,7 +49,6 @@ from ._trace_selection_edits import (
     is_selection_batch,
     push_from_handles,
 )
-from .types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -60,6 +61,7 @@ from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
 from .._selection.selectors import BaseSelector
+from ..backends.torch._trace_backward import _require_live_replay
 from ._param_fingerprint import changed_param_scope
 from .audit import (
     fire_records_since,
@@ -72,6 +74,7 @@ from .hooks import _validate_live_site_target, is_facet_target, lower_record_sit
 from .injection import injected_ops as _injected_op_records
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
+from .types import InterventionSpec, TargetSpec
 
 
 def _prepare_do(
@@ -158,7 +161,6 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     strict: bool = False,
 ) -> Trace:
     """Stage a site out recipe without propagating it (the ``engine="set_only"`` body of ``Trace.do``)."""
-
     warn_if_root_mutation(trace)
     if is_facet_target(site):
 
@@ -214,13 +216,6 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
         direction="forward",
     )
     return trace
-
-
-def remove(trace: Trace) -> None:
-    """Remove the most recent legacy-returned hook attachment. (the ``Trace.remove`` body)."""
-
-    detach_handles(trace, trace._last_hook_handle_ids)
-    trace._last_hook_handle_ids = ()
 
 
 def clear_edits(
@@ -290,23 +285,54 @@ def graph_edges(trace: Trace) -> tuple[Any, ...]:
 
 
 def settle_selection_do(
-    trace: Trace, txn: _DoTransaction, selected_engine: str, mutation_kind: str
+    trace: Trace,
+    txn: _DoTransaction,
+    selected_engine: str,
+    mutation_kind: str,
+    attached_handles: tuple[str, ...] = (),
 ) -> None:
     """Record a leaf-site selection edit and quarantine episode evidence.
 
-    Selection edits propagate (or deliberately do not) inside the
-    mutation step; no hook targets exist to push. A non-staged edit
-    perturbed this product's values, so inherited episode step evidence
-    no longer describes it (lane F42).
+    Selection edits propagate (or deliberately do not) inside the mutation step;
+    no hook targets exist to push. A non-staged edit perturbed this product's
+    values, so inherited episode step evidence no longer describes it (lane F42).
+    Hooks a set-only ``do`` staged are flagged so the next propagating ``do``
+    starts its replay at their sites too.
     """
 
     staged_only = selected_engine == "set_only" and mutation_kind not in (
         "selection_replayed",
         "selection_set",
     )
+    if staged_only:
+        mark_staged_unfired(trace, attached_handles, txn.value_specs_before)
     record_do_intervention_event(trace, txn, status=None, staged_only=staged_only)
     if not staged_only:
         quarantine_episode_after_perturbed_replay(trace)
+
+
+def detach_last_do_hooks(trace: Trace) -> None:
+    """Detach the sticky hooks the last ``do()`` staged (the scoped ``with`` exit body)."""
+
+    detach_handles(trace, trace._last_hook_handle_ids)
+    trace._last_hook_handle_ids = ()
+
+
+def _detach_failed_do_hooks(
+    trace: Trace, handle_ids: tuple[str, ...], pre_state: tuple[Any, bool]
+) -> None:
+    """Detach exactly the failed call's hooks and restore the state its attach changed.
+
+    The replay rolled its values back, so with the hooks gone the trace is where
+    it stood before the call: the detach alone would leave it ``SPEC_STALE``.
+    """
+
+    detach_handles(trace, handle_ids)
+    if handle_ids:
+        state, was_clean = pre_state
+        if was_clean:
+            trace._out_recipe_revision = trace._spec_revision
+        trace.state = state
 
 
 def do(  # noqa: PLR0913 - trace stands in for self on the moved method
@@ -340,30 +366,13 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     x: Any,
     intervention_options: InterventionOptions,
 ) -> Trace:
-    """Run one ``do()`` transaction under its merged options.
+    """Run one ``do()`` transaction under its merged options; returns the edited trace.
 
     :meth:`do` enters the ``allow_changed_params`` scope around this call, so every replay
-    the transaction runs (push, push_from, selection and region doors) sees one opt-in.
-
-    Parameters
-    ----------
-    trace:
-        The trace the transaction edits.
-    site:
-        Mapping/list batch input or selector-like site.
-    value_or_hook:
-        Optional hook for the ``(site, hook)`` input shape.
-    model:
-        Model required when ``engine="rerun"``.
-    x:
-        Input required when ``engine="rerun"``.
-    intervention_options:
-        Merged ``InterventionOptions``.
-
-    Returns
-    -------
-    Trace
-        This model log after the selected propagation engine runs.
+    the transaction runs (handle, site, selection and region doors) sees one opt-in.
+    ``site`` is a mapping/list batch or a selector-like site, ``value_or_hook``
+    the optional hook of the ``(site, hook)`` shape; ``model`` and ``x`` are required
+    when ``engine="rerun"``.
     """
     engine_value = intervention_options.engine
     strict_value = intervention_options.strict
@@ -382,17 +391,20 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         if model is None:
             raise EngineDispatchError("do(..., engine='rerun') requires model= and inputs=.")
         validate_supplied_model_matches_capture(trace, model)
-    # C03 fire-evidence rule: ONE transaction envelope per do() attempt,
-    # written on success, no-fire, AND failure -- intervention_audit is
-    # never empty after an attempt. The monotonic bound scopes exactly
-    # this transaction's FireRecords (the ONE builder stamps every one).
+    elif selected_engine == "replay":
+        # Capture gates (N3, N5, structure-only, stats) run before any site resolves.
+        _require_live_replay(trace)
+    # C03: ONE transaction envelope per do() attempt, written on success, no-fire AND
+    # failure; the monotonic bound scopes exactly this transaction's FireRecords.
     txn = _DoTransaction(
         site=site,
         value_or_hook=value_or_hook,
         engine=selected_engine,
         transaction_start=time.monotonic(),
         audit_rows_before=len(trace.intervention_audit),
+        value_specs_before=len(ensure_intervention_spec(trace).target_value_specs),
     )
+    pre_state = (trace.state, recipe_is_clean(trace))
     try:
         mutation_kind, attached_handles = apply_do_mutation(
             trace,
@@ -419,23 +431,20 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         mutation_kind in ("selection_replayed", "selection_set", "region_replayed")
         or selected_engine == "set_only"
     ):
-        settle_selection_do(trace, txn, selected_engine, mutation_kind)
+        settle_selection_do(trace, txn, selected_engine, mutation_kind, attached_handles)
         return trace
     try:
         if selected_engine == "replay":
-            result = push_from_handles(trace, attached_handles, strict=strict_value)
+            result = push_from_handles(trace, attached_handles, options=intervention_options)
         else:
             assert model is not None
             result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
     except BaseException as exc:
-        # A failed do() must not leave its sticky hooks attached (the next push
-        # would silently re-fire them): detach exactly this call's hooks, re-raise.
-        detach_handles(trace, attached_handles)
+        _detach_failed_do_hooks(trace, attached_handles, pre_state)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
         raise
     record_do_intervention_event(trace, txn, status=None)
-    # Lane F42: the push/rerun replayed a perturbed cone -- inherited
-    # episode step evidence no longer describes the edited product.
+    # F42: the propagation perturbed the cone; inherited episode step evidence no longer fits.
     quarantine_episode_after_perturbed_replay(result)
     return result
 
@@ -450,34 +459,15 @@ def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on
     extra_fields: dict[str, Any] | None = None,
     event_row: bool = False,
 ) -> dict[str, Any]:
-    """Write the ONE InterventionEvent envelope for one do() transaction.
+    """Write the one InterventionEvent envelope for one do() transaction; returns the row.
 
-    Parameters
-    ----------
-    trace:
-        The trace whose audit receives the envelope.
-    txn:
-        The transaction identity minted at the do() door (WHERE/edit
-        arguments, selected engine, FireRecord time bound, and the
-        audit-row watermark).
-    status:
-        Explicit status (``"error"``), or ``None`` to derive
-        fired/no_fire from the transaction's FireRecords.
-    error:
-        Stringified failure for error rows.
-    staged_only:
-        Whether the edit was staged without any propagation attempt.
-    extra_fields:
-        Further envelope disclosures (the armed keys of a gradient plan).
-    event_row:
-        Write the canonical audit row as the ``EVENT`` envelope row (which
-        carries ``status``) instead of the ``ACT`` row: a gradient plan's
-        row must say ``"armed"`` in ``intervention_audit[-1]``.
-
-    Returns
-    -------
-    dict
-        The envelope row.
+    ``txn`` is the identity minted at the door (arguments, engine, FireRecord time
+    bound, audit watermark). ``status`` is explicit (``"error"``) or ``None`` to derive
+    fired/no_fire from the transaction's FireRecords; ``staged_only`` marks an edit
+    staged without propagation; ``extra_fields`` adds disclosures (a gradient plan's
+    armed keys); ``event_row`` writes the canonical row as the ``EVENT`` envelope row
+    (which carries ``status``) instead of the ``ACT`` row, so a gradient plan's
+    ``intervention_audit[-1]`` says ``"armed"``.
     """
     site = txn.site
     value_or_hook = txn.value_or_hook
@@ -528,31 +518,15 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     engine: str,
     strict: bool,
 ) -> tuple[str, tuple[str, ...]]:
-    """Apply the mutation part of ``do`` and report its kind.
+    """Apply the mutation part of ``do`` under the selected ``engine``.
 
-    Parameters
-    ----------
-    trace:
-        The trace being mutated.
-    site:
-        Mapping/list batch input or selector-like site.
-    value_or_hook:
-        Optional value or hook.
-    engine:
-        Concrete engine selected by ``_edit_guards.select_do_engine``.
-    strict:
-        Whether selector checks should be strict.
-
-    Returns
-    -------
-    tuple[str, tuple[str, ...]]
-        The mutation kind (``"set"``, ``"attach_hooks"``, or a ``"selection_*"`` kind) and the
-        sticky-hook handle ids THIS call attached (for the caller's failure cleanup).
+    Returns the mutation kind (``"set"``, ``"attach_hooks"``, or a ``"selection_*"``
+    kind) and the sticky-hook handle ids this call attached (for the caller's
+    failure cleanup and staged-hook bookkeeping).
     """
     if isinstance(site, PublicInterventionSpec):
-        # C03 spec door: do(spec) applies the whole immutable spec through
-        # the attach path (one preflight, all rules or none), then the
-        # caller's selected engine propagates.
+        # C03 spec door: do(spec) attaches the whole immutable spec (all rules or none),
+        # then the selected engine propagates.
         if value_or_hook is not None:
             raise InvalidArgumentError(
                 "do(spec, edit) conflicts: the InterventionSpec already "
@@ -563,7 +537,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 "(site, edit) call shape without a spec",
                 argument="value_or_hook",
             )
-        return "attach_hooks", trace._attach_hooks(site, strict=strict)
+        return "attach_hooks", trace._attach_hooks(
+            site,
+            strict=strict,
+        )
 
     region_result = apply_region_target_do(
         trace,
@@ -600,9 +577,18 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     # decides whether the staged edit propagates now, so a hook stays a sticky
     # hook under it (the staging door that replaced the removed attach_hooks).
     if value_or_hook is not None and not callable(value_or_hook):
-        set_site(trace, site, value_or_hook, strict=strict)
+        set_site(
+            trace,
+            site,
+            value_or_hook,
+            strict=strict,
+        )
         return "set", ()
-    return "attach_hooks", trace._attach_hooks(site, value_or_hook, strict=strict)
+    return "attach_hooks", trace._attach_hooks(
+        site,
+        value_or_hook,
+        strict=strict,
+    )
 
 
 def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> None:
@@ -621,12 +607,9 @@ def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> N
         Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root,
         F41), then if available class or weight-fingerprint evidence differs.
     """
-    # The root entry-point fact joins this gate FAIL-CLOSED: written on every
-    # capture, so absence (a legacy artifact) refuses; a non-module_call root
-    # refuses rather than re-running ``forward`` under another entry point's
-    # capture (``owner`` for ``owner.generate`` would pass the class+weights
-    # checks and run ``__call__`` under a report that can say verified).
-    # Bound-method captures refuse rerun/append; never widened past the ruling.
+    # The root entry-point fact joins this gate fail-closed: absence (a legacy
+    # artifact) refuses, and a non-module_call root (``owner.generate``) refuses
+    # rather than re-running ``forward`` under another entry point's capture.
     root_fact = trace._provenance_root_entry_point
     if root_fact is None:
         raise ModelMismatchError(
@@ -703,9 +686,8 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
         Raises when the site cannot resolve.
     """
 
-    # Autograd-node sites resolve against grad_fn records, which exist
-    # only after a backward pass; gradient (tl.grad) sites resolve their
-    # inner selector against the forward ops like any activation site.
+    # Autograd-node sites resolve against grad_fn records (present only after a
+    # backward pass); tl.grad sites resolve their inner selector like activations.
     if addresses_autograd_nodes(site):
         return
     # A staged edit runs as a live hook on the rerun, so a selector kind that can
@@ -739,11 +721,9 @@ def target_spec_from_site(trace: Trace, site: Any, *, strict: bool) -> TargetSpe
         target = copy.copy(site)
         target.strict = strict or target.strict
         return target
-    # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label selector(s)
-    # first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2): an ``Op`` is
-    # exactly its own pass (``site.label``, never the bare ``layer_label`` =
-    # the LAST pass of a multi-pass layer); a multi-pass ``Layer`` is the
-    # explicit all-passes composite. Selector-likes pass through unchanged.
+    # An ``Op``/``Layer`` record lowers to its pass-qualified label selector(s)
+    # first (AUD-CODE 4.10): an ``Op`` is exactly its own pass, a multi-pass
+    # ``Layer`` the all-passes composite; selector-likes pass through unchanged.
     site = lower_record_site_target(site)
     if hasattr(site, "to_target_spec"):
         target = site.to_target_spec()

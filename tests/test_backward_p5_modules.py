@@ -12,6 +12,8 @@ import torchlens as tl
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _ModuleContainmentModel(nn.Module):

@@ -17,6 +17,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_edits import (
@@ -38,7 +39,7 @@ from .spec import (
 )
 
 
-def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
+def attach_sticky_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
     hook: Any = None,
@@ -49,9 +50,8 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
 
     warn_if_root_mutation(trace)
     if isinstance(hooks_or_site, PublicInterventionSpec):
-        # C03 spec door: the ONE immutable spec is accepted unchanged.
-        # Its rules already carry site and action, so extra call
-        # arguments have nothing sound to bind to.
+        # C03 spec door: the one immutable spec is accepted unchanged; its rules
+        # already carry site and action, so extra arguments have nothing to bind to.
         if hook is not None or extra_hooks:
             raise InvalidArgumentError(
                 "do(spec) takes the Recipe alone: its "
@@ -78,24 +78,25 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
         )
     entries = expand_facet_hook_entries(trace, entries)
     refuse_chunked_batch_coupling(trace, entries)
-    for entry in entries:
-        validate_intervention_site(trace, entry.site_target, strict=strict)
     spec = ensure_intervention_spec(trace)
     handle_ids: list[str] = []
     arming_group = f"arm-{uuid.uuid4().hex}"
     gradient_entries = 0
-    for entry in entries:
-        handle_id = f"hook-{uuid.uuid4().hex}"
-        handle_ids.append(handle_id)
-        metadata, stored_hook, is_gradient = sticky_hook_entry(entry, arming_group)
-        gradient_entries += int(is_gradient)
-        spec.add_hook(
-            target_spec_from_site(trace, entry.site_target, strict=strict),
-            stored_hook,
-            helper=entry.helper_spec,
-            handle=handle_id,
-            metadata=metadata,
-        )
+    with _label_index_scope():  # one label index for every site; nothing relabels here
+        for entry in entries:
+            validate_intervention_site(trace, entry.site_target, strict=strict)
+        for entry in entries:
+            handle_id = f"hook-{uuid.uuid4().hex}"
+            handle_ids.append(handle_id)
+            metadata, stored_hook, is_gradient = sticky_hook_entry(entry, arming_group)
+            gradient_entries += int(is_gradient)
+            spec.add_hook(
+                target_spec_from_site(trace, entry.site_target, strict=strict),
+                stored_hook,
+                helper=entry.helper_spec,
+                handle=handle_id,
+                metadata=metadata,
+            )
     if gradient_entries == len(entries):
         # Gradient rules edit nothing the forward recorded, so the saved
         # activations stay current: bump the recipe revision without

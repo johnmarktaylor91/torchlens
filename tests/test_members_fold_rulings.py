@@ -24,6 +24,8 @@ from torchlens.errors import TorchLensError
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     del ctx
@@ -176,7 +178,12 @@ def test_do_with_a_hook_and_set_only_stages_it_sticky(log: Any) -> None:
     assert len(log._intervention_spec.hook_specs) == 1
     assert not log._intervention_spec.target_value_specs
     torch.testing.assert_close(log[_relu_label(log)].out, before)
-    log.push()
+    # The next propagating do fires the staged hook (push folded into do).
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        intervention=InterventionOptions(),
+    )
     torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
 
 

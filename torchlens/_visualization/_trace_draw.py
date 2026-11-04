@@ -192,7 +192,6 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
-
     if highlight is not None:
         from ._highlight import draw_highlighted, explicit_draw_kwargs
 
