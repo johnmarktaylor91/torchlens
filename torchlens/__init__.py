@@ -642,7 +642,11 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            key = canonical_module_site_key(trace, pattern) or pattern
+            view = trace[key]
+            # A module address names its output Op here, as it does for the outs.
+            module_record = type(view).__name__ in {"Module", "ModuleCall"}
+            views[label] = trace.ops[key] if module_record else view
         return trace, outputs, views
 
     for pattern in layer_plan.values():

@@ -185,7 +185,7 @@ def output_op(trace: Any, key: str) -> Any:
     and a buffer address with several versions, naming the ``:N`` spellings.
     """
 
-    if key in (getattr(trace, "_ambiguous_lookup_keys", {}) or {}):
+    if key in (trace._ambiguous_lookup_keys or {}):
         trace[key]  # the plain door raises the ambiguity refusal for this key
     ops, spellings = _output_op_candidates(trace, key)
     if len(ops) > 1:

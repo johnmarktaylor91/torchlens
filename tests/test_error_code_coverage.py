@@ -121,7 +121,8 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "intervention_fire_results_cleanup_failed",
         "intervention_fire_results_unrecordable",
         "intervention_tensor_unsupported",
-        "layer_pass_ambiguous",
+        # layer_pass_ambiguous: row DELETED (shrink-only lock-in) -- the indexing
+        # coherence tests provoke it through a multi-pass Layer's .out.
         "layers_not_logged",
         "link_format_invalid",
         "max_pairs_invalid",

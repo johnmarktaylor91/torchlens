@@ -154,7 +154,7 @@ def test_multi_pass_layer_refuses_single_reads_with_pass_spellings(trace: tl.Tra
 
     with pytest.raises(InvalidArgumentError) as refusal:
         trace[SHARED].out
-    assert refusal.value.code == "layer_pass_ambiguous"
+    assert refusal.value.fields["code"] == "layer_pass_ambiguous"
     assert f"trace['{SHARED}:1'].out" in str(refusal.value)
     assert f"trace['{SHARED}:last'].out" in str(refusal.value)
 
@@ -166,7 +166,7 @@ def test_ops_door_keeps_the_bare_multi_pass_refusal(trace: tl.Trace) -> None:
         trace.ops[SHARED]
     with pytest.raises(AmbiguousSiteError) as refusal:
         trace[tl.label(SHARED)]
-    assert refusal.value.code == "multipass_bare_label_ambiguous"
+    assert refusal.value.fields["code"] == "multipass_bare_label_ambiguous"
     assert f"trace[{SHARED!r}]" in str(refusal.value)
 
 
@@ -176,7 +176,10 @@ def test_do_on_a_bare_multi_pass_label_edits_every_pass() -> None:
     torch.manual_seed(0)
     captured = tl.trace(DoorModel().eval(), torch.randn(3, 4))
     try:
-        edited = captured[SHARED].do(lambda out, *, ctx: torch.zeros_like(out))
+        edited = captured[SHARED].do(
+            lambda out, *, ctx: torch.zeros_like(out),
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
         for label in (f"{SHARED}:1", f"{SHARED}:2"):
             assert torch.count_nonzero(edited[label].out) == 0
         assert torch.count_nonzero(edited[f"{FC1}:1"].out) > 0
