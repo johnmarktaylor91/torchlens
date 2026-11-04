@@ -397,7 +397,7 @@ def _recompute_path(
             f"{record.parent_label!r} -> {record.child_label!r}, so substituting the edge "
             "cannot change it."
         )
-    label_keys = replay_module._label_key_map(trace)
+    label_keys = replay_module._shared_label_key_map(trace)
     between = cone[keys.index(site_key(child_op)) + 1 : keys.index(target_key) + 1]
     needed = {target_key}
     for op in reversed(between):

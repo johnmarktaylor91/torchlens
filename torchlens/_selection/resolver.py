@@ -18,6 +18,7 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from .._trace_core.label_cells import shared_site_index
 from ._display import site_table_card, site_table_repr
 from ._site_refusals import (
     check_site_query_arguments,
@@ -354,8 +355,7 @@ def _site_record(site: Any) -> Any:
     return site.spec.home if isinstance(site, Facet) else site
 
 
-#: Label indexes of the active :func:`_label_index_scope`, keyed by ``id(log)``:
-#: ``(log, site universe, universe length, index)``. ``None`` outside a scope.
+#: Active :func:`_label_index_scope` indexes by ``id(log)``: ``(log, sites, len, index)``.
 _LABEL_INDEXES: ContextVar[dict[int, tuple[Any, Sequence[Site], int, Any]] | None] = ContextVar(
     "torchlens_label_indexes", default=None
 )
@@ -426,7 +426,7 @@ def _indexed_label_match(
     ensure_supported(selector, lifecycle="site")
     cached = indexes.get(id(log))
     if cached is None or cached[0] is not log or cached[1] is not sites or cached[2] != len(sites):
-        index = _label_site_index(sites)
+        index = shared_site_index(sites, _label_site_index)
         if index is None:
             return None
         cached = (log, sites, len(sites), index)

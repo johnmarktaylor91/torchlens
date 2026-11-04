@@ -1369,18 +1369,16 @@ def _posthoc_discrete_output_decision(
     return PosthocPerturbDecision(False, "not_discrete_output")
 
 
-# In-place RNG fills that overwrite EVERY element of their destination (arg 0)
-# with fresh draws. By their definitions -- ``normal_(mean, std)``,
-# ``uniform_(from, to)``, ``cauchy_(median, sigma)``, ``log_normal_(mean,
-# std)``, ``geometric_(p)``, ``random_([from,] to)`` -- each element of the
-# result is a draw parameterized only by its scalar parameters (and the
-# generator), so the destination contributes shape/dtype/device and nothing
-# of its values. Those scalar parameters may arrive as 0-d tensors (torch's
-# parser accepts ``normal_(torch.tensor(0.0), 1.0)``), and ``bernoulli_``
-# takes a tensor ``p``; such a parent is not at the destination slot, so the
-# decision below exempts ONLY a parent at the destination slot and lets any
-# other parent fall through to the failure path. ``exponential_`` sits in
-# ``SKIP_PERTURBATION_ENTIRELY`` already.
+# In-place RNG fills that overwrite EVERY element of their destination (arg 0) with fresh
+# draws. By their definitions -- ``normal_(mean, std)``, ``uniform_(from, to)``, ``cauchy_``,
+# ``log_normal_``, ``geometric_(p)``, ``random_([from,] to)``, and the counter-based
+# ``_philox_normal_(key, mean, std)`` / ``_philox_uniform_(key, low, high)`` -- each element is a
+# draw parameterized only by its scalar parameters and the generator or key, so the destination
+# contributes shape/dtype/device and nothing of its values. Scalar parameters may arrive as 0-d
+# tensors (``normal_(torch.tensor(0.0), 1.0)``), ``bernoulli_`` takes a tensor ``p`` and a philox
+# fill a ``key`` tensor; such a parent is not at the destination slot, so the decision below
+# exempts ONLY a parent at the destination slot and every other parent stays perturbation-tested.
+# ``exponential_`` sits in ``SKIP_PERTURBATION_ENTIRELY`` already.
 _RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
     {
         "bernoulli_",
@@ -1390,6 +1388,8 @@ _RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
         "log_normal_",
         "geometric_",
         "random_",
+        "_philox_normal_",
+        "_philox_uniform_",
     }
 )
 

@@ -67,7 +67,7 @@ torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	109
 torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
-torchlens/_constants.py	1442
+torchlens/_constants.py	1437
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
@@ -470,7 +470,7 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1393
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1906
+torchlens/_trace_core/op_store.py	1843
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
@@ -1112,11 +1112,10 @@ torchlens/intervention/binding.py::_make_boundary_hook	61
 torchlens/intervention/compose.py::compose	103
 torchlens/intervention/edge_substitution.py::_recompute_with_substitution	65
 torchlens/intervention/edge_substitution.py::apply_edge_substitution_do	150
-torchlens/intervention/helpers.py	1249
+torchlens/intervention/helpers.py	1240
 torchlens/intervention/helpers.py::add_noise	61
 torchlens/intervention/helpers.py::helper_from_serialized	75
 torchlens/intervention/helpers.py::patch_from	110
-torchlens/intervention/helpers.py::rebuild_builtin_helper	68
 torchlens/intervention/helpers.py::scramble_elements	88
 torchlens/intervention/helpers.py::splice_module	81
 torchlens/intervention/helpers.py::swap_with	69
@@ -1128,7 +1127,7 @@ torchlens/intervention/hooks.py::expand_facet_hook_entries	70
 torchlens/intervention/hooks.py::normalize_hook_plan	69
 torchlens/intervention/injection.py	858
 torchlens/intervention/injection.py::injection_recorder._record_call	63
-torchlens/intervention/masked_edit.py::_derive_masked_edit	77
+torchlens/intervention/masked_edit.py::_derive_masked_edit	73
 torchlens/intervention/masked_edit.py::_row_equivariance_facts	69
 torchlens/intervention/param_substitution.py::_derive_entry_occurrences	65
 torchlens/intervention/param_substitution.py::_stage_param_entry	66

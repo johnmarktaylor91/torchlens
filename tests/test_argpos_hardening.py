@@ -13,6 +13,10 @@ under-specified-spec bug class stays closed structurally, not just per instance.
 
 from __future__ import annotations
 
+import warnings
+from collections.abc import Callable
+
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -189,6 +193,103 @@ def test_dynamic_cache_unrepresentable_call_never_caches_lossy_spec() -> None:
         assert {id(t) for t in second} == {id(base), id(nested)}
     finally:
         _pop_dynamic(name)
+
+
+def test_dynamic_cache_first_call_matches_cached_extraction_for_repeated_tensor() -> None:
+    """The first (crawled) call of a name extracts exactly what later cached calls do.
+
+    One tensor filling two slots (``f(bias, mat, mat)``, ``f(mat, [mat, other])``,
+    or two keywords) used to come back once from the first call's identity-deduped
+    crawl but once per slot from every later call through the cached spec, so the
+    first trace of a process recorded fewer parents than any re-trace and
+    validation reported the model as non-reproducible.
+    """
+
+    name = "zzargposhardeningrepeatprobe"
+    bias, mat, other = torch.randn(3, 3), torch.randn(3, 3), torch.randn(3, 3)
+    calls: tuple[tuple[tuple[object, ...], dict[str, object]], ...] = (
+        ((bias, mat, mat), {}),
+        ((mat, [mat, other]), {}),
+        ((bias,), {"mat1": mat, "mat2": mat}),
+    )
+    try:
+        for args, kwargs in calls:
+            _pop_dynamic(name)
+            first, _ = _extract_arg_tensors_and_params(name, args, kwargs)
+            second, _ = _extract_arg_tensors_and_params(name, args, kwargs)
+            assert [id(t) for t in first] == [id(t) for t in second]
+    finally:
+        _pop_dynamic(name)
+
+
+_ONE_TENSOR_TWICE: dict[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = {
+    "_addmm_activation": lambda m, x: torch._addmm_activation(m, x, x),
+    "addmm": lambda m, x: torch.addmm(m, x, x),
+    "cat": lambda m, x: torch.cat([x, x]).sum(0) + m.sum(0),
+    "matmul": lambda m, x: torch.matmul(x, x) + m,
+    "mul": lambda m, x: torch.mul(x, x) + m,
+}
+
+
+class _OneTensorTwice(nn.Module):
+    """Call one op with the same input tensor in two argument slots."""
+
+    def __init__(self, fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> None:
+        """Store the op under test.
+
+        Parameters
+        ----------
+        fn:
+            Callable taking ``(relu(x), x)`` that passes ``x`` in two slots.
+        """
+
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the op result plus the input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Op output added to ``x``.
+        """
+
+        return self.fn(torch.relu(x), x) + x
+
+
+@pytest.mark.parametrize("func_name", sorted(_ONE_TENSOR_TWICE))
+def test_one_tensor_in_two_slots_traces_and_validates_from_cold_cache(func_name: str) -> None:
+    """A cold-cache first trace records the same graph as a warm re-trace.
+
+    ``torch._addmm_activation(m, x, x)`` has no static spec, so its first trace
+    in a process took the deduping crawl and recorded parents ``(relu, input)``
+    while the validation re-trace recorded ``(relu, input, input)``: validation
+    raised TraceNotReproducibleWarning. The static-spec ops are pinned alongside.
+    """
+
+    cache_key = _normalize_func_name(func_name)
+    model = _OneTensorTwice(_ONE_TENSOR_TWICE[func_name])
+    torch.manual_seed(0)
+    x = torch.randn(4, 4)
+    try:
+        _pop_dynamic(cache_key)
+        cold = tl.trace(model, x)
+        warm = tl.trace(model, x)
+        assert [(op.type, tuple(op.parents)) for op in cold.ops] == [
+            (op.type, tuple(op.parents)) for op in warm.ops
+        ]
+        _pop_dynamic(cache_key)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert tl.validate(model, x, scope="forward", validate_metadata=True)
+    finally:
+        _pop_dynamic(cache_key)
 
 
 # ---------------------------------------------------------------------------
