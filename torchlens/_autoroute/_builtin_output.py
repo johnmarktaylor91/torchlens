@@ -29,6 +29,7 @@ from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
+from torchlens._utils.torchvision_weights import match_torchvision_weights
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
 #: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
@@ -365,6 +366,10 @@ def semantic_output_cache_key(model: Any) -> dict[str, Any]:
         default_cfg = None
         config_unreadable = _never_matching_fragment("model-default-cfg-getter-raised")
     weights = getattr(model, "_torchlens_weights", None)
+    if weights is None:
+        # No handle planted: a torchvision model still names its preset when
+        # its loaded state equals exactly one cached preset checkpoint.
+        weights = match_torchvision_weights(model)
     return {
         "version": DETECTOR_VERSION,
         "config_unreadable": config_unreadable,
@@ -471,8 +476,8 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
         code="decode_style_unknown",
         remedy=(
-            "pass a built-in style, or register a custom output decoder that resolves it "
-            "with tl.outputs.register(...)"
+            "pass a built-in style, or register a custom detector that resolves it "
+            "with tl.postprocessing.register(...)"
         ),
         argument=STYLE_KW,
     )
@@ -501,7 +506,7 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
     id2label = meta.get("id2label")
     if not isinstance(id2label, dict) or not id2label:
         return None
-    return ResolvedPostprocessing(
+    resolved = ResolvedPostprocessing(
         source="hf_config",
         identifier="config.id2label",
         verified=True,
@@ -513,6 +518,38 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
         label_source_version=DETECTOR_VERSION,
         confidence=0.99,
     )
+    if not _labels_cover_selected_logits(outputs, resolved, meta, id2label):
+        return None
+    return resolved
+
+
+def _labels_cover_selected_logits(
+    outputs: Any, resolved: ResolvedPostprocessing, meta: dict[str, Any], id2label: dict[Any, Any]
+) -> bool:
+    """Return whether ``id2label`` can label the logits this record would select.
+
+    Every Hugging Face config carries a placeholder ``id2label`` (two
+    ``LABEL_n`` entries) even on language models, whose ``logits`` are a
+    rank-3 vocabulary-width tensor no label table covers. Claiming those
+    outputs would block the tokenizer-backed text decode behind them, so the
+    classifier detector declines when the selected logits are not a rank-1 or
+    rank-2 tensor at most ``len(id2label)`` wide. An ambiguous head choice
+    (no single logits tensor) keeps the claim: the ambiguity is disclosed on
+    the record instead.
+    """
+
+    logits_info = _select_logits(outputs, resolved, meta)
+    if logits_info is None:
+        return True
+    logits = logits_info[0]
+    width = _safe_last_dim(logits)
+    if width is None:
+        return True
+    try:
+        rank = int(logits.ndim)
+    except Exception:
+        return True
+    return rank in (1, 2) and width <= len(id2label)
 
 
 @register(name="imagenet_verified", priority=20)

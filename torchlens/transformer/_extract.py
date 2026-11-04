@@ -73,7 +73,7 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
             message=f"The pattern facet at {address!r} did not resolve to a tensor "
             f"({type(value).__name__}); its payload was not captured.",
             remedy="recapture with the attention ops saved (the default exhaustive save "
-            "suffices; for fused kernels pass reconstruction_ready=True)",
+            "suffices; for fused kernels trace with capture=tl.options.CaptureOptions(reconstruction_ready=True))",
             address=address,
         )
     if value.ndim != 4:
@@ -385,7 +385,7 @@ def attention_views(  # noqa: PLR0913 -- same record-shaped surface, list form
             code="tv_facet_missing",
             message="No module in this trace exposes an attention pattern facet.",
             remedy="capture a transformer forward (eager attention captures directly; "
-            "fused kernels need reconstruction_ready=True), or check "
+            "fused kernels need tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))), or check "
             "tl.report.doctor(model, x)",
         )
     return [

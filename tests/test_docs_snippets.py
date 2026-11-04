@@ -53,7 +53,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "native-torch.md",
         "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
-        # tl.inputs / tl.outputs / tl.facets registration walkthrough.
+        # tl.preprocessing / tl.postprocessing / tl.facets registration walkthrough.
         "guides/model_conveniences.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
@@ -410,6 +410,97 @@ def test_canonical_page_python_blocks_execute(
     assert executed_statements > 0, f"{page_name}: nothing executed"
 
 
+#: Peer libraries the nightly peer leg installs beside TorchLens (the recipe
+#: pages' tools plus the optional-extra fences). A peer that patches torch at
+#: import time AFTER the first capture (nnsight re-wraps ``torch.Tensor.backward``
+#: with ``functools.wraps`` around whatever is installed) once made
+#: ``unwrap_torch`` raise its burial warning under the suite's
+#: warnings-as-errors filter before the decorated flag flipped, so every later
+#: snippet logged only module boundaries: 27 reds that appeared only with the
+#: peers present. ``test_docs_snippets_pass_set_matches_with_peer_imported`` is
+#: the bare-vs-peers parity guard: each installed peer runs the failing shape in
+#: a subprocess under the same filters this suite runs with.
+PEER_MODULES: tuple[str, ...] = (
+    "cornet",
+    "dictionary_learning",
+    "himalaya",
+    "lxt",
+    "matplotlib",
+    "netrep",
+    "nnsight",
+    "open_clip",
+    "quantus",
+    "sae_lens",
+    "sparsify",
+    "timm",
+    "torchcam",
+    "torchvision",
+    "transformers",
+    "tuned_lens",
+    "vit_prisma",
+    "wandb",
+    "weightwatcher",
+    "xarray",
+)
+
+_PEER_PARITY_PROBE = r"""
+import importlib
+import sys
+import warnings
+
+warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
+warnings.filterwarnings("error", category=DeprecationWarning, module=r"torchlens(\.|$)")
+
+import torch
+from torch import nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
+x = torch.ones(2, 4)
+bare = [op.func_name for op in tl.trace(model, x)]
+assert bare[1:-1] == ["linear", "relu", "linear"], bare
+
+importlib.import_module(sys.argv[1])
+
+# backends/torch.md fence 1: validate unwraps to pristine torch and re-wraps.
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+after = [op.func_name for op in tl.trace(model, x)]
+assert after == bare, (bare, after)
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+# The peer's own patch (if any) still runs outside a capture.
+model(x).sum().backward()
+print("PARITY_OK")
+"""
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize("peer", PEER_MODULES)
+def test_docs_snippets_pass_set_matches_with_peer_imported(peer: str) -> None:
+    """The snippet suite's pass set is the same with ``peer`` imported mid-process.
+
+    Runs in a subprocess so the peer's import-time torch patches land on a
+    process that has already captured once, the order the combined nightly
+    session produces, under this suite's warnings-as-errors filters.
+    """
+
+    import subprocess
+    import sys
+
+    if importlib.util.find_spec(peer) is None:
+        pytest.skip(f"peer library {peer} is not installed")
+    completed = subprocess.run(
+        [sys.executable, "-c", _PEER_PARITY_PROBE, peer],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert completed.returncode == 0 and "PARITY_OK" in completed.stdout, (
+        f"{peer}: rc={completed.returncode}\n{completed.stdout[-2000:]}\n{completed.stderr[-4000:]}"
+    )
+
+
 def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
     """Keep visual-reference links and the render-script manifest aligned."""
 
@@ -495,6 +586,12 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "order; each later fence reads the first fence's trace and helpers)"
     ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "bridges.md": (
+        "bridge fences share the first fence's resnet18 trace and need optional "
+        "third-party runtimes (captum, grad-cam, rsatoolbox, brain-score) plus a "
+        "network call (from_hub); claims covered by tests/test_bridge_real_captum.py, "
+        "tests/test_b2_bridge_captum.py and tests/test_b2_bridge_hub.py"
+    ),
     "backends/tf.md": (
         "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
         "tf_backend marker (needs the tensorflow runtime)"
@@ -561,6 +658,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,

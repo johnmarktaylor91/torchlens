@@ -125,6 +125,9 @@ pages:
     section: benchmarks
   - path: benchmarks/summary_performance.md
     section: benchmarks
+  - path: bridges.md
+    section: relation
+    note: connectors page, one entry per external tool a tl.bridge connector hands records to
   - path: buffers.md
     section: concepts
   - path: conditional_attribution.md
@@ -163,6 +166,8 @@ pages:
   - path: field-guide/jacobian_lens.md
     section: field-guide
     moved_from: [recipes/jacobian_lens.md]
+  - path: field-guide/linear_probes.md
+    section: field-guide
   - path: field-guide/lrp_epsilon_litmus.md
     section: field-guide
     moved_from: [recipes/lrp_epsilon_litmus.md]

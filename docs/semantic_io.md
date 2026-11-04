@@ -31,7 +31,7 @@ trace.output_table(k=5, style="classification", head="0")
 trace.decode_output(style="hf_text", tokenizer=tok)
 ```
 
-The read-time decode returns rows in the same shape as `trace.decoded_output`
+The read-time decode returns rows in the same shape as `trace.decode_output()`
 and never rewrites the captured record. It needs the output activations
 retained (the default save policy); a structure-only or output-excluding
 capture refuses with `decoded_output_unavailable`. A `style` that no
@@ -45,23 +45,31 @@ the argmax `token_ids` and `text` is `None` until a `tokenizer=` is passed.
 Passing the removed `output_style=` or `output_head=` to `CaptureOptions` or
 `tl.trace` refuses naming `trace.decode_output(...)`.
 
-Text models traced through `tl.bridge.transformers.trace_text` decode as text
-automatically: the bridge attaches the tokenizer for the span of the capture
-and the `hf_text` detector fires on it, decoding only a head named `logits`
-(or one bare output tensor). A text classifier with `config.id2label` gets its
-labels instead.
+Text models traced from a raw string (`tl.trace(model, "text")` routes a
+Hugging Face language model through `tl.bridge.transformers.trace_text`)
+decode as text automatically: the bridge attaches the tokenizer for the span
+of the capture and the `hf_text` detector fires on it, decoding only a head
+named `logits` (or one bare output tensor). A text classifier with
+`config.id2label` gets its labels instead; the placeholder `id2label` every
+Hugging Face config carries (`LABEL_0`, `LABEL_1`) never claims
+vocabulary-width or per-token logits, so language models fall through to the
+text decode.
 
 `trace.provenance.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
 bound. `trace.output_table(top_n, batch_items)` returns a dataframe with
-`batch_item`, `rank`, `label`, and `prob`. `batch_items=None` returns all
-captured items, an integer returns the first `N` batch items, and a sequence
-selects explicit batch indices.
+`batch_item`, `rank`, `label`, and `prob` for a classification decode, and
+with `batch_item`, `rank`, `text`, and `token_ids` for a text decode.
+`batch_items=None` returns all captured items, an integer returns the first
+`N` batch items, and a sequence selects explicit batch indices.
 
 `trace.decode_output(top_n)` returns the captured JSON-primitive decoded
 representation. It can recompute from retained logits when available; otherwise
 requests above the capture-time bound raise a clear "logits not retained"
-error.
+error. When nothing was decoded at capture, it runs the output detectors over
+the retained output tensors on demand and refuses typed when none is retained
+(`decoded_output_unavailable`) or no detector resolves a style
+(`decode_style_unknown`).
 
 For tabular graph export, decoded text is opt-in:
 
@@ -72,32 +80,81 @@ df = trace.to_pandas(include_decoded_output_summary=True)
 The extra `decoded_output_summary` column is populated only on output-node rows.
 The default `trace.to_pandas()` schema is unchanged.
 
-## Custom Output Decoders
+## Custom Output Detectors
 
-Register a decoder for your own classifier with `tl.outputs.register(...)`. The
-decorated function receives the model's output and returns the class labels in
-logit order (a list, or a dict from class index to label), or `None` to decline.
-Every later capture of a model whose class matches `class_name=` decodes its
-output into labelled top-k rows; a decoder also answers
-`trace.decode_output(style=<its name>)` on demand.
+Register custom output detectors through `tl.postprocessing.register(...)`
+(the `torchlens.postprocessing` namespace also exports `unregister`, `list`,
+`info`, `snapshot` and the `ResolvedPostprocessing` record).
+A detector runs twice: automatically at the end of every capture, with the
+live model output object and `meta["style"] is None`, and on demand from
+`trace.decode_output(style="my_labels")`, with the retained output tensors
+keyed by head (`{"logits": tensor}`, or the one bare tensor) and
+`meta["style"]` set to the requested style. It returns a
+`ResolvedPostprocessing` record or `None`.
 
 ```python
-@tl.outputs.register(name="my_labels", class_name="MyClassifier", priority=5)
-def my_labels(outputs):
-    """Name the two logits of MyClassifier."""
+from typing import Any
 
-    return {0: "cat", 1: "dog"}
+from torchlens.postprocessing import ResolvedPostprocessing
+
+
+@tl.postprocessing.register(name="my_labels", priority=5)
+def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
+    """Resolve a local label bank for decode_output(style='my_labels')."""
+
+    if meta.get("style") != "my_labels":
+        return None
+    return ResolvedPostprocessing(
+        source="project",
+        identifier="my_labels",
+        verified=True,
+        config={"id2label": {0: "cat", 1: "dog"}},
+        description="project label bank",
+        style="classification",
+        selected_output_head=meta.get("head"),
+        label_source="project-local",
+        label_source_version="v1",
+        confidence=1.0,
+    )
 
 
 trace = tl.trace(model, x)
-rows = trace.decode_output(k=1)
+rows = trace.decode_output(style="my_labels")
 ```
 
-Decoders run in ascending `priority` order; the built-in detectors sit at 10 to
-30. Remove a decoder with `tl.outputs.unregister("my_labels")`. The matching
-input-side registry is `tl.inputs.register(...)`; the guide
-[Adding conveniences for your model](guides/model_conveniences.md) walks through
-both and a custom facet.
+The registration API is intentionally fail-closed: return `None` for non-matches,
+and unregister a temporary detector with
+`tl.postprocessing.unregister("my_labels")`. Raw input has the matching door,
+`tl.preprocessing.register(...)` and `tl.preprocessing.unregister(...)`: an input
+detector receives `(model, payload, **kwargs)` before routing and claims the
+call by re-entering `tl.trace` with what `forward` takes. The guide
+[Adding conveniences for your model](guides/model_conveniences.md) walks
+through an input detector, an output decoder and a custom
+[facet](facets.md) on one model.
+
+## Image Inputs
+
+A PIL image, or a path to an image file, is a complete `tl.trace` input for a
+vision model:
+
+```python
+trace = tl.trace(resnet, "dog.jpg")
+trace = tl.trace(resnet, Image.open("dog.jpg"))
+```
+
+A `str` or `os.PathLike` naming an existing file with an image suffix (`.jpg`,
+`.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a list of them,
+is opened as an RGB PIL image before routing; a string with whitespace is text.
+A missing image path refuses `image_path_missing` (unless the model has a text
+tokenizer, in which case the string is text) and an undecodable file refuses
+`image_path_unreadable`. The image is then preprocessed by the authority
+`torchlens.preprocessing.resolve(model=)` finds: a torchvision model is
+recognised from its loaded state when exactly one preset checkpoint already in
+the torch hub cache equals it (`resolution_method="state_match"`), a timm
+model from its data config, a Hugging Face model from its image processor.
+When nothing resolves the capture refuses `preprocessing_unresolved`; record
+the authority with `torchlens.preprocessing.attach_authority(model, weights)`
+or pass your own transform through `CaptureOptions(input_transform=)`.
 
 ## Original Input Display
 
@@ -326,7 +383,7 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- the read-time `decode_output(style=, head=)` override and `tl.outputs.register(...)`;
+- the read-time `decode_output(style=, head=)` override and `tl.postprocessing.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.input` and `trace.provenance.input_preprocessor` provenance.
 
@@ -339,10 +396,14 @@ core flow runs without downloading external model weights.
 - `Trace.output_table(k=5, batch_items=None, *, style=None, head=None)`
 - `Trace.decode_output(k=None, *, style=None, head=None, tokenizer=None)`
 - `Trace.provenance.output_postprocessor`
-- `tl.outputs.register(...)`
-- `tl.outputs.unregister(...)`
-- `tl.inputs.register(...)`
-- `tl.inputs.unregister(...)`
+- `tl.postprocessing.register(...)`
+- `tl.postprocessing.unregister(...)`
+- `tl.postprocessing.list()`
+- `tl.postprocessing.info(...)`
+- `tl.postprocessing.snapshot()`
+- `torchlens.postprocessing.ResolvedPostprocessing`
+- `tl.preprocessing.register(...)`
+- `tl.preprocessing.unregister(...)`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.input`
 - `Trace.provenance.input_preprocessor`

@@ -52,7 +52,6 @@ grad_output	declared
 head	declared
 in_backward_pass	declared
 in_module	declared
-inputs	submodule
 intervention	submodule
 inventory	submodule
 io	submodule
@@ -72,12 +71,12 @@ neighborhood	declared
 neuro	submodule
 observers	submodule
 options	declared
-outputs	submodule
 param	declared
 pass_variance	declared
 patch_from	declared
 pluck	declared
 positions	declared
+postprocessing	submodule
 preceded_by	declared
 preprocessing	submodule
 project_onto	declared

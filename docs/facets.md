@@ -139,8 +139,9 @@ with tl.facets.adding(my_attention):
 ```
 
 The guide [Adding conveniences for your model](guides/model_conveniences.md)
-builds a custom facet next to a custom input preprocessor (`tl.inputs.register`)
-and output decoder (`tl.outputs.register`).
+builds a custom facet next to a custom input detector (`tl.preprocessing.register`)
+and output decoder (`tl.postprocessing.register`); [Semantic input and output](semantic_io.md)
+covers the built-in routes those registries already hold.
 
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.describe(class_name)` expose registry metadata.
@@ -153,18 +154,25 @@ only within the same specificity tier. True same-tier facet collisions warn.
 
 A recipe receives the TorchLens **`Module` record**, not the live `nn.Module`. The
 record does not proxy arbitrary live attributes as direct attributes -- they are
-snapshotted into `module.custom_attributes`. Use `config_value(module, *names)`
-(from `torchlens._semantic.recipes._helpers`), which checks record attributes **and**
-the `custom_attributes` snapshot, instead of `module.num_heads` directly:
+snapshotted into `module.custom_attributes`. Use `tl.facets.config_value(module, *names)`,
+which checks record attributes **and** the `custom_attributes` snapshot, instead of
+`module.num_heads` directly. The recipe-authoring helpers are public under `tl.facets`:
+`config_value`, `child_output_spec(module, child_name, recipe_id)` (a child module's
+output as a spec) and `parameter_spec(module, name, recipe_id)` (a parameter as a spec);
+no private import is needed:
 
 ```python
-from torchlens._semantic.recipes._helpers import config_value, child_output_spec
-
+@tl.facets.register(class_name="MyAttention", target_scope="module")
 def my_attention(module):
-    n_heads = config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
-    qkv = child_output_spec(module, "qkv", "my_attention")
-    return {"q": qkv.split(3, dim=-1)[0].heads(n_heads, None)}  # d_head inferred from shape
+    n_heads = tl.facets.config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
+    qkv = tl.facets.child_output_spec(module, "qkv", "my_attention")
+    return {"q": qkv.split(3, dim=-1)[0].heads(n_heads)}  # d_head inferred from shape
 ```
+
+`FacetSpec.heads(num_heads, d_head=None)` infers the head dimension from the
+projection's last axis when the facet is read (`last_dim // num_heads`); a last
+axis the head count does not divide refuses at read time. Pass `d_head` explicitly
+when the projection carries extra columns.
 
 Head counts are inferred automatically for any module that stores a conventionally
 named count -- HF configs, `torch.nn.MultiheadAttention` (`.num_heads`), or a custom
@@ -320,7 +328,7 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-`reconstruction_ready=True` enables `save_args=True` and
+`CaptureOptions(reconstruction_ready=True)` enables `save_args=True` and
 `save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
 so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
 the q_proj/k_proj outputs.

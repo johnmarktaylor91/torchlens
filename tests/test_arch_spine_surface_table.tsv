@@ -53,7 +53,6 @@ torchlens.grad_output	torchlens._selection.selectors	L4	core	1	0
 torchlens.head	torchlens._selection.selectors	L4	core	1	0
 torchlens.in_backward_pass	torchlens._selection.selectors	L4	core	1	0
 torchlens.in_module	torchlens._selection.selectors	L4	core	1	0
-torchlens.inputs	torchlens.inputs	FACADE	facade	0	0
 torchlens.intervention	torchlens.intervention	L4	core	0	0
 torchlens.io	torchlens.io	FACADE	facade	0	0
 torchlens.label	torchlens._selection.selectors	L4	core	1	0
@@ -71,7 +70,6 @@ torchlens.neighborhood	torchlens._selection.graph	L4	core	1	0
 torchlens.neuro	torchlens.neuro	L6	appliance	0	1
 torchlens.observers	torchlens.observers	L2	core	0	0
 torchlens.options	torchlens.options	L2	core	1	0
-torchlens.outputs	torchlens.outputs	L4	core	0	0
 torchlens.param	torchlens._selection.selection	L4	core	1	0
 torchlens.pass_variance	torchlens._selection.compare	L4	core	1	0
 torchlens.patch_from	torchlens.intervention.helpers	L4	core	1	0

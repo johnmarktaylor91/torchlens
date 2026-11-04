@@ -66,8 +66,6 @@ _LAZY_ATTRS = {
     "experimental": ("torchlens.experimental", None),
     "export": ("torchlens.export", None),
     "facets": ("torchlens._semantic", "facets"),
-    "inputs": ("torchlens.inputs", None),
-    "outputs": ("torchlens.outputs", None),
     "recording": ("torchlens.recording", None),
     "facet": ("torchlens._selection.selectors", "facet"),
     "followed_by": ("torchlens._selection.selectors", "followed_by"),

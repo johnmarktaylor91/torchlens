@@ -1338,7 +1338,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/stochastic.py", "__all__"),
         ("torchlens/intervention/sweep.py", "__all__"),
         ("torchlens/intervention/types.py", "__all__"),
-        ("torchlens/inputs.py", "__all__"),
         ("torchlens/inventory.py", "__all__"),
         ("torchlens/io/__init__.py", "__all__"),
         ("torchlens/_ir/__init__.py", "__all__"),
@@ -1419,7 +1418,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_observe/_timeline.py", "__all__"),
         ("torchlens/observers.py", "__all__"),
         ("torchlens/options.py", "__all__"),
-        ("torchlens/outputs.py", "__all__"),
         ("torchlens/_partial/__init__.py", "__all__"),
         ("torchlens/_postprocess/__init__.py", "__all__"),
         ("torchlens/_postprocess/_primitive_profile.py", "__all__"),
@@ -1624,6 +1622,12 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/report/_trace_summary.py", "__all__"),
         ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
+        ("torchlens/_utils/torchvision_weights.py", "__all__"),
+        ("torchlens/postprocessing/__init__.py", "__all__"),
+        ("torchlens/preprocessing/_declared_transform.py", "__all__"),
+        ("torchlens/recording/_generation_options.py", "__all__"),
+        ("torchlens/recording/_generation_stream.py", "__all__"),
+        ("torchlens/recording/reducers.py", "__all__"),
     }
 )
 

@@ -47,9 +47,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "io": "FACADE",
     "_user_funcs": "FACADE",
     "experimental": "FACADE",
-    # inputs is the public door for registered input preprocessors; each one
-    # re-enters tl.trace, so the module imports the trace facade.
-    "inputs": "FACADE",
     # quickstart is a FACADE-role package (lane F17): its verbs sit over the
     # capture engine, the inference search, and the renderer, with upward
     # imports deferred per Rule F; its interior modules declare their own
@@ -137,7 +134,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_selection": "L4",
     "_trace_slice": "L4",
     "facets": "L4",
-    "outputs": "L4",
     "_autoroute": "L4",
     "transforms": "L4",
     # -- L5 READS ------------------------------------------------------------

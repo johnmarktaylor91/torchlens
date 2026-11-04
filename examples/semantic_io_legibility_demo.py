@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import ResolvedPreprocessing
+from torchlens.postprocessing import ResolvedPostprocessing
 
 
 class TinyClassifier(nn.Module):
@@ -68,13 +69,26 @@ def text_to_tensor(text: str) -> torch.Tensor:
 
 
 def register_custom_decoder() -> None:
-    """Register a demo output decoder with a custom label bank."""
+    """Register a demo output detector with a custom label bank."""
 
-    @tl.outputs.register(name="demo_custom_labels", priority=5)
-    def demo_custom_labels(outputs: Any) -> dict[int, str]:
-        """Name the demo classifier's three logits for ``style='demo_custom_labels'``."""
+    @tl.postprocessing.register(name="demo_custom_labels", priority=5)
+    def demo_custom_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
+        """Resolve the demo-only ``decode_output(style='demo_custom_labels')`` style."""
 
-        return {0: "red", 1: "green", 2: "blue"}
+        if meta.get("style") != "demo_custom_labels":
+            return None
+        return ResolvedPostprocessing(
+            source="example",
+            identifier="demo_custom_labels",
+            verified=True,
+            config={"id2label": {0: "red", 1: "green", 2: "blue"}},
+            description="demo custom label bank",
+            style="classification",
+            selected_output_head=meta.get("head"),
+            label_source="example-local",
+            label_source_version="demo-v1",
+            confidence=1.0,
+        )
 
 
 def print_table(title: str, trace: tl.Trace, *, top_n: int = 2, style: str | None = None) -> None:
@@ -137,7 +151,7 @@ def main() -> None:
             style="demo_custom_labels",
         )
     finally:
-        tl.outputs.unregister("demo_custom_labels")
+        tl.postprocessing.unregister("demo_custom_labels")
 
     text_trace = tl.trace(
         model,
