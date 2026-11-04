@@ -9,6 +9,7 @@ from typing import Any
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
+from ..._utils._display_bounded import short_dataclass_repr
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -79,6 +80,8 @@ class _DispatchEvent:
 @dataclass
 class _WitnessState:
     """Per-forward dispatch census state."""
+
+    __repr__ = short_dataclass_repr
 
     trace: Any
     owner_thread_id: int
