@@ -142,6 +142,17 @@ def _merge_fields(event: GradFnDiscovered) -> tuple[Any, ...]:
     )
 
 
+def _rediscovery_changes_node(
+    existing: Any, event: Any, latest_topology: dict[int, tuple[int, ...]]
+) -> bool:
+    """Return whether a rediscovery fills a field or changes the topology of a known node."""
+
+    for field in ("op_label", "param_ref", "created_in_pass", "creator_object_id"):
+        if getattr(existing, field) is None and getattr(event, field) is not None:
+            return True
+    return tuple(event.topology) != tuple(latest_topology.get(event.object_id, ()))
+
+
 def _backward_tail_is_foldable(
     state: Any, tail: Sequence[Any], new_events: list[Any] | None = None
 ) -> bool:
@@ -171,15 +182,7 @@ def _backward_tail_is_foldable(
                     return False
                 new_events.append(event)
                 continue
-            if existing.op_label is None and event.op_label is not None:
-                return False
-            if existing.param_ref is None and event.param_ref is not None:
-                return False
-            if existing.created_in_pass is None and event.created_in_pass is not None:
-                return False
-            if existing.creator_object_id is None and event.creator_object_id is not None:
-                return False
-            if tuple(event.topology) != tuple(state.latest_topology.get(event.object_id, ())):
+            if _rediscovery_changes_node(existing, event, state.latest_topology):
                 return False
         elif isinstance(event, (GradFnFired, OpGradObserved, ParamGradObserved)):
             if event.pass_index <= max_built:
