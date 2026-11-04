@@ -27,6 +27,8 @@ import torch
 from ..facets import AbsenceReason, Facet, FacetSpec, MissingFacet, register
 from ..reconstruction import find_sdpa_op
 from ._helpers import (
+    OUTPUT_PROJECTION_CHILD_NAMES,
+    WRAPPED_OUTPUT_PROJECTION,
     add_if_present,
     attention_implementation,
     child_module,
@@ -40,10 +42,12 @@ from ._helpers import (
     module_output_spec,
     needs_capture,
     op_output_readable,
+    output_projection_child,
     parameter_spec,
     projection_input_spec,
     reshape_heads,
     structural,
+    wrapped_attention_core,
 )
 
 # Candidate attribute/config names for head counts + head dim. These are looked up
@@ -328,8 +332,6 @@ def _op_facet_spec(op: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
     return FacetSpec.from_home(op, home_kind="op", function_id=recipe_id)
 
 
-_OUTPUT_PROJECTION_CHILD_NAMES = ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o")
-
 #: Weight-storage orientation by projection class: transformers' Conv1D stores
 #: ``[in, out]``; ``nn.Linear`` stores ``[out, in]``. Never guessed for other
 #: classes -- a square weight cannot disambiguate, and a wrong orientation
@@ -351,11 +353,11 @@ def _eager_result_spec(module: Any, z_op: Any) -> FacetSpec | AbsenceReason:
     mismatch rather than serving a wrong decomposition.
     """
 
-    projection = _output_projection_child(module)
+    projection = output_projection_child(module)
     if projection is None:
         return structural(
             "per-head result needs an output projection child "
-            f"({'/'.join(_OUTPUT_PROJECTION_CHILD_NAMES)}) inside the attention module"
+            f"({'/'.join(OUTPUT_PROJECTION_CHILD_NAMES)}) inside the attention module"
         )
     weight_spec = parameter_spec(projection, "weight", "attention_eager")
     if isinstance(weight_spec, AbsenceReason):
@@ -384,16 +386,6 @@ def _eager_result_spec(module: Any, z_op: Any) -> FacetSpec | AbsenceReason:
         return _eager_result_checked(z_spec, weight_spec, bias, projection_out, projection_class)
 
     return FacetSpec.computed(_compute, function_id="attention_eager", function_version="a01")
-
-
-def _output_projection_child(module: Any) -> Any | None:
-    """Return the attention module's output-projection child record."""
-
-    for name in _OUTPUT_PROJECTION_CHILD_NAMES:
-        child = child_module(module, name)
-        if child is not None:
-            return child
-    return None
 
 
 def _projection_orientation(
@@ -483,6 +475,45 @@ def _eager_result_checked(
                 "result computation validation failed: summed per-head contributions (+ bias) "
                 "did not match the captured output projection value."
             )
+    return result
+
+
+def _projection_recipe(
+    module: Any,
+    children: tuple[str, str, str],
+    recipe_id: str,
+    *,
+    out_child: str | None = None,
+) -> dict[str, Any]:
+    """Return attention facets read from the q/k/v projection ``children``.
+
+    An HF wrapper (:func:`wrapped_attention_core`) reads q/k/v through its core
+    child instead, takes head geometry from the core when it carries none, and
+    serves ``attn_out`` from ``output.dense`` (the pre-residual projection; the
+    wrapper's own output may already include the residual and LayerNorm).
+    """
+
+    core = wrapped_attention_core(module)
+    if core is not None:
+        children = (f"{core}.query", f"{core}.key", f"{core}.value")
+    q_name, k_name, v_name = children
+    heads = _attention_config(module)
+    if core is not None and heads[0] is None:
+        heads = _attention_config(child_module(module, core))
+    n_q_heads, n_kv_heads, d_head = heads
+    result: dict[str, Any] = {}
+    q_spec = child_output_spec(module, q_name, recipe_id)
+    add_if_present(result, "q", reshape_heads(q_spec, n_q_heads, d_head))
+    k_spec = child_output_spec(module, k_name, recipe_id)
+    add_if_present(result, "k", reshape_heads(k_spec, n_kv_heads, d_head))
+    v_spec = child_output_spec(module, v_name, recipe_id)
+    add_if_present(result, "v", reshape_heads(v_spec, n_kv_heads, d_head))
+    if out_child is not None and core is None:
+        add_if_present(result, "attn_out", child_output_spec(module, out_child, recipe_id))
+    result = _with_attention_common(result, module, heads, query_child=q_name)
+    if core is not None:
+        attn_out = child_output_spec(module, WRAPPED_OUTPUT_PROJECTION, recipe_id)
+        add_if_present(result, "attn_out", attn_out)
     return result
 
 
@@ -632,35 +663,19 @@ def gpt_neox_attention(module: Any) -> dict[str, Any]:
 
 
 @register(
-    class_name=("BertSelfAttention", "BertSdpaSelfAttention"),
+    class_name=("BertSelfAttention", "BertSdpaSelfAttention", "BertAttention"),
     target_scope="module",
     facets=_ATTENTION_FACETS,
 )
 def bert_self_attention(module: Any) -> dict[str, Any]:
-    """Return facets for BERT self-attention modules."""
+    """Return facets for BERT self-attention: the q/k/v core or its wrapper.
 
-    n_q_heads, n_kv_heads, d_head = _attention_config(module)
-    result: dict[str, Any] = {}
-    add_if_present(
-        result,
-        "q",
-        reshape_heads(child_output_spec(module, "query", "bert_self_attention"), n_q_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "k",
-        reshape_heads(child_output_spec(module, "key", "bert_self_attention"), n_kv_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "v",
-        reshape_heads(
-            child_output_spec(module, "value", "bert_self_attention"), n_kv_heads, d_head
-        ),
-    )
-    return _with_attention_common(
-        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
-    )
+    ``BertAttention`` wraps the core as ``self`` and holds the output
+    projection at ``output.dense`` (every transformers line); the wrapper
+    serves the same q/k/v homes as the core, so head edits never double up.
+    """
+
+    return _projection_recipe(module, ("query", "key", "value"), "bert_self_attention")
 
 
 @register(
@@ -683,34 +698,17 @@ def gqa_attention(module: Any) -> dict[str, Any]:
 
     Covers the transformers 5.x unified classes (``LlamaAttention`` /
     ``MistralAttention`` / ``Qwen2Attention``, backend chosen at runtime), the
-    4.x per-backend subclasses, and the 5.x ``ViTAttention`` (same child
-    layout, MHA with ``n_kv_heads == n_q_heads``). ``Qwen2Attention`` differs
-    from Llama only in carrying q/k/v biases, which ride inside the captured
+    4.x per-backend subclasses, and ``ViTAttention`` (5.x: same child
+    layout, MHA with ``n_kv_heads == n_q_heads``; 4.x: the wrapped layout,
+    q/k/v on ``attention.{query,key,value}`` and ``output.dense``).
+    ``Qwen2Attention`` differs from Llama only in carrying q/k/v biases, which ride inside the captured
     projection outputs. ``Gemma2Attention`` has the same children; its eager
     ``pattern`` is the softmax after the score softcap and the causal mask.
     Fusedness comes from the captured graph, never these names.
     """
 
-    n_q_heads, n_kv_heads, d_head = _attention_config(module)
-    result: dict[str, Any] = {}
-    add_if_present(
-        result,
-        "q",
-        reshape_heads(child_output_spec(module, "q_proj", "gqa_attention"), n_q_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "k",
-        reshape_heads(child_output_spec(module, "k_proj", "gqa_attention"), n_kv_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "v",
-        reshape_heads(child_output_spec(module, "v_proj", "gqa_attention"), n_kv_heads, d_head),
-    )
-    add_if_present(result, "attn_out", child_output_spec(module, "o_proj", "gqa_attention"))
-    return _with_attention_common(
-        result, module, (n_q_heads, n_kv_heads, d_head), query_child="q_proj"
+    return _projection_recipe(
+        module, ("q_proj", "k_proj", "v_proj"), "gqa_attention", out_child="o_proj"
     )
 
 
@@ -747,26 +745,7 @@ def t5_attention(module: Any) -> dict[str, Any]:
 def vit_self_attention(module: Any) -> dict[str, Any]:
     """Return facets for ViT self-attention modules."""
 
-    n_q_heads, n_kv_heads, d_head = _attention_config(module)
-    result: dict[str, Any] = {}
-    add_if_present(
-        result,
-        "q",
-        reshape_heads(child_output_spec(module, "query", "vit_self_attention"), n_q_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "k",
-        reshape_heads(child_output_spec(module, "key", "vit_self_attention"), n_kv_heads, d_head),
-    )
-    add_if_present(
-        result,
-        "v",
-        reshape_heads(child_output_spec(module, "value", "vit_self_attention"), n_kv_heads, d_head),
-    )
-    return _with_attention_common(
-        result, module, (n_q_heads, n_kv_heads, d_head), query_child="query"
-    )
+    return _projection_recipe(module, ("query", "key", "value"), "vit_self_attention")
 
 
 @register(class_name="CLIPAttention", target_scope="module", facets=_ATTENTION_FACETS)
