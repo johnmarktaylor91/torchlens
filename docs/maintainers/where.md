@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1464 modules, 652878 lines, 0 modules without a docstring.
+83 packages, 1464 modules, 652874 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 111 | 54821 |
-| `torchlens.bridge` | External-tool bridge namespace. | 28 | 8857 |
+| `torchlens.bridge` | External-tool bridge namespace. | 28 | 8853 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -1373,7 +1373,7 @@ Torch backend implementation package for TorchLens capture. (111 modules, 54821 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (28 modules, 8857 lines)
+External-tool bridge namespace. (28 modules, 8853 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1402,7 +1402,7 @@ External-tool bridge namespace. (28 modules, 8857 lines)
 | `sae_lens` | SAE Lens bridge helpers. | 117 |
 | `shap` | SHAP bridge helpers. | 90 |
 | `steering_vectors` | steering-vectors converter. | 63 |
-| `transformers` | (syntax error at line 12) | 764 |
+| `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 760 |
 | `treescope` | The treescope bridge: external registration, probe, sniff, door (B4). | 723 |
 | `xarray` | xarray / NeuroidAssembly adapters over TorchLens sites (tvscope B8). | 200 |
 
