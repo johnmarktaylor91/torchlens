@@ -11,6 +11,7 @@ went red that way when it ran after a hooks cell).
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,22 @@ def test_stop_recording_restores_the_doors() -> None:
     assert _doors() != before
     _hook_passes.stop_recording(recorder)
     assert _doors() == before
+
+
+def test_patch_tripwire_names_and_unwraps_a_left_wrapper() -> None:
+    from _leak_guards import _unwrapped, leaked_internal_patches
+
+    original = run_entry._run_resolved_request
+
+    @functools.wraps(original)
+    def left_behind(r: object) -> object:
+        return original(r)
+
+    run_entry._run_resolved_request = left_behind
+    try:
+        leaks = leaked_internal_patches()
+        assert (run_entry, "_run_resolved_request", left_behind) in leaks
+        assert _unwrapped(left_behind) is original
+    finally:
+        run_entry._run_resolved_request = original
+    assert not leaked_internal_patches()
