@@ -4611,3 +4611,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e568b95613b1dfbf440cea9dba99205e9d9d8e2f (clean)
 recorded: 2026-11-04T00:27:11.820443+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-138 remerge4: merge of train 19cfba538 (C-142, repr-2 carrying repr-1) into C-138 (repr-1, indexing-coherence); both sides refreshed their own ledger, the merged tree needs one refresh
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7e0cef3cd21c7638eddb6326e57458e479335133 (dirty)
+recorded: 2026-11-04T05:09:36.992928+00:00

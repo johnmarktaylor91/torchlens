@@ -240,7 +240,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # beside their forward twins; the file sat at 3998.
     # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
     # 3600 -> 3500: the do fold, the names codemod and the confirm_mutation sweep (slack rule).
-    "torchlens/_data_classes/trace.py": 3500,
+    # 3500 -> 3400: C-138 remerge4 on train 19cfba538 measures 3398 (slack rule).
+    "torchlens/_data_classes/trace.py": 3400,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
