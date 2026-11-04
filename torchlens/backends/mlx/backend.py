@@ -16,6 +16,7 @@ import numpy as np
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ... import _state
+from ..._capture._arg_snapshot import snapshot_mutable_arg
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
@@ -1989,6 +1990,11 @@ class MLXBackend:
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
+        # Snapshot caller-owned mutable containers so a later mutation cannot
+        # rewrite the call-time arguments this record keeps.
+        non_tensor_pos_args = tuple(
+            snapshot_mutable_arg(arg) for arg in func_event_input.args if not self.is_tensor(arg)
+        )
         return OpEvent(
             kind=kind,
             label_raw=reserved.label_raw,
@@ -2016,17 +2022,13 @@ class MLXBackend:
                 num_args_total=len(func_event_input.args) + len(func_event_input.kwargs),
                 num_pos_args=len(func_event_input.args),
                 num_kwargs=len(func_event_input.kwargs),
-                non_tensor_pos_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
+                non_tensor_pos_args=non_tensor_pos_args,
                 non_tensor_kwargs=tuple(
-                    (key, value)
+                    (key, snapshot_mutable_arg(value))
                     for key, value in func_event_input.kwargs.items()
                     if not self.is_tensor(value)
                 ),
-                func_non_tensor_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
+                func_non_tensor_args=non_tensor_pos_args,
                 is_inplace=False,
                 func_config=(),
             ),

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture._arg_snapshot import snapshot_mutable_arg
 from ..._capture.arg_positions import (
     _normalize_func_name,
 )
@@ -158,8 +159,14 @@ def _build_shared_fields_dict(
 
     # Separate tensor args (which define graph edges) from non-tensor args
     # (which become metadata and feed into equivalence_class hashing).
-    non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
-    non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
+    # Snapshot caller-owned mutable containers (a shape list, a dict kwarg) so a
+    # mutation after the call cannot rewrite what the record says the op saw.
+    non_tensor_args = [snapshot_mutable_arg(arg) for arg in args if not _check_if_tensor_arg(arg)]
+    non_tensor_kwargs = {
+        key: snapshot_mutable_arg(val)
+        for key, val in kwargs.items()
+        if not _check_if_tensor_arg(val)
+    }
     parent_layer_labels = get_live_label_list(
         arg_tensors, self.capture_events.live_index.by_raw_label
     )
@@ -237,7 +244,11 @@ def _build_shared_fields_dict(
         func_name if is_transform else None
     )
     fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
-    fields_dict["transform_config"] = dict(getattr(func, "__tl_transform_config__", {}))
+    # The transform config holds the caller's builder kwargs (``in_dims`` lists, ...);
+    # snapshot nested containers too, not only the outer dict.
+    fields_dict["transform_config"] = snapshot_mutable_arg(
+        dict(getattr(func, "__tl_transform_config__", {}))
+    )
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
