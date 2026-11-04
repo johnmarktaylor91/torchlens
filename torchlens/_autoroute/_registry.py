@@ -23,6 +23,14 @@ class Detector:
         Stable tiebreaker for detectors with equal priority.
     func:
         Detector callable.
+
+    Examples
+    --------
+    >>> detector = tl.postprocessing.Detector(
+    ...     name="demo_detector", priority=5, registration_order=1, func=lambda outputs, meta: None
+    ... )
+    >>> detector.name, detector.priority
+    ('demo_detector', 5)
     """
 
     name: str
@@ -57,6 +65,11 @@ class Registry:
         self._detectors: list[Detector] = []
         self._counter = 0
 
+    def _public_namespace(self) -> str:
+        """Return the public spelling of this registry for messages."""
+
+        return "tl.postprocessing" if self.kind == "output" else f"tl._autoroute.{self.kind}"
+
     def register(
         self, *, name: str, priority: int = 100
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -78,6 +91,17 @@ class Registry:
         ------
         ValueError
             If a detector with ``name`` is already registered.
+
+        Examples
+        --------
+        >>> with tl.postprocessing.snapshot():
+        ...     @tl.postprocessing.register(name="demo_labels", priority=5)
+        ...     def demo_labels(outputs, meta):
+        ...         return None
+        ...     print(tl.postprocessing.info("demo_labels")["priority"])
+        5
+        >>> tl.postprocessing.list("demo_labels")
+        []
         """
 
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -97,7 +121,7 @@ class Registry:
             if any(detector.name == name for detector in self._detectors):
                 raise ValueError(
                     f"detector {name!r} is already registered on {self.kind} registry; "
-                    f"call tl._autoroute.{self.kind}.unregister({name!r}) first to replace"
+                    f"call {self._public_namespace()}.unregister({name!r}) first to replace"
                 )
             self._counter += 1
             self._detectors.append(
@@ -127,6 +151,15 @@ class Registry:
         ------
         KeyError
             If no detector with ``name`` exists.
+
+        Examples
+        --------
+        >>> @tl.postprocessing.register(name="demo_unregister")
+        ... def demo_unregister(outputs, meta):
+        ...     return None
+        >>> tl.postprocessing.unregister("demo_unregister")
+        >>> tl.postprocessing.list("demo_unregister")
+        []
         """
 
         before = len(self._detectors)
@@ -158,6 +191,16 @@ class Registry:
         -------
         list[Detector]
             Matching detector metadata in dispatch order.
+
+        Examples
+        --------
+        >>> def demo_list(outputs, meta):
+        ...     return None
+        >>> with tl.postprocessing.snapshot():
+        ...     _ = tl.postprocessing.register(name="demo_list", priority=7)(demo_list)
+        ...     found = tl.postprocessing.list("demo_*")
+        >>> [(detector.name, detector.priority) for detector in found]
+        [('demo_list', 7)]
         """
 
         if name_glob is None:
@@ -183,6 +226,16 @@ class Registry:
         ------
         KeyError
             If no detector with ``name`` exists.
+
+        Examples
+        --------
+        >>> def demo_info(outputs, meta):
+        ...     return None
+        >>> with tl.postprocessing.snapshot():
+        ...     _ = tl.postprocessing.register(name="demo_info", priority=3)(demo_info)
+        ...     details = tl.postprocessing.info("demo_info")
+        >>> details["name"], details["priority"], details["kind"]
+        ('demo_info', 3, 'output')
         """
 
         for detector in self._detectors:
@@ -205,6 +258,15 @@ class Registry:
         ------
         None
             Context body execution point.
+
+        Examples
+        --------
+        >>> with tl.postprocessing.snapshot():
+        ...     _ = tl.postprocessing.register(name="demo_snapshot")(lambda outputs, meta: None)
+        ...     print(len(tl.postprocessing.list("demo_snapshot")))
+        1
+        >>> len(tl.postprocessing.list("demo_snapshot"))
+        0
         """
 
         saved = list(self._detectors)
