@@ -3281,6 +3281,7 @@ class Trace(TraceOutputMixin, TraceLike):
         direction: VisDirectionLiteral | None = None,
         node_style: VisNodeModeLiteral = "default",
         show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_edge_shapes: bool = False,
         show_legend: bool | None = None,
         color_by: Any = None,
         size_by: str | Callable[[Any], Any] | None = None,
@@ -3397,8 +3398,7 @@ class Trace(TraceOutputMixin, TraceLike):
         # Internal plumbing from the one-call door (not public grammar).
         _execution_note: str | None = None,
         _input_synthesis: str | None = None,
-        # Anything else refuses typed (removed legacy spellings name their
-        # successor; unknown names get the nearest grammar option).
+        # Refuse unknown names with their replacement or nearest grammar option.
         **unsupported: Any,
     ) -> str:
         """Render a summary of this capture."""

@@ -43,13 +43,8 @@ from ._option_receipt import (
 from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
-    _validate_buffer_visibility,
     _validate_capture_values,
-    _validate_collapse,
-    _validate_fold_repeats,
-    _validate_intervention_mode,
-    _validate_node_style,
-    _validate_visualization_flag_fields,
+    _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
@@ -140,6 +135,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "open_viewer",
     "file_format",
     "show_buffers",
+    "show_edge_shapes",
     "direction",
     "graph_overrides",
     "node_style",
@@ -928,6 +924,8 @@ class VisualizationOptions:
         Graph output file format.
     show_buffers:
         Buffer visibility policy.
+    show_edge_shapes:
+        Label forward dataflow edges with their producer output shapes (default False).
     direction:
         Graph layout direction.
     graph_overrides:
@@ -1010,6 +1008,7 @@ class VisualizationOptions:
     open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
+    show_edge_shapes: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
@@ -1049,6 +1048,7 @@ class VisualizationOptions:
         open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+        show_edge_shapes: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1095,6 +1095,9 @@ class VisualizationOptions:
             ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
+            ),
+            "show_edge_shapes": _resolve_option_value(
+                "show_edge_shapes", show_edge_shapes, False, specified_fields
             ),
             "show_buffers": _resolve_option_value(
                 "show_buffers", show_buffers, "meaningful", specified_fields
@@ -1162,12 +1165,7 @@ class VisualizationOptions:
                 "order_siblings", order_siblings, True, specified_fields
             ),
         }
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -1200,14 +1198,9 @@ class VisualizationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
-        values = dict(values)
+        values = {"show_edge_shapes": False, **values}
         values["layout"] = _normalize_layout(values["layout"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
