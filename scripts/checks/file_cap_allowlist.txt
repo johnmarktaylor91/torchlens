@@ -46,7 +46,7 @@ torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	103
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projections.py::sync_recording_grad_records_from_sidecar	62
-torchlens/_capture/projectors.py	1009
+torchlens/_capture/projectors.py	1011
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
 torchlens/_capture/projectors.py::RefreshProjector.project	89
 torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	236
@@ -1310,7 +1310,7 @@ torchlens/recording/_recorder.py::Recorder._run_unified_capture	150
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1242
+torchlens/recording/types.py	1243
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	68
 torchlens/recording/types.py::Recording.to_trace	138

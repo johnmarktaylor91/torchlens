@@ -55,7 +55,7 @@ def log_source_tensor_lazy(
         "raw_index": graph_ws.layer_counter,
         "type": source,
         "type_index": type_index,
-        "func_name": None,
+        "func_name": "none",  # the exhaustive source spelling, as in sources.py
         "input_output_address": extra_addr,
         "address": module_frame.address if module_frame else None,
         "module_type": module_frame.module_type if module_frame else None,

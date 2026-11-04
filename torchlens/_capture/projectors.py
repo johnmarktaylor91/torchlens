@@ -953,13 +953,15 @@ def _core_records(
 class RecordingProjector:
     """Build Recording activation indexes directly from sealed run cores."""
 
-    def project(self, cores: Iterable[CapturedRunCore]) -> RecordingProjection:
+    def project(self, cores: Iterable[CapturedRunCore], fold: bool = True) -> RecordingProjection:
         """Build the sparse activation projection without first building a Trace.
 
         Parameters
         ----------
         cores
             Sealed cores in Recorder pass order.
+        fold
+            ``False`` (a lean recording) skips the multi-pass fold its partial journal cannot carry.
 
         Returns
         -------
@@ -977,7 +979,7 @@ class RecordingProjector:
             core_events = _cloned_core_events(core)
             cloned.append(core_events)
             indexes.add_records(_core_records(core, core_events))
-        folded = fold_pass_cores(captured_cores, cloned) if len(captured_cores) > 1 else None
+        folded = fold_pass_cores(captured_cores, cloned) if fold and len(cloned) > 1 else None
         all_events: list[Any] = (
             list(folded.events) if folded is not None else [e for events in cloned for e in events]
         )

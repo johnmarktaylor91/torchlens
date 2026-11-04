@@ -623,7 +623,8 @@ class Recording(TraceLike):
         if self._captured_run_cores:
             from .._capture.projectors import RecordingProjector
 
-            projection = RecordingProjector().project(self._captured_run_cores)
+            cores = self._captured_run_cores
+            projection = RecordingProjector().project(cores, fold=not self._lean_omissions())
             records.extend(projection.records)
             self.by_pass.update(projection.by_pass)
             self.by_label.update(projection.by_label)
