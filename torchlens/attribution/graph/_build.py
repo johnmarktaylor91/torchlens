@@ -29,6 +29,7 @@ from ..onebackward._targets import resolve_site_edge
 from ._read_sites import (
     check_upstream,
     facet_labels,
+    frozen_op_label,
     is_module,
     is_pooled_logits,
     op_read_label,
@@ -336,15 +337,6 @@ def _within(labels: list[str]) -> Any:
     return functools.reduce(operator.or_, (_lift_within(label, "read") for label in labels))
 
 
-def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
-    """Return the edge label of a frozen module's output, or of an op label."""
-
-    if not is_module(trace, name) and (name in index.edges or f"{name}:1" in index.edges):
-        return _edge_label(index, name, "frozen")
-    module = _module(trace, name, "frozen")
-    return _edge_label(index, _one_op(module, name, "output_ops", "frozen"), "frozen")
-
-
 def _frozen_labels(trace: Any, sites: _Sites, frozen: Any) -> list[str]:
     """Return the frozen set: every written MLP output plus the caller's sites."""
 
@@ -354,8 +346,11 @@ def _frozen_labels(trace: Any, sites: _Sites, frozen: Any) -> list[str]:
     for name in [frozen] if isinstance(frozen, FacetSelector) else frozen:
         if isinstance(name, FacetSelector):
             named = facet_labels(trace, sites.index, name)
+        elif isinstance(name, str) and is_module(trace, name):
+            output = _one_op(trace.modules[name], name, "output_ops", "frozen")
+            named = [_edge_label(sites.index, output, "frozen")]
         elif isinstance(name, str):
-            named = [_frozen_label(trace, sites.index, name)]
+            named = [frozen_op_label(sites.index, name)]
         else:
             raise _graph_refusal(
                 f"frozen= holds {name!r}; it takes module names, op labels and facet "
