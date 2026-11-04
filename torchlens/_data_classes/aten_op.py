@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._io import TLSPEC_VERSION, FieldPolicy, read_tlspec_version
 from .._trace_core.record_rows import install_record_facade as _install_record_facade
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+
+if TYPE_CHECKING:
+    from .._kernel_telemetry import KernelLaunch
+
+#: The detachable kernel-telemetry lane. ``gpu_kernels`` resolves it by name on
+#: read, so the class always carries the view while neither this layer nor the
+#: package imports the lane (``torchlens/_kernel_telemetry.py``).
+_KERNEL_TELEMETRY_MODULE = "torchlens._kernel_telemetry"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -186,6 +195,24 @@ class AtenOp:
 
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         self.__tl_state_restore__(state)
+
+    @property
+    def gpu_kernels(self) -> tuple[KernelLaunch, ...]:
+        """The GPU kernel launches this ATen call made, matched by the profiler's correlation id.
+
+        Each ``KernelLaunch`` row is a kernel the profiler saw launched while this
+        ATen call ran on the device. When kernel telemetry was off for the trace,
+        the value is one row with ``attribution_status="unavailable"``, never an
+        empty tuple. Reading it needs the optional kernel-telemetry adapter.
+
+        Returns
+        -------
+        tuple[KernelLaunch, ...]
+            The matched kernel launches, or one ``unavailable`` row.
+        """
+
+        telemetry = importlib.import_module(_KERNEL_TELEMETRY_MODULE)
+        return telemetry._aten_gpu_kernels(self)
 
 
 _PRIMITIVE_OP_STORE_LAYOUT = _install_record_facade(AtenOp, tuple(PRIMITIVE_OP_FIELD_ORDER))

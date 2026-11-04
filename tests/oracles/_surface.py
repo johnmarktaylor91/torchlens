@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import ast
 import importlib
-import importlib.util
 import inspect
 import pkgutil
 import textwrap
@@ -68,7 +67,7 @@ CLASS_SURFACE_COUNTED_SET = (
     "module-level torchlens attribute or as a public class of the "
     "CLASS_WALK_NAMESPACES (tl.types, tl.errors), keyed by reachable name, with every "
     "public top-level filesystem submodule imported first (import-state "
-    "normalization: opt-in installers like kernel_telemetry always counted); "
+    "normalization); "
     "each member carries a source-witnessed license from the closed 5-way "
     "vocabulary CLASS_MEMBER_LICENSES"
 )
@@ -174,25 +173,18 @@ def walk_module_surface(
     return tuple(entries)
 
 
-#: Private submodules that install documented members on public classes at
-#: import time. They are not in the public filesystem submodule set, but the
-#: save path imports them (``torchlens._io.field_registry`` lists
-#: ``torchlens._kernel_telemetry`` among its component-spec modules), so a
-#: session's ``dir(cls)`` depends on whether a save ran first. Importing them
-#: here keeps the walk at the same canonical maximal state.
-_PRIVATE_MEMBER_INSTALLERS: tuple[str, ...] = ("_kernel_telemetry",)
-
-
 def _normalize_import_state(namespace: types.ModuleType) -> None:
     """Import every public top-level submodule so ``dir(cls)`` is stable.
 
-    Opt-in submodules may install documented members on public classes at
-    import time (``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on
-    ``Op``/``AtenOp``), so a raw ``dir(cls)`` walk counts differently
+    A public submodule may install documented members on public classes at
+    import time, so a raw ``dir(cls)`` walk could count differently
     depending on which tests ran first -- green alone, red in a session.
     Importing the deterministic filesystem submodule set pins the walk to
     ONE canonical maximal state; installers are idempotent by contract
-    (re-import is a module-cache hit).
+    (re-import is a module-cache hit). Private modules are not imported here:
+    a documented member must exist on its class without them (the
+    ``gpu_kernels`` views are declared on ``Op``/``AtenOp`` and reach the
+    private telemetry module only when read).
 
     Parameters
     ----------
@@ -206,9 +198,6 @@ def _normalize_import_state(namespace: types.ModuleType) -> None:
         return
     for submodule in sorted(_filesystem_submodules(namespace)):
         importlib.import_module(f"{package_name}.{submodule}")
-    for installer in _PRIVATE_MEMBER_INSTALLERS:
-        if importlib.util.find_spec(f"{package_name}.{installer}") is not None:
-            importlib.import_module(f"{package_name}.{installer}")
 
 
 #: Public namespaces whose classes join the root's in the class walk: the
