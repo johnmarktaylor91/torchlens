@@ -4,9 +4,11 @@
 
 `Op.is_router` and `Op.expert` are lazy structural identity facts, with no
 stored per-op fields or capture hooks. Recognition requires a live source
-model, a homogeneous `ModuleList` or `ModuleDict` of experts, a sibling gate,
-and captured expert-index dataflow from softmax/top-k into the expert
-computation. ModuleDict expert numbers follow registration order. A repeated
+model, a homogeneous `ModuleList` or `ModuleDict` of experts (or an indexed
+bank of expert matrices), a sibling gate, and captured expert-index dataflow
+from softmax/top-k or argmax/gather into expert computation. A top-k over
+logits followed by softmax is supported too. ModuleDict expert numbers follow
+registration order. A repeated
 module collection or an unrelated top-k calculation alone proves nothing.
 Expert writer coordinates use the existing `expert` kind and expert number.
 
@@ -48,6 +50,14 @@ rows = trace.modules['self'].routing_table
 assert rows == trace.routing_table
 assert sum(rows[0]['tokens_per_expert']) == 6
 ```
+
+For fused expert outputs whose token and selected-slot axes are retained,
+use the routing record with the existing unit selector. If `fused` is an
+`Op` with output shape `[tokens, selected_slots, channels]`, the expert-one
+selection is `trace[tl.units(fused.layer_label,
+(torch.tensor(rows[0]['expert_indices']) == 1).unsqueeze(-1).expand(fused.shape))]`.
+After an operation sums the expert axis, its output cannot be split into
+expert contributions from routing indices alone.
 
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.

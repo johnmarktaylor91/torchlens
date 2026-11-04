@@ -74,7 +74,7 @@ class _TraceRouting:
         routing dimensions in row-major order; load is assignments divided by
         the total assignments, including top-k multiplicity. No model execution
         or capture-time work is added. Recognition requires the live source
-        model's expert containers and captured index dependencies. Unrecognized
+        model's expert containers or batched matrices and captured index dependencies. Unrecognized
         structures yield no rows. Missing saved routing outputs refuse with
         PayloadUnavailableError and code moe_routing_activation_missing;
         capture with save='all' to keep the required activations.

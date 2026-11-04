@@ -178,3 +178,52 @@ def test_argmax_with_saved_probability_gather() -> None:
     (row,) = trace.routing_table
     assert row["expert_indices"] == [[0], [1], [2], [3]]
     assert row["tokens_per_expert"] == [1, 1, 1, 1]
+
+
+def test_fused_parameter_bank_and_existing_unit_selection() -> None:
+    """A stacked parameter bank needs no new name to select expert slices."""
+
+    class FusedBank(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.router = nn.Linear(4, 4)
+            self.matrices = nn.Parameter(torch.randn(4, 4, 4))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            weights, indices = self.router(x).softmax(-1).topk(2, dim=-1)
+            values = torch.einsum("tkoi,ti->tko", self.matrices[indices], x)
+            return (values * weights.unsqueeze(-1)).sum(1)
+
+    model = FusedBank()
+    trace = tl.trace(model, _input())
+    (row,) = trace.routing_table
+    fused = next(op for op in trace.ops if op.func_name == "einsum")
+    assert fused.expert is None
+    mask = (torch.tensor(row["expert_indices"]) == 1).unsqueeze(-1).expand(fused.shape)
+    selected = trace[tl.units(fused.layer_label, mask)]
+    assert selected.labels == (fused.layer_label,)
+    assert torch.equal(selected[0].mask, mask)
+
+
+def test_capture_does_not_discover_expert_structure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Read-time features must not add MoE discovery to an ordinary capture."""
+    import torchlens._data_classes._moe_structure as structure
+
+    def unexpected(*args: object) -> None:
+        raise AssertionError("routing discovery ran during capture")
+
+    monkeypatch.setattr(structure, "_layouts", unexpected)
+    model = _ToyMoE()
+    trace = tl.trace(model, _input())
+    assert len(trace.ops) > 0
+
+
+def test_expert_writer_uses_reserved_coordinate_kind() -> None:
+    """The interpretability writer classification fills its expert row kind."""
+    from torchlens.mechinterp._residual import _writer_kind
+
+    model = _ToyMoE()
+    trace = tl.trace(model, _input())
+    writer = next(op for op in trace.ops if "bank.2:1" in op.modules)
+    assert _writer_kind(trace, writer) == "expert"
+    assert writer.expert == 2

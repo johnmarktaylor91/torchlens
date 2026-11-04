@@ -42,7 +42,7 @@ def _row(trace: Trace, route: _Route) -> dict[str, Any]:
         indices = indices.unsqueeze(-1)
     selected = indices.detach().cpu().reshape(-1, indices.shape[-1]).tolist()
     gates = weights.detach().cpu().reshape(-1, weights.shape[-1]).tolist()
-    counts = [sum(row.count(expert) for row in selected) for expert in range(len(route.experts))]
+    counts = [sum(row.count(expert) for row in selected) for expert in range(route.expert_count)]
     assignments = sum(counts)
     return {
         "module": route.block,

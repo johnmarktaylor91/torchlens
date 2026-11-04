@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch.nn as nn
 
+from ._moe_layouts import _Layout, _layouts
 from ._runtime_handles import source_model_from_trace
 
 if TYPE_CHECKING:
@@ -21,6 +22,7 @@ class _Route:
     block: str
     gate: str
     experts: tuple[str, ...]
+    expert_count: int
     weights: str
     indices: str
     routers: frozenset[str]
@@ -29,11 +31,6 @@ class _Route:
 def _inside(op: Op, address: str) -> bool:
     """Test captured module-call membership, never a substring match."""
     return not address or any(label.rsplit(":", 1)[0] == address for label in op.modules)
-
-
-def _join(address: str, child: str) -> str:
-    """Join a root-relative module address."""
-    return f"{address}.{child}" if address else child
 
 
 def _ancestors(ops: dict[str, Op], label: str) -> set[str]:
@@ -55,27 +52,6 @@ def _last_axis(op: Op, position: int, default: int) -> bool:
     kwargs = op.kwargs_template or {}
     dim = kwargs.get("dim", args[position] if len(args) > position else default)
     return isinstance(dim, int) and bool(op.shape) and dim % len(op.shape) == len(op.shape) - 1
-
-
-def _containers(model: nn.Module) -> list[tuple[str, tuple[str, ...], tuple[str, ...]]]:
-    """Find homogeneous containers and sibling gates without naming heuristics."""
-    found = []
-    for address, block in model.named_modules():
-        children = tuple(block.named_children())
-        for name, container in children:
-            if not isinstance(container, (nn.ModuleList, nn.ModuleDict)):
-                continue
-            entries = tuple(container.named_children())
-            if len(entries) < 2 or len({type(child) for _, child in entries}) != 1:
-                continue
-            experts = tuple(_join(_join(address, name), key) for key, _ in entries)
-            gates = tuple(
-                _join(address, key)
-                for key, child in children
-                if child is not container and not isinstance(child, (nn.ModuleList, nn.ModuleDict))
-            )
-            found.append((address, experts, gates))
-    return found
 
 
 def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
@@ -115,7 +91,7 @@ def _routes(trace: Trace) -> list[_Route]:
     model = source_model_from_trace(trace)
     if not isinstance(model, nn.Module):
         return []
-    containers = _containers(model)
+    containers = _layouts(model)
     if not containers:
         return []
     ops = {op.layer_label: op for op in trace.ops}
@@ -125,15 +101,15 @@ def _routes(trace: Trace) -> list[_Route]:
         if weights is None:
             continue
         upstream = _ancestors(ops, values.layer_label)
-        for block, experts, gates in containers:
-            if not _inside(values, block):
+        for layout in containers:
+            if not _inside(values, layout.block):
                 continue
-            for gate in gates:
+            for gate in layout.gates:
                 gate_ops = {label for label in upstream if _inside(ops[label], gate)}
                 if (
                     not gate_ops
-                    or not _expert_width(ops, values, len(experts))
-                    or not _feeds_experts(ops, indices, experts, block)
+                    or not _expert_width(ops, values, layout.count)
+                    or not _feeds_experts(ops, indices, layout)
                 ):
                     continue
                 routers = gate_ops | {values.layer_label, indices.layer_label, weights}
@@ -143,7 +119,15 @@ def _routes(trace: Trace) -> list[_Route]:
                     if any(seed in _ancestors(ops, label) for seed in gate_ops)
                 )
                 routes.append(
-                    _Route(block, gate, experts, weights, indices.layer_label, frozenset(routers))
+                    _Route(
+                        layout.block,
+                        gate,
+                        layout.experts,
+                        layout.count,
+                        weights,
+                        indices.layer_label,
+                        frozenset(routers),
+                    )
                 )
     return routes
 
@@ -157,25 +141,29 @@ def _expert_width(ops: dict[str, Op], values: Op, count: int) -> bool:
     )
 
 
-def _feeds_experts(ops: dict[str, Op], indices: Op, experts: tuple[str, ...], block: str) -> bool:
+def _feeds_experts(ops: dict[str, Op], indices: Op, layout: _Layout) -> bool:
     """Require recorded selection-index dependence inside each called expert."""
     called = []
-    block_calls = {label for label in indices.modules if label.rsplit(":", 1)[0] == block}
-    for expert in experts:
+    block_calls = {label for label in indices.modules if label.rsplit(":", 1)[0] == layout.block}
+    for expert in layout.experts:
         members = [
             op
             for op in ops.values()
-            if _inside(op, expert) and (not block or block_calls.intersection(op.modules))
+            if _inside(op, expert) and (not layout.block or block_calls.intersection(op.modules))
         ]
         if members:
             called.append(
                 any(indices.layer_label in _ancestors(ops, op.layer_label) for op in members)
             )
-    return all(called) if called else _feeds_fused(ops, indices, experts, block_calls)
+    return (
+        all(called)
+        if called
+        else _feeds_fused(ops, indices, layout.parameter_prefixes, block_calls)
+    )
 
 
 def _feeds_fused(
-    ops: dict[str, Op], indices: Op, experts: tuple[str, ...], block_calls: set[str]
+    ops: dict[str, Op], indices: Op, prefixes: tuple[str, ...], block_calls: set[str]
 ) -> bool:
     """Recognize batched expert math only with indexed expert-parameter ancestry."""
     for op in ops.values():
@@ -186,10 +174,23 @@ def _feeds_fused(
         upstream = _ancestors(ops, op.layer_label)
         if indices.layer_label not in upstream:
             continue
-        addresses = {param.address for label in upstream for param in ops[label].params}
-        if all(
-            any(address.startswith(expert + ".") for address in addresses) for expert in experts
-        ):
+        if _indexed_parameters(ops, upstream, indices.layer_label, prefixes):
+            return True
+    return False
+
+
+def _indexed_parameters(
+    ops: dict[str, Op], labels: set[str], indices: str, prefixes: tuple[str, ...]
+) -> bool:
+    """Prove that the routing indices select expert parameters before batched math."""
+    for label in labels:
+        if ops[label].func_name not in {"__getitem__", "getitem", "gather", "index_select"}:
+            continue
+        upstream = _ancestors(ops, label)
+        if indices not in upstream:
+            continue
+        addresses = {param.address for ancestor in upstream for param in ops[ancestor].params}
+        if all(any(address.startswith(prefix) for address in addresses) for prefix in prefixes):
             return True
     return False
 
