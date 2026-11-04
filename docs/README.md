@@ -13,6 +13,8 @@
 
 ## What it shows
 
+- [The Reproduction Gallery](gallery/index.md): published claims reproduced with TorchLens, each
+  checked against an independent oracle with controls, a saved artifact and a stamp.
 - [The basis grid](gallery/basis_grid.md): the six Reproduction Gallery entries against the six
   verbs they use.
 - [The any-architecture strip](gallery/any_architecture.md): the same three lines on six
