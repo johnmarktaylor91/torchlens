@@ -2891,6 +2891,7 @@ docs-md	docs/maintainers/where.md	1656
 docs-md	docs/maintainers/where.md	1667
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	1676
+docs-md	docs/maintainers/where.md	1678
 docs-md	docs/maintainers/where.md	168
 docs-md	docs/maintainers/where.md	169
 docs-md	docs/maintainers/where.md	17
@@ -3172,6 +3173,7 @@ docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	369
 docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	37006
+docs-md	docs/maintainers/where.md	37082
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
 docs-md	docs/maintainers/where.md	372
@@ -3274,6 +3276,7 @@ docs-md	docs/maintainers/where.md	464
 docs-md	docs/maintainers/where.md	465
 docs-md	docs/maintainers/where.md	466
 docs-md	docs/maintainers/where.md	4669
+docs-md	docs/maintainers/where.md	46746
 docs-md	docs/maintainers/where.md	469
 docs-md	docs/maintainers/where.md	470
 docs-md	docs/maintainers/where.md	472
@@ -3438,6 +3441,7 @@ docs-md	docs/maintainers/where.md	672
 docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
+docs-md	docs/maintainers/where.md	676168
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
@@ -3505,6 +3509,7 @@ docs-md	docs/maintainers/where.md	7651
 docs-md	docs/maintainers/where.md	767
 docs-md	docs/maintainers/where.md	77
 docs-md	docs/maintainers/where.md	771
+docs-md	docs/maintainers/where.md	772
 docs-md	docs/maintainers/where.md	773
 docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
@@ -7120,7 +7125,10 @@ package-docstrings	torchlens/_visualization/_legend.py	2026
 package-docstrings	torchlens/_visualization/_legend.py	28
 package-docstrings	torchlens/_visualization/_legend.py	29
 package-docstrings	torchlens/_visualization/_legend.py	366
+package-docstrings	torchlens/_visualization/_loop_edges.py	2.43,
 package-docstrings	torchlens/_visualization/_loop_edges.py	2026
+package-docstrings	torchlens/_visualization/_loop_edges.py	324
+package-docstrings	torchlens/_visualization/_pass_label_placement.py	2.43
 package-docstrings	torchlens/_visualization/_pass_marks.py	1_1
 package-docstrings	torchlens/_visualization/_pass_marks.py	2,4
 package-docstrings	torchlens/_visualization/_rank_layout_internal/layout.py	17
@@ -9668,6 +9676,7 @@ test-docstrings	tests/test_conditional_invariants.py	14
 test-docstrings	tests/test_conditional_invariants.py	15
 test-docstrings	tests/test_conditional_invariants.py	15.
 test-docstrings	tests/test_conditional_lifecycle.py	11
+test-docstrings	tests/test_conformance_torch_roster.py	256
 test-docstrings	tests/test_container_registry_p1.py	051
 test-docstrings	tests/test_container_visualization.py	16
 test-docstrings	tests/test_containers.py	051
@@ -11230,6 +11239,7 @@ test-docstrings	tests/validation_goldens/test_validation_exemption_hardening.py	
 test-docstrings	tests/validation_goldens/test_validation_exemption_hardening.py	36309580288
 test-docstrings	tests/visualization/test_container_draw_fixes.py	12
 test-docstrings	tests/visualization/test_container_draw_fixes.py	16
+test-docstrings	tests/visualization/test_rolled_loop_route_fallback.py	2.43
 test-docstrings	tests/visualization/test_sibling_order_clusters.py	11
 test-docstrings	tests/visualization/test_sibling_order_clusters.py	16
 test-docstrings	tests/visualization/test_sibling_order_clusters.py	2.43
