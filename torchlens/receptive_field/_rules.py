@@ -90,7 +90,8 @@ class ReceptiveFieldRuleContext:
 
     Examples
     --------
-    >>> context = ReceptiveFieldRuleContext(tl.trace(model, x)["conv2d_1_1"])
+    >>> trace = tl.trace(model, x)
+    >>> context = ReceptiveFieldRuleContext(trace["conv2d_1_1"])
     >>> context.in_shapes[0]
     (1, 3, 8, 8)
     >>> tl.receptive_field.rules()["conv2d"](context) is not None

@@ -134,7 +134,8 @@ class ReceptiveFieldUnavailableError(ReceptiveFieldError, RuntimeError):
 
     Examples
     --------
-    >>> view = tl.trace(model, x)["conv2d_2_3"].receptive_field
+    >>> trace = tl.trace(model, x)
+    >>> view = trace["conv2d_2_3"].receptive_field
     >>> try:
     ...     view.probe_grad((0, 0, 4, 4))
     ... except ReceptiveFieldUnavailableError as err:
