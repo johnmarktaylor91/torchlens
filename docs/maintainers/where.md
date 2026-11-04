@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1478 modules, 655195 lines, 0 modules without a docstring.
+83 packages, 1478 modules, 655194 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2969 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 42 | 16578 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 42 | 16577 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 77 | 44598 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
@@ -803,7 +803,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (13 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (42 modules, 16578 lines)
+Shared helpers used by two or more TorchLens packages. (42 modules, 16577 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -847,7 +847,7 @@ Shared helpers used by two or more TorchLens packages. (42 modules, 16578 lines)
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1097 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
 | `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 129 |
-| `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1863 |
+| `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1862 |
 | `torchvision_weights` | Recover the torchvision weights preset a model was built with, from its state. | 172 |
 
 ### `torchlens._utils.rng`
