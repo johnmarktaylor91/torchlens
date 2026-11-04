@@ -10160,6 +10160,7 @@ test-docstrings	tests/test_packaging_diet.py	87
 test-docstrings	tests/test_packaging_diet.py	874
 test-docstrings	tests/test_packaging_diet.py	94
 test-docstrings	tests/test_packaging_docs_a12.py	12
+test-docstrings	tests/test_packaging_docs_a12.py	2026
 test-docstrings	tests/test_packaging_docs_a12.py	22
 test-docstrings	tests/test_packaging_docs_a12.py	3.10
 test-docstrings	tests/test_packaging_docs_a12.py	30

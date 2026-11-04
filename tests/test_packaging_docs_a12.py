@@ -135,7 +135,8 @@ def test_requires_python_floor() -> None:
 def test_readme_renders_on_pypi() -> None:
     """Every README image reference is absolute (PyPI cannot resolve relative
     paths -- all 22 rendered broken there) and the post-trace pickling remedy
-    is taught."""
+    is taught on the glossary the README links (README.md stopped naming it in
+    the 4 Nov 2026 rewrite)."""
 
     text = README.read_text(encoding="utf-8")
     for src in re.findall(r'<img\s+[^>]*src="([^"]+)"', text):
@@ -145,8 +146,10 @@ def test_readme_renders_on_pypi() -> None:
             assert target.startswith(("https://", "http://")), (
                 f"relative README markdown image: {target}"
             )
-    assert "release_model" in text, (
-        "README must mention tl.release_model (whole-model pickle remedy; "
+    assert "docs/reference/glossary.md" in text, "README must link the glossary"
+    glossary = (REPO_ROOT / "docs" / "reference" / "glossary.md").read_text(encoding="utf-8")
+    assert "`tl.release_model` evicts" in glossary, (
+        "the glossary must teach tl.release_model (whole-model pickle remedy; "
         "listA row 29 doc-now portion)"
     )
 
