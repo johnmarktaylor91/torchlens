@@ -2,7 +2,7 @@
 
 A recipe is the AUTHORED intervention: ``tl.when(selector, edit)`` clauses that
 have not been lowered against any capture. It is saved on its own, with no
-trace, model or fire records, in the 3.0 saved format: ``manifest.json`` stamps
+trace, model or fire records, in saved format 3: ``manifest.json`` stamps
 ``kind: "recipe"``, ``intervention.json`` carries one rule per clause in the
 intervention-recipe grammar (the selector and the built-in ``Edit`` identity;
 ``docs/maintainers/saved_format_3.md``, section 5), and tensor arguments go to
@@ -78,7 +78,7 @@ def _write_recipe_manifest(
 
     The recipe carries no model and no sites, so the manifest's model fields
     describe the recipe class itself; the save level is read from the recipe
-    document and the 3.0 envelope fields are written last.
+    document and the saved format 3 envelope fields are written last.
     """
 
     save_level = str(document["save_level"])
@@ -248,7 +248,7 @@ def load_recipe(
     path:
         Directory containing ``manifest.json``, ``intervention.json`` and ``blobs/``.
     trust_custom_callables, allowed_custom_callable_modules:
-        Accepted for the ``tl.load`` model-free door; a 3.0 recipe never carries a
+        Accepted for the ``tl.load`` model-free door; a saved format 3 recipe never carries a
         callable, so neither changes what loads.
 
     Returns
