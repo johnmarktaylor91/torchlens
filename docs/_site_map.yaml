@@ -231,6 +231,16 @@ pages:
     section: gallery
   - path: gallery/basis_grid.md
     section: gallery
+  - path: gallery/causal_tracing.md
+    section: gallery
+  - path: gallery/cnn_fields.md
+    section: gallery
+  - path: gallery/index.md
+    section: gallery
+  - path: gallery/ioi_circuit.md
+    section: gallery
+  - path: gallery/neuro_rdms.md
+    section: gallery
   - path: gradient_contract.md
     section: concepts
   - path: guides/fast_paths.md
