@@ -19,12 +19,15 @@ torch's ``NotImplementedError``: validation then fails loudly, never silently.
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable
 from typing import Any
 
-import torch
-from torch.utils._python_dispatch import TorchDispatchMode
+from ..._utils._torch_compat import (
+    get_higher_order_eager_kernel,
+    get_higher_order_operator,
+    get_scan_eager_body,
+)
+from ._modes import _TorchLensDispatchMode
 
 _HopRule = Callable[..., Any]
 
@@ -43,7 +46,7 @@ TorchLens captured.
 
 
 def _cond_rule(
-    mode: TorchDispatchMode,
+    mode: _TorchLensDispatchMode,
     pred: Any,
     true_fn: Callable[..., Any],
     false_fn: Callable[..., Any],
@@ -92,7 +95,7 @@ def _scan_rule_from(generic_scan: Callable[..., Any]) -> _HopRule:
     """
 
     def _scan_rule(
-        mode: TorchDispatchMode,
+        mode: _TorchLensDispatchMode,
         combine_fn: Callable[..., Any],
         init: Any,
         xs: Any,
@@ -139,7 +142,7 @@ def _dense_rule_from(dense: Callable[..., Any]) -> _HopRule:
         The rule.
     """
 
-    def _dense_rule(mode: TorchDispatchMode, *args: Any, **kwargs: Any) -> Any:
+    def _dense_rule(mode: _TorchLensDispatchMode, *args: Any, **kwargs: Any) -> Any:
         """Run the eager kernel with ``mode`` active.
 
         Parameters
@@ -161,34 +164,6 @@ def _dense_rule_from(dense: Callable[..., Any]) -> _HopRule:
     return _dense_rule
 
 
-def _hop(module: str, attribute: str) -> Any:
-    """Return a ``HigherOrderOperator`` from ``torch._higher_order_ops``, or ``None``.
-
-    Parameters
-    ----------
-    module:
-        Submodule name.
-    attribute:
-        Operator attribute.
-
-    Returns
-    -------
-    Any
-        The operator, or ``None`` when this torch lacks it or it has no rule table.
-    """
-
-    try:
-        mod = importlib.import_module(f"torch._higher_order_ops.{module}")
-    except ImportError:
-        return None
-    op = getattr(mod, attribute, None)
-    if not isinstance(op, torch._ops.HigherOrderOperator):
-        return None
-    if not isinstance(getattr(op, "python_key_table", None), dict):
-        return None
-    return op
-
-
 def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
     """Return ``(operator, rule)`` pairs available on the running torch.
 
@@ -199,25 +174,22 @@ def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
     """
 
     rules: list[tuple[Any, _HopRule]] = []
-    cond_op = _hop("cond", "cond_op")
+    cond_op = get_higher_order_operator("cond", "cond_op")
     if cond_op is not None:
         rules.append((cond_op, _cond_rule))
-    scan_op = _hop("scan", "scan_op")
-    if scan_op is not None:
-        scan_module = importlib.import_module("torch._higher_order_ops.scan")
-        generic_scan = getattr(scan_module, "generic_scan", None)
-        if callable(generic_scan):
-            rules.append((scan_op, _scan_rule_from(generic_scan)))
-    dense_key = torch._C.DispatchKey.CompositeExplicitAutograd
+    scan_op = get_higher_order_operator("scan", "scan_op")
+    generic_scan = get_scan_eager_body()
+    if scan_op is not None and generic_scan is not None:
+        rules.append((scan_op, _scan_rule_from(generic_scan)))
     for module, attribute in _DENSE_UNDER_MODE:
-        op = _hop(module, attribute)
-        dense = None if op is None else op.py_kernels.get(dense_key)
+        op = get_higher_order_operator(module, attribute)
+        dense = None if op is None else get_higher_order_eager_kernel(op)
         if dense is not None:
             rules.append((op, _dense_rule_from(dense)))
     return rules
 
 
-def register_witness_hop_rules(mode_type: type[TorchDispatchMode]) -> tuple[str, ...]:
+def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple[str, ...]:
     """Register the HOP rules for ``mode_type`` (idempotent).
 
     Parameters
