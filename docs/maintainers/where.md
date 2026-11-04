@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1587 modules, 678810 lines, 0 modules without a docstring.
+83 packages, 1587 modules, 678819 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -37,7 +37,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7268 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3030 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4498 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4507 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 55 | 18185 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46767 |
@@ -833,7 +833,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 4498 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 4507 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -850,7 +850,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 
 | `payloads` | Identity-preserving payload arena. | 66 |
 | `pools` | Per-trace exact-type intern pools. | 92 |
 | `record_rows` | Generic store-backed record facades for the non-Op record kinds. | 288 |
-| `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 520 |
+| `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 529 |
 | `relations` | The canonical edge-occurrence table with CSR indexes. | 162 |
 
 ### `torchlens._utils`
