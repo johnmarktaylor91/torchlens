@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 
 import pytest
@@ -253,9 +254,11 @@ def _find_node_line(dot_source: str, layer_label: str) -> str:
     str
         Matching DOT line.
     """
-    names = {layer_label.replace(":", "pass"), layer_label.split(":")[0]}
+    # Unrolled node ids carry their pass (``lt_1_2pass1``); a bare layer label
+    # matches its first drawn pass.
+    pattern = re.compile(rf"{re.escape(layer_label.replace(':', 'pass'))}(pass\d+)?")
     for line in dot_source.splitlines():
-        if "->" not in line and line.strip().split(" ", 1)[0] in names:
+        if "->" not in line and pattern.fullmatch(line.strip().split(" ", 1)[0]):
             return line
     raise AssertionError(f"Could not find node line for {layer_label!r}")
 

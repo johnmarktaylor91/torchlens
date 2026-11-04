@@ -30,7 +30,7 @@ def test_segment_capsule_uses_theme_tokens() -> None:
         owner=None,
         num_ops=3,
     )
-    for theme_name, expected_fill in (("torchlens", "#f7f7f7"), ("dark", "#1F2937")):
+    for theme_name, expected_fill in (("torchlens", "#f7f7f7"), ("dark", "#262626")):
         graph = graphviz.Digraph()
         _queue_segment_node(graph, {}, set(), descriptor, ("unrolled", THEME_PRESETS[theme_name]))
         assert expected_fill in graph.source, (theme_name, graph.source)

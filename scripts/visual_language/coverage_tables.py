@@ -149,7 +149,6 @@ LABEL_TEMPLATES: Mapping[str, str] = {
     "CollapseTokens.word_segment": "VT04",
     "ELIF": "VE06",
     "ELSE": "VE06",
-    "IF": "VE06",
     "Intervention hook after": "VN18",
     "Out": "VE04",
     "THEN": "VE06",

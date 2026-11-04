@@ -243,7 +243,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Box: nn.Linear called as a module", "node(shape=box)"),
             Key("Oval: F.linear called as a function", "node(shape=oval, text~linear)"),
-            Key("Blue: the op uses parameters", "node(fillcolor={trainable})"),
+            Key("Grey: the op uses parameters", "node(fillcolor={trainable})"),
             Key("White: no parameters", "node(fillcolor=white, shape=oval)"),
         ),
         rows=("VN01", "VN02"),
@@ -447,12 +447,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="branches",
         title="Branches: which arm ran",
-        rule="Yellow TRUE is the comparison that chose the arm; it has no outgoing arrow because "
-        "it steered Python, not tensors.",
+        rule="The gold IF test is the comparison that chose the arm (pale gold when FALSE); it has "
+        "no outgoing arrow because it steered Python, not tensors.",
         panels=(Panel("a", "Branch"),),
         keys=(
-            Key("Yellow boolean, a dead end", "node(fillcolor={bool_color})"),
-            Key("IF where the condition's computation starts", "edge(text~IF)"),
+            Key("Gold boolean, a dead end", "node(fillcolor={bool_color})"),
+            Key("IF on the test, with its outcome", "node(text~IF)"),
             Key("THEN into the first op of the arm that ran", "edge(text~THEN)"),
             Key("The arm that did not run is absent", None),
         ),
@@ -1499,6 +1499,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("buffer", "buffers", "a", "node(shape=cylinder)"),
             ("fed by hidden buffers", "buffers", "a", "node(peripheries=2)"),
             ("boolean that chose a branch", "branches", "a", "node(fillcolor={bool_color})"),
+            ("IF test and its outcome", "branches", "a", "node(text~IF)"),
             ("whole module", "depth", "a", "node(shape=box3d)"),
             ("run of ops (segment)", "collapse-max", "a", "node(style^rounded)"),
             ("named pattern", "fold-patterns", "a", "node(text~PATTERN)"),
@@ -1517,7 +1518,6 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("not from the input", "dashed", "a", "edge(style=dashed)"),
             ("through hidden ops", "skip", "a", "edge(text~hidden)"),
             ("argument slot", "arrow-words", "a", 'edge(text~"arg 1")'),
-            ("condition starts here", "branches", "a", "edge(text~IF)"),
             ("branch taken", "branches", "a", "edge(text~THEN)"),
             ("passes using this edge", "loop-rolled", "a", "edge(text~In)"),
             ("N edges drawn as one", "arrows-as-one", "a", "edge(text~x2)"),
