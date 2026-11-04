@@ -197,7 +197,7 @@ torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	77
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88
 torchlens/_io/bundle_metadata.py::_load_lineage_sections	61
-torchlens/_io/forgery_validation.py	1996
+torchlens/_io/forgery_validation.py	1916
 torchlens/_io/forgery_validation.py::_validate_site_keys	90
 torchlens/_io/format_contract.py::coerce_container_typed_state	92
 torchlens/_io/injection_codec.py::append_injected_op_rows	63
@@ -268,7 +268,7 @@ torchlens/_io/scrub.py::_rebuild_tuple_value	67
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	96
 torchlens/_io/state_contract.py::inspect_state_contract	108
-torchlens/_io/streaming.py	995
+torchlens/_io/streaming.py	992
 torchlens/_io/streaming.py::BundleStreamWriter.__init__	83
 torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62
 torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	71

@@ -91,8 +91,8 @@
       "disk_storage": {
         "created": true,
         "files": [
-          "blobs/0000000001.safetensors",
-          "blobs/0000000002.safetensors",
+          "blobs/torch_safetensors_v1-0000.safetensors",
+          "blobs/torch_safetensors_v1-0001.safetensors",
           "fastlog_index.jsonl",
           "label_index.json",
           "manifest.json",
@@ -553,20 +553,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 1328508,
+      "python_peak_memory_median_bytes": 1317029,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 371.06928415596485
+      "wall_time_median_ms": 58.36485396139324
     }
   },
   "sha256_chunks": [
-    "c8dfeb47",
-    "dd0d2f3c",
-    "036a6f4e",
-    "b50fe5f5",
-    "9ca177bc",
-    "151b56c1",
-    "41041ab5",
-    "c0a82dc3"
+    "3e94237b",
+    "5e666382",
+    "8a65d330",
+    "2e1acbfe",
+    "57074b52",
+    "09fea3b8",
+    "1f576531",
+    "d465a112"
   ]
 }

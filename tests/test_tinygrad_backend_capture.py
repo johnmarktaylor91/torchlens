@@ -10,13 +10,8 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens._io._canonical_pickle import dump_canonical_metadata
-from torchlens._io.bundle import _build_manifest, _write_payload_blob
-from torchlens._io.format3.payloads import PayloadStore, seal_tensor_entries
 from torchlens._io.payload_codec import get_payload_codec
-from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
-from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
@@ -142,7 +137,7 @@ def test_tinygrad_payload_codec_encodes_numpy_manifest_fields() -> None:
 
 
 def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) -> None:
-    """Direct-writer tinygrad codec fixtures should load eager outs as tinygrad tensors."""
+    """Saved tinygrad payloads should load eagerly as tinygrad tensors."""
 
     path = tmp_path / "tinygrad_codec_roundtrip.tlspec"
     _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
@@ -159,7 +154,7 @@ def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) 
 
 
 def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> None:
-    """Lazy tinygrad codec fixtures should defer payload decode until materialization."""
+    """Lazily loaded tinygrad payloads should defer decode until materialization."""
 
     path = tmp_path / "tinygrad_codec_lazy.tlspec"
     _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
@@ -357,7 +352,7 @@ def _trace(**kwargs: Any) -> Any:
 
 
 def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str]:
-    """Write a materialized tinygrad bundle through the private codec writer path.
+    """Save a tinygrad trace with its payloads as a format 3 artifact.
 
     Parameters
     ----------
@@ -371,64 +366,14 @@ def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str
     """
 
     trace = _trace()
-    scrubbed_state, blob_specs, unsupported_tensors = scrub_for_save(
-        trace,
-        include_outs=True,
-        include_grads=False,
-        include_saved_args=False,
-        include_rng_states=False,
-        backend_name="tinygrad",
-        payload_materialization=True,
-    )
-    if not blob_specs:
-        raise AssertionError("tinygrad codec fixture expected at least one saved payload.")
-
-    path.mkdir()
-    (path / "blobs").mkdir()
-    codec = get_payload_codec("tinygrad")
-    store = PayloadStore(path)
-    tensor_refs: dict[str, dict[str, Any]] = {}
-    queued = [
-        _write_payload_blob(store=store, tensor_refs=tensor_refs, blob_spec=blob_spec, codec=codec)
-        for blob_spec in blob_specs
-    ]
-    store.close()
-    tensor_entries = seal_tensor_entries(path, queued)
-    manifest = _build_manifest(
-        trace=trace,
-        tensor_entries=tensor_entries,
-        unsupported_tensors=unsupported_tensors,
-    )
-    _TlSpecWriter.write_trace_manifest(
-        path=path / "manifest.json",
-        trace=trace,
-        legacy_manifest=manifest,
-        save_level="portable",
-    )
-    with (path / "metadata.pkl").open("wb") as handle:
-        dump_canonical_metadata(scrubbed_state, handle)
-    _mark_fixture_manifest_materialized(path)
-    first_payload = blob_specs[0].value
+    trace.save(path, level="portable")
+    first_payload = _first_saved_op(trace).out
     return (
         trace,
         np.asarray(first_payload.numpy()),
         str(first_payload.dtype),
         str(first_payload.device),
     )
-
-
-def _mark_fixture_manifest_materialized(path: Path) -> None:
-    """Patch a direct-writer fixture manifest to declare materialized payloads."""
-
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["body_format"] = "safetensors"
-    manifest["payload_policy"] = {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": sorted({entry["kind"] for entry in manifest["tensors"]}),
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def _first_saved_op(trace: Any) -> Any:

@@ -74,6 +74,7 @@ def install_runnable_binders(binders: RunnableBinders) -> None:
 
 
 def _binders() -> RunnableBinders:
+    """The runnable binders ``torchlens._io.bundle`` installs at import (refuses before then)."""
     if _BINDERS is None:  # pragma: no cover - bundle installs them at import
         raise RuntimeError("runnable binders are installed when torchlens._io.bundle imports")
     return _BINDERS

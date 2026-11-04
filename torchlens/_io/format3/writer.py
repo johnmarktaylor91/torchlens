@@ -150,7 +150,7 @@ def settle_live_side(trace: Any) -> None:
         Live trace about to be saved.
     """
 
-    for op in list(getattr(trace, "_layer_list", None) or ()):
+    for op in list(trace._layer_list or ()):
         for key in _EMPTY_MAP_OP_KEYS:
             if getattr(op, key, None) is None:
                 setattr(op, key, {})
@@ -432,6 +432,7 @@ def make_encoder_factory(tensor_refs: Mapping[str, Mapping[str, Any]]) -> Any:
     """
 
     def tensor_ref(value: Any, at: str) -> dict[str, Any] | None:
+        """The stored reference fields for a blob reference at ``at`` (None for any other value)."""
         blob_id = getattr(value, "blob_id", None)
         if blob_id is None:
             return None
@@ -446,6 +447,7 @@ def make_encoder_factory(tensor_refs: Mapping[str, Mapping[str, Any]]) -> Any:
         return dict(fields)
 
     def factory(record_ref: Any) -> ValueEncoder:
+        """A value encoder for one record that resolves blob references to stored payloads."""
         return ValueEncoder(record_ref=record_ref, tensor_ref=tensor_ref)
 
     return factory

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import set_cell
 from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
@@ -151,9 +152,10 @@ def test_malformed_backward_reason_refuses_at_load(
 ) -> None:
     trace = _capture_with_backward(HOST)
     trace._cost_backward_peak_memory = peak
-    trace.backward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
     trace.save(path)
+    # The 3.0 save refuses a malformed reason, so the forgery is planted on disk and re-digested.
+    set_cell(path, "trace", "backward_peak_memory_reason", 0, reason)
 
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)

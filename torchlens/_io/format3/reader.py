@@ -26,7 +26,7 @@ from . import contract
 from ._payload_headers import validate_payload_headers
 from ._record_refs import _RecordResolver
 from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
-from .codec_policy import codec_backend
+from .codec_policy import backend_hint_fields, backend_materializes, codec_backend
 from .container import iter_members, read_member_index
 from .decode import (
     CELL_CODE,
@@ -307,7 +307,8 @@ class TensorRefSink:
             "requires_grad": ref["requires_grad"],
             "logical_backend": backend,
             "codec": codec_id,
-            "codec_metadata": codec_metadata,
+            # A backend payload's hints are the 2.x tensor-entry fields the codec reads.
+            **backend_hint_fields(codec_metadata),
         }
         return BlobRef(blob_id, kind)
 
@@ -607,6 +608,12 @@ class DecodedArtifact(_RecordResolver):
 
         manifest = {"backend": contract.DEFAULT_BACKEND, **self.manifest}
         manifest["tensors"] = list(self.sink.entries.values())
+        # The rehydrate path reads materialization from the payload policy; format 3 keeps
+        # only the include flags there, so the backend's capability answers it.
+        manifest["payload_policy"] = {
+            **dict(manifest.get("payload_policy") or {}),
+            "materialization_supported": backend_materializes(manifest["backend"]),
+        }
         return manifest
 
 

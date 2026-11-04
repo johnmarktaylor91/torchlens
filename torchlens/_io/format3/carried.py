@@ -40,14 +40,17 @@ _DISCLOSURE_FIELDS: Final[dict[str, tuple[tuple[str, str], ...]]] = {
 
 
 def _is_count(value: Any) -> bool:
+    """Whether ``value`` is a non-negative int (a bool is not a count)."""
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _is_text(value: Any) -> bool:
+    """Whether ``value`` is a non-empty string."""
     return isinstance(value, str) and value != ""
 
 
 def _is_strings(value: Any) -> bool:
+    """Whether ``value`` is a list of strings."""
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
