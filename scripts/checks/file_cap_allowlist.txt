@@ -562,7 +562,7 @@ torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
 torchlens/_visualization/_render_dot.py::_resolve_collapse_request	96
 torchlens/_visualization/_render_dot.py::_resolve_forward_context	107
 torchlens/_visualization/_render_dot.py::draw	187
-torchlens/_visualization/_render_edges.py	1924
+torchlens/_visualization/_render_edges.py	1919
 torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266
