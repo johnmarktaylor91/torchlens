@@ -77,6 +77,8 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
         Every label the flood reached.
     """
 
+    # Cognitive complexity is over 15 on purpose (hot path, once per op): the
+    # sink logging is inlined, not called per visited node.
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
     # per-node `label not in <list>` scans were O(k^2) in sink count
     # (hunt-6 R52-2). The lists stay the portable source of truth.
@@ -192,9 +194,15 @@ def reset_and_flood_if_edges(trace: Trace, branch_bool_labels: list[str]) -> Non
         _reset_and_flood_if_edges_facade(trace, branch_bool_labels)
         return
     columns, rows = lookup
+    _reset_if_state_column(columns, rows)
+    _flood_if_edges_column(trace, columns, rows, branch_bool_labels)
+
+
+def _reset_if_state_column(columns: Any, rows: dict[str, int]) -> None:
+    """Clear every non-orphan op's IF entry children and conditional-body flag."""
+
     is_orphan = columns.getter("is_orphan", False)
     put_entry_children = columns.setter("conditional_entry_children")
-    entry_children = columns.getter("conditional_entry_children")
     # ``Op.is_in_conditional_body`` is a property whose setter stores this slot.
     put_in_body = columns.setter("_is_in_conditional_body")
     for row in rows.values():  # ``Trace.__iter__`` order during the pass
@@ -203,6 +211,18 @@ def reset_and_flood_if_edges(trace: Trace, branch_bool_labels: list[str]) -> Non
         put_entry_children(row, [])
         put_in_body(row, False)
 
+
+def _flood_if_edges_column(
+    trace: Trace, columns: Any, rows: dict[str, int], branch_bool_labels: list[str]
+) -> None:
+    """Column body of the backward IF-edge flood from the branch bools.
+
+    Cognitive complexity is over 15 on purpose (hot path): the row lookups
+    are inlined so the per-op loop makes no Python call the facade avoids.
+    """
+
+    entry_children = columns.getter("conditional_entry_children")
+    put_in_body = columns.setter("_is_in_conditional_body")
     parents = columns.getter("parents")
     has_output_descendant = columns.getter("has_output_descendant")
     nodes_seen: set[str] = set()
@@ -402,7 +422,11 @@ def _attribute_forward_edges_column(
     entry_edges: dict[tuple[int, str], list[tuple[str, str]]],
     call_indices: dict[tuple[str, str, int, str], list[int]],
 ) -> None:
-    """Column body of :func:`attribute_forward_edges`."""
+    """Column body of :func:`attribute_forward_edges`.
+
+    Cognitive complexity is over 15 on purpose (hot path, once per edge): the
+    row lookups and the empty-stack skip are inlined rather than called.
+    """
 
     columns, rows = lookup
     is_orphan = columns.getter("is_orphan", False)
