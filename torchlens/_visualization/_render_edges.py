@@ -17,7 +17,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
-from ._loop_edges import loop_edge_attrs
+from ._loop_edges import float_back_edge_label, loop_edge_attrs
 from ._pass_marks import pass_label_fits, with_branch
 from ._render_common import *
 from ._render_leaf import *
@@ -1291,6 +1291,8 @@ def _add_edges_for_node(
                     allow_midpoint_merge=pass_label_fits(edge_dict) and not arg_labeler_may_fire,
                     rolled_maps=rolled_maps,
                 )
+                if edge_is_back_edge:
+                    float_back_edge_label(edge_dict)
 
         # Label the arguments to the next node if multiple inputs. An edge
         # whose rendered endpoint was projected onto a run-fold ellipsis gets

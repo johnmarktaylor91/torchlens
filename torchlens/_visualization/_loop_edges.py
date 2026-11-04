@@ -21,16 +21,29 @@ _LOOP_PORTS: dict[str, tuple[str, str]] = {
     "LR": ("ne", "nw"),
     "RL": ("nw", "ne"),
 }
-# back edge between two body nodes: both ends on the same flank, so dot bows the
-# return out and around instead of cutting diagonally across the body's corner
-# (compared ne/se, e/se, ne/e and e/e on the README toy, 3 Nov 2026: only e/e arcs;
-# sideways, n/n hooked both ends up while the curve still ran under relu, s/s hangs a clean U)
+# back edge between two body nodes: the two inner corners on one flank (the tail's
+# corner nearest the head, the head's corner nearest the tail), so dot draws a short,
+# shallow arc past the middle node instead of a wide loop around both boxes (compared
+# flank centres, inner corners and no ports in bottom-up and left-to-right on the README
+# toy, 3 Nov 2026: inner corners halve the arc's depth and keep it clear of the body).
 _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
-    "BT": ("e", "e"),
-    "TB": ("e", "e"),
-    "LR": ("s", "s"),
-    "RL": ("s", "s"),
+    "BT": ("se", "ne"),
+    "TB": ("ne", "se"),
+    "LR": ("sw", "se"),
+    "RL": ("se", "sw"),
 }
+
+
+def float_back_edge_label(edge_dict: dict[str, str]) -> None:
+    """Move a back edge's midpoint label to an external label (``xlabel``).
+
+    dot gives a ``constraint=false`` edge's midpoint label its own rank slot, which pushes
+    the return arc out to make room; an external label is placed after layout beside the
+    drawn arc, so the arc stays tight and the pass range still reads next to it.
+    """
+
+    if "label" in edge_dict:
+        edge_dict["xlabel"] = edge_dict.pop("label")
 
 
 def self_loop_port_attrs(rankdir: str) -> dict[str, str]:

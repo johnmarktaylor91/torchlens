@@ -65,13 +65,23 @@ def _edge_lines(dot_source: str, tail: str, head: str) -> list[str]:
 def test_loop_edge_attrs_distinguish_self_loop_back_edge_and_plain_edge() -> None:
     assert loop_edge_attrs(True, False, "BT") == {"tailport": "ne", "headport": "se"}
     assert loop_edge_attrs(False, True, "BT") == {
-        "tailport": "e",
-        "headport": "e",
+        "tailport": "se",
+        "headport": "ne",
+        "constraint": "false",
+    }
+    assert loop_edge_attrs(False, True, "TB") == {
+        "tailport": "ne",
+        "headport": "se",
         "constraint": "false",
     }
     assert loop_edge_attrs(False, True, "LR") == {
-        "tailport": "s",
-        "headport": "s",
+        "tailport": "sw",
+        "headport": "se",
+        "constraint": "false",
+    }
+    assert loop_edge_attrs(False, True, "RL") == {
+        "tailport": "se",
+        "headport": "sw",
         "constraint": "false",
     }
     assert loop_edge_attrs(False, False, "BT") == {}
@@ -82,8 +92,9 @@ def test_rolled_two_op_loop_body_returns_on_an_unconstrained_arc() -> None:
     back = _edge_lines(dot_source, "relu_", "linear_")
     forward = _edge_lines(dot_source, "linear_", "relu_")
     assert len(back) == 1 and len(forward) == 1, dot_source
-    assert "tailport=e" in back[0], back[0]
-    assert "headport=e" in back[0], back[0]
+    assert "tailport=se" in back[0], back[0]
+    assert "headport=ne" in back[0], back[0]
+    assert "xlabel=" in back[0] and " label=" not in back[0], back[0]
     assert "constraint=false" in back[0] or 'constraint="false"' in back[0], back[0]
     assert "In 2-3" in back[0] and "Out 1-2" in back[0], back[0]
     assert "tailport" not in forward[0] and "constraint" not in forward[0], forward[0]
@@ -126,10 +137,11 @@ def test_branch_edge_label_is_padded_clear_of_its_edge() -> None:
 
 
 def test_rolled_back_edge_sideways_leaves_and_enters_from_below() -> None:
-    """Left-to-right, the return arc hangs under the body (south ports); top ports made dot
-    route the curve under relu anyway while hooking both ends upward."""
+    """Left-to-right, the return arc hangs under the body between the inner bottom corners;
+    top ports made dot route the curve under relu anyway while hooking both ends upward."""
     (back,) = _edge_lines(_dot(rolled=True, direction="leftright"), "relu_", "linear_")
-    assert "tailport=s" in back and "headport=s" in back, back
+    assert "tailport=sw" in back and "headport=se" in back, back
+    assert "xlabel=" in back and " label=" not in back, back
     assert "constraint=false" in back or 'constraint="false"' in back, back
 
 
