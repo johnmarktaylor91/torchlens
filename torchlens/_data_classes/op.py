@@ -1617,12 +1617,10 @@ class Op(OpAtenMixin, _SelectionOperand):
             out = slot("out")
             source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
-            # A collected Trace evicted the payload: refuse typed, never a silent None.
             if out is None and source_trace is None and source_ref is not None:
-                _getattribute(self, "source_trace")
-            # Lazy-payload honesty gate (P0 part 1): a saved payload behind a
-            # lazy blob ref materializes (sha-verified) instead of reading None;
-            # live streamed captures (retain_in_memory=False) keep their None.
+                _getattribute(self, "source_trace")  # collected Trace: refuse typed, never None
+            # Lazy-payload honesty gate (P0 part 1): a lazy blob ref materializes (sha-verified)
+            # instead of reading None; live streamed captures (retain_in_memory=False) keep None.
             if (
                 out is None
                 and slot("out_ref") is not None
@@ -1637,8 +1635,7 @@ class Op(OpAtenMixin, _SelectionOperand):
                 and not slot("has_saved_activation", False)
                 and (
                     getattr(source_trace, "_predicate_save_options", None) is not None
-                    # P0 part 4: a lazily loaded artifact never serves a silent
-                    # None for an unsaved row; eager loads keep None-for-unsaved.
+                    # P0 part 4: a lazy load refuses unsaved rows; eager loads keep None-for-unsaved.
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):
