@@ -7,6 +7,8 @@ from typing import Any, ClassVar
 
 from typing_extensions import Self
 
+from ._utils._display_numbers import format_duration, format_iec_bytes
+
 
 class Quantity(ABC):  # noqa: B024 - deliberate marker ABC, see the docstring
     """Marker base class for TorchLens numeric quantity wrappers.
@@ -386,7 +388,7 @@ class Bytes(_IntQuantity):
     --------
     >>> size = Bytes(2048)
     >>> str(size)
-    '2.0 KB'
+    '2 KiB'
     >>> format(size, "raw")
     '2048'
     >>> size == 2048
@@ -406,7 +408,7 @@ class Bytes(_IntQuantity):
     def __str__(self) -> str:
         """Return a human-readable byte string."""
 
-        return self._format_bytes("")
+        return ("-" if self < 0 else "") + format_iec_bytes(abs(int(self)))
 
     def __format__(self, format_spec: str) -> str:
         """Format bytes with optional precision and forced unit.
@@ -423,6 +425,8 @@ class Bytes(_IntQuantity):
             Formatted byte quantity.
         """
 
+        if not format_spec:
+            return str(self)
         if format_spec == "raw":
             return str(int(self))
         return self._format_bytes(format_spec)
@@ -551,11 +555,13 @@ class Duration(_FloatQuantity):
     def __str__(self) -> str:
         """Return a human-readable duration string."""
 
-        return self._format_duration("")
+        return format_duration(float(self))
 
     def __format__(self, format_spec: str) -> str:
         """Format seconds with optional precision and forced unit."""
 
+        if not format_spec:
+            return str(self)
         if format_spec == "raw":
             return str(float(self))
         return self._format_duration(format_spec)
