@@ -276,6 +276,8 @@ nav:
   - index.md
   - Field guide:
       - field-guide/seeded_subsample.md
+      - See and inspect:
+          - guides/visualization.md
   - Reference:
       - API:
           - reference/api/dataset_extraction.md
