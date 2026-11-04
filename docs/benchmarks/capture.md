@@ -6,7 +6,9 @@ TorchLens 2.36.3, nnsight 0.8.1. Every number below is a median wall time from t
 `benchmarks/capture/`; the raw medians are in
 [`data/capture_2026-11-03.json`](data/capture_2026-11-03.json). A second run the same day added
 GPT-2 small, ResNet-18 on CPU and GPU, fx, nnsight and `tl.record`, on the hosts named in its
-section, and the memory cost of recording a generation (Known costs).
+section, and the memory cost of recording a generation (Known costs). A third run the same day
+measured GPT-2 small and the LSTM tagger on a GPU, and the generation cost again after a fix to
+the recorder (Third run; Known costs).
 
 <!-- JMT review: plain factual prose, written for review. -->
 
@@ -187,11 +189,105 @@ Notes on these rows:
 - The fx rows are faster than the plain forward because `create_feature_extractor` builds a graph
   that stops at the requested module, so it runs only part of ResNet-18. The other arms run the
   whole network.
-- On GPU, the `tl.extract_dataset` arm failed: with the model and the dataset both on the GPU,
-  the run stopped with "Expected all tensors to be on the same device" (cuda:0 and cpu). No GPU
-  number is given for it.
+- On GPU, the `tl.extract_dataset` arm failed in this run: with the model and the dataset both on
+  the GPU, the run stopped with "Expected all tensors to be on the same device" (cuda:0 and cpu).
+  The cause (in-memory results were copied to the host while the model stayed on the GPU) was
+  fixed the same day; the third run below measured the fixed arm.
 - `tl.record` records only the sites it is asked for and costs a fraction of a full trace, but
   it still runs through TorchLens's wrapped operations, so it stays well above a forward hook.
+
+## Third run: GPT-2 small and the LSTM tagger on GPU
+
+A third run on 2026-11-03 measured on a GPU the two models the second run had left on CPU,
+and `tl.extract_dataset` on GPU after its fix. Two GPU nodes of one cluster were used; each table
+below names its node.
+
+- The GPT-2 small and LSTM tagger rows ran on a 256-core AMD EPYC 7662 Linux GPU node with an NVIDIA L40 (46 GiB), one torch thread per process, load average 56 to 74 (a shared node).
+  Raw data: [`data/capture_2026-11-03-gpu3.json`](data/capture_2026-11-03-gpu3.json).
+- The `tl.extract_dataset` rows and the GPU generation run (Known costs) ran on a 48-core Intel Xeon Gold 6126 2.60 GHz Linux GPU node with an NVIDIA GeForce RTX 2080 Ti (11 GiB), one torch thread per process, load average 1 to 3.
+  Raw data: [`data/capture_2026-11-03-gpu2.json`](data/capture_2026-11-03-gpu2.json).
+- Versions on both: Python 3.10, torch 2.13.0 built for CUDA 12.6, transformers 5.18.0, nnsight 0.8.1,
+  TransformerLens 4.3.0, and a development build of TorchLens from that day.
+
+Method as in the second run: each LSTM tagger row is three separate processes, each timing up to
+20 samples after 3 warmup calls, and the table gives the median of the three process medians with the
+lowest and highest in brackets; each GPT-2 row is one process that runs the whole workload three
+times, and the table gives the median wall time with the fastest and slowest in brackets. Every
+arm synchronises the GPU before it stops its clock. Every TorchLens arm's output was compared with the
+forward-hook arm's output and matched, with a largest absolute difference of 0.0 on GPT-2.
+Each job had one GPU to itself. The L40 node is shared and its CPUs were busy (load average 56 to 74
+on 256 cores); the RTX 2080 Ti node's CPUs carried a load average of 1 to 3. TransformerLens runs its
+own GPT-2 implementation loaded with the same weights, so its rows time a different model code path
+with hooks on `hook_resid_post`; every other GPT-2 row runs the transformers model.
+
+### GPT-2 small on GPU (L40 node)
+
+| Workload (model, device, repeats) | Tool | Median (fastest to slowest) |
+| --- | --- | --- |
+| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | forward hooks | 168 ms (167 ms to 173 ms) |
+| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | nnsight 0.8.1 | 200 ms (194 ms to 200 ms) |
+| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 369 ms (368 ms to 376 ms) |
+| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.record` | 8.35 s (8.07 s to 9.84 s) |
+| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.trace` (full trace) | 49.67 s (48.81 s to 49.85 s) |
+| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | forward hooks | 120 ms (119 ms to 120 ms) |
+| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | nnsight 0.8.1 | 135 ms (134 ms to 139 ms) |
+| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 259 ms (250 ms to 260 ms) |
+| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.record` | 6.30 s (6.28 s to 6.39 s) |
+| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.trace` (full trace) | 23.84 s (23.22 s to 24.57 s) |
+| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | forward hooks | 447 ms (447 ms to 454 ms) |
+| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | nnsight 0.8.1 | 524 ms (504 ms to 536 ms) |
+| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 1.11 s (1.08 s to 1.14 s) |
+| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.record` | 26.29 s (26.03 s to 26.74 s) |
+| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.trace` (full trace) | 92.10 s (91.33 s to 93.01 s) |
+
+### LSTM tagger on GPU (L40 node)
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| LSTM tagger, GPU, one module's output, n=3 processes | plain forward, nothing attached | 0.36 ms (0.35 ms to 0.36 ms) |
+| LSTM tagger, GPU, one module's output, n=3 processes | forward hook | 0.37 ms (0.37 ms to 0.38 ms) |
+| LSTM tagger, GPU, one module's output, n=3 processes | nnsight 0.8.1 | 0.44 ms (0.44 ms to 0.46 ms) |
+| LSTM tagger, GPU, one module's output, n=3 processes | `tl.record(..., save=tl.module(site))` | 18.16 ms (17.96 ms to 19.11 ms) |
+| LSTM tagger, GPU, one module's output, n=3 processes | `tl.trace(..., save=tl.module(site))` | 35.26 ms (35.17 ms to 37.08 ms) |
+| LSTM tagger, GPU, one module's output, n=3 processes | `tl.extract` | 36.25 ms (35.57 ms to 38.38 ms) |
+| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | forward hook | 0.39 ms (0.39 ms to 0.41 ms) |
+| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | nnsight 0.8.1 | 0.49 ms (0.48 ms to 0.50 ms) |
+| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.when(...).bind(model)` | 0.77 ms (0.75 ms to 0.79 ms) |
+| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.record(..., intervene=tl.when(...))` | 18.61 ms (18.60 ms to 19.79 ms) |
+| LSTM tagger, GPU, eight steering strengths, n=3 processes | forward hooks | 2.55 ms (2.49 ms to 2.67 ms) |
+| LSTM tagger, GPU, eight steering strengths, n=3 processes | nnsight 0.8.1 | 3.62 ms (3.49 ms to 3.73 ms) |
+| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.when(...).bind(model)` | 7.85 ms (7.45 ms to 8.21 ms) |
+| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.record(..., intervene=...)` per strength | 150.25 ms (148.79 ms to 157.70 ms) |
+| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 307.09 ms (306.43 ms to 324.52 ms) |
+| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 1.46 ms (1.37 ms to 1.48 ms) |
+| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | nnsight 0.8.1 | 1.86 ms (1.76 ms to 1.91 ms) |
+| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 72.40 ms (71.18 ms to 75.21 ms) |
+| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.extract_dataset` | 159.69 ms (149.83 ms to 202.53 ms) |
+| LSTM tagger, GPU, full forward, n=3 processes | plain forward | 0.35 ms (0.35 ms to 0.36 ms) |
+| LSTM tagger, GPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 0.36 ms (0.36 ms to 0.38 ms) |
+| LSTM tagger, GPU, full forward, n=3 processes | forward hooks on every module | 0.39 ms (0.39 ms to 0.39 ms) |
+| LSTM tagger, GPU, full forward, n=3 processes | `tl.record` (sparse recorder) | 18.20 ms (18.06 ms to 19.07 ms) |
+| LSTM tagger, GPU, full forward, n=3 processes | `tl.trace(model, x)` (full trace) | 36.66 ms (36.39 ms to 38.00 ms) |
+
+### ResNet-18 on GPU (RTX 2080 Ti node), `tl.extract_dataset` after its fix
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 8.29 ms (8.28 ms to 8.33 ms) |
+| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | torchvision fx `create_feature_extractor` | 3.67 ms (3.62 ms to 3.68 ms) |
+| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 428.00 ms (416.55 ms to 450.06 ms) |
+| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.extract_dataset` | 1.99 s (1.83 s to 2.02 s) |
+
+Notes on these rows:
+
+- On the LSTM tagger the gradient arms (forward hook plus tensor hook, Captum, `tl.trace` with
+  gradients saved) could not run on GPU for any tool: cuDNN's RNN backward is only available in
+  training mode, and the harness runs the model in eval mode. Those rows are not given. fx is not
+  given either: symbolic tracing refuses the model's data-dependent control flow.
+- `tl.extract_dataset` on GPU runs a trace per batch and gathers the requested module's output
+  across batches; on ResNet-18 it costs about five times `tl.record` per batch on the same node.
+- The peer tools on the LSTM tagger: nnsight ran; Captum is a gradient arm (see above); TransformerLens
+  has no LSTM.
 
 ## Known costs
 
@@ -216,19 +312,31 @@ set size; saved activations are the summed saved bytes of every step's record. R
 | 2,000 | not reached | over 17 GiB (stopped after 17 min) | not reached |
 
 The saved activations are a small part of the growth: 6.9 MiB of saved tensors at 500 tokens against 5.3 GiB of process memory; 13.8 MiB of saved tensors at 1,000 tokens against 15.7 GiB of process memory. The rest of the process memory
-grows with each recorded decode step and is not accounted for by the saved tensors. For long
-generations, record a shorter run or save fewer sites.
+grows with each recorded decode step and is not accounted for by the saved tensors.
+
+That growth was a bug: the recorder kept every decode pass's whole output, including the model's
+key-value cache, so retained memory grew with the square of the generated tokens. It was fixed on
+2026-11-03. Measured again after the fix, on the same 32-core Intel Xeon worker with four torch
+threads and the same model, prompt and saved sites (the 500- and 1,000-token rows from the fix's own
+check, the 2,000-token row from the third run), process memory grows linearly, about 2.7 MiB per
+token, and the time per token stays flat:
+
+| Generated tokens | Wall time per token | Peak process memory (RSS) | Saved activations at the end |
+| --- | --- | --- | --- |
+| 500 | 356 ms | 2.1 GiB | 6.9 MiB |
+| 1,000 | 395 ms | 3.4 GiB | 13.8 MiB |
+| 2,000 | 397 ms | 6.2 GiB | 27.4 MiB |
+
+The same 2,000-token run on the RTX 2080 Ti node above (four torch threads) took 269 ms per token, peaked at 6.8 GiB of process memory and 458 MiB of GPU memory, and saved the same 27.4 MiB of activations.
+
+For long generations, record a shorter run or save fewer sites.
 
 ## Not measured here
 
-- GPT-2 on GPU. The GPT-2 workloads in `benchmarks/capture/mi_workloads/` run on CPU only.
-- The LSTM tagger on GPU, and fx on the LSTM tagger: its data-dependent control flow cannot be
-  traced by fx.
-- TransformerLens on GPT-2 small. The second run measured forward hooks, nnsight, `tl.record`
-  and `tl.trace` on GPT-2.
-- `tl.extract_dataset` on GPU: the arm failed (see the notes under the ResNet-18 tables).
-- Generation cost past about 1,000 tokens: the 2,000-token run passed 17 GiB of process memory
-  after 17 minutes and was stopped at the 17 GiB limit set for the run, before it finished.
+- fx on the LSTM tagger: its data-dependent control flow cannot be traced by fx.
+- Gradient arms on the LSTM tagger on GPU: cuDNN's RNN backward needs training mode (see the third
+  run's notes).
+- Generation cost past 2,000 tokens.
 
 ## Reproduce
 
@@ -244,4 +352,11 @@ OMP_NUM_THREADS=1 python benchmarks/capture/driver.py --smoke --warmups 3 --samp
 OMP_NUM_THREADS=1 python -m benchmarks.capture.mi_workloads.matrix --model gpt2 --timeout 1500 \
     --tools hooks,nnsight,tl_record,tl_trace --workloads cache,steer_sweep,patch_sweep \
     --out mi-gpt2.jsonl --resdir mi-res -- --slow-rep-s 0
+# third run: the same on a GPU (TL_BENCH_DEVICE moves the GPT-2 workloads; the driver takes --device)
+pip install transformer-lens==4.3.0
+TL_BENCH_DEVICE=cuda OMP_NUM_THREADS=1 python -m benchmarks.capture.mi_workloads.matrix --model gpt2 \
+    --timeout 1500 --tools hooks,nnsight,tlens,tl_record,tl_trace --workloads cache,steer_sweep,patch_sweep \
+    --out mi-gpu-gpt2.jsonl --resdir mi-res -- --slow-rep-s 0
+OMP_NUM_THREADS=1 python benchmarks/capture/driver.py --device cuda --smoke --warmups 3 --samples 20 \
+    --budget-s 20 --threads 1 --processes 3 --no-sweep --subjects lstm-tagger,resnet18 --out capture-gpu.json
 ```
