@@ -123,3 +123,14 @@ def test_sealed_capture_fields_are_shared_and_tables_stay_isolated(parent: tl.Tr
         assert fork_table == parent_table and fork_table is not parent_table, name
         key = next(iter(parent_table))
         assert fork_table[key] == parent_table[key] and fork_table[key] is not parent_table[key]
+
+
+def test_parent_fixture_is_fresh_for_each_test(parent: tl.Trace) -> None:
+    """Every test gets an unforked parent, so no test depends on another's forks.
+
+    ``Trace.fork`` records a ``fork`` row on its parent by design, so a parent
+    shared across tests carries one test's forks into the next and makes the
+    results depend on test order (and on how xdist splits the module).
+    """
+
+    assert not [row for row in parent.state_history if row.get("op") == "fork"]
