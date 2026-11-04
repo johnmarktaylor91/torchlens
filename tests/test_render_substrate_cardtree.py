@@ -34,6 +34,7 @@ def test_trace_repr_html_stays_bounded() -> None:
     model = torch.nn.Sequential(*(torch.nn.Linear(4, 4) for _ in range(30)))
     log = tl.trace(model, torch.randn(2, 4))
     html = log._repr_html_()
-    # The key index is budgeted: truncation is disclosed, size stays O(50KB).
-    assert "more (" in html
-    assert len(html) < 50_000
+    # The Trace card keeps the same bounded rows and explicit exits as text.
+    assert ".summary()" in html
+    assert "<table>" in html
+    assert len(html) < 20_000

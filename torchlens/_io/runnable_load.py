@@ -1,5 +1,4 @@
 """Safe sparse runnable descriptor loading and torch callable reattachment.
-
 This module performs readiness preflight only. It never imports artifact-selected
 modules, binds state, constructs runtime calls, or executes a recorded graph.
 """
@@ -95,6 +94,7 @@ from .._utils._callable_safety import (
     is_pure_forward_callable,
     unsafe_callable_reason,
 )
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils._torch_compat import resolve_runnable_torch_alias
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
@@ -164,12 +164,10 @@ class _Resolution:
 
 def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor:
     """Parse a schema-validated manifest run object into frozen descriptor types.
-
     Parameters
     ----------
     value:
         Decoded ``manifest.run`` mapping after structural manifest validation.
-
     Returns
     -------
     SparseRunDescriptor
@@ -861,6 +859,8 @@ def _parse_coverage_gaps(value: Any) -> tuple[WitnessCoverageGap, ...]:
 @dataclass(frozen=True, slots=True)
 class _WitnessValidationContext:
     """Indexed descriptor state shared by witness-obligation validation phases."""
+
+    __repr__ = short_dataclass_repr
 
     descriptor: SparseRunDescriptor
     field: str

@@ -95,12 +95,12 @@ What changed for existing TorchLens users:
   historical 21-line Op dump (8x8 preview, full relation lists, eleven
   lookup keys) moved behind the card's `More:` exits (`.out`,
   `.parents`, `.children`, `.func_config`, `.lookup_keys`).
-- `print(trace)` is bounded: honesty header first, buffer rows folded to
-  one line, module hierarchy and layer roster elided past their rungs
-  with EXACT remainders (`... N more layers (see .ops)`).
+- `print(trace)` is bounded: cached health in the identity line and at most
+  twelve rows of stored metadata. The module hierarchy lives in `.summary()`.
 - Collection reprs (`trace.layers`, `trace.params`, `trace.modules`,
-  `trace.buffers`) are one-line composition cards with `.head()` /
-  `.find()` / `.to_pandas()` exits -- never member dumps.
+  `trace.buffers`) are one-line count and composition cards. Their `str()` shows
+  at most five members, an exact remainder and `.head()` / `.search()` /
+  `.to_pandas()` exits.
 - `tensor_stats_summary` (the legacy helper line) DROPPED the `neg=`
   field from its default output: on real float activations it read ~50%
   nearly always, and the exact count cost a full extra traversal for a

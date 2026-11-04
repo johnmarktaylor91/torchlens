@@ -105,8 +105,8 @@ def _make_all_frozen():
 
 class TestParamLogFields:
     def test_repr_contains_key_info(self):
-        """F10 re-pin: repr is one envelope+core line; grad/module facts
-        moved to the str() card (D15)."""
+        """Repr is one ``Param <address>: ...`` line (house style B1); grad/module
+        facts live in the str() card, whose first line is the repr."""
         model = _make_simple_model()
         mh = trace_fn(model, _simple_input())
         mh._keepalive_model = model  # live-param cores need the source model
@@ -114,11 +114,12 @@ class TestParamLogFields:
         r = repr(pl)
         assert pl.address in r
         assert "\n" not in r
-        assert "[param]" in r
+        assert r.startswith(f"Param {pl.address}: ")
         assert "trainable" in r or "frozen" in r
         card = str(pl)
         assert card.splitlines()[0] == r
-        assert "has_grad" in card
+        # ``has_grad False`` reads in words (house style A18); no backward ran here.
+        assert "\n  gradient  none captured\n" in card
 
     def test_len_equals_num_params(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -148,11 +149,11 @@ class TestParamAccessorMH:
             mh.params["weight"]  # Both 0.weight and 2.weight
 
     def test_repr_dict_like(self):
-        """F10 re-pin: collections point (one-line card); members show in str()."""
+        """Collection repr is the type and its count (house style B10); members show in str()."""
         mh = trace_fn(_make_simple_model(), _simple_input())
         r = repr(mh.params)
         assert "\n" not in r
-        assert "ParamAccessor(" in r and "params" in r
+        assert r == f"ParamAccessor: {len(mh.params)} params"
         assert "0.weight" in str(mh.params)
 
 

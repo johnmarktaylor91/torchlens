@@ -30,7 +30,7 @@ The lists below are in the order most people want them: see one site, edit it, t
 - [The mech-interp kit](../reference/mechinterp.md): residual decomposition, direct logit contributions, per-head results, the component edge graph and patching grids.
 - [ACDC circuit discovery as a driver loop](../field-guide/acdc_ioi.md): edge pruning on IOI written as a loop over TorchLens calls.
 - [A tuned lens in TorchLens's logit lens](../field-guide/tuned_lens.md) and the [train a tuned lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/train_tuned_lens_recipe.ipynb).
-- [A Jacobian lens in a few lines](../field-guide/jacobian_lens.md): what a block's residual vector is disposed to make the model say.
+- [A Jacobian lens in a few lines](../field-guide/jacobian_lens.md) and the [Jacobian lens notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/jacobian_lens_recipe.ipynb): what a block's residual vector is disposed to make the model say, fitted on GPT-2 small and compared with the logit lens.
 - [Per-step attribution for generated text](../field-guide/generation_step_attribution.md): attribute each generated token to the tokens before it.
 - [Attribution graphs with transcoders notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/attribution_graph_transcoders_recipe.ipynb): GPT-2 small with public transcoders spliced in.
 - [Function vectors notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/function_vectors_recipe.ipynb): score every head's causal indirect effect and sum the top heads into a task vector.
