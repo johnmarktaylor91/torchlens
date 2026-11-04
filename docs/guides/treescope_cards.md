@@ -1,7 +1,7 @@
 # Notebook cards and the treescope bridge
 
-*(Every spelling on this page is DOCUMENTED-UNSTABLE: it may change before
-the 3.0 release.)*
+*(Every spelling on this page is DOCUMENTED-UNSTABLE: it may change in
+a later release.)*
 
 TorchLens objects carry dependency-free rich HTML cards as their primary
 notebook experience; the treescope bridge is an **opt-in upgrade** that adds

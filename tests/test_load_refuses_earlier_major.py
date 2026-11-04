@@ -52,7 +52,7 @@ def test_file_saved_by_torchlens_2_refuses_at_load_under_3(
         tl.load(path)
 
     message = str(excinfo.value)
-    assert "saved by torchlens 2.x" in message
+    assert "saved by torchlens 2.37 and earlier" in message
     assert "load it with torchlens 2.36.x" in message
     assert "capture the model again" in message
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"

@@ -86,7 +86,7 @@ _EXTRACTION_V1 = _LEGACY / "extraction_v1"
 
 def _assert_extraction_v1_refusal(error: ArtifactTooOldError, path: Path) -> None:
     message = str(error)
-    assert "saved by torchlens 2.x" in message, message
+    assert "saved by torchlens 2.37 and earlier" in message, message
     assert "load it with torchlens 2.36.x" in message, message
     assert error.fields["code"] == "artifact_version_below_floor"
     assert error.fields["observed"] == "extraction manifest schema=tl_extract_manifest_v1"
@@ -154,7 +154,7 @@ def test_v2_extraction_saved_by_2x_refuses_at_every_reader_under_3(
         with pytest.raises(ArtifactTooOldError) as excinfo:
             reader(work)
         message = str(excinfo.value)
-        assert "saved by torchlens 2.x" in message, message
+        assert "saved by torchlens 2.37 and earlier" in message, message
         assert "load it with torchlens 2.36.x" in message, message
         assert excinfo.value.fields["code"] == "artifact_version_below_floor"
         assert excinfo.value.fields["observed"] == "torchlens_version=2.36.3"

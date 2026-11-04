@@ -10,13 +10,13 @@
 - **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.
 - **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
   points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
-- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
-  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
-  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+- **io**: files saved by torchlens 2.37 and earlier do not load. A saved trace below `tlspec_version` 11, a
+  pickled pre-2.38 module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a pre-2.38 `torchlens_version` refuse at `tl.load` (and at
   `tl.validation.validate_tlspec` and the extraction readers) with one error,
-  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
-  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
-  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the pre-2.38
+  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<2.38'`) or
+  capture the model again with this release. Nothing migrates a pre-2.38 file, and there is no
   `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
   withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
 - **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).

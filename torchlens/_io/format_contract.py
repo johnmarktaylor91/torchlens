@@ -127,7 +127,7 @@ def below_floor_error(
     """Build the typed refusal for an artifact older than the supported format.
 
     This release reads only the current format; anything older was saved by
-    torchlens 2.x, so every below-floor site raises the one 2.x refusal
+    torchlens 2.37 and earlier, so every below-floor site raises the one pre-2.38 refusal
     (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`) with a stable
     ``fields["code"]``, the ``observed`` version, the floor, a ``remedy`` and the ``path``
     when the caller has one.
@@ -416,7 +416,7 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     Raises
     ------
     ArtifactTooOldError
-        If the state predates the current ``tlspec_version`` (a torchlens 2.x file,
+        If the state predates the current ``tlspec_version`` (a torchlens 2.37 and earlier file,
         including unversioned pre-sprint states).
     UnknownPersistedFieldError
         If ``cls`` is provided, a governed artifact load is in progress, and
