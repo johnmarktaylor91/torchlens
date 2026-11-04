@@ -993,7 +993,7 @@ tests/test_perf6_label_index.py,4,0.15,0.13,unmarked
 tests/test_perf6_parity_warm_up.py,2,0.02,0.01,unmarked
 tests/test_perf7_eviction_walk.py,2,8.34,8.33,heavy
 tests/test_perf7_fork_reads.py,2,0.11,0.06,unmarked
-tests/test_perf8_fork_copy.py,47,10.19,7.79,heavy
+tests/test_perf8_fork_copy.py,48,4.79,2.99,heavy
 tests/test_perf_ab.py,10,0.07,0.01,unmarked
 tests/test_perf_bundle.py,13,1.59,1.25,slow
 tests/test_perf_gate.py,14,2.00,1.91,heavy
