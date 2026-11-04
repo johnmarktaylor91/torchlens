@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import importlib
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -346,6 +349,58 @@ def test_validation_skip_shaped_acceptance_meta_test(capture):
     assert verdict.reason == "edge_boundary_reexecution_mismatch"
 
 
+#: Format 3 reads these once per process (``functools.cache``) from the field
+#: policy tables: the record schema, the persisted-field sets and the
+#: writer-contract digest the reader checks.
+_POLICY_DERIVED_CACHES = (
+    ("torchlens._io.field_registry", "record_field_policies"),
+    ("torchlens._io.field_registry", "persisted_field_names"),
+    ("torchlens._io.field_registry", "field_tiers"),
+    ("torchlens._io.state_contract", "_known_keys_for"),
+    ("torchlens._io.format3.schema", "record_schema"),
+    ("torchlens._io.format3.schema", "schema_digest"),
+    ("torchlens._io.format3.schema", "_record_kinds_by_class"),
+    ("torchlens._io.format3.codec_policy", "payload_columns"),
+    ("torchlens._io.format3.restore", "computed_columns"),
+    ("torchlens._io.format3.restore", "_stored_columns"),
+    ("torchlens._io.format3._families", "_bound_families"),
+    ("torchlens._io.format3._families", "_guard_cells"),
+    ("torchlens._io.format3.validate", "_current_contract_digest"),
+)
+
+
+def _rebuild_policy_caches() -> None:
+    for module, name in _POLICY_DERIVED_CACHES:
+        getattr(importlib.import_module(module), name).cache_clear()
+
+
+@contextmanager
+def _regressed_edge_schema(
+    monkeypatch: pytest.MonkeyPatch, fields: tuple[str, ...], *, state_spec: bool = False
+) -> Iterator[None]:
+    """Run a block in a runtime whose ``fields`` are declared DROP again.
+
+    A real regressed runtime would build its schema, persisted-field sets and
+    writer-contract digest from the regressed tables, so the cached copies are
+    rebuilt on entry, and again on exit so no later test sees the regression.
+    """
+
+    from torchlens._data_classes.op import Op
+    from torchlens._io import FieldPolicy
+
+    try:
+        with monkeypatch.context() as patch:
+            for field_name in fields:
+                entry = replace(Op._FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP)
+                patch.setitem(Op._FIELD_POLICY, field_name, entry)
+                if state_spec:
+                    patch.setitem(Op._PORTABLE_STATE_SPEC, field_name, FieldPolicy.DROP)
+            _rebuild_policy_caches()
+            yield
+    finally:
+        _rebuild_policy_caches()
+
+
 def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkeypatch):
     """The erasure-prevention invariant survives the bump as a tripwire.
 
@@ -355,25 +410,18 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
     public level rather than silently erasing edge provenance.
     """
 
-    from dataclasses import replace
-
-    from torchlens._data_classes.op import Op
-    from torchlens._io import FieldPolicy
-
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    entry = Op._FIELD_POLICY["edge_substitutions"]
-    monkeypatch.setitem(
-        Op._FIELD_POLICY, "edge_substitutions", replace(entry, portable_policy=FieldPolicy.DROP)
-    )
-    for index, level in enumerate(("audit", "executable_with_callables", "portable", "runnable")):
-        with pytest.raises(Exception) as excinfo:
-            fork.save(tmp_path / f"edge_{index}.tlspec", level=level)
-        assert getattr(excinfo.value, "fields", {}).get("code") == (
-            "edge_intervention_save_unsupported"
-        ), level
-    # non-edge saves are untouched even under the regressed schema
-    trace.save(tmp_path / "clean.tlspec", level="audit")
+    with _regressed_edge_schema(monkeypatch, ("edge_substitutions",)):
+        levels = ("audit", "executable_with_callables", "portable", "runnable")
+        for index, level in enumerate(levels):
+            with pytest.raises(Exception) as excinfo:
+                fork.save(tmp_path / f"edge_{index}.tlspec", level=level)
+            assert getattr(excinfo.value, "fields", {}).get("code") == (
+                "edge_intervention_save_unsupported"
+            ), level
+        # non-edge saves are untouched even under the regressed schema
+        trace.save(tmp_path / "clean.tlspec", level="audit")
 
 
 # Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
@@ -411,41 +459,30 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
     divergence oracle.
     """
 
-    from dataclasses import replace
-
-    from torchlens._data_classes.op import Op
-    from torchlens._io import FieldPolicy
-
     model, x, trace = capture
     fork = trace.fork()
     fork.do(_edge(trace).__selection__(), tl.zero_ablate())
     bundle_module = importlib.import_module("torchlens._io.bundle")
     monkeypatch.setattr(bundle_module, "_refuse_edge_intervened_save", lambda _trace: None)
-    for field_name in ("edge_substitutions", "edge_replacement_stamps"):
-        monkeypatch.setitem(
-            Op._FIELD_POLICY,
-            field_name,
-            replace(Op._FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
-        )
-    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
-    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
+    carriers = ("edge_substitutions", "edge_replacement_stamps")
     path = tmp_path / "forced_edge.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        fork.save(path, level="executable_with_callables")
-    loaded = tl.load(path)
-    loaded_child = loaded.layers["conv2d_2_3"].ops[0]
-    assert not loaded_child.edge_substitutions
-    assert not loaded_child.edge_replacement_stamps
+    with _regressed_edge_schema(monkeypatch, carriers, state_spec=True):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fork.save(path, level="executable_with_callables")
+        loaded = tl.load(path)
+        loaded_child = loaded.layers["conv2d_2_3"].ops[0]
+        assert not loaded_child.edge_substitutions
+        assert not loaded_child.edge_replacement_stamps
 
-    # Trace func callables are DROP at this schema level. Reattach only the
-    # source callables so the forced artifact reaches the divergence oracle.
-    for loaded_op in loaded._layer_list:
-        source_op = fork.layers[loaded_op.layer_label].ops[0]
-        loaded_op._internal_set("func", source_op.func)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert loaded.validate_forward_pass(model(x)) is False
+        # Trace func callables are DROP at this schema level. Reattach only the
+        # source callables so the forced artifact reaches the divergence oracle.
+        for loaded_op in loaded._layer_list:
+            source_op = fork.layers[loaded_op.layer_label].ops[0]
+            loaded_op._internal_set("func", source_op.func)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            assert loaded.validate_forward_pass(model(x)) is False
 
 
 def test_tap_masked_values(capture):

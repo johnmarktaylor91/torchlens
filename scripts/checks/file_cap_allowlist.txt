@@ -238,7 +238,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	503
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3785
+torchlens/_io/runnable_load.py	3712
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -386,7 +386,7 @@ torchlens/_registry/kernel.py::Registry.register	88
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
 torchlens/_robustness.py::check_model_and_input_variants	262
-torchlens/_runnable/__init__.py	1779
+torchlens/_runnable/__init__.py	1824
 torchlens/_runnable/__init__.py::derive_required_witness_members	82
 torchlens/_runnable/attestation.py::_nondeterministic_value_sources	180
 torchlens/_runnable/call_arguments.py::_execute_sparse_call	64
@@ -1102,7 +1102,7 @@ torchlens/intervention/_patch_mapping.py::apply_position_map	72
 torchlens/intervention/_position_edits.py::positions	85
 torchlens/intervention/_replay_cone.py::cone_of_effect	65
 torchlens/intervention/_rerun_ledger.py::_build_ledger_record	66
-torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	401
+torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	367
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key._enforce_foreign_trust	69
 torchlens/intervention/_runtime_probes.py::_apply_inplace_replacement_to_mutated_storage	72
 torchlens/intervention/_spec_codec.py::_deserialize_intervention_spec	72

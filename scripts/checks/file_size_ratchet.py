@@ -193,7 +193,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
     "torchlens/_io/bundle.py": 3850,
-    "torchlens/_io/runnable_load.py": 3850,
+    "torchlens/_io/runnable_load.py": 3750,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);

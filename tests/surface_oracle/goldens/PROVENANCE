@@ -1814,3 +1814,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
 recorded: 2026-11-03T08:04:43.458201+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:49.367359+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:50.318743+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:51.228156+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:52.271531+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:53.270608+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-133 fixq6-g3 (format 3, tlspec 12, docs/maintainers/saved_format_3.md): trace.tlspec_version 11 to 12; Op.edge_substitutions and Op.edge_replacement_stamps settled from null to {} on the live side before every save (writer.settle_live_side); op.is_constant persisted and op.arg_expressions restored (contract.py PLANNED_KEYS empty at tlspec 12); a loaded record finishes construction and keeps its saved _out_dedup_mode, _warned_* flags and module forward templates, each now equal to live; trace._buffer_persistence loads its saved null (format3/restore.py true_up_record, tests/test_format3_round_trip_fidelity.py); gpu_kernels keys from census-order f229dff89 removed after recording (not a format 3 change; routed on wip/mp-census-order)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e42f1f58f09fcfb38552c13fba9e860a15b72857 (dirty)
+recorded: 2026-11-03T23:45:54.188693+00:00

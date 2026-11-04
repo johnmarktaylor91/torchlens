@@ -40,14 +40,6 @@ from typing import Any
 
 import torch
 
-from ..._runnable._schema_versions import (
-    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
-    RUNNABLE_CALL_RECIPE_VERSION,
-    RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-    RUNNABLE_INITIALIZER_POLICY_VERSION,
-    RUNNABLE_TLSPEC_SCHEMA_VERSION,
-    WITNESS_FAMILY_REGISTRY_VERSION,
-)
 from .._json import read_bounded
 from ..paths import reject_symlink_path
 from .contract import REFUSAL_CODES, RUNNABLE_DIR
@@ -133,6 +125,16 @@ def component_versions() -> dict[str, Any]:
         The runnable rows of the writer contract envelope, by component name.
     """
 
+    # Deferred: the frozen wire versions live in the L3 runnable vocabulary.
+    from ..._runnable import (
+        RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
+        RUNNABLE_CALL_RECIPE_VERSION,
+        RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
+        RUNNABLE_INITIALIZER_POLICY_VERSION,
+        RUNNABLE_TLSPEC_SCHEMA_VERSION,
+        WITNESS_FAMILY_REGISTRY_VERSION,
+    )
+
     return {
         "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
         "runnable_activation_payload": RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -179,12 +181,13 @@ def manifest_versions() -> dict[str, str]:
         Manifest key to the component version this runtime writes and reads.
     """
 
+    versions = component_versions()
     return {
-        "descriptor_version": RUNNABLE_TLSPEC_SCHEMA_VERSION,
-        "call_recipe_version": RUNNABLE_CALL_RECIPE_VERSION,
-        "callable_ref_version": str(RUNNABLE_CALLABLE_REF_SCHEMA_VERSION),
-        "initializer_policy_version": RUNNABLE_INITIALIZER_POLICY_VERSION,
-        "witness_registry_version": WITNESS_FAMILY_REGISTRY_VERSION,
+        "descriptor_version": versions["runnable_descriptor"],
+        "call_recipe_version": versions["runnable_call_recipe"],
+        "callable_ref_version": str(versions["runnable_callable_ref"]),
+        "initializer_policy_version": versions["runnable_initializer_policy"],
+        "witness_registry_version": versions["witness_family_registry"],
     }
 
 
@@ -333,7 +336,7 @@ def _read_descriptor(root: Path, files: Mapping[str, Any]) -> Mapping[str, Any]:
             _ALTERED,
         )
     if not isinstance(descriptor, Mapping) or (
-        descriptor.get("capability") == RUNNABLE_TLSPEC_SCHEMA_VERSION
+        descriptor.get("capability") == component_versions()["runnable_descriptor"]
         and not isinstance(descriptor.get("ambient_context"), Mapping)
     ):
         _refuse(
