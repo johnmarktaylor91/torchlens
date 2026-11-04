@@ -4,9 +4,9 @@ This page explains what happens inside TorchLens between `tl.trace(model, x)` an
 read afterwards, and what the later operations (lookups, gradients, edits, drawing, saving) do with
 it. It is written for someone who has run TorchLens at least once and wants a working model of the
 internals, either to predict its behaviour or to start reading the code. Terms are used with the
-meanings fixed in the [glossary](reference/glossary.md). Contributors who need the module-by-module
+meanings fixed in the [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md). Contributors who need the module-by-module
 map, package boundaries and the rules for changing them should continue with the
-[maintainer architecture page](maintainers/architecture.md).
+[maintainer architecture page](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/maintainers/architecture.md).
 
 ```mermaid
 flowchart LR
@@ -134,7 +134,7 @@ Grouping is structural. Two Ops belong to the same Layer when they share four th
 module instance that ran them, the call site (the Python frame chain inside that module's
 `forward`), the operation name, and the output slot. A `for` loop that applies the same code three
 times therefore yields one Layer with three passes, while the same three calls written out by hand
-yield three Layers, because their call sites differ. The [grouping guide](guides/grouping.md)
+yield three Layers, because their call sites differ. The [grouping guide](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/grouping.md)
 covers the rule and its edge cases.
 
 Final labels follow from this. A Layer label has the form `{layer_type}_{type_num}_{total_num}`,
@@ -303,7 +303,7 @@ realizing the computation once. You select one with `tl.trace(..., backend=...)`
 backends build their traces through a shared finalizer that reuses the torch pipeline's loop
 grouping and module-record steps, so they produce the same `Trace`, `Layer` and `Op` types and the
 same label and lookup rules. What each backend supports is listed in its scorecard. See
-[Backends](backends.md).
+[Backends](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/backends.md).
 
 ## The sparse path
 
@@ -336,9 +336,9 @@ All paths are inside the `torchlens/` package.
 
 ## Further reading
 
-- [Glossary](reference/glossary.md): the meaning of every public term used here.
-- [Grouping guide](guides/grouping.md): how Ops become Layers, in detail.
-- [Intervention API](intervention_api.md): every editing door and its options.
-- [Backward](backward.md): gradients and the backward graph.
-- [Maintainer architecture](maintainers/architecture.md): package boundaries and rules for
+- [Glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md): the meaning of every public term used here.
+- [Grouping guide](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/grouping.md): how Ops become Layers, in detail.
+- [Intervention API](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/intervention_api.md): every editing door and its options.
+- [Backward](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/backward.md): gradients and the backward graph.
+- [Maintainer architecture](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/maintainers/architecture.md): package boundaries and rules for
   changing them.
