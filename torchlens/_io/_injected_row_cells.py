@@ -103,8 +103,8 @@ def check_injection_provenance_row(record: Any, label: str) -> None:
 
     Shared by the layer_list surface validator in
     :mod:`torchlens._io.forgery_validation` (defense in depth --
-    the F44 load split removes genuine injected rows before it runs) and by
-    the F44 codec's split validator
+    the load split removes genuine injected rows before it runs) and by
+    the injected-op codec's split validator
     (:mod:`torchlens._io.injection_codec`), so a forged record refuses with
     the same typed code from either door.
     """
