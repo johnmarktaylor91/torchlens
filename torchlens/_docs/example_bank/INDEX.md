@@ -5,13 +5,13 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-467 examples, 1213 public names, 145 tasks.
+470 examples, 1219 public names, 147 tasks.
 
 ## By task
 
 | Task | Examples |
 |---|---|
-| ablate | bundle.md#bundle-fork-do, layer.md#layer-do-ablate, namespaces.md#namespaces-experiment, op.md#op-do-ablate, tasks.md#tasks-ablate, toplevel.md#toplevel-edit-zero-ablate, toplevel.md#toplevel-edit-mean-ablate, traps.md#traps-module-edit-read-op-wrong, traps.md#traps-module-edit-read-op-right, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-save-load-edited, workflows.md#workflows-bundle-rank-edits |
+| ablate | bundle.md#bundle-fork-do, layer.md#layer-do-ablate, namespaces.md#namespaces-experiment, namespaces.md#namespaces-mechinterp-ablation-controls, op.md#op-do-ablate, tasks.md#tasks-ablate, toplevel.md#toplevel-edit-zero-ablate, toplevel.md#toplevel-edit-mean-ablate, traps.md#traps-module-edit-read-op-wrong, traps.md#traps-module-edit-read-op-right, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-save-load-edited, workflows.md#workflows-bundle-rank-edits |
 | activations | module.md#module-outputs, module.md#modulecall-outputs, options.md#options-detach-saved, options.md#options-activation-transform, options.md#options-output-device-save-mode |
 | agent | namespaces.md#namespaces-agent, trace.md#trace-to-agent-json |
 | agent-inspect | tasks.md#tasks-agent-inspect |
@@ -19,7 +19,7 @@ By name lists the 3 most focused examples first;
 | appliances | namespaces.md#namespaces-appliances, trace.md#trace-using-appliance |
 | arguments | module.md#module-forward-args, module.md#modulecall-args |
 | aten | options.md#options-aten-ops, trace.md#trace-aten-ops |
-| attention | toplevel.md#toplevel-select-facet-head |
+| attention | namespaces.md#namespaces-transformer-generation-step, toplevel.md#toplevel-select-facet-head |
 | attribution | namespaces.md#namespaces-attribution, tasks.md#tasks-attribution |
 | audit | trace.md#trace-intervention-audit |
 | autograd | layer.md#layer-grad-fn, layer.md#layer-grad-fn-after-backward, op.md#op-grad-fn, op.md#op-grad-fn-after-backward |
@@ -34,10 +34,11 @@ By name lists the 3 most focused examples first;
 | call-tree | module.md#module-call-tree-facts, module.md#module-call-tree-walk, module.md#module-show-call-tree, module.md#modulecall-children, module.md#modulecall-show-call-tree, trace.md#trace-call-tree-walk, trace.md#trace-show-call-tree |
 | capture | capture.md#capture-trace-read-op, capture.md#capture-trace-list-op-labels, capture.md#capture-save-selector, namespaces.md#namespaces-options, namespaces.md#namespaces-experimental, options.md#options-input-output-transform, options.md#options-save-args-rng, options.md#options-source-context, options.md#options-structure-only, options.md#options-keep-orphans, options.md#options-name-seed, options.md#options-chunk-size, options.md#options-carry-state, options.md#options-aten-ops, options.md#options-cache, tasks.md#tasks-capture, toplevel.md#toplevel-classes-trace-layer-op, toplevel.md#toplevel-trace-save-all, toplevel.md#toplevel-release-model |
 | compare | namespaces.md#namespaces-bundle, namespaces.md#namespaces-differential, namespaces.md#namespaces-fingerprint, selection.md#selection-align-to |
-| compare-runs | bundle.md#bundle-build-read, bundle.md#bundle-container-facts, bundle.md#bundle-ops-layers, bundle.md#bundle-at-site, bundle.md#bundle-modules-params-buffers, bundle.md#bundle-supergraph, bundle.md#bundle-add, bundle.md#bundle-remove, bundle.md#bundle-remove-except, bundle.md#bundle-clear, bundle.md#bundle-capacity-evicts, bundle.md#bundle-compare, bundle.md#bundle-rank-changes, bundle.md#bundle-comparability, bundle.md#bundle-stored-comparison, bundle.md#bundle-map, bundle.md#bundle-run, bundle.md#bundle-vary, bundle.md#bundle-show-repr, bundle.md#bundle-relate-upstream-downstream, bundle.md#bundle-relation-grades, bundle.md#bundle-episode-status, tasks.md#tasks-compare-runs, toplevel.md#toplevel-changed, toplevel.md#toplevel-top-changed, workflows.md#workflows-bundle-several-inputs, workflows.md#workflows-bundle-rank-edits |
+| compare-runs | bundle.md#bundle-build-read, bundle.md#bundle-container-facts, bundle.md#bundle-ops-layers, bundle.md#bundle-at-site, bundle.md#bundle-modules-params-buffers, bundle.md#bundle-supergraph, bundle.md#bundle-add, bundle.md#bundle-remove, bundle.md#bundle-remove-except, bundle.md#bundle-clear, bundle.md#bundle-capacity-evicts, bundle.md#bundle-compare, bundle.md#bundle-rank-changes, bundle.md#bundle-comparability, bundle.md#bundle-stored-comparison, bundle.md#bundle-map, bundle.md#bundle-run, bundle.md#bundle-vary, bundle.md#bundle-show-repr, bundle.md#bundle-card-exports, bundle.md#bundle-relate-upstream-downstream, bundle.md#bundle-relation-grades, bundle.md#bundle-episode-status, tasks.md#tasks-compare-runs, toplevel.md#toplevel-changed, toplevel.md#toplevel-top-changed, workflows.md#workflows-bundle-several-inputs, workflows.md#workflows-bundle-rank-edits |
 | compat | namespaces.md#namespaces-compat |
 | conditionals | layer.md#layer-conditional-test, layer.md#layer-conditional-body, layer.md#layer-conditional-children, op.md#op-conditional-test, op.md#op-conditional-body, op.md#op-conditional-children |
 | containers | op.md#op-containers |
+| controls | namespaces.md#namespaces-mechinterp-ablation-controls |
 | cost | layer.md#layer-cost-facts, module.md#module-flops, op.md#op-cost-facts, trace.md#trace-compute-coverage, trace.md#trace-profile |
 | custom-function | grad_fn.md#grad-fn-custom-node |
 | debug | namespaces.md#namespaces-debug, trace.md#trace-uncalled-modules, trace.md#trace-audit, trace.md#trace-nonfinite |
@@ -52,7 +53,7 @@ By name lists the 3 most focused examples first;
 | examples | namespaces.md#namespaces-examples |
 | experiment | namespaces.md#namespaces-experiment |
 | explain | trace.md#trace-explain |
-| export | layer.md#layer-to-pandas, namespaces.md#namespaces-export, op.md#op-to-pandas |
+| export | bundle.md#bundle-card-exports, layer.md#layer-to-pandas, namespaces.md#namespaces-export, op.md#op-to-pandas |
 | export-html | tasks.md#tasks-export-html |
 | extract-dataset | namespaces.md#namespaces-dataset-extraction, namespaces.md#namespaces-neuro, tasks.md#tasks-extract-dataset, toplevel.md#toplevel-extract-dataset-memory |
 | extract-layers | capture.md#capture-extract-module-outputs, namespaces.md#namespaces-inventory, tasks.md#tasks-extract-layers, toplevel.md#toplevel-pluck-one-layer |
@@ -65,6 +66,7 @@ By name lists the 3 most focused examples first;
 | flops | layer.md#layer-cost-facts, op.md#op-cost-facts, trace.md#trace-compute-coverage |
 | fork | trace.md#trace-fork-do, trace.md#trace-fork-scoped |
 | function | layer.md#layer-func-facts, op.md#op-func-facts, op.md#op-args-facts, op.md#op-arg-templates, op.md#op-saved-args |
+| generation | namespaces.md#namespaces-transformer-generation-step |
 | geometry | namespaces.md#namespaces-repgeom |
 | grad-fn | grad_fn.md#grad-fn-list, grad_fn.md#grad-fn-class-facts, grad_fn.md#grad-fn-neighbours, grad_fn.md#grad-fn-forward-op, grad_fn.md#grad-fn-calls, grad_fn.md#grad-fn-builtin-source, grad_fn.md#grad-fn-custom-node, grad_fn.md#grad-fn-higher-order, grad_fn.md#grad-fn-to-pandas |
 | gradients | bundle.md#bundle-grad-fns, layer.md#layer-grad-facts, layer.md#layer-grad-loop, layer.md#layer-gradient-transform, module.md#module-grads, module.md#modulecall-grads, op.md#op-grad-facts, op.md#op-grads-per-backward, op.md#op-gradient-transform, op.md#op-lazy-grad, options.md#options-save-grads, options.md#options-backward-ready, options.md#options-grad-transform, params.md#params-grad, tasks.md#tasks-gradients, toplevel.md#toplevel-select-grad-fn, toplevel.md#toplevel-select-grad-input-output, toplevel.md#toplevel-select-in-backward-pass, toplevel.md#toplevel-select-without-op, toplevel.md#toplevel-grad-site-edit, trace.md#trace-backward-saved-grads, trace.md#trace-capture-backward, trace.md#trace-armed-edits, traps.md#traps-vjp-copy-wrong, traps.md#traps-vjp-copy-right, workflows.md#workflows-gradients-per-pass, workflows.md#workflows-gradients-match-autograd, workflows.md#workflows-draw-options |
@@ -83,11 +85,11 @@ By name lists the 3 most focused examples first;
 | labels | layer.md#layer-addresses, op.md#op-labels-facts, op.md#op-lookup-keys |
 | layers | module.md#module-layers, module.md#module-container-protocol |
 | lazy | op.md#op-lazy-out, op.md#op-lazy-grad |
-| lm | bundle.md#bundle-token-pairs, bundle.md#bundle-token-divergence, capture.md#capture-lm-final-norm, namespaces.md#namespaces-facets, namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-transformer, trace.md#trace-facets-attention, trace.md#trace-using-appliance, traps.md#traps-final-norm-wrong, traps.md#traps-final-norm-right, traps.md#traps-padding-last-token-wrong, traps.md#traps-padding-last-token-right |
+| lm | bundle.md#bundle-token-pairs, bundle.md#bundle-token-divergence, capture.md#capture-lm-final-norm, namespaces.md#namespaces-facets, namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-transformer, namespaces.md#namespaces-transformer-generation-step, trace.md#trace-facets-attention, trace.md#trace-using-appliance, traps.md#traps-final-norm-wrong, traps.md#traps-final-norm-right, traps.md#traps-padding-last-token-wrong, traps.md#traps-padding-last-token-right |
 | load | namespaces.md#namespaces-io, trace.md#trace-save-load, trace.md#trace-readiness, trace.md#trace-archived-activations, trace.md#trace-load-state-dict |
 | lookup | layer.md#layer-addresses, op.md#op-lookup-keys, trace.md#trace-getitem-label-or-selector, trace.md#trace-iterate, trace.md#trace-boundary-op-views, trace.md#trace-saved-views, trace.md#trace-params-buffers, trace.md#trace-module-calls-root |
 | loops | capture.md#capture-loop-passes, layer.md#layer-label-facts, layer.md#layer-ops-per-pass, layer.md#layer-total-duration-loop, layer.md#layer-cost-facts, layer.md#layer-graph-facts, layer.md#layer-edges-across-passes, layer.md#layer-grad-loop, layer.md#layer-to-pandas, module.md#module-multicall-out-wrong, module.md#module-multicall-out-right, op.md#op-pass-facts, options.md#options-recurrence-detection, options.md#options-vis-rolled, toplevel.md#toplevel-pass-variance, toplevel.md#toplevel-stable-across-passes, trace.md#trace-stack-passes, trace.md#trace-animate, traps.md#traps-layer-label-multipass-wrong, traps.md#traps-layer-label-multipass-right, workflows.md#workflows-loop-read-passes, workflows.md#workflows-loop-pass-values-differ, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-loop-edit-all-passes, workflows.md#workflows-gradients-per-pass, workflows.md#workflows-draw-rolled-loop |
-| mechinterp | namespaces.md#namespaces-mechinterp |
+| mechinterp | namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-mechinterp-ablation-controls |
 | memory | layer.md#layer-tensor-facts, module.md#module-memory, module.md#modulecall-memory, op.md#op-autograd-memory, options.md#options-detach-saved, options.md#options-activation-transform, options.md#options-output-device-save-mode, options.md#options-chunk-size, options.md#options-memory-probes, trace.md#trace-cleanup |
 | metrics | namespaces.md#namespaces-transformer |
 | migrate | namespaces.md#namespaces-compat |
@@ -143,7 +145,7 @@ By name lists the 3 most focused examples first;
 | subgraph | trace.md#trace-between, trace.md#trace-subgraph |
 | summary | tasks.md#tasks-summary, toplevel.md#toplevel-summary-text, trace.md#trace-facts-counts, trace.md#trace-summary, trace.md#trace-to-pandas, trace.md#trace-to-agent-json, trace.md#trace-explain, trace.md#trace-capabilities, trace.md#trace-bill-of-materials, trace.md#trace-narrate |
 | sweep | bundle.md#bundle-why-provenance, bundle.md#bundle-effects, tasks.md#tasks-sweep, toplevel.md#toplevel-sweep-values |
-| table | layer.md#layer-to-pandas, op.md#op-to-pandas, selection.md#selection-to-pandas, trace.md#trace-to-pandas |
+| table | bundle.md#bundle-card-exports, layer.md#layer-to-pandas, op.md#op-to-pandas, selection.md#selection-to-pandas, trace.md#trace-to-pandas |
 | timing | grad_fn.md#grad-fn-calls, layer.md#layer-call-records, layer.md#layer-total-duration-loop, module.md#module-durations, module.md#modulecall-durations-context, op.md#op-call-environment |
 | to-disk | tasks.md#tasks-to-disk, toplevel.md#toplevel-to-disk-stream |
 | trackers | namespaces.md#namespaces-trackers |
@@ -239,7 +241,10 @@ By name lists the 3 most focused examples first;
 | `Bundle.store_comparison` | bundle.md#bundle-stored-comparison |
 | `Bundle.stored_comparison` | bundle.md#bundle-stored-comparison |
 | `Bundle.stored_comparison_names` | bundle.md#bundle-stored-comparison |
+| `Bundle.summary` | bundle.md#bundle-card-exports |
 | `Bundle.supergraph` | bundle.md#bundle-supergraph |
+| `Bundle.to_agent_json` | bundle.md#bundle-card-exports |
+| `Bundle.to_pandas` | bundle.md#bundle-card-exports |
 | `Bundle.token_divergence` | bundle.md#bundle-token-divergence |
 | `Bundle.token_pairs` | bundle.md#bundle-token-pairs |
 | `Bundle.upstream` | bundle.md#bundle-relate-upstream-downstream |
@@ -1092,6 +1097,8 @@ By name lists the 3 most focused examples first;
 | `tl.low_variance` | toplevel.md#toplevel-low-variance |
 | `tl.mean_ablate` | toplevel.md#toplevel-edit-mean-ablate |
 | `tl.mechinterp` | namespaces.md#namespaces-mechinterp |
+| `tl.mechinterp.ablation_controls` | namespaces.md#namespaces-mechinterp-ablation-controls |
+| `tl.mechinterp.AblationControlsReport` | namespaces.md#namespaces-mechinterp-ablation-controls |
 | `tl.mechinterp.measure_trajectory` | namespaces.md#namespaces-mechinterp |
 | `tl.merge_ranks` | toplevel.md#toplevel-merge-ranks-refuses-local |
 | `tl.merge_report` | toplevel.md#toplevel-merge-report-refuses-local |
@@ -1160,6 +1167,7 @@ By name lists the 3 most focused examples first;
 | `tl.trackers.MemorySink` | namespaces.md#namespaces-trackers |
 | `tl.trackers.ScalarPoint` | namespaces.md#namespaces-trackers |
 | `tl.transformer` | namespaces.md#namespaces-transformer |
+| `tl.transformer.attention_view` | namespaces.md#namespaces-transformer-generation-step |
 | `tl.transformer.token_metrics` | namespaces.md#namespaces-transformer |
 | `tl.transforms` | namespaces.md#namespaces-transforms |
 | `tl.transforms.flatten` | namespaces.md#namespaces-transforms |

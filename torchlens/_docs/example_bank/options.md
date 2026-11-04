@@ -660,7 +660,7 @@ for mode in ["never", "meaningful", "always"]:
 # Output:
 # never 1
 # meaningful 1
-# always 2
+# always 1
 ```
 
 ### options-vis-backward-graph

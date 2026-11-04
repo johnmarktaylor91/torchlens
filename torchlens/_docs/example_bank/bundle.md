@@ -410,6 +410,26 @@ print(sorted(shown), type(shown["clean"]).__name__)
 # ['clean', 'shifted'] str
 ```
 
+### bundle-card-exports
+The bundle card as text, one member-keyed table, and the agent dump with each member's own dump inside.
+
+- covers: `Bundle.summary`, `Bundle.to_pandas`, `Bundle.to_agent_json`
+- tasks: compare-runs, table, export
+- fixture: toy
+
+```python
+bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)}, baseline="clean")
+print(bundle.summary().splitlines()[1].strip())
+table = bundle.to_pandas()
+print(list(table.columns)[0], list(table["member"].unique()))
+dump = bundle.to_agent_json(max_ops=2)
+print(dump["schema"], dump["baseline_name"], sorted(dump["members"]))
+# Output:
+# members (2): clean (baseline), shifted
+# member ['clean', 'shifted']
+# torchlens.agent_bundle.v1 clean ['clean', 'shifted']
+```
+
 ## Relations between members
 
 ### bundle-relate-upstream-downstream

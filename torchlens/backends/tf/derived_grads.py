@@ -27,6 +27,12 @@ from ..._data_classes.derived_grad import (
 )
 from ..._data_classes.trace import Trace
 from ..._ir.refs import DtypeRef
+from .._entry_refusals import (
+    refuse_if_bad_max_intermediate_grads,
+    refuse_tf_loss_not_scalar,
+    refuse_tf_no_grad_leaves,
+    refuse_tf_replay_diverged,
+)
 from .._finalize import mirror_param_derived_grads, stable_callable_name as _callable_identity
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
@@ -66,8 +72,7 @@ class GradOptions:
     ) -> None:
         """Initialize TensorFlow derived-gradient options."""
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "loss_fn", loss_fn)
         normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
         object.__setattr__(self, "input_grad_argnums", normalized)
@@ -192,10 +197,7 @@ def attach_tf_derived_grads(
     param_leaves = _tf_param_grad_leaves(trace)
     all_leaves = (*leaves, *param_leaves)
     if not all_leaves and not grad_options.intermediate_grads:
-        raise ValueError(
-            "TensorFlow derived gradients require at least one floating tensor "
-            "input or module parameter."
-        )
+        refuse_tf_no_grad_leaves()
     previous_call_counts = dict(module_tree.call_counts) if module_tree is not None else None
     previous_forward_args = (
         dict(module_tree.forward_args_by_call) if module_tree is not None else None
@@ -225,15 +227,9 @@ def attach_tf_derived_grads(
                 else replay_result.output
             )
         if not _is_scalar_float_tf_tensor(loss, tf):
-            raise ValueError(
-                "TensorFlow derived gradients require loss_fn(raw_output) to be a "
-                "scalar float tensor unless the traced output is already scalar."
-            )
+            refuse_tf_loss_not_scalar()
         if not _tf_trees_close(tf, replay_result.output, captured_output):
-            raise ValueError(
-                "TensorFlow derived gradient run raw output diverged from captured "
-                "raw output; refusing to expose trace.autograd.derived_grads."
-            )
+            refuse_tf_replay_diverged()
         intermediate_accessor = IntermediateDerivedGradAccessor()
         if grad_options.intermediate_grads:
             intermediate_accessor = _records_for_intermediate_tf_grads(
