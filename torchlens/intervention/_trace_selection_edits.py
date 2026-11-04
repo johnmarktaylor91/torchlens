@@ -607,5 +607,4 @@ def settle_edited_product(trace: Any) -> None:
     from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
 
     quarantine_episode_after_perturbed_replay(trace)
-    if getattr(trace, "_decoded_output", None) is not None:
-        refresh_decoded_output(trace)
+    refresh_decoded_output(trace)  # no-op when the capture decoded nothing

@@ -96,7 +96,7 @@ def _unmet_log_precondition(log: Trace) -> str | None:
         getattr(log, "is_replayable", False)
         or getattr(getattr(log, "options", None), "save_arg_templates", False)
     ):
-        backend = str(getattr(log, "_provenance_backend", None) or TORCH_BACKEND_NAME)
+        backend = str(log.provenance.backend or TORCH_BACKEND_NAME)
         if backend != TORCH_BACKEND_NAME:
             return (
                 f"the {backend} preview backend cannot edit or patch a finished trace: replay "

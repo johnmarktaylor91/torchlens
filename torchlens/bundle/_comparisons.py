@@ -363,5 +363,6 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
     if native is not None:
         return native
     trace = getattr(layer, "source_trace", None)
-    codec = get_payload_codec(str(getattr(trace, "_provenance_backend", "torch")))
+    backend = "torch" if trace is None else trace.provenance.backend
+    codec = get_payload_codec(str(backend))
     return _read_tensor_field(layer, field, codec)
