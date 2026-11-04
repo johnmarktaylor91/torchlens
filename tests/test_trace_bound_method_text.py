@@ -91,3 +91,20 @@ def test_generate_text_without_any_tokenizer_still_refuses() -> None:
     model = _model()
     with pytest.raises(TypeError, match="model.tokenizer"):
         tl.trace(model.generate, PROMPT, input_kwargs=GENERATE)
+
+
+@pytest.mark.real_model
+def test_gpt2_generate_text_as_the_readme_spells_it() -> None:
+    """The README call: pretrained GPT-2, text straight into ``generate``."""
+
+    model = transformers.AutoModelForCausalLM.from_pretrained("gpt2").eval()
+    text = "The capital of France is"
+    from_text = tl.trace(model.generate, text, input_kwargs={"max_new_tokens": 4})
+    model.tokenizer = transformers.AutoTokenizer.from_pretrained("gpt2")
+    with_attached = tl.trace(model.generate, text, input_kwargs={"max_new_tokens": 4})
+    ids = model.tokenizer(text, return_tensors="pt").input_ids
+    from_ids = tl.trace(model.generate, ids, input_kwargs={"max_new_tokens": 4})
+
+    assert from_text.provenance.root_entry_point.endswith(".generate")
+    assert len(from_text.ops) == len(with_attached.ops)
+    assert len(from_ids.ops) > 0
