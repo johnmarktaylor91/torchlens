@@ -2462,9 +2462,9 @@ class Op(OpAtenMixin, _SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; an Op does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
