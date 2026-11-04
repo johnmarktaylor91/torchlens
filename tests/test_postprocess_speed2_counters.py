@@ -17,6 +17,7 @@ exactly what the plain ``isinstance`` ladders returned.
 
 from __future__ import annotations
 
+import functools
 import sys
 from collections import defaultdict
 from dataclasses import fields, replace
@@ -83,6 +84,7 @@ def _count_in_step(
         _count_container_ids.__code__: "census",
     }
     real = getattr(owner, step)
+    real = getattr(real, "__wrapped__", real)  # a second call in one test wraps the original
 
     def profiler(frame: FrameType, event: str, _arg: Any) -> None:
         if event == "call":
@@ -91,6 +93,7 @@ def _count_in_step(
                 counts[name] += 1
                 seen.append((name, type(_first_arg(frame))))
 
+    @functools.wraps(real)
     def counted(*args: Any) -> None:
         previous = sys.getprofile()
         sys.setprofile(profiler)
@@ -137,10 +140,11 @@ def test_rename_builds_parent_refs_without_dataclasses_replace(
     trace, counts, seen = _count_in_step(monkeypatch, 4)
     assert counts["replace"] > 0, "the sweep must rebuild dataclass template nodes"
     assert ParentRef not in {cls for name, cls in seen if name == "replace"}
-    final_labels = {op.label for op in trace.ops} | {op.layer_label for op in trace.ops}
     refs = [ref for op in trace.ops for ref in _parent_refs(op.args_template)]
     assert len(refs) >= len(trace.ops) // 2
-    assert all(ref.parent_label in final_labels for ref in refs)
+    # Renamed: each ref resolves as a final lookup key (as replay resolves it), none is raw.
+    assert all(ref.parent_label in trace._layer_dict_all_keys for ref in refs)
+    assert not any("_raw" in ref.parent_label for ref in refs)
 
 
 def test_removal_scrub_reads_dataclass_fields_once_per_class(
