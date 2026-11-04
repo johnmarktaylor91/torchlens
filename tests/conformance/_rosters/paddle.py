@@ -230,8 +230,19 @@ def _fn_constants_planted() -> tuple[Any, Any]:
     return planted, paddle.to_tensor(_X24)
 
 
-_MLP_W1, _MLP_B1 = _param((4, 3)), _param((3,), 0.1)
-_MLP_W2, _MLP_B2 = _param((3, 2), 0.4), _param((2,), 0.05)
+# mod_mlp's input and weights are multiples of 1/32 or coarser: every product and partial sum
+# of both linears is exact in float32, so any summation order (paddle's kernel or NumPy's BLAS,
+# which differ by CPU) gives the oracle's bits. The sin weights left kept relu units of 4.8e-4
+# and 1.7e-3 built from terms near 0.3, where one rounding exceeds the band. Three hidden units
+# are kept and three zeroed.
+_MLP_X = np.array([[-1.0, -0.75, -0.5, -0.25], [0.25, 0.5, 0.75, 1.0]], dtype=np.float32)
+_MLP_W1 = np.array(
+    [[0.25, -0.5, 0.125], [-0.25, 0.25, 0.5], [0.5, -0.25, -0.25], [0.125, 0.5, -0.5]],
+    dtype=np.float32,
+)
+_MLP_B1 = np.array([0.125, -0.25, 0.0625], dtype=np.float32)
+_MLP_W2 = np.array([[0.5, -0.25], [0.25, 0.5], [-0.5, 0.25]], dtype=np.float32)
+_MLP_B2 = np.array([0.0625, -0.125], dtype=np.float32)
 
 
 def _mod_mlp() -> tuple[Any, Any]:
@@ -242,7 +253,7 @@ def _mod_mlp() -> tuple[Any, Any]:
     model = paddle.nn.Sequential(paddle.nn.Linear(4, 3), paddle.nn.ReLU(), paddle.nn.Linear(3, 2))
     _set_linear(model[0], _MLP_W1, _MLP_B1)
     _set_linear(model[2], _MLP_W2, _MLP_B2)
-    return model, paddle.to_tensor(_X24)
+    return model, paddle.to_tensor(_MLP_X)
 
 
 _SHARED_W, _SHARED_B = _param((4, 4)), _param((4,), 0.1)
@@ -490,7 +501,7 @@ def _mod_specs() -> tuple[_SpecTuple, ...]:
             "mod_mlp",
             _mod_mlp,
             ("input", "functional.linear", "functional.relu", "functional.linear"),
-            {"functional.relu": _relu(_X24 @ _MLP_W1 + _MLP_B1)},
+            {"functional.relu": _relu(_MLP_X @ _MLP_W1 + _MLP_B1)},
             False,
         ),
         (
