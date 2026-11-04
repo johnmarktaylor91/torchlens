@@ -129,7 +129,6 @@ def value_line(
     metadata: str,
     stats: Any,
     honesty: str = "",
-    facts: tuple[str, ...] = (),
     *,
     compact: bool = True,
 ) -> str:
@@ -137,7 +136,7 @@ def value_line(
 
     health = _health(stats)
     required = " ".join(part for part in (metadata, honesty, health) if part)
-    base = f"{head}: " + ", ".join((required, *facts))
+    base = f"{head}: {required}"
     if stats is None:
         suffix = ", values not computed" if not honesty else ""
         return base + suffix if len(base + suffix) <= REPR_COLS else base

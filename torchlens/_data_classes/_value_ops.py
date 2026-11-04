@@ -142,7 +142,7 @@ def _op_repr_line(op: Any, *, kind: str = "Op", key: str | None = None) -> str:
     return value_line(f"{kind} {key or display_key(op)}", metadata, stats, honesty)
 
 
-def op_rows(op: Any, *, kind: str = "operation") -> list[tuple[str, str]]:
+def op_rows(op: Any, *, kind: str = "operation", source_text: bool = True) -> list[tuple[str, str]]:
     """Shared text/HTML facts in the house-style row order."""
 
     _, stats, honesty = payload_facts(op)
@@ -158,7 +158,7 @@ def op_rows(op: Any, *, kind: str = "operation") -> list[tuple[str, str]]:
             ("graph", _graph(op)),
             ("function", _function(op)),
             ("source", _source(op)),
-            ("code", _code(op)),
+            ("code", _code(op) if source_text else ""),
         )
     )
     return rows
@@ -196,7 +196,8 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     ops = _first_ops(layer)
     passes = getattr(layer, "num_passes", 1)
     if passes <= 1:
-        return op_rows(ops[0]) if ops else []
+        # Source text belongs to the Op card; Layer keeps its eight-line contract.
+        return op_rows(ops[0], source_text=False) if ops else []
     rows = []
     for op in ops:
         _, stats, honesty = payload_facts(op)

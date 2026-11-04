@@ -33,7 +33,7 @@ def param_repr_line(param: Any) -> str:
     metadata, stats, honesty, _ = _param_facts(param)
     status = "trainable" if getattr(param, "is_trainable", False) else "frozen"
     return value_line(
-        f"Param {getattr(param, 'address', '?')}", metadata, stats, honesty, (status,)
+        f"Param {getattr(param, 'address', '?')}", f"{metadata}, {status}", stats, honesty
     )
 
 
@@ -98,9 +98,10 @@ def buffer_repr_line(buffer: Any) -> str:
 
     metadata, stats, basis = _buffer_facts(buffer)
     versions = len(getattr(buffer, "versions", ()) or ())
-    facts = (_count_words(versions, "version"),) if versions > 1 else ()
+    if versions > 1:
+        metadata += f", {_count_words(versions, 'version')}"
     honesty = METADATA_ONLY if basis == METADATA_ONLY else ""
-    return value_line(f"Buffer {getattr(buffer, 'address', '?')}", metadata, stats, honesty, facts)
+    return value_line(f"Buffer {getattr(buffer, 'address', '?')}", metadata, stats, honesty)
 
 
 def buffer_card(buffer: Any) -> str:
