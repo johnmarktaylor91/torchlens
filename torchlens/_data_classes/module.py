@@ -1664,17 +1664,20 @@ class Module(_ModuleRouting):
         if trace is None:
             return self.params
 
-        module_addresses = [module.address for module in self._recursive_modules_depth_first()]
+        # One pass over the trace's params (iterating them restores live refs), grouped by
+        # owning module in trace order; the depth-first module order then picks each group.
+        # Scanning every param once per descendant module made the save's recursive-param
+        # columns quadratic in model size.
+        params = list(trace._param_logs)
+        params_by_module: dict[Any, list[Any]] = {}
+        for param in params:
+            params_by_module.setdefault(param.module_address, []).append(param)
         recursive_param_dict: dict[str, Any] = {}
-        for module_address in module_addresses:
-            for param in trace._param_logs:
-                if (
-                    param.module_address == module_address
-                    and param.address not in recursive_param_dict
-                ):
-                    recursive_param_dict[param.address] = param
+        for module in self._recursive_modules_depth_first():
+            for param in params_by_module.get(module.address, ()):
+                recursive_param_dict.setdefault(param.address, param)
         # A never-called descendant has no Module record; its params are still in the subtree.
-        for param in trace._param_logs:
+        for param in params:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
