@@ -1217,13 +1217,13 @@ IGNORED_FUNCS = [
     # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
     *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
     # Private Tensor methods whose ``torch.*`` twins are crawled: unwrapped, ``x._neg_view()``
-    # or ``x._to_sparse_csr()`` reached its consumer with no provenance.
+    # or ``x._to_sparse_csr()`` reached its consumer with no provenance (philox: key is a parent).
     *(
         ("torch.Tensor", _private_name)
         for _private_name in (
             *(f"_to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
             *("_conj", "_conj_physical", "_neg_view", "_lazy_clone", "_addmm_activation"),
-            *("_is_all_true", "_is_any_true"),
+            *("_is_all_true", "_is_any_true", "_philox_normal_", "_philox_uniform_"),
         )
         if hasattr(torch.Tensor, _private_name)
     ),

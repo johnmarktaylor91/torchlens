@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -311,7 +312,7 @@ class _TwoConv(nn.Module):
         return torch.relu(self.c2(torch.relu(self.c1(x))))
 
 
-def _selection_fork() -> tl.Trace:
+def _selection_fork(edit: Any = None) -> tl.Trace:
     torch.manual_seed(0)
     trace = tl.trace(
         _TwoConv(),
@@ -319,7 +320,7 @@ def _selection_fork() -> tl.Trace:
         capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = trace.fork()
-    fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate())
+    fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate() if edit is None else edit)
     return fork
 
 
@@ -448,8 +449,12 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
+    # A masked builtin edit stores its mask and digest: the default portable save takes it.
+    fork.save(tmp_path / "portable_selection")
+    assert tl.load(tmp_path / "portable_selection").intervention_audit == live_audit
+    # A masked user callable cannot be rebuilt from the file: the portable save refuses.
     with pytest.raises(OpaqueCallableError) as caught:
-        fork.save(tmp_path / "nonportable_selection")
+        _selection_fork(lambda out, *, ctx: out * 0.5).save(tmp_path / "nonportable_selection")
     assert caught.value.fields["code"] == "intervention_spec_not_portable"
     loaded = _plain_roundtrip(fork, tmp_path, "selection", level="audit")
     assert loaded.intervention_audit == live_audit
