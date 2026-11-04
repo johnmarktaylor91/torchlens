@@ -1959,7 +1959,7 @@ def _label_rolled_call_indexs(
         return
     if is_self_loop and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
-        edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
+        edge_dict["taillabel"] = _html_combined_recurrence_label(top, bottom)
         return
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)
