@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1515
+torchlens/_capture/projections.py	1505
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	103
@@ -99,7 +99,7 @@ torchlens/_data_classes/grad_fn.py	840
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
 torchlens/_data_classes/interface.py::_str_after_pass	63
 torchlens/_data_classes/layer.py	1800
-torchlens/_data_classes/module.py	2621
+torchlens/_data_classes/module.py	2620
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61

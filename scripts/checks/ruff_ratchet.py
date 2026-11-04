@@ -300,7 +300,11 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # the recording-parity work's 5 (PredicateOpIdentity.for_call,
     # _predicate_output_context, _predicate_equivalence_class, Recording.do,
     # Recording.save). Same pinned mode.
-    "PLR0913": 446,
+    # 447 (2026-11-03, same JMT d-90086c50): the measured count of the C-146
+    # merged tree; the one new long signature is memory-lifetime's
+    # _retired_hook_event (torchlens/_utils/rng/monitor_state.py, the retired
+    # host-RNG hook's six profile-callback inputs). Same pinned mode.
+    "PLR0913": 447,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f
