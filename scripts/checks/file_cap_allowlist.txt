@@ -1319,7 +1319,7 @@ torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1294
+torchlens/recording/types.py	1291
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	68
 torchlens/recording/types.py::Recording.to_trace	169

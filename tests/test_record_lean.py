@@ -17,7 +17,8 @@ from _record_lean_facts import SCENARIOS, default_facts, record_default, scenari
 
 import torchlens as tl
 from torchlens import errors
-from torchlens.recording.types import LEAN_OMISSIONS, Recording
+from torchlens._captured_run import LEAN_OMISSIONS
+from torchlens.recording.types import Recording
 
 _GOLDEN = Path(__file__).parent / "data" / "record_lean_default_golden.json"
 _NAMES = [name for name, *_ in SCENARIOS]

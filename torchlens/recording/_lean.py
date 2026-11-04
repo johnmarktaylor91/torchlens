@@ -17,49 +17,13 @@ partial journal.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING
 
-from .._errors import CaptureNotActiveError, InvalidArgumentError
+from .._errors import InvalidArgumentError
 from .exceptions import RecordingConfigError
 
 if TYPE_CHECKING:
     from .options import _RecordingConfig
-
-#: What a lean recording (``tl.record(lean=True)``, PROVISIONAL SPELLING) leaves out.
-LEAN_OMISSIONS: Final[tuple[str, ...]] = (
-    "shell_records_of_unkept_ops",
-    "module_boundary_events_of_unkept_modules",
-    "event_indexes_of_unkept_events",
-    "op_counts",
-)
-
-#: Recording reads that need the full journal and refuse on a lean recording.
-LEAN_REFUSED_READS: tuple[str, ...] = (
-    "event_stream",
-    "op_events",
-    "lazy_trace",
-    "raw_metadata",
-    "to_trace",
-)
-
-
-def is_lean(recording: Any) -> bool:
-    """Return whether ``recording`` was made with the lean journal option."""
-
-    return bool(getattr(object.__getattribute__(recording, "_options"), "lean", False))
-
-
-def refuse_if_lean(recording: Any, read: str) -> None:
-    """Raise ``recording_lean_omitted`` when ``read`` needs the events lean dropped."""
-
-    if is_lean(recording):
-        raise CaptureNotActiveError(
-            f"Recording.{read} needs the journal events of every op, and this recording "
-            "was made with lean=True, which journals only the events its selection keeps "
-            f"(omitted: {', '.join(LEAN_OMISSIONS)})",
-            code="recording_lean_omitted",
-            remedy="record again without lean=True to keep every event",
-        )
 
 
 def validate_lean_value(value: object) -> None:

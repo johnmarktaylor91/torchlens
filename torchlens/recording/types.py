@@ -17,7 +17,6 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
-from ._lean import LEAN_OMISSIONS, is_lean, refuse_if_lean
 
 __all__ = [
     "ActivationRecord",
@@ -736,15 +735,13 @@ class Recording(TraceLike):
     def lean_omissions(self) -> tuple[str, ...]:
         """PROVISIONAL SPELLING. What a lean recording left out; ``()`` for a default one."""
 
-        return LEAN_OMISSIONS if is_lean(self) else ()
-
-    _check_journal_read = refuse_if_lean  # TraceLike event_stream/op_events refuse when lean
+        return self._lean_omissions()
 
     @property
     def lazy_trace(self) -> DryRun:
         """Return a lazy trace projection over all capture events (refused when lean)."""
 
-        refuse_if_lean(self, "lazy_trace")
+        self._check_journal_read("lazy_trace")
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
 
@@ -800,7 +797,7 @@ class Recording(TraceLike):
 
         from .exceptions import RecorderStateError
 
-        refuse_if_lean(self, "raw_metadata")
+        self._check_journal_read("raw_metadata")
         if self.event_stream is None:
             raise RecorderStateError(
                 "this Recording no longer holds its raw capture event stream "
@@ -1100,7 +1097,7 @@ class Recording(TraceLike):
             raw activation payload to bind as the output frontier.
         """
 
-        refuse_if_lean(self, "to_trace")
+        self._check_journal_read("to_trace")
         if self.is_failed:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
