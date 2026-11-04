@@ -30,7 +30,7 @@ from torchlens._io.writer_contract import writer_contract
 from torchlens.dataset_extraction import load_extraction, open_extraction
 from torchlens.errors import ArtifactTooOldError
 
-_PIN = "torchlens>=2.36,<2.38"
+_PIN = 'pip install "torchlens<2.38"'
 
 
 def _saved_trace(tmp_path: Path) -> tuple[Path, str]:
@@ -195,6 +195,8 @@ def test_file_saved_by_torchlens_2_refuses_at_load(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "load it with torchlens 2.36.x" in message
     assert "capture the model again" in message
+    assert "before 2.38; torchlens 2.38 and later do not read it" in message
+    assert "torchlens 3" not in message
     _assert_below_floor(excinfo.value, "2.36.3", path)
 
 

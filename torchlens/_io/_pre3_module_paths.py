@@ -80,8 +80,8 @@ _PRE_3_GLOBALS = frozenset(
 )
 
 _REMEDY = (
-    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<2.38'), or "
-    "capture the model again with this release and save that."
+    'load it with torchlens 2.36.x or 2.37.x, which read it (pip install "torchlens<2.38"), '
+    "or capture the model again with this release and save that."
 )
 
 #: Extra remedy sentence for a format_version-1 intervention spec: unlike a saved trace,
@@ -132,8 +132,8 @@ def pre_3_artifact_error(
 
     remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
     return ArtifactTooOldError(
-        f"This artifact was saved by torchlens 2.x ({observed}); torchlens 3 does not read "
-        f"files saved by torchlens 2.x. Remedy: {remedy}",
+        f"This artifact was saved by torchlens 2.x ({observed}), before 2.38; torchlens 2.38 "
+        f"and later do not read it. Remedy: {remedy}",
         code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
