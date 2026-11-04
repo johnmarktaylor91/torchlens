@@ -151,6 +151,8 @@ def _group_identity(group: Any, summary: Any) -> str:
 def _group_facts(name: str, trace: Any, summary: Any) -> list[str]:
     """Reuse Trace wording through the record's existing report door."""
 
+    # Keep the concern dispatch cohesive so every group shares the same
+    # stored-fact policy; its essential branches exceed the usual CC target.
     if name == "TraceGraph":
         return [summary._graph_text(trace)]
     if name == "TraceHealth":

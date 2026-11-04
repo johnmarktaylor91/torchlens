@@ -11,6 +11,7 @@ import torchlens as tl
 import torchlens.intervention
 from torchlens._data_classes.func_call_location import FuncCallLocation
 from torchlens._ir.events import GradFnDiscovered
+from torchlens._selection.resolver import _SiteTable
 from torchlens._utils import _display_card
 from torchlens._utils._display_bounded import RecordTuple, short_dataclass_repr
 from torchlens._utils._display_errors import lookup_message
@@ -51,6 +52,8 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
     selection = trace[tl.func("relu")]
     objects = [
         trace.event_stream,
+        trace.event_stream.op_events,
+        trace.aten_ops,
         *trace.aten_ops,
         trace.autograd.grad_fns[0],
         trace.autograd.grad_fns[0].calls[0],
@@ -67,6 +70,8 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
         InterventionValidationReport(True, True, False, True, True, {}),
         selection,
         selection[0],
+        _SiteTable(tuple(trace._layer_list)),
+        trace["relu_1"].edge_uses[0],
         recipe,
         recipe.rules[0],
         recipe.bind(nn.ReLU()),
@@ -101,6 +106,19 @@ def test_option_and_error_columns_align_to_longest_label():
         "  candidates 'near', 'far'",
         "  remedy     choose a key",
     ]
+
+
+def test_group_display_guards_the_report_door(trace, monkeypatch):
+    """A failed deferred report import cannot break notebook display."""
+
+    from torchlens._data_classes import _trace_groups
+
+    def unavailable():
+        raise ImportError("report unavailable")
+
+    monkeypatch.setattr(_trace_groups._doors, "report", unavailable)
+    assert repr(trace.graph) == "TraceGraph: display unavailable"
+    assert str(trace.graph) == repr(trace.graph)
 
 
 def test_candidates_rank_before_cut_and_remedy_survives():
