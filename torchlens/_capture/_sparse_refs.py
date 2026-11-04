@@ -9,13 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import torch
-
 from .._ir.events import FunctionCallRef, ModuleFrame, OutputRef
 from .._ir.op_record import GraphFacet, ParamsFacet
 from .._ir.predicate import ModuleStackFrame, RecordContext
 from .._ir.refs import ParamRef, TensorRef
-from .._utils._torch_symbols import torch_dtype_named
 
 __all__ = (
     "_SparseFreezeValues",
@@ -24,8 +21,6 @@ __all__ = (
     "_sparse_graph_facet",
     "_sparse_output_ref",
     "_sparse_params_facet",
-    "_torch_device_from_string",
-    "_torch_dtype_from_string",
 )
 
 
@@ -151,24 +146,3 @@ def _sparse_params_facet(params: tuple[ParamRef, ...]) -> Any:
     """The params facet of a sparse record, absent when the op read no prepared parameter."""
 
     return ParamsFacet(params=tuple(params)) if params else None
-
-
-def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
-    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
-
-    if dtype_name is None:
-        return None
-    if dtype_name.startswith("torch."):
-        return torch_dtype_named(dtype_name.removeprefix("torch."))
-    return None
-
-
-def _torch_device_from_string(device_name: Any) -> torch.device | None:
-    """Return a ``torch.device`` from a string-like field when possible."""
-
-    if device_name is None:
-        return None
-    try:
-        return torch.device(str(device_name))
-    except (TypeError, RuntimeError):
-        return None

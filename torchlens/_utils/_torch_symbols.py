@@ -85,6 +85,27 @@ def torch_dtype_named(name: str) -> torch.dtype | None:
     return value if isinstance(value, torch.dtype) else None
 
 
+def torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
+    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
+
+    if dtype_name is None:
+        return None
+    if dtype_name.startswith("torch."):
+        return torch_dtype_named(dtype_name.removeprefix("torch."))
+    return None
+
+
+def torch_device_from_string(device_name: Any) -> torch.device | None:
+    """Return a ``torch.device`` from a string-like field when possible."""
+
+    if device_name is None:
+        return None
+    try:
+        return torch.device(str(device_name))
+    except (TypeError, RuntimeError):
+        return None
+
+
 def shadowed_torch_submodule(namespace_name: str, resolved: Any) -> types.ModuleType | None:
     """Return the imported submodule that a same-named package attribute shadows.
 

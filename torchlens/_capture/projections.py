@@ -26,6 +26,10 @@ from .._ir.refs import DeviceRef, DtypeRef, ParamRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
+from .._utils._torch_symbols import (
+    torch_device_from_string,
+    torch_dtype_from_string,
+)
 from .._utils.tensor_utils import get_memory_amount_from_metadata
 from ..recording.exceptions import PredicateError
 from ..recording.types import (
@@ -46,8 +50,6 @@ from ._sparse_refs import (
     _sparse_output_ref,
     _sparse_params_facet,
     _SparseFreezeValues,
-    _torch_device_from_string,
-    _torch_dtype_from_string,
 )
 
 if TYPE_CHECKING:
@@ -154,7 +156,8 @@ class RecordingState:
     # Live indexes the module-boundary retention step reads on EVERY module
     # exit: the latest op context per raw label (last-wins, like a dict built
     # over ``all_contexts``) and the retained records' keys. Rebuilding both
-    # per exit made that step quadratic in model size.
+    # per exit made that step quadratic in model size. ``clear_pass_indexes``
+    # empties both at each ``Recorder`` pass start.
     op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
     retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
     # Capture-time parameter identity for predicate records, ``id -> ParamRef``,
@@ -204,6 +207,17 @@ class RecordingState:
         """Append a retained out record and update indexes."""
 
         self.storage_backend.append(record)
+
+    def clear_pass_indexes(self) -> None:
+        """Drop the module-exit indexes' entries before a ``Recorder``'s next pass.
+
+        A boundary output comes from an op of the current pass and a retained key
+        carries the current pass number, so earlier passes' entries are never read;
+        clearing them keeps a long generate at one pass's entries.
+        """
+
+        self.op_context_by_raw_label.clear()
+        self.retained_keys.keys.clear()
 
     def module_fields_for(
         self,
@@ -1443,10 +1457,8 @@ def _grad_record_context_from_op_grad_event(
                 order=getattr(pass_record, "order", None),
                 event_index=ordinal,
                 shape=event.shape,
-                dtype=_torch_dtype_from_string(event.dtype),
-                tensor_device=_torch_device_from_string(
-                    getattr(fastlog_ctx, "tensor_device", None)
-                ),
+                dtype=torch_dtype_from_string(event.dtype),
+                tensor_device=torch_device_from_string(getattr(fastlog_ctx, "tensor_device", None)),
             )
         return GradRecordContext(
             label=event.op_label,
@@ -1460,7 +1472,7 @@ def _grad_record_context_from_op_grad_event(
             order=getattr(pass_record, "order", None),
             event_index=ordinal,
             shape=event.shape,
-            dtype=_torch_dtype_from_string(event.dtype),
+            dtype=torch_dtype_from_string(event.dtype),
             tensor_device=None,
         )
     op = trace._layer_dict_all_keys[event.op_label]
@@ -1480,8 +1492,8 @@ def _grad_record_context_from_op_grad_event(
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
         shape=event.shape,
-        dtype=_torch_dtype_from_string(event.dtype),
-        tensor_device=_torch_device_from_string(getattr(op, "output_device", None)),
+        dtype=torch_dtype_from_string(event.dtype),
+        tensor_device=torch_device_from_string(getattr(op, "output_device", None)),
     )
 
 
