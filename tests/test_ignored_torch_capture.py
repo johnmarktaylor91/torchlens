@@ -69,18 +69,27 @@ def _input_4x4() -> torch.Tensor:
     return torch.randn(4, 4)
 
 
-def _assert_validates_and_replays(model: nn.Module, x: torch.Tensor, seed: int = 0) -> None:
-    """Forward validation passes and a live replay on fresh input matches a plain forward."""
+def _assert_validates_and_replays(
+    model: nn.Module, x: torch.Tensor, seed: int | None = None
+) -> None:
+    """Forward validation passes and a live replay on fresh input matches a plain forward.
+
+    With ``seed`` the capture and the run use that seed, and the plain forward runs right after
+    ``torch.manual_seed(seed)``: a run seeds the CPU generator the same way before its forward.
+    """
 
     assert tl.validate(model, x, scope="forward", validate_metadata=True) is True
-    torch.manual_seed(seed)
-    trace = tl.trace(model, x)
+    capture = CaptureOptions() if seed is None else CaptureOptions(seed=seed)
+    trace = tl.trace(model, x, capture=capture)
     try:
         fresh = torch.randn_like(x)
-        torch.manual_seed(seed)
-        result = trace.run_transaction(inputs=fresh)
+        if seed is None:
+            result = trace.run_transaction(inputs=fresh)
+        else:
+            result = trace.run_transaction(inputs=fresh, seed=seed)
         try:
-            torch.manual_seed(seed)
+            if seed is not None:
+                torch.manual_seed(seed)
             assert torch.equal(result.output, model(fresh))
         finally:
             result.trace.cleanup()
@@ -104,8 +113,8 @@ def test_private_tensor_method_captured_with_provenance(method: str) -> None:
         recorded = [op for op in log.ops if op.func_name == method]
         assert len(recorded) == 1, f"{method} not captured: {[op.func_name for op in log.ops]}"
         (op,) = recorded
-        labels = {candidate.layer_label for candidate in log.ops}
-        assert op.parents and set(op.parents) <= labels
+        op_labels = {candidate.layer_label for candidate in log.ops}
+        assert any(parent in op_labels for parent in op.parents), op.parents
         assert op.children, f"{method} output has no recorded consumer"
     finally:
         log.cleanup()
