@@ -313,10 +313,11 @@ def _bound_owner_hint(self: "Trace", ix: str) -> str:
         A sentence naming ``owner.<ix>``, or ``""`` when it does not apply.
     """
 
-    root_fact = getattr(self, "_provenance_root_entry_point", None)
+    root_fact = self.provenance.root_entry_point
     if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
         return ""
-    module_logs = getattr(self, "_module_logs", None) or {}
+    # ``modules`` is ``None`` only inside the pickle-restore window; read it as empty.
+    module_logs = self.modules or {}
     owner_key = f"owner.{ix}"
     if owner_key.rsplit(":", 1)[0] not in module_logs and owner_key not in module_logs:
         return ""
