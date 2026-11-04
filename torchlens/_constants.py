@@ -1211,14 +1211,14 @@ IGNORED_FUNCS = [
     # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
     # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
     *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
-    # Private Tensor methods (most have crawled ``torch.*`` twins) and the other tensor-returning
-    # ignored functions: unwrapped, each output reached its consumer with no provenance.
+    # Private Tensor methods (most have crawled ``torch.*`` twins; philox records its key as a
+    # parent) and the other tensor-returning ignored functions: unwrapped, each lost provenance.
     *(
         ("torch.Tensor", _private_name)
         for _private_name in (
             *(f"_to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
             *("_conj", "_conj_physical", "_neg_view", "_lazy_clone", "_addmm_activation"),
-            *("_is_all_true", "_is_any_true"),
+            *("_is_all_true", "_is_any_true", "_philox_normal_", "_philox_uniform_"),
         )
         if hasattr(torch.Tensor, _private_name)
     ),
