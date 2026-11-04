@@ -276,9 +276,10 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 
 | Location | Contents |
 |----------|----------|
-| `examples/5min/` | Seven quickstart notebooks plus README |
-| `examples/50min/` | Nine longer workflow notebooks plus README |
-| `examples/recipes/` | Five recipe notebooks plus README |
+| `examples/quick/` | One-screen recipe notebooks plus README |
+| `examples/workflows/` | Longer workflow notebooks plus README |
+| `examples/methods/` | Recent-method notebooks plus README |
+| `examples/replications/` | Paper-replication scripts on GPT-2 small plus README |
 | `examples/intervention/` | Sixteen numbered Python intervention examples plus README |
 | `examples/demos/` | Bundle-diff hero demo notebook and SVG artifact |
 | `notebooks/audit/` | User-facing 2.x audit notebooks |

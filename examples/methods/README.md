@@ -1,4 +1,4 @@
-# TorchLens Recipes
+# TorchLens recent methods
 
 These notebooks are self-contained intervention recipes. They use small local
 models only, so they can run in CI or with `papermill` without network

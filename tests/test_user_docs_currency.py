@@ -27,7 +27,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEPRECATIONS = REPO_ROOT / "docs" / "reference" / "deprecations.md"
-GALLERIES = ("examples/5min", "examples/50min", "examples/recipes")
+GALLERIES = ("examples/quick", "examples/workflows", "examples/methods")
 
 #: A ledger row whose "New name" cell is one backticked dotted public path.
 _LEDGER_ROW_RE = re.compile(r"^\| `[^`]+` \| `(?P<new>(?:torchlens|tl)\.[A-Za-z0-9_.]+)` \|", re.M)
