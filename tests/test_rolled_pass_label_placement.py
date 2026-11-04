@@ -13,6 +13,7 @@ per direction on the README loop toy with the label-geometry audit the rolled ga
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -24,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization._pass_label_placement import (
+    _shift_label,
     choose_pass_label_placements,
     has_pass_labels,
 )
@@ -113,6 +115,29 @@ def test_chooser_moves_a_colliding_default_pair_clear(tmp_path: Path) -> None:
     chosen = "".join(choose_pass_label_placements(body, layout))
     assert "labelangle=" in _edge(chosen, "linear_2_6", "linear_1_4")
     assert audit_gv_source(chosen).hard_violation_count == 0
+
+
+def _head_text_origin(source: str) -> tuple[float, float]:
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input=source, capture_output=True, text=True, check=True
+    ).stdout
+    (edge,) = json.loads(layout)["edges"]
+    (text,) = [op for op in edge["_hldraw_"] if op["op"] == "T"]
+    return float(text["pt"][0]), float(text["pt"][1])
+
+
+@pytest.mark.parametrize("shift", [(3.5, -2.0), (-6.0, 4.5), (0.0, -7.0)])
+def test_padding_moves_one_label_by_exactly_its_shift(shift: tuple[float, float]) -> None:
+    """A label the shared pair leaves astray moves alone, by blank table padding."""
+
+    line = (
+        '\ta -> b [headlabel=<<TABLE BORDER="0" CELLPADDING="2"><TR><TD>'
+        '<FONT POINT-SIZE="11">In 2</FONT></TD></TR></TABLE>> labelangle=60 labeldistance=2]\n'
+    )
+    graph = "digraph g {\n\trankdir=BT\n\ta [shape=box]\n\tb [shape=box]\n%s}\n"
+    x0, y0 = _head_text_origin(graph % line)
+    x1, y1 = _head_text_origin(graph % _shift_label(line, "headlabel", shift))
+    assert abs(x1 - x0 - shift[0]) <= 0.51 and abs(y1 - y0 - shift[1]) <= 0.51, (x1 - x0, y1 - y0)
 
 
 def test_chooser_leaves_graphs_without_pass_labels_alone() -> None:

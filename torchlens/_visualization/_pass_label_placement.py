@@ -8,7 +8,9 @@ placement keeps them off nodes, lines, arrowheads, other labels and module borde
 in every drawing and direction.  Head and tail labels never move nodes or edges,
 though, so one ``dot -Tjson`` pass gives the final geometry: each pass-labelled edge
 takes the candidate placement whose labels clear every obstacle and sit closest to
-their own nodes.  The chosen pair is written onto the edge statement before the real render.
+their own nodes.  A label the shared pair still leaves colliding or far from its node
+moves on its own by blank padding on one side of its HTML table.  The choices are
+written onto the edge statement before the real render.
 """
 
 from __future__ import annotations
