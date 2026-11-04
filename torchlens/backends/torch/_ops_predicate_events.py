@@ -66,11 +66,6 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
 )
-from ._ops_predicate_identity import (
-    _predicate_call_site_chain,
-    _predicate_equivalence_class,
-    _prepared_param_refs,
-)
 from ._tl import (
     get_label_list,
     get_live_tensor_label,
@@ -786,6 +781,11 @@ from ._ops_predicates import (  # noqa: E402
     _predicate_backend_semantics,
     _predicate_function_ref,
     _record_predicate_output,
+)
+from ._ops_shared_fields import (  # noqa: E402
+    _predicate_call_site_chain,
+    _predicate_equivalence_class,
+    _prepared_param_refs,
 )
 from .ops import (  # noqa: E402
     TRANSFORM_FUNC_NAMES,
