@@ -119,12 +119,20 @@ def test_chooser_moves_a_colliding_default_pair_clear(tmp_path: Path) -> None:
 
 
 def _head_text_centre(source: str) -> tuple[float, float]:
-    layout = subprocess.run(
-        ["dot", "-Tjson"], input=source, capture_output=True, text=True, check=True
-    ).stdout
-    (edge,) = json.loads(layout)["edges"]
+    """The head label's text centre relative to its node (a wider label can grow the
+    drawing's bounding box, which moves the whole drawing)."""
+
+    layout = json.loads(
+        subprocess.run(
+            ["dot", "-Tjson"], input=source, capture_output=True, text=True, check=True
+        ).stdout
+    )
+    (edge,) = layout["edges"]
     ((x0, y0, x1, y1),) = _label_lines(edge["_hldraw_"])
-    return (x0 + x1) / 2, (y0 + y1) / 2
+    (node_x, node_y) = next(
+        (float(v) for v in obj["pos"].split(",")) for obj in layout["objects"] if obj["name"] == "b"
+    )
+    return (x0 + x1) / 2 - node_x, (y0 + y1) / 2 - node_y
 
 
 @pytest.mark.parametrize("shift", [(3.5, -2.0), (-6.0, 4.5), (0.0, -7.0)])
