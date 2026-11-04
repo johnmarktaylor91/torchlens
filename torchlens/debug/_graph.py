@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 from .._debug_report import Report, at_source, table_report, trace_subject
 from .._io.payload_codec import get_payload_codec
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -686,7 +687,7 @@ def _feature_dim(
     """Return the unit axis for one activation tensor, or ``None`` when it is invalid."""
 
     if dim is None:
-        if str(trace._provenance_backend) != "torch" and out.ndim > 2:
+        if str(trace._provenance_backend) != TORCH_BACKEND_NAME and out.ndim > 2:
             return None
         return unit_axis(trace, op, out, axes)
     feature_dim = dim if dim >= 0 else out.ndim + dim
@@ -697,7 +698,7 @@ def _unit_axis_reason(trace: Trace, out: Any, dim: int | None) -> str:
     """Explain spatial preview rows whose unit layout the trace does not specify."""
 
     if dim is None and isinstance(out, torch.Tensor) and out.ndim > 2:
-        if str(trace._provenance_backend) != "torch":
+        if str(trace._provenance_backend) != TORCH_BACKEND_NAME:
             return "unit axis unavailable for preview spatial output; pass dim explicitly"
     return "invalid-dim"
 
