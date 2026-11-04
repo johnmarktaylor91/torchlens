@@ -21,7 +21,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _io | 17 | 0 |
 | _ir | 11 | 0 |
 | _merged | 12 | 0 |
-| _mutate_warnings | 1 | 0 |
 | _observability | 24 | 0 |
 | _observe | 1 | 0 |
 | _option_receipt | 1 | 0 |
@@ -53,7 +52,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | debug | 63 | 0 |
 | differential | 3 | 0 |
 | distributed | 9 | 0 |
-| errors | 30 | 0 |
+| errors | 31 | 0 |
 | examples | 1 | 0 |
 | experiment | 6 | 0 |
 | experimental | 5 | 0 |
@@ -63,7 +62,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | intervention | 95 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
-| mechinterp | 50 | 0 |
+| mechinterp | 51 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
 | options | 6 | 0 |
@@ -79,6 +78,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 14 | 0 |
-| **total** | **1060** | **0** |
+| **total** | **1061** | **0** |
 
-Public callable members of those classes (methods and properties): 1489.
+Public callable members of those classes (methods and properties): 1495.
