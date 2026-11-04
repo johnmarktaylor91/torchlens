@@ -3,12 +3,12 @@
 ``torch.cond``, ``while_loop``, ``map`` and ``scan`` run user callables through a
 ``HigherOrderOperator``. TorchLens captures the ops those callables run, so the
 completeness witness must census the same ops: a correct capture validates True,
-and an op inside the subgraph that TorchLens does not capture (a raw
-original ``torch.mul`` taken while the wrappers are removed, the planted drop)
-validates False. Branch callables use Tensor operators: ``tl.validate`` computes its
-ground truth with a plain run that sends eager HOPs through ``torch.compile``, which
-cannot inline a TorchLens wrapper captured by closure. Before the
-witness carried a rule per HOP, ``tl.validate`` raised ``NotImplementedError``
+and an op inside the subgraph that TorchLens does not capture (the original
+``torch.mul`` taken while the wrappers are removed, the planted drop) is named by
+the witness census. Branch callables use Tensor operators: ``tl.validate`` computes
+its ground truth with a plain run that sends eager HOPs through ``torch.compile``,
+which cannot inline a TorchLens wrapper captured by closure. Before the witness
+carried a rule per HOP, ``tl.validate`` raised ``NotImplementedError``
 ("no rule registered for HigherOrderOperator cond") on every such capture.
 """
 
@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterator
 
 import pytest
 import torch
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -38,15 +39,17 @@ _CLEAN_MUL: _Mul = operator.mul
 def raw_mul() -> Iterator[_Mul]:
     """Yield the original ``torch.mul``, taken while TorchLens's wrappers are removed.
 
-    The original is a builtin TorchLens never sees, so calling it inside a HOP
-    subgraph plants an op the capture drops while the witness still observes it.
-    The wrappers are re-installed with the session's diagnostic modes before the
-    test and again at teardown.
+    The original is a builtin TorchLens never sees. It is held in an
+    :class:`OpaqueCallable` because capture preparation rebinds pristine torch
+    functions found in closures, so a bare original would be captured after all.
+    Calling it inside a HOP subgraph plants an op the capture drops while the
+    witness still observes it. The wrappers are re-installed with the session's
+    diagnostic modes before the test and again at teardown.
 
     Yields
     ------
     _Mul
-        The unwrapped ``torch.mul``.
+        The unwrapped ``torch.mul`` behind an opaque holder.
     """
 
     saved_escape = _state._escape_detector_mode
@@ -54,7 +57,7 @@ def raw_mul() -> Iterator[_Mul]:
     unwrap_torch()
     original = torch.mul
     wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
-    yield original
+    yield OpaqueCallable(original)
     unwrap_torch()
     wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
@@ -328,18 +331,28 @@ def test_hop_capture_validates_true(hop: str) -> None:
 
 
 @pytest.mark.parametrize("hop", sorted(_HOP_FORWARDS))
-def test_hop_planted_dropped_op_validates_false(
+def test_hop_planted_dropped_op_is_named_by_the_witness(
     hop: str, raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An uncaptured op inside the HOP subgraph that ran is caught by the witness.
+    """An op the capture dropped inside the HOP subgraph that ran is named by the census.
 
     The rescue re-run is disabled so the primary capture keeps the planted drop (it would
     otherwise recover the raw op through aten recording and repair the capture).
     """
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    fn = _HOP_FORWARDS[hop](raw_mul)
-    assert _validate(_Forward(fn)) is False
+    wrap_torch(completeness_witness=True)
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_Forward(_HOP_FORWARDS[hop](raw_mul)), torch.randn(3, 3))
+    try:
+        operators = [row["operator"] for row in trace.completeness_diagnostics]
+        verified = trace.provenance.verified
+    finally:
+        trace.cleanup()
+    assert any(str(name).startswith("aten.mul.") for name in operators), operators
+    assert verified is False
 
 
 def test_cond_branch_with_parameters_validates_true() -> None:
