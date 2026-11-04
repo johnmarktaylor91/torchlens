@@ -22,6 +22,7 @@ __all__ = (
     "OutputSlot",
     "OutputStatus",
     "forward_failed",
+    "fork_output_refusal",
     "read_output",
     "mark_transformed_output_stale",
     "read_transformed_output",
@@ -159,6 +160,25 @@ _STALE_TRANSFORM_REFUSAL = (
     "apply the edit with intervention=tl.options.InterventionOptions(engine='rerun'), which "
     "re-runs the model and re-applies output_transform",
 )
+
+
+_FORK_OUTPUT_REFUSAL = (
+    "model output",
+    "it is a fork, built from its parent's recorded values, and a replay recomputes ops "
+    "without a model return",
+    "read .output on the parent, or apply the edit with "
+    "intervention=tl.options.InterventionOptions(engine='rerun'), which re-runs the model",
+)
+
+
+def fork_output_refusal(is_fork: bool) -> tuple[str, str, str] | None:
+    """Return the ``read_output`` ``missing=`` reason for a fork, ``None`` otherwise.
+
+    A fork is built without the parent's output slot; a loaded or unpickled
+    trace (no parent link) keeps the loaded-from-disk text.
+    """
+
+    return _FORK_OUTPUT_REFUSAL if is_fork else None
 
 
 def read_transformed_output(value: Any, *, owner: str) -> Any:
