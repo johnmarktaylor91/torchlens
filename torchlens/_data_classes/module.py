@@ -2522,28 +2522,28 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
                 if alias not in self._dict:
                     self._alias_dict[alias] = ml
 
-    def __getitem__(self, key: int | str) -> "Module":
-        """Return a Module by module-specific lookup rules."""
-        if key == "":
-            key = "self"
+    def _module_by_address(self, key: Any) -> "Module":
+        """Return the Module an ordinal, address, alias or pass label names (no conversion)."""
+        key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
-        if isinstance(key, str) and key in self._pass_dict:
-            key = self._pass_dict[key].address
+        return super().__getitem__(self._pass_dict[key].address if key in self._pass_dict else key)
+
+    def __getitem__(self, key: int | str) -> "Module":
+        """Return a Module by address, else the Module an op, param or buffer key ran in."""
         try:
-            return super().__getitem__(key)
+            return self._module_by_address(key)
         except KeyError:
-            # An op label, parameter or buffer address names the Module it belongs to.
-            resolved = converted(self, str(key), module_for_key)
-            if resolved is None:
+            if (resolved := converted(self, str(key), module_for_key)) is None:
                 raise
             return resolved
 
     def __contains__(self, key: object) -> bool:
-        """Return True if key is a known module address, alias, or pass label."""
-        if key == "":
-            key = "self"
-        return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
+        """Return True if key is a module address, alias or pass label; ``in`` never converts."""
+        try:
+            return isinstance(key, (int, str)) and self._module_by_address(key) is not None
+        except (KeyError, TypeError, IndexError, ValueError):
+            return False
 
     def __dir__(self) -> list[str]:
         """Return Python attributes plus module addresses for tab completion.

@@ -79,18 +79,14 @@ class _Sites:
 def _module(trace: Any, name: str, role: str) -> Any:
     """Return the module log ``name`` or refuse naming its role."""
 
-    refusal = _graph_refusal(
-        f"The {role} module {name!r} is not a module of this capture. "
-        "Remedy: name a module from dict(model.named_modules()) that ran once in "
-        "the captured forward.",
-        code="attribution_graph_site_not_found",
-    )
-    if not is_module(trace, name):  # an op label would convert to its owning Module
-        raise refusal
-    try:
-        return trace.modules[name]
-    except Exception as exc:  # noqa: BLE001 - any lookup failure is the same refusal
-        raise refusal from exc
+    if not is_module(trace, name):  # membership: an op label would convert to its Module
+        raise _graph_refusal(
+            f"The {role} module {name!r} is not a module of this capture. "
+            "Remedy: name a module from dict(model.named_modules()) that ran once in "
+            "the captured forward.",
+            code="attribution_graph_site_not_found",
+        )
+    return trace.modules[name]
 
 
 def _one_op(module: Any, name: str, field: str, role: str) -> str:
