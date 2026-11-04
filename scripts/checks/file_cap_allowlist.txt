@@ -110,7 +110,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1080
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3433
+torchlens/_data_classes/trace.py	3427
 torchlens/_data_classes/trace.py::Trace.__init__	360
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
