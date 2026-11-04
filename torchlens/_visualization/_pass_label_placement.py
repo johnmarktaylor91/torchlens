@@ -25,14 +25,6 @@ from typing import Any, NamedTuple
 
 from . import _render_utils
 
-__all__ = [
-    "choose_pass_label_placements",
-    "place_forward_pass_labels",
-    "has_pass_labels",
-    "pass_label_layout",
-    "place_pass_labels",
-]
-
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
 
