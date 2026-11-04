@@ -1127,7 +1127,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (`do`/`trace[selector]`), `selection_unresolvable` /
+  (`do`; `trace.ops` refuses `ambiguous_op_lookup`; `trace[label]` gives the Layer), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer

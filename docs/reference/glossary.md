@@ -1399,8 +1399,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   A bare layer label at `trace[...]` is the Layer, single- or multi-pass; a single-pass Layer
   passes single-op reads (`.out`, `.shape`) through to its Op, and on a multi-pass Layer they
   refuse (`layer_pass_ambiguous`) naming `label:1` and `label:last`. A door that must give one
-  Op (`trace.ops[label]`, `tl.label(label)`) refuses a bare multi-pass label
-  (`multipass_bare_label_ambiguous`) naming these spellings and `trace[label]`.
+  Op refuses a bare multi-pass label: `tl.label(label)` with `multipass_bare_label_ambiguous`
+  naming these spellings and `trace[label]`, `trace.ops[label]` with `ambiguous_op_lookup`.
 
 **Indexing coherence (every door returns the kind it names)**
 : The plain door `trace[key]` returns the kind the key names: a layer label its `Layer` and
@@ -2854,10 +2854,10 @@ shim owed; S2-gated*
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`, or
   `label:all` for every pass); the
-  string/`tl.label` addressing face (`trace[label]` included) is
+  string/`tl.label` addressing face is
   `multipass_bare_label_ambiguous` on `AmbiguousSiteError` (both teaching refusals name
-  every pass-qualified spelling, `:last`, `:all` and `trace.layers[label]`; spellings
-  DOCUMENTED-UNSTABLE).
+  every pass-qualified spelling, `:last`, `:all` and `trace[label]`, which gives the
+  aggregate Layer; spellings DOCUMENTED-UNSTABLE).
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
