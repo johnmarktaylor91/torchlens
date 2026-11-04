@@ -44,13 +44,7 @@ from ._engine_geometry import (
 )
 from ._engine_revision import _graph_revision, _operation_is_live
 from ._errors import ReceptiveFieldConfigurationError
-from ._rules import (
-    _RF_RULES,
-    ReceptiveFieldRuleContext,
-    _rf_rules_epoch,
-    _RuleResult,
-    operand_shapes,
-)
+from ._rules import _RF_RULES, ReceptiveFieldRuleContext, _rf_rules_epoch, _RuleResult
 from ._types import (
     ReceptiveField,
     ReceptiveFieldStatus,
@@ -824,7 +818,7 @@ def _concatenation_starts_by_position(op: Op, raw_axis: int) -> tuple[int, ...]:
             return cached[1]
     positions: list[int] = []
     offset = 0
-    for _label, shape in zip(op.parents, operand_shapes(op), strict=False):
+    for _label, shape in zip(op.parents, ReceptiveFieldRuleContext(op).parent_shapes, strict=False):
         positions.append(offset)
         if shape is None:
             continue
