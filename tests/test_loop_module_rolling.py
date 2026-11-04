@@ -663,7 +663,7 @@ def _dot_edge_attrs(dot: str, tail: str, head: str) -> list[str]:
 def _html_label_lines(attrs: str, kind: str) -> list[str] | None:
     """Return the visible text lines of an HTML ``kind=<...>`` edge label.
 
-    ``kind`` is ``"label"``, ``"headlabel"``, or ``"taillabel"``.  Returns None
+    ``kind`` is ``"label"``, ``"xlabel"``, ``"headlabel"``, or ``"taillabel"``.  Returns None
     when the edge carries no such HTML label.  Tags (including ``<BR/>`` line
     breaks) are treated as line separators, so a two-line combined label yields
     two entries.
@@ -875,7 +875,10 @@ def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Pa
     back_attrs = back_edges[0]
     assert "headlabel" not in back_attrs
     assert "taillabel" not in back_attrs
-    assert _html_label_lines(back_attrs, "label") == ["In 2-4", "Out 1-3"]
+    # The back-edge floats its pass range as an external ``xlabel`` so dot does
+    # not reserve a rank slot for it (the arc stays tight); no midpoint label.
+    assert _html_label_lines(back_attrs, "label") is None
+    assert _html_label_lines(back_attrs, "xlabel") == ["In 2-4", "Out 1-3"]
 
     forward_edges = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
     assert len(forward_edges) == 1
@@ -911,7 +914,8 @@ def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> 
 
     write_edges = _dot_edge_attrs(dot, "add_2_2", "buffer_1")
     assert len(write_edges) == 1
-    assert _html_label_lines(write_edges[0], "label") == ["In 2-6"]
+    # The write edge closes the loop, so its pass range floats as an ``xlabel``.
+    assert _html_label_lines(write_edges[0], "xlabel") == ["In 2-6"]
 
     for attrs in (read_edges[0], fanout_read_edges[0], write_edges[0]):
         assert "headlabel" not in attrs
@@ -923,8 +927,9 @@ def test_varying_forward_edges_compose_midpoint_labels(tmp_path: Path) -> None:
 
     ``DeepLoopBody`` is a three-op cycle. The body edges run on every pass at
     both ends, so they carry no pass label; the input edge (pass 1 only) and the
-    back-edge (passes 1-2 into 2-3) keep theirs as midpoint ``label``s, which
-    Graphviz reserves layout space for, and no edge carries placement attrs.
+    back-edge (passes 1-2 into 2-3) keep theirs: the input edge as a midpoint
+    ``label``, the back-edge as a floated ``xlabel`` (dot reserves no rank slot
+    for it, so the return arc stays tight); no edge carries head/tail placement attrs.
     """
 
     dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", depth=1000)
@@ -947,10 +952,11 @@ def test_varying_forward_edges_compose_midpoint_labels(tmp_path: Path) -> None:
         assert "labeldistance=" not in attrs
         assert "labelangle=" not in attrs
 
-    # The cycle's back-edge merges to a midpoint label like any recurrence.
+    # The cycle's back-edge merges In/Out into one label like any recurrence,
+    # floated as an ``xlabel`` beside its arc.
     back_edge = _dot_edge_attrs(dot, "layernorm_1_3", "linear_1_1")
     assert len(back_edge) == 1
-    assert _html_label_lines(back_edge[0], "label") == ["In 2-3", "Out 1-2"]
+    assert _html_label_lines(back_edge[0], "xlabel") == ["In 2-3", "Out 1-2"]
 
 
 def test_rolled_edges_label_only_ends_a_strict_subset_of_passes_uses(tmp_path: Path) -> None:
@@ -966,7 +972,7 @@ def test_rolled_edges_label_only_ends_a_strict_subset_of_passes_uses(tmp_path: P
     texts: set[str] = set()
     for line in dot.splitlines():
         if " -> " in line:
-            for kind in ("label", "headlabel", "taillabel"):
+            for kind in ("label", "xlabel", "headlabel", "taillabel"):
                 texts.update(_html_label_lines(line, kind) or [])
     assert texts == {"In 1", "In 2-3", "Out 1-2", "Out 3"}, sorted(texts)
     body = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
