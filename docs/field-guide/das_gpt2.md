@@ -18,7 +18,7 @@ method on a small trained MLP, with a layer comparison, is the notebook
 `examples/methods/das_causal_basis_recipe.ipynb`.
 
 The recipe downloads GPT-2 small from the Hugging Face Hub (about 500 MB) on first use and
-runs on a CPU in about a minute.
+runs on a CPU in a few minutes, most of them in the training loop.
 
 ## Minimal example on the running model
 

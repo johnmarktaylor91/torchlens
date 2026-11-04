@@ -149,6 +149,10 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: The DAS page downloads GPT-2 small and trains a basis for 32 steps through a
+#: bound hook: 66 s and 329 s on a four-core worker under light and heavy host
+#: load. The entropy-vector page downloads GPT-2 small, samples continuations
+#: and decodes greedily under four steering settings: 48 s on four cores.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
@@ -156,6 +160,8 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/clip_head_attention_recipe.ipynb",
         "examples/methods/clip_text_decomposition_recipe.ipynb",
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "docs/field-guide/das_gpt2.md",
+        "docs/field-guide/entropy_steering.md",
     }
 )
 
