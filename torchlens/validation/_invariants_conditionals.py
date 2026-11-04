@@ -226,7 +226,7 @@ def _conditional_evaluation_starts(ml: Trace, name: str) -> dict[int, list[int]]
     """
 
     starts: dict[int, list[int]] = {}
-    for op in ml.layer_list:
+    for op in ml._layer_list:
         conditional_id = op.terminal_conditional_id
         if conditional_id is None:
             continue
@@ -344,7 +344,7 @@ def _check_conditional_branch_stack_monotonicity(
     # respect source nesting.
     events_by_id = {event.id: event for event in ml._graph_conditional_records}
     evaluation_starts = _conditional_evaluation_starts(ml, name)
-    for parent_op in ml.layer_list:
+    for parent_op in ml._layer_list:
         _check_stack_respects_event_nesting(parent_op, events_by_id, name)
         parent_arms = _arms_by_evaluation(parent_op, evaluation_starts, name)
         for child_label in parent_op.children:
