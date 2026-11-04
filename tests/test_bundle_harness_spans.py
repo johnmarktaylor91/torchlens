@@ -19,8 +19,12 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
+from torchlens._io import ArtifactTooOldError
+from torchlens._io.bundle_metadata import _load_gated_member_relations
+from torchlens._io.format3.container import RELATIONS_FILE
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import TOKEN_BOUNDARY_FAMILY_ID
 from torchlens.bundle._token_spans import find_token_spans
@@ -160,11 +164,14 @@ def _saved_matched(tmp_path: Path, model: _TinyLM) -> Path:
 
 
 def _rewrite_spans(source: Path, target: Path, spans: list[list[int]]) -> None:
+    """Forge the saved ``fed_by`` row's spans in ``relations.json`` and re-digest it."""
+
     shutil.copytree(source, target)
-    metadata_path = target / "bundle.json"
+    metadata_path = target / RELATIONS_FILE
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"][0]["params"]["token_spans"] = spans
     metadata_path.write_text(json.dumps(metadata))
+    redigest(target, RELATIONS_FILE)
 
 
 def test_forged_matched_spans_refuse_at_load(tmp_path: Path, model: _TinyLM) -> None:
@@ -320,12 +327,26 @@ def test_members_render_refuses_a_backward_graph(model: _TinyLM) -> None:
 
 
 def test_v9_stamped_artifact_with_a_fed_by_row_refuses(tmp_path: Path, model: _TinyLM) -> None:
+    """A ``fed_by`` row under a v9 stamp never loads.
+
+    Format 3 refuses every 2.x stamp at the version floor before any record or
+    relation row is read, so a v9-stamped bundle refuses
+    ``artifact_version_below_floor`` at ``tl.load``. The stamped-version
+    admission rule itself (a v9 stamp predates ``fed_by``) stays pinned at the
+    relation loader every bundle door calls.
+    """
+
     path = _saved_matched(tmp_path, model)
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["tlspec_version"] = 9
     manifest_path.write_text(json.dumps(manifest))
-    with pytest.raises(BundleRelationError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as too_old:
         tl.load(path)
+    assert _code(too_old) == "artifact_version_below_floor"
+    relations = json.loads((path / RELATIONS_FILE).read_text())
+    assert [row["kind"] for row in relations["member_relations"]] == ["fed_by"]
+    with pytest.raises(BundleRelationError) as excinfo:
+        _load_gated_member_relations(relations, tlspec_version=9)
     assert _code(excinfo) == "bundle_relation_schema_invalid"
     assert excinfo.value.fields["row_kind"] == "fed_by"  # type: ignore[attr-defined]

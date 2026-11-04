@@ -22,6 +22,7 @@ import collections
 
 import pytest
 import torch
+from _format3_envelope import read_manifest
 from torch import nn
 
 import torchlens as tl
@@ -104,18 +105,28 @@ class warnings_as_errors_for_flattening:
 
 
 def test_defaultdict_foreign_factory_is_dropped_with_disclosure(tmp_path) -> None:
-    """A user-module default_factory never becomes a load-time booby-trap."""
+    """A user-module default_factory never becomes a load-time booby-trap.
+
+    Format 3 (docs/maintainers/saved_format_3.md, the ``dict`` tag): the foreign
+    factory is written as an ``unencodable`` disclosure that the manifest counts,
+    the mapping reloads as a plain dict, and the load carries the
+    ``unencodable_values_stringified`` advisory. No factory is executed on load.
+    """
 
     log = _traced()
     trapped = collections.defaultdict(_user_factory)
     trapped["present"] = 1
     log.annotations["user_dd"] = trapped
     bundle = tmp_path / "dd.tlspec"
-    with pytest.warns(UserWarning, match="default_factory"):
-        log.save(bundle)
+    log.save(bundle)
+    disclosures = read_manifest(bundle)["disclosures"]
+    assert disclosures["count"] >= 1
+    assert any(str(at).endswith("default_factory") for at in disclosures["first"])
     loaded = tl.load(bundle)
     restored = loaded.annotations["user_dd"]
+    assert type(restored) is dict
     assert restored["present"] == 1
-    assert restored.default_factory is None
     with pytest.raises(KeyError):
         restored["missing_key"]
+    advisories = loaded.annotations["capture_advisories"]
+    assert any(row["kind"] == "unencodable_values_stringified" for row in advisories)
