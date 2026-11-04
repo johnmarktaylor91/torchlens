@@ -16,6 +16,8 @@ sections:
     title: Home
   - id: get-started
     title: Get started
+  - id: fields
+    title: Start from your field
   - id: field-guide
     title: Field guide
   - id: gallery
@@ -144,6 +146,15 @@ pages:
     section: doors
   - path: facets.md
     section: concepts
+  - path: fields/debugging_and_training.md
+    section: fields
+    note: landing page for people debugging or training networks; linked from the README
+  - path: fields/mechanistic_interpretability.md
+    section: fields
+    note: landing page for mechanistic interpretability; linked from the README
+  - path: fields/teaching.md
+    section: fields
+    note: landing page for teaching how networks work; linked from the README
   - path: field-guide/acdc_ioi.md
     section: field-guide
     moved_from: [recipes/acdc_ioi.md]

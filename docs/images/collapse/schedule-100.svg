@@ -120,7 +120,7 @@
 <g id="node8" class="node">
 <title>adaptiveavgpool2d_1_59pass1</title>
 <polygon fill="white" stroke="black" points="334.5,-944.61 154.75,-944.61 154.75,-857.61 334.5,-857.61 334.5,-944.61"/>
-<text xml:space="preserve" text-anchor="start" x="164.75" y="-926.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_67</text>
+<text xml:space="preserve" text-anchor="start" x="164.75" y="-926.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_59</text>
 <text xml:space="preserve" text-anchor="start" x="180.88" y="-905.56" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 1, 1), 2.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="190.25" y="-885.81" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="213.88" y="-866.06" font-family="Helvetica,sans-Serif" font-size="14.00">@avgpool</text>
@@ -135,7 +135,7 @@
 <g id="node9" class="node">
 <title>flatten_1_60pass1</title>
 <ellipse fill="white" stroke="black" cx="244.62" cy="-1014.19" rx="83.09" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="205.62" y="-1019.64" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_68</text>
+<text xml:space="preserve" text-anchor="start" x="205.62" y="-1019.64" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_60</text>
 <text xml:space="preserve" text-anchor="start" x="195.88" y="-998.89" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512), 2.0 KiB</text>
 </g>
 <!-- adaptiveavgpool2d_1_59pass1&#45;&gt;flatten_1_60pass1 -->
@@ -148,7 +148,7 @@
 <g id="node10" class="node">
 <title>linear_1_61pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="378.75,-1170.78 110.5,-1170.78 110.5,-1083.78 378.75,-1083.78 378.75,-1170.78"/>
-<text xml:space="preserve" text-anchor="start" x="207.88" y="-1152.48" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_69</text>
+<text xml:space="preserve" text-anchor="start" x="207.88" y="-1152.48" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_61</text>
 <text xml:space="preserve" text-anchor="start" x="192.12" y="-1131.73" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="120.5" y="-1111.98" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 512) · bias (1000,)</text>
 <text xml:space="preserve" text-anchor="start" x="232.25" y="-1092.23" font-family="Helvetica,sans-Serif" font-size="14.00">@fc</text>

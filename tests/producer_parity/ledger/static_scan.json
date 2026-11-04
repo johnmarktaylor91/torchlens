@@ -801,6 +801,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_data_classes/_conditional_arms.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/_doors.py",
   "has_default": false,
@@ -4705,18 +4713,10 @@
  },
  {
   "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/_visualization/_render_nodes.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "type_index",
   "file": "torchlens/_visualization/_render_nodes.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {

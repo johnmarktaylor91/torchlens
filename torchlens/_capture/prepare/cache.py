@@ -31,6 +31,7 @@ from ..._trace_selector_helpers import (
     _predicate_cache_key,
     _stable_cache_fragment,
 )
+from ...backends.torch.bound_root import TLBoundMethodRoot
 from .chunked import normalize_chunk_paths
 from .request import _DoorState
 
@@ -629,7 +630,10 @@ def _resolve_cache_key(state: _DoorState) -> _DoorState:
     """Name the trace and, when caching, derive the cache key, path and secret."""
     capture_options = state.capture_options
     name = capture_options.name
-    log_name = name if name is not None else _state._auto_name(state.model)
+    naming_model = (
+        state.model.tl_owner if isinstance(state.model, TLBoundMethodRoot) else state.model
+    )
+    log_name = name if name is not None else _state._auto_name(naming_model)
     state = replace(state, log_name=log_name)
     if not capture_options.cache:
         return state
