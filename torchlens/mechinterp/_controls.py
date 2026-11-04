@@ -363,8 +363,10 @@ def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated k
 
     Parameters
     ----------
-    model, inputs:
-        The model and the input every run uses; the model runs once per control.
+    model:
+        The model; it runs once per control.
+    inputs:
+        The input every run uses.
     site:
         Selector of the ablated tensor; it must fire exactly once.
     metric:
@@ -376,16 +378,23 @@ def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated k
         The ablation the claim used: ``"zero"``, ``"mean"`` or ``"resample"``.
     donors:
         Input whose rows feed the mean and resample baselines (default ``inputs``).
-    direction, feature_axis:
-        Optional 1-D direction the claim is about and the site axis it lives on; runs
-        the direction family against ``n_directions`` matched random directions.
+    direction:
+        Optional 1-D direction the claim is about; runs the direction family against
+        ``n_directions`` matched random directions.
+    feature_axis:
+        The site axis ``direction`` lives on; required with ``direction``.
+    n_directions:
+        Matched random directions of the same norm that the claimed direction is ranked
+        against.
     sites:
         Optional ``name -> selector`` of neighbouring sites; runs the site family.
     seed:
         Seed of the random directions and the resample draw.
-    min_ratio, alpha:
-        Share of the claimed effect a baseline or site control must keep (same sign),
-        and the largest direction-family p-value that survives.
+    min_ratio:
+        Share of the claimed effect a baseline or site control must keep, with the same
+        sign, to survive.
+    alpha:
+        The largest direction-family rank p-value that survives.
 
     Returns
     -------
