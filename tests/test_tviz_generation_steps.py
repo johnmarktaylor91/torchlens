@@ -19,11 +19,9 @@ import torchlens.errors
 pytest.importorskip("transformers")
 pytest.importorskip("matplotlib")
 
+import torchlens.transformer  # noqa: E402
 from tests.real_model.r0.families import build_distilgpt2  # noqa: E402
-from torchlens.transformer._generation_attention import (  # noqa: E402
-    generation_attention_view,
-    generation_attention_views,
-)
+from torchlens.transformer._generation_attention import generation_attention_views  # noqa: E402
 
 RTOL, ATOL = 1e-4, 1e-5
 PROMPT = torch.tensor([[454, 137, 139, 386]])
@@ -55,7 +53,7 @@ def test_each_step_picture_equals_a_full_no_cache_forward(recorded) -> None:
         n_keys = entry.positions.stop
         prefix = generation.sequences[:, :n_keys]
         for layer_index, layer in enumerate(LAYERS):
-            view = generation_attention_view(generation, layer, entry.step)
+            view = torchlens.transformer.attention_view(generation, layer, step=entry.step)
             assert view.pattern.shape == (2, n_keys, n_keys)
             assert view.episode is not None and view.episode.step == entry.step
             assert view.episode.role == ("prefill" if entry.step == 0 else "decode")
@@ -72,7 +70,7 @@ def test_each_step_picture_equals_a_full_no_cache_forward(recorded) -> None:
 def test_the_decode_row_is_the_steps_own_record(recorded) -> None:
     _, generation = recorded
     step = N_NEW - 1
-    view = generation_attention_view(generation, LAYERS[1], step)
+    view = torchlens.transformer.attention_view(generation, LAYERS[1], step=step)
     own = [
         record.ram_payload
         for record in generation.records_at(step)
@@ -91,7 +89,7 @@ def test_views_cover_every_attention_layer_in_order(recorded) -> None:
 def test_tokens_label_both_axes_up_to_the_step(recorded) -> None:
     _, generation = recorded
     words = [f"w{int(token)}" for token in generation.sequences[0]]
-    view = generation_attention_view(generation, LAYERS[0], 1, tokens=words)
+    view = torchlens.transformer.attention_view(generation, LAYERS[0], step=1, tokens=words)
     assert view.query_tokens.tokens == tuple(words[: PROMPT.shape[1] + 1])
     assert view.key_tokens.tokens == view.query_tokens.tokens
 
@@ -99,10 +97,11 @@ def test_tokens_label_both_axes_up_to_the_step(recorded) -> None:
 def test_render_outlines_the_decode_row(recorded, tmp_path) -> None:
     _, generation = recorded
     decode = tl.viz.attention(
-        generation_attention_view(generation, LAYERS[0], 2), tmp_path / "decode.png"
+        torchlens.transformer.attention_view(generation, LAYERS[0], step=2), tmp_path / "decode.png"
     )
     prefill = tl.viz.attention(
-        generation_attention_view(generation, LAYERS[0], 0), tmp_path / "prefill.png"
+        torchlens.transformer.attention_view(generation, LAYERS[0], step=0),
+        tmp_path / "prefill.png",
     )
     assert decode.paths[0].stat().st_size > 0
     assert any("outlined row" in line for line in decode.disclosure_lines)
@@ -113,16 +112,16 @@ def test_render_outlines_the_decode_row(recorded, tmp_path) -> None:
 def test_refusals_name_the_fix(recorded) -> None:
     model, generation = recorded
     with pytest.raises(torchlens.errors.RenderError) as no_layer:
-        generation_attention_view(generation, "transformer.h.0.mlp", 0)
+        torchlens.transformer.attention_view(generation, "transformer.h.0.mlp", step=0)
     assert no_layer.value.fields["code"] == "tv_facet_missing"
     assert LAYERS[0] in no_layer.value.fields["available"]
 
     with pytest.raises(torchlens.errors.RenderError) as short:
-        generation_attention_view(generation, LAYERS[0], 2, tokens=["a", "b"])
+        torchlens.transformer.attention_view(generation, LAYERS[0], step=2, tokens=["a", "b"])
     assert short.value.fields["code"] == "tv_record_invalid"
 
     with pytest.raises(torchlens.errors.InvalidArgumentError) as no_step:
-        generation_attention_view(generation, LAYERS[0], N_NEW)
+        torchlens.transformer.attention_view(generation, LAYERS[0], step=N_NEW)
     assert no_step.value.fields["code"] == "record_generation_step_missing"
 
     unsaved = tl.record(
@@ -131,3 +130,33 @@ def test_refusals_name_the_fix(recorded) -> None:
     with pytest.raises(torchlens.errors.RenderError) as nothing:
         generation_attention_views(unsaved, 0)
     assert nothing.value.fields["code"] == "tv_facet_missing"
+
+
+def test_step_request_refusals_name_the_fix(recorded) -> None:
+    """step= needs a generation recording, a generation needs step=, and the axes are shared."""
+
+    model, generation = recorded
+    trace = tl.trace(model, PROMPT)
+    with pytest.raises(torchlens.errors.RenderError) as not_generation:
+        torchlens.transformer.attention_view(trace, LAYERS[0], step=1)
+    assert not_generation.value.fields["code"] == "tv_record_invalid"
+    assert "generate_kwargs" in not_generation.value.fields["remedy"]
+
+    with pytest.raises(torchlens.errors.RenderError) as no_step:
+        torchlens.transformer.attention_view(generation, LAYERS[0])
+    assert no_step.value.fields["code"] == "tv_record_invalid"
+    assert f"to {N_NEW - 1}" in no_step.value.fields["remedy"]
+
+    with pytest.raises(torchlens.errors.RenderError) as cross_axes:
+        torchlens.transformer.attention_view(generation, LAYERS[0], step=1, query_tokens=["a"])
+    assert cross_axes.value.fields["code"] == "tv_record_invalid"
+
+
+def test_public_door_matches_the_step_assembler(recorded) -> None:
+    """attention_view(generation, layer, step=k) is the views.3 assembler, view for view."""
+
+    _, generation = recorded
+    for view in generation_attention_views(generation, 2):
+        public = torchlens.transformer.attention_view(generation, view.layer, step=2)
+        assert torch.equal(public.pattern, view.pattern)
+        assert public.episode == view.episode

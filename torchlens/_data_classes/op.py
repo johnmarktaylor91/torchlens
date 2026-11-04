@@ -382,11 +382,11 @@ _FIDS_INIT_NONE = tuple(
 #     untouched and never enters the pool.
 # ---------------------------------------------------------------------------
 
-# Exact classes that are safe to share.  Exact-class (not isinstance) matching
-# keeps subclasses out, so a pooled value always has the original's type.
-# ``torch.dtype``/``torch.device`` are immutable value objects (process
-# singletons for dtypes), so sharing references is safe; they appear inside
-# per-op config dicts such as ``func_autocast_state``.
+# Exact immutable classes safe to share (exact class keeps a pooled value's type;
+# dtype/device are process value objects, e.g. in ``func_autocast_state``). Only a
+# ZERO ``Duration`` pools (the fixed placeholder of rows that ran nothing): measured
+# timings match only by chance, and sharing them made the saved graph's identity
+# (pickle memo back-references, ``metadata.pkl`` bytes) depend on the clock.
 _POOLED_CLASSES = frozenset(
     {str, bytes, DtypeRef, DeviceRef, Bytes, Flops, Macs, Duration, torch.dtype, torch.device}
 )
@@ -688,7 +688,7 @@ def _pool_key(value: Any) -> Any:
         return (cls, value)
     if cls is float:
         return (cls, value.hex())
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         return (cls, value.hex()) if cls is Duration else (cls, value)
     if value is None:
         return _NONE_POOL_KEY
@@ -721,7 +721,7 @@ def _pool_value(value: Any, pool: dict[Any, Any]) -> Any:
     """
 
     cls = value.__class__
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         key = (cls, value.hex()) if cls is Duration else (cls, value)
     elif (cls is tuple or cls is frozenset) and value:
         key = _pool_key(value)
@@ -1747,7 +1747,7 @@ class Op(OpAtenMixin, _SelectionOperand):
             if value is None:
                 continue
             cls = value.__class__
-            if cls in pooled_classes:
+            if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:

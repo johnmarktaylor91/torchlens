@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .. import _entry_refusals as _refusals
 from .._io import _json
 from .._user_funcs import (
     validate_backward_pass,
@@ -66,8 +67,7 @@ def validate_tlspec(
     tlspec_path = Path(path)
     if not tlspec_path.exists():
         raise FileNotFoundError(f"TorchLens .tlspec path does not exist: {tlspec_path}.")
-    if not tlspec_path.is_dir():
-        raise ValueError(f"TorchLens .tlspec path must be a directory: {tlspec_path}.")
+    _refusals.refuse_if_not_directory(tlspec_path)
 
     manifest_path = tlspec_path / "manifest.json"
     if manifest_path.exists():
@@ -78,9 +78,8 @@ def validate_tlspec(
         try:
             manifest_value = _json.read_bounded(manifest_path)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Failed to parse .tlspec manifest JSON at {manifest_path}.") from exc
-        if not isinstance(manifest_value, dict):
-            raise ValueError(f".tlspec manifest at {manifest_path} must be a JSON object.")
+            _refusals.refuse_manifest_unparseable(manifest_path, exc)
+        _refusals.refuse_if_manifest_not_object(manifest_path, manifest_value)
 
     tlspec_format = detect_tlspec_format(tlspec_path)
     if tlspec_format == "pre_3":
@@ -97,10 +96,8 @@ def validate_tlspec(
             ),
             code="artifact_version_below_floor",
         )
-    if tlspec_format == "v3":
-        validate_format3(tlspec_path, allow_unsupported_runnable_versions)
-        return
-    raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
+    _refusals.refuse_if_unknown_tlspec_format(tlspec_path, tlspec_format)
+    validate_format3(tlspec_path, allow_unsupported_runnable_versions)
 
 
 def _manifest_schema_version(manifest: dict[str, Any]) -> int:
