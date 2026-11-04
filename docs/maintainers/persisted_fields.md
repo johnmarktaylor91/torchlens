@@ -5,7 +5,7 @@ the storage bindings or a record class changes and commit the result;
 `tests/test_persisted_fields_doc.py` fails when this page and the generator disagree.
 
 Contract of record: `torchlens/schemas/writer_contract_v11.json`, digest
-`25c9c0fb5503f91fd7f7dc27d709c936f7afb9fb7ae60bd9e90d58797d7271d5`.
+`49a6cca44f1ec18d891d4465d54dd3dd4d7451e2fd70089ffe121ffc6cf1fc27`.
 Previous contract: `torchlens/schemas/writer_contract_v10.json`, digest
 `9e2dbda0727524e6d2de8c27c78348d6694c054e185d01269baaff74f18896f5` (tlspec 10).
 Reader floor: tlspec 11.

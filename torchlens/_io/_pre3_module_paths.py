@@ -1,9 +1,9 @@
-"""The one refusal for a file saved by torchlens 2.x.
+"""The one refusal for a file saved by torchlens 2.37 and earlier.
 
-This release carries no reader for 2.x files. Every door that can recognise one raises
+This release carries no reader for pre-2.38 files. Every door that can recognise one raises
 :func:`pre_3_artifact_error`: the restricted unpickler through
 :func:`refuse_pre_3_module_path` for each global it resolves, and the manifest checks for
-a format stamp older than the current one. A 2.x file fails with this one error instead
+a format stamp older than the current one. A pre-2.38 file fails with this one error instead
 of an unknown-global or missing-field refusal.
 """
 
@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from .format_errors import ArtifactTooOldError
 
-#: The major release line whose saved files this release refuses with the one 2.x error.
+#: The major release line of every release before the first format-11 writer
+#: (``format_contract.FIRST_FORMAT3_RELEASE``). A file one of them saved refuses with the
+#: one 2.x error; the check compares the full release stamp, not only this major.
 PRE_3_MAJOR = 2
 
 #: Top-level torchlens packages the 3.0 rename made private, renamed or folded away. A
@@ -78,8 +80,8 @@ _PRE_3_GLOBALS = frozenset(
 )
 
 _REMEDY = (
-    "load it with torchlens 2.36.x, which reads it (pip install 'torchlens>=2.36,<3'), or "
-    "capture the model again with this release and save that."
+    'load it with torchlens 2.36.x or 2.37.x, which read it (pip install "torchlens<2.38"), '
+    "or capture the model again with this release and save that."
 )
 
 #: Extra remedy sentence for a format_version-1 intervention spec: unlike a saved trace,
@@ -104,12 +106,12 @@ def pre_3_artifact_error(
     remedy_note: str = "",
     code: str = "artifact_version_below_floor",
 ) -> ArtifactTooOldError:
-    """Build the typed refusal for an artifact saved by torchlens 2.x.
+    """Build the typed refusal for an artifact saved by torchlens 2.37 and earlier.
 
     Parameters
     ----------
     observed:
-        What marks the artifact as 2.x (a pickled module path, a format stamp, a manifest
+        What marks the artifact as pre-2.38 (a pickled module path, a format stamp, a manifest
         spelling), rendered as ``name=value`` text.
     path:
         Artifact path, when the caller has it in scope.
@@ -126,16 +128,16 @@ def pre_3_artifact_error(
         The refusal, ready to raise; ``fields["code"]`` is ``artifact_version_below_floor``.
     """
 
-    from .format_contract import MIN_TLSPEC_VERSION
+    from .format_contract import FIRST_FORMAT3_RELEASE, MIN_TLSPEC_VERSION
 
     remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
     return ArtifactTooOldError(
-        f"This artifact was saved by torchlens 2.x ({observed}); torchlens 3 does not read "
-        f"files saved by torchlens 2.x. Remedy: {remedy}",
+        f"This artifact was saved by torchlens 2.37 and earlier ({observed}); torchlens 2.38 does not read "
+        f"files saved by torchlens 2.37 and earlier. Remedy: {remedy}",
         code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
-        floor_torchlens_version="3.0.0",
+        floor_torchlens_version=FIRST_FORMAT3_RELEASE,
         path=path,
         remedy=remedy,
     )
@@ -168,7 +170,7 @@ def modellog_216_error(
 
 
 def refuse_pre_3_module_path(module: str, name: str = "") -> None:
-    """Refuse a pickled module path that only torchlens 2.x wrote.
+    """Refuse a pickled module path that only torchlens 2.37 and earlier wrote.
 
     Parameters
     ----------
@@ -181,7 +183,7 @@ def refuse_pre_3_module_path(module: str, name: str = "") -> None:
     ------
     ArtifactTooOldError
         When ``module`` lives under a package that left the public surface in 3.0, or
-        names a private module or class that only 2.x wrote.
+        names a private module or class that only pre-2.38 wrote.
     """
 
     root, _, rest = module.partition(".")

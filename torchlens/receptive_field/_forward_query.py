@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, cast
 from . import _engine
 from ._engine_forward import _ProjectiveFieldSolution
 from ._engine_geometry import _Affine, _as_tuple, _Mapped, _select_full_axes, _transpose_mapped
-from ._errors import AmbiguousTargetError, ReceptiveFieldError
-from ._path import forward_index_image
+from ._errors import ReceptiveFieldError
+from ._path import _select_target_descriptor, forward_index_image
 from ._query import (
     _AxisSets,
     _build_box,
@@ -34,7 +34,7 @@ from ._query_causal import EXTENDED_KINDS, map_extended_to_child
 from ._query_maps import _call_interval_callback, map_transposed_convolution_index_set
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
-from ._types import ReceptiveField, ReceptiveFieldBox, ReceptiveFieldDirection
+from ._types import ReceptiveFieldBox, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -80,7 +80,7 @@ def box_for_source_unit(
         raise ReceptiveFieldError(
             f"No projective-field solution is available from source {op.label!r}."
         )
-    descriptor = _select_target_descriptor(descriptors, target)
+    descriptor = _select_target_descriptor(descriptors, target, solution.target_labels)
     _validate_descriptor_for_query(descriptor)
     coordinates = _normalize_unit(op, descriptor, unit)
     initial = _initial_axis_sets(op, descriptor, coordinates, complete_unit=complete_unit)
@@ -109,25 +109,6 @@ def box_for_source_unit(
         direction=ReceptiveFieldDirection.PROJECTIVE,
         unit_shape=tuple(op.shape),
     )
-
-
-def _select_target_descriptor(
-    descriptors: Mapping[str, ReceptiveField], target: Op | str | None
-) -> ReceptiveField:
-    """Resolve one projective result descriptor without choosing silently."""
-
-    if target is None:
-        if len(descriptors) != 1:
-            roles = ", ".join(descriptors)
-            raise AmbiguousTargetError(
-                f"Select one reachable target; available target roles: {roles}."
-            )
-        return next(iter(descriptors.values()))
-    identity = target if isinstance(target, str) else target.label
-    for role, descriptor in descriptors.items():
-        if identity in {role, descriptor.input_op_label}:
-            return descriptor
-    raise ReceptiveFieldError(f"Target {identity!r} is not reachable from this source.")
 
 
 def _labels_reaching(
