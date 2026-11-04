@@ -3071,8 +3071,8 @@ class Trace(TraceOutputMixin, TraceLike):
         on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace":
         """Rerun the live model on new input and refresh this Trace."""
-        options = {name: value for name, value in locals().items() if name != "self"}
-        result = _doors.intervention()._trace_run.run(self, **options, transaction=False)
+        options = {k: v for k, v in locals().items() if k not in ("self", "model", "x")}
+        result = _doors.intervention()._trace_run.run(self, model, x, **options, transaction=False)
         return cast("Trace", result)
 
     def run_transaction(
