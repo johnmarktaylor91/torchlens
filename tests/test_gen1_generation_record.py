@@ -120,6 +120,7 @@ def test_text_prompt_is_tokenized_as_tl_trace_does(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(hf_bridge, "_resolve_tokenizer", lambda model: _PromptTokenizer())
     model = build_distilgpt2("eager")
+    model.config.name_or_path = "distilgpt2"  # a hub model names its tokenizer this way
     plain = model.generate(PROMPT, attention_mask=torch.ones_like(PROMPT), **_greedy(3))
 
     generation = tl.record(
