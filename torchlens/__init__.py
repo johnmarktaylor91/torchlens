@@ -7,9 +7,8 @@ the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
 their owning submodules.
 
-For AI agents: start with ``torchlens.agent.guide()`` (or ``python -m
-torchlens guide``), a cookbook of copyable recipes; also ``trace.to_agent_json()``,
-``trace.explain(max_tokens=N)`` and the CLI (``python -m torchlens --help``).
+For AI agents: start with ``torchlens.agent.guide()`` (or ``python -m torchlens guide``), a
+cookbook of recipes; also ``trace.to_agent_json()``, ``trace.explain()`` and the CLI.
 """
 
 from __future__ import annotations
@@ -678,8 +677,7 @@ def extract(
     (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
     ``episode=``, storage) belongs to ``tl.trace``; call it and read
     ``trace[label].out`` when you need one of them. Exact module addresses on an
-    eval-mode model with one tensor input take one plain hooked forward (same
-    values, a fraction of the cost); anything else runs the full capture.
+    eval-mode model with one tensor input take one hooked forward, not a capture.
 
     Parameters
     ----------
@@ -708,15 +706,11 @@ def extract(
     [('head', (1, 2, 8, 8)), ('stem', (1, 4, 8, 8))]
     """
 
-    from ._extract_fast import try_module_output_extract  # deferred: init stays torch-free
+    from ._extract_fast import extract_outputs  # deferred: init stays torch-free
 
-    fast = try_module_output_extract(model, inputs, layers, detach=detach_saved_activations)
-    if fast is not None:
-        return fast
-    _trace, outputs, _views = _extract_layers_with_trace(
-        model, inputs, layers, detach_saved_activations=detach_saved_activations
+    return extract_outputs(
+        model, inputs, layers, _extract_layers_with_trace, detach=detach_saved_activations
     )
-    return outputs
 
 
 __all__ = [

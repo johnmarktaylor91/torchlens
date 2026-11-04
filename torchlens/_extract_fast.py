@@ -15,7 +15,7 @@ owns every refusal and error message.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import torch
@@ -128,3 +128,25 @@ def try_module_output_extract(
         _restore_rng(rng)
         return None
     return {key: calls[name][0] for key, name in plan.items()}
+
+
+def extract_outputs(
+    model: nn.Module,
+    x: Any,
+    layers: Iterable[str] | Mapping[str, str],
+    full_capture: Callable[..., tuple[Any, dict[str, torch.Tensor], Any]],
+    *,
+    detach: bool,
+) -> dict[str, torch.Tensor]:
+    """Return ``tl.extract``'s outputs: the hooked fast path when it applies, else ``full_capture``.
+
+    ``full_capture`` is the package's trace-backed extract; it receives the same
+    arguments (``detach`` as ``detach_saved_activations``) and returns
+    ``(trace, outputs, views)``.
+    """
+
+    fast = try_module_output_extract(model, x, layers, detach=detach)
+    if fast is not None:
+        return fast
+    _trace, outputs, _views = full_capture(model, x, layers, detach_saved_activations=detach)
+    return outputs
