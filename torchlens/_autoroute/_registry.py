@@ -47,9 +47,8 @@ class Registry:
     not match"; return a non-None result to claim the dispatch.
 
     The registry is direction-agnostic: the ``kind`` field is purely for diagnostics.
-    Used for input dispatch (``tl._autoroute.input``) in this sprint; structured to
-    also serve output dispatch (``tl._autoroute.output``) in a future sprint without
-    modification.
+    One instance serves input dispatch and one serves output decoding; the
+    public registration doors are ``tl.preprocessing`` and ``tl.postprocessing``.
     """
 
     def __init__(self, kind: str) -> None:
@@ -68,7 +67,8 @@ class Registry:
     def _public_namespace(self) -> str:
         """Return the public spelling of this registry for messages."""
 
-        return "tl.postprocessing" if self.kind == "output" else f"tl._autoroute.{self.kind}"
+        public = {"output": "tl.postprocessing", "input": "tl.preprocessing"}
+        return public.get(self.kind, f"tl._autoroute.{self.kind}")
 
     def register(
         self, *, name: str, priority: int = 100

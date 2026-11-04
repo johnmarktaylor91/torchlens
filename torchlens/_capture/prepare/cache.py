@@ -17,7 +17,7 @@ from typing import Any, cast
 
 from torchlens import _state
 
-from ..._autoroute._builtin_output import semantic_output_cache_key
+from ..._autoroute._builtin_output import output_decoders_cache_key, semantic_output_cache_key
 from ..._capture_state_helpers import (
     _capture_cache_dir,
     _capture_cache_key,
@@ -699,6 +699,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "capture_container_structure": opts.capture_container_structure,
         "output_transform": _stable_cache_fragment(opts.output_transform),
         "semantic_output_cache_key": semantic_output_cache_key(state.model),
+        "output_decoders": output_decoders_cache_key(),
         "facets": _facet_recipe_cache_key(state.facet_recipes),
         "save_predicate": _predicate_cache_key(state.save_predicate),
         "intervene": _predicate_cache_key(state.args.intervene),

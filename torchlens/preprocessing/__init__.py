@@ -21,12 +21,22 @@ carry three separate epistemic claims:
 - :class:`InputDiagnostics` -- opt-in tensor findings that contradict or
   fail-to-contradict, never verify.
 
+A project teaches ``tl.trace`` its own raw input through :func:`register`, the
+public door of the input detector registry (the same registry the built-in
+Hugging Face text, image and multimodal routes use). A detector receives
+``(model, payload, **kwargs)`` and returns a ``Trace`` or ``None``; it claims
+the call by re-entering ``tl.trace`` with what ``forward`` takes, forwarding
+``kwargs`` so the caller's options survive. :func:`unregister` removes it, and
+both affect later traces only.
+
 Generic by design: nothing here is gated behind the ``neuro`` extra (memo
 section 8, all three labs verbatim). Every spelling is DOCUMENTED-UNSTABLE
 pending the naming sprint; import as ``import torchlens.preprocessing``.
 """
 
 from __future__ import annotations
+
+from torchlens._autoroute.input import register, unregister
 
 from ._attached import attach_authority
 from ._audit import (
@@ -63,7 +73,9 @@ __all__ = [
     "check_card",
     "diagnose",
     "imagenet_default",
+    "register",
     "register_authority_adapter",
     "resolve",
     "unknown_resolution",
+    "unregister",
 ]

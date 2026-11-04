@@ -23,7 +23,7 @@ from torchlens._autoroute._decode_spellings import (
     STYLE_KW,
     UNDETECTED_REMEDY,
 )
-from torchlens._autoroute.output import register
+from torchlens._autoroute.output import list as _registered_output_detectors, register
 from torchlens._capture._episode_derivation import _render_container_path
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
@@ -313,6 +313,25 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
     return None
 
 
+def output_decoders_cache_key() -> tuple[tuple[str, int, int], ...]:
+    """Return the registered output detectors as a capture-cache fragment.
+
+    Registered detectors label the capture-time decode, so a cached trace made
+    before a register or unregister must not serve the next capture.
+
+    Returns
+    -------
+    tuple[tuple[str, int, int], ...]
+        ``(name, priority, registration_order)`` per registered detector, in
+        dispatch order; re-registering a name changes its order and the key.
+    """
+
+    return tuple(
+        (detector.name, detector.priority, detector.registration_order)
+        for detector in _registered_output_detectors()
+    )
+
+
 def semantic_output_cache_key(model: Any) -> dict[str, Any]:
     """Return a serializable semantic-output cache fingerprint.
 
@@ -409,6 +428,7 @@ def _build_output_meta(
         if tokenizer is not None
         else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
+        "model_class_name": trace._source_class_name,
     }
 
 
