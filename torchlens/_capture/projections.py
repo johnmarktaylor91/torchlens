@@ -42,6 +42,7 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
+from ._forward_helpers import _normalize_module_stack
 from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
 from ._sparse_refs import (
     _module_frames_from_record_context,
@@ -134,6 +135,11 @@ class RecordingState:
     event_index: int = 0
     step_index: int = 0
     no_tensor_capture: bool = False
+    # Op contexts the predicate did not select are dropped from ``all_contexts``
+    # once committed: ``Recording.backward`` reads only the selected ones, so a
+    # long forward no longer retains one context per op for the recording's
+    # lifetime. A dry run keeps every context (its result is the context list).
+    keep_all_contexts: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
@@ -157,7 +163,8 @@ class RecordingState:
     # exit: the latest op context per raw label (last-wins, like a dict built
     # over ``all_contexts``) and the retained records' keys. Rebuilding both
     # per exit made that step quadratic in model size. ``clear_pass_indexes``
-    # empties both at each ``Recorder`` pass start.
+    # empties both at each ``Recorder`` pass start; the raw-label index also
+    # empties when a pass ends, since it serves module exits inside the forward.
     op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
     retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
     # Capture-time parameter identity for predicate records, ``id -> ParamRef``,
@@ -190,10 +197,16 @@ class RecordingState:
 
             self.storage_backend = RamStorageBackend(self.recording)
 
-    def append_context(self, ctx: RecordContext) -> None:
-        """Append an event context to the bounded sliding window."""
+    def append_context(self, ctx: RecordContext, *, selected: bool = True) -> None:
+        """Append an event context to the bounded sliding window.
 
-        self.all_contexts.append(ctx)
+        ``selected`` is the forward's capture decision for an op context; an op the
+        predicate skipped is kept only in the lookback window and the raw-label index,
+        unless ``keep_all_contexts`` holds every context for a dry run.
+        """
+
+        if selected or self.keep_all_contexts:
+            self.all_contexts.append(ctx)
         if ctx.kind == "op" and ctx.raw_label is not None:
             self.op_context_by_raw_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
@@ -371,29 +384,6 @@ def _read_field(source: Any, name: str, default: Any = None) -> Any:
     if type(source) is dict or isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
-
-
-def _normalize_module_stack(
-    module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None,
-) -> tuple[ModuleStackFrame, ...]:
-    """Normalize module stack input to ModuleStackFrame instances."""
-
-    if module_stack is None:
-        return ()
-    frames: list[ModuleStackFrame] = []
-    for frame in module_stack:
-        if isinstance(frame, ModuleStackFrame):
-            frames.append(frame)
-            continue
-        frames.append(
-            ModuleStackFrame(
-                address=str(frame.get("address", "")),
-                module_type=str(frame.get("module_type", "")),
-                module_id=int(frame.get("module_id", 0)),
-                pass_number=int(frame.get("pass_number", 0)),
-            )
-        )
-    return tuple(frames)
 
 
 def _recent_ops_for_event(

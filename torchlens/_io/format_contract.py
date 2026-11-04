@@ -13,6 +13,7 @@ re-export FACADE over this module; no public spelling changed in the split
 from __future__ import annotations
 
 import copy
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
@@ -84,11 +85,15 @@ TLSPEC_VERSION = 11
 
 # Rehydration floor: this release reads only its own format. Every stamp below
 # the current one was written by torchlens 2.x and refuses with the one error in
-# ``_pre3_module_paths``. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
-# text stamped into the writer contract (the first tlspec-11 writer); it is never
-# matched against a manifest. The frozen v9 and v10 contracts keep their texts.
+# ``_pre3_module_paths``. ``FIRST_FORMAT3_RELEASE`` is the first release that
+# writes the current format (tlspec 11): a manifest whose ``torchlens_version``
+# stamp is below it was written by an earlier release and refuses at the load
+# door (``raise_if_saved_by_older_major``). ``MIN_TORCHLENS_VERSION_TEXT`` is the
+# same floor release as stamped into the writer contract. The frozen v9 and v10
+# contracts keep their texts.
 MIN_TLSPEC_VERSION = 11
-MIN_TORCHLENS_VERSION_TEXT = "3.0.0"
+FIRST_FORMAT3_RELEASE = "2.38.0"
+MIN_TORCHLENS_VERSION_TEXT = FIRST_FORMAT3_RELEASE
 
 # Reserved generation step-score vocabulary, credited to inseq: the
 # keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,
@@ -127,7 +132,7 @@ def below_floor_error(
     """Build the typed refusal for an artifact older than the supported format.
 
     This release reads only the current format; anything older was saved by
-    torchlens 2.x, so every below-floor site raises the one 2.x refusal
+    torchlens 2.37 and earlier, so every below-floor site raises the one pre-2.38 refusal
     (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`) with a stable
     ``fields["code"]``, the ``observed`` version, the floor, a ``remedy`` and the ``path``
     when the caller has one.
@@ -182,27 +187,41 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
         )
 
 
-def _major_version(version: Any) -> int | None:
-    """Return the leading integer of a ``MAJOR.MINOR...`` version string, else ``None``."""
+_RELEASE_PARTS = re.compile(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?")
+
+
+def _release_parts(version: Any) -> tuple[int, int, int] | None:
+    """Return ``(major, minor, patch)`` from a release stamp, else ``None``.
+
+    Reads the leading numeric ``MAJOR[.MINOR[.PATCH]]`` run of the stamp; a suffix
+    after it is ignored (``"2.38.0rc1"`` reads as ``(2, 38, 0)``) and a missing
+    component counts as ``0``. A stamp that does not start with a digit is not
+    parseable.
+    """
 
     if not isinstance(version, str):
         return None
-    head = version.strip().split(".", 1)[0]
-    return int(head) if head.isdigit() else None
+    match = _RELEASE_PARTS.match(version.strip())
+    if match is None:
+        return None
+    major, minor, patch = (int(part) if part else 0 for part in match.groups())
+    return major, minor, patch
 
 
 def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_version: str) -> None:
-    """Refuse an artifact that an earlier major release of torchlens saved.
+    """Refuse an artifact that a release before ``FIRST_FORMAT3_RELEASE`` saved.
 
-    A major release does not read the files an earlier major release wrote: the
-    saved field names and package paths changed between them, and no compatibility
-    reader is carried. A file torchlens 2.x saved raises the one 2.x refusal
+    This release reads only the saved format that ``FIRST_FORMAT3_RELEASE``
+    introduced: the saved field names and package paths changed in it, and no
+    compatibility reader is carried. A manifest whose ``torchlens_version`` stamp
+    is below that release was written by an earlier one. A stamp from the 2.x
+    line (2.37 and earlier) raises the one pre-format-11 refusal
     (:func:`torchlens._io._pre3_module_paths.pre_3_artifact_error`), worded like
-    every other 2.x door; an older major raises the same error class naming the
-    saving release and the two ways out (the earlier major release reads the
-    file, or capture again with this one). Artifacts without a parseable
-    ``torchlens_version`` stamp return untouched; their own typed checks own
-    that case.
+    every other door that recognises such a file; a stamp from an earlier major
+    raises the same error class naming the saving release and the two ways out
+    (that major's releases read the file, or capture again with this one).
+    Artifacts without a parseable ``torchlens_version`` stamp return untouched;
+    their own typed checks own that case.
 
     Parameters
     ----------
@@ -211,36 +230,39 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_vers
     path:
         Artifact path for the structured fields.
     running_version:
-        The running release's ``torchlens.__version__``; passed in so this
-        contract module never imports the package that imports it.
+        The running release's ``torchlens.__version__``, named in the earlier-major
+        message; passed in so this contract module never imports the package that
+        imports it.
 
     Raises
     ------
     ArtifactTooOldError
-        When the saving release's major version is below the running one.
+        When the saving release is below ``FIRST_FORMAT3_RELEASE``.
     """
 
-    running = _major_version(running_version)
-    saved = _major_version(saved_version)
-    if running is None or saved is None or saved >= running:
+    saved = _release_parts(saved_version)
+    floor = _release_parts(FIRST_FORMAT3_RELEASE)
+    if saved is None or floor is None or saved >= floor:
         return
-    if saved == PRE_3_MAJOR:
+    if saved[0] == PRE_3_MAJOR:
         raise pre_3_artifact_error(
             f"torchlens_version={saved_version}",
             path=path,
             code="artifact_version_below_floor",
         )
+    saved_major = saved[0]
     remedy = (
-        f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
-        f"capture the model again with torchlens {running_version} and save that."
+        f"load it with torchlens {saved_major}.x (pip install "
+        f"'torchlens<{saved_major + 1}'), or capture the model again with torchlens "
+        f"{running_version} and save that."
     )
     raise ArtifactTooOldError(
-        f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "
-        f"does not read files saved by torchlens {saved}.x. Remedy: {remedy}",
+        f"This artifact was saved by torchlens {saved_version}; torchlens {running_version} "
+        f"does not read files saved by torchlens {saved_major}.x. Remedy: {remedy}",
         code="artifact_version_below_floor",
         observed=f"torchlens_version={saved_version}",
         floor_tlspec_version=MIN_TLSPEC_VERSION,
-        floor_torchlens_version=f"{running}.0.0",
+        floor_torchlens_version=FIRST_FORMAT3_RELEASE,
         path=path,
         remedy=remedy,
     )
@@ -416,7 +438,7 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     Raises
     ------
     ArtifactTooOldError
-        If the state predates the current ``tlspec_version`` (a torchlens 2.x file,
+        If the state predates the current ``tlspec_version`` (a torchlens 2.37 and earlier file,
         including unversioned pre-sprint states).
     UnknownPersistedFieldError
         If ``cls`` is provided, a governed artifact load is in progress, and

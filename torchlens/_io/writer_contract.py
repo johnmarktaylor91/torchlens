@@ -18,7 +18,7 @@ the manifest's own writer stamp, not inside the digest.
 The contract of record is committed at
 ``torchlens/schemas/writer_contract_v{TLSPEC_VERSION}.json`` (v10 as of the
 batch-2 coordinated schema write; the superseded v8 and v9 contracts left
-with the 2.x readers) and enforced by
+with the pre-2.38 readers) and enforced by
 ``tests/test_tlspec_envelope_contract.py``: regenerating from the live tree
 must reproduce the committed contract byte-for-byte, and a persisted field
 name that DISAPPEARS from the live contract must be covered by an alias rule

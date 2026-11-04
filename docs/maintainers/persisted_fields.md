@@ -5,7 +5,7 @@ the storage bindings or a record class changes and commit the result;
 `tests/test_persisted_fields_doc.py` fails when this page and the generator disagree.
 
 Contract of record: `torchlens/schemas/writer_contract_v11.json`, digest
-`25c9c0fb5503f91fd7f7dc27d709c936f7afb9fb7ae60bd9e90d58797d7271d5`.
+`49a6cca44f1ec18d891d4465d54dd3dd4d7451e2fd70089ffe121ffc6cf1fc27`.
 Previous contract: `torchlens/schemas/writer_contract_v10.json`, digest
 `9e2dbda0727524e6d2de8c27c78348d6694c054e185d01269baaff74f18896f5` (tlspec 10).
 Reader floor: tlspec 11.
@@ -591,7 +591,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `_layer_label_raw` | interned | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | interned | required: every level | keep | fact | `Op.has_params`, `Layer.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 38 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 28 more |
 | `_tracing_finished` | interned | required: every level | keep | fact | none (storage only) |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.activation_memory` (field) |
 | `address` | interned | required: every level | keep | fact | `Op.address` (field) |
@@ -767,7 +767,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `_is_in_conditional_body` | scalar | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | scalar | required: every level | keep | fact | `Layer.has_params`, `Op.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 28 more |
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.activation_memory` (field) |
 | `address` | scalar | required: every level | keep | fact | `Layer.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Layer.annotations` (field) |
@@ -902,7 +902,7 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
 | `_executed_flops_record` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `BackwardPass.flops_attribution` |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 28 more |
 | `backward_call_context` | scalar: `object | None` | required: every level | keep | fact | `BackwardPass.backward_call_context` (field) |
 | `duration` | scalar: `Duration | None` | required: every level | keep | fact | `BackwardPass.duration` (field) |
 | `engine_flags` | scalar: `dict[str, object] | None` | required: every level | keep | fact | `BackwardPass.engine_flags` (field) |
@@ -982,7 +982,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 38 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 28 more |
 | `backward_docstring` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_docstring` (field) |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFn.backward_duration` (field) |
 | `backward_signature` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_signature` (field) |
@@ -1040,7 +1040,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 38 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 28 more |
 | `_time_finished` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `_time_started` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFnCall.backward_duration` (field) |
@@ -1059,7 +1059,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 38 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 28 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `Module.address` (field) |
 | `address_children` | scalar: `list[str]` | required: every level | keep | fact | `Module.address_children` (field) |
 | `address_depth` | scalar: `int` | required: every level | keep | fact | `Module.address_depth` (field) |
@@ -1148,7 +1148,7 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.grad`, `ModuleCall.grads` and 38 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.internal_activation_memory`, `ModuleCall.internal_gradient_memory` and 28 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `ModuleCall.address` (field) |
 | `all_addresses` | scalar: `list[str]` | required: every level | keep | fact | `ModuleCall.all_addresses` (field) |
 | `autograd_memory` | computed | required: every level | keep | fact | `ModuleCall.autograd_memory` (field) |

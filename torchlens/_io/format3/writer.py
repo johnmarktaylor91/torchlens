@@ -1,4 +1,4 @@
-"""The 3.0 writer: a trace or bundle to typed JSON records plus safetensors blobs.
+"""The 2.38 writer: a trace or bundle to typed JSON records plus safetensors blobs.
 
 Contract: ``docs/maintainers/saved_format_3.md`` (envelope, records, tensor
 references, unencodable values, the intervention recipe, refusals). Every
@@ -24,7 +24,7 @@ def write_trace(
     overwrite: bool = False,
     payload_policy: dict[str, bool] | None = None,
 ) -> NoReturn:
-    """Write one trace as a 3.0 artifact directory.
+    """Write one trace as a 2.38 artifact directory.
 
     Parameters
     ----------

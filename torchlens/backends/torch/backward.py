@@ -3293,17 +3293,17 @@ def _capture_autograd_engine_call(
     # P1 supports multi-trace bracket opening by nesting setup and running the
     # engine once through the innermost capture. Later projection phases will
     # refine per-trace outer_context metadata.
-    def nested_call(index: int) -> Any:
-        """Run nested capture setup for all matched traces."""
-
-        if index == len(matched_traces):
-            return engine_callable()
+    # Built innermost-first as a chain of partials (no self-recursive closure:
+    # that cycle would hold every matched trace until the cyclic collector ran).
+    run: Callable[[], Any] = engine_callable
+    for index in reversed(range(len(matched_traces))):
         matched_trace = matched_traces[index]
         root_forward_op_count = _root_forward_op_count(matched_trace, roots)
-        return _run_backward_with_capture(
+        run = functools.partial(
+            _run_backward_with_capture,
             matched_trace,
             roots_of[index][0],
-            lambda: nested_call(index + 1),
+            run,
             extra_roots=roots_of[index][1:],
             trigger=trigger,
             outer_context=None if index == 0 else f"{trigger}:multi_trace",
@@ -3314,8 +3314,7 @@ def _capture_autograd_engine_call(
                 else forward_op_count_at_trigger
             ),
         )
-
-    return nested_call(0)
+    return run()
 
 
 # ---------------------------------------------------------------------------

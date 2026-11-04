@@ -2,13 +2,13 @@
 
 ## `.tlspec` Compatibility
 
-TorchLens 3 does not load files saved by torchlens 2.x. A saved trace (any
-`tlspec_version` below 11, the format this release writes), a pickled 2.x module
-path, a recording, merged or extraction directory whose manifest names a 2.x
+TorchLens 2.38 does not load files saved by torchlens 2.37 and earlier. A saved trace (any
+`tlspec_version` below 11, the format this release writes), a pickled pre-2.38 module
+path, a recording, merged or extraction directory whose manifest names a pre-2.38
 `torchlens_version`, and the formats below all refuse at `tl.load` with
 `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message
-names the 2.x origin and the remedy: load the file with torchlens 2.36.x
-(`pip install 'torchlens>=2.36,<3'`), which reads it, or capture the model again with
+names the pre-2.38 origin and the remedy: load the file with torchlens 2.36.x or 2.37.x
+(`pip install "torchlens<2.38"`), which read it, or capture the model again with
 this release and save that. Saving the file again with torchlens 2.36.x does not help
 for a trace: 2.36.x writes `tlspec_version` 9. The promise earlier releases made, that
 `.tlspec` files written by torchlens 2.16 would always load, is withdrawn.
@@ -19,8 +19,8 @@ TorchLens 2.16.0 wrote two public `.tlspec` directory formats:
   torchlens 2.16 to 2.28; torchlens 2.29 and later write `"2"`).
 - Portable `ModelLog` bundles with `manifest.json` containing `io_format_version`.
 
-TorchLens 3 reads neither, and does not migrate them: like every file saved by
-torchlens 2.x, both refuse at `tl.load` and at `tl.validation.validate_tlspec` with
+TorchLens 2.38 reads neither, and does not migrate them: like every file saved by
+torchlens 2.37 and earlier, both refuse at `tl.load` and at `tl.validation.validate_tlspec` with
 `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`). A
 format_version-1 intervention spec saved again with torchlens 2.36.x is written as
 format_version 2, which this release reads. The 2.16 `ModelLog` bundle is the exception
@@ -33,9 +33,9 @@ keep their 2.16 spellings for current intervention specs, which carry `kind:
 
 ### Compatibility window
 
-The intended compatibility window for artifacts written by TorchLens 3.x is five years: a
-`.tlspec` saved by a 3.x release is meant to load in every 3.x release published within five
-years of the one that wrote it. That window is a stated intention, not yet a promise, because
+The intended compatibility window for artifacts written by TorchLens 2.38 or later is five
+years: a `.tlspec` saved by one of those releases is meant to load in every later 2.x release
+published within five years of the one that wrote it. That window is a stated intention, not yet a promise, because
 it rests on three prerequisites and only the first is in place:
 
 1. Typed refusal of unknown fields in both directions: in place. A reader refuses a field it
@@ -48,13 +48,13 @@ it rests on three prerequisites and only the first is in place:
    tree: not yet run. The committed goldens prove the reverse direction only (the current
    reader loading older artifacts).
 
-Until all three are green the promise is the narrower one this page already makes: within 3.x,
-a newer reader loads older 3.x artifacts and refuses, typed, anything it cannot read; a newer
+Until all three are green the promise is the narrower one this page already makes: from 2.38 on,
+a newer 2.x reader loads older artifacts written by 2.38 or later and refuses, typed, anything it cannot read; a newer
 artifact refuses, typed, in an older reader. The five-year window becomes a promise, and this
-section drops its conditions, when prerequisites 2 and 3 land. Files written by torchlens 2.x
+section drops its conditions, when prerequisites 2 and 3 land. Files written by torchlens 2.37 and earlier
 are outside the window entirely (see above).
 
-## Member moves of the 3.0 surface review (hard changes, no shims)
+## Member moves of the 2.38 surface review (hard changes, no shims)
 
 - `Trace.attach_hooks`, `Layer.attach_hooks`, `Op.attach_hooks`, `Trace.clear_hooks`,
   `tl.intervention.HookHandle` and `prepend=` are REMOVED. `do(site, hook, ...)` attaches
@@ -440,7 +440,7 @@ acceptance authority.
 `tl.extract_dataset` writes manifest v2 (model identity, transform
 disclosure, input-preprocessing block, per-site identity with L1 site keys).
 v1 artifacts (schema `tl_extract_manifest_v1`, written by torchlens 2.34 and
-earlier) are files saved by torchlens 2.x: `load_extraction`, `open_extraction`,
+earlier) are files saved by torchlens 2.37 and earlier: `load_extraction`, `open_extraction`,
 `relabel_extraction`, `tl.load` and `extract_dataset(..., resume=True)` refuse them
 with `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), and
 nothing migrates them in place. Re-extract into a fresh directory, or read them

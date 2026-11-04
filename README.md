@@ -729,7 +729,7 @@ saved activations are unaffected either way.
 | [docs/reference/limitations.md](docs/reference/limitations.md) | Edge scenarios, typed symptoms, and remedies |
 | [docs/reference/composition_matrix.md](docs/reference/composition_matrix.md) | Which feature pairings are verified together, refused on purpose, or not yet verified |
 | [docs/migration/landscape.md](docs/migration/landscape.md) | Comparable tools and their status, with dated sources |
-| [MIGRATIONS.md](MIGRATIONS.md) | Artifact compatibility: the 2.x floor and the conditional five-year window |
+| [MIGRATIONS.md](MIGRATIONS.md) | Artifact compatibility: the pre-2.38 floor and the conditional five-year window |
 
 
 ## Security

@@ -125,7 +125,8 @@ def _remedy_runs(error: InvalidArgumentError, tmp_path: Path) -> None:
     fork.do(tl.subspace(_SITE, _ROTATION[:2], origin=_ORIGIN), tl.scale(2.0))
     path = tmp_path / "resaved.tlspec"
     tl.io.save_intervention(fork, path, level="portable")
-    assert torch.equal(_apply(tl.io.load_intervention_spec(path))[_SITE].out, fork[_SITE].out)
+    reapplied = _apply(tl.io.load_intervention_spec(path))
+    assert torch.equal(reapplied[_SITE].out, fork[_SITE].out)
 
 
 def test_changed_rows_refuse_as_tampered_and_non_orthonormal_rows_refuse() -> None:
