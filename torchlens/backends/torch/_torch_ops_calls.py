@@ -343,10 +343,13 @@ def _zero_fa2_softmax_padding(outputs: Any, args: tuple[Any, ...], kwargs: dict[
     s_dmask = outputs[2]
     q = args[0] if args else kwargs.get("q")
     k = args[1] if len(args) > 1 else kwargs.get("k")
-    tensors = (s_dmask, q, k)
-    if not all(isinstance(t, torch.Tensor) and t.dim() == 4 for t in tensors):
+    if not (
+        isinstance(s_dmask, torch.Tensor)
+        and isinstance(q, torch.Tensor)
+        and isinstance(k, torch.Tensor)
+    ):
         return
-    if s_dmask.numel() == 0:
+    if s_dmask.dim() != 4 or q.dim() != 4 or k.dim() != 4 or s_dmask.numel() == 0:
         return
     seqlen_q, seqlen_k = q.shape[1], k.shape[1]
     with _state.pause_logging(), torch.no_grad():
@@ -354,7 +357,7 @@ def _zero_fa2_softmax_padding(outputs: Any, args: tuple[Any, ...], kwargs: dict[
         s_dmask[:, :, :seqlen_q, seqlen_k:].zero_()
 
 
-def _zeroing_fa2_softmax_padding(original: Callable[..., Any], op: Any) -> Callable[..., Any]:
+def _zeroing_fa2_softmax_padding(original: Callable[..., Any], op: Any) -> functools.partial[Any]:
     """Return the FlashAttention 2 replay callable: the operator, then the padding zeroed.
 
     A ``functools.partial`` bound to ``op`` like every recorded operator's callable, so
