@@ -18,7 +18,17 @@ from ._errors import PayloadUnavailableError
 __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
-__all__ = ("OutputSlot", "OutputStatus", "forward_failed", "read_output", "returned", "stopped")
+__all__ = (
+    "OutputSlot",
+    "OutputStatus",
+    "forward_failed",
+    "read_output",
+    "mark_transformed_output_stale",
+    "read_transformed_output",
+    "saved_transformed_output",
+    "returned",
+    "stopped",
+)
 
 OutputStatus = Literal["returned", "forward_failed", "stopped"]
 
@@ -111,3 +121,76 @@ def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
             remedy="drop stop_after= (or move it past the last op) to let the model return",
         )
     return slot.value
+
+
+class _TransformedOutputStale:
+    """Private marker stored in place of a transform result a replay made stale.
+
+    ``output_transform`` runs on the model's return value. A replay recomputes
+    ops from captured values and has no model return to re-apply it to, so
+    once it rewrites an output op the inherited result describes the parent's
+    forward. The marker pickles by reference to the module singleton, so a
+    deep-copied or unpickled trace keeps refusing; a portable save writes
+    ``None`` for it.
+    """
+
+    __slots__ = ()
+
+    def __reduce__(self) -> str:
+        return "_TRANSFORMED_OUTPUT_STALE"
+
+    def __repr__(self) -> str:
+        return "<transformed output stale: a replay rewrote the model output>"
+
+
+_TRANSFORMED_OUTPUT_STALE = _TransformedOutputStale()
+
+
+def read_transformed_output(value: Any, *, owner: str) -> Any:
+    """Return a stored transform result or refuse when a replay made it stale.
+
+    Parameters
+    ----------
+    value:
+        The stored ``transformed_output`` value (``None`` when no
+        ``output_transform`` was given).
+    owner:
+        ``"Trace"``, used in the refusal text.
+
+    Raises
+    ------
+    PayloadUnavailableError
+        ``output_not_stored`` when a replay rewrote an output op after capture.
+    """
+
+    if value is _TRANSFORMED_OUTPUT_STALE:
+        raise PayloadUnavailableError(
+            f"this {owner} has no transformed output: a replay rewrote the model output after "
+            "capture and has no model return to re-apply output_transform to",
+            code="output_not_stored",
+            remedy="apply the edit with intervention=tl.options.InterventionOptions("
+            "engine='rerun'), which re-runs the model and re-applies output_transform",
+        )
+    return value
+
+
+def mark_transformed_output_stale(trace: Any) -> None:
+    """Mark ``trace``'s transform result stale after a replay rewrote an output op.
+
+    Writes the stored key directly (never the refusing property). A trace with
+    no transform result (``None``) keeps ``None``: it still means no
+    ``output_transform`` was given.
+    """
+
+    if trace.__dict__.get("transformed_output") is not None:
+        trace.__dict__["transformed_output"] = _TRANSFORMED_OUTPUT_STALE
+
+
+def saved_transformed_output(value: Any) -> Any:
+    """Return the value a portable save writes for a stored transform result.
+
+    A stale result saves as ``None``, exactly as a trace with no transform
+    result saves.
+    """
+
+    return None if value is _TRANSFORMED_OUTPUT_STALE else value

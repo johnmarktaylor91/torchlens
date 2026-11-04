@@ -6,10 +6,15 @@ no model return to apply it to. After a replay rewrites an output op's values,
 the inherited transform result describes the parent's forward, so reading it
 refuses typed, the same way the fork's ``trace.output`` does. A replay that
 leaves every output op's values unchanged keeps the inherited result.
+``copy.deepcopy`` and pickle keep the refusal; a portable save stores no
+transformed output for such a trace, so the loaded trace reads ``None``.
 """
 
 from __future__ import annotations
 
+import copy
+import pickle
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -88,3 +93,82 @@ def test_rerun_recomputes_transformed_output_from_the_edited_forward() -> None:
     assert not torch.allclose(edited[out].out, trace[out].out)
     assert torch.allclose(edited.transformed_output, edited[out].out * 10.0)
     assert torch.allclose(trace.transformed_output, trace[out].out * 10.0)
+
+
+def _stale_fork() -> tuple[Any, Any]:
+    model, x, trace = _capture()
+    return trace, _fork_do(trace, model, x, tl.zero_ablate(), "replay")
+
+
+def _assert_refuses(trace: Any) -> None:
+    with pytest.raises(PayloadUnavailableError) as caught:
+        _ = trace.transformed_output
+    assert caught.value.code == "output_not_stored"
+    assert "replay rewrote the model output" in str(caught.value)
+    assert "rerun" in str(caught.value)
+
+
+def test_refusal_names_the_replay_and_the_rerun_remedy() -> None:
+    """The refusal says why (a replay rewrite) and how to recompute (the rerun engine)."""
+
+    _assert_refuses(_stale_fork()[1])
+
+
+def test_deepcopy_of_a_stale_fork_still_refuses() -> None:
+    """``copy.deepcopy`` keeps the stale marker: the copy refuses too."""
+
+    _assert_refuses(copy.deepcopy(_stale_fork()[1]))
+
+
+def test_pickle_round_trip_of_a_stale_fork_still_refuses() -> None:
+    """The marker pickles by reference, so an unpickled stale fork refuses."""
+
+    _assert_refuses(pickle.loads(pickle.dumps(_stale_fork()[1])))
+
+
+def test_saved_stale_fork_loads_with_no_transformed_output(tmp_path: Path) -> None:
+    """A portable save writes no transformed output for a stale fork (``None`` on load)."""
+
+    parent, edited = _stale_fork()
+    bundle = tmp_path / "stale_fork.tlspec"
+    edited.save(str(bundle))
+    assert tl.load(str(bundle)).transformed_output is None
+    _assert_refuses(edited)
+    assert parent.transformed_output is not None
+
+
+def test_unchanged_output_fork_keeps_its_value_through_copy_pickle_and_save(
+    tmp_path: Path,
+) -> None:
+    """A replay that changed no output op keeps the parent's value everywhere it travels."""
+
+    model, x, trace = _capture()
+    edited = _fork_do(trace, model, x, tl.scale(1.0), "replay")
+    expected = trace.transformed_output
+    assert torch.equal(copy.deepcopy(edited).transformed_output, expected)
+    assert torch.equal(pickle.loads(pickle.dumps(edited)).transformed_output, expected)
+    bundle = tmp_path / "unchanged_fork.tlspec"
+    edited.save(str(bundle))
+    assert torch.equal(tl.load(str(bundle)).transformed_output, expected)
+
+
+def test_aborted_selection_batch_restores_the_transform_result() -> None:
+    """A batch that rewrites the output then refuses rolls the stored result back too."""
+
+    capture = tl.options.CaptureOptions(output_transform=_times_ten, replayable=True)
+    trace = tl.trace(_TinyClassifier().eval(), torch.ones(1, 2), capture=capture)
+    fork = trace.fork()
+    expected = fork.transformed_output
+    head_op = fork[fork.output_layers[0]].parents[0]
+
+    def _wrong_shape(tensor: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        return tensor[:1]
+
+    pairs = [
+        (fork.layers[head_op].__selection__(), tl.scale(2.0)),
+        (tl.param("head.weight"), _wrong_shape),
+    ]
+    with pytest.raises(Exception) as caught:
+        fork.do(pairs)
+    assert "code" in getattr(caught.value, "fields", {}), "a typed refusal"
+    assert torch.equal(fork.transformed_output, expected)
