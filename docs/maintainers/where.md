@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 676055 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 676056 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26668 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39394 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39395 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (102 modules, 39394 lines)
+Core data structures for representing a logged forward pass. (102 modules, 39395 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -402,7 +402,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39394
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3462 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3417 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3418 |
 
 ### `torchlens._data_substrate`
 
