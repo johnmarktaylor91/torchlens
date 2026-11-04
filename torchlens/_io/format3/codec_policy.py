@@ -126,6 +126,34 @@ def backend_materializes(backend: str) -> bool:
     return backend_materializes_payloads(backend)
 
 
+def check_tf_runtime_version(manifest: Mapping[str, Any]) -> None:
+    """Refuse a TensorFlow artifact whose ``backend_runtime`` version is not the installed one.
+
+    TensorFlow traces load only on the TensorFlow release that wrote them (the 2.x unified
+    manifest's fail-closed fingerprint rule); the manifest schema check already tied the
+    stamp's name to the artifact backend.
+    """
+
+    if manifest.get("backend") != "tf":
+        return
+    # Deferred, as in the 2.x preflight: ``backends`` sits below ``_io`` and imports TF lazily.
+    from torchlens.backends.registry import BackendRuntimeCompatibilityError
+
+    try:
+        import tensorflow as tf
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            "Portable TensorFlow trace loading requires the tensorflow runtime."
+        ) from exc
+    saved_version = manifest["backend_runtime"].get("version")
+    current_version = str(getattr(tf, "__version__", ""))
+    if saved_version != current_version:
+        raise BackendRuntimeCompatibilityError(
+            f"Manifest TensorFlow runtime version {saved_version!r} does not match installed "
+            f"tensorflow {current_version!r}."
+        )
+
+
 _BACKEND_HINT_FIELDS = (
     "logical_dtype",
     "logical_device",
