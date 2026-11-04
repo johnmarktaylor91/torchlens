@@ -37,10 +37,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cache
-from typing import Any
+from typing import Any, NoReturn
 
 from .format_contract import TLSPEC_VERSION
-from .format_errors import ArtifactError, UnknownPersistedFieldError
+from .format_errors import UnknownPersistedFieldError
 
 #: Cap on unknown names spelled out in one refusal/inventory row (the full
 #: count always reports; a hostile million-key state must not build a
@@ -56,7 +56,6 @@ _MAX_INVENTORY_PKL_BYTES = 512 * 1024**2
 #: hostile pickle could name one per few bytes. The surrogates live only for the scan.
 _MAX_SURROGATE_CLASSES = 4096
 
-_INVENTORY_REMEDY = "re-save the trace with trace.save()"
 
 #: Transport-envelope keys the bundle writer places BESIDE the Trace state in
 #: metadata.pkl and the loaders pop before ``__setstate__`` ever runs
@@ -293,23 +292,6 @@ def _iter_surrogates(root: Any) -> Iterator[_SurrogateRecord]:
             stack.extend(node)
 
 
-def _inventory_refusal(metadata_path: Any, reason: str) -> ArtifactError:
-    """Return the typed refusal for a legacy ``metadata.pkl`` the inventory will not read.
-
-    The same error and code the 3.0 inventory half raises for an unreadable record file.
-    """
-
-    from .format3 import contract
-
-    return ArtifactError(
-        f"Artifact metadata {metadata_path} could not be read: {reason}. "
-        f"Remedy: {_INVENTORY_REMEDY}.",
-        code=contract.REFUSAL_CODES["record_file_corrupt"],
-        remedy=_INVENTORY_REMEDY,
-        file_path=str(metadata_path),
-    )
-
-
 def _load_inventory_skeleton(metadata_path: Any) -> Any:
     """Inertly unpickle a legacy ``metadata.pkl`` into surrogate skeletons, under bounds.
 
@@ -327,16 +309,24 @@ def _load_inventory_skeleton(metadata_path: Any) -> Any:
     import os
     import pickle
 
+    from .format3 import contract
+    from .format3.inventory import refuse_unreadable_file
+
+    def refuse(reason: str) -> NoReturn:
+        refuse_unreadable_file(
+            metadata_path,
+            code=contract.REFUSAL_CODES["record_file_corrupt"],
+            what="metadata",
+            reason=reason,
+        )
+
     classes: dict[str, type] = {}
 
     def surrogate_class(qualname: str) -> type:
         cls = classes.get(qualname)
         if cls is None:
             if len(classes) >= _MAX_SURROGATE_CLASSES:
-                raise _inventory_refusal(
-                    metadata_path,
-                    f"it names more than {_MAX_SURROGATE_CLASSES} distinct classes",
-                )
+                refuse(f"it names more than {_MAX_SURROGATE_CLASSES} distinct classes")
             cls = type(
                 "_Surrogate", (_SurrogateRecord,), {"_tl_qualname": qualname, "__slots__": ()}
             )
@@ -359,10 +349,7 @@ def _load_inventory_skeleton(metadata_path: Any) -> Any:
     with metadata_path.open("rb") as handle:
         size = os.fstat(handle.fileno()).st_size
         if size > _MAX_INVENTORY_PKL_BYTES:
-            raise _inventory_refusal(
-                metadata_path,
-                f"it is {size} bytes, above the {_MAX_INVENTORY_PKL_BYTES}-byte ceiling",
-            )
+            refuse(f"it is {size} bytes, above the {_MAX_INVENTORY_PKL_BYTES}-byte ceiling")
         return _InventoryUnpickler(_stdlib_io.BufferedReader(handle)).load()
 
 

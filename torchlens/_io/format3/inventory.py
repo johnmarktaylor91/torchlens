@@ -13,15 +13,37 @@ import os
 import stat
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from .._json import loads_bounded, read_bytes_bounded
 from ..format_errors import ArtifactError
 from . import contract
 
-__all__ = ["foreign_file_note", "inspect_record_tables", "names_format3"]
+__all__ = ["foreign_file_note", "inspect_record_tables", "names_format3", "refuse_unreadable_file"]
 
 _REMEDY = "re-save the trace with trace.save()"
+
+
+def refuse_unreadable_file(
+    path: Path, *, code: str, what: str, reason: object, cause: BaseException | None = None
+) -> NoReturn:
+    """Refuse one file the inert inventory cannot read, typed with the caller's code.
+
+    The one refusal of both inventory halves: an unreadable 3.0 manifest or record
+    table, and a 2.x ``metadata.pkl`` over the legacy scan's bounds.
+
+    Raises
+    ------
+    ArtifactError
+        Always, naming the file, the reason and the remedy.
+    """
+
+    raise ArtifactError(
+        f"Artifact {what} {path} could not be read: {reason}. Remedy: {_REMEDY}.",
+        code=code,
+        remedy=_REMEDY,
+        file_path=str(path),
+    ) from cause
 
 
 def _read_json_file(path: Path, *, code: str, what: str) -> Any:
@@ -32,12 +54,7 @@ def _read_json_file(path: Path, *, code: str, what: str) -> Any:
     except (OSError, ValueError, ArtifactError) as exc:
         if isinstance(exc, FileNotFoundError) and what == "manifest":
             code = contract.REFUSAL_CODES["manifest_missing"]
-        raise ArtifactError(
-            f"Artifact {what} {path} could not be read: {exc}. Remedy: {_REMEDY}.",
-            code=code,
-            remedy=_REMEDY,
-            file_path=str(path),
-        ) from exc
+        refuse_unreadable_file(path, code=code, what=what, reason=exc, cause=exc)
 
 
 def names_format3(root: Path) -> bool:

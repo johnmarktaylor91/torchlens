@@ -216,7 +216,7 @@ def test_inert_inventory_still_reads_a_legacy_root_pickle(tmp_path: Path) -> Non
     report = inspect_state_contract(bundle)
     trace_row = report["record_types"]["torchlens._data_classes.trace.Trace"]
     assert trace_row["unknown_fields"] == [UNKNOWN_KEY]
-    assert report["record_types"]["builtins.open"]["ungoverned"] is True
+    assert report["record_types"][f"{open.__module__}.{open.__name__}"]["ungoverned"] is True
     assert "foreign_files" not in report
     assert not marker.exists()
 
