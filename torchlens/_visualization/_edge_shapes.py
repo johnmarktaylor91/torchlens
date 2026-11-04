@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 def _producer_ops(trace: Trace, label: str, rolled: bool) -> tuple[Any, ...]:
     """Return the ops a rendered producer label stands for.
 
-    A rolled render names a layer by its bare label, which ``trace[...]`` refuses
-    for a multi-pass layer; the aggregate ``trace.layers[...]`` holds every pass.
+    A bare label, or any label in a rolled render, names the whole layer, which
+    ``trace[...]`` refuses for a multi-pass layer; ``trace.layers[...]`` holds every pass.
     """
-    if rolled and label in trace.layers:
+    if label in trace.layers and (rolled or ":" not in label):
         return tuple(trace.layers[label].ops)
     entry = trace[label]
     return tuple(entry.ops) if rolled and hasattr(entry, "ops") else (entry,)
