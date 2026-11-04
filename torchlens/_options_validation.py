@@ -394,9 +394,8 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``: the field names, with
-        ``container_path`` as ``path``; ``file_format`` only when explicit,
-        ``fold_repeats`` when set or explicit, the rest only when set.
+        ``Trace.draw`` field names, renaming ``container_path`` to ``path``;
+        include ``file_format`` only when explicit and ``fold_repeats`` when set or explicit.
     """
     explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
