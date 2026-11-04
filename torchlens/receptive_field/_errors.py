@@ -74,6 +74,11 @@ class NoInfluencePathError(ReceptiveFieldError, ValueError):
 class AmbiguousTargetError(ReceptiveFieldError, ValueError):
     """Raised when a projective query has more than one reachable target.
 
+    A query with no ``target=`` whose other targets are caches (an output role
+    with a ``past_key_values``, ``presents`` or ``mems`` segment, or one
+    containing ``cache``) answers the primary output instead: the ``logits``
+    role, else the first non-cache output. Two real outputs still raise.
+
     Examples
     --------
     >>> class TwoOut(nn.Module):

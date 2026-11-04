@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from ._errors import (
     AmbiguousCallError,
     AmbiguousPassError,
+    AmbiguousTargetError,
     NoInfluencePathError,
     ReceptiveFieldError,
 )
@@ -18,6 +19,10 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from ._query import _IndexSet
+    from ._types import ReceptiveField
+
+# Output path segments that name a cache field; see ``_is_cache_role``.
+_CACHE_ROLE_SEGMENTS = frozenset({"past_key_values", "presents", "mems"})
 
 
 def _op_by_name(trace: Trace, handle: str) -> Op:
@@ -372,3 +377,79 @@ def _reachable_labels(start: str, adjacency: Mapping[str, frozenset[str]]) -> fr
 
 
 __all__: list[str] = []
+
+
+def _is_cache_role(role: str) -> bool:
+    """Return whether an output IO role names a cache tensor rather than a real output.
+
+    A role is a cache role when one of its dotted path segments is a known
+    cache field (``past_key_values``, ``presents``, ``mems``) or contains
+    ``cache`` (``cache_params``, ``kv_cache``), compared case-insensitively.
+    """
+
+    return any(
+        segment in _CACHE_ROLE_SEGMENTS or "cache" in segment for segment in role.lower().split(".")
+    )
+
+
+def _primary_target_role(
+    descriptors: Mapping[str, ReceptiveField], order: Sequence[str]
+) -> str | None:
+    """Return the primary output role when every other reachable target is a cache.
+
+    Parameters
+    ----------
+    descriptors:
+        Reachable target descriptors keyed by output IO role.
+    order:
+        Target operation labels in model output order.
+
+    Returns
+    -------
+    str | None
+        The role whose last segment is ``logits``, else the first non-cache
+        role in output order; ``None`` when no cache role is reachable (two
+        real outputs stay ambiguous) or every reachable role is a cache.
+    """
+
+    real = [role for role in descriptors if not _is_cache_role(role)]
+    if not real or len(real) == len(descriptors):
+        return None
+    logits = [role for role in real if role.rsplit(".", 1)[-1] == "logits"]
+    if logits:
+        return logits[0]
+    rank = {label: index for index, label in enumerate(order)}
+    return min(real, key=lambda role: rank.get(descriptors[role].input_op_label, len(rank)))
+
+
+def _select_target_descriptor(
+    descriptors: Mapping[str, ReceptiveField],
+    target: Op | str | None,
+    order: Sequence[str] = (),
+    source_label: str | None = None,
+) -> ReceptiveField:
+    """Resolve one projective result descriptor without choosing silently.
+
+    With no ``target`` and several reachable targets, the primary output is
+    chosen only when the others are cache tensors (see ``_primary_target_role``;
+    ``order`` is the solution's target labels in model output order). Any other
+    several-target case raises ``AmbiguousTargetError``.
+    """
+
+    if target is None:
+        if len(descriptors) == 1:
+            return next(iter(descriptors.values()))
+        primary = _primary_target_role(descriptors, order)
+        if primary is not None:
+            return descriptors[primary]
+        roles = ", ".join(descriptors)
+        prefix = "This source" if source_label is None else f"Source {source_label!r}"
+        raise AmbiguousTargetError(
+            f"{prefix} has multiple reachable targets: {roles}. "
+            "Select one with view[target_op] or target=<io_role>."
+        )
+    identity = target if isinstance(target, str) else target.label
+    for role, descriptor in descriptors.items():
+        if identity in {role, descriptor.input_op_label}:
+            return descriptor
+    raise ReceptiveFieldError(f"Target {identity!r} is not reachable from this source.")
