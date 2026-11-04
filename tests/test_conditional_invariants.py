@@ -376,7 +376,7 @@ def test_invariant_5_all_conditional_ids_resolve_to_events() -> None:
 
 
 def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
-    """Invariant 6 fails on a non-prefix stack reordering across one graph edge."""
+    """Invariant 6 fails when a nested stack lists the inner conditional first."""
 
     trace = _log_model(NestedIfModel(), torch.ones(2, 3))
     try:
@@ -396,7 +396,7 @@ def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
         violating_child.conditional_branch_stack = list(
             reversed(violating_child.conditional_branch_stack)
         )
-        _assert_invariant_error(trace, ("Invariant 6", "non-prefix conditional stacks"))
+        _assert_invariant_error(trace, ("Invariant 6", "without its enclosing conditional"))
     finally:
         trace.cleanup()
 

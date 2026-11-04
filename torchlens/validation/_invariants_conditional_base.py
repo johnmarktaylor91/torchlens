@@ -16,7 +16,6 @@ __all__ = (
     "_fail_conditional_invariant",
     "_strip_pass_suffix",
     "_append_unique",
-    "_is_prefix_stack",
     "_expected_layer_pass_child_views",
     "_expected_layer_log_child_views",
     "_expected_layer_log_child_union",
@@ -166,26 +165,6 @@ def _append_unique(values: list[str], value: str) -> None:
 
     if value not in values:
         values.append(value)
-
-
-def _is_prefix_stack(prefix: list[tuple[int, str]], full: list[tuple[int, str]]) -> bool:
-    """Return whether one conditional branch stack prefixes another.
-
-    Parameters
-    ----------
-    prefix:
-        Candidate prefix stack.
-    full:
-        Candidate full stack.
-
-    Returns
-    -------
-    bool
-        ``True`` if ``prefix`` matches the first ``len(prefix)`` entries of
-        ``full``.
-    """
-
-    return len(prefix) <= len(full) and full[: len(prefix)] == prefix
 
 
 def _expected_layer_pass_child_views(

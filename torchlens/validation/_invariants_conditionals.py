@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .._data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import ConditionalEvent, Trace
 
 __all__ = (
     "_check_conditional_child_labels_resolve",
@@ -202,11 +204,133 @@ def _check_conditional_event_references(
             )
 
 
+def _conditional_evaluation_starts(ml: Trace, name: str) -> dict[int, list[int]]:
+    """Return, per conditional id, the ``raw_index`` of every test op that decided it.
+
+    Every terminal bool of a conditional starts (an ``if`` test) or continues (an
+    ``elif`` test) one evaluation of that conditional. An op in an arm body runs after
+    the last test of its evaluation and before the next evaluation's first test, so
+    the count of tests that ran before a body op identifies its evaluation exactly.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+
+    Returns
+    -------
+    dict[int, list[int]]
+        Ascending test-op ``raw_index`` values keyed by conditional id.
+    """
+
+    starts: dict[int, list[int]] = {}
+    for op in ml.layer_list:
+        conditional_id = op.terminal_conditional_id
+        if conditional_id is None:
+            continue
+        if op.raw_index is None:
+            _fail_conditional_invariant(
+                name,
+                6,
+                f"Terminal bool {op.layer_label!r} of conditional {conditional_id} has no raw_index",
+            )
+        starts.setdefault(conditional_id, []).append(op.raw_index)
+    return {conditional_id: sorted(indices) for conditional_id, indices in starts.items()}
+
+
+def _arms_by_evaluation(
+    op: Op,
+    evaluation_starts: Mapping[int, list[int]],
+    name: str,
+) -> dict[int, tuple[int, str]]:
+    """Map each conditional in an op's stack to its (evaluation ordinal, arm kind).
+
+    Parameters
+    ----------
+    op:
+        Op whose ``conditional_branch_stack`` is read.
+    evaluation_starts:
+        Per-conditional ascending test-op ``raw_index`` values.
+    name:
+        Invariant check name for raised errors.
+
+    Returns
+    -------
+    dict[int, tuple[int, str]]
+        ``conditional_id -> (evaluation ordinal, arm kind)``; the ordinal is 1-based.
+        A conditional re-entered within one stack keeps its innermost entry.
+    """
+
+    arms: dict[int, tuple[int, str]] = {}
+    for conditional_id, arm_kind in op.conditional_branch_stack:
+        ordinal = (
+            0
+            if op.raw_index is None
+            else bisect_right(evaluation_starts.get(conditional_id, []), op.raw_index)
+        )
+        if ordinal == 0:
+            _fail_conditional_invariant(
+                name,
+                6,
+                f"{op.layer_label!r} carries conditional {conditional_id} arm {arm_kind!r} in "
+                f"conditional_branch_stack but ran (raw_index={op.raw_index}) before any test "
+                f"of that conditional",
+            )
+        arms[conditional_id] = (ordinal, arm_kind)
+    return arms
+
+
+def _check_stack_respects_event_nesting(
+    op: Op,
+    events_by_id: Mapping[int, ConditionalEvent],
+    name: str,
+) -> None:
+    """Fail when a stack lists a conditional before the enclosing arm its source sits in.
+
+    Parameters
+    ----------
+    op:
+        Op whose ``conditional_branch_stack`` is read.
+    events_by_id:
+        Conditional events keyed by dense id.
+    name:
+        Invariant check name for raised errors.
+    """
+
+    stack = list(op.conditional_branch_stack)
+    for position, (conditional_id, _arm_kind) in enumerate(stack):
+        event = events_by_id.get(conditional_id)
+        # An id with no event is invariant 5's finding, raised before this check.
+        if event is None or event.parent_conditional_id is None:
+            continue
+        enclosing = (event.parent_conditional_id, event.parent_branch_kind)
+        if enclosing not in stack[:position]:
+            _fail_conditional_invariant(
+                name,
+                6,
+                f"{op.layer_label!r} conditional_branch_stack={op.conditional_branch_stack} lists "
+                f"conditional {conditional_id} without its enclosing conditional "
+                f"{enclosing[0]} arm {enclosing[1]!r} before it",
+            )
+
+
 def _check_conditional_branch_stack_monotonicity(
     ml: Trace,
     name: str,
 ) -> None:
-    """Check parent-child conditional stacks are monotone by prefix.
+    """Check no edge crosses arms within one evaluation of a conditional.
+
+    ``conditional_branch_stack`` is structural: ``(conditional_id, arm_kind)`` pairs for
+    the source arms an op sits in, outer to inner, where a conditional id names one
+    ``if`` chain at one source location. One evaluation of that chain runs one arm, so
+    two ops joined by an edge that executed under the same evaluation of a conditional
+    must agree on its arm. Another evaluation (a loop iteration, a recurrent pass, a
+    re-entered call) or a sibling conditional may run a different arm, and an edge
+    into it is ordinary dataflow. Evaluations are told apart by the conditional's test
+    ops in execution order. Each stack must also list every conditional after the
+    enclosing conditional arm its source sits in.
 
     Parameters
     ----------
@@ -216,29 +340,32 @@ def _check_conditional_branch_stack_monotonicity(
         Invariant check name for raised errors.
     """
 
-    # Invariant 6: parent->child stacks are monotone by prefix relation.
-    for parent_op in ml._layer_list:
+    # Invariant 6: an edge never crosses arms of one conditional evaluation, and stacks
+    # respect source nesting.
+    events_by_id = {event.id: event for event in ml._graph_conditional_records}
+    evaluation_starts = _conditional_evaluation_starts(ml, name)
+    for parent_op in ml.layer_list:
+        _check_stack_respects_event_nesting(parent_op, events_by_id, name)
+        parent_arms = _arms_by_evaluation(parent_op, evaluation_starts, name)
         for child_label in parent_op.children:
-            child_layer = ml[child_label]
-            if parent_op.pass_number != child_layer.pass_number:
+            child_op = ml[child_label]
+            if parent_op.conditional_branch_stack == child_op.conditional_branch_stack:
                 continue
-            if parent_op.conditional_branch_stack == child_layer.conditional_branch_stack:
-                continue
-            if _is_prefix_stack(
-                parent_op.conditional_branch_stack, child_layer.conditional_branch_stack
-            ):
-                continue
-            if _is_prefix_stack(
-                child_layer.conditional_branch_stack, parent_op.conditional_branch_stack
-            ):
-                continue
-            _fail_conditional_invariant(
-                name,
-                6,
-                f"Edge ({parent_op.layer_label!r}, {child_label!r}) has non-prefix "
-                f"conditional stacks parent={parent_op.conditional_branch_stack} "
-                f"child={child_layer.conditional_branch_stack}",
-            )
+            child_arms = _arms_by_evaluation(child_op, evaluation_starts, name)
+            for conditional_id, (evaluation, parent_arm) in parent_arms.items():
+                child_entry = child_arms.get(conditional_id)
+                if child_entry is None or child_entry[0] != evaluation:
+                    continue
+                if child_entry[1] == parent_arm:
+                    continue
+                _fail_conditional_invariant(
+                    name,
+                    6,
+                    f"Edge ({parent_op.layer_label!r}, {child_label!r}) crosses arms of "
+                    f"conditional {conditional_id} within its evaluation {evaluation}: "
+                    f"parent arm {parent_arm!r} stack={parent_op.conditional_branch_stack} "
+                    f"child arm {child_entry[1]!r} stack={child_op.conditional_branch_stack}",
+                )
 
 
 def _check_conditional_elif_key_contiguity(
@@ -536,6 +663,5 @@ def _check_conditional_branch_entry_edges(
 from ._invariants_conditional_base import (  # noqa: E402
     _expected_layer_log_child_union,
     _fail_conditional_invariant,
-    _is_prefix_stack,
     _strip_pass_suffix,
 )
