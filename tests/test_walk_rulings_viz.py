@@ -61,8 +61,8 @@ def test_edge_shapes_render_specific_output_slots(tmp_path):
     assert default == explicit
     shaped = str(trace.draw(path, show_edge_shapes=True, order_siblings=False))
     edge_lines = [line for line in shaped.splitlines() if " -> " in line]
-    assert any("[1, 1]" in line for line in edge_lines)
-    assert any("[1, 3]" in line for line in edge_lines)
+    assert any("[1, 1]" in line for line in edge_lines), shaped
+    assert any("[1, 3]" in line for line in edge_lines), shaped
     assert shaped != default
 
 

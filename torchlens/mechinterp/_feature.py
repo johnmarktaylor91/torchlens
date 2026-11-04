@@ -153,7 +153,7 @@ def _validate_settings(model: Any, steps: int, lr: float, seed: int, unit: Any, 
 
 def visualize_feature(
     model: nn.Module,
-    site: Any,
+    site: str | BaseSelector,
     *,
     inputs: torch.Tensor | None = None,
     input_shape: tuple[int, ...] | None = None,

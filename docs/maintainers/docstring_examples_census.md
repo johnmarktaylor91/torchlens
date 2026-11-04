@@ -48,6 +48,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | backends | 22 | 0 |
 | bridge | 53 | 0 |
 | bundle | 3 | 0 |
+| callbacks | 2 | 2 |
 | compat | 10 | 0 |
 | dataset_extraction | 3 | 0 |
 | debug | 63 | 0 |
@@ -63,7 +64,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | intervention | 95 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
-| mechinterp | 48 | 0 |
+| mechinterp | 49 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
 | options | 6 | 0 |
@@ -79,6 +80,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1054** | **0** |
+| **total** | **1057** | **2** |
 
-Public callable members of those classes (methods and properties): 1488.
+Public callable members of those classes (methods and properties): 1496.

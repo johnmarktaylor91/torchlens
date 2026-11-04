@@ -127,7 +127,9 @@ def _draw_policy(
     }
 
 
-def _require_graph_kind(graph: str, show_containers: bool, show_edge_shapes: bool) -> None:
+def _require_graph_kind(
+    graph: str, show_containers: ShowContainersLiteral, show_edge_shapes: bool
+) -> None:
     """Refuse a ``graph=`` value other than forward, backward or combined."""
 
     _validate_draw_flag_options(show_containers, show_edge_shapes=show_edge_shapes)

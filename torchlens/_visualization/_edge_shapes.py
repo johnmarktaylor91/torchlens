@@ -47,7 +47,10 @@ def _shape_statements(
     """Decorate emitted forward statements, including edges inside module clusters."""
     result = []
     for statement in statements:
-        shape = shapes.get(tuple(statement.args[:2])) if statement.kind == "edge" else None
+        values = dict(statement.attrs)
+        tail = statement.args[0] if statement.args else values.get("tail_name", "")
+        head = statement.args[1] if len(statement.args) > 1 else values.get("head_name", "")
+        shape = shapes.get((tail, head)) if statement.kind == "edge" else None
         attrs = _label_attrs(statement.attrs, shape) if shape else statement.attrs
         result.append(
             replace(statement, attrs=attrs, children=_shape_statements(statement.children, shapes))
