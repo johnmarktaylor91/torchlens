@@ -12,10 +12,10 @@ whose durations all differ.
 Saved format 3 writes no pickle at any level, so the artifact is read through its own
 files: ``manifest.json`` names every file and the ``records/op.json`` table carries the
 per-op durations. The pre-3 check that counted pickle float opcodes does not apply to a
-pickle-free format and is gone. JSON writes a float as its shortest decimal text, whose
-length varies with the value, so the byte comparison rewrites every JSON float to one
-fixed token first: the analogue of the pickle's fixed eight-byte float, under which a
-shared or back-referenced cell still changes the size.
+pickle-free format and is gone. The pickle wrote every float at a fixed width; format 3
+writes floats by exact repr, so the byte comparison uses the save-path counters' size, which
+holds each wall-clock timing float (``TIMING_FLOAT_PATHS``) at a fixed width and counts every
+other byte as written: a shared or back-referenced Duration cell still changes it.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from benchmarks import save_path_counters as spc
 from torchlens.backends.torch import wrappers
 from torchlens.options import CaptureOptions
 
@@ -95,7 +96,6 @@ def _measured_durations(trace: Any) -> list[Any]:
 
 
 _TYPED_VALUE_KEY = "$tl"
-_FLOAT_TOKEN = "f"
 
 
 def _save(trace: Any, target: Path) -> dict[str, Any]:
@@ -144,22 +144,15 @@ def _saved_durations(trace: Any, table: dict[str, Any]) -> list[Any]:
     return [cells[op.label] for op in trace.ops if id(op.func_duration) in measured]
 
 
-def _size_with_fixed_floats(target: Path, manifest: dict[str, Any]) -> int:
-    """Return the artifact's byte count with every JSON float rewritten to one token.
+def _timing_normalised_size(target: Path) -> int:
+    """Return the artifact's size with each timing float at a fixed width, every other byte raw."""
 
-    The manifest itself is left out: it records the other files' raw byte counts and
-    digests, which move with the float text this count normalises.
-    """
-
-    total = 0
-    for name in sorted(manifest["files"]):
-        path = target / name
-        if name.endswith(".json"):
-            parsed = json.loads(path.read_text(), parse_float=lambda _text: _FLOAT_TOKEN)
-            total += len(json.dumps(parsed, sort_keys=True).encode())
-        else:
-            total += path.stat().st_size
-    return total
+    sizes = spc.bundle_bytes(target)
+    found = sizes["timing_floats_by_file"]
+    assert set(found) == set(spc.TIMING_FLOAT_PATHS), found
+    assert all(count >= 1 for count in found.values()), found
+    size: int = sizes["bytes_written"]
+    return size
 
 
 def test_equal_op_durations_stay_distinct_objects(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -200,7 +193,7 @@ def test_save_bytes_do_not_depend_on_op_timings(
         assert [_floats_in(cell) for cell in cells] == [
             [float(d)] for d in _measured_durations(trace)
         ], "every measured op's saved cell carries its own duration value"
-        sizes.append(_size_with_fixed_floats(target, manifest))
+        sizes.append(_timing_normalised_size(target))
 
     assert sizes[0] == sizes[1], "the saved bytes depend on which ops share a timing"
 

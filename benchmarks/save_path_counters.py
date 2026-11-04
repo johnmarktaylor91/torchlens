@@ -24,12 +24,15 @@ Counters for one save of a fixed capture:
     Tensor blobs are written by the safetensors extension and do not appear here;
     they appear in the byte counters.
 ``files_written`` / ``bytes_written``
-    Files in the published bundle and their total size; ``bytes_by_part`` splits the
-    size into ``manifest``, ``metadata`` (the ``records/`` tables), ``blobs`` and
-    ``other``.
+    Files in the published bundle and their total size with each wall-clock timing
+    float (``TIMING_FLOAT_PATHS``) counted at ``TIMING_FLOAT_WIDTH`` bytes; every other
+    byte counts as written. ``bytes_by_part`` splits the size into ``manifest``,
+    ``metadata`` (the ``records/`` tables), ``blobs`` and ``other``;
+    ``timing_floats_by_file`` counts the timing floats found per record table.
 
-``python_calls`` (total calls under ``cProfile``) and the wall time of two unprofiled
-saves (an A/A pair) are reported as information and never gate.
+``python_calls`` (total calls under ``cProfile``), the raw byte count of the bundle and
+the wall time of two unprofiled saves (an A/A pair) are reported as information and
+never gate.
 
 Run ``python benchmarks/save_path_counters.py --out OUT.json``; one JSON document is
 printed and written to ``--out``.
@@ -69,6 +72,68 @@ GATED_COUNTERS = (
     "files_written",
     "bytes_written",
 )
+
+
+#: Wall-clock timing floats in the record tables, by file and key path (``*`` matches
+#: one list index or object key). The pre-3 pickle wrote every float at a fixed width,
+#: so timings never moved its size; saved format 3 writes floats by exact repr
+#: (``docs/maintainers/saved_format_3.md``), whose text length moves with the measured
+#: value. Only these floats are counted at ``TIMING_FLOAT_WIDTH``; every other byte,
+#: other floats included, counts as written, so any non-timing change moves the count.
+TIMING_FLOAT_PATHS: dict[str, tuple[str, ...]] = {
+    "records/op.json": ("columns.func_duration.*.fields.value",),
+    "records/module.json": (
+        "columns.forward_duration.*.fields.value",
+        "columns.func_calls_duration.*.fields.value",
+        "columns.total_forward_duration.*.fields.value",
+        "columns.total_func_calls_duration.*.fields.value",
+    ),
+    "records/module_call.json": (
+        "columns.forward_duration.*.fields.value",
+        "columns.func_calls_duration.*.fields.value",
+    ),
+    "records/trace.json": (
+        "fields._cost_forward_duration.fields.value",
+        "fields._cost_func_calls_duration.fields.value",
+        "fields._phase_timings.*.total_s",
+    ),
+}
+#: Bytes each timing float counts for (a binary double's width).
+TIMING_FLOAT_WIDTH = 8
+
+
+def _matches(node: Any, steps: list[str]) -> Iterator[Any]:
+    """Yield the values under ``node`` at the dotted ``steps`` (``*``: any one child)."""
+
+    if not steps:
+        yield node
+        return
+    head, rest = steps[0], steps[1:]
+    if isinstance(node, dict):
+        children = list(node.values()) if head == "*" else [node[head]] if head in node else []
+    elif isinstance(node, list) and head == "*":
+        children = list(node)
+    else:
+        children = []
+    for child in children:
+        yield from _matches(child, rest)
+
+
+def timing_float_slack(relative: str, text: str) -> tuple[int, int]:
+    """Return (bytes the timing floats of one file take beyond their fixed width, count)."""
+
+    patterns = TIMING_FLOAT_PATHS.get(relative)
+    if not patterns:
+        return 0, 0
+    document = json.loads(text)
+    floats = [
+        value
+        for pattern in patterns
+        for value in _matches(document, pattern.split("."))
+        if isinstance(value, float)
+    ]
+    slack = sum(len(json.dumps(value)) - TIMING_FLOAT_WIDTH for value in floats)
+    return slack, len(floats)
 
 
 @contextmanager
@@ -147,18 +212,34 @@ def _part(relative: Path) -> str:
 
 
 def bundle_bytes(path: Path) -> dict[str, Any]:
-    """Return the file count, total bytes and per-part bytes of a published bundle."""
+    """Return the file count, timing-normalised total and per-part bytes, and timing floats.
+
+    ``raw_bytes_written`` is the bundle's size as written (information only: it moves
+    with the measured timings).
+    """
 
     by_part: Counter[str] = Counter()
-    files = 0
+    timing_floats: dict[str, int] = {}
+    files = raw = 0
     for item in sorted(path.rglob("*")):
         if item.is_file():
             files += 1
-            by_part[_part(item.relative_to(path))] += item.stat().st_size
+            relative = item.relative_to(path)
+            size = item.stat().st_size
+            raw += size
+            slack, found = 0, 0
+            if relative.as_posix() in TIMING_FLOAT_PATHS:
+                slack, found = timing_float_slack(
+                    relative.as_posix(), item.read_text(encoding="utf-8")
+                )
+                timing_floats[relative.as_posix()] = found
+            by_part[_part(relative)] += size - slack
     return {
         "files_written": files,
         "bytes_written": sum(by_part.values()),
         "bytes_by_part": {k: by_part.get(k, 0) for k in ("manifest", "metadata", "blobs", "other")},
+        "timing_floats_by_file": timing_floats,
+        "raw_bytes_written": raw,
     }
 
 
@@ -189,7 +270,9 @@ def measure(trace: Any, workdir: Path) -> dict[str, Any]:
     with counting(workdir) as counts:
         trace.save(str(target))
     result: dict[str, Any] = {key: counts.get(key, 0) for key in GATED_COUNTERS}
-    result.update(bundle_bytes(target))
+    sizes = bundle_bytes(target)
+    sizes.pop("raw_bytes_written")
+    result.update(sizes)
     return result
 
 
@@ -221,6 +304,9 @@ def run() -> dict[str, Any]:
         info = {
             "python_calls": _python_calls(trace, workdir),
             "wall_ms_aa_pair": [_wall_ms(trace, workdir, "1"), _wall_ms(trace, workdir, "2")],
+            "raw_bytes_written": bundle_bytes(workdir / "a" / "counted.tlspec")[
+                "raw_bytes_written"
+            ],
         }
     return {
         "schema": "torchlens.save_path_counters.v2",

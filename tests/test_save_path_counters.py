@@ -11,6 +11,11 @@ Counters that depend only on the save path's structure gate everywhere. The enco
 count and the byte counts also depend on the torch build (module docstrings and attributes
 are part of the metadata), so they gate only when torch and the Python minor version match
 the pinned environment.
+
+Byte counts hold each wall-clock timing float at a fixed width
+(``spc.TIMING_FLOAT_PATHS``): the pre-3 pickle wrote floats at a fixed width, saved format 3
+writes them by exact repr, so their text length moves with the measured timings. Every other
+byte counts as written.
 """
 
 from __future__ import annotations
@@ -74,7 +79,10 @@ def test_pinned_record_names_every_gated_counter() -> None:
     """The pinned record covers exactly the counters the script gates."""
 
     pinned = _pinned()
-    assert set(pinned["counters"]) == set(spc.GATED_COUNTERS) | {"bytes_by_part"}
+    assert set(pinned["counters"]) == set(spc.GATED_COUNTERS) | {
+        "bytes_by_part",
+        "timing_floats_by_file",
+    }
     assert set(STRUCTURAL_COUNTERS) | set(BUILD_KEYED_COUNTERS) == set(spc.GATED_COUNTERS)
     assert pinned["schema"] == "torchlens.save_path_counters.v2"
 
@@ -98,6 +106,18 @@ def test_structural_save_counters_hold_exactly(
     }
     assert first["metadata_writes"] == 1
     assert first["verify_reloads"] == 1
+
+
+def test_timing_normaliser_finds_every_timing_table(
+    measured: tuple[dict[str, Any], dict[str, Any]],
+) -> None:
+    """Each table with timing floats has some, at the pinned count (a renamed key fails here)."""
+
+    first, _ = measured
+    found = first["timing_floats_by_file"]
+    assert set(found) == set(spc.TIMING_FLOAT_PATHS)
+    assert all(count >= 1 for count in found.values()), found
+    assert found == _pinned()["counters"]["timing_floats_by_file"]
 
 
 def test_build_keyed_save_counters_hold_exactly(
