@@ -15,6 +15,16 @@
   output has no row and stays fully tested; the same operator name in another namespace, a
   parent at another position or a keyword stays strict.
 
+- **capture**: A FlashAttention 2 call with dropout and `return_attn_probs=True` now replays bit
+  for bit, so `tl.validate(scope="forward")` passes on it. Replay already restored the captured
+  CUDA generator state, which redraws the same dropout mask; what differed was the dropout mask's
+  padding: the kernel returns it rounded up to its block size and leaves the cells past the
+  sequence lengths undefined. TorchLens now zeroes those padding cells where the recorded
+  `flash_attn::_flash_attn_forward` call returns, in the capture and in the replay, so the model,
+  the trace and the replay hold the same values. The defined region and the other outputs are
+  unchanged; other operators, including the varlen entry point, are not touched. Validation still
+  compares the whole tensor.
+
 - **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
   read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
   or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
