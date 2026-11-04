@@ -173,10 +173,12 @@ class _Loop(nn.Module):
     """One module whose forward runs ``2 * n`` torch builtin ops."""
 
     def __init__(self, n: int) -> None:
+        """Store the number of sin/cos rounds."""
         super().__init__()
         self.n = n
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply ``cos(sin(x))`` ``n`` times."""
         for _ in range(self.n):
             x = torch.cos(torch.sin(x))
         return x
@@ -192,9 +194,11 @@ def _capture_calls(monkeypatch: pytest.MonkeyPatch, owner: Any, name: str, n: in
     real_postprocess = postprocess_pkg.postprocess
 
     def patched(*args: Any, **kwargs: Any) -> Any:
+        """Count the call while capture runs, else pass it through."""
         return counting(*args, **kwargs) if state["capture"] else real(*args, **kwargs)
 
     def postprocess(*args: Any, **kwargs: Any) -> Any:
+        """Run the real postprocess with counting switched off."""
         state["capture"] = False
         try:
             return real_postprocess(*args, **kwargs)
@@ -215,6 +219,7 @@ def _capture_calls(monkeypatch: pytest.MonkeyPatch, owner: Any, name: str, n: in
 def test_capture_derives_each_function_registry_key_once_per_function(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Registry-key derivations do not grow with the op count of one function."""
     tl.trace(_Loop(1), torch.randn(2, 4))  # warm one-time instrumentation
     name = "function_registry_key_from_callable"
     small = _capture_calls(monkeypatch, resolver_registry, name, 2)
@@ -223,6 +228,7 @@ def test_capture_derives_each_function_registry_key_once_per_function(
 
 
 def test_capture_deepcopies_nothing_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``copy.deepcopy`` calls do not grow with the op count."""
     tl.trace(_Loop(1), torch.randn(2, 4))  # warm one-time instrumentation
     small = _capture_calls(monkeypatch, copy, "deepcopy", 2)
     large = _capture_calls(monkeypatch, copy, "deepcopy", 12)
