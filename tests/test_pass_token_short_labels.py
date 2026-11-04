@@ -69,9 +69,10 @@ def _assert_every_named_spelling_resolves(trace: tl.Trace, message: str) -> None
 def test_bare_label_error_names_a_spelling_that_resolves() -> None:
     """A bare multi-pass label is the Layer; each one-op refusal names spellings that resolve.
 
-    ``trace[label]`` returns the Layer, single- or multi-pass (indexing ruling of
-    3 Nov 2026); the doors that must give exactly one op still refuse the bare
-    label, and so does a single-op read on the multi-pass Layer.
+    ``trace[label]`` returns the Layer, single- or multi-pass (the indexing
+    ruling: a layer label names a Layer); the doors that must give exactly one
+    op still refuse the bare label, and so does a single-op read on the
+    multi-pass Layer.
     """
 
     trace = tl.trace(Recurrent(), torch.randn(1, 4))
