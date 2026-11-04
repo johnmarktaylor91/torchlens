@@ -4,18 +4,61 @@ Facet recipes are written against a Module record: they read
 ``module._single_call_or_error()``, ``module.calls[0]`` and the module's
 children by address. A module called more than once (an ALBERT layer shared
 across depth) refuses those single-call reads, so its recipes see nothing.
-:class:`CallBoundModule` wraps one ``ModuleCall`` so that every read a
-ModuleCall can answer (outputs, input and output ops, its own facet view)
-answers for that call, as a single-call Module's delegating reads do, and
-every other read (class config, parameters, trace) answers for the owning
-Module. Children resolve to the
-child's call made inside the same parent call, so a recipe reading
-``query``'s output gets the output of that pass.
+:class:`CallBoundModule` wraps one ``ModuleCall``: the reads a single-call
+Module delegates to its call (outputs, input and output ops, forward
+arguments, its facet view) answer for the bound call, and every identity or
+configuration read (class name, parameters, captured attributes, trace)
+answers for the owning Module, which records them; the call's own copies of
+those can be empty. Children resolve to the child's call made inside the same
+parent call, so a recipe reading ``query``'s output gets the output of that
+pass.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+# Names both records carry whose Module reading delegates to its single call;
+# on a bound subject they answer for the bound call.
+_PER_CALL_SHARED = frozenset(
+    {
+        "backward_duration",
+        "call_children",
+        "call_parent",
+        "facets",
+        "forward_args",
+        "forward_args_summary",
+        "forward_args_template",
+        "forward_duration",
+        "forward_kwargs",
+        "forward_kwargs_summary",
+        "forward_kwargs_template",
+        "func_calls_duration",
+        "grad",
+        "grads",
+        "input_layers",
+        "input_ops",
+        "num_edges",
+        "num_input_edges",
+        "num_internal_edges",
+        "num_output_edges",
+        "out",
+        "out_shape",
+        "out_shapes",
+        "outs",
+        "output_layers",
+        "output_ops",
+        "output_structure",
+        "projective_field",
+        "receptive_field",
+    }
+)
+
+
+def _carries(record: Any, name: str) -> bool:
+    """Return whether ``record`` defines ``name`` itself, without evaluating it."""
+
+    return name in vars(record) or hasattr(type(record), name)
 
 
 class CallBoundModule:
@@ -38,12 +81,12 @@ class CallBoundModule:
         self._call = call
 
     def __getattr__(self, name: str) -> Any:
-        """Answer from the call when a ModuleCall has ``name``, else from the Module."""
+        """Answer per-call reads from the call and every other read from the Module."""
 
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
         call = self._call
-        if name in vars(call) or hasattr(type(call), name):
+        if name in _PER_CALL_SHARED or (_carries(call, name) and not _carries(self._module, name)):
             return getattr(call, name)
         return getattr(self._module, name)
 
