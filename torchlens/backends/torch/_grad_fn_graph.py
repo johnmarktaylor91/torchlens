@@ -46,6 +46,23 @@ def _co_parent_labels(
     return co_parent_labels
 
 
+def _label_lookup(relations: Mapping[str, list[str]]) -> Callable[[str], list[str]]:
+    """Return a lookup from a record label to its labels in ``relations``.
+
+    Parameters
+    ----------
+    relations:
+        Relation labels keyed by record label.
+
+    Returns
+    -------
+    Callable[[str], list[str]]
+        Lookup returning the record's labels, empty for an unknown label.
+    """
+
+    return lambda label: relations.get(label, [])
+
+
 def _sync_grad_fn_graph_relations(trace: Any) -> None:
     """Populate backward-oriented GradFn graph relation labels.
 
@@ -79,43 +96,38 @@ def _sync_grad_fn_graph_relations(trace: Any) -> None:
                 parent_map[child_label].append(grad_fn.label)
                 parent_membership[child_label].add(grad_fn.label)
 
-    def children_of(label: str) -> list[str]:
-        """Return the child labels derived for a record in this sync.
-
-        Parameters
-        ----------
-        label:
-            Label of the record.
-
-        Returns
-        -------
-        list[str]
-            The record's children, empty for an unknown label.
-        """
-
-        return child_map.get(label, [])
-
-    def parents_of(label: str) -> list[str]:
-        """Return the parent labels derived for a record in this sync.
-
-        Parameters
-        ----------
-        label:
-            Label of the record.
-
-        Returns
-        -------
-        list[str]
-            The record's parents, empty for an unknown label.
-        """
-
-        return parent_map.get(label, [])
-
+    children_of = _label_lookup(child_map)
+    parents_of = _label_lookup(parent_map)
     for grad_fn in trace._grad_fn_logs.values():
         grad_fn.children = child_map[grad_fn.label]
         grad_fn.parents = parent_map[grad_fn.label]
         grad_fn.siblings = _sibling_labels(grad_fn.label, grad_fn.parents, children_of)
         grad_fn.co_parents = _co_parent_labels(grad_fn.label, grad_fn.children, parents_of)
+
+
+def _live_relation_lookups(
+    grad_fn_logs: Mapping[int, GradFn], label_to_id: Mapping[str, int]
+) -> tuple[Callable[[str], Sequence[str]], Callable[[str], Sequence[str]]]:
+    """Return children and parents lookups that read each record's current relations.
+
+    Parameters
+    ----------
+    grad_fn_logs:
+        Every record, appended records included.
+    label_to_id:
+        Label to object id for every record in ``grad_fn_logs``.
+
+    Returns
+    -------
+    tuple[Callable[[str], Sequence[str]], Callable[[str], Sequence[str]]]
+        The children lookup and the parents lookup, each read live from the
+        record ``label_to_id`` maps the label to.
+    """
+
+    return (
+        lambda label: grad_fn_logs[label_to_id[label]].children,
+        lambda label: grad_fn_logs[label_to_id[label]].parents,
+    )
 
 
 def _extend_grad_fn_graph_relations(
@@ -141,56 +153,8 @@ def _extend_grad_fn_graph_relations(
         Label to object id for every record, the appended ones included.
     """
 
-    def record(label: str) -> GradFn:
-        """Return the record with a label, appended records included.
-
-        Parameters
-        ----------
-        label:
-            Label of the record.
-
-        Returns
-        -------
-        GradFn
-            The record in ``grad_fn_logs`` that ``label_to_id`` maps the label to.
-        """
-
-        return grad_fn_logs[label_to_id[label]]
-
     touched_child_ids = _link_appended_records(grad_fn_logs, new_ids)
-
-    def children_of(label: str) -> Sequence[str]:
-        """Return a record's current children, read live from the record.
-
-        Parameters
-        ----------
-        label:
-            Label of the record.
-
-        Returns
-        -------
-        Sequence[str]
-            The record's child labels.
-        """
-
-        return record(label).children
-
-    def parents_of(label: str) -> Sequence[str]:
-        """Return a record's current parents, appended parents included.
-
-        Parameters
-        ----------
-        label:
-            Label of the record.
-
-        Returns
-        -------
-        Sequence[str]
-            The record's parent labels.
-        """
-
-        return record(label).parents
-
+    children_of, parents_of = _live_relation_lookups(grad_fn_logs, label_to_id)
     new_id_set = set(new_ids)
     co_parent_ids: dict[int, None] = dict.fromkeys(new_ids)
     for child_id in [*new_ids, *touched_child_ids]:
