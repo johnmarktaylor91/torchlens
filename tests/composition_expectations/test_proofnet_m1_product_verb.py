@@ -101,15 +101,9 @@ M1_EXPECTATIONS: dict[tuple[str, str], Cell] = {
     ("recording", "explain"): Cell(
         REFUSES_TYPED, code="report_subject_unsupported", exc="InvalidArgumentError"
     ),
-    ("recording", "agent_json"): Cell(
-        REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT SG#5 / B2-10 family"
-    ),
-    ("recording", "save_analysis"): Cell(
-        REFUSES_UNTYPED, exc="ArtifactError", gap="DIGEST-AUDIT SG#24 (codeless scrub refusal)"
-    ),
-    ("recording", "fork"): Cell(
-        REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT product-secondary-verb sweep"
-    ),
+    ("recording", "agent_json"): _w(),
+    ("recording", "save_analysis"): _w(),
+    ("recording", "fork"): _w(),
     ("recording", "outcome"): _w(),
     ("recording", "len"): _w(),
     ("recording", "contains_label"): _w(),
@@ -152,15 +146,11 @@ M1_EXPECTATIONS: dict[tuple[str, str], Cell] = {
     ("trace_slice", "len"): _w(),
     ("trace_slice", "contains_label"): _w(),
     ("bundle", "repr"): _w(),
-    ("bundle", "summary"): Cell(
-        REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT SG#5 presenter family"
-    ),
+    ("bundle", "summary"): _w(),
     ("bundle", "explain"): Cell(
         REFUSES_TYPED, code="report_subject_unsupported", exc="InvalidArgumentError"
     ),
-    ("bundle", "agent_json"): Cell(
-        REFUSES_UNTYPED, exc="AttributeError", gap="DIGEST-AUDIT SG#5 presenter family"
-    ),
+    ("bundle", "agent_json"): _w(),
     ("bundle", "save_analysis"): _w(),
     ("bundle", "fork"): _w(),
     ("bundle", "outcome"): _w(),
