@@ -498,6 +498,24 @@ def _replace_leaves(output: Any, replacements: dict[Any, Any], path: tuple[Any, 
     return output
 
 
+@dataclass(frozen=True)
+class _ReplacementBoundaryPredicate:
+    """Fire one module edit's decision at its own replacement boundary op only.
+
+    Equivalent here to ``tl.when(tl.func("interventionreplacement"), decision)``:
+    the Paddle intervention path reads only the decision's hook and isolate flag,
+    and a func selector matches the captured function name or the layer type.
+    """
+
+    decision: InterventionDecision | None
+
+    def __call__(self, ctx: Any) -> InterventionDecision | None:
+        """Return the decision for the boundary op and ``None`` for any other op."""
+
+        names = (getattr(ctx, "func_name", None), getattr(ctx, "layer_type", None))
+        return self.decision if "interventionreplacement" in names else None
+
+
 def _copy_leaf(tensor: Any) -> Any:
     """Copy the raw producer value without changing its label or existing consumers."""
 
@@ -507,13 +525,10 @@ def _copy_leaf(tensor: Any) -> Any:
 def _emit_module_leaf(trace: Any, runtime: Any, tensor: Any) -> Any:
     """Record a declared replacement through Paddle's existing replay machinery."""
 
-    from ..._selection.selectors import FuncSelector  # deferred: L4 vocabulary
-    from ...intervention.spec import when
-
     backend = runtime._backend
     label = backend.tensor_store.get_label(tensor)
     predicate = runtime.intervene
-    runtime.intervene = when(FuncSelector("interventionreplacement"), predicate.decision)
+    runtime.intervene = _ReplacementBoundaryPredicate(predicate.decision)
     try:
         with _state.pause_logging():
             raw = _copy_leaf(tensor)
