@@ -6,8 +6,8 @@ the model under the documented ``owner.`` prefix, each generated token is one
 call of every module, a loop that keeps its values as tensors traces without
 warnings, an escape warning names the caller's line, the caller's
 ``input_kwargs`` survive an input transform, text reaches a bound method of a
-model with a resolvable tokenizer, and a plain module address on such a trace
-names the ``owner.`` spelling, and the tensor search keeps a property's log
+model with a resolvable tokenizer, a plain module address on such a trace
+resolves to the model's module, and the tensor search keeps a property's log
 record quiet. The GPT-2 test runs the README snippet itself.
 """
 
@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import AmbiguousOpLookupError, ScalarEscapeWarning
+from torchlens.errors import ScalarEscapeWarning
 
 N_NEW = 3
 
@@ -134,11 +134,14 @@ def test_text_input_reaches_a_bound_generate(monkeypatch: pytest.MonkeyPatch) ->
     assert not hasattr(model, "_torchlens_output_tokenizer")
 
 
-def test_plain_module_address_names_the_owner_spelling() -> None:
+def test_plain_module_address_resolves_to_the_owners_module() -> None:
     model = _ToyGenerator().eval()
     gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
-    with pytest.raises(AmbiguousOpLookupError, match=r"use 'owner\.head'"):
-        gen["head"]
+    head = gen["head"]
+    # The record of model.head, checked by what it is rather than how the owner prefix spells it.
+    assert head is gen.modules["head"]
+    assert str(head.address).removeprefix("owner.") == "head"
+    assert head.num_calls == N_NEW
 
 
 class _CacheWithLoggedProperty:
