@@ -81,7 +81,7 @@
    },
    "n_ops": 77,
    "recipes": {
-    "bert_self_attention": 2,
+    "bert_self_attention": 4,
     "embedding": 3,
     "layer_norm": 5,
     "transformer_residuals": 2
@@ -121,7 +121,7 @@
    },
    "n_ops": 67,
    "recipes": {
-    "bert_self_attention": 2,
+    "bert_self_attention": 4,
     "embedding": 3,
     "layer_norm": 5,
     "transformer_residuals": 2
