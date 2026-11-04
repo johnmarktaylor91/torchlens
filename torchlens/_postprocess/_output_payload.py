@@ -14,6 +14,7 @@ import torch
 from .._utils.tensor_utils import tensor_nanequal
 
 __all__ = (
+    "output_copy_detaches",
     "output_gained_graph_after_log",
     "output_payload_aliases_parent",
     "output_rides_parent_payload",
@@ -100,3 +101,29 @@ def output_rides_parent_payload(returned: Any, retained: Any, *, detach_saved: b
 
     gained = output_gained_graph_after_log(returned, retained, detach_saved=detach_saved)
     return not gained and output_payload_aliases_parent(returned, retained)
+
+
+def output_copy_detaches(returned: Any, retained: Any, *, detach_saved: bool) -> bool:
+    """True iff the output row's own copy is detached from the autograd graph.
+
+    The copy inherits the producer payload's detachment, unless the returned
+    tensor gained a graph the payload lacks (:func:`output_gained_graph_after_log`).
+
+    Parameters
+    ----------
+    returned:
+        Tensor the model returned.
+    retained:
+        The producer's retained payload.
+    detach_saved:
+        Whether the trace detaches saved activations.
+
+    Returns
+    -------
+    bool
+        Whether the copy is taken detached.
+    """
+
+    if output_gained_graph_after_log(returned, retained, detach_saved=detach_saved):
+        return False
+    return not (torch.is_tensor(retained) and retained.grad_fn is not None)

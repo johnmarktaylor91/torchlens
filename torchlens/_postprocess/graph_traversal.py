@@ -33,7 +33,11 @@ from ._orphan_seeds import (
     _orphan_flood_seeds,
     _remember_orphan_rows,
 )
-from ._output_payload import output_gained_graph_after_log, output_payload_aliases_parent
+from ._output_payload import (
+    output_copy_detaches,
+    output_payload_aliases_parent as output_payload_aliases_parent,  # re-exported for tests
+    output_rides_parent_payload,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -433,13 +437,9 @@ def _add_output_layers(
             _parent_payload = (
                 output_node.out if output_node.out is not None else output_node.transformed_out
             )
-            _gained = output_gained_graph_after_log(
-                output_tensor, _parent_payload, detach_saved=self._options_detach_saved_activations
-            )
-            _detach_payload = not _gained and not (
-                torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
-            )
-            if not _gained and output_payload_aliases_parent(output_tensor, output_node.out):
+            _ds = self._options_detach_saved_activations
+            _detach_payload = output_copy_detaches(output_tensor, _parent_payload, detach_saved=_ds)
+            if output_rides_parent_payload(output_tensor, output_node.out, detach_saved=_ds):
                 # HONESTY 13-R1: the producer already retains this exact value, so the output
                 # pseudo-row rides that ONE retained payload instead of a second physical copy
                 # (the byte model charged both: a full duplicate of the logits on large
