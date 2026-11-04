@@ -786,14 +786,13 @@ class RefreshProjector:
     def _separate_output_payloads(self) -> None:
         """Settle refreshed output-node payloads against their producer's payload.
 
-        HONESTY 13-R1 (same rule as plain capture, ``graph_traversal``): when
-        the refreshed output value IS the producer's retained payload, the
-        output pseudo-row rides that ONE payload; a differing value keeps its
-        own physical copy, so a refresh never hides a variation and never
-        re-acquires the redundant duplicate the byte model charged.
+        HONESTY 13-R1 (same rule as plain capture, ``_output_payload``): when the refreshed
+        output value IS the producer's retained payload, the output pseudo-row rides that ONE
+        payload; a differing value (or a graph the payload lacks) keeps its own physical copy,
+        so a refresh never hides a variation nor re-acquires the duplicate the bytes charged.
         """
 
-        from .._postprocess.graph_traversal import output_payload_aliases_parent
+        from .._postprocess._output_payload import output_rides_parent_payload
         from .._utils.tensor_utils import safe_copy
 
         for output_label in self.target.output_layers:
@@ -801,7 +800,8 @@ class RefreshProjector:
             if not output.parents or output.out is None:
                 continue
             parent_out = self.target._layer_dict_all_keys[output.parents[0]].out
-            if output_payload_aliases_parent(output.out, parent_out):
+            detach_saved = self.target._options_detach_saved_activations
+            if output_rides_parent_payload(output.out, parent_out, detach_saved=detach_saved):
                 output._internal_set("out", parent_out)
                 continue
             output._internal_set(
