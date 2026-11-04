@@ -133,16 +133,16 @@ _GROUP_FIELDS = {
 }
 
 
-def group_repr(group: Any, summary: Any) -> str:
+def group_repr(group: Any, texts: dict[str, str]) -> str:
     """Identity and stored scalar leaves only; group properties may run analysis."""
 
     return fail_open(
-        lambda: _group_identity(group, summary),
+        lambda: _group_identity(group, texts),
         lambda _error: f"{type(group).__name__}: metadata unavailable",
     )
 
 
-def _group_identity(group: Any, summary: Any) -> str:
+def _group_identity(group: Any, texts: dict[str, str]) -> str:
     """Build a Trace group's repr line: cost totals for TraceCost, else its headline facts."""
 
     trace = group._trace
@@ -156,19 +156,19 @@ def _group_identity(group: Any, summary: Any) -> str:
                 f"{format_iec_bytes(trace._cost_saved_activation_memory)} saved",
             ],
         )
-    facts = _group_facts(name, trace, summary)
+    facts = _group_facts(name, trace, texts)
     return one_line(f"{name} of {trace.name or 'unnamed'}", facts)
 
 
-def _group_facts(name: str, trace: Any, summary: Any) -> list[str]:
-    """Reuse Trace wording through the record's existing report door."""
+def _group_facts(name: str, trace: Any, texts: dict[str, str]) -> list[str]:
+    """Reuse the Trace card's wording, which the group read through the Trace."""
 
     # Keep the concern dispatch cohesive so every group shares the same
     # stored-fact policy; its essential branches exceed the usual CC target.
     if name == "TraceGraph":
-        return [summary._graph_text(trace)]
+        return [texts["graph"]]
     if name == "TraceHealth":
-        return [summary._health_text(trace)]
+        return [texts["health"]]
     if name == "TraceAutograd":
         return ["backward-ready" if trace._options_backward_ready else "not backward-ready"]
     if name == "TraceSource":
@@ -185,13 +185,13 @@ def _group_facts(name: str, trace: Any, summary: Any) -> list[str]:
     return facts
 
 
-def group_str(group: Any, summary: Any) -> str:
+def group_str(group: Any, texts: dict[str, str]) -> str:
     """One headline row and the existing concern attributes, without running analysis."""
 
-    return fail_open(lambda: _group_card(group, summary), lambda _error: group_repr(group, summary))
+    return fail_open(lambda: _group_card(group, texts), lambda _error: group_repr(group, texts))
 
 
-def _group_card(group: Any, summary: Any) -> str:
+def _group_card(group: Any, texts: dict[str, str]) -> str:
     """Build a Trace group's card: compute and saved for TraceCost, else one status row."""
 
     name, trace = type(group).__name__, group._trace
@@ -201,7 +201,7 @@ def _group_card(group: Any, summary: Any) -> str:
             ("saved", format_iec_bytes(trace._cost_saved_activation_memory)),
         ]
     else:
-        rows = [("status", ", ".join(_group_facts(name, trace, summary)))]
+        rows = [("status", ", ".join(_group_facts(name, trace, texts)))]
     attributes = {
         "TraceCost": (".forward_duration", ".saved_activation_memory"),
         "TraceGraph": (".edges", ".is_recurrent", ".has_conditional_branching"),
@@ -211,7 +211,7 @@ def _group_card(group: Any, summary: Any) -> str:
         "TraceSettings": (".mode", ".seed"),
         "TraceProvenance": (".backend", ".verified"),
     }
-    return render_card(group_repr(group, summary), rows, more=attributes.get(name, ()))
+    return render_card(group_repr(group, texts), rows, more=attributes.get(name, ()))
 
 
 _EVENT_LANES = (

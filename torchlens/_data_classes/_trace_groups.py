@@ -10,10 +10,23 @@ from typing import TYPE_CHECKING, Any
 
 from .._utils._display_constructor import display_guard
 from .._utils._display_records import group_repr, group_str
-from . import _doors
 
 if TYPE_CHECKING:
     from .trace import Trace
+
+
+def _trace_texts(group: _TraceGroup) -> dict[str, str]:
+    """The Trace card wording a group shows: its graph row, or its honesty markers.
+
+    Read through the Trace's own report door, so the group adds no import edge.
+    """
+
+    name, trace = type(group).__name__, group._trace
+    if name == "TraceGraph":
+        return {"graph": dict(trace._repr_card_rows()).get("graph", "graph unavailable")}
+    if name == "TraceHealth":
+        return {"health": trace._repr_honesty_suffix()}
+    return {}
 
 
 class _TraceGroup:
@@ -28,15 +41,15 @@ class _TraceGroup:
 
     @display_guard
     def __repr__(self) -> str:
-        """Use the Trace card's stored-fact wording through the existing report door."""
+        """Use the Trace card's stored-fact wording, read through the Trace's own door."""
 
-        return group_repr(self, _doors.report()._trace_summary)
+        return group_repr(self, _trace_texts(self))
 
     @display_guard
     def __str__(self) -> str:
         """Show a short concern card and its existing detail attributes."""
 
-        return group_str(self, _doors.report()._trace_summary)
+        return group_str(self, _trace_texts(self))
 
     def __dir__(self) -> list[str]:
         """List the group's public members."""

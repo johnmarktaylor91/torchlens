@@ -147,12 +147,12 @@ def test_option_and_error_columns_align_to_longest_label():
 def test_group_display_guards_the_report_door(trace, monkeypatch):
     """A failed deferred report import cannot break notebook display."""
 
-    from torchlens._data_classes import _trace_groups
+    from torchlens._data_classes import _doors
 
     def unavailable():
         raise ImportError("report unavailable")
 
-    monkeypatch.setattr(_trace_groups._doors, "report", unavailable)
+    monkeypatch.setattr(_doors, "report", unavailable)
     assert repr(trace.graph) == "TraceGraph: display unavailable"
     assert str(trace.graph) == repr(trace.graph)
 
