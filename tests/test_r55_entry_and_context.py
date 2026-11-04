@@ -46,12 +46,12 @@ def test_tensor_input_kwargs_refuses_typed_naming_the_tuple_spelling() -> None:
 
 
 def test_tensor_in_layers_to_save_slot_refuses_typed() -> None:
-    """A third positional tensor lands in layers_to_save: name the mistake."""
+    """Positional values past inputs are refused with a typed error."""
 
     model = _TinyModel()
     q, k, v = torch.randn(1, 4), torch.randn(1, 4), torch.randn(1, 4)
     with pytest.raises(ArgumentTypeError, match="tuple"):
-        tl.trace(model, q, {"y": k}, v)  # dict kwargs fine; tensor in 4th slot
+        tl.trace(model, q, {"y": k}, v)  # past the two positional slots
 
 
 def test_tuple_spelling_still_works() -> None:

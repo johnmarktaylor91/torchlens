@@ -1500,7 +1500,7 @@ def test_layers_to_save_type_invalid_provoked() -> None:
 
     model = torch.nn.Identity()
     with pytest.raises(ArgumentTypeError) as excinfo:
-        # grad_transform is the FOURTH positional slot (after input_kwargs).
+        # Only model and inputs are positional; extra positional values are refused.
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:
