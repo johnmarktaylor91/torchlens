@@ -1221,8 +1221,7 @@ IGNORED_FUNCS = [
         )
         if hasattr(torch.Tensor, _private_name)
     ),
-    # Presence read straight from ``torch.__dict__`` (what ``torch_attr`` reads), so no lazy
-    # ``torch.__getattr__`` fires and this low-tier module imports nothing upward.
+    # Read ``torch.__dict__`` (as ``torch_attr`` does): no lazy ``torch.__getattr__``, no upward import.
     *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch.__dict__.get(_name) is not None),
     # A no-parent factory (the CPU RNG state as a fresh uint8 tensor). TorchLens's own RNG
     # snapshots read ``torch.default_generator.get_state()``, so they never record.
