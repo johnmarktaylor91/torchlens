@@ -66,7 +66,7 @@ def wl_steer_sweep(tool, model, fam, a) -> dict[str, Any]:
     L, d = C.n_layers(model), C.d_model(model)
     g = torch.Generator().manual_seed(2)
     direction = torch.randn(d, generator=g)
-    direction = direction / direction.norm()
+    direction = (direction / direction.norm()).to(C.DEVICE)
     layers = sorted({L // 4, L // 2, (3 * L) // 4})
     mags = [1.0, 2.0, 4.0, 8.0]
 
@@ -136,7 +136,7 @@ def wl_generate(tool, model, fam, a, sample: bool = False) -> dict[str, Any]:
     L, d = C.n_layers(model), C.d_model(model)
     g = torch.Generator().manual_seed(2)
     direction = torch.randn(d, generator=g)
-    direction = direction / direction.norm() * 4.0
+    direction = (direction / direction.norm() * 4.0).to(C.DEVICE)
 
     def run():
         return tool.generate(prompt, site(tool, fam, "L", L // 2), direction, a.new_tokens, sample)
@@ -149,12 +149,12 @@ def wl_sae(tool, model, fam, a) -> dict[str, Any]:
     data = C.make_dataset(a.n_seqs, a.seq_len, model.config.vocab_size)
     L, d = C.n_layers(model), C.d_model(model)
     g = torch.Generator().manual_seed(5)
-    W = torch.randn(d, 8 * d, generator=g) / d**0.5
-    b = torch.zeros(8 * d)
+    W = (torch.randn(d, 8 * d, generator=g) / d**0.5).to(C.DEVICE)
+    b = torch.zeros(8 * d, device=C.DEVICE)
     s = site(tool, fam, "L", L // 2)
 
     def run():
-        acc = torch.zeros(8 * d)
+        acc = torch.zeros(8 * d, device=C.DEVICE)
         n = 0
         for bt in C.batches(data, a.batch):
             h = tool.cache(bt, [s])[s].float()
@@ -181,7 +181,7 @@ def wl_logit_lens(tool, model, fam, a) -> dict[str, Any]:
             with torch.no_grad():
                 final = unembed(got[sites[-1]].float()).argmax(-1)
                 for li, s in enumerate(sites):
-                    agree[li] += (unembed(got[s].float()).argmax(-1) == final).float().sum()
+                    agree[li] += (unembed(got[s].float()).argmax(-1) == final).float().sum().item()
             n += bt.numel()
         return agree / n
 
@@ -351,6 +351,7 @@ def main() -> None:
             "rss_tool_mib": rss_tool,
             "rss_end_mib": C.rss_mib(),
             "peak_rss_mib": C.peak_rss_mib(),
+            "peak_device_mib": C.peak_device_mib(),
             "result_shape": list(res.shape),
         }
     )

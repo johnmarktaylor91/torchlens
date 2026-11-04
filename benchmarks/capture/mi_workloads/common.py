@@ -26,6 +26,8 @@ OUT_PATH: str | None = None
 REPS = 3
 WARMUP = 1
 SLOW_REP_S = 30.0  # a timed rep slower than this ends the repetition loop (n reported)
+# The device every workload runs on: "cpu" (the default) or "cuda"; set TL_BENCH_DEVICE.
+DEVICE = torch.device(os.environ.get("TL_BENCH_DEVICE", "cpu"))
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,7 @@ def first_tensor(x: Any) -> torch.Tensor:
 
 
 def load_model(name: str) -> tuple[nn.Module, Any, Family]:
-    """Load a public checkpoint in fp32 eager attention, eval mode, on CPU."""
+    """Load a public checkpoint in fp32 eager attention, eval mode, on DEVICE."""
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -102,6 +104,7 @@ def load_model(name: str) -> tuple[nn.Module, Any, Family]:
         model_id, dtype=torch.float32, attn_implementation="eager"
     )
     model.eval()
+    model.to(DEVICE)
     fam = FAMILIES[model.config.model_type]
     return model, tok, fam
 
@@ -115,15 +118,30 @@ def d_model(model: nn.Module) -> int:
 
 
 def make_dataset(n_seqs: int, seq_len: int, vocab: int, seed: int = 0) -> torch.Tensor:
-    """Deterministic token-id dataset [n_seqs, seq_len] (ids below min(vocab, 20000))."""
+    """Deterministic token-id dataset [n_seqs, seq_len] (ids below min(vocab, 20000)) on DEVICE."""
 
     g = torch.Generator().manual_seed(seed)
-    return torch.randint(5, min(vocab, 20000), (n_seqs, seq_len), generator=g)
+    return torch.randint(5, min(vocab, 20000), (n_seqs, seq_len), generator=g).to(DEVICE)
 
 
 def batches(data: torch.Tensor, batch: int):
     for i in range(0, data.shape[0], batch):
         yield data[i : i + batch]
+
+
+def sync() -> None:
+    """Wait for queued device work so a wall-clock stamp covers it (a no-op on CPU)."""
+
+    if DEVICE.type == "cuda":
+        torch.cuda.synchronize(DEVICE)
+
+
+def peak_device_mib() -> float | None:
+    """Peak device memory allocated by this process in MiB (None on CPU)."""
+
+    if DEVICE.type != "cuda":
+        return None
+    return torch.cuda.max_memory_allocated(DEVICE) / 2**20
 
 
 def timed(fn: Callable[[], Any]) -> tuple[list[float], Any]:
@@ -132,12 +150,14 @@ def timed(fn: Callable[[], Any]) -> tuple[list[float], Any]:
     out = None
     for _ in range(WARMUP):
         out = fn()
+        sync()
         del out
         gc.collect()
     times: list[float] = []
     for r in range(REPS):
         t0 = time.perf_counter()
         out = fn()
+        sync()
         dt = time.perf_counter() - t0
         times.append(dt)
         if dt > SLOW_REP_S or r == REPS - 1:
@@ -169,7 +189,10 @@ def env_record(tool: str, extra: dict[str, Any] | None = None) -> dict[str, Any]
         "threads": torch.get_num_threads(),
         "loadavg": os.getloadavg(),
         "cpus": os.cpu_count(),
+        "device": str(DEVICE),
     }
+    if DEVICE.type == "cuda":
+        rec["gpu"] = torch.cuda.get_device_name(DEVICE)
     try:
         import torchlens as tl
 
