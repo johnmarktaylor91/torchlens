@@ -232,6 +232,7 @@ def _freeze_keeping_identity(op: Any) -> None:
     saved = op.out.detach().clone()
     packet = op.func.args[0]
     frozen = functools.partial(lambda _packet, *args, **kwargs: saved.clone(), packet)
+    frozen.__name__ = op.func.__name__  # type: ignore[attr-defined]  # as the recorder sets it
     object.__setattr__(op, "func", frozen)
 
 
