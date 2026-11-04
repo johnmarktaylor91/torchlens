@@ -358,12 +358,12 @@ torchlens/_postprocess/graph_traversal.py	914
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	293
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	90
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
-torchlens/_postprocess/labeling.py	1057
+torchlens/_postprocess/labeling.py	935
 torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	118
 torchlens/_postprocess/labeling.py::_log_final_info_for_layers	82
 torchlens/_postprocess/labeling.py::_map_raw_labels_to_final_labels	80
 torchlens/_postprocess/labeling.py::_rename_model_history_layer_names	130
-torchlens/_postprocess/labeling.py::_replace_layer_names_for_layer_entry	185
+torchlens/_postprocess/labeling.py::_replace_layer_names_for_layer_entry	175
 torchlens/_postprocess/loop_detection.py::_build_recurrence_grouping_graph	91
 torchlens/_postprocess/loop_grouping_adapter.py	2592
 torchlens/_postprocess/loop_grouping_adapter.py::_advance_bfs_frontier	77
