@@ -137,7 +137,7 @@ class OpAccessor(Accessor["Op"]):
             return default
 
     def _composition_note(self) -> str | None:
-        """Owning layer and the REAL read basis of ``ops[...]`` (bug 27), no members listed."""
+        """Owning layer and the REAL read basis of ``ops[...]``, with no members listed."""
 
         basis = "0-based positions or pass-qualified labels"
         layer = getattr(self._list[0], "layer_label", None) if self._list else None
