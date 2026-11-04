@@ -18,6 +18,7 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from ._display import site_table_card, site_table_repr
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -138,16 +139,12 @@ class _SiteTable:
             Summary including count and first labels.
         """
 
-        count = len(self)
-        if count == 0:
-            return "_SiteTable(0 sites)"
-        labels = self.labels()
-        if count == 1:
-            return f"_SiteTable(1 site: {labels[0]})"
-        if count <= 3:
-            return f"_SiteTable({count} sites: {', '.join(labels)})"
-        prefix = ", ".join(labels[:3])
-        return f"_SiteTable({count} sites: {prefix}, ... {labels[-1]})"
+        return site_table_repr(self)
+
+    def __str__(self) -> str:
+        """Show a bounded prefix of the resolved sites."""
+
+        return site_table_card(self)
 
     def where(self, predicate: Callable[[Site], bool]) -> _SiteTable:
         """Filter the table with a predicate.

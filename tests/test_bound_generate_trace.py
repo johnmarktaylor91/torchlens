@@ -1,12 +1,13 @@
 """Tracing a generation loop through a bound ``generate`` method.
 
 ``tl.trace(model.generate, ...)`` is the README's generation-loop example. The
-toy tests pin, without Hugging Face: module addresses mirror a plain trace of
-the model under the documented ``owner.`` prefix, each generated token is one
-call of every module, a loop that keeps its values as tensors traces without
-warnings, an escape warning names the caller's line, the caller's
-``input_kwargs`` survive an input transform, text reaches a bound method of a
-model with a resolvable tokenizer, a plain module address on such a trace
+toy tests pin, without Hugging Face: module addresses equal a plain trace of
+the model's (the model is the trace's root ``self``; no wrapper prefix), each
+generated token is one call of every module including the root, the trace
+validates and survives a save/load round trip, a loop that keeps its values
+as tensors traces without warnings, an escape warning names the caller's
+line, the caller's ``input_kwargs`` survive an input transform, text reaches
+a bound method of a model with a resolvable tokenizer, a plain module address
 resolves to the model's module, and the tensor search keeps a property's log
 record quiet. The GPT-2 test runs the README snippet itself.
 """
@@ -23,7 +24,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import ScalarEscapeWarning
+from torchlens._errors import AmbiguousOpLookupError
+from torchlens.errors import InvalidArgumentError, ScalarEscapeWarning
 
 N_NEW = 3
 
@@ -62,18 +64,54 @@ def _module_addresses(trace: tl.Trace) -> set[str]:
     return {str(module.address) for module in trace.modules}
 
 
-def test_generate_trace_addresses_owner_modules_like_a_plain_trace() -> None:
+def test_generate_trace_addresses_modules_like_a_plain_trace() -> None:
     model = _ToyGenerator().eval()
     plain = tl.trace(model, _ids())
     gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
 
-    expected = {"self", "owner"} | {f"owner.{a}" for a in _module_addresses(plain) - {"self"}}
-    assert _module_addresses(gen) == expected
-    assert gen["owner.head"].num_calls == N_NEW
+    assert _module_addresses(gen) == _module_addresses(plain)
+    assert [str(m.address) for m in gen.modules] == [str(m.address) for m in plain.modules]
+    assert plain.modules["self"].num_calls == 1
+    # The model is the root: generate calls it once per token.
+    assert gen.modules["self"].num_calls == N_NEW
+    assert gen.modules["self"].call_labels == [f"self:{k}" for k in range(1, N_NEW + 1)]
+    assert gen["head"].num_calls == N_NEW
     for call in range(1, N_NEW + 1):
-        assert gen[f"owner.head:{call}"].out.shape == (1, 1, 16)
+        assert gen[f"head:{call}"].out.shape == (1, 1, 16)
     # The first call reads the same input as a plain forward, so it computes the same values.
-    assert torch.equal(gen["owner.head:1"].out, plain["head"].out)
+    assert torch.equal(gen["head:1"].out, plain["head"].out)
+    # The root's calls are containment facts of the root only: no op lists them
+    # as a module it sits in, as on a plain trace.
+    for op in gen.ops:
+        assert all(not str(m).startswith("self") for m in op.modules), op.label
+        assert all(not str(m).startswith("self") for m in op.module_call_stack), op.label
+    assert [str(k) for k in gen.layer_labels if "owner" in str(k)] == []
+
+
+def test_generate_trace_module_tables_match_a_plain_trace() -> None:
+    model = _ToyGenerator().eval()
+    plain = tl.trace(model, _ids())
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    plain_modules = plain.to_pandas()["module"].dropna().map(str)
+    gen_modules = gen.to_pandas()["module"].dropna().map(str)
+    # Same module addresses; generate's calls add only the ``:2`` .. ``:N`` suffixes.
+    assert {m.rsplit(":", 1)[0] for m in gen_modules} == {
+        m.rsplit(":", 1)[0] for m in plain_modules
+    }
+    assert {m.rsplit(":", 1)[1] for m in gen_modules} == {str(k) for k in range(1, N_NEW + 1)}
+    assert not any(m.startswith(("owner", "self")) for m in gen_modules)
+
+
+def test_generate_trace_validates_and_round_trips(tmp_path: Any) -> None:
+    model = _ToyGenerator().eval()
+    assert tl.validate(model.generate, _ids(), input_kwargs={"n_new": N_NEW}, scope="forward")
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    gen.save(tmp_path / "gen")
+    loaded = tl.load(tmp_path / "gen")
+    assert _module_addresses(loaded) == _module_addresses(gen)
+    assert loaded.modules["self"].num_calls == N_NEW
+    assert loaded["head"].num_calls == N_NEW
+    assert torch.equal(loaded["head:2"].out, gen["head:2"].out)
 
 
 def test_plain_generate_trace_emits_no_warning() -> None:
@@ -107,7 +145,7 @@ def test_input_kwargs_survive_an_input_transform(transform: Any) -> None:
         input_kwargs={"n_new": 2},
         capture=tl.options.CaptureOptions(input_transform=transform),
     )
-    assert gen["owner.head"].num_calls == 2
+    assert gen["head"].num_calls == 2
 
 
 class _FakeTokenizer:
@@ -129,11 +167,34 @@ def test_text_input_reaches_a_bound_generate(monkeypatch: pytest.MonkeyPatch) ->
     gen = tl.trace(model.generate, "a bb ccc", input_kwargs={"n_new": 2})
     by_ids = tl.trace(model.generate, torch.tensor([[1, 2, 3]]), input_kwargs={"n_new": 2})
 
-    assert gen["owner.head"].num_calls == 2
+    assert gen["head"].num_calls == 2
     assert torch.equal(gen.output, by_ids.output)
     # generate returns token ids, not logits: no tokenizer is attached for output decoding.
     assert getattr(gen, "_output_tokenizer", None) is None
     assert not hasattr(model, "_torchlens_output_tokenizer")
+
+
+def test_unknown_key_lookup_names_no_wrapper_spelling() -> None:
+    model = _ToyGenerator().eval()
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    with pytest.raises((KeyError, InvalidArgumentError)) as excinfo:
+        gen["no_such_module"]
+    assert "owner" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("key", ["head:", "embed:"])
+def test_empty_call_index_lookup_suggests_no_wrapper_spelling(key: str) -> None:
+    """A module address with an empty call index is refused like any ambiguous key.
+
+    The removed bound-owner hint suggested ``owner.<address>:`` here, itself not a key.
+    """
+    model = _ToyGenerator().eval()
+    gen = tl.trace(model.generate, _ids(), input_kwargs={"n_new": N_NEW})
+    with pytest.raises(AmbiguousOpLookupError) as excinfo:
+        gen[key]
+    message = str(excinfo.value)
+    assert "owner" not in message
+    assert "use a pass-qualified label, full address, or explicit call index" in message
 
 
 def test_plain_module_address_resolves_to_the_owners_module() -> None:
@@ -205,7 +266,7 @@ def test_gpt2_generate_readme_snippet(capfd: pytest.CaptureFixture[str]) -> None
 
     # The tensor search reads the cache's deprecated size properties; their notices stay quiet.
     assert "deprecated" not in capfd.readouterr().err
-    mlp = "owner.transformer.h.5.mlp"
+    mlp = "transformer.h.5.mlp"
     assert trace[mlp].num_calls == 4
     assert trace[f"{mlp}:1"].out.shape == (1, 5, 768)  # the prefill reads all 5 prompt tokens
     for call in (2, 3, 4):

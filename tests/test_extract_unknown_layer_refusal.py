@@ -85,7 +85,7 @@ def test_extract_unknown_layer_message_still_suggests_candidates(
     with pytest.raises(InvalidArgumentError) as info:
         tl.extract(model, x, ["linear_1_1_typo"])
     assert _code(info.value) == "op_lookup_not_found"
-    assert "Did you mean" in str(info.value)
+    assert "  candidates" in str(info.value)
     assert info.value.fields.get("key") == "linear_1_1_typo"
 
 

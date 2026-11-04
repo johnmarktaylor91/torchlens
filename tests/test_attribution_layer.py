@@ -230,7 +230,7 @@ def test_bad_layer_name_lists_available_options() -> None:
 
     with pytest.raises(
         torchlens.errors.AttributionError,
-        match="layer 'missing' was not found; available conv-like layers include: features.0",
+        match="layer 'missing' was not found.\n  candidates 'features.0'",
     ):
         attribution.grad_cam(model, inputs, target=0, layer="missing")
 
@@ -243,7 +243,7 @@ def test_layer_path_methods_reject_bad_layer_name() -> None:
 
     with pytest.raises(
         torchlens.errors.AttributionError,
-        match="layer 'missing' was not found; available conv-like layers include: hidden",
+        match="layer 'missing' was not found.\n  candidates 'hidden'",
     ):
         attribution.layer_integrated_gradients(
             model,

@@ -47,8 +47,8 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._utils._display_errors import module_lookup_message, module_output_message
 from ._accessor_base import Accessor
-from ._bound_owner_alias import owner_address_for
 from ._call_tree import (
     _bound_call_trace,
     _edge_counts_for_scope,
@@ -929,14 +929,7 @@ class ModuleCall:
         if len(self.output_ops) != 1:
             from ..intervention.errors import MultiOutputModuleError
 
-            candidates = ", ".join(
-                f"module_call.output_ops[{index}]={label!r}"
-                for index, label in enumerate(self.output_ops)
-            )
-            raise MultiOutputModuleError(
-                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
-                f"select one candidate explicitly: {candidates or 'none'}."
-            )
+            raise MultiOutputModuleError(module_output_message(self, self._source_trace))
         trace = _bound_call_trace(self)
         return trace.ops[self.output_ops[0]].receptive_field
 
@@ -2373,8 +2366,7 @@ class Module:
                 return self._source_trace[matches[0]]
             elif len(matches) > 1:
                 raise AmbiguousOpLookupError(
-                    f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
-                    f"'{self.address}': {', '.join(matches[:5])}",
+                    module_lookup_message(ix, self, matches),
                     key=str(ix),
                     address=self.address,
                 )
@@ -2508,7 +2500,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __getitem__(self, key: int | str) -> "Module":
         """Return a Module by module-specific lookup rules."""
-        key = "self" if key == "" else owner_address_for(self, key)
+        key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         if isinstance(key, str) and key in self._pass_dict:
@@ -2517,7 +2509,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 
     def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
-        key = "self" if key == "" else owner_address_for(self, key)
+        key = "self" if key == "" else key
         return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
 
     def __dir__(self) -> list[str]:
