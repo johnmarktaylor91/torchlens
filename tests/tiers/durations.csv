@@ -360,7 +360,6 @@ tests/test_containers.py,14,3.39,0.77,unmarked
 tests/test_context7_draft.py,3,0.05,0.02,unmarked
 tests/test_coverage_floor_governance.py,7,1.46,0.44,unmarked
 tests/test_critical_invariant_guards.py,3,0.08,0.05,smoke
-tests/test_dagua_theme.py,4,3.82,3.77,unmarked
 tests/test_data_substrate_artifact.py,12,0.24,0.03,smoke
 tests/test_data_substrate_digests.py,16,0.32,0.03,unmarked
 tests/test_data_substrate_extraction_v2.py,22,11.47,0.90,unmarked

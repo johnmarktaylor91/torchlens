@@ -4516,7 +4516,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_dot.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7558,62 +7558,6 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "bool_value",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "parent_arg_positions",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
-  "sites": 3,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/experimental/dagua/_clusters.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/experimental/dagua/_clusters.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": true,

@@ -7,7 +7,7 @@ sweep's name table, line up row for row:
   rows, public top-level submodules);
 - ``export:tl.ns.X``: an export of a public namespace (its ``__all__``, else its public
   definitions and module-level data constants), including nested namespaces such as
-  ``tl.experimental.dagua`` and a submodule that a root name of the same spelling
+  ``tl.experimental.node_styles`` and a submodule that a root name of the same spelling
   shadows (a root function ``tl.x`` beside a package ``torchlens/x``);
 - ``member:<module>:<Class>.<name>``: a public member of a reached TorchLens class, one
   row per defining class; stored fields declared only in the class's ``_FIELD_POLICY``
@@ -69,7 +69,7 @@ PROTOCOL_DUNDERS: frozenset[str] = frozenset(
 _SKIPPED_PARAMS = frozenset({"self", "cls"})
 #: Values a namespace without ``__all__`` exports as constants when its source assigns them.
 _DATA_TYPES = (str, bytes, int, float, bool, tuple, list, dict, set, frozenset, type(None))
-#: Nested namespace levels walked below a root namespace (``tl.experimental.dagua``).
+#: Nested namespace levels walked below a root namespace (``tl.experimental.node_styles``).
 MAX_NAMESPACE_DEPTH = 3
 #: Distinct documented meanings shown on one keyword row's doc line.
 MAX_PARAM_MEANINGS = 3
