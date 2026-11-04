@@ -1,5 +1,6 @@
 """Argument templates, edge uses, and tensor provenance."""
 
+import types
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
@@ -42,6 +43,7 @@ from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ..._ir.workspaces import RawGraphWorkspace
 
 
 __all__ = (
@@ -56,8 +58,26 @@ __all__ = (
 )
 
 
+def _peek_raw_graph_workspace(trace: "Trace | None") -> "RawGraphWorkspace | None":
+    """Read the trace's raw-graph workspace, if this capture still holds one.
+
+    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
+    lives for one capture: postprocess pops it at its terminal consume and a
+    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
+    direct private read guarded by ``AttributeError`` rather than a
+    string-literal ``getattr`` default, so a rename breaks loudly.
+    """
+
+    if trace is None:
+        return None
+    try:
+        return trace._raw_graph_ws
+    except AttributeError:
+        return None
+
+
 def _function_registry_key(
-    func: Callable[..., Any], func_name: str | None = None
+    func: Callable[..., Any], func_name: str | None = None, trace: "Trace | None" = None
 ) -> FunctionRegistryKey:
     """Build a portable registry key for a captured function.
 
@@ -68,6 +88,8 @@ def _function_registry_key(
     func_name
         TorchLens-recorded function name for property getter callables whose
         underlying C descriptor does not preserve the property name.
+    trace
+        Active trace; its raw-graph workspace memoizes C-callable keys per capture.
 
     Returns
     -------
@@ -75,10 +97,59 @@ def _function_registry_key(
         Best-effort function identity.
     """
 
-    from torchlens.intervention._resolver_registry import function_registry_key_from_callable
-
     if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
         return FunctionRegistryKey("torch.Tensor", str(func_name), "method")
+    workspace = _peek_raw_graph_workspace(trace)
+    if workspace is None or not _is_permanent_c_callable(func):
+        return _derive_function_registry_key(func)
+    memo = workspace._function_key_memo
+    hit = memo.get(id(func))
+    if hit is not None and hit[0] is func:
+        namespace, qualname, dispatch_kind, version, import_path = hit[1]
+        return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
+    key = _derive_function_registry_key(func)
+    memo[id(func)] = (
+        func,
+        (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path),
+    )
+    return key
+
+
+# The capture memoizes the portable identity of permanent C callables (torch
+# builtins, method and slot descriptors) in its raw-graph workspace, keyed by
+# ``id`` with the callable held so the id cannot be reused: every op of the same
+# function used to re-derive the same key (module and qualname reads, the
+# internal-builtin probe, the runnable alias table scan). The memo lives and dies
+# with one capture, so a torch namespace patched between captures is re-derived,
+# and each hit returns a NEW key object, so no two ops share a key instance.
+_PERMANENT_C_CALLABLE_TYPES = (
+    types.MethodDescriptorType,
+    types.WrapperDescriptorType,
+    types.ClassMethodDescriptorType,
+)
+
+
+def _is_permanent_c_callable(func: Any) -> bool:
+    """Return whether ``func`` is a C callable owned by a module or class, never an instance.
+
+    A static C function (``torch.sin``: ``METH_STATIC`` on ``_VariableFunctionsClass``)
+    is bound to nothing, so its ``__self__`` is ``None``.
+    """
+
+    func_type = type(func)
+    if func_type in _PERMANENT_C_CALLABLE_TYPES:
+        return True
+    if func_type is not types.BuiltinFunctionType:
+        return False
+    owner = getattr(func, "__self__", None)
+    return owner is None or isinstance(owner, (types.ModuleType, type))
+
+
+def _derive_function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
+    """Derive the portable registry key of ``func`` (no memo)."""
+
+    from torchlens.intervention._resolver_registry import function_registry_key_from_callable
+
     return function_registry_key_from_callable(func)
 
 
@@ -213,7 +284,7 @@ def _build_args_template(
     return CapturedArgTemplate(
         args=arg_components,
         kwargs=kwarg_components,
-        func_id=_function_registry_key(func, func_name),
+        func_id=_function_registry_key(func, func_name, trace),
         notes=tuple(notes),
     )
 
