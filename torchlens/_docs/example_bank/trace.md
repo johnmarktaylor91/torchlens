@@ -737,7 +737,8 @@ x2 = torch.randn(3, 4)
 result = trace.run_transaction(inputs=x2, seed=0)
 print(type(result).__name__)
 print(torch.allclose(result.output, model(x2)))
-print(torch.equal(trace.ops["relu_1_2"].out, tl.trace(model, x).ops["relu_1_2"].out))
+again = tl.trace(model, x)
+print(torch.equal(trace.ops["relu_1_2"].out, again.ops["relu_1_2"].out))
 # Output:
 # RunResult
 # True
