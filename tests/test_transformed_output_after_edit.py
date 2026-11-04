@@ -67,7 +67,7 @@ def test_replay_that_changes_an_output_op_refuses_transformed_output() -> None:
     assert not torch.allclose(edited[out].out, trace[out].out)
     with pytest.raises(PayloadUnavailableError) as caught:
         _ = edited.transformed_output
-    assert caught.value.code == "output_not_stored"
+    assert caught.value.fields["code"] == "output_not_stored"
     # The parent keeps its own, still-true transform result.
     assert torch.allclose(trace.transformed_output, trace[out].out * 10.0)
 
@@ -103,7 +103,7 @@ def _stale_fork() -> tuple[Any, Any]:
 def _assert_refuses(trace: Any) -> None:
     with pytest.raises(PayloadUnavailableError) as caught:
         _ = trace.transformed_output
-    assert caught.value.code == "output_not_stored"
+    assert caught.value.fields["code"] == "output_not_stored"
     assert "replay rewrote the model output" in str(caught.value)
     assert "rerun" in str(caught.value)
 
@@ -172,3 +172,19 @@ def test_aborted_selection_batch_restores_the_transform_result() -> None:
         fork.do(pairs)
     assert "code" in getattr(caught.value, "fields", {}), "a typed refusal"
     assert torch.equal(fork.transformed_output, expected)
+
+
+def test_fork_of_a_stale_fork_still_refuses() -> None:
+    """Forking a stale fork carries the refusal; forking the parent does not."""
+
+    parent, edited = _stale_fork()
+    _assert_refuses(edited.fork())
+    assert torch.equal(parent.fork().transformed_output, parent.transformed_output)
+
+
+def test_cleanup_of_a_stale_fork_succeeds() -> None:
+    """Releasing a stale fork's fields does not trip over the refusing getter."""
+
+    _parent, edited = _stale_fork()
+    edited.cleanup()
+    assert "transformed_output" not in edited.__dict__

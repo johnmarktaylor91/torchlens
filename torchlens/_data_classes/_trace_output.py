@@ -77,3 +77,12 @@ class TraceOutputMixin(_TraceRouting):
         """Store ``value`` under the plain ``transformed_output`` key."""
 
         self.__dict__["transformed_output"] = value
+
+    @transformed_output.deleter
+    def transformed_output(self: Any) -> None:
+        """Drop the stored value (trace cleanup deletes fields by name)."""
+
+        try:
+            del self.__dict__["transformed_output"]
+        except KeyError:
+            raise AttributeError("transformed_output") from None
