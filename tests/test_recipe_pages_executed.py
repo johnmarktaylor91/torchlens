@@ -151,6 +151,13 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
+#: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
+#: measured 168.3 s in the test call and 175.7 s run alone; the LEACE notebook
+#: (GPT-2 small, twelve block erasers) measured 73.3 s and 82.0 s. The vision
+#: logit lens notebook measured 8.1 s and 6.4 s with a warm cache, but it
+#: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
+#: use, so it sits in the slow tier with the CLIP notebooks.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
