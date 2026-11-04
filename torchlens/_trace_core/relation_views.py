@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .groups import GroupRef, MembershipGroups
-from .op_store import _CSR, _MISSING
+from .op_store import _CSR, _MISSING, PooledCell
 
 if TYPE_CHECKING:
     from .core import TraceCore
@@ -281,6 +281,8 @@ def freeze_op_relation_views(
         if parents is _MISSING or not parents:
             continue
         pap = row_cells[pap_fid]
+        if isinstance(pap, PooledCell):  # sibling output members share one pooled cell
+            pap = pap.prototype
         positions_by_parent: dict[str, list[Any]] = {}
         if isinstance(pap, dict):
             for domain in ("args", "kwargs"):
@@ -293,12 +295,8 @@ def freeze_op_relation_views(
             source = row_of_label.get(parent_label)
             if source is None:
                 continue
-            occurrences = positions_by_parent.get(parent_label)
-            if occurrences:
-                for occurrence in occurrences:
-                    edges.add(source, row, arg_position=occurrence)
-            else:
-                edges.add(source, row, arg_position=None)
+            for occurrence in positions_by_parent.get(parent_label) or (None,):
+                edges.add(source, row, arg_position=occurrence)
     stats.edges = len(edges)
     edges.freeze(n_rows, n_rows)
 
