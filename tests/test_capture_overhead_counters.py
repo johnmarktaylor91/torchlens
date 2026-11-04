@@ -9,11 +9,16 @@ properties the search reads, that capture's generator context-manager entries
 do not grow with the op count, and the mute window's contract: the user's own
 ``logging.disable`` level survives a trace (also when a search raises), and a
 record the model logs in its forward still reaches a handler.
+
+Every op also derived its function's portable registry key afresh and
+``copy.deepcopy``-ed its parent label map. The last two tests pin that, during
+capture, neither the key derivation nor ``deepcopy`` runs once per op.
 """
 
 from __future__ import annotations
 
 import contextlib
+import copy
 import logging
 from typing import Any
 
@@ -24,6 +29,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as postprocess_pkg
+import torchlens.intervention._resolver_registry as resolver_registry
 
 _CACHE_LOGGER = "tl_counter_cache"
 _MODEL_LOGGER = "tl_counter_model"
@@ -161,3 +167,63 @@ def test_capture_enters_no_generator_context_manager_per_op(
     small = _capture_generator_cm_entries(monkeypatch, 2)
     large = _capture_generator_cm_entries(monkeypatch, 12)
     assert large == small, f"4 ops: {small} entries; 24 ops: {large} entries"
+
+
+class _Loop(nn.Module):
+    """One module whose forward runs ``2 * n`` torch builtin ops."""
+
+    def __init__(self, n: int) -> None:
+        super().__init__()
+        self.n = n
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for _ in range(self.n):
+            x = torch.cos(torch.sin(x))
+        return x
+
+
+def _capture_calls(monkeypatch: pytest.MonkeyPatch, owner: Any, name: str, n: int) -> int:
+    """Calls of ``owner.<name>`` on this thread during capture (postprocess excluded)."""
+
+    counts: dict[str, int] = {}
+    state = {"capture": True}
+    real = getattr(owner, name)
+    counting = thread_counting(real, counts, "calls")
+    real_postprocess = postprocess_pkg.postprocess
+
+    def patched(*args: Any, **kwargs: Any) -> Any:
+        return counting(*args, **kwargs) if state["capture"] else real(*args, **kwargs)
+
+    def postprocess(*args: Any, **kwargs: Any) -> Any:
+        state["capture"] = False
+        try:
+            return real_postprocess(*args, **kwargs)
+        finally:
+            state["capture"] = True
+
+    with quiet_gc():
+        monkeypatch.setattr(owner, name, patched)
+        monkeypatch.setattr(postprocess_pkg, "postprocess", postprocess)
+        try:
+            tl.trace(_Loop(n), torch.randn(2, 4))
+        finally:
+            monkeypatch.setattr(owner, name, real)
+            monkeypatch.setattr(postprocess_pkg, "postprocess", real_postprocess)
+    return counts.get("calls", 0)
+
+
+def test_capture_derives_each_function_registry_key_once_per_function(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tl.trace(_Loop(1), torch.randn(2, 4))  # warm one-time instrumentation
+    name = "function_registry_key_from_callable"
+    small = _capture_calls(monkeypatch, resolver_registry, name, 2)
+    large = _capture_calls(monkeypatch, resolver_registry, name, 12)
+    assert large == small, f"4 ops: {small} key derivations; 24 ops: {large}"
+
+
+def test_capture_deepcopies_nothing_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    tl.trace(_Loop(1), torch.randn(2, 4))  # warm one-time instrumentation
+    small = _capture_calls(monkeypatch, copy, "deepcopy", 2)
+    large = _capture_calls(monkeypatch, copy, "deepcopy", 12)
+    assert large == small, f"4 ops: {small} deepcopy calls; 24 ops: {large}"
