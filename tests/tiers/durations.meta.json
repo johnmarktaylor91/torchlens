@@ -1,16 +1,16 @@
 {
-  "carried_files": 1795,
+  "carried_files": 1796,
   "files": 1798,
   "inputs": [
-    "mc196a.xml",
-    "mc196b.xml"
+    "mc199a.xml",
+    "mc199b.xml"
   ],
   "instrumented": false,
   "measured_on": "2026-11-04",
-  "note": "regen-3: test files changed since 699c0e92a7 re-measured on axon and runpod 2026-11-04 (initial set, then C-191, C-188, C-193, C-194, C-192, C-195, C-196 files; jobs mp-tdr3-*); other rows carried from regen-2 (699c0e92a7/ba96b5d31e)",
+  "note": "regen-3: test files changed since 699c0e92a7 re-measured on axon and runpod 2026-11-04 (initial set, then C-191, C-188, C-193, C-194, C-192, C-195, C-196, C-199 files; jobs mp-tdr3-*); other rows carried from regen-2 (699c0e92a7/ba96b5d31e)",
   "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "75371d9423",
+  "source_commit": "dbe643457a",
   "tests": 21466,
   "workers": 4
 }
