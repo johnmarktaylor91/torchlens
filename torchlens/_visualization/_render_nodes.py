@@ -1982,12 +1982,12 @@ def compute_default_node_lines(
     if isinstance(layer_log, BoundaryNode):
         return [layer_log.display_label]
 
+    # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
+    lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
     if node_label_fields is not None:
-        selected_lines = _compute_selected_node_lines(
-            layer_log, node_address, vis_mode, node_label_fields
-        )
-        append_overlay_lines(selected_lines, layer_log, node_overlay)
-        return selected_lines
+        lines += _compute_selected_node_lines(layer_log, node_address, vis_mode, node_label_fields)
+        append_overlay_lines(lines, layer_log, node_overlay)
+        return lines
 
     annotation = _rolling_annotation(layer_log, vis_mode)
     # An atomic module rectangle carries its split call range on the ``@module``
@@ -2022,9 +2022,6 @@ def compute_default_node_lines(
     else:
         title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
 
-    lines: list[str] = []
-    if layer_log.is_terminal_bool:
-        lines.append(bool_value_line(layer_log))
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
     # data, escaped like every row by the S5 choke point).

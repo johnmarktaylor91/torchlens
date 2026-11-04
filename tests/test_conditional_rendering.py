@@ -285,6 +285,29 @@ def test_elif_ladder_tests_name_if_then_elif_on_the_test_node() -> None:
         trace.cleanup()
 
 
+def test_field_picker_keeps_the_if_row_on_the_test_node() -> None:
+    """``node_label_fields`` never drops a test's ``IF: TRUE`` row.
+
+    The IF kind lives on the test node's outcome row, not on an edge, so a picker
+    that omits it would erase the branch's IF from the drawing.
+    """
+
+    trace = tl.trace(
+        SimpleIfElseModel(), torch.ones(1, 3), capture=CaptureOptions(save_source_context=True)
+    )
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dot_source = trace.draw(
+                path=os.path.join(tmpdir, "picker"),
+                file_format="dot",
+                node_label_fields=["label", "shape"],
+            ).dot
+        bool_label = trace.graph.conditional_records[0].bool_layers[0]
+        assert "IF: TRUE" in _find_node_line(dot_source, bool_label)
+    finally:
+        trace.cleanup()
+
+
 # Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_loop_repeated_if_tests_remain_if() -> None:
     """Repeated evaluations of one source ``if`` never become an ELIF ladder."""
