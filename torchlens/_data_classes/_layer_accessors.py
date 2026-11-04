@@ -138,17 +138,6 @@ class OpAccessor(Accessor["Op"]):
         except (KeyError, IndexError, ValueError):
             return default
 
-    def __repr__(self) -> str:
-        """Return a bounded summary teaching the REAL index basis."""
-
-        labels = [str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in self._list]
-        shown = ", ".join(repr(label) for label in labels[:5])
-        suffix = ", ..." if len(labels) > 5 else ""
-        return (
-            f"OpAccessor with {len(self._list)} ops "
-            f"(0-based positions or pass-qualified labels): [{shown}{suffix}]"
-        )
-
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""
         if len(self._dict) == 1:
@@ -207,12 +196,24 @@ class LayerAccessor(Accessor["Layer"]):
     }
 
     def _composition_note(self) -> str | None:
-        """Composition breakdown for the one-line card: ops vs buffers."""
+        """Identity partition: compute layers, inputs, outputs and buffer rows."""
 
-        buffer_count = sum(1 for layer in self._list if getattr(layer, "is_buffer", False))
-        if not buffer_count:
-            return None
-        return f"{len(self._list) - buffer_count} ops, {buffer_count} buffers"
+        counts = {"op": 0, "input": 0, "output": 0, "buffer": 0}
+        for layer in self._list:
+            kind = "op"
+            for candidate in ("input", "output", "buffer"):
+                if getattr(layer, f"is_{candidate}", False):
+                    kind = candidate
+                    break
+            counts[kind] += 1
+        return (
+            ", ".join(
+                f"{count:,} {noun}{'s' if count != 1 else ''}"
+                for noun, count in counts.items()
+                if count
+            )
+            or None
+        )
 
     def __init__(
         self,

@@ -1,5 +1,4 @@
 """The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
-
 ONE engine, three customers: the ``site_sweep`` face, the
 tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an
@@ -11,12 +10,10 @@ husks the trace — every logged field dies with it), retains or releases
 under policy, and appends one effect row per candidate — including released,
 refused, and failed candidates, which are table rows and NEVER falsely
 members (D3c).
-
 Lane ruling (D3d): default ``engine="live_hook"`` — fork + _attach_hooks +
 run(model, x), a real forward with hooks attached. ``engine="replay"`` is
 the cone-recompute opt-in (fork + do on saved payloads). The lane is stamped
 in every event envelope and effect table; escalation is never silent.
-
 Required arguments (D3b): ``edit=``, ``metric=``, and ``retain=`` have NO
 defaults — which ablation is sound is a live scientific argument, the metric
 IS the experiment, and retention decides what evidence is DESTROYED.
@@ -33,6 +30,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
@@ -564,6 +562,8 @@ def _preflight_retention(
 @dataclass
 class _SweepState:
     """Mutable per-sweep accumulator: bundle, effect rows, retention."""
+
+    __repr__ = short_dataclass_repr
 
     bundle: Bundle
     baseline: Trace

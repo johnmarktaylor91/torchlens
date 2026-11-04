@@ -14,6 +14,13 @@ ActivationT = TypeVar("ActivationT")
 _ADDRESS_LISTING_LIMIT = 20
 
 
+def _event_tuple(items: Iterable[Any], title: str, noun: str) -> tuple[Any, ...]:
+    # The shared captured-run vocabulary loads display helpers only on this door.
+    from ._utils._display_bounded import RecordTuple
+
+    return RecordTuple(items, title, noun)
+
+
 def forget_event_stream(run: object) -> None:
     """Release the run-owned raw event stream for an explicitly cleaned run.
 
@@ -87,10 +94,10 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
+            return _event_tuple((), "OpEvents", "events")
         if hasattr(events, "amended_op_records"):
-            return tuple(events.amended_op_records())
-        return tuple(events.op_events)
+            return _event_tuple(events.amended_op_records(), "OpEvents", "events")
+        return _event_tuple(events.op_events, "OpEvents", "events")
 
     @property
     def backward_events(self) -> tuple[Any, ...]:
@@ -98,8 +105,8 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
-        return tuple(getattr(events, "backward_events", ()))
+            return _event_tuple((), "BackwardEvents", "events")
+        return _event_tuple(getattr(events, "backward_events", ()), "BackwardEvents", "events")
 
     @property
     def sibling_events(self) -> tuple[Any, ...]:
@@ -107,12 +114,16 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
-        return (
-            *events.module_prep_events,
-            *events.module_enter_events,
-            *events.module_exit_events,
-            *events.output_version_events,
+            return _event_tuple((), "SiblingEvents", "events")
+        return _event_tuple(
+            (
+                *events.module_prep_events,
+                *events.module_enter_events,
+                *events.module_exit_events,
+                *events.output_version_events,
+            ),
+            "SiblingEvents",
+            "events",
         )
 
     @property

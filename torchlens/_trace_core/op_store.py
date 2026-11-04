@@ -1,13 +1,10 @@
 """Columnar row store backing the ``Op`` facade (the M5 seam).
-
 One ``OpRowStore`` per captured trace holds every stored ``Op`` field cell;
 ``Op`` itself is a two-word ``(_core, _row)`` facade whose generated data
 descriptors read and write cells here. ``DetachedOpStore`` is the single-row
 twin used by ``Op._copy_with_shallow_fields()``, pickle restoration, fork shells, and preview
 backends that construct ops outside the event-materialize ingress.
-
 Storage phases:
-
 * BUILDING (postprocess steps 0-20): rows are plain Python lists (one
   ``[_MISSING] * n_fields`` allocation per op), so cell reads/writes are
   list indexing and the per-op footprint matches the former slot layout.
@@ -18,7 +15,6 @@ Storage phases:
   their exact public type); everything else stays an object column. Later
   writes land in a sparse overlay; deletes on object columns release the
   cell value in place so op removal keeps freeing payloads.
-
 An unset cell is ``_MISSING`` (never ``None`` -- ``None`` is a real stored
 value); facade descriptors translate ``_MISSING`` into the exact
 ``AttributeError`` an unset ``__slots__`` member raised.
@@ -34,6 +30,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from .._utils._display_bounded import RecordTuple
 from ._fork_copy import (
     _COW_ATOMIC,
     _contains_mutable_container,
@@ -216,6 +213,8 @@ def _evict_payloads_in_tuple(
         return value
     if type(value) is tuple:
         return tuple(rebuilt)
+    if type(value) is RecordTuple:
+        return RecordTuple(rebuilt, value.title, value.noun, value.singular)
     try:
         # Named tuples and tuple subclasses reconstruct through their own
         # type; an unreconstructable subclass keeps the original (a

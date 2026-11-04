@@ -61,4 +61,7 @@ def test_module_hierarchy_display_still_renders() -> None:
     hierarchy = _module_hierarchy_str(log)
     assert "1" in hierarchy  # child modules render
     assert "<cycle>" not in hierarchy and "<max-depth>" not in hierarchy
-    assert "linear_1_1" in str(log)
+    summary = str(log.summary())
+    assert "(Linear)" in summary and "(ReLU)" in summary
+    assert "linear_1_1" not in str(log)
+    assert ".summary()" in str(log)

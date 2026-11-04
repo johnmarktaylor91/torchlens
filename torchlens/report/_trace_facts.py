@@ -16,6 +16,7 @@ from .._capture._episode_ledger import capture_kind_for, episode_ledger_for
 from .._capture_honesty import capture_advisories, poison_facts
 from .._data_classes._trace_inventory import build_bill_of_materials
 from .._quantities import Flops, Macs
+from .._utils._display_collections import callable_dict_repr, callable_dict_str
 from ._compute_truth import aggregate_forward_compute, compute_aggregation, unknown_op_ledger
 from ._explain import explain as _explain
 from ._factcore import factcore as _factcore
@@ -37,6 +38,9 @@ class _CallableDict(dict[Any, Any]):
     This preserves legacy ``log.report_by_type()`` ergonomics for budgeted
     report properties that should not remain inspectable custom_methods.
     """
+
+    __repr__ = callable_dict_repr
+    __str__ = callable_dict_str
 
     def __call__(self) -> dict[Any, Any]:
         """Return a plain-dict copy of this report.
