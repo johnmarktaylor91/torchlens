@@ -354,11 +354,11 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1842
+torchlens/_postprocess/finalization.py	1841
 torchlens/_postprocess/finalization.py::_build_conditional_records	160
 torchlens/_postprocess/finalization.py::_build_layer_logs	114
 torchlens/_postprocess/finalization.py::_build_module_logs	206
-torchlens/_postprocess/finalization.py::_build_root_module_log	106
+torchlens/_postprocess/finalization.py::_build_root_module_log	105
 torchlens/_postprocess/finalization.py::_build_submodule_call_logs	116
 torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	70
@@ -958,7 +958,7 @@ torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forwa
 torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
-torchlens/backends/torch/prehook_provenance.py	1002
+torchlens/backends/torch/prehook_provenance.py	1003
 torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
