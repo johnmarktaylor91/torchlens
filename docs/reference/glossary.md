@@ -5711,8 +5711,8 @@ example.
 | `GradFnCall.backward_duration` | Measured backward time for this call, or `None` when not measured |
 | `GradFnCall.backward_pass_number` | 1-based number of the backward pass this call belongs to, or `None` |
 | `GradFnCall.label` | Pass-qualified label of this call, in the form `label:call_index` |
-| `GradFnCall.grad_inputs` | Gradients flowing into this grad-fn, as observed by the backward hook |
-| `GradFnCall.grad_outputs` | Gradients flowing out of this grad-fn, as observed by the backward hook |
+| `GradFnCall.grad_inputs` | Gradients flowing out of this grad-fn toward earlier ops (the gradients with respect to its forward inputs), as observed by the backward hook |
+| `GradFnCall.grad_outputs` | Gradients flowing into this grad-fn from later ops (the gradients with respect to its forward outputs), as observed by the backward hook |
 | `GradFnCall.is_saved` | Whether this call has saved gradient payloads |
 | `GradFnCall.ordinal_index` | 0-based position of this call in `trace.autograd.grad_fn_calls` |
 | `GradFnCall.timestamp` | Wall-clock time in seconds when the hook fired, or `None` |
