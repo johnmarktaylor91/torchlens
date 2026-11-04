@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._state as _state
 from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.options import CaptureOptions
@@ -46,24 +47,39 @@ _PRIVATE_METHOD_FORWARDS: dict[str, Callable[[torch.Tensor, torch.Tensor], torch
     "_conj_physical": lambda m, x: torch.view_as_real(_complex_of(m)._conj_physical()).sum(-1) + x,
     "_neg_view": lambda m, x: m._neg_view().resolve_neg() * 2 + x,
     "_lazy_clone": lambda m, x: m._lazy_clone() * 2 + x,
-    # Distinct mat operands: one tensor passed as both mats does not re-trace to the same graph,
-    # and the decorated ``torch._addmm_activation`` twin shows the same on the unchanged base.
     "_addmm_activation": lambda m, x: m._addmm_activation(x, x * 2) + x,
     "_is_all_true": lambda m, x: x + (m > -1)._is_all_true().float(),
     "_is_any_true": lambda m, x: x + (m > 100)._is_any_true().float(),
 }
 _PRIVATE_METHODS = tuple(name for name in _PRIVATE_METHOD_FORWARDS if hasattr(torch.Tensor, name))
+# Further cases of a method above, by test id: ``(method, forward)``. One tensor as both mats of
+# ``_addmm_activation`` sits beside the distinct-mats case.
+_PRIVATE_METHOD_EXTRA_CASES: dict[
+    str, tuple[str, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]]
+] = {
+    "_addmm_activation-same-mats": (
+        "_addmm_activation",
+        lambda m, x: m._addmm_activation(x, x) + x,
+    ),
+}
+_PRIVATE_METHOD_CASES = [
+    pytest.param(name, _PRIVATE_METHOD_FORWARDS[name], id=name) for name in _PRIVATE_METHODS
+] + [
+    pytest.param(method, forward, id=case_id)
+    for case_id, (method, forward) in _PRIVATE_METHOD_EXTRA_CASES.items()
+    if hasattr(torch.Tensor, method)
+]
 
 
 class _PrivateMethodModel(nn.Module):
     """Calls one private Tensor method on a recorded tensor and consumes the result."""
 
-    def __init__(self, method: str) -> None:
+    def __init__(self, forward: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> None:
         super().__init__()
-        self.method = method
+        self.call = forward
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return _PRIVATE_METHOD_FORWARDS[self.method](torch.relu(x), x)
+        return self.call(torch.relu(x), x)
 
 
 def _input_4x4() -> torch.Tensor:
@@ -106,11 +122,13 @@ def test_private_tensor_method_is_decorated(method: str) -> None:
     assert ("torch.Tensor", method) in _decorated_pairs()
 
 
-@pytest.mark.parametrize("method", _PRIVATE_METHODS)
-def test_private_tensor_method_captured_with_provenance(method: str) -> None:
+@pytest.mark.parametrize(("method", "forward"), _PRIVATE_METHOD_CASES)
+def test_private_tensor_method_captured_with_provenance(
+    method: str, forward: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+) -> None:
     """The private method records as one op with recorded parents and a consumer."""
 
-    log = tl.trace(_PrivateMethodModel(method), _input_4x4())
+    log = tl.trace(_PrivateMethodModel(forward), _input_4x4())
     try:
         recorded = [op for op in log.ops if op.func_name == method]
         assert len(recorded) == 1, f"{method} not captured: {[op.func_name for op in log.ops]}"
@@ -122,11 +140,18 @@ def test_private_tensor_method_captured_with_provenance(method: str) -> None:
         log.cleanup()
 
 
-@pytest.mark.parametrize("method", _PRIVATE_METHODS)
-def test_private_tensor_method_validates_and_replays(method: str) -> None:
-    """Forward validation passes and the live replay reproduces a plain forward."""
+@pytest.mark.parametrize(("method", "forward"), _PRIVATE_METHOD_CASES)
+def test_private_tensor_method_validates_and_replays(
+    method: str, forward: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+) -> None:
+    """Forward validation passes and the live replay reproduces a plain forward.
 
-    _assert_validates_and_replays(_PrivateMethodModel(method), _input_4x4())
+    Each case starts from a cold dynamic arg-spec cache, so the first trace takes the crawl a
+    process's first call takes (one tensor as both mats once lost a parent there).
+    """
+
+    _state._dynamic_arg_specs.pop(_normalize_func_name(method), None)
+    _assert_validates_and_replays(_PrivateMethodModel(forward), _input_4x4())
 
 
 # ---------------------------------------------------------------------------
