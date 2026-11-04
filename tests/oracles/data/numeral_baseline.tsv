@@ -2755,7 +2755,6 @@ docs-md	docs/maintainers/where.md	107
 docs-md	docs/maintainers/where.md	1077
 docs-md	docs/maintainers/where.md	1078
 docs-md	docs/maintainers/where.md	108
-docs-md	docs/maintainers/where.md	1081
 docs-md	docs/maintainers/where.md	1083
 docs-md	docs/maintainers/where.md	1084
 docs-md	docs/maintainers/where.md	10914
@@ -2821,7 +2820,6 @@ docs-md	docs/maintainers/where.md	1360
 docs-md	docs/maintainers/where.md	1366
 docs-md	docs/maintainers/where.md	1368
 docs-md	docs/maintainers/where.md	137
-docs-md	docs/maintainers/where.md	1372
 docs-md	docs/maintainers/where.md	138
 docs-md	docs/maintainers/where.md	1380
 docs-md	docs/maintainers/where.md	139
@@ -2870,7 +2868,6 @@ docs-md	docs/maintainers/where.md	1560
 docs-md	docs/maintainers/where.md	1562
 docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
-docs-md	docs/maintainers/where.md	1577
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	159
@@ -2905,9 +2902,9 @@ docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	1741
 docs-md	docs/maintainers/where.md	1749
 docs-md	docs/maintainers/where.md	175
-docs-md	docs/maintainers/where.md	17545
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1761
+docs-md	docs/maintainers/where.md	17625
 docs-md	docs/maintainers/where.md	1768
 docs-md	docs/maintainers/where.md	177
 docs-md	docs/maintainers/where.md	1772
@@ -2915,8 +2912,8 @@ docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
 docs-md	docs/maintainers/where.md	180
-docs-md	docs/maintainers/where.md	18051
 docs-md	docs/maintainers/where.md	181
+docs-md	docs/maintainers/where.md	18109
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
@@ -2926,7 +2923,7 @@ docs-md	docs/maintainers/where.md	1847
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1850
 docs-md	docs/maintainers/where.md	186
-docs-md	docs/maintainers/where.md	1862
+docs-md	docs/maintainers/where.md	1860
 docs-md	docs/maintainers/where.md	187
 docs-md	docs/maintainers/where.md	188
 docs-md	docs/maintainers/where.md	189
@@ -3133,6 +3130,7 @@ docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
 docs-md	docs/maintainers/where.md	334
+docs-md	docs/maintainers/where.md	335
 docs-md	docs/maintainers/where.md	336
 docs-md	docs/maintainers/where.md	337
 docs-md	docs/maintainers/where.md	338
@@ -3199,7 +3197,7 @@ docs-md	docs/maintainers/where.md	392
 docs-md	docs/maintainers/where.md	393
 docs-md	docs/maintainers/where.md	394
 docs-md	docs/maintainers/where.md	395
-docs-md	docs/maintainers/where.md	39571
+docs-md	docs/maintainers/where.md	39626
 docs-md	docs/maintainers/where.md	397
 docs-md	docs/maintainers/where.md	398
 docs-md	docs/maintainers/where.md	399
@@ -3357,6 +3355,7 @@ docs-md	docs/maintainers/where.md	563
 docs-md	docs/maintainers/where.md	564
 docs-md	docs/maintainers/where.md	565
 docs-md	docs/maintainers/where.md	566
+docs-md	docs/maintainers/where.md	56772
 docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	57
@@ -3441,6 +3440,7 @@ docs-md	docs/maintainers/where.md	672
 docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
+docs-md	docs/maintainers/where.md	676992
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
@@ -3462,6 +3462,7 @@ docs-md	docs/maintainers/where.md	700
 docs-md	docs/maintainers/where.md	7001
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
+docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	710
@@ -11101,6 +11102,7 @@ test-docstrings	tests/test_validation.py	90
 test-docstrings	tests/test_validation.py	99
 test-docstrings	tests/test_validation.py	99.9
 test-docstrings	tests/test_validation_bool_exemption.py	30
+test-docstrings	tests/test_validation_bool_exemption.py	4.57
 test-docstrings	tests/test_validation_default_dtype_and_parameter_output.py	64
 test-docstrings	tests/test_validation_degenerate_forward.py	16570
 test-docstrings	tests/test_validation_hardening.py	1.0
