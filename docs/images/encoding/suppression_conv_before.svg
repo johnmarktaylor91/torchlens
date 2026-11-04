@@ -15,7 +15,7 @@
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#009e73" stroke="black" cx="259" cy="-45.96" rx="104.8" ry="45.92"/>
+<ellipse fill="#98fb98" stroke="black" cx="259" cy="-45.96" rx="104.8" ry="45.92"/>
 <text text-anchor="start" x="234.5" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
 <text text-anchor="start" x="195" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 16, 16), 3.0 KiB</text>
 <text text-anchor="start" x="231.5" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
@@ -23,7 +23,7 @@
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="470.5,-230.92 47.5,-230.92 47.5,-127.92 470.5,-127.92 470.5,-230.92"/>
+<polygon fill="#d9d9d9" stroke="black" points="470.5,-230.92 47.5,-230.92 47.5,-127.92 470.5,-127.92 470.5,-230.92"/>
 <text text-anchor="start" x="220.5" y="-214.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
 <text text-anchor="start" x="195.5" y="-194.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8.0 KiB</text>
 <text text-anchor="start" x="58" y="-175.22" font-family="Helvetica,sans-Serif" font-size="14.00">out_channels=8, in_channels=3, kernel_size=(3, 3), padding=(1, 1)</text>
@@ -52,7 +52,7 @@
 <!-- conv2d_2_3pass1 -->
 <g id="node4" class="node">
 <title>conv2d_2_3pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="514,-470.98 4,-470.98 4,-367.98 514,-367.98 514,-470.98"/>
+<polygon fill="#d9d9d9" stroke="black" points="514,-470.98 4,-470.98 4,-367.98 514,-367.98 514,-470.98"/>
 <text text-anchor="start" x="220" y="-454.28" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_2_3</text>
 <text text-anchor="start" x="198.5" y="-434.28" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4.0 KiB</text>
 <text text-anchor="start" x="14" y="-415.28" font-family="Helvetica,sans-Serif" font-size="14.00">out_channels=16, in_channels=8, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
@@ -81,7 +81,7 @@
 <!-- conv2d_3_5pass1 -->
 <g id="node6" class="node">
 <title>conv2d_3_5pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="518,-711.03 0,-711.03 0,-608.03 518,-608.03 518,-711.03"/>
+<polygon fill="#d9d9d9" stroke="black" points="518,-711.03 0,-711.03 0,-608.03 518,-608.03 518,-711.03"/>
 <text text-anchor="start" x="220" y="-694.33" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_3_5</text>
 <text text-anchor="start" x="198.5" y="-674.33" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32, 4, 4), 2.0 KiB</text>
 <text text-anchor="start" x="10" y="-655.33" font-family="Helvetica,sans-Serif" font-size="14.00">out_channels=32, in_channels=16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
@@ -138,7 +138,7 @@
 <!-- linear_1_9pass1 -->
 <g id="node10" class="node">
 <title>linear_1_9pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="374.5,-1172.14 143.5,-1172.14 143.5,-1069.14 374.5,-1069.14 374.5,-1172.14"/>
+<polygon fill="#d9d9d9" stroke="black" points="374.5,-1172.14 143.5,-1172.14 143.5,-1069.14 374.5,-1069.14 374.5,-1172.14"/>
 <text text-anchor="start" x="226" y="-1155.44" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_9</text>
 <text text-anchor="start" x="222" y="-1135.44" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 10), 40 B</text>
 <text text-anchor="start" x="161.5" y="-1116.44" font-family="Helvetica,sans-Serif" font-size="14.00">out_features=10, in_features=32</text>
@@ -154,7 +154,7 @@
 <!-- output_1pass1 -->
 <g id="node11" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#d55e00" stroke="black" cx="259" cy="-1254.1" rx="67.35" ry="45.92"/>
+<ellipse fill="#ff9999" stroke="black" cx="259" cy="-1254.1" rx="67.35" ry="45.92"/>
 <text text-anchor="start" x="230.5" y="-1269.9" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text text-anchor="start" x="222" y="-1249.9" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 10), 40 B</text>
 <text text-anchor="start" x="233.5" y="-1230.9" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>

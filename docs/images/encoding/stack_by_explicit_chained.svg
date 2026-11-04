@@ -20,7 +20,7 @@
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#009e73" stroke="black" cx="61.52" cy="-45.96" rx="61.54" ry="45.92"/>
+<ellipse fill="#98fb98" stroke="black" cx="61.52" cy="-45.96" rx="61.54" ry="45.92"/>
 <text text-anchor="start" x="37.52" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
 <text text-anchor="start" x="28.52" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="34.52" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
@@ -28,7 +28,7 @@
 <!-- linear_1_1pass1 -->
 <g id="node2" class="node">
 <title>linear_1_1pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="368.04,-87.96 159.04,-87.96 159.04,-3.96 368.04,-3.96 368.04,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="368.04,-87.96 159.04,-87.96 159.04,-3.96 368.04,-3.96 368.04,-87.96"/>
 <text text-anchor="start" x="224.54" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_1:1</text>
 <text text-anchor="start" x="230.54" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="169.54" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -56,7 +56,7 @@
 <!-- linear_1_1pass2 -->
 <g id="node4" class="node">
 <title>linear_1_1pass2</title>
-<polygon fill="#c0c0c0" stroke="black" points="772.07,-87.96 563.07,-87.96 563.07,-3.96 772.07,-3.96 772.07,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="772.07,-87.96 563.07,-87.96 563.07,-3.96 772.07,-3.96 772.07,-87.96"/>
 <text text-anchor="start" x="628.57" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_1:2</text>
 <text text-anchor="start" x="634.57" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="573.57" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -84,7 +84,7 @@
 <!-- linear_1_1pass3 -->
 <g id="node6" class="node">
 <title>linear_1_1pass3</title>
-<polygon fill="#c0c0c0" stroke="black" points="1176.11,-87.96 967.11,-87.96 967.11,-3.96 1176.11,-3.96 1176.11,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="1176.11,-87.96 967.11,-87.96 967.11,-3.96 1176.11,-3.96 1176.11,-87.96"/>
 <text text-anchor="start" x="1032.61" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_1:3</text>
 <text text-anchor="start" x="1038.61" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="977.61" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -112,7 +112,7 @@
 <!-- linear_2_3pass1 -->
 <g id="node8" class="node">
 <title>linear_2_3pass1</title>
-<polygon fill="#c0c0c0" stroke="black" points="1580.15,-87.96 1371.15,-87.96 1371.15,-3.96 1580.15,-3.96 1580.15,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="1580.15,-87.96 1371.15,-87.96 1371.15,-3.96 1580.15,-3.96 1580.15,-87.96"/>
 <text text-anchor="start" x="1436.65" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_2_3:1</text>
 <text text-anchor="start" x="1442.65" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="1381.65" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -140,7 +140,7 @@
 <!-- linear_2_3pass2 -->
 <g id="node10" class="node">
 <title>linear_2_3pass2</title>
-<polygon fill="#c0c0c0" stroke="black" points="1984.18,-87.96 1775.18,-87.96 1775.18,-3.96 1984.18,-3.96 1984.18,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="1984.18,-87.96 1775.18,-87.96 1775.18,-3.96 1984.18,-3.96 1984.18,-87.96"/>
 <text text-anchor="start" x="1840.68" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_2_3:2</text>
 <text text-anchor="start" x="1846.68" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="1785.68" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -168,7 +168,7 @@
 <!-- linear_2_3pass3 -->
 <g id="node12" class="node">
 <title>linear_2_3pass3</title>
-<polygon fill="#c0c0c0" stroke="black" points="2388.22,-87.96 2179.22,-87.96 2179.22,-3.96 2388.22,-3.96 2388.22,-87.96"/>
+<polygon fill="#d9d9d9" stroke="black" points="2388.22,-87.96 2179.22,-87.96 2179.22,-3.96 2388.22,-3.96 2388.22,-87.96"/>
 <text text-anchor="start" x="2244.72" y="-71.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_2_3:3</text>
 <text text-anchor="start" x="2250.72" y="-51.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="2189.72" y="-32.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 8) · bias (8,)</text>
@@ -196,7 +196,7 @@
 <!-- output_1pass1 -->
 <g id="node14" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#d55e00" stroke="black" cx="2644.77" cy="-45.96" rx="61.54" ry="45.92"/>
+<ellipse fill="#ff9999" stroke="black" cx="2644.77" cy="-45.96" rx="61.54" ry="45.92"/>
 <text text-anchor="start" x="2616.27" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text text-anchor="start" x="2611.77" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 8), 64 B</text>
 <text text-anchor="start" x="2619.27" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
