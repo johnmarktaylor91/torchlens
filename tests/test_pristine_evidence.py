@@ -27,6 +27,9 @@ from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _DIM = 8
 _HERE = Path(__file__).parent
 _V9_ARTIFACT = _HERE / "goldens" / "legacy" / "tlspec_v9.tlspec"

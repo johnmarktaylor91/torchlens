@@ -200,7 +200,7 @@ Key entry points:
   each consumer sees is substituted at its derived occurrence address via the
   tier-(ii) edge-substitution store (`substitution_kind="param"`; cone
   recomputation RE-SPLICES every tier-(ii) entry (param, region, and edge kinds),
-  so later pushes never silently revert any edit; chained param edits compose),
+  so later replays never silently revert any edit; chained param edits compose),
   the live `nn.Parameter` is never written, and
   rerun/set_only refuse `param_substitution_engine_unsupported`. Recurrently
   reused params (tied weights, multi-pass consumers) substitute at EVERY
@@ -209,7 +209,7 @@ Key entry points:
   positions, released legacy captures, bare pass-ambiguous consumer
   spellings, and consumer inventories omitting a pass.
 - Pass-qualified replay (decided 2026-08-17; refusal spelling
-  DOCUMENTED-UNSTABLE): the replay/push engine keys cone traversal, the
+  DOCUMENTED-UNSTABLE): the replay engine keys cone traversal, the
   overlay, hook targets, and commits by pass-qualified op labels
   (`Op.label`, `label:pass`), so multi-pass edits touch exactly the
   addressed pass, recompute downstream passes, and commit every pass's
@@ -225,7 +225,7 @@ Key entry points:
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
-  the replay/push engine only (`edge_intervention_engine_unsupported`
+  the replay engine only (`edge_intervention_engine_unsupported`
   otherwise); the substituted value rides `Op.edge_substitutions` (+
   `edge_replacement_stamps`, `FireRecord.edge_address`; persisted as of
   tlspec v8) while capture truth stays unmodified, and uncorroborated

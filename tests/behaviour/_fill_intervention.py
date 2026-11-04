@@ -726,10 +726,10 @@ def _after_mean_ablate(cell: Cell) -> None:
     donors = tl.intervention.population(
         torch.stack([out, out * 3]), origin="behaviour net: two donors from the site itself"
     )
-    fork = _apply_on_fork(trace, label, tl.mean_ablate(donors, dim=None))
+    fork = _apply_on_fork(trace, label, tl.mean_ablate(donors, dim="members"))
     cell.expect(
         torch.allclose(fork[label].out, out * 2, equal_nan=True),
-        f"mean_ablate(Population, dim=None) at {label} is not the elementwise member mean",
+        f"mean_ablate(Population, dim='members') at {label} is not the elementwise member mean",
     )
     names = [name for name, *_ in _fire_facts(fork[label])]
     cell.expect("mean_ablate" in names, f"no mean_ablate fire record on {label}: {names}")

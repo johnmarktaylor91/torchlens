@@ -1614,6 +1614,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_operations.py", "__all__"),
         ("torchlens/bundle/_save.py", "__all__"),
         ("torchlens/intervention/_op_edits.py", "__all__"),
+        ("torchlens/intervention/_recipe_io.py", "__all__"),
         ("torchlens/intervention/_trace_edits.py", "__all__"),
         ("torchlens/intervention/_trace_hooks.py", "__all__"),
         ("torchlens/intervention/_trace_run.py", "__all__"),

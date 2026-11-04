@@ -1,11 +1,12 @@
-"""Trace run and push functions reached from the records through ``_data_classes._doors.intervention``.
+"""Trace run functions reached from the records through ``_data_classes._doors.intervention``.
 
-``Trace.run``, ``Trace.push``, ``Trace.push_from`` and ``trace.autograd.disarm`` are the thin methods;
+``Trace.run`` and ``trace.autograd.disarm`` are the thin methods;
 the ``_runnable`` / ``_fast_run`` / ``_fast_live_steer`` dispatch lives here.
 """
 
 from __future__ import annotations
 
+import importlib
 import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
@@ -55,7 +56,7 @@ from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
 from .._runnable.verification import _run_fork_name
 from .._trace_state import TraceState
-from ..backends.torch._trace_backward import _refuse_stats_capture, _require_live_replay
+from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
 from ..errors import (
     PathDivergenceError,
@@ -67,7 +68,6 @@ from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
-from .replay import push as _push_impl, push_from as _push_from_impl
 from .rerun import run as _rerun_impl
 
 if TYPE_CHECKING:
@@ -75,8 +75,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "disarm",
-    "push",
-    "push_from",
     "run",
 ]
 
@@ -294,8 +292,8 @@ def _warn_pending_value_edits_on_new_input_run(
     """Disclose that value-edits on this trace do not apply to a new-input run.
 
     There are two legitimate intervention paths: (1) edit a SAVED value and
-    push the effect downstream on the captured DAG (``do()``/``push_from``/
-    direct writes), and (2) intervene on a FRESH execution (``engine="rerun"``
+    push the effect downstream on the captured DAG (``do()`` or direct
+    writes), and (2) intervene on a FRESH execution (``engine="rerun"``
     with a model and input, or a new capture with ``intervene=``). A
     ``run(inputs=...)`` on a trace carrying path-1 edits is a fresh execution:
     the edits say nothing about the new inputs, so the run is coherent but the
@@ -308,11 +306,11 @@ def _warn_pending_value_edits_on_new_input_run(
     trace:
         Live Trace about to be re-executed on new inputs.
     staged_spec_applies:
-        True when this run is the guarded fast live engine applying the
+        True when this run is the live provider (fast or not) applying the
         trace's staged intervention spec. The capture-time or rerun firing
         audit and the ``RERUN_PROPAGATED`` state are then that intervention's
-        own trail, not an inert value edit, so only ``do()``/``push``/direct
-        writes disclose.
+        own trail, not an inert value edit, so only ``do()`` propagation and
+        direct writes disclose.
     """
 
     state = getattr(trace, "state", None)
@@ -347,33 +345,6 @@ def _warn_pending_value_edits_on_new_input_run(
         # 4: this helper, run(), the thin Trace.run shell, then the caller's site.
         stacklevel=4,
     )
-
-
-def push(
-    trace: Trace,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Body of ``Trace.push``; the method carries the documented contract."""
-
-    _require_live_replay(trace)
-    replay_options = merge_replay_options(replay=replay)
-
-    return _push_impl(trace, replay=replay_options)
-
-
-def push_from(
-    trace: Trace,
-    site: Any,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Body of ``Trace.push_from``; the method carries the documented contract."""
-
-    require_capture_capability(trace, "live_replay")
-    require_structure_only_capability(trace, "live_replay")
-    _refuse_stats_capture(trace, "live_replay")
-    replay_options = merge_replay_options(replay=replay)
-
-    return _push_from_impl(trace, site, replay=replay_options)
 
 
 def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call shape; the fold removes the duplicate site)
@@ -454,44 +425,27 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
         }
     )
     if use_unified_provider:
-        # C03 honesty gate: the unified provider is a FRESH verified
-        # execution and never installs the staged intervention spec, while
-        # the legacy run(model, x) surface DOES (rerun.py reads
-        # _intervention_spec). Silently returning an un-intervened run for
-        # a trace that carries staged hooks/value replacements was a
-        # measured silent wrong answer (surgery memo, build item 1); it is
-        # a typed refusal now. Settled under both OP1 branches.
-        # D1 carve-out (2026-08-19): sticky hooks the selection-do() plan
-        # attached are engine-owned residue of an edit ALREADY applied to
-        # this trace's saved values (audit-recorded and propagated); their
-        # inertness on a new-input run is the PendingValueEditsWarning
-        # DISCLOSURE at the run door below, never a refusal.
+        # C03 honesty gate, narrowed to the loaded providers: a loaded artifact
+        # has no model to install the staged intervention spec on, and silently
+        # returning an un-intervened run was a measured silent wrong answer. The
+        # live provider (fast or not) applies the spec. D1 carve-out: sticky hooks
+        # the selection-do() plan attached are engine-owned residue of an edit
+        # already applied to the saved values; their inertness on a new-input run
+        # is the PendingValueEditsWarning disclosure below, never a refusal.
         staged_user_hooks, staged_value_specs = _staged_user_entries(trace)
-        # The guarded fast LIVE engine applies the staged spec at real
-        # module boundaries (``_fast_live_steer``), so the gate's reason
-        # does not hold there; loaded providers and the ordinary live
-        # provider still never install it and keep refusing.
-        fast_live_applies_spec = fast and loaded_provider not in {
-            RunProvider.LOADED_SPARSE,
-            RunProvider.LOADED_ANALYSIS,
-        }
-        if (staged_user_hooks or staged_value_specs) and not fast_live_applies_spec:
-            staged_hooks = len(staged_user_hooks)
-            staged_values = len(staged_value_specs)
+        loaded_run = loaded_provider in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
+        if (staged_user_hooks or staged_value_specs) and loaded_run:
             raise EngineDispatchError(
-                "run(inputs=...) is a fresh verified execution and does NOT "
-                "apply this trace's staged intervention spec "
-                f"({staged_hooks} sticky hook(s), {staged_values} value "
-                "replacement(s) staged); running would silently return an "
-                "un-intervened result. To run WITH the intervention, use "
-                "the legacy intervened rerun trace.run(model, x) or capture "
-                "fresh with tl.trace(model, x, intervene=...); to run "
-                "WITHOUT it, detach the staged spec first "
-                "(trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
+                "run(inputs=...) on a loaded artifact cannot apply this trace's "
+                f"staged intervention spec ({len(staged_user_hooks)} sticky hook(s), "
+                f"{len(staged_value_specs)} value replacement(s) staged); running "
+                "would silently return an un-intervened result. Run the live trace "
+                "(trace.run(inputs=...) applies the spec there) or capture fresh with "
+                "tl.trace(model, x, intervene=...); to run without it, detach the "
+                "staged spec first (trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
                 code="run_staged_spec_unapplied",
-                remedy="apply the spec via run(model, x) / tl.trace(..., "
-                "intervene=...), or detach the staged hooks before "
-                "run(inputs=...)",
+                remedy="run the live trace or tl.trace(..., intervene=...), or detach "
+                "the staged hooks before run(inputs=...) on the loaded artifact",
             )
         if inputs is not MISSING:
             if model is not None or x is not None:
@@ -611,20 +565,16 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             staged_spec = trace._intervention_spec
         except AttributeError:
             staged_spec = None
+        # The live provider applies the staged spec (fast or not); a previous
+        # live run's own RERUN_PROPAGATED trail is a fresh execution, not a
+        # value edit (repeated training steps through run(inputs=...)).
         _warn_pending_value_edits_on_new_input_run(
             trace,
-            staged_spec_applies=bool(fast)
-            and loaded_provider not in {RunProvider.LOADED_SPARSE, RunProvider.LOADED_ANALYSIS}
-            and (
-                bool(
-                    getattr(staged_spec, "hook_specs", ())
-                    or getattr(staged_spec, "target_value_specs", ())
-                )
-                # A previous fast run's own RERUN_PROPAGATED trail is a
-                # fresh execution, not a value edit (repeated training
-                # steps through run(inputs=..., fast=True)).
-                or (getattr(trace, "last_run", None) or {}).get("engine") == "guarded_fast"
-            ),
+            staged_spec_applies=bool(
+                getattr(staged_spec, "hook_specs", ())
+                or getattr(staged_spec, "target_value_specs", ())
+            )
+            or (getattr(trace, "last_run", None) or {}).get("engine") in {"guarded_fast", "live"},
         )
         source_ref = trace._source_model_ref
         live_model = source_ref() if source_ref is not None else None
@@ -637,16 +587,20 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 refuse_unfired_fast_run(fast_result.trace)
             return fast_result
 
-        return _apply_run_save_selection(
-            run_live_trace(
-                trace,
-                run_inputs,
-                seed=seed,
-                on_divergence=on_divergence,
-                options=_LiveRunOptions(carry_state=carry_state, until=until),
-            ),
-            run_save_labels,
+        # The staged spec (sticky hooks, value replacements) applies on the live
+        # forward; the fork carries the fire receipts and zero-fire facts. The
+        # planner is reached through importlib: it is a leaf over the rerun engine.
+        run_staged = importlib.import_module("torchlens.intervention._run_staged")
+        live_options = _LiveRunOptions(
+            carry_state=carry_state,
+            until=until,
+            staged_plan=run_staged.build_staged_run_plan(trace),
         )
+        with zero_fire_policy_scope(zero_fire_policy):
+            live_result = run_live_trace(
+                trace, run_inputs, seed=seed, on_divergence=on_divergence, options=live_options
+            )
+        return _apply_run_save_selection(live_result, run_save_labels)
 
     if fast:
         raise KeywordConflictError(

@@ -49,12 +49,7 @@ def main() -> None:
     clean_relu = clean.find_sites(tl.func("relu")).first().out
 
     patched = corrupted.fork("patched")
-    patched.do(
-        tl.func("relu"),
-        clean_relu,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
-    )
-    patched.push()
+    patched.do(tl.func("relu"), clean_relu)
 
     clean_out = clean.output_ops[-1].out
     corrupted_out = corrupted.output_ops[-1].out
