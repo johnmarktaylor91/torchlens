@@ -69,7 +69,7 @@ def _op(trace: Any, layer_type: str, pass_number: int) -> Any:
 def _output_parent_passes(trace: Any) -> list[int]:
     """Pass number of the op feeding each output layer, in output order."""
 
-    return [trace[trace[label].parents[0]].pass_number for label in trace.output_layers]
+    return [trace.ops[trace.ops[label].parents[0]].pass_number for label in trace.output_layers]
 
 
 def test_three_pass_recording_cooks_like_trace() -> None:
