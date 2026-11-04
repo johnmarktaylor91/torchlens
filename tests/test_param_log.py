@@ -152,7 +152,7 @@ class TestParamAccessorMH:
         mh = trace_fn(_make_simple_model(), _simple_input())
         r = repr(mh.params)
         assert "\n" not in r
-        assert "ParamAccessor(" in r and "params" in r
+        assert r == f"ParamAccessor: {len(mh.params)} params"
         assert "0.weight" in str(mh.params)
 
 

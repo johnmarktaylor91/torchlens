@@ -217,13 +217,13 @@ shared honesty chokepoint, and the footer's five subjects (Params /
 Compute / Memory / Graph / Capture) carry coverage, both payload scopes
 (`at capture` vs `retained now`), and the health verdict.
 
-The Params footer also carries the parameter storage (`size 5.6 KB`); on
+The Params footer also carries the parameter storage (`size 5.42 KiB`); on
 a model pruned with `torch.nn.utils.prune` it names the pruned tensors
 with raw and effective nonzero counts (`pruned: 3,016 effective nonzero
 of 3,124 raw (108 masked in conv.weight)`); and when the capture was
 given an optimizer (`tl.trace(model, x,
 capture=tl.options.CaptureOptions(optimizer=opt))`) it adds
-`optimizer state N params, X KB`, read from the optimizer's live state
+`optimizer state N params, X KiB`, read from the optimizer's live state
 (zero before the first `step()`).
 
 ## Performance

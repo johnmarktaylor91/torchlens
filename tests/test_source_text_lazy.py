@@ -28,7 +28,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._site_key import operation_witness
-from torchlens._data_classes.func_call_location import display_frame
+from torchlens._data_classes.func_call_location import display_frame, short_source_path
 
 _TOY_SOURCE = textwrap.dedent(
     """
@@ -133,7 +133,7 @@ def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
     assert shown.line_number == _line_of(path, "y = self.linear(x)")
     card = str(linear)
     assert "  module    linear" in card
-    assert f"  source    {path.name}:{shown.line_number} in " in card
+    assert f"  source    {short_source_path(str(path))}:{shown.line_number} in " in card
     assert "  code      y = self.linear(x)" in card
 
 

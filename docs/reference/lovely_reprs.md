@@ -44,8 +44,9 @@ Op relu_1: float32 [8] on cpu, min 0.000 max 0.5000 mean 0.1429 sd 0.1821
 ```
 
 The card behind it (`print(op)`) adds `position`, `module`, `output`,
-`values`, `graph`, `function`, and `source` rows, then the `more` exits.
-The source row is a captured location, not a read of the current file.
+`values`, `graph`, `function`, `source`, and `code` rows, then the `more` exits.
+The source row is a captured location. The code row reads fingerprint-checked
+source text, or names a changed or missing source file.
 Counts in card rows are exact and byte quantities use IEC units (`60.0 KiB`).
 Durations use compact units (`4.02 ms`); `Flops` and `Macs` keep their spelling.
 
@@ -61,7 +62,7 @@ and Unicode equivalence contract.
 `(freed)`, `(disk-backed: metadata only until read)`,
 `(preview backend: shape/dtype only)`, and `(edited)` retain their meanings.
 Value words preserve nonfinite counts, magnitude-based complex statistics,
-and `~` for sampled moments.
+and `(~sampled)` even when sampled moments no longer fit.
 
 A saved CPU activation below the existing sampling gate is summarized once
 and cached by tensor version. Live parameters, device tensors, and larger

@@ -49,7 +49,8 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     assert f"at least {trace._num_layers_with_params} parameter operations" in text
     assert f"at least {trace.num_params} params total" in text
     assert "lower bound" in text
-    assert "Capture verified: NO (escape_rescue_unrecovered)" in text
+    assert "  capture   unverified: escape_rescue_unrecovered" in text
+    assert ", (capture unverified" not in text
 
 
 def test_the_named_option_records_every_op_and_drops_the_hint() -> None:

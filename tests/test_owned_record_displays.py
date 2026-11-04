@@ -99,6 +99,7 @@ def test_trace_flops_row_uses_only_existing_aggregation(trace):
     _FACTCORE_CACHE.pop(id(trace), None)
     assert "  flops " not in str(trace)
     assert id(trace) not in _FACTCORE_CACHE
+    assert "2 submodules, 20 params in 2 tensors" in str(trace)
     aggregation = trace.factcore.compute
     assert f"  flops     {aggregation.partition_total} forward, {aggregation.macs_total}" in str(
         trace

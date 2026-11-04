@@ -216,7 +216,10 @@ def test_graph_count_names_output_descendants(captured) -> None:
 def test_sampled_disclosure_survives_every_width_rung() -> None:
     """Approximate evidence stays visible when optional statistics no longer fit."""
 
-    stats = replace(tensor_stats(torch.tensor([-1.0, 2.0])), policy="sampled")
+    stats = replace(
+        tensor_stats(torch.tensor([-1.0, 2.0])),
+        mean_evidence=FamilyEvidence("sampled", population=100, sample_size=2),
+    )
     for width in (1, 20, 35):
         line = value_line(f"Op {'x' * width}", "float32 [1, 5, 3072] on cpu", stats)
         assert "(~sampled)" in line

@@ -252,10 +252,10 @@ def _identity(trace: Any) -> str:
     health = _health_text(trace)
     progress = "(capture in progress)" if not trace._tracing_finished else ""
     # Drop optional metadata in order, keeping every honesty marker visible.
-    required = [progress, states, health]
     counts = _count_facts(trace)
     for optional in ([model, *counts], counts, []):
-        line = one_line(identity, [*optional, *required])
+        details = " ".join(part for part in (", ".join(optional), progress, states) if part)
+        line = one_line(identity, [details, health])
         if len(line) <= REPR_COLS or not optional:
             return line
     return identity
@@ -306,6 +306,7 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
             f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
         ),
     ]
+    rows.extend(_coverage_rows(trace))
     cached = _FACTCORE_CACHE.get(id(trace))
     if cached is not None and cached[0]() is trace:
         aggregation = cached[1].compute
@@ -328,6 +329,35 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
                 f"unverified: {trace._provenance_verification_reason or 'reason unavailable'}; counts are lower bounds",
             ),
         )
+        rows.insert(1, ("bounds", _lower_bounds(trace)))
+    return rows
+
+
+def _lower_bounds(trace: Any) -> str:
+    """Unverified capture counts remain explicit lower bounds in the card."""
+
+    return (
+        f"at least {plural(len(trace), 'total tensor')}, "
+        f"at least {plural(trace._num_layers_with_params, 'parameter operation')}, "
+        f"at least {plural(trace.num_params, 'param')} total"
+    )
+
+
+def _coverage_rows(trace: Any) -> list[tuple[str, str]]:
+    """Disclose disk storage and settled coverage gaps without reading payloads."""
+
+    disk = sum(
+        op._slot("out_ref") is not None and op._slot("out") is None for op in trace._layer_list
+    )
+    rows = [("storage", f"{plural(disk, 'disk-backed output')}, not materialized")] if disk else []
+    payload = getattr(trace, "annotations", {}).get("health_facts")
+    if payload is not None:
+        revision = capture_fingerprint(trace)
+        facts = _parse_persisted(payload, revision)
+        if facts.capture_revision == revision and facts.num_unexamined_ops:
+            rows.append(
+                ("coverage", f"{plural(facts.num_unexamined_ops, 'output')} could not be examined")
+            )
     return rows
 
 

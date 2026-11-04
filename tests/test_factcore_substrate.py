@@ -186,5 +186,5 @@ def test_scope_label_on_payload_stripped_artifact(tmp_path) -> None:
     # Rebuilt default footer: the Memory subject carries BOTH payload scopes.
     footer = [line for line in loaded.summary().splitlines() if line.startswith("Memory")]
     assert footer and "retained now" in footer[0] and "at capture" in footer[0]
-    health = [line for line in loaded.summary().splitlines() if "health" in line.lower()]
-    assert health and "NOT-CHECKED" in health[0]
+    health = [line for line in loaded.summary().splitlines() if line.startswith("Capture")]
+    assert health and "NaN/Inf not checked" in health[0]

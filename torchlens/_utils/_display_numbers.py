@@ -78,8 +78,10 @@ def format_duration(seconds: float) -> str:
         return "0 s"
     magnitude = abs(seconds)
     for unit, scale in _DURATION_UNITS:
-        if magnitude >= scale * 0.9995 or unit == "ns":
-            rounded = float(f"{seconds / scale:.3g}")
+        # One adjacent float keeps unit conversion from missing an exact halfway value.
+        if magnitude >= math.nextafter(scale * 0.9995, 0.0) or unit == "ns":
+            scaled = math.nextafter(seconds / scale, math.copysign(math.inf, seconds))
+            rounded = float(f"{scaled:.3g}")
             return f"{format_sig(rounded, 3)} {unit}"
     return f"{seconds:.3g} s"
 
