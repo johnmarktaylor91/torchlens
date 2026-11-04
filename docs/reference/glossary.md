@@ -4277,7 +4277,7 @@ describe each surface in depth.
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
 | `Recording.by_pass` | Map from pass index to indexes of the retained records captured in that pass |
-| `Recording.do` | Cook through `to_trace()` and run `Trace.do` on a fork of the cooked trace: the edited, replayed Trace, with no in-place mutation warning; `recording.do(hooks_or_site, edit, /, *, model=None, inputs=None, intervention=None, loss=None)`, with the site and edit positional-only as on `Trace.do` |
+| `Recording.do` | Cook through `to_trace()` and run `Trace.do` on a fork of the cooked trace: the edited, replayed Trace, with no in-place mutation warning; `recording.do(site, edit, /, *, model=None, inputs=None, intervention=None, loss=None)`, with the site and edit positional-only as on `Trace.do` |
 | `Recording.end_times` | Per-pass end timestamps of the recording |
 | `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
 | `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |
@@ -5049,7 +5049,7 @@ alphabetical order.
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
 | `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); with nothing captured, run the output detectors over the retained output tensors and raise if none is retained or no detector resolves a style |
-| `Trace.do` | `trace.do(hooks_or_site, edit, /, *, model=None, inputs=None, intervention=None, loss=None)`: apply an intervention and replay, rerun or set it; the site (a selector-like site, or a mapping or list batch of `(site, edit)` pairs) and the edit (the value, hook or helper applied there, omitted for a batch) are positional-only |
+| `Trace.do` | `trace.do(site, edit, /, *, model=None, inputs=None, intervention=None, loss=None)`: apply an intervention and replay, rerun or set it; the site (a selector-like site, or a mapping or list batch of `(site, edit)` pairs) and the edit (the value, hook or helper applied there, omitted for a batch) are positional-only |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
 | `Trace.find_nan` | Return the first NaN or Inf found among saved outputs in execution order |

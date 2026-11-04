@@ -37,8 +37,8 @@ def _kinds(function: object) -> dict[str, inspect._ParameterKind]:
 @pytest.mark.parametrize(
     ("function", "positional"),
     [
-        (Trace.do, ("hooks_or_site", "edit")),
-        (Recording.do, ("hooks_or_site", "edit")),
+        (Trace.do, ("site", "edit")),
+        (Recording.do, ("site", "edit")),
         (Layer.do, ("edit",)),
         (Op.do, ("edit",)),
         (Trace.run, ("model", "x")),

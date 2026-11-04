@@ -344,7 +344,7 @@ def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
     assert loaded._runnable.callables_by_call_id is None
     with pytest.raises(ReattachError) as captured:
-        loaded.run(torch.ones(1, 3))
+        loaded.run_transaction(inputs=torch.ones(1, 3))
     assert captured.value.fields["readiness"] is loaded.readiness
     assert captured.value.fields["diagnostics"] == loaded.readiness.diagnostics
 
