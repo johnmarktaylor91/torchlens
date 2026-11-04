@@ -262,9 +262,7 @@ def _label_for_reference_removal(log_entry: Op, pass_finished: bool) -> str:
 
 
 def _map_removed_label(
-    label: str,
-    labels_to_remove: set[str],
-    replacements: dict[str, str] | None,
+    label: str, labels_to_remove: set[str], replacements: dict[str, str] | None
 ) -> str | None:
     """Return the surviving label for one reference, or ``None`` to drop it.
 
@@ -756,6 +754,7 @@ def _scrub_template(template: Any, labels_to_remove: set[str]) -> Any:
     """
 
     def names_removed(leaf: Any) -> bool:
+        """Return whether ``leaf`` is a ``ParentRef`` to a removed parent."""
         return isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove
 
     if template_has_leaf(template, names_removed):
@@ -767,6 +766,7 @@ def _replace_removed_parent_refs(value: Any, labels_to_remove: set[str]) -> Any:
     """Return ``value`` rebuilt with refs to removed parents as unsupported leaves."""
 
     def replace_leaf(leaf: Any) -> Any:
+        """Return an ``Unsupported`` leaf for a removed-parent ``ParentRef``, else ``leaf``."""
         if isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove:
             return Unsupported(reason="removed_parent_ref", value_type="ParentRef")
         return leaf
