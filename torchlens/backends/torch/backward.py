@@ -82,6 +82,7 @@ from ._fire_timing import (
 from ._grad_fn_graph import _sync_grad_fn_graph_relations
 from ._grad_fn_growth import (
     _commit_grad_fn_growth,
+    _fold_created_records,
     _grad_fn_record_from_discovery,
     _GradFnGrowth,
     _layer_grad_fn_ids,
@@ -1235,9 +1236,7 @@ def _fold_backward_projection_tail(
         trace, state, new_pass_indices, pass_to_calls, trace._backward_pass_logs
     )
     _refresh_backward_pass_counters(trace, state)
-    new_calls = [call for calls in pass_to_calls.values() for call in calls]
-    new_passes = [trace._backward_pass_logs[pass_index] for pass_index in new_pass_indices]
-    return list(growth.records.values()), new_calls, new_passes
+    return _fold_created_records(trace, growth, pass_to_calls, new_pass_indices)
 
 
 def _fold_fired_events(

@@ -362,3 +362,16 @@ def _commit_grad_fn_growth(trace: Any, state: Any, growth: _GradFnGrowth) -> Non
     state.membership_sweeps.update(growth.membership_sweeps)
     _rename_appended_labels(grad_fn_logs, list(growth.records), renames, state.label_to_id)
     _extend_grad_fn_graph_relations(grad_fn_logs, list(growth.records), state.label_to_id)
+
+
+def _fold_created_records(
+    trace: Any,
+    growth: _GradFnGrowth,
+    pass_to_calls: dict[int, list[Any]],
+    new_pass_indices: list[int],
+) -> tuple[list[Any], ...]:
+    """Return the grad-fn, call and pass records one tail fold created."""
+
+    new_calls = [call for calls in pass_to_calls.values() for call in calls]
+    new_passes = [trace._backward_pass_logs[pass_index] for pass_index in new_pass_indices]
+    return list(growth.records.values()), new_calls, new_passes
