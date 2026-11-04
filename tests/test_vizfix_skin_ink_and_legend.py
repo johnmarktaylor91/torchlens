@@ -315,6 +315,8 @@ def test_key_lists_only_the_roles_drawn() -> None:
 
     theme = THEME_PRESETS["torchlens"]
     plain_only = drawn_legend_roles([{"shape": "oval", "fillcolor": "white"}], theme)
+    # The default skin fills tests and buffers white too; a white oval is still only a plain op.
+    assert plain_only == frozenset({"plain op"})
     assert key_swatches(theme, plain_only, has_module=False) == ()
     assert key_swatches(theme, frozenset(), has_module=False) == ()
 
