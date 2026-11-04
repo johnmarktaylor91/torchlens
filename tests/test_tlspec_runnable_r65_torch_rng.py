@@ -286,21 +286,20 @@ def test_initial_seed_profile_keeps_capture_seed() -> None:
 
 def test_get_rng_state_branch_on_bytes_never_verified(tmp_path: Path) -> None:
     """Z-a structural coverage pin: state-byte control flow rides the escape belt."""
-    # The engine-state tensor has no graph/source provenance and steers the branch
-    # through a pruned ``getitem``: the capture discloses it (source_provenance).
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = _capture(_GetStateBranch(), torch.tensor([2.0]), seed=1)
+    # ``get_rng_state`` records as a source op, so the state tensor has provenance (the
+    # suite's warning filter would turn a "no graph/source provenance" warning into an
+    # error); the branch on its bytes still rides the escape belt.
+    trace = _capture(_GetStateBranch(), torch.tensor([2.0]), seed=1)
     descriptor = build_sparse_run_descriptor(trace)
     assert descriptor.witness_completeness is WitnessCompleteness.INCOMPLETE_SCALAR_ESCAPE
     for run_seed in (1, 9):
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
-            result = _roundtrip_run(
-                _GetStateBranch(),
-                torch.tensor([2.0]),
-                capture_seed=1,
-                run_seed=run_seed,
-                tmp=tmp_path,
-            )
+        result = _roundtrip_run(
+            _GetStateBranch(),
+            torch.tensor([2.0]),
+            capture_seed=1,
+            run_seed=run_seed,
+            tmp=tmp_path,
+        )
         assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 

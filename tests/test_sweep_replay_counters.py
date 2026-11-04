@@ -92,9 +92,20 @@ def _counting(fn: Any) -> Counter[str]:
     return counts
 
 
-def test_one_head_replay_builds_each_structural_index_once(pair: Any) -> None:
-    """fork + head patch + replay: one label index, one label map, one call grouping."""
+def test_one_head_replay_builds_each_structural_index_once(
+    pair: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """fork + head patch + replay: one label index, one label map, one call grouping.
 
+    Pinned on the private path (sharing across forks turned off): a clean fork
+    that reuses its parent's shared indexes builds none, which
+    ``tests/test_fork_shared_label_index.py`` pins.
+    """
+
+    from torchlens._trace_core import label_cells
+
+    monkeypatch.setattr(label_cells, "shared_entry", lambda ops: None)
+    monkeypatch.setattr(_replay_cone, "shared_entry", lambda ops: None)
     _, _, _, france, italy = pair
     _patched_logits(italy, france, 0, 0)  # first use settles lazy imports and caches
     counts = _counting(lambda: _patched_logits(italy, france, 1, 1))

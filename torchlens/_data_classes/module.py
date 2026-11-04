@@ -955,9 +955,9 @@ class ModuleCall:
 
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from .._semantic.facets import FacetView
+            from .._semantic import _call_subject, facets
 
-            cache = FacetView(self)
+            cache = facets.FacetView(_call_subject.call_subject(self))
             self.__dict__["_facets_cache"] = cache
         return cache
 
@@ -2173,14 +2173,14 @@ class Module(_ModuleRouting):
             return None
         return f"{self.forward_source_file}:{self.forward_source_line}"
 
-    def _single_call_or_error(self) -> ModuleCall:
+    def _single_call_or_error(self, remedy: str | None = None) -> ModuleCall:
         """Return the only ModuleCall or raise for multi-call modules."""
 
         if self.num_calls != 1 or len(self.ops) != 1:
             raise InvalidArgumentError(
                 f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]",
                 code="module_call_ambiguous",
-                remedy="access one call via module.calls[N]",
+                remedy=remedy or "access one call via module.calls[N]",
                 address=self.address,
                 num_calls=self.num_calls,
             )

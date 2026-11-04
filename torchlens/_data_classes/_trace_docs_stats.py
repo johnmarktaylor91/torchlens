@@ -306,7 +306,8 @@ DOCS: dict[str, str] = {
         
         A module called more than once has no module-level facet view: it is
         skipped when no facet recipe for its class declares ``name``, and refused
-        (``InvalidArgumentError``, code ``module_call_ambiguous``) when one does.
+        (``InvalidArgumentError``, code ``module_call_ambiguous``) when one does;
+        the refusal's remedy names the per-call views, ``module.calls[N].facets``.
         
         Parameters
         ----------
