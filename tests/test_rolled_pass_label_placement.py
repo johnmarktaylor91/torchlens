@@ -162,18 +162,25 @@ def test_chooser_leaves_graphs_without_pass_labels_alone() -> None:
     assert choose_pass_label_placements(labelled, "not json") == labelled
 
 
-def test_dot_source_is_still_written_without_a_graphviz_binary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("failure", ["layout error", "no binary"])
+def test_a_failed_placement_layout_leaves_the_labels_unplaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
-    """``file_format="dot"`` never needed Graphviz; the placement pass keeps it that way."""
+    """If the extra ``-Tjson`` layout fails, the drawing keeps its labels, unplaced."""
 
     from torchlens._visualization import _render_utils
     from torchlens.errors import GraphvizUnavailableError
 
-    def missing(cmd: list[str], **_: object) -> None:
-        raise GraphvizUnavailableError("no dot", executable=cmd[0])
+    real = _render_utils.run_bounded_subprocess
 
-    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", missing)
+    def failing_json(cmd: list[str], **kwargs: object) -> object:
+        if "-Tjson" not in cmd:
+            return real(cmd, **kwargs)  # type: ignore[arg-type]
+        if failure == "no binary":
+            raise GraphvizUnavailableError("no dot", executable=cmd[0])
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", failing_json)
     dot = _rolled_dot("bottomup", tmp_path)
     arc = _edge(dot, "linear_2_6", "linear_1_4")
     assert (_label(arc, "taillabel"), _label(arc, "headlabel")) == ("Out 1", "In 2")
