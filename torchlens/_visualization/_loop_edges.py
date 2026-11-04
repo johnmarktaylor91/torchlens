@@ -23,12 +23,13 @@ _LOOP_PORTS: dict[str, tuple[str, str]] = {
 }
 # back edge between two body nodes: both ends on the same flank, so dot bows the
 # return out and around instead of cutting diagonally across the body's corner
-# (compared ne/se, e/se, ne/e and e/e on the README toy, 3 Nov 2026: only e/e arcs)
+# (compared ne/se, e/se, ne/e and e/e on the README toy, 3 Nov 2026: only e/e arcs;
+# sideways, n/n hooked both ends up while the curve still ran under relu, s/s hangs a clean U)
 _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
     "BT": ("e", "e"),
     "TB": ("e", "e"),
-    "LR": ("n", "n"),
-    "RL": ("n", "n"),
+    "LR": ("s", "s"),
+    "RL": ("s", "s"),
 }
 
 

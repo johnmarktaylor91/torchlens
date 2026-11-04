@@ -70,8 +70,8 @@ def test_loop_edge_attrs_distinguish_self_loop_back_edge_and_plain_edge() -> Non
         "constraint": "false",
     }
     assert loop_edge_attrs(False, True, "LR") == {
-        "tailport": "n",
-        "headport": "n",
+        "tailport": "s",
+        "headport": "s",
         "constraint": "false",
     }
     assert loop_edge_attrs(False, False, "BT") == {}
@@ -123,3 +123,11 @@ def test_branch_edge_label_is_padded_clear_of_its_edge() -> None:
             ), if_edge
             (then_edge,) = _edge_lines(_dot(rolled, direction), "input_1", "neg_")
             assert "<u>THEN</u></b></FONT></TD>" + pad in then_edge, then_edge
+
+
+def test_rolled_back_edge_sideways_leaves_and_enters_from_below() -> None:
+    """Left-to-right, the return arc hangs under the body (south ports); top ports made dot
+    route the curve under relu anyway while hooking both ends upward."""
+    (back,) = _edge_lines(_dot(rolled=True, direction="leftright"), "relu_", "linear_")
+    assert "tailport=s" in back and "headport=s" in back, back
+    assert "constraint=false" in back or 'constraint="false"' in back, back
