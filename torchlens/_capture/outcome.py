@@ -153,6 +153,15 @@ _TORCH_OPS_PASSTHROUGH_FILE = "_torch_ops_calls.py"
 _TORCH_OPS_PASSTHROUGH_MARKER = "return original(self, *args, **kwargs)"
 # Its in-place replay callable for a receiver-mutating operator (``mutates_args``).
 _TORCH_OPS_MUTATION_MARKER = "call_operator(*args, **kwargs)"
+# The module-forward wrappers' calls into the user's ``nn.Module.forward``
+# (recorded, predicate-scoped and unrecorded pass-through arms, and the
+# prehook-provenance shim): a library layer raising inside that forward (a
+# BatchNorm rank check) is the user's module failing, not TorchLens.
+_MODULE_FORWARD_PASSTHROUGHS = (
+    ("model_prep.py", "orig_forward(*args, **kwargs)"),
+    ("_predicate_forward.py", "orig_forward(*args, **kwargs)"),
+    ("prehook_provenance.py", "prior_forward(*args, **kwargs)"),
+)
 
 
 def _frame_zone(filename: str) -> str:
@@ -197,9 +206,10 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     A :class:`~torchlens.errors.TraceCaptureError` classifies as its ``__cause__``. Walks the
     traceback from the innermost frame outward; the innermost attributable frame wins: user
     code -> USER_OP; a torchlens frame -> TORCHLENS, except the wrapper trampoline, the
-    completeness-witness redispatch and the declined-protocol re-offer (each executing the
-    user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing attributable
-    -> UNKNOWN. Misclassification is capability-safe by construction -- origin never steers a gate.
+    completeness-witness redispatch, the declined-protocol re-offer and the module-forward
+    pass-throughs (each executing the user's op or forward) -> USER_OP. Interrupts classify
+    INTERRUPT; no traceback or nothing attributable -> UNKNOWN. Misclassification is
+    capability-safe by construction -- origin never steers a gate.
     """
 
     exc = original_exception(exc)
@@ -230,27 +240,27 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
         if zone == "user":
             return FailureOrigin.USER_OP
         if zone == "torchlens":
-            line = frame.line or ""
-            if (
-                _TRAMPOLINE_SOURCE_MARKER in line
-                or (
-                    frame.filename.endswith(_WITNESS_REDISPATCH_FILE)
-                    and _WITNESS_REDISPATCH_MARKER in line
-                )
-                or (
-                    frame.filename.endswith(_PROTOCOL_REDISPATCH_FILE)
-                    and _PROTOCOL_REDISPATCH_MARKER in line
-                )
-                or (
-                    frame.filename.endswith(_TORCH_OPS_PASSTHROUGH_FILE)
-                    and (
-                        _TORCH_OPS_PASSTHROUGH_MARKER in line or _TORCH_OPS_MUTATION_MARKER in line
-                    )
-                )
-            ):
+            if _executes_user_code(frame.filename, frame.line or ""):
                 return FailureOrigin.USER_OP
             return FailureOrigin.TORCHLENS
     return FailureOrigin.UNKNOWN
+
+
+def _executes_user_code(filename: str, line: str) -> bool:
+    """Return whether a torchlens frame is a pass-through running the user's op or forward."""
+
+    if _TRAMPOLINE_SOURCE_MARKER in line:
+        return True
+    if filename.endswith(_WITNESS_REDISPATCH_FILE):
+        return _WITNESS_REDISPATCH_MARKER in line
+    if filename.endswith(_PROTOCOL_REDISPATCH_FILE):
+        return _PROTOCOL_REDISPATCH_MARKER in line
+    if filename.endswith(_TORCH_OPS_PASSTHROUGH_FILE):
+        return _TORCH_OPS_PASSTHROUGH_MARKER in line or _TORCH_OPS_MUTATION_MARKER in line
+    return any(
+        filename.endswith(suffix) and marker in line
+        for suffix, marker in _MODULE_FORWARD_PASSTHROUGHS
+    )
 
 
 # ---------------------------------------------------------------------------
