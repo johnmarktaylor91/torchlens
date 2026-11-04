@@ -153,7 +153,7 @@ def test_template_rename_matches_reference(index: int) -> None:
     """Fast template rename returns the reference result, layouts kept by identity."""
 
     value = _corpus()[index]
-    got = _rename_template_parent_refs(value, _MAP)
+    got = _rename_template_parent_refs(value, _MAP, ParentRef)
     assert _same(got, _ref_rename_template(value, _MAP))
     for new, old in zip(_parent_refs(got), _parent_refs(value)):
         assert new._capture_layout is old._capture_layout

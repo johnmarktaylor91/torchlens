@@ -4,7 +4,9 @@ Split from ``labeling.py`` (step 9 and step 10 helpers). Each walk dispatches on
 the exact class before the ``isinstance`` ladder and reads dataclass field
 names from a per-call cache, so a template pays ``dataclasses.fields`` once per
 class rather than once per node. Node order, rebuilt types and results are those
-of the plain ladder: tuple, list, dict, then dataclass instance.
+of the plain ladder: tuple, list, dict, then dataclass instance. The caller passes
+the ``ParentRef`` class in, so this module imports nothing from ``intervention``
+and stays outside the package's import cycle.
 """
 
 from __future__ import annotations
@@ -14,7 +16,6 @@ from dataclasses import replace
 from typing import Any
 
 from .._data_classes._template_walk import dataclass_field_names
-from ..intervention.types import ParentRef
 
 #: Exact leaf classes that are never containers, dataclasses or callables.
 _ATOMIC_CLASSES = frozenset({int, float, bool, bytes, complex, type(None)})
@@ -27,13 +28,14 @@ _FieldCache = dict[type, Any]
 
 
 def _rename_template_parent_refs(
-    value: Any, mapping: dict[str, str], cache: _FieldCache | None = None
+    value: Any, mapping: dict[str, str], parent_ref_cls: type, cache: _FieldCache | None = None
 ) -> Any:
     """Rename ``ParentRef.parent_label`` leaves in replay templates.
 
     Args:
         value: Template or nested template component.
         mapping: Raw-to-final layer-label mapping.
+        parent_ref_cls: The ``ParentRef`` class.
         cache: Per-walk dataclass field-name cache (built when ``None``).
 
     Returns:
@@ -41,23 +43,28 @@ def _rename_template_parent_refs(
     """
 
     cls = value.__class__
-    if cls is ParentRef:
+    if cls is parent_ref_cls:
         # Exactly what ``replace`` builds for this two-field init-only class.
         label = value.parent_label
-        return ParentRef(mapping.get(label, label), value._capture_layout)
+        return parent_ref_cls(mapping.get(label, label), value._capture_layout)
     if cls is str or cls in _ATOMIC_CLASSES:
         return value
-    if isinstance(value, ParentRef):
+    if isinstance(value, parent_ref_cls):
         return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
     if cache is None:
         cache = {}
     if isinstance(value, tuple):
-        return tuple([_rename_template_parent_refs(item, mapping, cache) for item in value])
+        return tuple(
+            [_rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value]
+        )
     if isinstance(value, list):
-        return [_rename_template_parent_refs(item, mapping, cache) for item in value]
+        return [
+            _rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value
+        ]
     if isinstance(value, dict):
         return {
-            key: _rename_template_parent_refs(item, mapping, cache) for key, item in value.items()
+            key: _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
+            for key, item in value.items()
         }
     names = dataclass_field_names(value, cache)
     if names is None:
@@ -66,7 +73,7 @@ def _rename_template_parent_refs(
     for name in names:
         item = getattr(value, name, _ABSENT)
         if item is not _ABSENT:
-            updates[name] = _rename_template_parent_refs(item, mapping, cache)
+            updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
     return replace(value, **updates)
 
 
@@ -124,6 +131,7 @@ def _rename_replay_fields(
     mapping: dict[str, str],
     set_entry_field: Callable[[str, Any], None],
     cache: _FieldCache,
+    parent_ref_cls: type,
 ) -> None:
     """Rename labels in one Op's edge uses, replay templates and edit records.
 
@@ -132,6 +140,7 @@ def _rename_replay_fields(
         mapping: Raw-to-final layer-label mapping.
         set_entry_field: Writer for one renamed field of ``layer_entry``.
         cache: Dataclass field-name cache shared across the rename sweep.
+        parent_ref_cls: The ``ParentRef`` class.
     """
 
     edge_uses = getattr(layer_entry, "_edge_uses", None)
@@ -142,12 +151,14 @@ def _rename_replay_fields(
     args_template = getattr(layer_entry, "args_template", None)
     if args_template is not None:
         set_entry_field(
-            "args_template", _rename_template_parent_refs(args_template, mapping, cache)
+            "args_template",
+            _rename_template_parent_refs(args_template, mapping, parent_ref_cls, cache),
         )
     kwargs_template = getattr(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
         set_entry_field(
-            "kwargs_template", _rename_template_parent_refs(kwargs_template, mapping, cache)
+            "kwargs_template",
+            _rename_template_parent_refs(kwargs_template, mapping, parent_ref_cls, cache),
         )
     interventions = getattr(layer_entry, "edits", None)
     if interventions:

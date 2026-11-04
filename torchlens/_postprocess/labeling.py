@@ -28,6 +28,7 @@ from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
 from .._record_type import record_type
+from ..intervention.types import ParentRef
 from ._label_rename import _rename_label_dataclass, _rename_replay_fields
 from ._module_containment import _log_module_hierarchy_info_for_layer
 
@@ -603,8 +604,7 @@ def _replace_layer_names_for_layer_entry(
                 "conditional_else_children",
                 [layer_mapping[layer_label] for layer_label in conditional_else_children_value],
             )
-
-    _rename_replay_fields(layer_entry, mapping, set_entry_field, field_cache)
+    _rename_replay_fields(layer_entry, mapping, set_entry_field, field_cache, ParentRef)
 
 
 def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
