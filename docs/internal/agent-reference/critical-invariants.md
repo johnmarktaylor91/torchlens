@@ -122,7 +122,11 @@
     on (ruling: "(b) Declare per-output dependence per kernel in a table."; FlashAttention 4's
     log-sum-exp reads q and k, not v) and the perturbation check excuses exactly the
     declared-independent edges, every undeclared kernel, output and position staying strict
-    (`validation/_foreign_kernel_dependence.py`). An ordinary custom Function
+    (`validation/_foreign_kernel_dependence.py`). The same table declares native custom ops
+    recorded as sibling ops with no boundary (FlashAttention 2's
+    `flash_attn::_flash_attn_forward`, keyed on the operator its replay callable calls plus
+    its `func_name`: the log-sum-exp and dropout mask read q and k, the rng state none of q,
+    k, v; the attention output has no row). An ordinary custom Function
     (interior in torch) is captured op by op exactly as before. A round trip outside any
     Function is never collapsed into a boundary that hides ops: the export is journaled as a
     departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited

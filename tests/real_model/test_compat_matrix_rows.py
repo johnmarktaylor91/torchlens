@@ -27,9 +27,10 @@ measured on.
   wheels pin a torch release; skipped elsewhere with the reason. ``_flash_attn_forward`` is a
   torch custom op, so each attention call is four sibling ops of one call (attention output,
   log-sum-exp, dropout mask, rng state) with no boundary op and no foreign-kernel warning;
-  the capture is exact, and forward validation reports the unconsumed siblings' v edge as
-  insensitive (strict xfail: the kernel table's per-output dependence speaks only for
-  boundary ops recorded with a declared kernel's exit, and these native sibling ops have no row).
+  the capture is exact, and forward validation passes: the kernel table declares the custom
+  op's per-output dependence (the log-sum-exp and dropout mask read q and k, the rng state
+  none of q, k, v), so the unconsumed siblings' undeclared edges are excused and the
+  attention output's every edge is still tested.
 """
 
 from __future__ import annotations
@@ -521,24 +522,15 @@ def test_flash_attention_2_captures_exactly() -> None:
         assert disclosed == [], (grad_enabled, disclosed)
 
 
-_FA2_SIBLING_EDGE = (
-    "_flash_attn_forward returns (out, softmax_lse, S_dmask, rng_state) as four sibling ops of "
-    "one call; the log-sum-exp depends on q and k only and the rng state on nothing, so the "
-    "perturbation check reports a sibling's v edge (arg 2) as insensitive. A per-output or "
-    "per-call rule for multi-output calls is a validation-integrity decision; until it is "
-    "made this pins the failure (the same rule the FlashAttention 4 log-sum-exp waits on)."
-)
-
-
 @pytest.mark.cuda
 @pytest.mark.heavy
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA2_SIBLING_EDGE)
 def test_flash_attention_2_validates() -> None:
-    """Forward validation of a ``flash_attention_2`` Llama fails only on a sibling's v edge.
+    """Forward validation of a ``flash_attention_2`` Llama passes.
 
-    The capture is exact (``test_flash_attention_2_captures_exactly``); the perturbation
-    check names ``_flash_attn_forward`` and a v-projection parent. When a rule for that edge
-    lands this xfail must be dropped.
+    The capture is exact (``test_flash_attention_2_captures_exactly``). Each call's four
+    sibling ops carry q, k and v; the kernel table declares which of them each output reads
+    (``_foreign_data._KNOWN_NATIVE_CUSTOM_OPS``), so the log-sum-exp's and dropout mask's v
+    edge and the rng state's q, k, v edges are excused, and every other edge is tested.
     """
 
     from torchlens.validation import last_validation_failure

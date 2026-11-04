@@ -15,7 +15,15 @@ row, ``multi_output_index`` is missing, a perturbed parent sits at a keyword, a 
 unmapped position, a position outside the row's ``positions``, or any declared-dependent
 position. Output 0 of FlashAttention 4 has no row, so its every edge stays tested.
 
-Registered in ``exemptions.CUSTOM_EXEMPTION_CHECKS`` under ``autogradfunction``.
+A native custom op (``_foreign_data._KNOWN_NATIVE_CUSTOM_OPS``: FlashAttention 2's
+``flash_attn::_flash_attn_forward``) has no boundary op and its ``transform_config`` names no
+Function: TorchLens records it as one native op per output. It is identified by the operator
+its replay callable calls plus its recorded ``func_name``; the same projection then applies. A
+callable that is not a recorded ``torch.ops`` operator (including none, on a loaded bundle)
+stays strict.
+
+Registered in ``exemptions.CUSTOM_EXEMPTION_CHECKS`` under ``autogradfunction`` and
+``_flash_attn_forward``.
 """
 
 from __future__ import annotations
@@ -25,6 +33,8 @@ from typing import TYPE_CHECKING, Any
 from ..backends.torch._foreign_data import (
     OutputDependence,
     known_foreign_kernel_output_dependence,
+    known_native_custom_op_output_dependence,
+    recorded_custom_op_name,
 )
 
 if TYPE_CHECKING:
@@ -33,24 +43,35 @@ if TYPE_CHECKING:
 
 
 def declared_output_dependence(layer: Op) -> OutputDependence | None:
-    """Return the table row for this boundary op's output, or None when nothing is declared.
+    """Return the table row for this op's output, or None when nothing is declared.
 
     Parameters
     ----------
     layer:
-        An ``autogradfunction`` op record (one output of a Function boundary call).
+        An ``autogradfunction`` op record (one output of a Function boundary call) or a
+        native custom-op record (one output of a ``torch.ops`` call).
 
     Returns
     -------
     OutputDependence | None
         The declared row when the op's ``transform_config`` names a known kernel's module,
-        Function and exit and its ``multi_output_index`` has a row; otherwise None.
+        Function and exit, or its replay callable calls a known native custom op under the
+        declared ``func_name``, and its ``multi_output_index`` has a row; otherwise None.
     """
 
-    config = getattr(layer, "transform_config", None)
     output_index = getattr(layer, "multi_output_index", None)
-    if not isinstance(config, dict) or not isinstance(output_index, int):
+    if not isinstance(output_index, int):
         return None
+    config = getattr(layer, "transform_config", None)
+    if isinstance(config, dict) and "function_module" in config:
+        return _boundary_dependence(config, output_index)
+    # A native op's ``transform_config`` names no Function (annotations at most).
+    return _native_dependence(layer, output_index)
+
+
+def _boundary_dependence(config: dict[str, Any], output_index: int) -> OutputDependence | None:
+    """Return the known-kernel row for a boundary op's ``transform_config``, if declared."""
+
     module = config.get("function_module")
     function = config.get("function")
     exits = config.get("exits")
@@ -59,6 +80,16 @@ def declared_output_dependence(layer: Op) -> OutputDependence | None:
     if not isinstance(exits, (list, tuple)):
         return None
     return known_foreign_kernel_output_dependence(module, function, output_index, exits)
+
+
+def _native_dependence(layer: Op, output_index: int) -> OutputDependence | None:
+    """Return the native custom-op row for an op whose replay calls a known operator."""
+
+    qualified_name = recorded_custom_op_name(getattr(layer, "func", None))
+    func_name = getattr(layer, "func_name", None)
+    if qualified_name is None or not isinstance(func_name, str):
+        return None
+    return known_native_custom_op_output_dependence(qualified_name, func_name, output_index)
 
 
 def _positions_of(layer: Op, label: str) -> list[Any] | None:
@@ -80,7 +111,7 @@ def check_foreign_kernel_dependence_exempt(
     source_trace:
         Trace being validated (unused; custom-check signature).
     layer:
-        ``autogradfunction`` op record being perturbation-checked.
+        ``autogradfunction`` or native custom-op record being perturbation-checked.
     layers_to_perturb:
         Parent labels selected for perturbation.
 

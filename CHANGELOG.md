@@ -5,6 +5,16 @@
 
 ### Fixed
 
+- **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
+  `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes
+  `tl.validate(scope="forward")`. Each attention call is four native sibling ops that all
+  carry q, k and v; the known-kernel table now also declares native custom ops (ruling: "(b)
+  Declare per-output dependence per kernel in a table."): the log-sum-exp and the dropout
+  mask depend on q and k, the rng state on none of q, k and v, so the perturbation check
+  excuses exactly those edges. Before, validation failed on a sibling's v edge. The attention
+  output has no row and stays fully tested; the same operator name in another namespace, a
+  parent at another position or a keyword stays strict.
+
 - **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
   read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
   or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
