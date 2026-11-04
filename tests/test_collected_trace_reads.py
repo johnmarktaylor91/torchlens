@@ -68,7 +68,7 @@ def _assert_value_or_typed_refusal(view: Any, name: str, trace_ref: weakref.ref)
     except RecordBindingError as exc:
         assert trace_ref() is None, f"{name} refused while its Trace is alive"
         assert exc.fields["code"] == "trace_reference_collected", name
-        assert exc.fields["remedy"], name
+        assert "variable" in exc.fields["remedy"], name
     else:
         assert value is not None, f"{name} read None"
 
@@ -93,7 +93,7 @@ def test_chained_output_op_out_is_the_output_or_refuses_typed() -> None:
         out = tl.trace(model, x).output_ops[0].out
     except RecordBindingError as exc:
         assert exc.fields["code"] == "trace_reference_collected"
-        assert exc.fields["remedy"]
+        assert "variable" in exc.fields["remedy"]  # names the fix: keep the Trace in a variable
     else:
         assert out is not None, "a chained temporary read None from Op.out"
         assert torch.equal(out, model(x))
@@ -107,7 +107,7 @@ def test_chained_receptive_field_is_a_view_or_refuses_typed() -> None:
         view = tl.trace(model, x)["conv2d_1_1"].receptive_field
     except RecordBindingError as exc:
         assert exc.fields["code"] == "trace_reference_collected"
-        assert exc.fields["remedy"]
+        assert "variable" in exc.fields["remedy"]  # names the fix: keep the Trace in a variable
     else:
         assert view.at((0, 0)) is not None
 
