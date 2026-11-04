@@ -17,6 +17,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._crossing_perturbations import (
+    integer_clamp_crossing_values,
+    integer_extrema_crossing_values,
+    isclose_tolerance_crossing_values,
+)
 from ._membership_perturbation import isin_membership_toggle_values
 
 if TYPE_CHECKING:
@@ -46,10 +51,10 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    if layer.func_name == "isin":
-        return isin_membership_toggle_values(layer, parent_label, parent_values)
+    if layer.func_name in _SET_TEST_CROSSING_VALUES:
+        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
     if not parent_values.is_floating_point():
-        return None
+        return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
         return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
     if layer.func_name in {"bernoulli", "bernoulli_"} and _bernoulli_probability_slot_hit(
@@ -82,6 +87,33 @@ def _perturb_domain_sensitive_parent_values(
         return _saturated_activation_boundary_values(layer, parent_values)
     if layer.func_name in {"relu", "relu_"}:
         return _relu_boundary_crossing_values(parent_values)
+    return None
+
+
+_SET_TEST_CROSSING_VALUES = {
+    "isin": isin_membership_toggle_values,
+    "isclose": isclose_tolerance_crossing_values,
+}
+"""Set and tolerance tests whose operands get values that flip each element's result."""
+
+
+def _integer_saturation_crossing_values(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> torch.Tensor | None:
+    """Return boundary-crossing values for an integer ``clamp``/``maximum``/``minimum`` parent.
+
+    The integer counterpart of the float ``clamp`` rule below: a parent
+    saturated against a large constant stays flat under the small integer draw.
+    Bool and complex parents, and every other op, keep the generic draw.
+    """
+
+    if parent_values.dtype == torch.bool or parent_values.is_complex():
+        return None
+    if layer.func_name in {"maximum", "minimum"}:
+        return integer_extrema_crossing_values(layer, parent_label, parent_values)
+    if layer.func_name == "clamp" and _parent_label_occupies_arg_position(layer, parent_label, 0):
+        lower, upper = _clamp_scalar_bounds(layer)
+        return integer_clamp_crossing_values(parent_values, lower, upper)
     return None
 
 

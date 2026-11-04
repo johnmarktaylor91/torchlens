@@ -3,7 +3,7 @@
 The forward validation replays each op from a perturbed parent and requires the
 output to move; these helpers produce that perturbation (integer, bool, float
 and complex strategies, and sparse parents through their values component).
-Leaf module: it imports torch and the sparse component helpers only.
+Leaf module: it imports torch, the sparse component helpers and torch_attr only.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import torch
 
 from .._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from .._utils._torch_symbols import torch_attr
 
 # Maximum number of random perturbation attempts before giving up on finding
 # a value different from the original.  Relevant for integer/bool tensors
@@ -21,13 +22,13 @@ MAX_PERTURB_ATTEMPTS = 100
 # devices), so they are perturbed through a same-width signed view: a philox key (uint64) is a
 # value parent that is perturbed like any integer, never routed to the float branch.
 _UNSIGNED_AS_SIGNED: dict[torch.dtype, torch.dtype] = {
-    getattr(torch, unsigned): signed
+    unsigned_dtype: signed
     for unsigned, signed in (
         ("uint16", torch.int16),
         ("uint32", torch.int32),
         ("uint64", torch.int64),
     )
-    if hasattr(torch, unsigned)
+    if (unsigned_dtype := torch_attr(unsigned)) is not None
 }
 
 
