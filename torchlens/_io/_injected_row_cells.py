@@ -29,6 +29,15 @@ _CALLABLE_KEY_FIELDS = frozenset(
 """Closed field set of one persisted callable registry key."""
 
 
+def _refuse_injected_row(
+    message: str, *, code: str, field: str, reason: str, remedy: str
+) -> NoReturn:
+    """Raise one typed injected-row load refusal: the identity grammar and the codec
+    envelope refuse through this one site, each with its own code, field and remedy."""
+
+    raise ArtifactError(message, code=code, field=field, reason=reason, remedy=remedy)
+
+
 def _is_int(value: Any) -> bool:
     """Whether ``value`` is an int and not a bool."""
 
@@ -89,7 +98,7 @@ def _injection_invalid(message: str, reason: str) -> NoReturn:
         "re-capture with log_injections and re-save with one current "
         "TorchLens version; do not hand-edit injected-op identity records"
     )
-    raise ArtifactError(
+    _refuse_injected_row(
         f"{field} is invalid in the loaded artifact: {message}. Remedy: {remedy}.",
         code="artifact_injection_provenance_invalid",
         field=field,
@@ -160,7 +169,7 @@ def check_injected_row_cells(provenance: Any, annotations: Any, label: str) -> N
 def _refuse_codec(message: str, reason: str) -> NoReturn:
     """Raise one typed codec-envelope load refusal."""
 
-    raise ArtifactError(
+    _refuse_injected_row(
         f"{message} -- the artifact's injected-op codec envelope is forged or hand-edited",
         code="artifact_injection_codec_invalid",
         field="Op.annotations.injection_codec_v1",
