@@ -22,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import pickle
 import shutil
 import uuid
 from dataclasses import replace
@@ -42,6 +41,7 @@ from ._enums import (
 )
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
+from ._member_refusals import _is_bundle_integrity_refusal, _refuse_foreign_pickle, _tamper
 from ._presenter import MergedTrace, _RankHandle
 from ._rules import is_strict_int
 from ._witness import witness_consistency
@@ -192,65 +192,11 @@ _MEMBER_ENTRY_KEYS = frozenset({"rank", "path", "tree_sha256"})
 """Closed key set for one descriptor ``members`` entry (unknown keys refuse)."""
 
 
-_TAMPER_REMEDY = (
-    "The artifact's integrity records do not match its contents; it was edited "
-    "or corrupted in transit. Re-generate it from the original rank cores with "
-    "tl.merge_ranks([...]).save(path)."
-)
 _SCHEMA_REMEDY = (
     "The artifact does not match the merged-directory schema this runtime "
     "supports. Re-generate it with tl.merge_ranks([...]).save(path) using a "
     "matching torchlens release."
 )
-
-
-# Bundle-load failures that are INTEGRITY signals (tamper), not environmental
-# degradation. A guarded-unpickler denylist refusal / corrupt pickle stream is
-# raised as ``pickle.UnpicklingError``/``EOFError`` and, at the ``bundle.load``
-# boundary, wrapped into a ``ArtifactError`` tagged with this code (A-R58-1).
-_BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
-
-
-def _is_bundle_integrity_refusal(exc: BaseException) -> bool:
-    """Return True if a member bundle-load failure is a tamper signal, not drift.
-
-    A guarded-unpickler denylist refusal or a corrupt/truncated pickle stream is
-    a bundle-INTEGRITY failure: it means the member core's bytes are inconsistent
-    with an honest capture, which is tamper. It is distinguished from genuine
-    environmental degradation (torch/codec import drift, a missing optional
-    dependency) both by the stable ``code`` the ``bundle.load`` boundary stamps
-    on it AND by walking the ``__cause__``/``__context__`` chain for the raw
-    ``pickle.UnpicklingError``/``EOFError`` (belt-and-braces: a refusal that
-    reaches here through any other wrapper is still caught).
-    """
-
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        if isinstance(current, (pickle.UnpicklingError, EOFError)):
-            return True
-        fields = getattr(current, "fields", None)
-        if isinstance(fields, dict) and fields.get("code") == _BUNDLE_INTEGRITY_CODE:
-            return True
-        current = current.__cause__ or current.__context__
-    return False
-
-
-def _tamper(detail: str, *, remedy: str = _TAMPER_REMEDY, **payload: Any) -> MergedArtifactError:
-    """Build the typed tamper refusal (integrity failure, never a presence gap).
-
-    Every merged refusal now carries a ``fields["remedy"]`` (R65: the tamper
-    refusals shipped with none, even where the correct sentence existed verbatim
-    elsewhere in this module).
-    """
-
-    return MergedArtifactError(
-        f"Merged artifact integrity failure: {detail}",
-        code=MergedErrorCode.MERGED_DESCRIPTOR_TAMPER,
-        remedy=remedy,
-        **payload,
-    )
 
 
 def _schema_refusal(
@@ -911,7 +857,7 @@ def load_merged(path: str | Path) -> MergedTrace:
         actual = tree_hash(member_path)
         if actual != recorded:
             raise _tamper(f"rank {rank} core bytes do not match the recorded tree hash")
-        member_paths[rank] = member_path
+        member_paths[rank] = _refuse_foreign_pickle(rank, member_path)
 
     # 2. Independent rederivation from the parsable rank cores.
     from .._io.bundle import load as load_bundle

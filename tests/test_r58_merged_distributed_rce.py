@@ -473,3 +473,37 @@ def test_corrupt_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None
         load_merged(art)
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "bundle-integrity" in str(caught.value)
+
+
+def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path) -> None:
+    """A root ``metadata.pkl`` planted in a 3.0 rank core refuses as tamper, unopened.
+
+    The 3.0 writer emits no pickle, so the file is foreign content: it must refuse
+    typed, never degrade the merge to partial, and never be unpickled (its
+    ``__reduce__`` would create the marker file).
+    """
+
+    import pickle
+
+    marker = tmp_path / "unpickled.marker"
+
+    class _Marker:
+        def __reduce__(self):  # pragma: no cover - never unpickled
+            return (Path.touch, (marker,))
+
+    art = _real_two_rank_artifact(tmp_path)
+    planted = art / "members" / "rank_0001.tlspec" / "metadata.pkl"
+    planted.write_bytes(pickle.dumps(_Marker()))
+    _rehash_artifact(art)
+    with pytest.raises(MergedArtifactError) as caught:
+        load_merged(art)
+    assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
+    assert "rank 1" in str(caught.value)
+    assert "metadata.pkl" in str(caught.value)
+    assert "never unpickled" in str(caught.value)
+    assert not marker.exists()
+
+    planted.unlink()
+    _rehash_artifact(art)
+    assert load_merged(art).degradations == ()
+    assert not marker.exists()
