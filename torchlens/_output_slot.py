@@ -73,7 +73,9 @@ def stopped(detail: str | None) -> OutputSlot:
     return OutputSlot(status="stopped", detail=detail)
 
 
-def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
+def read_output(
+    slot: OutputSlot | None, *, owner: str, missing: tuple[str, str, str] | None = None
+) -> Any:
     """Return the model output held by ``slot`` or refuse with the reason.
 
     Parameters
@@ -83,6 +85,10 @@ def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
         restored from disk (or a pickle) or built without a live forward.
     owner:
         ``"Trace"`` or ``"Recording"``, used in the refusal text.
+    missing:
+        ``(what, reason, remedy)`` for the ``slot is None`` refusal when the
+        missing value is not the plain model output (the stale
+        ``transformed_output``); ``None`` uses the loaded-from-disk text.
 
     Returns
     -------
@@ -99,12 +105,14 @@ def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
     """
 
     if slot is None:
+        what, reason, remedy = missing or (
+            "model output",
+            f"the output is held in memory only and is not stored with saved {owner}s, so a "
+            f"{owner} loaded from disk (or unpickled) never carries it",
+            f"re-run the capture and read .output on the live {owner}",
+        )
         raise PayloadUnavailableError(
-            f"this {owner} has no model output: the output is held in memory only and is "
-            f"not stored with saved {owner}s, so a {owner} loaded from disk (or unpickled) "
-            "never carries it",
-            code="output_not_stored",
-            remedy=f"re-run the capture and read .output on the live {owner}",
+            f"this {owner} has no {what}: {reason}", code="output_not_stored", remedy=remedy
         )
     if slot.status == "forward_failed":
         raise PayloadUnavailableError(
@@ -144,6 +152,13 @@ class _TransformedOutputStale:
 
 
 _TRANSFORMED_OUTPUT_STALE = _TransformedOutputStale()
+_STALE_TRANSFORM_REFUSAL = (
+    "transformed output",
+    "a replay rewrote the model output after capture and has no model return to re-apply "
+    "output_transform to",
+    "apply the edit with intervention=tl.options.InterventionOptions(engine='rerun'), which "
+    "re-runs the model and re-applies output_transform",
+)
 
 
 def read_transformed_output(value: Any, *, owner: str) -> Any:
@@ -164,13 +179,8 @@ def read_transformed_output(value: Any, *, owner: str) -> Any:
     """
 
     if value is _TRANSFORMED_OUTPUT_STALE:
-        raise PayloadUnavailableError(
-            f"this {owner} has no transformed output: a replay rewrote the model output after "
-            "capture and has no model return to re-apply output_transform to",
-            code="output_not_stored",
-            remedy="apply the edit with intervention=tl.options.InterventionOptions("
-            "engine='rerun'), which re-runs the model and re-applies output_transform",
-        )
+        # The same refusal site as a missing model output: one code, one contract row.
+        read_output(None, owner=owner, missing=_STALE_TRANSFORM_REFUSAL)
     return value
 
 
