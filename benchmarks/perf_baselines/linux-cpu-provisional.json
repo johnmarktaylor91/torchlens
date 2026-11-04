@@ -5543,17 +5543,17 @@
             "write_opens": 0
           },
           "information": {
-            "note": "information only, never gates: profiled Python calls, raw bundle bytes (they move with measured timings) and unprofiled wall-clock A/A pair, RunPod 2026-11-04",
+            "note": "information only, never gates: profiled Python calls, raw bundle bytes (they move with measured timings) and unprofiled wall-clock A/A pair, fellows cluster CPU node 2026-11-04",
             "python_calls": [
-              8544164
+              893612
             ],
             "raw_bytes_written": [
-              2268369
+              2268349
             ],
             "wall_ms_aa_pairs": [
               [
-                684.475,
-                698.321
+                251.772,
+                252.635
               ]
             ]
           },
