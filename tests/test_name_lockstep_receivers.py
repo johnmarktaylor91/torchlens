@@ -156,7 +156,7 @@ def test_the_gone_keyword_handed_to_torchlens_still_reports(tmp_path: Path) -> N
 
 
 def test_a_local_function_that_declares_the_keyword_owns_it(tmp_path: Path) -> None:
-    """``def plot(data, format="png")`` takes its own ``format=``; a ``**kw`` one may not."""
+    """A local function or ``__init__`` that declares ``format=`` owns it; ``**kw`` may not."""
 
     cells = [
         'def plot(data, format="png"):\n',
@@ -165,9 +165,19 @@ def test_a_local_function_that_declares_the_keyword_owns_it(tmp_path: Path) -> N
         "def forward(data, **kw):\n",
         "    return data\n",
         'forward(1, format="svg")\n',
+        "class Writer:\n",
+        '    def __init__(self, format="png"):\n',
+        "        self.format = format\n",
+        'Writer(format="svg")\n',
+        "class Opaque(tl.Bundle):\n",
+        "    pass\n",
+        'Opaque(format="svg")\n',
     ]
     found, lines = _stale(tmp_path, "examples/local.ipynb", _notebook(SETUP, cells))
-    assert found == {_line(lines, 'forward(1, format=\\"svg\\")')}
+    assert found == {
+        _line(lines, 'forward(1, format=\\"svg\\")'),
+        _line(lines, 'Opaque(format=\\"svg\\")'),
+    }
 
 
 def test_python_files_resolve_receivers_the_same_way(tmp_path: Path) -> None:

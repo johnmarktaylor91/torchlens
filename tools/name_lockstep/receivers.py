@@ -19,7 +19,8 @@ A call's leaves are:
   forward keywords it does not list, so its keywords are never foreign;
 - ``""`` when the callee is a function defined in the same file or notebook that does
   not name the keyword itself (a local ``render_png(trace, **kw)`` wrapper that hands
-  ``**kw`` to ``tl.draw``);
+  ``**kw`` to ``tl.draw``), or a class defined there whose own ``__init__`` does not
+  (or that has none of its own);
 - ``""`` when the callee is neither a name nor an attribute (a call result, a
   subscript).
 
@@ -259,7 +260,7 @@ def _local_defs(trees: list[ast.AST]) -> dict[str, frozenset[str] | None]:
                 args = node.args
                 declared = None if args.kwarg else _declared(args)
             elif isinstance(node, ast.ClassDef):
-                declared = None
+                declared = _init_declared(node)
             else:
                 continue
             if node.name not in found:
@@ -269,6 +270,19 @@ def _local_defs(trees: list[ast.AST]) -> dict[str, frozenset[str] | None]:
             both = previous is not None and declared is not None
             found[node.name] = previous & declared if both else None  # type: ignore[operator]
     return found
+
+
+def _init_declared(node: ast.ClassDef) -> frozenset[str] | None:
+    """Return the keywords a local class's own ``__init__`` declares.
+
+    ``None`` (cannot tell) when the class defines no ``__init__`` (a dataclass, an
+    inherited constructor) or its ``__init__`` takes ``**kwargs``.
+    """
+
+    for item in node.body:
+        if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+            return None if item.args.kwarg else _declared(item.args)
+    return None
 
 
 def _declared(args: ast.arguments) -> frozenset[str]:
