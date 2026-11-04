@@ -148,5 +148,5 @@ def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None
     descriptor = read_runnable_descriptor(path)
     assert descriptor["payload_layers"]["nonpersistent_buffers"]["present"] is False
     assert {"buffers", "buffers_family", "buffers_tensors"}.isdisjoint(manifest["runnable"])
-    result = tl.load(str(path)).run(inputs=x)
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

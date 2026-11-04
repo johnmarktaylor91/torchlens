@@ -6,7 +6,7 @@ names.14: ``InterventionOptions.confirm_mutation`` is gone; a root trace edit
 warns ``TraceMutationWarning`` once, a fork and the session-level
 ``torchlens.errors.quiet()`` context stay quiet.
 names.9: ``Trace.run`` takes ``model`` and ``x`` positionally only; the
-transactional ``inputs=`` form is unchanged.
+transactional ``inputs=`` form is ``Trace.run_transaction(inputs=...)`` (walk rulings names.11).
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def test_do_site_is_positional_only() -> None:
 
     log = _capture().fork("edit")
     with pytest.raises(TypeError):
-        log.do(site=tl.func("relu"), value_or_hook=torch.zeros(2, 3), intervention=_set_only())
+        log.do(site=tl.func("relu"), edit=torch.zeros(2, 3), intervention=_set_only())
     assert log.do(tl.func("relu"), torch.zeros(2, 3), intervention=_set_only()) is log
 
 
@@ -121,11 +121,11 @@ def test_run_model_and_x_are_positional_only() -> None:
 
 
 def test_run_inputs_transaction_returns_run_result() -> None:
-    """The transactional ``inputs=`` door still returns a ``RunResult``."""
+    """The transactional ``run_transaction(inputs=...)`` door returns a ``RunResult``."""
 
     x = torch.randn(2, 3)
     model = ReluAdd()  # the trace holds the model weakly; keep it alive for a live run
     log = tl.trace(model, x)
-    result = log.run(inputs=x)
+    result = log.run_transaction(inputs=x)
     assert isinstance(result, RunResult)
     assert result.trace is not log

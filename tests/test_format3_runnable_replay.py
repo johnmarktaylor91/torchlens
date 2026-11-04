@@ -231,7 +231,7 @@ def _assert_replays_like_live(model: nn.Module, inputs: Any, tmp_path: Path, whe
 
     trace = tl.trace(model, inputs, capture=_CAP)
     try:
-        live = trace.run(inputs=inputs)
+        live = trace.run_transaction(inputs=inputs)
     except RunnablePreflightError as live_refusal:
         # The live provider refuses this capture; the saved one must refuse the same way.
         with pytest.raises(RunnablePreflightError) as saved_refusal:
@@ -249,8 +249,8 @@ def _assert_replays_like_live(model: nn.Module, inputs: Any, tmp_path: Path, whe
     if old_refusal is not None or refusal is not None:
         _assert_same_refusal(refusal, old_refusal, f"{where} (save and load)")
         return
-    old_replay, old_refusal = _attempt(lambda: old_loaded.run(inputs=inputs))
-    replayed, refusal = _attempt(lambda: loaded.run(inputs=inputs))
+    old_replay, old_refusal = _attempt(lambda: old_loaded.run_transaction(inputs=inputs))
+    replayed, refusal = _attempt(lambda: loaded.run_transaction(inputs=inputs))
     if old_refusal is not None or refusal is not None:
         _assert_same_refusal(refusal, old_refusal, f"{where} (replay)")
         return
@@ -351,14 +351,14 @@ def test_archived_activations_round_trip_and_attest(tmp_path: Path) -> None:
     loaded, _artifact = _save_and_load_runnable(trace, tmp_path, include_activations=True)
     archived = loaded._runnable.archived_activations
     assert archived, "the activation family did not bind"
-    replayed = loaded.run(inputs=inputs)
+    replayed = loaded.run_transaction(inputs=inputs)
     old_path = tmp_path / "old.tlspec"
     _quiet_save(trace, old_path, level="runnable", include_weights=True, include_activations=True)
     old_loaded = tl.load(old_path)
     assert set(old_loaded._runnable.archived_activations) == set(archived)
     for key, record in archived.items():
         assert record.byte_digest == old_loaded._runnable.archived_activations[key].byte_digest
-    old_replay = old_loaded.run(inputs=inputs)
+    old_replay = old_loaded.run_transaction(inputs=inputs)
     _assert_identical(replayed.output, old_replay.output, "activations")
     assert replayed.report.numeric_attestation == old_replay.report.numeric_attestation
 

@@ -255,7 +255,7 @@ def test_leaf_shaped_tampered_mapping_type_is_stopped_by_the_admissibility_gate(
 
     loaded = tl.load(bundle)
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=torch.randn(1, 4))
+        loaded.run_transaction(inputs=torch.randn(1, 4))
     chain = _chain_text(caught.value)
     assert "disallowed type subprocess.Popen" in chain
     assert "leaves supplied" not in chain

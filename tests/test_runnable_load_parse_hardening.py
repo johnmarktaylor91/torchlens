@@ -230,7 +230,9 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     loaded.save(resaved, level="runnable", include_weights=True)
     assert read_runnable(with_weights) == read_runnable(resaved)
     assert tl.load(resaved).readiness.status is ReadinessStatus.READY
-    torch.testing.assert_close(tl.load(resaved).run(inputs=inputs).output, model(inputs))
+    torch.testing.assert_close(
+        tl.load(resaved).run_transaction(inputs=inputs).output, model(inputs)
+    )
 
     recaptured = tl.trace(
         TinyModel(),

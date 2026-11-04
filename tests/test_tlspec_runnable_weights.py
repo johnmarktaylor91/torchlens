@@ -280,7 +280,7 @@ def test_embedded_weights_run_matches_live_and_reports_capture_state(tmp_path: P
     loaded = tl.load(path)
     inputs = torch.tensor([[2.0, -1.0, 0.5], [-3.0, 0.25, 4.0]])
 
-    result = loaded.run(inputs=inputs, seed=91)
+    result = loaded.run_transaction(inputs=inputs, seed=91)
 
     assert torch.equal(result.output, model(inputs))
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
@@ -314,7 +314,7 @@ def test_delayed_weight_save_embeds_capture_state_and_attests(
         include_weights=True,
         include_activations=True,
     )
-    result = tl.load(path).run(inputs=inputs)
+    result = tl.load(path).run_transaction(inputs=inputs)
 
     assert torch.equal(result.output, expected_output)
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
@@ -334,7 +334,7 @@ def test_user_state_dict_overrides_embedded_capture_state(tmp_path: Path) -> Non
     user_state["scale"] = torch.ones_like(user_state["scale"])
 
     loaded.load_state_dict(user_state)
-    result = loaded.run(inputs=torch.ones(2, 3), seed=17)
+    result = loaded.run_transaction(inputs=torch.ones(2, 3), seed=17)
 
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert torch.equal(result.output, torch.zeros(2, 2))

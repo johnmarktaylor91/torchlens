@@ -327,7 +327,7 @@ def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) 
     assert not any("records no original-input digests" in str(e.message) for e in caught)
 
     assert _descriptor(path)["payload_layers"]["activations"]["original_input_digests"]
-    result = tl.load(path).run(inputs=inputs.clone())
+    result = tl.load(path).run_transaction(inputs=inputs.clone())
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
