@@ -363,6 +363,9 @@ def shape_outlines(draw_ops):
             outlines.append(sample_ellipse(cx, cy, rx, ry))
         elif o in ("p", "P"):
             outlines.append([(float(p[0]), float(p[1])) for p in op["points"]])
+        elif o in ("b", "B"):
+            # curved shapes (cylinder, rounded boxes) draw their outline as beziers
+            outlines.append(sample_beziers([(float(p[0]), float(p[1])) for p in op["points"]]))
     return outlines
 
 
@@ -672,7 +675,13 @@ def audit_gv_source(
     Raises:
         RuntimeError: If ``dot`` fails to lay out the graph.
     """
-    proc = subprocess.run([dot, "-Tjson"], input=gv_source, capture_output=True, text=True)
+    # Lay out with the bundled font every TorchLens render uses, so the audit
+    # measures the text widths a drawing really has, not the host's fallback font.
+    from torchlens._visualization._fonts import graphviz_font_env
+
+    proc = subprocess.run(
+        [dot, "-Tjson"], input=gv_source, capture_output=True, text=True, env=graphviz_font_env()
+    )
     if proc.returncode != 0:
         raise RuntimeError("dot -Tjson failed: %s" % proc.stderr.strip())
     graph = parse_graph(json.loads(proc.stdout))

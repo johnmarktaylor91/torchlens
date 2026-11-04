@@ -12,7 +12,7 @@ Nov 2026).
 
 from __future__ import annotations
 
-__all__ = ["loop_edge_attrs", "self_loop_port_attrs"]
+__all__ = ["loop_edge_attrs", "pass_label_spacing", "self_loop_port_attrs"]
 
 # self-loop: tail port (output side), head port (input side) per rank direction
 _LOOP_PORTS: dict[str, tuple[str, str]] = {
@@ -34,16 +34,16 @@ _BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
 }
 
 
-def float_back_edge_label(edge_dict: dict[str, str]) -> None:
-    """Move a back edge's midpoint label to an external label (``xlabel``).
+def pass_label_spacing(is_back_edge: bool) -> dict[str, str]:
+    """Return the length a straight edge needs for its head/tail pass labels.
 
-    dot gives a ``constraint=false`` edge's midpoint label its own rank slot, which pushes
-    the return arc out to make room; an external label is placed after layout beside the
-    drawn arc, so the arc stays tight and the pass range still reads next to it.
+    Graphviz reserves no space for head/tail labels.  A pass-labelled straight edge
+    keeps the two ranks its midpoint label used to reserve, so ``Out 2`` fits between
+    the nodes sideways and nearby loops keep the room the label geometry gate was
+    measured with.  A return arc is ``constraint=false`` and takes no length from ranks.
     """
 
-    if "label" in edge_dict:
-        edge_dict["xlabel"] = edge_dict.pop("label")
+    return {} if is_back_edge else {"minlen": "2"}
 
 
 def self_loop_port_attrs(rankdir: str) -> dict[str, str]:

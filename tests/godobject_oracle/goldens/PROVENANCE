@@ -869,3 +869,64 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a9ad62da6993067637eca2e394d3000d78bc299c (dirty)
 recorded: 2026-11-03T18:50:15.232875+00:00
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); self-loop label placed by the chooser; labelled straight edges keep two ranks
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 98bc110669478276f31380e6aee4757692d0504b (dirty)
+recorded: 2026-11-04T08:46:32.006872+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); self-loop label placed by the chooser; labelled straight edges keep two ranks
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 98bc110669478276f31380e6aee4757692d0504b (dirty)
+recorded: 2026-11-04T08:46:32.036883+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); self-loop label placed by the chooser; labelled straight edges keep two ranks
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 98bc110669478276f31380e6aee4757692d0504b (dirty)
+recorded: 2026-11-04T08:46:32.070160+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); self-loop label placed by the chooser; labelled straight edges keep two ranks
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 98bc110669478276f31380e6aee4757692d0504b (dirty)
+recorded: 2026-11-04T08:46:32.099268+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); each label attached on the free side of its own edge end (JMT 4 Nov 2026)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d0a2d80a95f555473f68067ccad21b6e8550dde (dirty)
+recorded: 2026-11-04T09:16:18.624415+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); each label attached on the free side of its own edge end (JMT 4 Nov 2026)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d0a2d80a95f555473f68067ccad21b6e8550dde (dirty)
+recorded: 2026-11-04T09:16:18.652604+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); each label attached on the free side of its own edge end (JMT 4 Nov 2026)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d0a2d80a95f555473f68067ccad21b6e8550dde (dirty)
+recorded: 2026-11-04T09:16:18.680512+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: rolled In/Out pass labels sit at their nodes again as head/tail labels placed after layout (JMT 3 Nov 2026); each label attached on the free side of its own edge end (JMT 4 Nov 2026)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d0a2d80a95f555473f68067ccad21b6e8550dde (dirty)
+recorded: 2026-11-04T09:16:18.707754+00:00

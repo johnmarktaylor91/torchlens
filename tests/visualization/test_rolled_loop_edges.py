@@ -9,6 +9,7 @@ body instead of drawing a second line beside the forward edge.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 
 import torch
@@ -94,9 +95,11 @@ def test_rolled_two_op_loop_body_returns_on_an_unconstrained_arc() -> None:
     assert len(back) == 1 and len(forward) == 1, dot_source
     assert "tailport=se" in back[0], back[0]
     assert "headport=ne" in back[0], back[0]
-    assert "xlabel=" in back[0] and " label=" not in back[0], back[0]
     assert "constraint=false" in back[0] or 'constraint="false"' in back[0], back[0]
-    assert "In 2-3" in back[0] and "Out 1-2" in back[0], back[0]
+    # Restored head/tail placement: each pass range sits at the node it names.
+    assert re.search(r"taillabel=<<TABLE[^\]]*>Out 1-2<", back[0]), back[0]
+    assert re.search(r"headlabel=<<TABLE[^\]]*>In 2-3<", back[0]), back[0]
+    assert "xlabel=" not in back[0] and " label=" not in back[0], back[0]
     assert "tailport" not in forward[0] and "constraint" not in forward[0], forward[0]
 
 
@@ -141,7 +144,8 @@ def test_rolled_back_edge_sideways_leaves_and_enters_from_below() -> None:
     top ports made dot route the curve under relu anyway while hooking both ends upward."""
     (back,) = _edge_lines(_dot(rolled=True, direction="leftright"), "relu_", "linear_")
     assert "tailport=sw" in back and "headport=se" in back, back
-    assert "xlabel=" in back and " label=" not in back, back
+    assert "taillabel=" in back and "headlabel=" in back, back
+    assert "xlabel=" not in back and " label=" not in back, back
     assert "constraint=false" in back or 'constraint="false"' in back, back
 
 
