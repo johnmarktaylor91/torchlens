@@ -47,6 +47,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._utils._display_errors import module_lookup_message, module_output_message
 from ._accessor_base import Accessor
 from ._call_tree import (
     _edge_counts_for_scope,
@@ -942,14 +943,7 @@ class ModuleCall:
         if len(self.output_ops) != 1:
             from ..intervention.errors import MultiOutputModuleError
 
-            candidates = ", ".join(
-                f"module_call.output_ops[{index}]={label!r}"
-                for index, label in enumerate(self.output_ops)
-            )
-            raise MultiOutputModuleError(
-                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
-                f"select one candidate explicitly: {candidates or 'none'}."
-            )
+            raise MultiOutputModuleError(module_output_message(self, self._source_trace))
         trace = self._source_trace
         if trace is None:
             raise RecordBindingError(
@@ -2399,8 +2393,7 @@ class Module:
                 return self._source_trace[matches[0]]
             elif len(matches) > 1:
                 raise AmbiguousOpLookupError(
-                    f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
-                    f"'{self.address}': {', '.join(matches[:5])}",
+                    module_lookup_message(ix, self, matches),
                     key=str(ix),
                     address=self.address,
                 )

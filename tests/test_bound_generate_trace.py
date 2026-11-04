@@ -194,7 +194,7 @@ def test_empty_call_index_lookup_suggests_no_wrapper_spelling(key: str) -> None:
         gen[key]
     message = str(excinfo.value)
     assert "owner" not in message
-    assert "Please use a more specific key." in message
+    assert "Use a more specific key." in message
 
 
 def test_plain_module_address_resolves_to_the_owners_module() -> None:

@@ -44,9 +44,10 @@ Op relu_1: float32 [8] on cpu, min 0.000 max 0.5000 mean 0.1429 sd 0.1821
 ```
 
 The card behind it (`print(op)`) adds `position`, `module`, `output`,
-`values`, `graph`, `function`, and `source` rows, then the `more` exits.
-The source row is a captured location, not a read of the current file.
-Counts in card rows are exact and byte quantities use IEC units (`60 KiB`).
+`values`, `graph`, `function`, `source`, and `code` rows, then the `more` exits.
+The source row is a captured location. The code row reads fingerprint-checked
+source text, or names a changed or missing source file.
+Counts in card rows are exact and byte quantities use IEC units (`60.0 KiB`).
 Durations use compact units (`4.02 ms`); `Flops` and `Macs` keep their spelling.
 
 The value words use four significant digits, including trailing zeros.
@@ -61,7 +62,7 @@ and Unicode equivalence contract.
 `(freed)`, `(disk-backed: metadata only until read)`,
 `(preview backend: shape/dtype only)`, and `(edited)` retain their meanings.
 Value words preserve nonfinite counts, magnitude-based complex statistics,
-and `~` for sampled moments.
+and `(~sampled)` even when sampled moments no longer fit.
 
 A saved CPU activation below the existing sampling gate is summarized once
 and cached by tensor version. Live parameters, device tensors, and larger
@@ -86,7 +87,7 @@ First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
 >>> _ = log.health_facts
 >>> log
-Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf FOUND (.nonfinite_ops)
+Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf found (see .nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
@@ -123,6 +124,57 @@ draw a bare tensor as an RGB image or a channel grid, as functions rather
 than tensor attributes ([Look at a tensor as an
 image](../field-guide/tensor_images.md)).
 
+## Selections, edits, options and reports
+
+Selections report sites and values separately and name the selector that
+produced them. For a five-token GPT-2 small capture:
+
+```text
+Selection ACT: 12 sites, 184.3k values, from tl.func('tanh')
+```
+
+`print(selection)` puts the first three site names and the number omitted
+on one `sites` row, followed by the attributes for further inspection. A dense mask says `values not computed`
+rather than scanning its elements while printing.
+
+Selectors retain parentheses so their constructor spelling rebuilds the
+same boolean expression. Edits retain their public constructor spelling;
+tensor arguments use shape, dtype and device without printing elements:
+
+```text
+tl.scale(2.0)
+tl.project_out(<tensor float32 [4] on cpu>)
+tl.when(tl.func('relu'), tl.zero_ablate())
+Recipe: 2 rules
+```
+
+A recipe uses `tl.when(...)` only when that spelling rebuilds it exactly.
+Otherwise its repr reports the number of rules; `print(recipe)` lists at
+most five rules. Captured arguments and frozen intervention specs also
+show metadata and counts rather than tensor contents or callback dumps.
+Captured argument cards show parent display keys and scalar literals,
+including literals nested in tuples or lists.
+
+Options show non-default fields in repr. Printing an options object lists
+its public fields with non-None values, including defaults. Boolean card values use
+words, rows align to the longest field name, and a closing `more` row points to details:
+
+```text
+CaptureOptions()
+CaptureOptions(save_grads=True, aten_ops=True)
+```
+
+Doctor, health and compute report reprs show their type, scope and row or
+finding counts. Summary tables retain their headers and totals, use plain
+numeric percentages, and explain every displayed marker in one legend.
+Lookup errors keep the problem first and offer at most five display keys, closest by edit distance first:
+
+```text
+Layer 'tanhh_6' not found.
+  candidates 'tanh_6', 'tanh_1', 'tanh_2', 'tanh_9', 'tanh_11'; and 5 more
+  remedy     pass an in-range integer, a layer label, or a module address
+```
+
 ## Credits
 
 The philosophy this surface mines and extends:
@@ -146,6 +198,8 @@ contains stored model, capture, graph and save metadata; `trace.summary()`
 provides the module hierarchy. Default pristine state is omitted.
 
 ATen and event tuples keep tuple iteration, equality, hashing and slicing.
-Their bounded displays show counts and at most five records, for example
-`AtenOps: 500 calls`. Portable saves encode these sequences as ordinary
+Their reprs show only counts, for example `AtenOps: 500 calls`. Printing
+adds at most five identified members, the number omitted, and a closing
+`more` row. An ATen card puts each of its first three tensor inputs on a
+separate row, followed by the number omitted. Portable saves encode these sequences as ordinary
 tuples, so their display type does not change the artifact format.

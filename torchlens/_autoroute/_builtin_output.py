@@ -31,6 +31,8 @@ from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
 from torchlens._utils.torchvision_weights import match_torchvision_weights
 
+from .._utils._display_errors import lookup_message
+
 DETECTOR_VERSION = "torchlens-output-a2-v1"
 #: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
 #: custom detector may resolve others (docs/semantic_io.md, Custom Output Detectors).
@@ -470,10 +472,12 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
             argument=STYLE_KW,
         )
     close = difflib.get_close_matches(str(style), BUILTIN_OUTPUT_STYLES, n=1)
-    hint = f" (did you mean {close[0]!r}?)" if close else ""
     raise DecodeStyleUnknownError(
-        f"unknown {STYLE_KW}={style!r}{hint}; no built-in or registered custom output "
-        f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
+        lookup_message(
+            f"unknown {STYLE_KW}={style!r}; no built-in or registered custom output detector resolved it.",
+            [*close, *(item for item in BUILTIN_OUTPUT_STYLES if item not in close)],
+            "pass a built-in style, or register a custom output detector.",
+        ),
         code="decode_style_unknown",
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "

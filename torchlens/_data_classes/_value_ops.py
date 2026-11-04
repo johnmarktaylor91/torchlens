@@ -12,6 +12,7 @@ from .._utils._display_numbers import format_duration, format_exact_count, forma
 from .._utils.fail_open import fail_open
 from ._value_state import (
     METADATA_ONLY,
+    _count_words,
     edited_token,
     metadata_text,
     payload_facts,
@@ -54,8 +55,11 @@ def _graph(op: Any) -> str:
     downstream = getattr(op, "output_descendants", None)
     if downstream is not None:
         count = len(downstream)
-        noun = "output" if count == 1 else "outputs"
-        graph += f" ({format_exact_count(count)} {noun} downstream)"
+        outputs = getattr(trace_of(op), "output_layers", None)
+        if outputs is not None:
+            graph += f" (reaches {format_exact_count(count)} of {_count_words(len(outputs), 'model output')})"
+        else:
+            graph += f" ({_count_words(count, 'model output')} downstream)"
     return graph
 
 
@@ -104,7 +108,7 @@ def _output(op: Any) -> str:
     """Captured shape count and byte quantity without a payload read."""
 
     shape = getattr(op, "shape", None)
-    parts = [f"{format_exact_count(math.prod(shape))} values"] if shape is not None else []
+    parts = [_count_words(math.prod(shape), "value")] if shape is not None else []
     memory = getattr(op, "activation_memory", None)
     if memory is not None:
         parts.append(format_iec_bytes(int(memory)))
@@ -115,7 +119,7 @@ def _position(op: Any, kind: str) -> str:
     """Position belongs to the card, not the one-line identity."""
 
     trace = trace_of(op)
-    total = fail_open(lambda: trace._num_ops, lambda _error: None)
+    total = trace._num_ops if trace is not None else None
     index = getattr(op, "step_index", None)
     if index is None or total is None:
         return ""
@@ -177,7 +181,7 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     ops = _first_ops(layer)
     passes = getattr(layer, "num_passes", 1)
     if passes <= 1:
-        return op_rows(ops[0], kind="layer") if ops else []
+        return op_rows(ops[0]) if ops else []
     rows = []
     for op in ops:
         _, stats, honesty = payload_facts(op)
