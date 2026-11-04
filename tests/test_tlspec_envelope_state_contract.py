@@ -221,6 +221,23 @@ def test_inert_inventory_still_reads_a_legacy_root_pickle(tmp_path: Path) -> Non
     assert not marker.exists()
 
 
+_LEGACY_GOLDENS = sorted(
+    (Path(__file__).parent / "goldens" / "legacy").glob("*.tlspec/metadata.pkl")
+)
+
+
+@pytest.mark.parametrize("metadata", _LEGACY_GOLDENS, ids=lambda path: path.parent.name)
+def test_inert_inventory_reads_every_legacy_golden_under_its_bounds(metadata: Path) -> None:
+    """The byte ceiling and the class cap leave every genuine 2.x golden readable."""
+
+    from torchlens._io.state_contract import inspect_state_contract
+
+    assert _LEGACY_GOLDENS, "the legacy goldens moved; this test would pass vacuously"
+    report = inspect_state_contract(metadata.parent)
+    assert report["record_types"]
+    assert "foreign_files" not in report
+
+
 def _assert_inventory_refusal(excinfo: pytest.ExceptionInfo, needle: str) -> None:
     from torchlens._io import ArtifactError
 
