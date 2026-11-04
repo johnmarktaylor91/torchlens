@@ -51,9 +51,8 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    set_test_values = _SET_TEST_CROSSING_VALUES.get(layer.func_name)
-    if set_test_values is not None:
-        return set_test_values(layer, parent_label, parent_values)
+    if layer.func_name in _SET_TEST_CROSSING_VALUES:
+        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
     if not parent_values.is_floating_point():
         return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
