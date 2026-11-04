@@ -3644,7 +3644,7 @@ def _jax_intermediate_tap_specs(trace: Trace) -> tuple[_JaxIntermediateTapSpec, 
         label = capture_to_label.get(capture.index)
         if not isinstance(label, str) or label not in trace.op_labels:
             continue
-        op = trace[label]
+        op = trace.ops[label]
         if not getattr(op, "has_saved_activation", False):
             continue
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):

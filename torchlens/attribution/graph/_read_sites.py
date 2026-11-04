@@ -40,13 +40,14 @@ def _site_refusal(message: str, *, code: str) -> AttributionError:
 
 
 def is_module(trace: Any, name: str) -> bool:
-    """Return whether ``name`` is a module address of the capture.
+    """Return whether ``name`` is a module of the capture.
 
-    Membership, not lookup: ``trace.modules[op_label]`` converts an op label to
-    the Module the op ran in, so a successful lookup does not mean ``name``
-    addresses a module.
+    An op or layer label is not, though the module door converts it to the
+    Module that op ran in.
     """
 
+    if name in trace.op_labels or name in trace.layer_labels:
+        return False
     try:
         return name in trace.modules
     except Exception:  # noqa: BLE001 - any membership failure means "not a module name"

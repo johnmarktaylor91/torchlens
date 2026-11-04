@@ -114,32 +114,19 @@ def op_at(trace: Any, key: Any) -> Any:
 
     The internal spelling for callers that accept any lookup key but need an
     Op: ``trace[key]`` for an Op (or a selector result), ``trace.ops[key]`` when
-    the plain door answers with a Module, ModuleCall or Buffer.
+    the plain door answers with a Layer, Module, ModuleCall or Buffer (a bare
+    multi-pass layer label refuses there, naming the pass spellings).
     """
 
     record = trace[key]
-    if isinstance(key, str) and type(record).__name__ in {"Module", "ModuleCall", "Buffer"}:
+    if isinstance(key, str) and type(record).__name__ in {
+        "Layer",
+        "Module",
+        "ModuleCall",
+        "Buffer",
+    }:
         return trace.ops[key]
     return record
-
-
-def extraction_view(trace: Any, key: str) -> Any:
-    """The view an extraction key names: its Op from ``trace.ops``, else ``op_at``.
-
-    A caller-spelled module name (wrapper-relative or dot-flattened) first maps
-    to the address it names. The ops door answers op labels and record keys (a
-    module, call or buffer key names its output Op). A pattern only the plain
-    door resolves, such as a unique substring like ``"relu"``, keeps the plain
-    door's answer.
-    """
-
-    from .._trace_selector_helpers import canonical_module_site_key
-
-    key = canonical_module_site_key(trace, key) or key
-    try:
-        return trace.ops[key]
-    except KeyError:
-        return op_at(trace, key)
 
 
 # --------------------------------------------------------------------------- #
@@ -198,16 +185,27 @@ def output_op(trace: Any, key: str) -> Any:
     and a buffer address with several versions, naming the ``:N`` spellings.
     """
 
-    try:
-        ambiguous = trace._ambiguous_lookup_keys or {}
-    except AttributeError:  # a trace-shaped stand-in without the store
-        ambiguous = {}
-    if key in ambiguous:
+    if key in (trace._ambiguous_lookup_keys or {}):
         trace[key]  # the plain door raises the ambiguity refusal for this key
     ops, spellings = _output_op_candidates(trace, key)
     if len(ops) > 1:
         refuse_several("Op", key, spellings, "output ops")
     return ops[0] if ops else None
+
+
+def _record_view(trace: Any, key: str) -> Any:
+    """``trace[key]``, except that a Module or ModuleCall gives its output Op.
+
+    The Op comes from ``trace.ops`` under the record's own address or call
+    label, so every spelling the plain door accepts (alias, flattened name)
+    reaches it and a module called several times keeps the ops door's refusal.
+    """
+
+    view = trace[key]
+    kind = type(view).__name__
+    if kind == "Module":
+        return trace.ops[view.address]
+    return trace.ops[view.label] if kind == "ModuleCall" else view
 
 
 def layer_for_key(trace: Any, key: str) -> Any:
@@ -346,8 +344,8 @@ def grad_fn_for_key(trace: Any, key: str) -> Any:
 def module_item(module: Any, key: str) -> Any:
     """Resolve ``module[key]`` for a string key: the kind the key names, inside this module.
 
-    A layer label of this module gives what ``trace[label]`` gives (an Op, or
-    the multi-pass teaching refusal); a descendant module address gives that
+    A layer label of this module gives what ``trace[label]`` gives (its Layer,
+    or the Op of ``label:N``); a descendant module address gives that
     Module and a descendant call label its ModuleCall; a substring naming one
     layer of this module gives that record.
     """

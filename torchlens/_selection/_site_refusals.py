@@ -96,7 +96,7 @@ def multipass_bare_label_message(layer_label: str, pass_indices: Sequence[int]) 
         "single-pass layers. Remedy: address one pass with a pass-qualified "
         f"label ({spellings}), the final pass with '{layer_label}:last', or every "
         f"pass as a Selection with '{layer_label}:all'; the aggregate Layer is "
-        f"trace.layers[{layer_label!r}]."
+        f"trace[{layer_label!r}]."
     )
 
 

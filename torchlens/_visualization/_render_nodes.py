@@ -125,7 +125,7 @@ def _get_hidden_parent_buffer_addresses(
             continue
         parent_node: BaseGraphNode
         if isinstance(source_node, Op):
-            parent_node = trace[parent_label]
+            parent_node = trace.ops[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):

@@ -23,7 +23,7 @@ from typing import Any, cast
 
 import torch
 
-from .._data_classes._lookup_kinds import op_at
+from .._data_classes._lookup_kinds import _record_view
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from ..errors._base import ConfigurationError
@@ -564,7 +564,7 @@ def enumerate_trace_sites(
     seen: set[str] = set()
     for requested in requested_list:
         lookup = str(requested)
-        record = op_at(trace, lookup)  # a module address names its output op
+        record = _record_view(trace, lookup)  # a module address names its output Op
         layer_label = str(getattr(record, "layer_label", lookup))
         if int(getattr(record, "num_passes", 1)) > 1 and not _is_pass_qualified(record):
             alternatives = [str(op.label) for op in getattr(record, "ops", {}).values()]

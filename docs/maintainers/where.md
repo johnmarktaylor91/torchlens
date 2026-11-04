@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1494 modules, 656690 lines, 0 modules without a docstring.
+83 packages, 1494 modules, 656718 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 75 | 33565 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 75 | 33564 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1438 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26616 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4664 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 98 | 38675 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 98 | 38684 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10665 |
@@ -50,7 +50,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5249 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15089 |
-| `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2527 |
+| `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2528 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3863 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 17 | 6756 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4149 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13924 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13943 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7619 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33565 lines)
+TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33564 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -174,7 +174,7 @@ TorchLens - extract outs and metadata from PyTorch models. (75 modules, 33565 li
 | `facets` | Lazy alias module: ''torchlens.facets'' is :mod:'torchlens._semantic.facets'. | 15 |
 | `features` | The ONE named, recorded feature-matrix shaping operation (tvscope B7/). | 340 |
 | `fingerprint` | Provisional public structural-hash helpers. | 350 |
-| `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 492 |
+| `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 491 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 598 |
 | `options` | Grouped option dataclasses for public TorchLens APIs. | 1753 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 174 |
@@ -295,7 +295,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (98 modules, 38675 lines)
+Core data structures for representing a logged forward pass. (98 modules, 38684 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -318,7 +318,7 @@ Core data structures for representing a logged forward pass. (98 modules, 38675 
 | `_layer_spec` | Layer mirror-field spec table and stored-state order (pure schema data). | 223 |
 | `_layer_views` | Layer view functions: per-pass aggregation and graph unions moved off ''Layer''. | 328 |
 | `_lookup_keys` | Shared lookup-key validation helpers for ''Trace'' access paths. | 157 |
-| `_lookup_kinds` | Cross-kind key resolution shared by the TorchLens indexing doors. | 394 |
+| `_lookup_kinds` | Cross-kind key resolution shared by the TorchLens indexing doors. | 392 |
 | `_module_accessor_filters` | Collection views of ''ModuleAccessor'' that read through the owning trace. | 38 |
 | `_module_facade_fields` | Stored-field tables for the ''ModuleCall'' and ''Module'' record facades. | 95 |
 | `_module_role_hints` | Semantic role hints for structured module outputs. | 152 |
@@ -373,7 +373,7 @@ Core data structures for representing a logged forward pass. (98 modules, 38675 
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 713 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
-| `_value_modules` | Bounded module and module-call record displays. | 94 |
+| `_value_modules` | Bounded module and module-call record displays. | 99 |
 | `_value_ops` | Operation and pass-aware layer text cards, built from captured facts. | 253 |
 | `_value_params` | Parameter and buffer records: metadata first, explicit value basis. | 113 |
 | `_value_repr` | Record display facade: one-line identities and bounded labelled cards. | 34 |
@@ -389,7 +389,7 @@ Core data structures for representing a logged forward pass. (98 modules, 38675 
 | `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 793 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 845 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 395 |
-| `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 481 |
+| `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 487 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1775 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2640 |
@@ -1107,7 +1107,7 @@ Input-attribution methods for TorchLens. (31 modules, 15089 lines)
 
 ### `torchlens.attribution.graph`
 
-Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. (7 modules, 2527 lines)
+Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. (7 modules, 2528 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1115,7 +1115,7 @@ Attribution graphs: direct linear effects between transcoder features, errors, t
 | `_build` | ''build_graph'': an attribution graph from one capture, one backward read. | 866 |
 | `_neuronpedia` | Attribution graphs in Neuronpedia's published attribution-graph schema. | 581 |
 | `_neuronpedia_upload` | Uploads to Neuronpedia through its documented API, with the standard library only. | 436 |
-| `_read_sites` | Read sites inside modules and facet-named frozen sets for ''build_graph''. | 168 |
+| `_read_sites` | Read sites inside modules and facet-named frozen sets for ''build_graph''. | 169 |
 | `_result` | The attribution-graph result: typed nodes, a dense adjacency, and its accounting. | 294 |
 | `_transcoders` | Transcoder specs for the attribution graph: what each feature reads and writes. | 168 |
 
@@ -1832,7 +1832,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13924 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13943 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1845,7 +1845,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13924
 | `_engine_geometry` | Internal rational geometry primitives for the receptive-field engine. | 280 |
 | `_engine_revision` | Structural fingerprint of a trace for the receptive-field solution caches. | 102 |
 | `_errors` | Exception types for receptive-field queries and validation. | 169 |
-| `_forward_query` | Exact per-unit projective queries via membership transposition. | 645 |
+| `_forward_query` | Exact per-unit projective queries via membership transposition. | 664 |
 | `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 862 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 530 |
 | `_gradient_live` | Resolve the graph-connected tensor behind a same-object logging copy. | 126 |

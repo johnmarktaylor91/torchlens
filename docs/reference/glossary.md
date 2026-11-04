@@ -1411,13 +1411,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   return that Op, `trace["relu_1_1:all"]` and `trace[tl.label("relu_1_1:all")]` return the
   Selection of every pass (an Op collection refuses `:all` with a `KeyError` naming those
   doors), and `trace.layers["relu_1_1:last"]` is the aggregate Layer like any pass spelling.
-  A bare multi-pass label through `trace[...]` refuses (`multipass_bare_label_ambiguous`, the
-  `tl.label` refusal) naming these spellings and `trace.layers[label]`; `trace[...]` never
-  returns a Layer.
+  A bare layer label at `trace[...]` is the Layer, single- or multi-pass; a single-pass Layer
+  passes single-op reads (`.out`, `.shape`) through to its Op, and on a multi-pass Layer they
+  refuse (`layer_pass_ambiguous`) naming `label:1` and `label:last`. A door that must give one
+  Op refuses a bare multi-pass label: `tl.label(label)` with `multipass_bare_label_ambiguous`
+  naming these spellings and `trace[label]`, `trace.ops[label]` with `ambiguous_op_lookup`.
 
 **Indexing coherence (every door returns the kind it names)**
-: The plain door `trace[key]` returns the kind the key names: a layer label its Op (never a
-  Layer, above), a module address its `Module` whether called once or many times, `address:N`
+: The plain door `trace[key]` returns the kind the key names: a layer label its `Layer` and
+  `label:N` its Op (*Pass tokens*, above), a module address its `Module` whether called once or many times, `address:N`
   its `ModuleCall`, a parameter address its `Param`, a buffer address its `Buffer`
   (`buffer_address:N` the version Op), a grad_fn label its `GradFn`. A typed door always
   returns its own kind and converts a key that names exactly one such object: `trace.ops[address]`
@@ -2872,10 +2874,10 @@ shim owed; S2-gated*
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`, or
   `label:all` for every pass); the
-  string/`tl.label` addressing face (`trace[label]` included) is
+  string/`tl.label` addressing face is
   `multipass_bare_label_ambiguous` on `AmbiguousSiteError` (both teaching refusals name
-  every pass-qualified spelling, `:last`, `:all` and `trace.layers[label]`; spellings
-  DOCUMENTED-UNSTABLE).
+  every pass-qualified spelling, `:last`, `:all` and `trace[label]`, which gives the
+  aggregate Layer; spellings DOCUMENTED-UNSTABLE).
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*

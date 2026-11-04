@@ -164,7 +164,7 @@ def _mask_from_eager(trace: Any, module: Any, batch_index: int) -> MaskInfo | No
     if home_label is None:
         return None
     try:
-        scores_op = trace[home_label]
+        scores_op = trace.ops[home_label]
     except (KeyError, TorchLensError):
         return None
     shape = tuple(getattr(scores_op, "shape", ()) or ())
@@ -184,7 +184,7 @@ def _additive_mask_from_parent(
     """Return the masked-position grid if a parent op holds the additive fill."""
 
     try:
-        value = trace[parent_label].out
+        value = trace.ops[parent_label].out
     except (KeyError, TorchLensError):
         return None
     if not isinstance(value, torch.Tensor) or not value.is_floating_point():
