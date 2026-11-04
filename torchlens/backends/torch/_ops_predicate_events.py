@@ -477,9 +477,11 @@ def _extract_arg_tensors_and_params(
         spec = FUNC_ARG_SPECS.get(normalized_name)
         if spec is not None and dynamic_spec_covers_call(spec, args, kwargs):
             return promote_mutated_parameters(*extract_tensors_and_params(spec, args, kwargs))
-        if spec is None:
-            if (cached := _extract_through_dynamic_spec(normalized_name, args, kwargs)) is not None:
-                return cached
+        if (
+            spec is None
+            and (cached := _extract_through_dynamic_spec(normalized_name, args, kwargs)) is not None
+        ):
+            return cached
 
     # Tier 3 fallback: BFS crawl. Cache/union-merge the derived spec only for
     # fixed-arity functions with no static entry; variadic transform ops,
@@ -492,8 +494,7 @@ def _extract_arg_tensors_and_params(
         and _st._dynamic_arg_specs.get(normalized_name) is not DYNAMIC_SPEC_UNCACHEABLE
     ):
         _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
-        # The crawl dedups by identity, but later calls extract one entry per slot
-        # through the cached spec; do the same now so a first trace matches its retrace.
+        # The crawl dedups by id; extract per slot as later calls do, so a retrace matches.
         if (cached := _extract_through_dynamic_spec(normalized_name, args, kwargs)) is not None:
             return cached
     # A Parameter mutated in place earlier in this pass binds as a graph parent of
