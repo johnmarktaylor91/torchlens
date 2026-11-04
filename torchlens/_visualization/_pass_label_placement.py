@@ -197,6 +197,7 @@ def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], int]:
 
 
 def _unquote(name: str) -> str:
+    """Return a DOT node name without its port suffix and surrounding quotes."""
     name = name.split(":", 1)[0] if not name.startswith('"') else name
     if name.startswith('"') and name.endswith('"'):
         return name[1:-1].replace('\\"', '"')
@@ -221,6 +222,7 @@ def _shift_label(line: str, kind: str, shift: Point) -> str:
     above, below = (pad_row, "") if shift[1] < 0 else ("", pad_row)
 
     def wrap(match: re.Match[str]) -> str:
+        """Wrap the matched HTML label in a table padded on the chosen sides."""
         return (
             f'{kind}=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
             f"{above}<TR>{left}<TD>{match.group(1)}</TD>{right}</TR>{below}</TABLE>>"
@@ -230,6 +232,7 @@ def _shift_label(line: str, kind: str, shift: Point) -> str:
 
 
 def _with_placement(line: str, choice: tuple[float, float]) -> str:
+    """Append the chosen ``labelangle`` and ``labeldistance`` to an edge statement."""
     stripped = line.rstrip("\n")
     newline = line[len(stripped) :]
     distance, angle = choice
@@ -272,6 +275,7 @@ class _Scene:
     def _add_edge(
         self, edge: dict[str, Any], names: dict[int, str], seen: dict[tuple[str, str], int]
     ) -> None:
+        """Record one laid-out edge: its spline, arrowheads, label boxes and end-label candidates."""
         tail, head = names.get(edge["tail"], ""), names.get(edge["head"], "")
         occurrence = seen.get((tail, head), 0)
         seen[(tail, head)] = occurrence + 1
@@ -531,11 +535,13 @@ def _wrong_side(label: dict[str, Any], lines: list[Rect]) -> bool:
 
 
 def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:
+    """Return ``lines`` moved by ``shift``."""
     dx, dy = shift
     return [(r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy) for r in lines]
 
 
 def _union(rects: Sequence[Rect]) -> Rect:
+    """Return the smallest rectangle that covers every rectangle in ``rects``."""
     return (
         min(r[0] for r in rects),
         min(r[1] for r in rects),
@@ -545,16 +551,19 @@ def _union(rects: Sequence[Rect]) -> Rect:
 
 
 def _bb(text: str) -> Rect:
+    """Parse a Graphviz bounding box string (left, bottom, right, top)."""
     x0, y0, x1, y1 = (float(v) for v in text.split(","))
     return (x0, y0, x1, y1)
 
 
 def _point(text: str) -> Point:
+    """Parse a Graphviz ``x,y`` point, ignoring any trailing fields."""
     x, y = (float(v) for v in text.split(",")[:2])
     return (x, y)
 
 
 def _outlines(ops: Any) -> list[list[Point]]:
+    """Return closed outlines for the ellipses, polygons and curves in Graphviz draw ops."""
     outlines: list[list[Point]] = []
     for op in ops or []:
         if op["op"] in ("e", "E"):
@@ -573,6 +582,7 @@ def _outlines(ops: Any) -> list[list[Point]]:
 
 
 def _ring(rect: Rect) -> list[Point]:
+    """Return the densified outline of ``rect``."""
     x0, y0, x1, y1 = rect
     return _densify([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
 
@@ -590,6 +600,7 @@ def _densify(points: Sequence[Point]) -> list[Point]:
 
 
 def _beziers(ops: Any) -> list[list[Point]]:
+    """Return the control points of every Bezier draw op."""
     return [
         [(float(x), float(y)) for x, y in op["points"]]
         for op in ops or []
@@ -636,6 +647,7 @@ def _port_tangent(pos: str, *, head: bool) -> tuple[Point, Point]:
 
 
 def _bezier_at(ctrl: Sequence[Point], t: float) -> Point:
+    """Evaluate a cubic Bezier segment at parameter ``t``."""
     (x0, y0), (x1, y1), (x2, y2), (x3, y3) = ctrl
     m = 1.0 - t
     return (
@@ -645,6 +657,7 @@ def _bezier_at(ctrl: Sequence[Point], t: float) -> Point:
 
 
 def _sample_bezier(ctrl: Sequence[Point]) -> list[Point]:
+    """Sample a piecewise cubic Bezier into a densified polyline."""
     points = [ctrl[0]]
     for start in range(0, len(ctrl) - 3, 3):
         points += [_bezier_at(ctrl[start : start + 4], k / 16) for k in range(1, 17)]
@@ -652,15 +665,18 @@ def _sample_bezier(ctrl: Sequence[Point]) -> list[Point]:
 
 
 def _bounds(points: Sequence[Point]) -> Rect:
+    """Return the bounding rectangle of ``points``."""
     xs, ys = [p[0] for p in points], [p[1] for p in points]
     return (min(xs), min(ys), max(xs), max(ys))
 
 
 def _grow(rect: Rect, margin: float) -> Rect:
+    """Return ``rect`` enlarged by ``margin`` on every side."""
     return (rect[0] - margin, rect[1] - margin, rect[2] + margin, rect[3] + margin)
 
 
 def _overlaps(a: Rect, b: Rect) -> bool:
+    """Whether rectangles ``a`` and ``b`` touch or overlap."""
     return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
 
 
@@ -671,12 +687,14 @@ def _depth(point: Point, rect: Rect) -> float:
 
 
 def _point_rect_distance(point: Point, rect: Rect) -> float:
+    """Distance from ``point`` to ``rect`` (zero inside)."""
     dx = max(rect[0] - point[0], 0.0, point[0] - rect[2])
     dy = max(rect[1] - point[1], 0.0, point[1] - rect[3])
     return math.hypot(dx, dy)
 
 
 def _rect_rect_gap(a: Rect, b: Rect) -> float:
+    """Gap between rectangles ``a`` and ``b`` (negative when they overlap)."""
     dx = max(b[0] - a[2], a[0] - b[2])
     dy = max(b[1] - a[3], a[1] - b[3])
     if dx > 0 or dy > 0:
@@ -708,6 +726,7 @@ def _rect_poly_gap(rect: Rect, ring: Sequence[Point]) -> float:
 
 
 def _inside(point: Point, poly: Sequence[Point]) -> bool:
+    """Whether ``point`` lies inside polygon ``poly`` (even-odd rule)."""
     x, y = point
     hit = False
     for (x1, y1), (x2, y2) in zip(poly, [*poly[1:], poly[0]], strict=True):
