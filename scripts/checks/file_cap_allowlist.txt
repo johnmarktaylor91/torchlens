@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	172
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1121
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1533
+torchlens/_capture/projections.py	1520
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	104
@@ -100,7 +100,7 @@ torchlens/_data_classes/grad_fn.py	840
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
 torchlens/_data_classes/interface.py::_str_after_pass	63
 torchlens/_data_classes/layer.py	1800
-torchlens/_data_classes/module.py	2623
+torchlens/_data_classes/module.py	2621
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
@@ -903,7 +903,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4187
+torchlens/backends/torch/backward.py	4186
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	94
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
