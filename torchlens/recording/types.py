@@ -1172,12 +1172,7 @@ class Recording(TraceLike):
 
         fork = self.to_trace().fork()
         return fork.do(
-            site,
-            value_or_hook,
-            model=model,
-            inputs=inputs,
-            intervention=intervention,
-            loss=loss,
+            site, value_or_hook, model=model, inputs=inputs, intervention=intervention, loss=loss
         )
 
     def _recover_halt_frontier(self) -> tuple[str, torch.Tensor]:
