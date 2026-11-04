@@ -1301,6 +1301,7 @@ def _build_module_focus_entries(
                 vis_mode=vis_mode,
                 boundary_kind="output",
                 inner_node=node,
+                tensor_row=shape_size_row(child_node),
             )
             if _relation_label(node) not in boundary.parents:
                 boundary.parents.append(_relation_label(node))

@@ -159,8 +159,9 @@ def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path
     (to_output,) = [rows for rows in stubs.values() if rows[0].startswith("to model output")]
     assert to_output[0] == "to model output 1"
     assert to_output[1].startswith("output_")
-    # No size row: the tensor leaving is the inner op's own, already drawn.
-    assert all(len(rows) == 2 for rows in stubs.values()), by_first_row
+    # A stub reads like any node: its last row is its op's shape and size.
+    for rows in stubs.values():
+        assert rows == [rows[0], rows[1], _tensor_row(trace, rows[1])], by_first_row
 
 
 def test_stubs_sit_outside_the_focused_frame(trace: tl.Trace, tmp_path: Path) -> None:

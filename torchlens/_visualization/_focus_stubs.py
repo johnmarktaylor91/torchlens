@@ -110,7 +110,7 @@ def _get_or_create_boundary_node(
     module's output. The stub is placed outside the focused module's frame,
     in the frame of the deepest called module that encloses the focus (the
     top level once a focused draw flattens its ancestors). ``tensor_row`` is
-    the shape and size of the tensor an input stub brings.
+    the shape and size of the outside op's output.
     """
 
     external_label = external_node.layer_label.replace(":", "pass")
@@ -171,8 +171,9 @@ def _boundary_lines(
     relative to the scope line's ``prefix``), or ``from model input x`` /
     ``to model output logits``. The second row is the outside op's own label
     (the name its node carries elsewhere); an outside op in no module has it
-    on the first row instead (``from linear_1_1``). An input stub ends with
-    ``tensor_row``, the shape and size of the tensor it brings.
+    on the first row instead (``from linear_1_1``). Every stub ends with
+    ``tensor_row``, the shape and size of the outside op's output, so a stub
+    reads like any other node: name, shape, size.
     """
 
     word = "from" if boundary_kind == "input" else "to"
@@ -183,7 +184,7 @@ def _boundary_lines(
     else:
         where = address if address.startswith("model ") else _relative_call(address, prefix)
         rows = [f"{word} {where}", title]
-    if boundary_kind == "input" and tensor_row:
+    if tensor_row:
         rows.append(tensor_row)
     return tuple(rows)
 
