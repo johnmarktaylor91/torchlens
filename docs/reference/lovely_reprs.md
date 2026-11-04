@@ -8,9 +8,12 @@ DOCUMENTED-UNSTABLE pending the naming session):
 - Value-record `str(x)` is a bounded card with at most 10 rows below the
   first line. Its first line is the repr, and its `more` row names the exits.
 - Record HTML cards contain those same rows, with no automatic value grid.
+- A Trace `str(x)` is a bounded card with at most twelve rows below the
+  first line, which is the repr; the module tree stays in `.summary()`.
 - Containers point, records show: collection reprs are one-line
-  composition cards (`LayerAccessor(553 layers (539 ops, 14 buffers) |
-  .head() .search() .to_pandas())`), never member dumps.
+  composition cards (`LayerAccessor: 553 layers (539 ops, 14 buffers)`),
+  with at most five members and `.head()`, `.search()` and `.to_pandas()`
+  exits in `str()`.
 
 ## The explicit glance core line
 
@@ -81,13 +84,16 @@ Op truediv_1: float32 [1, 8] on cpu NaN 3, +Inf 5, no finite values
 >>> log.first_nonfinite()
 First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=(1, 8),
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
+>>> _ = log.health_facts
 >>> log
-Trace(name='_poisoned_1', model_class_qualname='_Poisoned', layers=7, state=PRISTINE) [NaN/Inf FOUND (.nonfinite_ops)]
+Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf FOUND (.nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
-in the same one-line language as the health report. On a clean, fully
-checked capture the trace repr instead carries the per-trace PROOF line
+in the same one-line language as the health report. Trace rendering reads
+cached health evidence and never scans tensors. Until health has been
+checked it says `NaN/Inf not checked`. A clean, fully
+checked capture carries the per-trace proof
 `no NaN/Inf (exact)`.
 
 ## The graph-scale table
@@ -127,3 +133,14 @@ The philosophy this surface mines and extends:
   collapsed-first rendering.
 - **flax `tabulate`** (totals conservation), **Keras 3** (footer
   authority), **pysnooper** `normalize=True` (diffable summaries).
+
+## Trace and owned record collections
+
+`print(trace)` shows at most twelve rows below its identity line. The card
+contains stored model, capture, graph and save metadata; `trace.summary()`
+provides the module hierarchy. Default pristine state is omitted.
+
+ATen and event tuples keep tuple iteration, equality, hashing and slicing.
+Their bounded displays show counts and at most five records, for example
+`AtenOps: 500 calls`. Portable saves encode these sequences as ordinary
+tuples, so their display type does not change the artifact format.

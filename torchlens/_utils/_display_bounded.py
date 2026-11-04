@@ -50,6 +50,8 @@ class RecordTuple(tuple):
         return (type(self), (tuple(self), self.title, self.noun, self.singular))
 
     def _head(self) -> str:
+        """The count header: title, member count and the singular or plural noun."""
+
         return f"{self.title}: {len(self)} {self.singular if len(self) == 1 else self.noun}"
 
     def __repr__(self) -> str:
@@ -119,9 +121,13 @@ def _read_field(obj: Any, name: str) -> Any:
     """Read one dataclass field for display; a failing property reads as ``None``."""
 
     def read() -> Any:
+        """Read the named field from the record."""
+
         return getattr(obj, name)
 
     def fallback(_error: Exception) -> Any:
+        """Return ``None`` when reading the field raised."""
+
         return None
 
     return fail_open(read, fallback)

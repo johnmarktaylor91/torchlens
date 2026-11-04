@@ -1080,22 +1080,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_data_classes/_lookup_kinds.py",
-  "has_default": false,
-  "sites": 6,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "params",
-  "file": "torchlens/_data_classes/_lookup_kinds.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/_data_classes/_op_aten.py",
@@ -1321,14 +1305,6 @@
  },
  {
   "ambiguous": true,
-  "field": "label_raw",
-  "file": "torchlens/_data_classes/interface.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
@@ -1340,7 +1316,7 @@
   "field": "params",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -4321,6 +4297,14 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_utils/_display_records.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_utils/_onramp.py",
   "has_default": false,
@@ -5428,7 +5412,7 @@
   "field": "modules",
   "file": "torchlens/attribution/graph/_build.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -9517,14 +9501,6 @@
   "file": "torchlens/report/_flops_report.py",
   "has_default": false,
   "sites": 10,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
