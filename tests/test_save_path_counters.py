@@ -32,7 +32,6 @@ _BASELINE = (
     / "perf_baselines"
     / "linux-cpu-provisional.json"
 )
-_ROW_LABEL = "tl.save fresh tlspec path"
 
 # Structure of the save path: the same on every torch build.
 STRUCTURAL_COUNTERS = (
@@ -54,9 +53,9 @@ def _pinned() -> dict[str, Any]:
     rows = [
         row
         for row in document["rows"]
-        if row.get("operation") == "aux_save" and row.get("label") == _ROW_LABEL
+        if row.get("operation") == "aux_save" and row.get("model") == "tinynet"
     ]
-    assert len(rows) == 1, f"expected one {_ROW_LABEL!r} aux_save row, found {len(rows)}"
+    assert len(rows) == 1, f"expected one tinynet aux_save row, found {len(rows)}"
     return rows[0]["metadata"]["save_path_counters"]
 
 
