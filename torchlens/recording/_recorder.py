@@ -28,16 +28,18 @@ from .._output_slot import (
     returned as output_returned,
     stopped as output_stopped,
 )
-from .._training_validation import TrainingModeConfigError, reject_compiled_model
+from .._training_validation import reject_compiled_model
 from ..intervention.predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions
 from ._capture_door import _unfold_capture_options
-from ._halt import StopSignal
+from ._halt import StopSignal, _mark_recording_halted
 from ._recorder_config import _configure_predicate_capture
 from ._run_cores import retain_run_core
+from ._storage_resolver import _resolve_train_mode_defaults
 from ._validation import (
     _unwrap_ddp_for_fastlog,
     _warn_zero_match_capture_selectors,
+    refuse_episode_on_record,
     validate_recording_options,
 )
 from .exceptions import RecorderStateError
@@ -50,35 +52,7 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import CaptureSpec, Recording, _mark_recording_halted
-
-
-def _resolve_train_mode_default(
-    *,
-    field_name: str,
-    value: bool | CaptureSpec | MissingType,
-    backward_ready: bool,
-) -> bool | CaptureSpec | MissingType:
-    """Resolve one default capture option for train-mode sugar."""
-
-    if backward_ready and value is MISSING:
-        return CaptureSpec(save_grad=True, save_out=True, save_metadata=True)
-    if not backward_ready or value is MISSING or value is False:
-        return value
-    if value is True:
-        raise TrainingModeConfigError(
-            f"backward_ready=True conflicts with {field_name}=True because True uses "
-            "save_grad=False; use CaptureSpec(save_grad=True) or omit the default. "
-            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
-            code="backward_ready_conflict",
-        )
-    if isinstance(value, CaptureSpec) and not value.save_grad:
-        raise TrainingModeConfigError(
-            f"backward_ready=True conflicts with {field_name}=CaptureSpec(save_grad=False). "
-            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
-            code="backward_ready_conflict",
-        )
-    return value
+from .types import CaptureSpec, Recording
 
 
 def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
@@ -143,6 +117,7 @@ class Recorder:
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         narrate: Any | None | MissingType = MISSING,
         capture: CaptureOptions | None = None,
+        episode: Any | None = None,
         lean: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
@@ -182,6 +157,8 @@ class Recorder:
             autograd history, so a loss built from them backpropagates into the model;
             a spec with ``save_grad=True`` stays attached either way, disk payloads are
             always detached, and ``backward_ready=True`` refuses an explicit ``True``.
+        episode:
+            Refused typed (``record_episode_unsupported``); episode capture runs on ``tl.trace``.
         """
 
         flat = _unfold_capture_options(capture, api_name="torchlens.recording.Recorder")
@@ -206,16 +183,10 @@ class Recorder:
                 detach_saved_activations if isinstance(detach_saved_activations, bool) else None
             ),
         )
+        refuse_episode_on_record(episode)
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, storage)
-        default_op = _resolve_train_mode_default(
-            field_name="default_op",
-            value=default_op,
-            backward_ready=backward_ready,
-        )
-        default_module = _resolve_train_mode_default(
-            field_name="default_module",
-            value=default_module,
-            backward_ready=backward_ready,
+        default_op, default_module = _resolve_train_mode_defaults(
+            default_op, default_module, backward_ready
         )
         self.model = unwrapped_model
         # Gradient hooks are installed only when the caller asks for a backward
@@ -271,6 +242,7 @@ class Recorder:
         self._output_tensors: list[torch.Tensor] = []
         self._output_tensor_addresses: list[str] = []
         self._captured_run_cores: list[Any] = []
+        self._trim_pass_cores = False  # a generation recorder sets it (_run_cores)
         self._entered = False
         self._exited = False
         self._failed = False
@@ -389,7 +361,6 @@ class Recorder:
 
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("calling a Recorder requires an active with-block")
-        # Deferred: _training_validation sits above fastlog in the layer map.
         from .._training_validation import autograd_disabled_at_entry
 
         inference_only = not self._backward_requested and autograd_disabled_at_entry()
@@ -419,7 +390,7 @@ class Recorder:
             inference_only=inference_only,
             inference_only_implied=inference_only,
         )
-        _configure_predicate_capture(trace, self.options)
+        _configure_predicate_capture(trace, self.options, model=self.model)
         self._reset_state_for_pass(sample_id=sample_id)
         if self._echo_session is not None:
             self._echo_session.reset_pass(self._next_pass_index)
@@ -447,7 +418,7 @@ class Recorder:
                 )
         except StopSignal as halt_exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            retain_run_core(self._captured_run_cores, captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
             self._absorb_pass_events(trace)
             object.__setattr__(
                 self._state.recording,
@@ -465,7 +436,7 @@ class Recorder:
             return output
         except Exception as exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-            retain_run_core(self._captured_run_cores, captured_run_core)
+            retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if self._echo_session is not None:
                 # Crash tail (snoop D5 tail 2): flush synchronously, extend the
@@ -504,7 +475,7 @@ class Recorder:
         output_tensors = trace.__dict__.pop("_fastlog_output_tensors", None)
         output_tensor_addresses = trace.__dict__.pop("_fastlog_output_tensor_addresses", None)
         captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
-        retain_run_core(self._captured_run_cores, captured_run_core)
+        retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
         if output_tensors is None or output_tensor_addresses is None:
             # Defensive fallback only; the postprocess=False branch above always
             # populates these on a normal return.

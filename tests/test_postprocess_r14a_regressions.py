@@ -336,6 +336,7 @@ def test_loop_conditionals_clear_ambiguous_fired_arm_summary(tmp_path: Path) -> 
     assert [arm.fired for arm in conditional.arms] == [True, True]
     assert conditional.fired_arm_index is None
     assert conditional.fired_arm_kind is None
+    assert conditional.outcome == "multiple"
     assert trace.check_metadata_invariants() is True
 
 

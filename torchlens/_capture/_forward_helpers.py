@@ -15,7 +15,6 @@ from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
-from .._ir.events import ModuleFrame
 from .._ir.predicate import ModuleStackFrame
 from .._quantities import Bytes
 from ..backends.registry import (
@@ -24,7 +23,6 @@ from ..backends.registry import (
     resolve_backend_spec,
 )
 from ..recording._halt import StopSignal
-from ..recording.types import RecordContext
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
 from .session import (
     CaptureSession,
@@ -664,36 +662,3 @@ def _normalize_module_stack(
             )
         )
     return tuple(frames)
-
-
-def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame, ...]:
-    """Convert fastlog module-stack frames to IR module frames."""
-
-    return tuple(
-        ModuleFrame(
-            address=_module_frame_address(frame),
-            address_normalized=None,
-            module_type=frame.module_type,
-            call_index=frame.pass_number,
-            fx_qualpath=None,
-            entry_argnames=(),
-        )
-        for frame in ctx.module_stack
-    )
-
-
-def _module_frame_address(frame: ModuleStackFrame) -> str:
-    """Return the Trace-facing address for a predicate module-stack frame.
-
-    Parameters
-    ----------
-    frame
-        Predicate module frame from a capture-time ``RecordContext``.
-
-    Returns
-    -------
-    str
-        Public module address used by postprocess.
-    """
-
-    return frame.address or "self"

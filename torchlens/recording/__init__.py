@@ -15,7 +15,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "StopSignal": ("torchlens.recording._halt", "StopSignal"),
     "ModuleStackFrame": ("torchlens.recording.types", "ModuleStackFrame"),
     "Recorder": ("torchlens.recording._recorder", "Recorder"),
-    "DryRun": ("torchlens.recording.types", "DryRun"),
+    "DryRun": ("torchlens.recording._dry_run", "DryRun"),
     "GenerationOptions": ("torchlens.recording._generation_options", "GenerationOptions"),
     "TokenSeries": ("torchlens.recording._generation_stream", "TokenSeries"),
     "reducers": ("torchlens.recording.reducers", None),
