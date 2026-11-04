@@ -74,7 +74,9 @@ def focus_address(module: Any) -> str | None:
 def module_at(trace: Trace, address: str) -> Module | None:
     """Return the module record at ``address``, or ``None`` when the trace has none there."""
 
-    return trace.modules[address] if address in trace.modules else None
+    if address not in trace.modules:  # the accessor resolves, it has no .get
+        return None
+    return trace.modules[address]
 
 
 def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
