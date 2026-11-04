@@ -163,3 +163,28 @@ def test_text_decode_keeps_captured_text_when_the_ids_do_not_change() -> None:
     assert edited.decode_output() == [
         {"batch_item": 0, "rank": 1, "text": "tok0 tok1", "token_ids": [0, 1]}
     ]
+
+
+def test_aborted_selection_batch_restores_the_decoded_output() -> None:
+    """A batch that commits an output rewrite then refuses rolls the decoded rows back exactly."""
+
+    model = _TinyClassifier().eval()
+    capture = tl.options.CaptureOptions(replayable=True)
+    fork = tl.trace(model, torch.ones(1, 2), capture=capture).fork()
+    stored = fork.__dict__["_decoded_output"]
+    assert stored is not None, "the capture decoded its output"
+    expected = fork.decode_output(k=3)
+    head_op = fork[fork.output_layers[0]].parents[0]
+
+    def _wrong_shape(tensor: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        return tensor[:1]
+
+    pairs = [
+        (fork.layers[head_op].__selection__(), tl.scale(2.0)),
+        (tl.param("head.weight"), _wrong_shape),
+    ]
+    with pytest.raises(Exception) as caught:
+        fork.do(pairs)
+    assert "code" in getattr(caught.value, "fields", {}), "a typed refusal"
+    assert fork.__dict__["_decoded_output"] is stored
+    assert fork.decode_output(k=3) == expected
