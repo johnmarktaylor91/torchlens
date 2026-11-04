@@ -311,12 +311,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="module-boxes",
         title="Module boxes: path, class, depth",
-        rule="Each call is a box titled @path over (Class); the border thins with depth, "
-        "{pen_max} pt outside to {pen_min} pt at the deepest.",
+        rule="Each call is a box titled @path over (Class); every border is {pen_max} pt, "
+        "at any depth, so nesting reads from the boxes and their titles.",
         panels=(Panel("a", "Nested", kwargs=CALLS),),
         keys=(
             Key("@block:1 over (Sequential): the first call", "cluster(label~@block:1)"),
-            Key("Thick outer border, thinner inside", "cluster(penwidth={pen_max})"),
+            Key("Same border at every depth", "cluster(penwidth={pen_max})"),
             Key("Second call of the same module: @block:2", "cluster(label~@block:2)"),
             Key("Rows name the call: @block.0.fc:2", "node(text~@block.0.fc:2)"),
         ),

@@ -222,7 +222,7 @@ def test_focus_count_skips_the_boundary_stubs(
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
-        assert f"drawn: {count} ops ({binary_size(expected)})" in header
+        assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
 
 
 # -- focus scope line and reading key (AGT-2538) ------------------------------
@@ -230,12 +230,15 @@ def test_focus_count_skips_the_boundary_stubs(
 
 def test_focus_header_names_its_scope_and_its_lines(trace: tl.Trace, tmp_path: Path) -> None:
     header = _header(_dot(trace, tmp_path, "scope", module=_FOCUS))
-    # Non-breaking spaces around the U+203A separators: SVG viewers drop a
-    # plain space next to a bold run, which read as "_Toy> transformer".
+    # Non-breaking spaces around the U+203A separators, and ONE bold run for
+    # the whole scope: Graphviz writes each change of weight as its own SVG
+    # <text> placed by its own metrics, so a mixed line drifted at every
+    # bold/plain boundary in browsers whose font differs.
     sep = "&#160;&#8250;&#160;"
-    scope = f"<B>_Toy</B>{sep}transformer{sep}h.1{sep}<B>mlp</B>&#160;(_MLP)"
+    scope = f"<B>_Toy{sep}transformer{sep}h.1{sep}mlp&#160;(_MLP)</B><br align='left'/>"
     assert scope in header
-    assert "drawn: " in header
+    assert header.count("<B>") == 1, header
+    assert "drawn: " not in header  # the count line carries no label, as on a whole-model draw
     assert "whole model" not in header and "params" not in header
 
 
@@ -247,9 +250,7 @@ def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path
     assert "(shape), size:" not in dot
     bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
     assert KEY_TABLE_ID not in bare and "@name: a module" not in bare
-    assert (
-        "&#8250;&#160;<B>mlp</B>&#160;(_MLP)" in bare
-    )  # the scope line is the header, not the key
+    assert "&#8250;&#160;mlp&#160;(_MLP)</B>" in bare  # the scope line is the header, not the key
 
 
 def test_reading_key_is_opt_in_through_show_legend(trace: tl.Trace, tmp_path: Path) -> None:

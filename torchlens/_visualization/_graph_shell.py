@@ -15,12 +15,15 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._render_common import VisualizationOverrides
 
-__all__ = ["FOCUS_RANKSEP", "build_graphviz_shell"]
+__all__ = ["FOCUS_RANKSEP", "ROLLED_NODESEP", "build_graphviz_shell"]
 
 #: Rank separation (inches) of a ``module=`` focused draw. Graphviz's default
 #: is 0.5; a focused picture is one module's short chain of ops, and the
 #: tighter ranks keep its input and output on one screen.
 FOCUS_RANKSEP = "0.3"
+#: Node separation of a rolled draw, in inches (dot default 0.25): a self-loop
+#: is half of it wide, so a recurrence draws as an obvious loop.
+ROLLED_NODESEP = "0.5"
 
 
 def build_graphviz_shell(
@@ -67,6 +70,10 @@ def _graph_attrs(
         # One module's ops read as a short chain: closer ranks keep the input
         # and the output of a focused draw on one screen.
         graph_args["ranksep"] = FOCUS_RANKSEP
+    if request.vis_mode == "rolled":
+        # A rolled recurrence is a self-loop whose width dot takes from half
+        # the node separation: wider ranks give the loop room to read as one.
+        graph_args["nodesep"] = ROLLED_NODESEP
     # r-b6 R19-6 / T9: node images are RELATIVE to the trace scratch root, which
     # Graphviz gets out of band (subprocess cwd), never as an in-source
     # ``imagepath``: a baked temp path broke saved DOT once the dir was GC'd.

@@ -255,9 +255,7 @@ ROWS: Mapping[str, Row] = {
     "VR01": _R(
         "region.module_cluster", "module-boxes", P, "_render_utils:make_module_cluster_attrs"
     ),
-    "VR02": _R(
-        "region.depth_penwidth", "module-boxes", P, "_frame_penwidth:compute_module_penwidth"
-    ),
+    "VR02": _R("region.penwidth", "module-boxes", P, "_frame_penwidth:compute_module_penwidth"),
     "VR03": _R(
         "region.nesting_pruning", "module-boxes", P, "_render_regions:_module_subtree_payload_empty"
     ),

@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ._focus_scope import scope_caption_head
+from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
 from ._render_utils import html_escape
 from .themes import resolve_theme
@@ -70,8 +71,8 @@ _SWATCH_VERSION = 1
 _KEY_SPACING = 3
 #: Swatches per key row before the row wraps.
 _SWATCHES_PER_ROW = 3
-#: Stroke of the key's module frame, in points (module frames run 2 to 5 pt by depth).
-_MODULE_FRAME_LINE = 3.0
+#: Stroke of the key's module frame, in points: the same stroke as every module frame.
+_MODULE_FRAME_LINE = MODULE_PENWIDTH
 #: Node unit kinds the header counts: each draws one node that shows a tensor size
 #: (a ``module=`` focus stub, kind ``boundary``, shows none).
 _COUNTED_UNIT_KINDS = frozenset({"raw_op", "module_box"})
@@ -434,7 +435,7 @@ def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -
 def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
     """Return the module entry: a real module frame, not a plain op's thin box.
 
-    The frame has the module box's page fill and ink and a thick stroke, so
+    The frame has the module box's page fill, ink and stroke, so
     the key matches the expanded modules in the picture (Lead, 29 Oct 2026).
     """
 
