@@ -410,7 +410,7 @@
         "last_event_func": null,
         "last_event_label": null,
         "last_successful_op_label": null,
-        "n_ops_completed": 0,
+        "n_ops_committed": 0,
         "status": "complete",
         "stop_reason": null
       },
@@ -534,20 +534,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 333464,
+      "python_peak_memory_median_bytes": 334811,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 32.193063059821725
+      "wall_time_median_ms": 31.514941016212106
     }
   },
   "sha256_chunks": [
-    "f16383f7",
-    "080065cb",
-    "69a8d955",
-    "edffef29",
-    "35f21095",
-    "df0a4d11",
-    "5a26f051",
-    "bd63b1a6"
+    "828449f8",
+    "35c1bd88",
+    "da1e899a",
+    "1e705cd4",
+    "e891326f",
+    "8525a10f",
+    "d5696b71",
+    "2f0531d4"
   ]
 }

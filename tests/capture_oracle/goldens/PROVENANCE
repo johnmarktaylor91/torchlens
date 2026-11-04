@@ -2389,3 +2389,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 61c0a1078630c3d0ff74207ecbc9d92efee473db (dirty)
 recorded: 2026-11-03T23:09:13.902764+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:14.725172+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:20.258473+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:26.010729+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:31.465964+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:37.726845+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:43.446291+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:49.741033+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-134 remerge2 (mq-c134 36e156447 + train 12f951a54 + c134-fixq2 cb9cf72fa): re-record the eight *_record goldens on the merged tip. Two intended changes meet here: (1) C-134 c134-oracle 17adfe4a0 (Recording parity with tl.trace, rulings-gap-3 55538173a equivalence class and parameter identity, 98a7559a0 multi_output_index on single-output ops, 54a6e1429 root module frame dropped); (2) the train C-130 c573c9a29 rename n_ops_completed to n_ops_committed in the outcome block, digests re-sealed by 675ad686d. Every field differing from either parent golden is one of these or the measured tracking medians and the digest (remerge2 field audit in RESULT-REMERGE2-C134.md).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9bf5ca81ef14cbdbecfb9c7f63250ed397bf1191 (dirty)
+recorded: 2026-11-04T00:47:55.200952+00:00
