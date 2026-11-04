@@ -120,7 +120,10 @@ exclude_docs: |
   /fields/teaching.md
   /field-guide/acdc_ioi.md
   /field-guide/conditional_steering.md
+  /field-guide/craft_concepts.md
+  /field-guide/das_gpt2.md
   /field-guide/dissection.md
+  /field-guide/entropy_steering.md
   /field-guide/extract_features.md
   /field-guide/feature_visualisation.md
   /field-guide/generation_attention.md
@@ -179,6 +182,7 @@ exclude_docs: |
   /migration/cross_engine.md
   /migration/from_bertviz_ecco.md
   /migration/from_captum.md
+  /migration/from_flax_tabulate.md
   /migration/from_fx.md
   /migration/from_hf_kwargs.md
   /migration/from_hooks.md

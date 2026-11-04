@@ -53,6 +53,9 @@ PAGES: dict[str, str] = {
     "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
     "docs/field-guide/prisma_clip_sae.md": "prisma",
     "docs/field-guide/linear_probes.md": "sklearn",
+    "docs/field-guide/craft_concepts.md": "sklearn",
+    "docs/field-guide/das_gpt2.md": "transformers",
+    "docs/field-guide/entropy_steering.md": "transformers",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -123,6 +126,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: family inside its aggregate budget.
 #: The linear-probe page measured 5.9 s through its sixth fence alone on one
 #: core (OMP_NUM_THREADS=1), before its streaming fence.
+#: The CRAFT page trains a small CNN for 150 steps and estimates Sobol indices
+#: over 32 images; it measured 12.4 s on a two-core worker.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -139,6 +144,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "examples/methods/cka_rsa_two_models_recipe.ipynb",
         "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
         "docs/field-guide/linear_probes.md",
+        "docs/field-guide/craft_concepts.md",
     }
 )
 
@@ -165,6 +171,10 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
 #: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
 #: use, so it sits in the slow tier with the CLIP notebooks.
+#: The DAS page downloads GPT-2 small and trains a basis for 32 steps through a
+#: bound hook: 66 s and 329 s on a four-core worker under light and heavy host
+#: load. The entropy-vector page downloads GPT-2 small, samples continuations
+#: and decodes greedily under four steering settings: 48 s on four cores.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
@@ -176,6 +186,8 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/eap_ig_circuit_recipe.ipynb",
         "examples/methods/vision_logit_lens_recipe.ipynb",
         "examples/methods/leace_concept_erasure_recipe.ipynb",
+        "docs/field-guide/das_gpt2.md",
+        "docs/field-guide/entropy_steering.md",
     }
 )
 
@@ -389,11 +401,14 @@ def test_token_result_save_line_names_a_real_method() -> None:
 
 
 def test_roadmap_names_the_quantized_summary_footer() -> None:
-    """The bits-per-weight footer and flax-tabulate recipe are a roadmap note."""
+    """The bits-per-weight footer stays a roadmap note; the flax-tabulate page says so."""
 
     text = (REPO / "ROADMAP.md").read_text("utf-8")
     assert "bits-per-weight footer" in text
-    assert "coming from flax\n  `tabulate`" in text
+    assert "`docs/migration/from_flax_tabulate.md`" in text
+    page = (REPO / "docs/migration/from_flax_tabulate.md").read_text("utf-8")
+    assert "There is no\nbits-per-weight line in the footer" in page
+    assert "`quantized_tensor` row" in page
 
 
 def test_neuro_refusal_homes_have_recipe_pages() -> None:
