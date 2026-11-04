@@ -57,16 +57,28 @@ _RECORDING_DOOR_DEFAULTS: dict[str, Any] = {
     "on_forward_error": "raise",
     "default_grad": MISSING,
     "postprocess": "none",
+    "lean": False,
 }
 
 
-def _unfold_recording_options(recording: RecordingOptions | None) -> dict[str, Any]:
+def _unfold_recording_options(recording: RecordingOptions | None, lean: Any) -> dict[str, Any]:
     """Read the recorder knobs off ``recording=``.
 
     ``keep_op`` and ``intervene`` are the door's own ``save=`` and
     ``intervene=``; setting them on the bundle refuses instead of being a
-    silent no-op.
+    silent no-op. ``lean`` arrives as the door keyword or on ``recording=``;
+    either one asks for it (a non-``False`` door value wins and is validated
+    by the Recorder).
     """
+
+    knobs = _read_recording_options(recording)
+    if lean is not False:
+        knobs["lean"] = lean
+    return knobs
+
+
+def _read_recording_options(recording: RecordingOptions | None) -> dict[str, Any]:
+    """Return the ``RecordingOptions`` fields ``tl.record`` reads, door defaults filled in."""
 
     if recording is None:
         return dict(_RECORDING_DOOR_DEFAULTS)
@@ -141,6 +153,20 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
         )
 
 
+def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> tuple[Any, Any]:
+    """Coerce ``inputs`` and ``input_kwargs`` and run trace()'s up-front tensor-variant guard on them.
+
+    Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
+    storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
+    record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
+    instead of crashing deep in capture with an opaque torch error.
+    """
+
+    coerced, coerced_kwargs = _coerce_inputs(model, inputs, input_kwargs)
+    check_model_and_input_variants(model, coerced, coerced_kwargs)
+    return coerced, coerced_kwargs
+
+
 def record(
     model: nn.Module,
     inputs: Any,
@@ -155,6 +181,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    lean: bool = False,
     generation: GenerationOptions | None = None,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
@@ -184,8 +211,8 @@ def record(
         Grouped recorder options (``tl.options.RecordingOptions``). The fields
         ``record`` reads: ``default_op``, ``default_module``, ``default_grad``,
         ``history_size``, ``include_source_events``, ``max_predicate_failures``,
-        ``on_predicate_error``, ``on_forward_error`` and ``postprocess`` (see
-        ``RecordingOptions``); ``keep_op`` and ``intervene`` refuse with code
+        ``on_predicate_error``, ``on_forward_error``, ``postprocess`` and ``lean``
+        (see ``RecordingOptions``); ``keep_op`` and ``intervene`` refuse with code
         ``record_capture_option_unsupported`` (pass ``save=`` and ``intervene=``).
         ``on_forward_error`` controls failed-forward handling: ``"raise"`` raises
         the capture's ``TraceCaptureError``, ``"attach_partial"`` also attaches the
@@ -236,6 +263,10 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    lean:
+        PROVISIONAL SPELLING. ``True`` journals only the events the selection keeps;
+        ``Recording.lean_omissions`` names what it omitted and the reads that refuse
+        (``recording_lean_omitted``). Default ``False`` is unchanged.
     generation:
         DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions` widening
         the generation door: per-token ``reducers=``, ``kv_sites=``, a ``keep_last=``
@@ -262,15 +293,10 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
-    knobs = _unfold_recording_options(recording)
+    knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
-    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
-    # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
-    # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
-    # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
-    # instead of crashing deep in capture with an opaque torch error.
-    check_model_and_input_variants(model, inputs, input_kwargs)
+    inputs, input_kwargs = _checked_inputs(model, inputs, input_kwargs)
     _require_generate_kwargs(generation, generate_kwargs)
     recorder_kwargs: dict[str, Any] = {
         **knobs,
