@@ -465,9 +465,12 @@ def _role_fill(theme: VisualizationTheme, role: str, constant: str) -> str:
 
     if role != "boolean_false":
         return theme.semantic_palette.get(role, constant)
-    boolean = _hex_rgb(theme.semantic_palette.get("boolean", "#F7D460"))
+    named = theme.semantic_palette.get("boolean", "#F7D460")
+    boolean = _hex_rgb(named)
     if boolean is None:
         return constant
+    if boolean == (255, 255, 255):
+        return named  # a white test (the default skin) stays the plain-op white
     mixed = (round(255 + (boolean[i] - 255) * _FALSE_TEST_SHARE) for i in range(3))
     return "#" + "".join(f"{channel:02X}" for channel in mixed)
 
