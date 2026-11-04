@@ -18,7 +18,7 @@ from torch import nn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from ._facet_writes import _active_facet_fire, _facet_home_label
-from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
+from .errors import AmbiguousAxisError, HookValueError, _refuse_non_executable
 from .hooks import HookContext, _resolve_facet_specs
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
 from .types import Edit, HelperPortability, Signal
@@ -199,7 +199,7 @@ def _non_executable_builtin_placeholder(
             Always -- the helper carries an audit-only opaque argument.
         """
 
-        raise NonExecutableSpecError(
+        _refuse_non_executable(
             f"Builtin helper {name!r} was loaded with a non-executable "
             f"(audit-only) argument {opaque_arg!r} and cannot be run. Re-save the "
             "intervention at level='executable_with_callables' (or 'portable') "

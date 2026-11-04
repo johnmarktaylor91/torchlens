@@ -386,7 +386,7 @@ torchlens/_registry/kernel.py::Registry.register	88
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
 torchlens/_robustness.py::check_model_and_input_variants	262
-torchlens/_runnable/__init__.py	1779
+torchlens/_runnable/__init__.py	1824
 torchlens/_runnable/__init__.py::derive_required_witness_members	82
 torchlens/_runnable/attestation.py::_nondeterministic_value_sources	180
 torchlens/_runnable/call_arguments.py::_execute_sparse_call	64

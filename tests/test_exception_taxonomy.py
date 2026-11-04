@@ -1210,6 +1210,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
+    "torchlens._io.format_errors.OpaqueCallableError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens.intervention.errors; defined in the L0 error module so the "
+        "format 3 recipe encoder can raise it; this row records the defining file"
+    ),
     "torchlens.bundle._labels.AmbiguousLabelError": (
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens.bundle; this row records the defining file (moved into the "

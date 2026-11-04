@@ -130,7 +130,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_captured_run": "L3",
     "_fast_run": "L3",
     "_runnable": "L3",
-    "_runnable._schema_versions": "L1",
     "_transport": "L3",
     "_source_links": "L3",
     "_training_validation": "L3",

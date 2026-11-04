@@ -113,7 +113,7 @@ Save preparation lives in `_save_gates.py`; runnable wire storage has no record 
 binding dependency. Runtime component attachment and family binding belong to
 `_format3_runnable_bind.py`, above the pure `format3/runnable.py` carrier.
 
-Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; frozen wire version names come from `_runnable/_schema_versions.py`, which re-exports through `_runnable`.
+Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; it reads the frozen wire version names from the `_runnable` vocabulary through one deferred import in `component_versions()`.
 
 Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/save.py` delegates decoding there.
 

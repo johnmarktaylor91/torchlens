@@ -17,6 +17,10 @@ from ..errors._base import CompatibilityError, ConfigurationError
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
+#: Remedy for a tensor with no saved-format payload codec (a sparse or other
+#: non-strided layout): the ``metadata_value_unportable`` save refusal carries it.
+DENSE_REMEDY = 'make the tensor dense and strided before the save, or save at level="audit"'
+
 
 class ArtifactError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported.
@@ -154,13 +158,14 @@ def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoRetur
     )
 
 
-def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
+def refuse_missing_blobs(blob_ids: list[str], *, file_path: str | None = None) -> NoReturn:
     """Raise the ``bundle_blob_missing`` refusal for a manifest whose blob files are gone."""
 
     raise ArtifactError(
         f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
         code="bundle_blob_missing",
         remedy="restore the missing blob files, or re-save the bundle from its source capture",
+        file_path=file_path,
     )
 
 

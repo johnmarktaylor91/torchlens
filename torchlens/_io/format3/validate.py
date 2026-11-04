@@ -26,7 +26,7 @@ from .._extra_files import _warn_extra_files
 from .._json import loads_bounded, read_bytes_bounded
 from .._runtime_identity import check_runtime_identity, parse_pep440
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
-from ..format_errors import ArtifactError, ArtifactTooOldError
+from ..format_errors import ArtifactError, ArtifactTooOldError, refuse_missing_blobs
 from ..paths import reject_symlink_path
 from ..writer_contract import writer_contract_digest
 from . import contract
@@ -457,6 +457,9 @@ def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Pat
             break
         symlink_guard(ancestor, f"artifact file {relpath}")
     if not target.is_file():
+        if relpath.startswith(f"{contract.BLOBS_DIR}/"):
+            # A listed tensor chunk that is gone keeps its own public code.
+            refuse_missing_blobs([relpath], file_path=str(target))
         raise integrity_error(
             target, "listed in the manifest but missing from the artifact", code=_CORRUPT
         )

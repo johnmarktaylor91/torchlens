@@ -63,8 +63,8 @@ def _alias_reader(**recorded: Any) -> Callable[[dict[str, Any]], None]:
     ``recorded`` overrides the alias slot's recorded fields (shape, rank, dtype).
     """
 
-    def mutate(manifest: dict[str, Any]) -> None:
-        run = manifest["run"]
+    def mutate(descriptor: dict[str, Any]) -> None:
+        run = descriptor  # format 3: runnable/descriptor.json holds what the 2.x manifest ``run`` held
         calls = {call["op_labels"][0].split("_")[0]: call for call in run["calls"]}
         producer_id = calls["relu"]["output_slot_ids"][0]
         reader = calls["mean"]

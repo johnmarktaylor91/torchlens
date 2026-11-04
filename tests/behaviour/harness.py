@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import copy
 import inspect
+import json
 import shutil
 import warnings
 from collections import Counter, OrderedDict
@@ -37,6 +38,10 @@ from torchlens.validation import last_validation_failure
 
 BASE_ORACLES: tuple[str, ...] = ("trace", "validate", "save", "load", "equality", "forward_match")
 _SCALARS = (int, float, bool, str, bytes, type(None))
+#: The one portable-save refusal the save oracle answers with a callable-level save (format.5).
+_PORTABLE_REFUSAL = "intervention_spec_not_portable"
+#: The level ``_save`` uses after that refusal: outs and argument snapshots stay real.
+_CALLABLE_LEVEL = "executable_with_callables"
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,8 @@ class Cell:
     loaded: Any = None
     plain_output: list[Any] = field(default_factory=list)
     outcomes: dict[str, Outcome] = field(default_factory=dict)
+    #: The format.5 portable refusal ``_save`` asserted before its callable-level save.
+    portable_refusal: str = ""
 
     def changes(self, oracle: str) -> bool:
         """Whether any active feature changes the meaning of ``oracle``."""
@@ -381,6 +388,12 @@ def _compute_facts(model: nn.Module, inputs: Any) -> CaseFacts:
 # --- the cell runner -------------------------------------------------------
 
 
+def _error_code(exc: TorchLensError) -> str:
+    """Return the typed refusal code a TorchLens error carries ("" when none)."""
+
+    return str(getattr(exc, "fields", {}).get("code", "") or getattr(exc, "code", ""))
+
+
 def _guard(cell: Cell, oracle: str, step: Callable[[], None]) -> bool:
     """Run ``step`` and record its outcome under ``oracle``; return whether it passed."""
 
@@ -393,7 +406,7 @@ def _guard(cell: Cell, oracle: str, step: Callable[[], None]) -> bool:
         cell.outcomes[oracle] = Outcome("fail", str(exc))
         return False
     except TorchLensError as exc:
-        code = str(getattr(exc, "fields", {}).get("code", "") or getattr(exc, "code", ""))
+        code = _error_code(exc)
         cell.outcomes[oracle] = Outcome("refused", str(exc)[:300], type(exc).__name__, code)
         return False
     except Exception as exc:  # noqa: BLE001 - an untyped error is a finding, recorded as one
@@ -474,7 +487,51 @@ def _validate(cell: Cell) -> None:
 
 
 def _save(cell: Cell) -> None:
-    cell.require_trace().save(cell.tmp / "cell.tlspec", level="portable")
+    """Save the cell's trace portably, or with callables when format.5 refuses portable.
+
+    ``docs/maintainers/saved_format_3.md`` section 5: a portable save of a recipe
+    holding a user callable refuses with ``intervention_spec_not_portable``. Only
+    that code, on a trace whose saved recipe really holds a callable placeholder,
+    takes the ``executable_with_callables`` path (it keeps outs and argument
+    snapshots and writes the callable as a non-executable placeholder); the refusal
+    is asserted (nothing left on disk) and load and equality then compare real
+    payloads. Any other refusal, or this code on a callable-free trace, fails the cell.
+    """
+
+    path = cell.tmp / "cell.tlspec"
+    trace = cell.require_trace()
+    try:
+        trace.save(path, level="portable")
+        return
+    except TorchLensError as exc:
+        if _error_code(exc) != _PORTABLE_REFUSAL:
+            raise
+        refusal = f"{type(exc).__name__}({_PORTABLE_REFUSAL}): {str(exc)[:200]}"
+    cell.expect(not path.exists(), f"refused portable save left {path.name} on disk")
+    trace.save(path, level=_CALLABLE_LEVEL)
+    cell.expect(
+        _recipe_holds_callable(path),
+        f"portable save refused {_PORTABLE_REFUSAL} but the recipe holds no user callable",
+    )
+    cell.portable_refusal = refusal
+
+
+def _recipe_holds_callable(path: Path) -> bool:
+    """Whether the saved intervention recipe carries a ``callable_placeholder`` edit."""
+
+    intervention = json.loads((path / "manifest.json").read_text()).get("intervention") or {}
+    if not intervention.get("file"):
+        return False
+    pending = [json.loads((path / intervention["file"]).read_text())]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            if node.get("$tl") == "callable_placeholder":
+                return True
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    return False
 
 
 def _load(cell: Cell) -> None:
@@ -602,6 +659,13 @@ def _run_cell(case: Case, features: tuple[Feature, ...], tmp: Path) -> CellResul
 
 def _finish(cell: Cell) -> CellResult:
     outcomes = dict(cell.outcomes)
+    if cell.portable_refusal and outcomes.get("save") == Outcome("pass"):
+        outcomes["save"] = Outcome(
+            "pass",
+            f"portable refused as format.5 requires, {_CALLABLE_LEVEL} save used: "
+            f"{cell.portable_refusal}",
+            code=_PORTABLE_REFUSAL,
+        )
     gate = outcomes.get("trace")
     if gate is not None and gate.status in {"refused", "not_applicable"}:
         for oracle in BASE_ORACLES:
