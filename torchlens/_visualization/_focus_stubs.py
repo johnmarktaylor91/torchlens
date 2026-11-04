@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ._focus_relabel import shape_size_row
 from ._focus_scope import focus_parent_prefix, module_at, relative_address
 
 if TYPE_CHECKING:
@@ -101,7 +102,6 @@ def _get_or_create_boundary_node(
     vis_mode: str,
     boundary_kind: str,
     inner_node: GraphNode,
-    tensor_row: str | None = None,
 ) -> BoundaryNode:
     """Create or return a boundary node for one external layer next to ``inner_node``.
 
@@ -109,8 +109,7 @@ def _get_or_create_boundary_node(
     the focused module reads, an output stub for the op that reads the
     module's output. The stub is placed outside the focused module's frame,
     in the frame of the deepest called module that encloses the focus (the
-    top level once a focused draw flattens its ancestors). ``tensor_row`` is
-    the shape and size of the outside op's output.
+    top level once a focused draw flattens its ancestors).
     """
 
     external_label = external_node.layer_label.replace(":", "pass")
@@ -132,7 +131,7 @@ def _get_or_create_boundary_node(
             external_node,
             vis_mode,
             boundary_kind,
-            tensor_row,
+            shape_size_row(external_node),
             prefix=focus_parent_prefix(target_module),
         ),
     )

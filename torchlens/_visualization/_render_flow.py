@@ -4,7 +4,6 @@
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
-from ._focus_relabel import shape_size_row
 from ._focus_stubs import _boundary_module_path, _get_or_create_boundary_node
 from ._render_common import *
 from ._render_edges import *
@@ -1278,7 +1277,6 @@ def _build_module_focus_entries(
                 vis_mode=vis_mode,
                 boundary_kind="input",
                 inner_node=node,
-                tensor_row=shape_size_row(parent_node),
             )
             if _relation_label(node) not in boundary.children:
                 boundary.children.append(_relation_label(node))
@@ -1301,7 +1299,6 @@ def _build_module_focus_entries(
                 vis_mode=vis_mode,
                 boundary_kind="output",
                 inner_node=node,
-                tensor_row=shape_size_row(child_node),
             )
             if _relation_label(node) not in boundary.parents:
                 boundary.parents.append(_relation_label(node))

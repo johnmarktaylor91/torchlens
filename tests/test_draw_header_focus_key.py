@@ -207,10 +207,11 @@ def test_focus_count_skips_the_boundary_stubs(
     drawn = [name for name in _node_names(dot) if not name.startswith("__module_focus")]
     assert noun == ("layers" if rolled else "ops")
     assert int(count) == len(drawn)
-    # An input stub names the size of the tensor it brings (made outside the
-    # drawn module); an output stub none. Neither is counted. Every drawn op
-    # shows its output size, as on a whole-model draw.
-    assert stubs and all(name.startswith("__module_focus_input") for name in stubs)
+    # Every stub names its outside op's output size (made outside the drawn
+    # module), and no stub is counted. Every drawn op shows its output size,
+    # as on a whole-model draw.
+    kinds = {name.split("_")[4] for name in stubs}  # __module_focus_<kind>_<op>
+    assert kinds == {"input", "output"}, stubs
     assert len(_sized_nodes(dot)) - len(stubs) == len(drawn)
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:

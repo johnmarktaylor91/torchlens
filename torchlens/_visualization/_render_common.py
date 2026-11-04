@@ -752,7 +752,6 @@ _SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quo
 
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer on the far side of a pass label
-_PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
 
 __all__ = [
     "Any",
@@ -855,7 +854,6 @@ __all__ = [
     "_GRAPHVIZ_ESCAPE_HINT",
     "_NOISE_BUFFER_NAMES",
     "_SELF_LOOP_LABEL_HGAP",
-    "_PASS_LABEL_EDGE_GAP",
     "_SIBLING_ORDER_WARNING_EMITTED",
     "_SVG_ATTR_RE",
     "_SVG_IMAGE_TAG_RE",

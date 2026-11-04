@@ -160,8 +160,9 @@ def test_output_stubs_name_where_the_output_goes(trace: tl.Trace, tmp_path: Path
     assert to_output[0] == "to model output 1"
     assert to_output[1].startswith("output_")
     # A stub reads like any node: its last row is its op's shape and size.
-    for rows in stubs.values():
-        assert rows == [rows[0], rows[1], _tensor_row(trace, rows[1])], by_first_row
+    for name, rows in stubs.items():
+        label = name.removeprefix("__module_focus_output_")
+        assert rows == [rows[0], rows[1], _tensor_row(trace, label)], by_first_row
 
 
 def test_stubs_sit_outside_the_focused_frame(trace: tl.Trace, tmp_path: Path) -> None:
@@ -246,7 +247,7 @@ def test_every_default_op_node_carries_name_shape_size_and_params(
             assert any(row.startswith("params:") for row in node_rows), (name, node_rows)
     (into,) = _stubs(dot, "input").values() if module == "pre_x.act" else (None,)
     if into is not None:  # the input stub still brings its tensor's shape and size
-        assert into[1] == _tensor_row(trace, "linear_1_1")
+        assert into[-1] == _tensor_row(trace, "linear_1_1")
 
 
 def test_whole_model_draw_keeps_every_shape_row(trace: tl.Trace, tmp_path: Path) -> None:
@@ -264,7 +265,7 @@ def test_leaf_rows_under_the_scope_leave_the_scope_prefix_off(
     norm = _dot(trace, tmp_path, "norm", module="mixer.norm")
     assert ">@norm</TD>" in norm and "@mixer.norm" not in norm
     (into,) = _stubs(norm, "input").values()
-    assert into[-1] == "@mixer"  # the scope module itself keeps its own name
+    assert into[0] == "from mixer"  # the scope module itself keeps its own name
     whole = _dot(trace, tmp_path, "whole")
     assert ">@mixer.norm</TD>" in whole
 

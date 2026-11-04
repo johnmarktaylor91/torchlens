@@ -27,6 +27,8 @@ from ._render_module_scope import (
 from ._render_utils import html_escape
 from .collapse_plan import OpSegment
 
+_PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
@@ -1862,12 +1864,9 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     """Return an HTML combined recurrence label that sits against its edge.
 
     Used for a node's self-loop arc, a merged recurrence back-edge, and merged
-    buffer-edge annotations; the combined ``In``/``Out`` label sits beside the
-    edge. Graphviz routes the edge along the left side of a midpoint label, so
-    the left spacer is only ``_PASS_LABEL_EDGE_GAP`` wide and the text reads as
-    part of that edge rather than floating between edges; the wide right spacer
-    keeps it clear of the next node or edge. When ``bottom`` is ``None`` the
-    label is a single line (a buffer edge may carry only one of ``In``/``Out``).
+    buffer-edge annotations. Graphviz routes the edge along a midpoint label's
+    left side, so the narrow left spacer keeps the text on its edge and the
+    wide right one keeps it off the next node; ``bottom=None`` gives one line.
 
     ``top``/``bottom`` are escaped individually (not after joining) so the
     literal ``<BR/>`` line-break tag inserted between them is preserved.
