@@ -2,13 +2,19 @@
 
 ``Conditional`` and ``ConditionalArm`` live in :mod:`torchlens._data_classes.trace`
 (their module path is part of the saved-file format). The reads here are derived
-from their stored fields on demand and persist nothing.
+from their stored fields on demand and persist nothing. :class:`ArmRef` is the
+descriptor behind ``ConditionalArm._trace``: an arm holds its Trace weakly, like
+every other record view, so the conditional records never keep a dropped Trace
+alive for the cyclic collector.
 """
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Sequence
 from typing import Any, Literal, TypeAlias
+
+from .._errors import RecordBindingError
 
 #: Which way a conditional went: ``Conditional.outcome``'s values.
 ConditionalOutcome: TypeAlias = Literal[
@@ -143,7 +149,93 @@ def arm_role_ops(
     return labels
 
 
+class _ArmTraceRef:
+    """A picklable weak reference from one ``ConditionalArm`` to its Trace.
+
+    Pickling stores the Trace itself, so a Trace pickled with its conditionals
+    (the Trace's own pickle state, or ``Trace.__deepcopy__``, which pickles)
+    reloads with every arm bound to the reloaded Trace. A reference whose Trace
+    is already gone pickles as a dead reference.
+    """
+
+    __slots__ = ("_ref",)
+
+    def __init__(self, trace: Any) -> None:
+        """Hold ``trace`` weakly; ``None`` makes a dead reference."""
+
+        self._ref = None if trace is None else weakref.ref(trace)
+
+    def __call__(self) -> Any:
+        """Return the Trace, or ``None`` once it has been collected."""
+
+        return None if self._ref is None else self._ref()
+
+    def __reduce__(self) -> tuple[Any, tuple[Any]]:
+        """Pickle as the referenced Trace (``None`` when it is gone)."""
+
+        return (_ArmTraceRef, (self(),))
+
+    def __copy__(self) -> _ArmTraceRef:
+        """Share the reference: it is immutable."""
+
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _ArmTraceRef:
+        """Point at the Trace's copy when this deep copy made one, else at the Trace.
+
+        A deep copy never copies the Trace through an arm: an arm is a view, so a
+        copied arm stays bound to the Trace it viewed unless the same copy
+        already produced a copy of that Trace.
+        """
+
+        trace = self()
+        if trace is None or id(trace) not in memo:
+            return self
+        return _ArmTraceRef(memo[id(trace)])
+
+
+class ArmRef:
+    """Data descriptor for ``ConditionalArm._trace``: the arm's weak Trace reference.
+
+    Used as the dataclass field's default (``field(default=ArmRef(), ...)``), so the
+    generated ``__init__`` and every ``arm._trace = trace`` assignment route through
+    :meth:`__set__`, which stores an :class:`_ArmTraceRef` in the instance's
+    ``_trace_ref`` slot. Reading returns the live Trace, ``None`` for an arm never
+    bound (or detached for saving), and refuses ``trace_reference_collected`` for
+    an arm whose Trace was dropped, the same refusal an ``Op`` gives.
+    """
+
+    def __get__(self, arm: Any, owner: type | None = None) -> Any:
+        """Return the bound Trace (``self`` on class access, the dataclass default)."""
+
+        if arm is None:
+            return self
+        ref = arm.__dict__.get("_trace_ref")
+        if ref is None:
+            return None
+        trace = ref()
+        if trace is None:
+            raise RecordBindingError(
+                "Trace has been garbage-collected; a Conditional does not keep its Trace alive",
+                code="trace_reference_collected",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
+            )
+        return trace
+
+    def __set__(self, arm: Any, value: Any) -> None:
+        """Bind ``value`` weakly; ``None`` (or this default) leaves the arm unbound."""
+
+        unbound = value is None or value is self
+        arm.__dict__["_trace_ref"] = None if unbound else _ArmTraceRef(value)
+
+    def __repr__(self) -> str:
+        """Render as the field's effective default in signatures: unbound."""
+
+        return "None"
+
+
 __all__ = [
+    "ArmRef",
     "ConditionalOutcome",
     "arm_role_ops",
     "derive_conditional_outcome",
