@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._utils._display_numbers import format_count
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
@@ -418,10 +419,6 @@ def _child_segment_label(
 
 
 def _format_param_count(value: int) -> str:
-    """Return a compact parameter count for segment labels."""
+    """Return a compact parameter count for segment labels (the shared ``15.4k`` spelling)."""
 
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"{value / 1_000:.1f}K"
-    return str(value)
+    return format_count(value)
