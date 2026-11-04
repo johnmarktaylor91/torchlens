@@ -499,8 +499,8 @@ def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path)
         load_merged(art)
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "rank 1" in str(caught.value)
-    assert "metadata.pkl" in str(caught.value)
-    assert "never unpickled" in str(caught.value)
+    assert "root pickle in a 3.0 core (unopened)" in str(caught.value)
+    assert "metadata.pkl" in str(caught.value.__cause__)
     assert not marker.exists()
 
     planted.unlink()

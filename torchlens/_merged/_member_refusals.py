@@ -1,8 +1,9 @@
-"""Merged-artifact tamper refusals and the member-core checks that raise them.
+"""Merged-artifact member-load classification: which member failures are tamper, not drift.
 
-Split out of :mod:`torchlens._merged._artifact` (file cap): the typed tamper builder,
-the member-load failure classifier, and the foreign-pickle guard ``load_merged``
-runs on every integrity-verified rank core.
+Split out of :mod:`torchlens._merged._artifact` (file cap). ``load_merged`` asks
+:func:`_is_bundle_integrity_refusal` about every rank core that fails to load; a True answer
+refuses the whole artifact as ``merged_descriptor_tamper`` instead of recording a runtime
+degradation that caps the merge at partial.
 """
 
 from __future__ import annotations
@@ -10,18 +11,9 @@ from __future__ import annotations
 import json
 import pickle
 from pathlib import Path
-from typing import Any
 
 from .._io import _json
 from .._io.format3.contract import FORMAT_NAME, MANIFEST_FILE
-from ._enums import MergedErrorCode
-from ._errors import MergedArtifactError
-
-_TAMPER_REMEDY = (
-    "The artifact's integrity records do not match its contents; it was edited "
-    "or corrupted in transit. Re-generate it from the original rank cores with "
-    "tl.merge_ranks([...]).save(path)."
-)
 
 # Bundle-load failures that are INTEGRITY signals (tamper), not environmental
 # degradation. A guarded-unpickler denylist refusal / corrupt pickle stream is
@@ -34,7 +26,7 @@ _BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
 _LEGACY_PICKLE = "metadata.pkl"
 
 
-def _is_bundle_integrity_refusal(exc: BaseException) -> bool:
+def _is_bundle_integrity_refusal(exc: BaseException, member_path: Path | None = None) -> bool:
     """Return True if a member bundle-load failure is a tamper signal, not drift.
 
     A guarded-unpickler denylist refusal or a corrupt/truncated pickle stream is
@@ -44,9 +36,13 @@ def _is_bundle_integrity_refusal(exc: BaseException) -> bool:
     dependency) both by the stable ``code`` the ``bundle.load`` boundary stamps
     on it AND by walking the ``__cause__``/``__context__`` chain for the raw
     ``pickle.UnpicklingError``/``EOFError`` (belt-and-braces: a refusal that
-    reaches here through any other wrapper is still caught).
+    reaches here through any other wrapper is still caught). A 3.0 core at
+    ``member_path`` that holds a root ``metadata.pkl`` is tamper too, whatever the
+    loader raised (see :func:`_holds_foreign_pickle`).
     """
 
+    if member_path is not None and _holds_foreign_pickle(member_path):
+        return True
     seen: set[int] = set()
     current: BaseException | None = exc
     while current is not None and id(current) not in seen:
@@ -60,50 +56,23 @@ def _is_bundle_integrity_refusal(exc: BaseException) -> bool:
     return False
 
 
-def _tamper(detail: str, *, remedy: str = _TAMPER_REMEDY, **payload: Any) -> MergedArtifactError:
-    """Build the typed tamper refusal (integrity failure, never a presence gap).
+def _holds_foreign_pickle(member_path: Path) -> bool:
+    """Return whether a rank core names the 3.0 format yet holds a root ``metadata.pkl``.
 
-    Every merged refusal now carries a ``fields["remedy"]`` (R65: the tamper
-    refusals shipped with none, even where the correct sentence existed verbatim
-    elsewhere in this module).
-    """
-
-    return MergedArtifactError(
-        f"Merged artifact integrity failure: {detail}",
-        code=MergedErrorCode.MERGED_DESCRIPTOR_TAMPER,
-        remedy=remedy,
-        **payload,
-    )
-
-
-def _refuse_foreign_pickle(rank: int, member_path: Path) -> Path:
-    """Return ``member_path``, refusing a 3.0 rank core that holds a root ``metadata.pkl``.
-
-    The pickle is never opened. ``tl.load`` refuses any root holding it as a 2.x artifact
-    before reading it, which ``load_merged`` would otherwise record as a runtime
-    degradation (capping the merge at partial). A core whose manifest does not name the
-    3.0 format is left to the loader: a genuine 2.x core still degrades.
-
-    Raises
-    ------
-    MergedArtifactError
-        ``merged_descriptor_tamper`` when the core's manifest names the 3.0 format.
+    The pickle is never opened: ``tl.load`` refuses any root holding it as a 2.x artifact
+    before reading it, so without this check ``load_merged`` recorded the planted file as a
+    runtime degradation. A core whose manifest does not name the 3.0 format (or cannot be
+    read) answers False and stays with the loader's verdict: a genuine 2.x core still degrades.
     """
 
     pickle_path = member_path / _LEGACY_PICKLE
     manifest_path = member_path / MANIFEST_FILE
     if not (pickle_path.exists() or pickle_path.is_symlink()):
-        return member_path
+        return False
     if manifest_path.is_symlink() or not manifest_path.is_file():
-        return member_path
+        return False
     try:
         manifest = _json.read_bounded(manifest_path)
     except (OSError, json.JSONDecodeError):
-        return member_path
-    if isinstance(manifest, dict) and manifest.get("format") == FORMAT_NAME:
-        raise _tamper(
-            f"rank {rank} core {str(member_path)!r} is a 3.0 core but holds a root "
-            f"{_LEGACY_PICKLE}; the 3.0 format writes no pickle, so the file is foreign "
-            "content (refused unopened, never unpickled)"
-        )
-    return member_path
+        return False
+    return isinstance(manifest, dict) and manifest.get("format") == FORMAT_NAME

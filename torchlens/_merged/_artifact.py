@@ -41,7 +41,7 @@ from ._enums import (
 )
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
-from ._member_refusals import _is_bundle_integrity_refusal, _refuse_foreign_pickle, _tamper
+from ._member_refusals import _is_bundle_integrity_refusal
 from ._presenter import MergedTrace, _RankHandle
 from ._rules import is_strict_int
 from ._witness import witness_consistency
@@ -192,11 +192,32 @@ _MEMBER_ENTRY_KEYS = frozenset({"rank", "path", "tree_sha256"})
 """Closed key set for one descriptor ``members`` entry (unknown keys refuse)."""
 
 
+_TAMPER_REMEDY = (
+    "The artifact's integrity records do not match its contents; it was edited "
+    "or corrupted in transit. Re-generate it from the original rank cores with "
+    "tl.merge_ranks([...]).save(path)."
+)
 _SCHEMA_REMEDY = (
     "The artifact does not match the merged-directory schema this runtime "
     "supports. Re-generate it with tl.merge_ranks([...]).save(path) using a "
     "matching torchlens release."
 )
+
+
+def _tamper(detail: str, *, remedy: str = _TAMPER_REMEDY, **payload: Any) -> MergedArtifactError:
+    """Build the typed tamper refusal (integrity failure, never a presence gap).
+
+    Every merged refusal now carries a ``fields["remedy"]`` (R65: the tamper
+    refusals shipped with none, even where the correct sentence existed verbatim
+    elsewhere in this module).
+    """
+
+    return MergedArtifactError(
+        f"Merged artifact integrity failure: {detail}",
+        code=MergedErrorCode.MERGED_DESCRIPTOR_TAMPER,
+        remedy=remedy,
+        **payload,
+    )
 
 
 def _schema_refusal(
@@ -857,7 +878,7 @@ def load_merged(path: str | Path) -> MergedTrace:
         actual = tree_hash(member_path)
         if actual != recorded:
             raise _tamper(f"rank {rank} core bytes do not match the recorded tree hash")
-        member_paths[rank] = _refuse_foreign_pickle(rank, member_path)
+        member_paths[rank] = member_path
 
     # 2. Independent rederivation from the parsable rank cores.
     from .._io.bundle import load as load_bundle
@@ -886,12 +907,12 @@ def load_merged(path: str | Path) -> MergedTrace:
             # denylist refusal into the "no longer parses on this runtime"
             # channel, silently capping the merge at partial off the remaining
             # members while the adjacent handler refused the same tamper class).
-            if _is_bundle_integrity_refusal(exc):
+            if _is_bundle_integrity_refusal(exc, member_path):
                 raise _tamper(
                     f"rank {declared_rank} member core {str(member_path)!r} failed "
                     f"a bundle-integrity check ({_bounded_exc(exc)}); a guarded-unpickler denylist "
-                    "refusal or corrupt pickle stream is a tampered artifact, never "
-                    "a runtime degradation to be laundered into a partial merge"
+                    "refusal, a corrupt pickle stream or a root pickle in a 3.0 core (unopened) "
+                    "is a tampered artifact, never a degradation laundered into a partial merge"
                 ) from exc
             # A member bundle that no longer LOADS on this runtime is a genuine
             # environmental degradation (torch/codec drift). It caps the
