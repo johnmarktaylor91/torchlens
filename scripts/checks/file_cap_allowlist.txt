@@ -959,7 +959,7 @@ torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
 torchlens/backends/torch/prehook_provenance.py	1002
-torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
+torchlens/backends/torch/prehook_provenance.py::_ensure_observer	64
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
@@ -1450,7 +1450,6 @@ torchlens/validation/_invariants_payloads.py::_check_edge_use_parent_arg_invaria
 torchlens/validation/_invariants_payloads.py::_check_live_payload_metadata	77
 torchlens/validation/_invariants_payloads.py::_check_op_log_fields	171
 torchlens/validation/_invariants_payloads.py::_check_payload_metadata_invariants	94
-torchlens/validation/_invariants_sites.py::_check_site_key_uniqueness	61
 torchlens/validation/_invariants_topology.py::_check_capture_edge_survival	98
 torchlens/validation/_invariants_topology.py::_check_graph_topology	214
 torchlens/validation/_invariants_topology.py::_check_op_label_resolution	67
