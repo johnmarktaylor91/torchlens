@@ -272,6 +272,10 @@ pages:
   - path: guides/treescope_cards.md
     section: field-guide
     group: See and inspect
+  - path: how-it-works.md
+    section: concepts
+    publish: true
+    note: narrative guide to the internals; maintainers/architecture.md is its maintainer companion
   - path: index.md
     section: home
     publish: true

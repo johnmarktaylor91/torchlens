@@ -27,7 +27,11 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -273,6 +277,8 @@ nav:
   - index.md
   - Field guide:
       - field-guide/seeded_subsample.md
+  - Concepts:
+      - how-it-works.md
   - Reference:
       - API:
           - reference/api/dataset_extraction.md
