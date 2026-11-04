@@ -91,6 +91,42 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
     assert all(len(label) <= 9 for label in labels), labels
 
 
+def test_value_and_report_card_labels_fit_shared_column(monkeypatch):
+    """Cover the value-record and report card builders through real objects."""
+
+    from torchlens.report._compute_truth import compute_aggregation
+
+    labels = []
+    original = _display_card.card_row
+
+    def record(label, value, *, width=_display_card.LABEL_WIDTH):
+        labels.append(label)
+        return original(label, value, width=width)
+
+    monkeypatch.setattr(_display_card, "card_row", record)
+    model = nn.Sequential(nn.Linear(4, 4), nn.BatchNorm1d(4), nn.ReLU()).eval()
+    trace = tl.trace(model, torch.ones(2, 4))
+    layer = trace.layers["linear_1"]
+    objects = [
+        trace,
+        layer,
+        layer.ops[0],
+        trace.params["0.weight"],
+        trace.buffers["1.running_mean"],
+        trace.modules["0"],
+        trace.module_calls["0:1"],
+        compute_aggregation(trace),
+    ]
+    for obj in objects:
+        text = str(obj)
+        assert text.splitlines()[0] == repr(obj), type(obj).__name__
+        assert "metadata unavailable" not in text, type(obj).__name__
+        assert text.splitlines()[-1].lstrip().startswith("more "), type(obj).__name__
+    trace.cleanup()
+    assert labels
+    assert all(len(label) <= 9 for label in labels), labels
+
+
 def test_option_and_error_columns_align_to_longest_label():
     options = tl.options.CaptureOptions(save_grads=True)
     rows = str(options).splitlines()[1:]

@@ -204,6 +204,7 @@ _RECORDING_FIELDS = {
     "default_grad",
     "include_source_events",
     "postprocess",
+    "lean",
 }
 _CAPTURE_FIELDS = {
     "lookback",

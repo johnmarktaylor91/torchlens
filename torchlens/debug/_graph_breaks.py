@@ -13,7 +13,7 @@ from torch import nn
 
 from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._utils import _torch_compat
 from .._utils.arg_handling import normalize_input_args
 from ..errors._base import CompatibilityError
@@ -296,11 +296,12 @@ def _model_call_args(
         Positional and keyword arguments for Dynamo explain.
     """
 
-    coerced = _coerce_input_args(model, x)
-    args = tuple(normalize_input_args(coerced, model))
     input_kwargs = trace_kwargs.get("input_kwargs")
-    kwargs = dict(input_kwargs) if isinstance(input_kwargs, dict) else {}
-    return args, kwargs
+    coerced, routed_kwargs = _coerce_inputs(
+        model, x, dict(input_kwargs) if isinstance(input_kwargs, dict) else None
+    )
+    args = tuple(normalize_input_args(coerced, model))
+    return args, dict(routed_kwargs or {})
 
 
 def _op_locations(op: Any) -> tuple[tuple[str, int], ...]:

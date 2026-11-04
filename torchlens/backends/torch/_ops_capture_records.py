@@ -400,6 +400,8 @@ def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None
     """
 
     trace._capture_producer_policy = get_capture_producer_policy(mode)
+    if mode == "predicate":
+        install_lazy_record_contexts(trace)
 
 
 def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
@@ -737,7 +739,10 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
-from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
+from ._ops_predicate_events import (  # noqa: E402
+    _emit_predicate_operation_events,
+    install_lazy_record_contexts,
+)
 from .ops import (  # noqa: E402
     _ANCESTOR_FIELD_NAMES,
     _ANCESTOR_SLOT_DESCRIPTORS,

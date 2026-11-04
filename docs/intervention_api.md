@@ -7,7 +7,10 @@ To apply one intervention to many forwards or a `generate()` loop, use `spec.bin
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
 model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
-entry "Guarded fast rerun"). Which one to pick for a loop or for generation:
+entry "Guarded fast rerun"). `x`, like the `inputs` of `tl.record`, takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string,
+PIL image or modality dict (`{"text": ..., "image": ...}`), resolved with the model's own
+tokenizer or `AutoProcessor` exactly as the trace was. Which one to pick for a loop or for generation:
 [Performance: choosing a fast path](guides/fast_paths.md).
 
 ## Selectors

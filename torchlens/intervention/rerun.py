@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import torch
 from torch import nn
 
-from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths
 from .._data_classes._trace_accessors import boundary_label_rows
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _chunk_rerun_plan, _coerce_inputs
+from .._input_route import _routed_payload
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
@@ -353,8 +354,7 @@ def _chunked_rerun(
     _preflight(log, model, x)
     model = _unwrap_compiled_model(model)
     model = _unwrap_model_for_chunk_plan(model)
-    x = _coerce_input_args(model, x)
-    plan = plan_chunks(x, chunk_size=chunk_size, chunk_paths=chunk_paths)
+    x, plan = _chunk_rerun_plan(model, x, chunk_size, chunk_paths)
     if chunk_size >= plan.total_size:
         return run(
             log,
@@ -482,7 +482,7 @@ def _append_rerun(
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
 
     duration_s = time.monotonic() - started_at
-    chunk_size = _batch_size_from_input(x)
+    chunk_size = _batch_size_from_input(_routed_payload(x))
     total_batch_size = _first_saved_batch_size(log)
     log.last_run = {
         "engine": "append",
@@ -1033,15 +1033,15 @@ def _capture_with_active_spec(
     from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
-    x = _coerce_input_args(model, x)
-    check_model_and_input_variants(model, x, {})
+    x, input_kwargs = _coerce_inputs(model, x, None)
+    check_model_and_input_variants(model, x, input_kwargs or {})
     save_grads_policy = log._options_save_grads
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     with _share_source_state_clones(log):
         return _run_model_and_save_specified_outs(
             model=model,
             input_args=x,
-            input_kwargs={},
+            input_kwargs=input_kwargs or {},
             output_device=cast('Literal["same", "cpu", "cuda"]', log._options_output_device),
             activation_transform=log._options_activation_transform,
             grad_transform=log._options_grad_transform,

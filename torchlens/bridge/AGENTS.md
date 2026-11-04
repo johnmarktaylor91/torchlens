@@ -118,6 +118,22 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
+- `_hf_processor.py` (used by `transformers.py`): `_resolve_hf_processor(model, name_or_path)`
+  loads the `AutoProcessor` for a modality dict (cache first, then the Hub unless offline)
+  and refuses typed `preprocessing_unresolved` when it cannot, through the one raise site
+  `_hf_refusals.refuse_preprocessing_unresolved` (shared with the image cascade);
+  `_load_hf_processor` is the one network seam tests patch; `_make_multimodal_transform(processor)`
+  builds the `input_transform`. The auto-route claims a `transformers` `PreTrainedModel`
+  with a `name_or_path` on shape alone (no cache or Hub I/O in detection); any other named
+  model is claimed only when its processor is in the local cache, else it keeps the plain
+  path. A dict on a model with an attached `model.processor` is coerced in
+  `torchlens/_input_coerce.py` instead. The same resolution reaches `Trace.run`, `tl.record`,
+  `tl.recording.dry_run`, `tl.validation.validate_backward_pass` and the `tl.debug` entries through that coercion
+  door: `autoroute/_builtin_input.py` installs `hf_input_claims` / `hf_input_transform` on
+  `torchlens/_input_route.py` at import (the door module itself imports no bridge code), and
+  `_apply_hf_processor` there spells a singular `image` key the way the processor's own call
+  signature names it (`images` for a CLIP-shaped processor; a `(*args, **kwargs)` processor
+  such as Whisper's gets the keys unchanged).
 - `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function
   (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip

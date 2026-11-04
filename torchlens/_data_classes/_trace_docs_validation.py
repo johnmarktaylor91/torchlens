@@ -84,8 +84,9 @@ DOCS: dict[str, str] = {
             available -- the trace holds it weakly, so this requires the
             caller to have kept a strong reference (see Raises).
         x:
-            Forward input. If ``model`` is omitted, the first positional argument
-            is treated as the new user input.
+            Forward input, in every form ``tl.trace`` takes: a tensor, a positional
+            list or tuple, and for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it. If ``model`` is omitted, the
+            first positional argument is treated as the new user input.
         inputs:
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.

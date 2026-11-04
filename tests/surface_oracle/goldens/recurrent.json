@@ -2012,6 +2012,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2384,6 +2387,9 @@
     "fx_call_index": 0,
     "fx_label": "cell_linear_0",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2795,6 +2801,9 @@
     "fx_call_index": 1,
     "fx_label": "cell_linear_1",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3206,6 +3215,9 @@
     "fx_call_index": 2,
     "fx_label": "cell_linear_2",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3570,6 +3582,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3937,6 +3952,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -4304,6 +4322,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -4671,6 +4692,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -8149,6 +8173,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -8521,6 +8548,9 @@
     "fx_call_index": 0,
     "fx_label": "cell_linear_0",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -8932,6 +8962,9 @@
     "fx_call_index": 1,
     "fx_label": "cell_linear_1",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -9343,6 +9376,9 @@
     "fx_call_index": 2,
     "fx_label": "cell_linear_2",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -9707,6 +9743,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10074,6 +10113,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10441,6 +10483,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10808,6 +10853,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14294,6 +14342,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14666,6 +14717,9 @@
     "fx_call_index": 0,
     "fx_label": "cell_linear_0",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15077,6 +15131,9 @@
     "fx_call_index": 1,
     "fx_label": "cell_linear_1",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15488,6 +15545,9 @@
     "fx_call_index": 2,
     "fx_label": "cell_linear_2",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15852,6 +15912,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16219,6 +16282,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16586,6 +16652,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -16953,6 +17022,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -20369,6 +20441,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -20741,6 +20816,9 @@
     "fx_call_index": 0,
     "fx_label": "cell_linear_0",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21152,6 +21230,9 @@
     "fx_call_index": 1,
     "fx_label": "cell_linear_1",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21563,6 +21644,9 @@
     "fx_call_index": 2,
     "fx_label": "cell_linear_2",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -21927,6 +22011,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -22294,6 +22381,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -22661,6 +22751,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -23028,6 +23121,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -26512,6 +26608,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -26877,6 +26976,9 @@
     "fx_call_index": 0,
     "fx_label": "cell_linear_0",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -27266,6 +27368,9 @@
     "fx_call_index": 1,
     "fx_label": "cell_linear_1",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -27655,6 +27760,9 @@
     "fx_call_index": 2,
     "fx_label": "cell_linear_2",
     "fx_qualpath": "cell.linear",
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -28001,6 +28109,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -28337,6 +28448,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -28684,6 +28798,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -29031,6 +29148,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
