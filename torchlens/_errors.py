@@ -2,41 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any, NoReturn, cast
+from typing import Any, NoReturn, TypeVar, cast
 
-from .errors._base import CaptureError, ConfigurationError, TorchLensWarning
+from .errors._base import (
+    CaptureError,
+    ConfigurationError,
+    TorchLensError,
+    TorchLensWarning,
+    _actionable_message,
+)
+
+_ProjectionT = TypeVar("_ProjectionT")
 
 #: Layer declaration (architecture memo build item 2, seeding the layer map
 #: the C01 lint consumes): the exception vocabulary is homed at L0 BASIS --
 #: frozen vocabularies and contracts that execute no torchlens behavior --
 #: so importing it from any layer is a downward edge, never an inversion.
 __tl_layer__ = "L0"
-
-
-def _actionable_message(problem: str, remedy: str) -> str:
-    """Combine a refusal description with its required user remedy.
-
-    Parameters
-    ----------
-    problem:
-        Description of the rejected object or operation and its cause.
-    remedy:
-        Concrete action the caller can take to resolve the refusal.
-
-    Returns
-    -------
-    str
-        Stable human-readable message containing both clauses.
-    """
-
-    problem_clause = problem.rstrip()
-    if "\n  remedy " in problem_clause:
-        problem_clause, old_remedy = problem_clause.rsplit("\n  remedy", 1)
-        padding = old_remedy[: len(old_remedy) - len(old_remedy.lstrip())]
-        return f"{problem_clause}\n  remedy{padding}{remedy.rstrip()}"
-    if not problem_clause.endswith((".", "!", "?", ":", ";")):
-        problem_clause = f"{problem_clause}."
-    return f"{problem_clause} Remedy: {remedy.rstrip().rstrip('.')}."
 
 
 def _restore_actionable_error(
@@ -448,6 +430,52 @@ def refuse_cleaned_up(problem: str, *, remedy: str, **context: object) -> NoRetu
     """
 
     raise TraceCleanedUpError(problem, remedy=remedy, **context)
+
+
+class _InternalInvariantError(_ActionableErrorMixin, TorchLensError, RuntimeError, ValueError):
+    """Raised when TorchLens's own bookkeeping breaks an invariant (a TorchLens bug).
+
+    It subclasses both ``RuntimeError`` and ``ValueError`` because the invariant
+    checks it replaced raised one or the other.
+
+    Examples
+    --------
+    >>> issubclass(_InternalInvariantError, RuntimeError)
+    True
+    """
+
+    def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
+        """Initialize an internal-invariant refusal with its code and remedy."""
+
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
+def require_recording_projection(trace: _ProjectionT | None) -> _ProjectionT:
+    """Return ``trace``; raise ``recording_projection_uninitialized`` when it is unset."""
+
+    if trace is None:
+        raise _InternalInvariantError(
+            "recording_trace projection was not initialized",
+            code="recording_projection_uninitialized",
+            remedy="report this as a TorchLens bug with the full traceback",
+        )
+    return trace
+
+
+def refuse_if_no_replay_events(capture_events: object) -> None:
+    """Raise ``recording_events_not_retained`` when a projection has no replay events."""
+
+    if capture_events is None:
+        raise CaptureNotActiveError(
+            "Recording.to_trace() core has no replay event facts",
+            code="recording_events_not_retained",
+            remedy="convert the in-session Recording rather than a disk-recovered one",
+        )
 
 
 class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeError):
