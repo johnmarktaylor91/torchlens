@@ -21,6 +21,8 @@ def backward_repr(record: Any) -> str:
 
 
 def _backward_identity(record: Any) -> str:
+    """Build the repr line of a GradFn, GradFnCall or BackwardPass from identity and counts."""
+
     kind = type(record).__name__
     if kind == "GradFn":
         return one_line(
@@ -44,6 +46,8 @@ def backward_str(record: Any) -> str:
 
 
 def _backward_card(record: Any) -> str:
+    """Build a backward record's card: kind-specific rows and the accessors holding its payloads."""
+
     kind = type(record).__name__
     if kind == "GradFn":
         rows = [
@@ -66,7 +70,11 @@ def _backward_card(record: Any) -> str:
 
 
 def frame_repr(frame: Any) -> str:
+    """One-line repr of a source frame: the shortened location and the function name."""
+
     def _line() -> str:
+        """Build the location line; a failure here becomes the fixed fallback text."""
+
         function = f"in {frame.func_name}"
         return one_line("FuncCallLocation", [_frame_location(frame, function), function])
 
@@ -79,6 +87,8 @@ _MIN_LOCATION_COLS = 24
 
 
 def _frame_location(frame: Any, function: str) -> str:
+    """Path and line number, shortened to fit the repr width beside the function name."""
+
     path = str(frame.file).replace("\\", "/")
     location = f"{path}:{frame.line_number}"
     reserved = len("FuncCallLocation: ") + len(f", {function}")
@@ -89,6 +99,8 @@ def _frame_location(frame: Any, function: str) -> str:
 
 
 def frame_str(frame: Any) -> str:
+    """Source frame card with file, line and function rows; the repr replaces it on failure."""
+
     return fail_open(
         lambda: render_card(
             frame_repr(frame),
@@ -124,6 +136,8 @@ def group_repr(group: Any) -> str:
 
 
 def _group_identity(group: Any) -> str:
+    """Build a Trace group's repr line: cost totals for TraceCost, else its stored scalar fields."""
+
     trace = group._trace
     name = type(group).__name__
     if name == "TraceCost":
@@ -169,6 +183,8 @@ def capture_events_repr(events: Any) -> str:
 
 
 def capture_events_str(events: Any) -> str:
+    """CaptureEvents card with one row per journal lane size; the repr replaces it on failure."""
+
     return fail_open(
         lambda: render_card(
             capture_events_repr(events),
@@ -180,6 +196,8 @@ def capture_events_str(events: Any) -> str:
 
 
 def ir_record_repr(record: Any) -> str:
+    """One-line repr for a private IR record, with dedicated forms for journals and tensor facts."""
+
     if type(record).__name__ == "CaptureEvents":
         return capture_events_repr(record)
     if type(record).__name__ == "_AtenTensorFact":

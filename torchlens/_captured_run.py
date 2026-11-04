@@ -17,6 +17,8 @@ _ADDRESS_LISTING_LIMIT = 20
 
 
 def _event_tuple(items: Iterable[Any], title: str, noun: str) -> tuple[Any, ...]:
+    """Wrap event records in a bounded-display RecordTuple, loading display helpers lazily."""
+
     # The shared captured-run vocabulary loads display helpers only on this door.
     from ._utils._display_bounded import RecordTuple
 
