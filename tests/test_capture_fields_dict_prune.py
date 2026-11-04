@@ -10,6 +10,8 @@ recomputes from the record (parameter totals and memory, the parent-param map,
 tests pin, on a tiny GPT-2 ``generate`` and on toy models that reach the
 parameter, in-place, multi-output and internal-source paths, that no such key is
 built, the number of keys built per op, and the Python calls capture makes per op.
+Source tensors and module-boundary outputs have their own builders (no function
+call: ``func_call_id`` is None) and are not counted.
 """
 
 from __future__ import annotations
@@ -149,10 +151,16 @@ def _tiny_gpt2_generate() -> tuple[Callable[..., Any], torch.Tensor, dict[str, A
     return model.generate, torch.tensor([[3, 7, 1, 9]]), kwargs
 
 
+def _is_function_call_draft(fields_dict: dict[str, Any]) -> bool:
+    """Whether a draft came from the per-op build (a function call), not a source."""
+
+    return fields_dict.get("func_call_id") is not None
+
+
 def _frozen_key_sets(
     monkeypatch: pytest.MonkeyPatch, fn: Callable[..., Any], x: Any, kw: dict[str, Any]
 ) -> list[frozenset[str]]:
-    """Trace ``fn`` and return each op's fields-dict key set at the freeze."""
+    """Trace ``fn`` and return each function-call op's fields-dict key set at the freeze."""
 
     seen: list[frozenset[str]] = []
     real = torch_ops._op_record_from_log
@@ -160,7 +168,8 @@ def _frozen_key_sets(
     def spy(trace: Any, fields_dict: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
         """Record the draft's keys, then freeze it for real."""
 
-        seen.append(frozenset(fields_dict))
+        if _is_function_call_draft(fields_dict):
+            seen.append(frozenset(fields_dict))
         return real(trace, fields_dict, *args, **kwargs)
 
     monkeypatch.setattr(torch_ops, "_op_record_from_log", spy)
@@ -174,7 +183,7 @@ def _frozen_key_sets(
 def _capture_calls_per_op(
     monkeypatch: pytest.MonkeyPatch, fn: Callable[..., Any], x: Any, kw: dict[str, Any]
 ) -> float:
-    """Python calls into TorchLens code during capture, divided by the ops frozen."""
+    """Python calls into TorchLens code during capture per function-call op frozen."""
 
     owner = threading.get_ident()
     state = {"capture": True, "calls": 0, "ops": 0}
@@ -192,11 +201,12 @@ def _capture_calls_per_op(
         ):
             state["calls"] += 1
 
-    def freeze(*args: Any, **kwargs: Any) -> Any:
-        """Count one op, then freeze it."""
+    def freeze(trace: Any, fields_dict: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
+        """Count one function-call op, then freeze it."""
 
-        state["ops"] += 1
-        return real_freeze(*args, **kwargs)
+        if _is_function_call_draft(fields_dict):
+            state["ops"] += 1
+        return real_freeze(trace, fields_dict, *args, **kwargs)
 
     def postprocess(*args: Any, **kwargs: Any) -> Any:
         """Run postprocess with counting paused."""
@@ -241,9 +251,10 @@ def test_gpt2_generate_fields_dict_keys_per_op(monkeypatch: pytest.MonkeyPatch) 
     key_sets = _frozen_key_sets(monkeypatch, fn, ids, kw)
     assert len(key_sets) > 100
     built = frozenset().union(*key_sets)
-    print(f"[fields-dict] ops={len(key_sets)} max_keys={max(map(len, key_sets))}")
+    sizes = [len(keys) for keys in key_sets]
+    print(f"[fields-dict] ops={len(sizes)} max_keys={max(sizes)} min_keys={min(sizes)}")
     assert sorted(built & _UNREAD_KEYS) == []
-    assert max(map(len, key_sets)) <= _MAX_KEYS_PER_OP
+    assert max(sizes) <= _MAX_KEYS_PER_OP
 
 
 def test_gpt2_generate_capture_python_calls_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
