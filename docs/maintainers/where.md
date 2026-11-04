@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1565 modules, 672836 lines, 0 modules without a docstring.
+83 packages, 1565 modules, 672797 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,7 +54,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3863 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 18 | 6959 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8701 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8662 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6858 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6364 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8470 |
@@ -1233,7 +1233,7 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (10 modules, 8701 lines)
+JAX backend preview exports. (10 modules, 8662 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1243,10 +1243,10 @@ JAX backend preview exports. (10 modules, 8701 lines)
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 530 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 86 |
-| `backend` | Jaxpr-first JAX backend preview. | 4369 |
+| `backend` | Jaxpr-first JAX backend preview. | 4359 |
 | `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
 | `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2491 |
-| `modules` | JAX module helpers for Equinox and Flax NNX roots. | 1015 |
+| `modules` | JAX module helpers for Equinox and Flax NNX roots. | 986 |
 
 ### `torchlens.backends.mlx`
 
