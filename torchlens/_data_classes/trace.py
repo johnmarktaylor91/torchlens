@@ -2334,9 +2334,9 @@ class Trace(TraceOutputMixin, TraceLike):
         return _trace_views.suggest_layer_labels(self, selector, limit=limit)
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
-        """Yield Modules whose semantic facet view has a facet available now."""
+        """Yield single-call Modules whose semantic facet view has a facet available now."""
 
-        return (module for module in self.modules if module.facets.has(name))
+        return _trace_views.modules_with_facet(self, name)
 
     def attention_blocks(self) -> Iterator[Any]:
         """Yield Modules with an available query-projection facet."""

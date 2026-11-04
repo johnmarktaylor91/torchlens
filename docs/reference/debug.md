@@ -385,9 +385,8 @@ sync per device (replacing the historical per-op `.item()`), `stage` +
 stamps. Under AMP the saved gradients are SCALED: pass `grad_scale=` (one
 factor) or `grad_scales=` (per-backward mapping); unknown provenance yields
 `unknown` magnitude verdicts in the `verdict` column, never a silent
-pass-as-1.0. `basis="total_norm"` keeps the legacy classification for one
-deprecation cycle; the `basis="rms"` flip is announced in `report.attrs` and
-gated on the multi-model calibration runs.
+pass-as-1.0. `basis="total_norm"` (the default) classifies on each gradient's
+total norm; `basis="rms"` classifies on `norm/sqrt(numel)`.
 
 ```python
 import torch

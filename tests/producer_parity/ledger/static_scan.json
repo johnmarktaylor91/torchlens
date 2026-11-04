@@ -1244,7 +1244,7 @@
   "field": "modules",
   "file": "torchlens/_data_classes/_trace_views.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -1501,14 +1501,6 @@
   "file": "torchlens/_data_classes/trace.py",
   "has_default": false,
   "sites": 3,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_data_classes/trace.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
@@ -4188,7 +4180,7 @@
   "field": "modules",
   "file": "torchlens/_semantic/patching.py",
   "has_default": false,
-  "sites": 15,
+  "sites": 14,
   "via_getattr": false
  },
  {
