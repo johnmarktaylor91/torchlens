@@ -287,7 +287,7 @@ def _build_root_module_log(
 
 
 def _synthesized_root_call(
-    self: Trace, mbd: dict[str, Any], root_meta: dict[str, Any]
+    self: "Trace", mbd: dict[str, Any], root_meta: dict[str, Any]
 ) -> ModuleCall:
     """The synthesized ``self:1`` spanning the whole capture of a plain module root."""
 
