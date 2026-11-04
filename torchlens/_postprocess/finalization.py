@@ -212,9 +212,12 @@ def _build_root_module_log(
         ]
 
     root_ops: dict[int, ModuleCall] = {}
+    # The labels are the calls' own string objects (the synthesized call's literal below), so
+    # the saved metadata pickles each label once and refers back to it.
+    root_call_labels = ["self:1"]
     if recorded_calls:
         child_to_parent, input_layers_by_call = _root_call_build_inputs(self, mbd)
-        root_ops, _labels = _build_submodule_call_logs(
+        root_ops, root_call_labels = _build_submodule_call_logs(
             self,
             "self",
             recorded_calls,
@@ -258,7 +261,7 @@ def _build_root_module_log(
         call_depth=0,
         num_calls=max(1, recorded_calls),
         ops=root_ops,
-        call_labels=[f"self:{call_index}" for call_index in range(1, max(1, recorded_calls) + 1)],
+        call_labels=root_call_labels,
         layer_labels=root_layers,
         params=root_params,
         num_params=root_num_params,
