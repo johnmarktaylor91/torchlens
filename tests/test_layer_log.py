@@ -101,6 +101,8 @@ class TestLayerLogDisplay:
         for layer_log in simple_log._layer_logs.values():
             s = str(layer_log)
             assert display_key(layer_log) in s
+            # Records print by their display key (house style A5); the full label stays on .layer_label.
+            assert s.splitlines()[0].startswith(f"Layer {layer_log.short_layer_label}: ")
             assert s.splitlines()[0] == repr(layer_log)
             assert len(s.splitlines()) <= 8
 
@@ -114,6 +116,13 @@ class TestLayerLogDisplay:
                 assert len(pass_rows) == layer_log.num_passes  # per-pass cores, never pooled
                 for pass_num, row in enumerate(pass_rows, start=1):
                     assert row.startswith(f"  pass {pass_num} ")
+                n = layer_log.num_passes
+                assert s.splitlines()[0].startswith(
+                    f"Layer {layer_log.short_layer_label}: {n} passes, "
+                )
+                for k in range(1, min(n, 3) + 1):
+                    assert f"\n  pass {k}    " in s  # per-pass cores, never pooled
+                assert "\n  values    " not in s
                 break
 
 

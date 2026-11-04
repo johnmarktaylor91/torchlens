@@ -111,18 +111,20 @@ def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path:
     )
     cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
     label = cached_op.layer_label
-    assert cached_op.is_in_conditional_body is True
+    # The Op property follows arm membership, not the cache: a test op stays outside.
+    op_body = cached_op.is_in_conditional_body
     trace.layers[label]._is_in_conditional_body = True
+    assert trace.layers[label].is_in_conditional_body is True
 
     pickle_restored = pickle.loads(pickle.dumps(trace))
     assert pickle_restored.layers[label].ops[0]._is_in_conditional_body is True
-    assert pickle_restored.layers[label].ops[0].is_in_conditional_body is True
+    assert pickle_restored.layers[label].ops[0].is_in_conditional_body is op_body
 
     bundle_path = tmp_path / "conditional_cache.tlspec"
     trace.save(bundle_path)
     tlspec_restored = tl.load(bundle_path)
     assert tlspec_restored.layers[label].ops[0]._is_in_conditional_body is True
-    assert tlspec_restored.layers[label].ops[0].is_in_conditional_body is True
+    assert tlspec_restored.layers[label].ops[0].is_in_conditional_body is op_body
     assert tlspec_restored.layers[label]._is_in_conditional_body is True
     assert tlspec_restored.layers[label].is_in_conditional_body is True
 

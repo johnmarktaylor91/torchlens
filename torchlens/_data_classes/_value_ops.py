@@ -21,7 +21,7 @@ from ._value_state import (
     value_line,
     value_words,
 )
-from .func_call_location import display_frame, short_source_path
+from .func_call_location import display_frame, short_source_path, stale_location_note
 
 _OP_MORE = (".out", ".parents", ".children", ".func_config", ".code_context", ".lookup_keys")
 _LAYER_MORE = (".ops", ".parents", ".children", ".to_pandas()")
@@ -79,22 +79,14 @@ def _function(op: Any, *, duration: bool = True) -> str:
 
 
 def _source(op: Any) -> str:
-    """Captured source location only; never consult source files or linecache."""
+    """Captured source location; never reads source text (a stale file is flagged by one stat)."""
 
     frame = display_frame(getattr(op, "code_context", None))
     if frame is None:
         return ""
-    return f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
-
-
-def _code(op: Any) -> str:
-    """Use the fingerprint-checked source helper, retaining missing/edited reasons."""
-
-    frame = display_frame(getattr(op, "code_context", None))
-    if frame is None:
-        return ""
-    view, reason = frame._source_text_state()
-    return str(view[3]).strip() if view is not None else f"({reason})"
+    location = f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
+    note = stale_location_note(frame)
+    return f"{location} ({note})" if note else location
 
 
 def _module(op: Any) -> str:
@@ -142,7 +134,7 @@ def _op_repr_line(op: Any, *, kind: str = "Op", key: str | None = None) -> str:
     return value_line(f"{kind} {key or display_key(op)}", metadata, stats, honesty)
 
 
-def op_rows(op: Any, *, kind: str = "operation", source_text: bool = True) -> list[tuple[str, str]]:
+def op_rows(op: Any, *, kind: str = "operation") -> list[tuple[str, str]]:
     """Shared text/HTML facts in the house-style row order."""
 
     _, stats, honesty = payload_facts(op)
@@ -153,14 +145,7 @@ def op_rows(op: Any, *, kind: str = "operation", source_text: bool = True) -> li
     ]
     if not honesty:
         rows.append(("values", value_words(stats)))
-    rows.extend(
-        (
-            ("graph", _graph(op)),
-            ("function", _function(op)),
-            ("source", _source(op)),
-            ("code", _code(op) if source_text else ""),
-        )
-    )
+    rows.extend((("graph", _graph(op)), ("function", _function(op)), ("source", _source(op))))
     return rows
 
 
@@ -196,8 +181,7 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     ops = _first_ops(layer)
     passes = getattr(layer, "num_passes", 1)
     if passes <= 1:
-        # Source text belongs to the Op card; Layer keeps its eight-line contract.
-        return op_rows(ops[0], source_text=False) if ops else []
+        return op_rows(ops[0]) if ops else []
     rows = []
     for op in ops:
         _, stats, honesty = payload_facts(op)
@@ -207,7 +191,13 @@ def layer_rows(layer: Any) -> list[tuple[str, str]]:
     if passes > len(ops):
         rows.append(("", f"... and {format_exact_count(passes - len(ops))} more passes"))
     if ops:
-        rows.extend((("module", _module(ops[0])), ("function", _function(ops[0], duration=False))))
+        rows.extend(
+            (
+                ("module", _module(ops[0])),
+                ("function", _function(ops[0], duration=False)),
+                ("source", _source(ops[0])),
+            )
+        )
     return rows
 
 

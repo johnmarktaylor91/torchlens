@@ -43,14 +43,18 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     trace._provenance_verified = False
     trace._provenance_verification_reason = "escape_rescue_unrecovered"
     text = _summary(trace)
-    assert "purely feedforward" not in text
-    assert "structure unverified" in text
+    assert "feedforward" not in text
+    assert "\n  graph     structure unverified, " in text
     assert f"at least {len(trace)} total tensors" in text
+    # The parameter-operation count lives on the bounds row; the model row counts tensors.
     assert f"at least {trace._num_layers_with_params} parameter operations" in text
     assert f"at least {trace.num_params} params total" in text
     assert "lower bound" in text
-    assert "  capture   unverified: escape_rescue_unrecovered" in text
+    # One caveat covers every count on the card: the header token and the capture row.
+    assert "(capture unverified; counts are lower bounds)" in text.splitlines()[0]
+    assert "\n  capture   unverified: escape_rescue_unrecovered; counts are lower bounds\n" in text
     assert ", (capture unverified" not in text
+    assert f" of {len(trace)} layer outputs, " in text
 
 
 def test_the_named_option_records_every_op_and_drops_the_hint() -> None:
