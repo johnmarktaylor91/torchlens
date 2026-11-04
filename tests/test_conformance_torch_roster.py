@@ -74,7 +74,8 @@ def test_reference_adapter_seeds_the_random_row_so_its_cells_repeat() -> None:
     runs = []
     for _ in range(2):
         model, example = ROWS[RANDOM_ROW].builder()
-        captured = adapter.trace(model, example).output_ops[0].out
+        trace = adapter.trace(model, example)
+        captured = trace.output_ops[0].out
         before = torch.get_rng_state()
         reference = adapter.reference_output(model, example)
         assert torch.equal(torch.get_rng_state(), before)
