@@ -7,11 +7,13 @@ call of every module, a loop that keeps its values as tensors traces without
 warnings, an escape warning names the caller's line, the caller's
 ``input_kwargs`` survive an input transform, text reaches a bound method of a
 model with a resolvable tokenizer, and a plain module address on such a trace
-names the ``owner.`` spelling. The GPT-2 test runs the README snippet itself.
+names the ``owner.`` spelling, and the tensor search keeps a property's log
+record quiet. The GPT-2 test runs the README snippet itself.
 """
 
 from __future__ import annotations
 
+import logging
 import warnings
 from types import SimpleNamespace
 from typing import Any
@@ -128,7 +130,7 @@ def test_text_input_reaches_a_bound_generate(monkeypatch: pytest.MonkeyPatch) ->
     assert gen["owner.head"].num_calls == 2
     assert torch.equal(gen.output, by_ids.output)
     # generate returns token ids, not logits: no tokenizer is attached for output decoding.
-    assert gen._output_tokenizer is None
+    assert getattr(gen, "_output_tokenizer", None) is None
     assert not hasattr(model, "_torchlens_output_tokenizer")
 
 
@@ -139,9 +141,53 @@ def test_plain_module_address_names_the_owner_spelling() -> None:
         gen["head"]
 
 
+class _CacheWithLoggedProperty:
+    """Generation-cache stand-in whose deprecated property logs, as transformers' caches do."""
+
+    reads = 0
+
+    def __init__(self) -> None:
+        self.keys = torch.ones(1, 8)
+
+    @property
+    def max_len(self) -> int:
+        type(self).reads += 1
+        logging.getLogger("toy_cache").warning("`max_len` is deprecated")
+        return 8
+
+
+class _Attention(nn.Module):
+    def forward(self, x: torch.Tensor, cache: _CacheWithLoggedProperty) -> torch.Tensor:
+        return x + cache.keys
+
+
+class _CachedModel(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attn = _Attention()
+
+    def forward(self, x: torch.Tensor, cache: _CacheWithLoggedProperty) -> torch.Tensor:
+        return self.attn(x, cache)
+
+
+def test_tensor_search_keeps_a_property_log_record_quiet(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    cache = _CacheWithLoggedProperty()
+    _CacheWithLoggedProperty.reads = 0
+    with caplog.at_level(logging.WARNING, logger="toy_cache"):
+        trace = tl.trace(_CachedModel(), torch.zeros(1, 8), input_kwargs={"cache": cache})
+        assert _CacheWithLoggedProperty.reads > 0  # the search did run the getter
+        assert [r.getMessage() for r in caplog.records if r.name == "toy_cache"] == []
+        assert logging.root.manager.disable == logging.NOTSET
+        cache.max_len  # the user's own read still logs
+    assert [r.getMessage() for r in caplog.records] == ["`max_len` is deprecated"]
+    assert torch.equal(trace.output, torch.ones(1, 8))
+
+
 @pytest.mark.real_model
 @pytest.mark.slow
-def test_gpt2_generate_readme_snippet() -> None:
+def test_gpt2_generate_readme_snippet(capfd: pytest.CaptureFixture[str]) -> None:
     """The README's generation-loop snippet, run as written on GPT-2 small."""
 
     transformers = pytest.importorskip("transformers")
@@ -152,6 +198,8 @@ def test_gpt2_generate_readme_snippet() -> None:
             model.generate, "The capital of France is", input_kwargs={"max_new_tokens": 4}
         )
 
+    # The tensor search reads the cache's deprecated size properties; their notices stay quiet.
+    assert "deprecated" not in capfd.readouterr().err
     mlp = "owner.transformer.h.5.mlp"
     assert trace[mlp].num_calls == 4
     assert trace[f"{mlp}:1"].out.shape == (1, 5, 768)  # the prefill reads all 5 prompt tokens
