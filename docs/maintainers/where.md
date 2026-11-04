@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1579 modules, 676992 lines, 0 modules without a docstring.
+83 packages, 1580 modules, 677156 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26668 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 104 | 39626 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 104 | 39638 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -34,8 +34,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10583 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 13 | 7121 |
-| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3025 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7268 |
+| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3030 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4187 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 54 | 18109 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (104 modules, 39626 lines)
+Core data structures for representing a logged forward pass. (104 modules, 39638 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -356,7 +356,7 @@ Core data structures for representing a logged forward pass. (104 modules, 39626
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
 | `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 598 |
-| `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 544 |
+| `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 545 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 360 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 493 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 773 |
@@ -378,7 +378,7 @@ Core data structures for representing a logged forward pass. (104 modules, 39626
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 690 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 176 |
-| `_trace_views` | Trace group-view and field-derived accessor functions. | 747 |
+| `_trace_views` | Trace group-view and field-derived accessor functions. | 758 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_modules` | Bounded module and module-call record displays. | 106 |
@@ -779,11 +779,12 @@ Selection: naming sites and resolving them on a trace. (21 modules, 10583 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (13 modules, 7121 lines)
+Semantic facet views for TorchLens records. (14 modules, 7268 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Semantic facet views for TorchLens records. | 28 |
+| `_call_subject` | One call of a module, presented to facet recipes as a single-call Module. | 147 |
 | `_facet_tensor_ops` | Tensor-level helpers behind facet primitives (head geometry, scatter-back). | 107 |
 | `_families` | Facet families: facets a registered codec (an SAE's latents) serves on its home op. | 100 |
 | `_hops` | Hop rule: grammar proposes, payload identity verifies (mikit /, wave 0a). | 430 |
@@ -799,12 +800,12 @@ Semantic facet views for TorchLens records. (13 modules, 7121 lines)
 
 ### `torchlens._semantic.recipes`
 
-Built-in TorchLens semantic facet recipes. (9 modules, 3025 lines)
+Built-in TorchLens semantic facet recipes. (9 modules, 3030 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Built-in TorchLens semantic facet recipes. | 245 |
-| `_helpers` | Shared helpers for built-in semantic recipes. | 601 |
+| `_helpers` | Shared helpers for built-in semantic recipes. | 606 |
 | `attention` | Built-in semantic recipes for attention modules. | 780 |
 | `embedding` | Built-in semantic recipes for embedding modules. | 25 |
 | `lm_head` | Built-in semantic recipes for language-model unembedding heads. | 353 |

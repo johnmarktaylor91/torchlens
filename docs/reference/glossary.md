@@ -5082,7 +5082,7 @@ alphabetical order.
 | `Trace.model_ops` | Tuple of the trace's ordinary executed op records, excluding any ops injected by intervention hooks |
 | `Trace.model_profile` | The computed `ModelProfile` semantic input/output descriptor for this trace, not persisted |
 | `Trace.module_calls` | Accessor for per-invocation `ModuleCall` records, looked up by call label or index |
-| `Trace.modules_with_facet` | Yield the single-call Modules whose semantic facet view currently has the facet `name` available; a module called more than once is skipped, or refused (`module_call_ambiguous`) when its facet recipe declares `name` |
+| `Trace.modules_with_facet` | Yield the single-call Modules whose semantic facet view currently has the facet `name` available; a module called more than once is skipped, or refused (`module_call_ambiguous`) when its facet recipe declares `name`, with a remedy naming the per-call views `module.calls[N].facets` |
 | `Trace.nonfinite_verdict` | Three-state health verdict: `found`, `checked_and_clean` or `not_checked` |
 | `Trace.num_context_lines` | Number of source lines captured around each call site for `FuncCallLocation` |
 | `Trace.num_edges` | Number of distinct edges in the per-pass Op graph, including boundary edges |

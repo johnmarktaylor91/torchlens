@@ -125,3 +125,11 @@ env: n/a
 torch: n/a
 source: 20c222a3c
 recorded: 2026-10-05T08:30:57+00:00
+---
+generator: tests/test_exports.py (netron.json)
+flag: TORCHLENS_REGEN_EXPORT_GOLDENS=1
+reason: netron node docString now carries the source line number (node_doc read FuncCallLocation.line, which does not exist; it reads line_number)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 77baeb4ad6f9e67fc38f41a86702a504feb29546 (dirty)
+recorded: 2026-11-04T19:53:29.957279+00:00
