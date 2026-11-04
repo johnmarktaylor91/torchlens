@@ -523,6 +523,8 @@ docs-md	docs/acknowledgments.md	669,
 docs-md	docs/acknowledgments.md	684.
 docs-md	docs/acknowledgments.md	71,
 docs-md	docs/acknowledgments.md	82,
+docs-md	docs/also_in_torchlens.md	188
+docs-md	docs/also_in_torchlens.md	64
 docs-md	docs/backends.md	0.13,
 docs-md	docs/backends.md	0.13.0
 docs-md	docs/backends.md	0.14
@@ -1208,6 +1210,7 @@ docs-md	docs/field-guide/jacobian_lens.md	512,
 docs-md	docs/field-guide/jacobian_lens.md	64
 docs-md	docs/field-guide/jacobian_lens.md	64,
 docs-md	docs/field-guide/jacobian_lens.md	768
+docs-md	docs/field-guide/jacobian_lens.md	91
 docs-md	docs/field-guide/jacobian_lens.md	96
 docs-md	docs/field-guide/linear_probes.md	0.25,
 docs-md	docs/field-guide/linear_probes.md	0.75,
@@ -2501,9 +2504,8 @@ docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
 docs-md	docs/maintainers/where.md	1468
 docs-md	docs/maintainers/where.md	147
-docs-md	docs/maintainers/where.md	1470
 docs-md	docs/maintainers/where.md	148
-docs-md	docs/maintainers/where.md	1483
+docs-md	docs/maintainers/where.md	1484
 docs-md	docs/maintainers/where.md	149
 docs-md	docs/maintainers/where.md	14907
 docs-md	docs/maintainers/where.md	15
@@ -2625,6 +2627,7 @@ docs-md	docs/maintainers/where.md	208
 docs-md	docs/maintainers/where.md	2084
 docs-md	docs/maintainers/where.md	209
 docs-md	docs/maintainers/where.md	21
+docs-md	docs/maintainers/where.md	210
 docs-md	docs/maintainers/where.md	2105
 docs-md	docs/maintainers/where.md	211
 docs-md	docs/maintainers/where.md	212
@@ -2991,7 +2994,6 @@ docs-md	docs/maintainers/where.md	549
 docs-md	docs/maintainers/where.md	55
 docs-md	docs/maintainers/where.md	552
 docs-md	docs/maintainers/where.md	5524
-docs-md	docs/maintainers/where.md	55318
 docs-md	docs/maintainers/where.md	55324
 docs-md	docs/maintainers/where.md	554
 docs-md	docs/maintainers/where.md	5540
@@ -3069,10 +3071,7 @@ docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
-docs-md	docs/maintainers/where.md	653802
-docs-md	docs/maintainers/where.md	653527
-docs-md	docs/maintainers/where.md	653
-docs-md	docs/maintainers/where.md	654389
+docs-md	docs/maintainers/where.md	654664
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	657
 docs-md	docs/maintainers/where.md	66
