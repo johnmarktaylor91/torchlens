@@ -112,7 +112,7 @@ fig, (top, bottom) = plt.subplots(
 fig.suptitle("ESM-2 (8M) on human ubiquitin: both panels read from one TorchLens trace",
              fontsize=12)
 colors = ["#B0B0B0" if hit else "#c0392b" for hit in recovered.tolist()]
-top.bar(torch.arange(1, n + 1), native_logp.detach(), color=colors, width=0.85)
+top.bar(range(1, n + 1), native_logp.detach().numpy(), color=colors, width=0.85)
 top.set_xlim(0.5, n + 0.5)
 top.set_xlabel("residue")
 top.set_ylabel("log p(native)")
@@ -128,7 +128,7 @@ shown = contacts.clone()
 shown[(index[:, None] - index[None, :]).abs() < 6] = float("nan")
 greys = plt.get_cmap("Greys").copy()
 greys.set_bad("#EFE3C8")
-image = bottom.imshow(shown, cmap=greys, vmin=0, vmax=1,
+image = bottom.imshow(shown.numpy(), cmap=greys, vmin=0, vmax=1,
                       extent=(0.5, n + 0.5, n + 0.5, 0.5))
 for text, cell, where in (
     (r"$\beta$1-$\beta$2 hairpin", (13, 4), (30, 9)),
@@ -138,7 +138,7 @@ for text, cell, where in (
                     arrowprops={"arrowstyle": "-", "color": "#333333", "lw": 0.8})
 bottom.set_xlabel("residue")
 bottom.set_ylabel("residue")
-bottom.set_title("Contacts from the six attention maps (beige: pairs under 6 apart, masked)",
+bottom.set_title("Contacts from the six attention maps (beige: under 6 residues apart, masked)",
                  loc="left", fontsize=11)
 fig.colorbar(image, ax=bottom, shrink=0.8, label="contact probability")
 fig.savefig("esm2_ubiquitin.png", dpi=150, facecolor="white")
