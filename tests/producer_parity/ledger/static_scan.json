@@ -8377,6 +8377,14 @@
  },
  {
   "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/intervention/_replay_values.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "capture_spec",
   "file": "torchlens/intervention/_rerun_predicate.py",
   "has_default": false,
