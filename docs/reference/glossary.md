@@ -3030,7 +3030,7 @@ deprecation shim owed*
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
   keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` and
-  `colorblind` render the Okabe-Ito set (green input, vermillion output, blue weights), `paper`
+  `colorblind` render the Okabe-Ito set with grey weights (green input, vermillion output, light grey trainable and dark grey frozen weights; no skin draws blue), `paper`
   and `high_contrast` the legacy set (light green input, light red output, grey weights). The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 

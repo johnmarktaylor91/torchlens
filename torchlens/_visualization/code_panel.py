@@ -688,7 +688,7 @@ def _source_text_to_html_rows(source_text: str, displayed_lines: list[str]) -> l
         )
         rows.append(
             f"<TR><TD ALIGN='LEFT' HREF='{href}' TOOLTIP='{tooltip}'>"
-            f"<FONT FACE='Courier' COLOR='#0366D6'>{link_label}</FONT></TD></TR>"
+            f"<FONT FACE='Courier' COLOR='#444444'>{link_label}</FONT></TD></TR>"
         )
     for line in displayed_lines:
         escaped_line = html.escape(line, quote=False) if line else "&#160;"

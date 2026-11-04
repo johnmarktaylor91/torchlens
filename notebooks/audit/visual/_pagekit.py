@@ -26,7 +26,7 @@ Image.MAX_IMAGE_PIXELS = None  # graphviz output of big graphs is legitimately h
 
 PAGE_W_IN = 13.0  # fixed page width (inches)
 MAX_PANEL_H_IN = 42.0  # cap per-panel display height (very deep graphs)
-HEADER_COLOR = "#1a3a5c"
+HEADER_COLOR = "#333333"
 CAPTION_BG = "#f4f6f8"
 
 
@@ -214,7 +214,7 @@ def compose_page(
         va="center",
         ha="right",
         fontsize=10,
-        color="#cfe0f0",
+        color="#e0e0e0",
     )
 
     # --- title ---
@@ -383,7 +383,7 @@ def compose_text_page(
         va="center",
         ha="right",
         fontsize=10,
-        color="#cfe0f0",
+        color="#e0e0e0",
     )
 
     title_y = header_h_in + 0.35

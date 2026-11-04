@@ -279,13 +279,13 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="grey-params",
-        title="Blue means parameters",
-        rule="Light blue trains, dark blue is frozen, two-tone is both. Fill precedence: input, "
+        title="Grey means parameters",
+        rule="Light grey trains, dark grey is frozen, two-tone is both. Fill precedence: input, "
         "output, boolean, then parameters.",
         panels=(Panel("a", "Params", kwargs={**CAP, **FULL}),),
         keys=(
-            Key("Light blue {trainable}: all trainable", "node(fillcolor={trainable})"),
-            Key("Dark blue {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
+            Key("Light grey {trainable}: all trainable", "node(fillcolor={trainable})"),
+            Key("Dark grey {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
             Key("Two-tone: some of each", "node(fillcolor~:)"),
             Key("Caption counts trainable parameters", "graph(label~trainable)", at="Params"),
         ),
@@ -496,7 +496,7 @@ SLIDES: tuple[Slide, ...] = (
                 at="mutated parameter",
             ),
         ),
-        footnote="A frozen Parameter takes the dark blue fill.",
+        footnote="A frozen Parameter takes the dark grey fill.",
         rows=("VN09", "VE11", "VI01"),
     ),
     Slide(
@@ -808,7 +808,7 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="color-by",
         title="Colour a measurement: color_by",
-        rule="Fill ramps light to blue by value; the legend appears by itself and states source, "
+        rule="Fill ramps pale yellow to brown by value; the legend appears by itself and states source, "
         "coverage, scale and range.",
         panels=(
             Panel("a", "Sizes", kwargs={"color_by": "flops", **QUIET}, label='color_by="flops"'),
@@ -1020,7 +1020,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("grad_fn node", "node(fillcolor=#F2F3FF)"),
+            Key("grad_fn node", "node(fillcolor=#F8E1E7)"),
             Key("Dotted accum edge to a leaf", "edge(style=dotted)"),
         ),
         rows=("VN26", "VE09", "VC04", "VV02"),
@@ -1234,7 +1234,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Flow",
-                kwargs={"node_spec_fn": "@badge", "edge_overrides": {"color": "#0072B2"}},
+                kwargs={"node_spec_fn": "@badge", "edge_overrides": {"color": "#D55E00"}},
                 label="node_spec_fn, edge_overrides",
             ),
             Panel(
@@ -1244,14 +1244,14 @@ SLIDES: tuple[Slide, ...] = (
                     "depth": 1,
                     "collapsed_node_spec_fn": "@boxbadge",
                     "graph_overrides": {"label": "", "bgcolor": "#F7F7F7"},
-                    "module_overrides": {"color": "#0072B2"},
+                    "module_overrides": {"color": "#D55E00"},
                 },
                 label="collapsed_node_spec_fn, graph and module overrides",
             ),
         ),
         keys=(
             Key("NodeSpec callback restyles a node", "node(fillcolor=#FFE9A8)"),
-            Key("Edge override recolours every arrow", "edge(color=#0072B2)"),
+            Key("Edge override recolours every arrow", "edge(color=#D55E00)"),
             Key("Collapsed-node callback", "node(fillcolor=#FFE9A8)", panel="b"),
             Key("Graph override: background", "graph(bgcolor=#F7F7F7)", panel="b"),
         ),
@@ -1505,7 +1505,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("+N more repeats", "fold-repeats", "a", "node(shape=plaintext, text~more)"),
             ("orphan", "orphans", "a", "node(text~sin)"),
             ("focused module's input", "focus", "a", "node(fillcolor={input_color})"),
-            ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
+            ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F8E1E7)"),
             ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),

@@ -29,8 +29,8 @@ __all__ = ["render_token_strip", "token_strip_html", "token_strip_svg"]
 TOKENS_PER_LINE = 16
 
 #: Positive/negative/neutral fills for the zero-dependency emitter
-#: (diverging, zero-centered; colorblind-safe blue/orange pair).
-_POSITIVE_RGB = (0, 114, 178)  # Okabe-Ito blue
+#: (diverging, zero-centered; colorblind-safe green/vermillion pair, no blue).
+_POSITIVE_RGB = (0, 158, 115)  # Okabe-Ito bluish green
 _NEGATIVE_RGB = (213, 94, 0)  # Okabe-Ito vermillion
 _NA_FILL = "#f0f0f0"
 

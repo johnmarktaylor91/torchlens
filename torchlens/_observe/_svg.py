@@ -20,8 +20,8 @@ __all__ = ["render_timeline_svg", "write_timeline_svg"]
 
 #: Stacked band order (bottom-up) and placeholder fills.
 _BANDS: tuple[tuple[str, str], ...] = (
-    ("parameter", "#4878a8"),
-    ("buffer", "#76a5af"),
+    ("parameter", "#808080"),
+    ("buffer", "#e69f00"),
     ("input", "#b3b3b3"),
     ("activation", "#e8a33d"),
     ("newly_saved_activation", "#c25454"),

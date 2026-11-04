@@ -361,13 +361,13 @@ OUTPUT_COLOR = "#ff9999"  # Light red/salmon
 PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no Param available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
-GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
-BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn_handle nodes
+GRADIENT_ARROW_COLOR = "#B03A6A"  # Raspberry for backward edges (no blue in any skin)
+BACKWARD_NODE_COLOR = "#F8E1E7"  # Pale rose for backward grad_fn_handle nodes
 BACKWARD_NODE_BORDER_COLOR = GRADIENT_ARROW_COLOR
 BACKWARD_HIGHER_ORDER_COLOR = "#FFF4D6"
 BACKWARD_ACCUMULATION_EDGE_STYLE = "dotted"
 DEFAULT_BG_COLOR = "white"
-BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
+BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers (a True test)
 BUFFER_NODE_COLOR = "#E69F00"  # Orange for buffer layers (the palette buffer role)
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
 

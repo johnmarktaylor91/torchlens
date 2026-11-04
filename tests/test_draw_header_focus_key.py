@@ -37,17 +37,6 @@ from torchlens.errors import ArgumentConflictError
 
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
 
-#: The eight Okabe-Ito colours.
-_OKABE_ITO = {
-    "#E69F00",
-    "#56B4E9",
-    "#009E73",
-    "#F0E442",
-    "#0072B2",
-    "#D55E00",
-    "#CC79A7",
-    "#000000",
-}
 _FOCUS = "transformer.h.1.mlp"
 _COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KiB|MiB|GiB))\)")
 _SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KiB|MiB|GiB)<")
@@ -310,11 +299,11 @@ def test_each_module_mark_gets_its_own_key_entry() -> None:
     assert [s.text for s in key_swatches(theme, frozenset(), has_module=True)] == ["module"]
 
 
-def test_frozen_weights_take_okabe_ito_black_with_white_ink(tmp_path: Path) -> None:
-    # Okabe-Ito blue #0072B2 fails the CVD gate against the input green
-    # (deuteranopia 37, tritanopia 21, floor 40); black is the member left.
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] in _OKABE_ITO
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#000000"
+def test_frozen_weights_take_dark_grey_with_black_ink(tmp_path: Path) -> None:
+    # No skin draws weights in blue: trainable is light grey, frozen dark grey. Frozen stays
+    # at #808080 so one black ink reads on both halves of the gradient split (5.3:1).
+    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#808080"
+    assert OKABE_ITO_SEMANTIC_PALETTE["params_trainable"] == "#C0C0C0"
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     model[0].requires_grad_(False)
     captured = tl.trace(model, torch.randn(1, 4))
@@ -322,6 +311,6 @@ def test_frozen_weights_take_okabe_ito_black_with_white_ink(tmp_path: Path) -> N
         dot = captured.draw(str(tmp_path / "frozen.svg")).dot
     finally:
         captured.cleanup()
-    frozen = [line for line in dot.splitlines() if "#000000" in line and "[label=<" in line]
+    frozen = [line for line in dot.splitlines() if "#808080" in line and "[label=<" in line]
     assert frozen, dot
-    assert all('fontcolor="#FFFFFF"' in line or "fontcolor=#FFFFFF" in line for line in frozen)
+    assert not any("#FFFFFF" in line.upper() or "fontcolor=white" in line for line in frozen)

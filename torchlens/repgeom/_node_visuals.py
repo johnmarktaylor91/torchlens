@@ -483,7 +483,7 @@ def _render_scree_image(
         height=height,
         y_min=0.0,
         y_max=1.0,
-        colors=((48, 93, 170), (32, 128, 90), (160, 72, 72)),
+        colors=((80, 80, 80), (32, 128, 90), (160, 72, 72)),
         show_legend=True,
         x_label="component",
         y_label="fraction",
@@ -499,7 +499,7 @@ def _render_scree_image(
         f"rank {info['effective_rank']}"
     )
     draw.rectangle([(0, height), (width - 1, height + callout_height - 1)], fill=(255, 255, 255))
-    draw.line([(0, height), (width - 1, height)], fill=(215, 219, 226))
+    draw.line([(0, height), (width - 1, height)], fill=(218, 218, 218))
     draw.text((8, height + 10), callout, fill=(35, 39, 47))
     return canvas
 

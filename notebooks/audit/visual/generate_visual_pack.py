@@ -310,7 +310,7 @@ def _spec_highlight_relu(layer_log, spec):
 
 def _collapsed_spec_tag(module_log, spec):
     """collapsed_node_spec_fn demo: tag every collapsed box."""
-    spec.fillcolor = "#D0E8FF"
+    spec.fillcolor = "#FFE8CC"
     spec.lines = [*spec.lines, "<-- collapsed_node_spec_fn hit"]
     return spec
 
@@ -437,7 +437,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         "vis_module_overrides",
         "demo_model",
         {},
-        {"module_overrides": {"color": "blue", "style": "dashed"}},
+        {"module_overrides": {"color": "#D55E00", "style": "dashed"}},
     ),
     VacuousDemoGuard(
         "vis_intervention_mode",
@@ -1200,7 +1200,7 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Power-user escape hatches passing attributes straight to Graphviz: "
                     "vis_graph_overrides (whole-graph attrs; here a tinted background), vis_edge_overrides "
-                    "(every edge; here thick red), vis_module_overrides (module boxes; here dashed blue). "
+                    "(every edge; here thick red), vis_module_overrides (module boxes; here dashed vermillion). "
                     "vis_grad_edge_overrides styles gradient edges through the same machinery.\n"
                     "CHECK: overrides apply globally and verbatim -- these are raw attrs, no validation."
                 ),
@@ -1216,9 +1216,9 @@ SECTIONS: list[Section] = [
                         kwargs={"edge_overrides": {"color": "red", "penwidth": "2"}},
                     ),
                     Panel(
-                        "vis_module_overrides: dashed blue module boxes",
+                        "vis_module_overrides: dashed vermillion module boxes",
                         "demo_model",
-                        kwargs={"module_overrides": {"color": "blue", "style": "dashed"}},
+                        kwargs={"module_overrides": {"color": "#D55E00", "style": "dashed"}},
                     ),
                 ],
                 covers=["overrides:graph", "overrides:edge", "overrides:module"],

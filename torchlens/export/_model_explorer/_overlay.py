@@ -49,7 +49,7 @@ _VALUE_DERIVED = frozenset({"magnitude", "grad_norm", "nan"})
 
 #: TL's colorblind-safe sequential ramp anchors (light theme), shared with
 #: the draw() encoding channel.
-_SEQUENTIAL_GRADIENT = ({"stop": 0, "bgColor": "#FFFFFF"}, {"stop": 1, "bgColor": "#0072B2"})
+_SEQUENTIAL_GRADIENT = ({"stop": 0, "bgColor": "#FFF7BC"}, {"stop": 1, "bgColor": "#993404"})
 
 
 def build_node_data(

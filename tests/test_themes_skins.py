@@ -9,6 +9,9 @@ deuteranopia failure is pinned here as the fork's evidence.
 
 from __future__ import annotations
 
+import colorsys
+import dataclasses
+import re
 from typing import Any
 
 import pytest
@@ -24,8 +27,64 @@ from torchlens._visualization.themes import (
     OKABE_ITO_SEMANTIC_PALETTE,
     THEME_PRESETS,
     apply_theme_to_spec,
+    collapse_tokens,
     resolve_theme,
 )
+
+_HEX = re.compile(r"#[0-9A-Fa-f]{6}\b")
+_PARAM_ROLES = ("params_generic", "params_trainable", "params_frozen")
+
+
+def _hexes(value: Any) -> list[str]:
+    """Return every ``#RRGGBB`` colour reachable inside a theme value."""
+
+    if isinstance(value, str):
+        return _HEX.findall(value)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return [h for f in dataclasses.fields(value) for h in _hexes(getattr(value, f.name))]
+    if isinstance(value, dict):
+        return [h for item in value.values() for h in _hexes(item)]
+    if isinstance(value, (tuple, list)):
+        return [h for item in value for h in _hexes(item)]
+    return []
+
+
+def _is_blue(color: str) -> bool:
+    """True for a saturated colour whose hue sits between cyan and violet (180-260 deg)."""
+
+    r, g, b = (int(color[i : i + 2], 16) / 255 for i in (1, 3, 5))
+    hue, saturation, value = colorsys.rgb_to_hsv(r, g, b)
+    return 180 <= hue * 360 <= 260 and saturation >= 0.15 and value >= 0.15
+
+
+@pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
+def test_no_skin_draws_blue(skin: str) -> None:
+    """No skin, light or dark, carries a blue in its palette, ramp, inks or collapse tokens."""
+
+    theme = THEME_PRESETS[skin]
+    blues = [h for h in _hexes(theme) + _hexes(collapse_tokens(theme)) if _is_blue(h)]
+    assert not blues, (skin, blues)
+
+
+def test_default_palette_passes_every_cvd_gate_with_grey_weights() -> None:
+    """The default palette clears all four CVD checks; weights are greys, frozen darker."""
+
+    findings = palette_distinguishability(dict(OKABE_ITO_SEMANTIC_PALETTE))
+    assert all(finding.passed for finding in findings), [
+        (f.check, f.measurements) for f in findings if not f.passed
+    ]
+    greys = [OKABE_ITO_SEMANTIC_PALETTE[role] for role in _PARAM_ROLES]
+    assert all(len({g[1:3], g[3:5], g[5:7]}) == 1 for g in greys), greys
+    assert int(greys[2][1:3], 16) < int(greys[1][1:3], 16) < int(greys[0][1:3], 16)
+
+
+def test_dark_skin_weights_collide_with_no_role() -> None:
+    """The dark skin's grey weights stay apart from every other role under all simulations."""
+
+    palette = dict(THEME_PRESETS["dark"].semantic_palette)
+    for finding in palette_distinguishability(palette):
+        for pair in finding.measurements.get("collisions", ()):
+            assert "params" not in str(pair), (finding.check, pair)
 
 
 # Kept: the slices removed this test; the stack's Okabe-Ito default-skin work rewrote it to assert the new palette.

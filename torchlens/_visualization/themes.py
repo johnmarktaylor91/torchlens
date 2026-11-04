@@ -10,12 +10,13 @@ schema change), and the declared NEUTRAL "aggregate, not encoded" fill
 (N17) for collapsed boxes under an active channel.
 
 The default ``torchlens`` skin and the ``colorblind`` skin render the
-Okabe-Ito role colours (input green, output vermillion, weights sky blue when
-trainable and a deeper blue when frozen, plain operations the page colour), the
-set that passes every colour-vision gate. The ``paper`` and ``high_contrast``
-skins keep the legacy TorchLens role colours (input light green, output light
-red, weights light grey when trainable and dark grey when frozen) and ``dark``
-its dark remap.
+Okabe-Ito role colours (input green, output vermillion, plain operations the
+page colour) with grey weights (light grey when trainable, dark grey when
+frozen), the set that passes every colour-vision gate. No skin draws blue:
+weights are grey in every skin and the sequential ramps are warm. The ``paper``
+and ``high_contrast`` skins keep the legacy TorchLens role colours (input light
+green, output light red, weights light grey when trainable and dark grey when
+frozen) and ``dark`` its dark remap.
 """
 
 from __future__ import annotations
@@ -30,19 +31,21 @@ from .._errors import InvalidArgumentError
 from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 
-#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set; frozen weights
-#: take the set's black, the one member left that the CVD gate tells apart
-#: from every role; its blue is too close to the input green, and the white
-#: label ink comes from ``_legible_ink``): the default ``torchlens`` skin and
-#: the ``colorblind`` skin render it; the CVD accessibility gate measures it.
+#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set) with the
+#: ruled grey weights (no blue in any skin: trainable light grey, frozen dark
+#: grey, generic a paler neutral grey). Each grey pair sits at least 40 apart
+#: under every colour-vision simulation; the frozen grey keeps black ink
+#: legible (5.3:1) so the trainable/frozen split fill reads with one ink; the
+#: generic grey sits 13 dE from the white page. The default ``torchlens`` skin
+#: and the ``colorblind`` skin render it; the CVD accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
         "output": "#D55E00",
-        "params_generic": "#CFE5F5",
-        "params_trainable": "#56B4E9",
-        "params_frozen": "#000000",
-        "params_gradient": "#56B4E9:#000000",
+        "params_generic": "#DADADA",
+        "params_trainable": "#C0C0C0",
+        "params_frozen": "#808080",
+        "params_gradient": "#C0C0C0:#808080",
         "boolean": "#F0E442",
         "buffer": "#E69F00",
         "intervention": "#CC79A7",
@@ -66,27 +69,40 @@ LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: Dark-skin semantic palette: the historical dark-theme role colours (params
-#: remap to dark grays; input/output/boolean pass through unchanged, as
-#: before the palette went live). The dark plain fill is the page colour, not
-#: the old ``#1F2937``, so a plain operation and a parameterised one separate.
-#: Frozen weights are a lighter gray than trainable ones (20.6 dE apart under
-#: colour-vision simulation), so the key's two weight rows read apart on the
-#: dark page as they do on the light one.
+#: Dark-skin semantic palette: the historical dark-theme role colours for
+#: input, output and boolean (passed through unchanged) with the ruled grey
+#: weights: trainable light grey, frozen dark grey, as on the light page. The
+#: trainable grey stays at least 40 from the light input green under every
+#: colour-vision simulation, and the frozen grey keeps black ink legible so
+#: the trainable/frozen split fill reads with one ink. The dark plain fill is
+#: the page colour, so a plain operation and a parameterised one separate.
 _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
         "output": "#ff9999",
-        "params_generic": "#374151",
-        "params_trainable": "#374151",
-        "params_frozen": "#6B7280",
-        "params_gradient": "#374151:#6B7280",
+        "params_generic": "#DADADA",
+        "params_trainable": "#DADADA",
+        "params_frozen": "#808080",
+        "params_gradient": "#DADADA:#808080",
         "boolean": "#F7D460",
         "buffer": "#E69F00",
         "intervention": "#CC79A7",
     }
 )
 
+
+#: Warm sequential ramps (low, mid, high; ColorBrewer YlOrBr anchors): no blue
+#: and no purple in any skin. Luminance falls monotonically on the light page
+#: (243, 170, 77) and rises on the dark one (48, 121, 220), and each passes the
+#: colour-vision gate.
+LIGHT_WARM_RAMP: tuple[str, str, str] = ("#FFF7BC", "#FE9929", "#993404")
+DARK_WARM_RAMP: tuple[str, str, str] = ("#3A2E22", "#C0661E", "#FED98E")
+#: The dark skin's neutral near-black page (no blue tint).
+DARK_PAGE = "#141414"
+#: The declared "aggregate, not encoded" fills (N17): a pale warm stone on the
+#: light skins and a dark warm stone on the dark one, never a role colour.
+LIGHT_AGGREGATE_FILL = "#EDE7DE"
+DARK_AGGREGATE_FILL = "#2E2A25"
 
 #: Theme fields deleted outright (lane F12; no alias kept).
 _REMOVED_THEME_MEMBERS: dict[str, str] = {
@@ -147,8 +163,8 @@ class VisualizationTheme:
     # mappingproxy as a field default. The factory returns the one shared
     # read-only proxy, so the default stays identical and immutable.
     semantic_palette: Mapping[str, str] = field(default_factory=lambda: LEGACY_SEMANTIC_PALETTE)
-    ramp: tuple[str, str, str] = ("#F2F2F2", "#79A8CC", "#0072B2")
-    neutral_aggregate_fill: str = "#E8EEF2"
+    ramp: tuple[str, str, str] = LIGHT_WARM_RAMP
+    neutral_aggregate_fill: str = LIGHT_AGGREGATE_FILL
     typography: TypographyRecord = field(default=DEFAULT_TYPOGRAPHY)
 
     # Runtime only: under TYPE_CHECKING the hook would make every attribute
@@ -179,8 +195,8 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="black",
         default_font="black",
         semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
-        ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
-        neutral_aggregate_fill="#E8EEF2",
+        ramp=LIGHT_WARM_RAMP,
+        neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
     "paper": VisualizationTheme(
         name="paper",
@@ -193,21 +209,22 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         semantic_palette=LEGACY_SEMANTIC_PALETTE,
         # Grayscale ramp (review r3 working anchors): print-safe by design.
         ramp=("#F0F0F0", "#969696", "#252525"),
-        neutral_aggregate_fill="#E8EEF2",
+        neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
     "dark": VisualizationTheme(
         name="dark",
-        graph={"bgcolor": "#111827", "fontname": "Helvetica"},
+        # Neutral near-black page and neutral grey inks: no blue-tinted greys.
+        graph={"bgcolor": DARK_PAGE, "fontname": "Helvetica"},
         node={"fontname": "Helvetica"},
-        edge={"color": "#9CA3AF", "fontcolor": "#D1D5DB", "fontname": "Helvetica"},
-        # The plain fill is the page, as in the default skin: ``#1F2937`` sat
-        # 11 dE from the parameter gray, under the 12 dE colour-vision floor.
-        default_fill="#111827",
-        default_border="#E5E7EB",
-        default_font="#F9FAFB",
+        edge={"color": "#A3A3A3", "fontcolor": "#D4D4D4", "fontname": "Helvetica"},
+        # The plain fill is the page, as in the default skin, so a plain
+        # operation and a parameterised one separate.
+        default_fill=DARK_PAGE,
+        default_border="#E5E5E5",
+        default_font="#FAFAFA",
         semantic_palette=_DARK_SEMANTIC_PALETTE,
-        ramp=("#2A3646", "#3F7CA6", "#56B4E9"),
-        neutral_aggregate_fill="#2A3441",
+        ramp=DARK_WARM_RAMP,
+        neutral_aggregate_fill=DARK_AGGREGATE_FILL,
     ),
     "colorblind": VisualizationTheme(
         name="colorblind",
@@ -217,11 +234,11 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         # The plain fill is the page, as in the default skin: ``#F0F0F0`` sat
         # 8 dE from the trainable-parameter gray, under the 12 dE floor.
         default_fill="white",
-        default_border="#0072B2",
+        default_border="#111111",
         default_font="#111111",
         semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
-        ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
-        neutral_aggregate_fill="#E8EEF2",
+        ramp=LIGHT_WARM_RAMP,
+        neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
     "high_contrast": VisualizationTheme(
         name="high_contrast",
@@ -238,7 +255,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_font="black",
         semantic_palette=LEGACY_SEMANTIC_PALETTE,
         ramp=("#EBEBEB", "#767676", "#000000"),
-        neutral_aggregate_fill="#E8EEF2",
+        neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
         typography=HIGH_CONTRAST_TYPOGRAPHY,
     ),
 }
@@ -312,12 +329,12 @@ def collapse_tokens(theme: VisualizationTheme) -> CollapseTokens:
 
     if theme.name == "dark":
         return CollapseTokens(
-            segment_fill="#1F2937",
-            segment_border="#9CA3AF",
-            segment_font="#F9FAFB",
-            ellipsis_fill="#111827",
-            ellipsis_border="#9CA3AF",
-            ellipsis_font="#D1D5DB",
+            segment_fill="#262626",
+            segment_border="#A3A3A3",
+            segment_font="#FAFAFA",
+            ellipsis_fill=DARK_PAGE,
+            ellipsis_border="#A3A3A3",
+            ellipsis_font="#D4D4D4",
         )
     return CollapseTokens(
         segment_fill="#f7f7f7",
@@ -370,6 +387,9 @@ _CONSTANT_ROLES: dict[str, str] = {
     "#D9D9D9": "params_trainable",
     "#B0B0B0": "params_frozen",
     "#F7D460": "boolean",
+    # A False test: the skin's boolean colour blended toward its page (no
+    # palette key of its own; see ``_role_fill``).
+    "#FBEAB0": "boolean_false",
     # Buffers fill with the palette's buffer role. They used to fill with the
     # plain-op default, so the legend's buffer swatch and a plain op looked
     # the same in every skin; the shape was the only cue.
@@ -397,10 +417,36 @@ def _skin_fill_for(spec_fill: str | None, theme: VisualizationTheme) -> str | No
     if not any(roles):
         return None
     translated = [
-        theme.semantic_palette.get(role, segment) if role is not None else segment
+        _role_fill(theme, role, segment) if role is not None else segment
         for role, segment in zip(roles, segments, strict=True)
     ]
     return ":".join(translated)
+
+
+#: Share of the boolean colour in a False test's fill (the rest is the page).
+_FALSE_TEST_SHARE = 0.45
+
+
+def _role_fill(theme: VisualizationTheme, role: str, constant: str) -> str:
+    """Return the skin's fill for one role, deriving the False-test pale."""
+
+    if role != "boolean_false":
+        return theme.semantic_palette.get(role, constant)
+    boolean = _hex_rgb(theme.semantic_palette.get("boolean", "#F7D460"))
+    page = _hex_rgb(theme.default_fill)
+    if boolean is None or page is None:
+        return constant
+    mixed = (round(page[i] + (boolean[i] - page[i]) * _FALSE_TEST_SHARE) for i in range(3))
+    return "#" + "".join(f"{channel:02X}" for channel in mixed)
+
+
+def _hex_rgb(color: str) -> tuple[int, int, int] | None:
+    """Return ``#RRGGBB`` (or ``white``/``black``) as an RGB triple, else ``None``."""
+
+    text = {"white": "#FFFFFF", "black": "#000000"}.get(color.strip().lower(), color.strip())
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", text):
+        return None
+    return int(text[1:3], 16), int(text[3:5], 16), int(text[5:7], 16)
 
 
 def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:

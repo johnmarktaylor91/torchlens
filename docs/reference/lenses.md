@@ -93,8 +93,9 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   (min == max) render UNENCODED with a note, never mid-ramp.
 - **Skins are live (N4).** Semantic role colours resolve through the
   active skin's palette at the one theme seam. The default `torchlens` skin and the
-  `colorblind` skin render the Okabe-Ito set (green input, vermillion output, sky-blue
-  trainable and deeper-blue frozen weights), the set with CVD evidence attached; `paper` and
+  `colorblind` skin render the Okabe-Ito set with grey weights (green input, vermillion
+  output, light grey trainable and dark grey frozen weights; no skin draws blue), the set
+  with CVD evidence attached; `paper` and
   `high_contrast` keep the legacy role colours (light green input, light red output, light and
   dark grey weights) and `dark` its dark remap.
   Each skin carries a 3-anchor ramp and the N17 neutral "aggregate, not

@@ -56,10 +56,10 @@ _FAN_QS = (0.05, 0.25, 0.5, 0.75, 0.95)
 _FAN_HEIGHT = 240
 _WATERFALL_HEIGHT = 320
 
-# Colorblind-safe fixed palette (Okabe-Ito derived), hex only.
-_C_MEDIAN = "#0072b2"
-_C_BAND_INNER = "#8ecae6"
-_C_BAND_OUTER = "#d0e7f5"
+# Colorblind-safe fixed palette (Okabe-Ito accents on neutral greys; no blue), hex only.
+_C_MEDIAN = "#222222"
+_C_BAND_INNER = "#bdbdbd"
+_C_BAND_OUTER = "#e6e6e6"
 _C_MINMAX = "#555555"
 _C_NONFINITE = "#d55e00"
 _C_SKIP = "#cc79a7"
@@ -537,17 +537,17 @@ def _waterfall_raster(points: tuple[SeriesPoint, ...], view: HistoryView) -> tup
     if peak > 0:
         density = density / peak
     rgb = np.full((n_rows, n_cols, 3), 255, dtype=np.uint8)
-    # Grid cells ramp white -> deep blue; special bands white -> vermillion.
+    # Grid cells ramp white -> dark grey; special bands white -> vermillion.
     ramp = (density * 255).astype(np.uint8)
     grid_mask = ~special
     rgb[..., 0] = np.where(
-        grid_mask, 255 - (ramp * 0.85).astype(np.uint8), 255 - (ramp * 0.16).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 0.16).astype(np.uint8)
     )
     rgb[..., 1] = np.where(
-        grid_mask, 255 - (ramp * 0.55).astype(np.uint8), 255 - (ramp * 0.63).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 0.63).astype(np.uint8)
     )
     rgb[..., 2] = np.where(
-        grid_mask, 255 - (ramp * 0.30).astype(np.uint8), 255 - (ramp * 1.0).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 1.0).astype(np.uint8)
     )
     image = Image.fromarray(rgb, mode="RGB")
     buffer = io.BytesIO()

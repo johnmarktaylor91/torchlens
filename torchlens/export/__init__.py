@@ -1212,7 +1212,7 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
         f"viewBox='0 0 {data['width']} {data['height']}'>"
         "<style>.tl-edge{stroke:#555;stroke-width:1.4}.tl-node rect{fill:#fff;stroke:#222;stroke-width:1.2}"
         ".tl-node-input rect{fill:#D9F0D3}.tl-node-output rect{fill:#F6D7C3}"
-        ".tl-node-parameterized rect{fill:#DDEAF7}.tl-node-buffer rect{fill:#F7E7BA}"
+        ".tl-node-parameterized rect{fill:#C0C0C0}.tl-node-buffer rect{fill:#F7E7BA}"
         ".tl-node text{font:12px sans-serif;fill:#111;pointer-events:none}</style>"
         + "".join(edge_markup)
         + "".join(node_markup)

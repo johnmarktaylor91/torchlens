@@ -405,9 +405,9 @@ NOTE_LOG_NONPOSITIVE = "values <= 0 -- unencoded under the log transform"
 #: fields; unit-dependent behavior).
 COLOR_TRANSFORM_VOCABULARY = ("linear", "rank", "log")
 
-#: Sequential colormap anchors (Okabe-Ito adjacent, colorblind-safe).
-LIGHT_RAMP = ("#FFFFFF", "#0072B2")
-DARK_RAMP = ("#1F2937", "#56B4E9")
+#: Fallback sequential anchors: the skins' warm YlOrBr low/high (no blue).
+LIGHT_RAMP = ("#FFF7BC", "#993404")
+DARK_RAMP = ("#3A2E22", "#FED98E")
 
 # ---------------------------------------------------------------------------
 # SIZE channel constants (wave 1; D4 DEFAULT-APPLIED -- memo 3.1/3.2 C2).

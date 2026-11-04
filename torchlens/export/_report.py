@@ -532,7 +532,7 @@ _REPORT_CSS = (
     ".tl-report-honesty{background:#fff8f0;border:1px solid #d0d7de;border-radius:6px;"
     "padding:8px 10px;margin:10px 0;font-size:13px}"
     ".tl-report-notice{color:#9a6700;font-weight:600;margin:8px 0}"
-    ".tl-report-stats{color:#57606a;font-family:ui-monospace,monospace;font-size:12px}"
+    ".tl-report-stats{color:#5f5f5f;font-family:ui-monospace,monospace;font-size:12px}"
     ".tl-report-graph{overflow:auto;max-height:640px;border:1px solid #d0d7de;margin:8px 0}"
     ".tl-report-ops{border-collapse:collapse;font-size:12px}"
     ".tl-report-ops td,.tl-report-ops th{border:1px solid #d0d7de;padding:2px 6px}"
