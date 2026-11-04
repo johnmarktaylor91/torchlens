@@ -1324,7 +1324,7 @@
   "field": "modules",
   "file": "torchlens/_data_classes/interface.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 5,
   "via_getattr": false
  },
  {

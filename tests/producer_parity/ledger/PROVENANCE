@@ -4635,3 +4635,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1247d81a6dbb094c5e32ee6713aa6d46c7be5dbc (dirty)
 recorded: 2026-11-04T03:04:19.774206+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-138 remerge4: merge of indexing-coherence round 2 (5ae75bf6ed) into C-138 remerge4; both sides moved read sites, the merged tree needs one refresh
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: abf7950b449d5d9a0eade621ed5a6f40d1f825ea (clean)
+recorded: 2026-11-04T06:30:13.272858+00:00
