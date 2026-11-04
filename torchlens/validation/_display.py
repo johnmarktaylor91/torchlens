@@ -101,7 +101,7 @@ def bind_failure_key(failure: Any, trace: Any) -> None:
     """Retain only the resolved display string, never a Trace or tensor reference."""
 
     def bind() -> None:
-        record = getattr(trace, "_layer_dict_all_keys", {}).get(failure.op_label)
+        record = trace._layer_dict_all_keys.get(failure.op_label)
         if record is not None:
             failure._display_op_key = display_key(record)
 
