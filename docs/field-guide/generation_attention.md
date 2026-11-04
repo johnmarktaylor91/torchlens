@@ -9,10 +9,9 @@ softmax the model produced at each step, placed at its position; nothing is
 recomputed. The renderer is the same one `tl.viz.attention` uses for a single
 forward.
 
-**Spelling pending.** The step door is
-`torchlens.transformer._generation_attention.generation_attention_view` (and
-`generation_attention_views` for every layer) until the public name is chosen.
-The rendering call, `tl.viz.attention`, is public.
+The step door is `tl.transformer.attention_view(generation, layer, step=k)`:
+the same call that reads one forward's trace, given a generation recording and
+the step to picture. The rendering call is `tl.viz.attention`.
 
 The example uses the two-layer GPT-2 with random weights from the running
 examples, so it runs offline. With a real checkpoint, load the model with
@@ -64,11 +63,6 @@ example's config turns it off for single forwards, so the call turns it back on.
 
 ```python
 # recipe-test: tool=transformers expected=(4, 4)
-from torchlens.transformer._generation_attention import (
-    generation_attention_view,
-    generation_attention_views,
-)
-
 generation = tl.record(
     model,
     x,
@@ -95,7 +89,7 @@ per position of `generation.sequences`.
 ```python
 # recipe-test: tool=transformers expected=((4, 17, 17), 'decode')
 labels = [vocab[int(token)] for token in generation.sequences[0]]
-view = generation_attention_view(generation, "transformer.h.1.attn", 3, tokens=labels)
+view = tl.transformer.attention_view(generation, "transformer.h.1.attn", step=3, tokens=labels)
 RESULT = (tuple(view.pattern.shape), view.episode.role)
 ```
 
@@ -112,12 +106,15 @@ RESULT = saved.paths[0].exists() and any("outlined row" in line for line in save
 
 ## 4. Every layer at one step
 
-`generation_attention_views` returns one view per attention layer, in execution
-order; pass `layers=` to pick some.
+Call `attention_view` once per attention layer to picture the same step across
+the stack.
 
 ```python
 # recipe-test: tool=transformers expected=('transformer.h.0.attn', 'transformer.h.1.attn')
-views = generation_attention_views(generation, 1, tokens=labels)
+views = [
+    tl.transformer.attention_view(generation, layer, step=1, tokens=labels)
+    for layer in ("transformer.h.0.attn", "transformer.h.1.attn")
+]
 RESULT = tuple(view.layer for view in views)
 ```
 
@@ -130,7 +127,7 @@ each raise a typed error naming the fix. Branch on `exc.fields["code"]`.
 ```python
 # recipe-test: tool=transformers expected='tv_facet_missing'
 try:
-    generation_attention_view(generation, "transformer.h.0.mlp", 0)
+    tl.transformer.attention_view(generation, "transformer.h.0.mlp", step=0)
 except tl.errors.RenderError as exc:
     RESULT = exc.fields["code"]
 ```

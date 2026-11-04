@@ -588,6 +588,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted_input`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
 | Fixed-period induction score | `FixedPeriodInduction`, `head_scores(..., kind=FixedPeriodInduction(period=n))`, `period` | unstable -- no deprecation shim owed |
+| Ablation controls (baseline, direction and site reruns of one claim) | `ablation_controls`, `AblationControlsReport`, `axis`, `baseline`, `donors`, `direction`, `feature_axis`, `n_directions`, `sites`, `seed`, `min_ratio`, `alpha`, `clean`, `effect`, `rows`, `families`, `direction_p`, `survives` | unstable -- no deprecation shim owed |
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:END -->
 
 `component_graph(trace)` returns a `ComponentGraph`: read-only `nodes`, `receivers` and `edges`
@@ -3924,11 +3925,13 @@ describe each surface in depth.
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered facet functions, optionally filtered by target scope and class-name glob |
 | `tl.facets.parameter_spec` | Recipe helper: a module parameter as a `FacetSpec` (`module, name, recipe_id`), or an absence reason |
+| `tl.mechinterp.AblationControlsReport` | Every control rerun of one ablation claim and the verdict per family (read-only record) |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
 | `tl.mechinterp.LogitLensPredictions` | Result of a streaming :func:`logit_lens_predictions` sweep |
 | `tl.mechinterp.PatchedRun` | The receipted product of one lowered counterfactual |
 | `tl.mechinterp.SavePlan` | A priced, composable retention plan (mikit D15) |
+| `tl.mechinterp.ablation_controls` | Rerun an ablation claim under the baseline, direction and site controls; returns an `AblationControlsReport` |
 | `tl.mechinterp.patch_head` | Patch one head (or its pattern) on a fused model via exact lowering |
 | `tl.mechinterp.patching` | Prebuilt activation and attribution patching helpers for facets |
 | `tl.neuro.ExtractionPlan` | Immutable measured plan for one whole-model extraction sweep |
@@ -3981,6 +3984,13 @@ describe each surface in depth.
 ### Fields and methods
 | Spelling | Meaning |
 | --- | --- |
+| `AblationControlsReport.baseline` | field of `AblationControlsReport`: the claimed ablation's baseline (`"zero"`, `"mean"` or `"resample"`) |
+| `AblationControlsReport.clean` | field of `AblationControlsReport`: the metric on the unedited run |
+| `AblationControlsReport.direction_p` | field of `AblationControlsReport`: the direction family's rank p-value, or `None` when no direction was given |
+| `AblationControlsReport.effect` | field of `AblationControlsReport`: the claimed ablation's effect, edited metric minus clean metric |
+| `AblationControlsReport.families` | field of `AblationControlsReport`: one verdict per family that ran (`family`, `survives`, `reason`) |
+| `AblationControlsReport.rows` | field of `AblationControlsReport`: one row per rerun, in run order (`family`, `name`, `effect`, `survives`) |
+| `AblationControlsReport.survives` | `True` when every family that ran survived |
 | `AbsenceReason.detail` | Human-readable explanation of the absence |
 | `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
 | `Attribution.target_repr` | Compact representation of the scalarization target |
@@ -4371,7 +4381,7 @@ The sections above describe each surface in depth.
 | `tl.transformer.TokenMetrics` | Per-token metric strip record |
 | `tl.transformer.TokenScoreRow` | One labeled row of per-token scores (strip row) |
 | `tl.transformer.TokenScores` | Colored-token strip record, single- or multi-row |
-| `tl.transformer.attention_view` | Extract one layer's attention pattern as a typed view |
+| `tl.transformer.attention_view` | Extract one layer's attention pattern as a typed view; `attention_view(generation, layer, step=k)` reads step `k` of a recorded generation |
 | `tl.transformer.attention_views` | Extract every (or the named) attention layer's view, in trace order |
 | `tl.transformer.bertviz_tuple` | Return attention in the BertViz and Hugging Face `output_attentions` tuple format |
 | `tl.transformer.circuitsvis_attention` | Hand the payload to circuitsvis's attention component (notebook only) |
@@ -5787,6 +5797,7 @@ drops a newly listed record from the keyword rows.
 | `tl.io.AnalysisOnlySidecar` | Unvalidated view of a persisted sidecar whose provider is absent |
 | `tl.io.SidecarFamily` | One registered sidecar family's declared contract |
 | `tl.mechinterp.AliasResolution` | One resolved alias: native coordinates + honest capability status |
+| `tl.mechinterp.AblationControlsReport` | Every control rerun of one ablation claim and the verdict per family |
 | `tl.mechinterp.ComponentEdge` | One edge `sender->receiver` of the component graph |
 | `tl.mechinterp.ComponentGraph` | The component edge graph of one trace (built by `component_graph`) |
 | `tl.mechinterp.ComponentReceiver` | One residual reader (a graph target) |

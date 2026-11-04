@@ -1,4 +1,4 @@
-"""Tests for the private controls helper (``torchlens.mechinterp._controls``)."""
+"""Tests for the ablation controls helper (``tl.mechinterp.ablation_controls``)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.mechinterp._controls import BASELINES, run_controls
+from torchlens.mechinterp import ablation_controls
+from torchlens.mechinterp._controls import BASELINES
 
 DEMO = Path(__file__).resolve().parents[1] / "examples" / "intervention"
 DEMO = DEMO / "19_controls_wrong_tensor.py"
@@ -29,7 +30,7 @@ def test_wrong_tensor_claim_fails_the_baseline_family(demo) -> None:
     """Zero-ablating the near-constant gain looks large; mean and resample do not."""
 
     model, x, metric = demo
-    report = run_controls(model, x, tl.module("gain"), metric, axis=0)
+    report = ablation_controls(model, x, tl.module("gain"), metric, axis=0)
     rows = {row.name: row for row in report.rows if row.family == "baseline"}
     assert set(rows) == set(BASELINES)
     assert report.effect < -1.0
@@ -45,7 +46,7 @@ def test_right_tensor_claim_survives_every_family(demo) -> None:
 
     model, x, metric = demo
     direction = (model.readout.weight[1] - model.readout.weight[0]).detach()
-    report = run_controls(
+    report = ablation_controls(
         model,
         x,
         tl.module("norm"),
@@ -68,8 +69,8 @@ def test_controls_are_deterministic(demo) -> None:
     """The same seed gives the same rows."""
 
     model, x, metric = demo
-    first = run_controls(model, x, tl.module("gain"), metric, axis=0, baseline="mean")
-    second = run_controls(model, x, tl.module("gain"), metric, axis=0, baseline="mean")
+    first = ablation_controls(model, x, tl.module("gain"), metric, axis=0, baseline="mean")
+    second = ablation_controls(model, x, tl.module("gain"), metric, axis=0, baseline="mean")
     assert first.rows == second.rows
 
 
@@ -98,7 +99,7 @@ def test_claim_that_moves_nothing_does_not_survive() -> None:
     """A zero claimed effect is reported as such, never as surviving."""
 
     torch.manual_seed(0)
-    report = run_controls(
+    report = ablation_controls(
         _UnusedBranch(), torch.randn(4, 3), tl.module("side"), _sum_metric, axis=0
     )
     assert report.effect == 0.0
@@ -122,7 +123,7 @@ def test_bad_settings_are_refused(kwargs, match) -> None:
 
     torch.manual_seed(0)
     with pytest.raises(ValueError, match=match):
-        run_controls(
+        ablation_controls(
             _UnusedBranch(), torch.randn(4, 3), tl.module("main"), _sum_metric, axis=0, **kwargs
         )
 
@@ -132,7 +133,9 @@ def test_site_firing_more_than_once_is_refused() -> None:
 
     torch.manual_seed(0)
     with pytest.raises(ValueError, match="fired 2 times"):
-        run_controls(_UnusedBranch(), torch.randn(4, 3), tl.func("linear"), _sum_metric, axis=0)
+        ablation_controls(
+            _UnusedBranch(), torch.randn(4, 3), tl.func("linear"), _sum_metric, axis=0
+        )
 
 
 def test_non_scalar_metric_is_refused() -> None:
@@ -140,7 +143,7 @@ def test_non_scalar_metric_is_refused() -> None:
 
     torch.manual_seed(0)
     with pytest.raises(ValueError, match="must return one number"):
-        run_controls(
+        ablation_controls(
             _UnusedBranch(),
             torch.randn(4, 3),
             tl.module("main"),

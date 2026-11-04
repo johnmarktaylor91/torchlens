@@ -524,6 +524,27 @@ print(stats.statistics, stats.num_examples)
 # ('entropy',) 1
 ```
 
+### namespaces-mechinterp-ablation-controls
+Check an ablation claim with controls: rerun it under the other baselines and read the verdict.
+
+- covers: `tl.mechinterp.ablation_controls`, `tl.mechinterp.AblationControlsReport`
+- tasks: ablate, controls, mechinterp
+- fixture: toy
+
+```python
+import torchlens.mechinterp
+def metric(trace):
+    return trace.output_ops[-1].out.sum()
+report = tl.mechinterp.ablation_controls(model, x, tl.module("fc1"), metric, axis=0)
+print(isinstance(report, tl.mechinterp.AblationControlsReport), report.baseline)
+print([(row.family, row.name) for row in report.rows])
+print([family.family for family in report.families], isinstance(report.survives, bool))
+# Output:
+# True zero
+# [('baseline', 'zero'), ('baseline', 'mean'), ('baseline', 'resample')]
+# ['baseline'] True
+```
+
 ### namespaces-transformer
 Per-token next-token loss and entropy strips from one sequence's logits.
 
@@ -542,6 +563,31 @@ print(loss.source_fingerprint == entropy.source_fingerprint)
 # Output:
 # 5 True
 # True
+```
+
+### namespaces-transformer-generation-step
+Picture one attention layer as it stood at one step of a recorded generation.
+
+- covers: `tl.transformer.attention_view`
+- tasks: attention, generation, lm
+- fixture: none
+- requires: transformers
+
+```python
+import torchlens.transformer
+from transformers import GPT2Config, GPT2LMHeadModel
+torch.manual_seed(0)
+config = GPT2Config(n_layer=2, n_head=2, n_embd=32, vocab_size=100, attn_implementation="eager")
+lm = GPT2LMHeadModel(config).eval()
+greedy = {"max_new_tokens": 3, "min_new_tokens": 3, "do_sample": False, "use_cache": True}
+ids = torch.tensor([[5, 17, 42, 8, 3]])
+generation = tl.record(lm, ids, save=tl.func("softmax"), generate_kwargs=greedy)
+view = tl.transformer.attention_view(generation, "transformer.h.0.attn", step=2)
+print(len(generation.steps), tuple(view.pattern.shape))
+print(view.episode.step, view.episode.role)
+# Output:
+# 3 (2, 7, 7)
+# 2 decode
 ```
 
 ## Integrations

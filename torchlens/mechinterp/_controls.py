@@ -17,10 +17,9 @@ A control row survives when its effect has the claimed effect's sign and at leas
 ``min_ratio`` of its size; the direction family survives when ``p <= alpha``. The claim
 survives when every family that ran survives.
 
-This module is the private implementation of the controls helper (walk card recipes.4,
-ruled 3 Nov 2026). Its public spelling is pending, so it is reachable only as
-``torchlens.mechinterp._controls.run_controls``; its argument refusals are plain
-``ValueError`` until a typed code is ruled with the name.
+The helper is public as ``tl.mechinterp.ablation_controls`` and returns an
+:class:`AblationControlsReport`. Its argument refusals are plain ``ValueError`` until
+typed codes are ruled.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ from ..intervention.stochastic import resample_rows_from
 from ..intervention.types import Edit
 from ..options import CaptureOptions
 
-__all__ = ("ControlRow", "ControlsReport", "FamilyVerdict", "run_controls")
+__all__ = ("ControlRow", "AblationControlsReport", "FamilyVerdict", "ablation_controls")
 
 #: The ablation baselines, in report order.
 BASELINES = ("zero", "mean", "resample")
@@ -70,7 +69,7 @@ class FamilyVerdict:
 
 
 @dataclass(frozen=True)
-class ControlsReport:
+class AblationControlsReport:
     """Every control rerun of one ablation claim and the verdict per family.
 
     Attributes
@@ -343,7 +342,7 @@ def _run_families(
     return rows, families, direction_p
 
 
-def run_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
+def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
     model: nn.Module,
     inputs: Any,
     site: Any,
@@ -359,7 +358,7 @@ def run_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
     seed: int = 0,
     min_ratio: float = 0.5,
     alpha: float = 0.05,
-) -> ControlsReport:
+) -> AblationControlsReport:
     """Rerun an ablation claim under the baseline, direction and site controls.
 
     Parameters
@@ -390,7 +389,7 @@ def run_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
 
     Returns
     -------
-    ControlsReport
+    AblationControlsReport
         Every rerun, the verdict per family and ``survives`` overall.
     """
 
@@ -400,4 +399,6 @@ def run_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
     claimed = runner.effect(site, _baseline_edit(runner, baseline, site, settings))
     rows, families, direction_p = _run_families(runner, site, claimed, direction, sites, settings)
     report_rows, verdicts = tuple(rows), tuple(families)
-    return ControlsReport(runner.clean, claimed, baseline, report_rows, verdicts, direction_p)
+    return AblationControlsReport(
+        runner.clean, claimed, baseline, report_rows, verdicts, direction_p
+    )
