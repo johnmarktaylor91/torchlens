@@ -32,7 +32,7 @@ from ..paths import reject_symlink_path
 from ..writer_contract import writer_contract_digest
 from . import contract
 from .carried import carried_field_errors
-from .codec_policy import check_tf_runtime_version, known_backend
+from .codec_policy import known_backend
 from .summaries import summary_schema_errors
 
 __all__ = [
@@ -403,7 +403,6 @@ def check_runtime_policy(manifest: Mapping[str, Any]) -> None:
         python_version=manifest["python_version"],
         subject="Artifact",
     )
-    check_tf_runtime_version(manifest)
 
 
 def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:

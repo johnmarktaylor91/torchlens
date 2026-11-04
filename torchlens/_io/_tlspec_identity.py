@@ -404,3 +404,40 @@ def _backend_model_fingerprint(source: Any, *, backend_name: str) -> dict[str, A
             "param_source": source._provenance_param_source,
         }
     }
+
+
+def _preflight_schema_v2_runtime(
+    manifest: dict[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
+
+    from torchlens.backends.registry import BackendRuntimeCompatibilityError
+
+    runtime = manifest["backend_runtime"]
+    spec = get_backend_spec(backend_name)
+    expected_runtime_name = spec.serialization_policy.runtime_name or backend_name
+    runtime_name = runtime.get("name")
+    if runtime_name != expected_runtime_name:
+        raise BackendRuntimeCompatibilityError(
+            f"Manifest backend runtime name {runtime_name!r} does not match expected "
+            f"{expected_runtime_name!r} for backend {backend_name!r}."
+        )
+    if expected_runtime_name != "tf":
+        return
+
+    try:
+        import tensorflow as tf
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            "Portable TensorFlow trace loading requires the tensorflow runtime."
+        ) from exc
+
+    saved_version = runtime.get("version")
+    current_version = str(getattr(tf, "__version__", ""))
+    if saved_version != current_version:
+        raise BackendRuntimeCompatibilityError(
+            "Manifest TensorFlow runtime version "
+            f"{saved_version!r} does not match installed tensorflow {current_version!r}."
+        )
