@@ -23,6 +23,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._render_utils import html_escape
 
 if TYPE_CHECKING:
@@ -98,7 +99,6 @@ _NON_ROLE_SHAPES = frozenset({"plaintext", "plain", "none", "point"})
 def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
     """Return each fill-coded role's rendered fills under ``theme``, lowercased."""
 
-    from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
     from ._render_common import (
         BOOL_NODE_COLOR,
         BUFFER_NODE_COLOR,
