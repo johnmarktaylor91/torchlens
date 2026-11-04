@@ -27,7 +27,6 @@ from torch.overrides import get_ignored_functions, get_testing_overrides
 
 from ._torchvision_ops import _get_torchvision_funcs as _get_torchvision_funcs
 from ._utils._torch_compat import get_torch_vf_namespace, get_variable_function_names
-from ._utils._torch_symbols import torch_attr
 
 # ---------------------------------------------------------------------------
 # Field-order definitions
@@ -1222,7 +1221,9 @@ IGNORED_FUNCS = [
         )
         if hasattr(torch.Tensor, _private_name)
     ),
-    *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch_attr(_name) is not None),
+    # Presence read straight from ``torch.__dict__`` (what ``torch_attr`` reads), so no lazy
+    # ``torch.__getattr__`` fires and this low-tier module imports nothing upward.
+    *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch.__dict__.get(_name) is not None),
     # A no-parent factory (the CPU RNG state as a fresh uint8 tensor). TorchLens's own RNG
     # snapshots read ``torch.default_generator.get_state()``, so they never record.
     ("torch", "get_rng_state"),
