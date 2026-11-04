@@ -10,6 +10,7 @@ from typing import Any, ParamSpec
 import torch
 
 from ._display_card import INLINE_LIMIT, REPR_COLS
+from ._display_keys import display_key
 from ._display_text import tensor_stand_in
 from .fail_open import fail_open
 
@@ -32,6 +33,12 @@ def value_text(value: Any, depth: int = 0) -> str:
 def _value_text(value: Any, depth: int) -> str:
     """Format scalars and a bounded prefix of ordinary containers."""
 
+    if type(value).__module__ == "torchlens.intervention.types":
+        kind = type(value).__name__
+        if kind in {"LiteralTensor", "LiteralValue"}:
+            return value_text(value.value, depth)
+        if kind == "ParentRef":
+            return clipped(getattr(value, "_display_key", value.parent_label), 80)
     if isinstance(value, torch.Tensor):
         return tensor_stand_in(value)
     if isinstance(value, (str, bytes, int, float, bool, type(None))):
@@ -77,3 +84,25 @@ def display_guard(render: Callable[P, str]) -> Callable[P, str]:
         )
 
     return guarded
+
+
+def bind_template_keys(template: Any, records: Any) -> None:
+    """Cache display keys after relabeling; replay components stay unchanged."""
+
+    fail_open(lambda: _bind_template_keys(template, records), lambda _error: None)
+
+
+def _bind_template_keys(value: Any, records: Any) -> None:
+    if type(value).__name__ == "ParentRef":
+        record = records.get(value.parent_label)
+        if record is not None:
+            object.__setattr__(value, "_display_key", display_key(record))
+    elif type(value).__name__ == "CapturedArgTemplate":
+        _bind_template_keys(value.args, records)
+        _bind_template_keys(value.kwargs, records)
+    elif isinstance(value, (tuple, list)):
+        for member in value:
+            _bind_template_keys(member, records)
+    elif isinstance(value, dict):
+        for member in value.values():
+            _bind_template_keys(member, records)

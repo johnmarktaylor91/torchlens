@@ -569,6 +569,7 @@ class TraceOpAccessor(Accessor[Op]):
                     f"Layer {parent_label!r} has {len(parent_matches)} ops.",
                     [display_key(op) for op in parent_matches],
                     "Use a 0-based integer position or a pass-qualified label.",
+                    query=parent_label,
                 )
             )
         return None

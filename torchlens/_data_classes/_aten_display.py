@@ -49,14 +49,14 @@ def _aten_identity(row: Any) -> str:
     return one_line(f"AtenOp {row.label}", facts, optional)
 
 
-def _fact_rows(facts: tuple[Any, ...]) -> str:
+def _fact_rows(facts: tuple[Any, ...]) -> list[str]:
     lines = []
     for fact in facts[:3]:
         grad = ", requires grad" if fact.requires_grad else ""
         lines.append(f"{_fact_text(fact)}, stride {fact.stride}{grad}")
     if len(facts) > len(lines):
         lines.append(f"and {len(facts) - len(lines)} more tensors")
-    return "; ".join(lines) or "no tensor arguments"
+    return lines or ["no tensor arguments"]
 
 
 def aten_str(row: Any) -> str:
@@ -73,13 +73,18 @@ def _aten_card(row: Any) -> str:
     flops = (
         format_exact_count(row.algorithmic_flops)
         if row.algorithmic_flops is not None
+        else "not counted for this operator"
+        if row.flop_status == "unsupported"
         else row.flop_status
     )
     rows = [
         ("schema", row.schema or "not recorded"),
         ("sequence", f"{row.sequence}, slot {row.decomposition_slot}, {_owners(row)}, {phase}"),
-        ("inputs", _fact_rows(row.input_tensor_facts)),
-        ("outputs", f"{_fact_rows(row.output_tensor_facts)}, {row.view_copy_kind}"),
+        *[
+            ("inputs" if i == 0 else "", fact)
+            for i, fact in enumerate(_fact_rows(row.input_tensor_facts))
+        ],
+        ("outputs", f"{'; '.join(_fact_rows(row.output_tensor_facts))}, {row.view_copy_kind}"),
         ("flops", flops),
         ("module", module),
     ]

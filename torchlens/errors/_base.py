@@ -66,9 +66,12 @@ def _message_from_payload(class_name: str, fields: dict[str, object]) -> str:
 def _remedy_from_message(message: str) -> str | None:
     """Read the authored remedy from either supported display layout."""
 
-    for marker in (_REMEDY_MARKER, "\n  remedy    "):
-        if marker in message:
-            return message.rsplit(marker, 1)[1].strip().rstrip(".") or None
+    if _REMEDY_MARKER in message:
+        return message.rsplit(_REMEDY_MARKER, 1)[1].strip().rstrip(".") or None
+    for line in reversed(message.splitlines()):
+        label, separator, value = line.strip().partition(" ")
+        if label == "remedy" and separator:
+            return value.strip().rstrip(".") or None
     return None
 
 

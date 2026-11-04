@@ -215,7 +215,7 @@ _REDIRECTS: dict[str, str] = {
     "Macs": "use torchlens.types.Macs",
     "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
@@ -244,7 +244,7 @@ _REDIRECTS: dict[str, str] = {
     "ModuleAccessor": "use torchlens._data_classes.module.ModuleAccessor",
     "ModuleCall": "use torchlens.types.ModuleCall",
     "ModuleInputSnapshot": "use torchlens.types.ModuleInputSnapshot",
-    "NodeSpec": "use torchlens.experimental.dagua.NodeSpec",
+    "NodeSpec": "use torchlens.viz.NodeSpec",
     "Param": "use torchlens.types.Param",
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.types.PreHookEffect",
@@ -255,7 +255,6 @@ _REDIRECTS: dict[str, str] = {
     "render_graph": "use torchlens.Trace.draw (trace.draw())",
     "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
     "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
-    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
@@ -279,7 +278,6 @@ _REDIRECTS: dict[str, str] = {
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
     "TorchLensPostfuncError": "use torchlens.errors.UserTransformError",
-    "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
     "transformer": "import torchlens.transformer, then use torchlens.transformer.AttentionView and its siblings -- a submodule, not a root name; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
@@ -386,6 +384,7 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
             f"Layer {name!r} not found.",
             suggestions,
             "pass an in-range integer, a layer label, or a module address.",
+            query=name,
         )
     return f"Layer {name!r} not found."
 

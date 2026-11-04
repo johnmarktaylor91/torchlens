@@ -28,7 +28,11 @@ def display_key(record: Any) -> str:
 
     short = _stored(record, "short_layer_label")
     if not isinstance(short, str) or not short:
-        label = _stored(record, "layer_label") or _stored(record, "label")
+        label = (
+            _stored(record, "layer_label")
+            or _stored(record, "label")
+            or _stored(record, "label_raw")
+        )
         return str(label) if label is not None else "?"
     num_passes = _stored(record, "num_passes")
     pass_number = _stored(record, "pass_number")

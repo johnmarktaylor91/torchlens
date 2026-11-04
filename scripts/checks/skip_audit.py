@@ -155,7 +155,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "model-explorer export-bridge demo dependency, no declared extra",
     ),
-    "dagua": (UNAVAILABLE_OK, "unreleased in-development layout engine"),
     "delphi.latents.loader": (
         OPTIONAL_PREVIEW,
         "SAE latent-export consumer (eai-delphi, no declared extra); nightly.yml "
@@ -1313,7 +1312,6 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
         "everywhere, so absence costs validation breadth only"
     ),
     "dacite": "model-explorer export-bridge demo dependency",
-    "dagua": "unreleased in-development layout engine",
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
     "fvcore.nn": (
         "supplementary FLOP-counter cross-oracle (A07); the closed-form and "

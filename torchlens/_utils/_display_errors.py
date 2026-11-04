@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from ._display_card import card_row
+from ._display_card import render_card
 from ._display_keys import candidates_text, display_key
 
 
@@ -17,20 +17,39 @@ def candidate_keys(candidates: Sequence[str], records: Mapping[str, Any]) -> lis
     )
 
 
-def lookup_message(problem: str, candidates: Sequence[str], remedy: str) -> str:
-    """Keep the problem first, followed by at most five candidates and the remedy."""
+def _edit_distance(left: str, right: str) -> int:
+    """Levenshtein distance with a single row of working storage."""
 
-    lines = [problem]
-    if candidates:
-        lines.append(card_row("candidates", candidates_text(candidates)))
-    lines.append(card_row("remedy", remedy))
-    return "\n".join(lines)
+    previous = list(range(len(right) + 1))
+    for i, a in enumerate(left, 1):
+        current = [i]
+        for j, b in enumerate(right, 1):
+            current.append(min(current[-1] + 1, previous[j] + 1, previous[j - 1] + (a != b)))
+        previous = current
+    return previous[-1]
+
+
+def lookup_message(
+    problem: str, candidates: Sequence[str], remedy: str, *, query: str | None = None
+) -> str:
+    """Rank choices before the five-candidate cut, keeping the remedy last."""
+
+    ranked = (
+        sorted(candidates, key=lambda key: _edit_distance(query, key))
+        if query is not None
+        else candidates
+    )
+    rows = [("candidates", candidates_text(ranked))] if ranked else []
+    rows.append(("remedy", remedy))
+    return render_card(problem, rows)
 
 
 def short_name_message(key: str, candidates: Sequence[str]) -> str:
     """Offer full parameter or buffer addresses without dumping every match."""
 
-    return lookup_message(f"Ambiguous short name {key!r}.", candidates, "use a full address")
+    return lookup_message(
+        f"Ambiguous short name {key!r}.", candidates, "use a full address", query=key
+    )
 
 
 def module_output_message(call: Any, trace: Any) -> str:
@@ -55,4 +74,16 @@ def module_lookup_message(key: str, module: Any, matches: Sequence[str]) -> str:
         f"Ambiguous lookup: {key!r} matches {len(matches)} layers in module {module.address!r}.",
         candidate_keys(matches, module._source_trace._layer_dict_all_keys),
         "select one layer by its full key",
+        query=key,
+    )
+
+
+def ambiguous_substring_message(key: str, records: Sequence[Any]) -> str:
+    """Keep a substring refusal and its resolved candidate ranking together."""
+
+    return lookup_message(
+        f"Ambiguous lookup: {key!r} matches {len(records)} layers.",
+        [display_key(record) for record in records],
+        "Use a more specific key.",
+        query=key,
     )

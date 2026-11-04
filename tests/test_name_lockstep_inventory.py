@@ -306,7 +306,7 @@ def test_real_package_inventory_covers_field_tables_and_shims() -> None:
         "member:torchlens._vocab.trace_state:TraceState.APPENDED",
         "root:tl.Bundle",
         "export:tl.bundle.SuperOp",
-        "export:tl.experimental.dagua.NodeSpec",
+        "export:tl.experimental.node_styles.attention_node_mode",
     } <= set(rows)
     assert rows["export:tl.io.TraceState"]["module"] == "torchlens._vocab.trace_state"
     # ``tl.Bundle`` is the one spelling: the bundle namespace no longer exports the

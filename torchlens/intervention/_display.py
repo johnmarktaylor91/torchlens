@@ -97,7 +97,7 @@ def recipe_card(recipe: Recipe) -> str:
     """Show at most five rules and disclose the exact remainder."""
 
     rows = [
-        (f"rule {index}", _rule_text(rule))
+        ("rule", f"{index}: {_rule_text(rule)}")
         for index, rule in enumerate(recipe.rules[:LIST_LIMIT], 1)
     ]
     if len(recipe.rules) > LIST_LIMIT:
@@ -118,8 +118,6 @@ def template_repr(template: CapturedArgTemplate) -> str:
 def _component_text(component: Any) -> str:
     """Describe literals through metadata-only values, with other records kept shallow."""
 
-    if type(component).__name__ in {"LiteralTensor", "LiteralValue"}:
-        return value_text(component.value)
     return value_text(component)
 
 
@@ -132,7 +130,10 @@ def template_card(template: CapturedArgTemplate) -> str:
     ]
     remaining = max(0, len(template.args) - LIST_LIMIT)
     budget = LIST_LIMIT - len(rows)
-    rows.extend((clipped(key, 30), _component_text(item)) for key, item in template.kwargs[:budget])
+    rows.extend(
+        ("keyword", f"{clipped(key, 30)} = {_component_text(item)}")
+        for key, item in template.kwargs[:budget]
+    )
     remaining += max(0, len(template.kwargs) - budget)
     if remaining:
         rows.append(("args", f"... and {remaining} more"))
@@ -156,8 +157,8 @@ def frozen_spec_card(spec: FrozenInterventionSpec) -> str:
     return render_card(
         frozen_spec_repr(spec),
         [
-            ("edit", _term_text(spec.helper)),
-            ("value", value_text(spec.value)),
+            *([("edit", _term_text(spec.helper))] if spec.helper is not None else []),
+            *([("value", value_text(spec.value))] if spec.value is not None else []),
             ("hooks", str(len(spec.hook_specs))),
             ("metadata", f"{len(spec.metadata)} entries"),
         ],

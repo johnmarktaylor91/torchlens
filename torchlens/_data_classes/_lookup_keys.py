@@ -127,4 +127,5 @@ def _missing_layer_message(trace: "Trace", label: int | str, suggestions: list[s
         f"Layer {label!r} not found.",
         candidate_keys(suggestions, trace._layer_dict_all_keys),
         "pass an in-range integer, a layer label, or a module address.",
+        query=str(label),
     )

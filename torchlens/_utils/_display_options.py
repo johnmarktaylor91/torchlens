@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import MISSING, fields
 from typing import Any
 
-from ._display_card import REPR_COLS, card_row
+from ._display_card import REPR_COLS, render_card
 from ._display_constructor import display_guard, value_text
 from .fail_open import fail_open
 
@@ -22,12 +22,22 @@ class _OptionsDisplay:
     def __str__(self) -> str:
         """List every public option field beneath the constructor summary."""
 
-        return "\n".join(
-            [
-                repr(self),
-                *(card_row(name, value_text(value)) for name, value, _ in _option_fields(self)),
-            ]
-        )
+        rows = [
+            (name, _option_card_value(value))
+            for name, value, _ in _option_fields(self)
+            if value is not None
+        ]
+        exports = tuple(f".{name}()" for name in ("to_dict", "as_dict") if hasattr(self, name))
+        more = exports or tuple(f".{name}" for name, _, _ in _option_fields(self)[:3])
+        return render_card(repr(self), rows, more, max_rows=len(rows) + 1)
+
+
+def _option_card_value(value: Any) -> str:
+    """Use words for switches; constructor reprs retain Python literals."""
+
+    if isinstance(value, bool):
+        return "enabled" if value else "disabled"
+    return value_text(value)
 
 
 def _option_fields(obj: Any) -> list[tuple[str, Any, Any]]:

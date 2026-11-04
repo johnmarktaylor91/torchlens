@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
@@ -56,7 +56,7 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -1422,33 +1422,12 @@ def draw(
     if request.encoding is not None and not bool(
         renderer_capability_rows.get("encoding_channels", False)
     ):
-        from ._encoding import raise_encoding_dagua_refusal
+        from ._encoding import raise_encoding_renderer_refusal
 
-        raise_encoding_dagua_refusal(request.encoding.active_channels())
+        raise_encoding_renderer_refusal(vis_renderer, request.encoding.active_channels())
     resolved_outpath, announce_path = resolve_draw_outpath(
         vis_outpath, vis_fileformat, announce_path
     )
-    if vis_renderer == "dagua":
-        opted_in_module = sys.modules.get("torchlens.experimental.dagua")
-        if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
-            raise CaptureNotActiveError(
-                "dagua renderer is experimental and has not been opted into",
-                code="dagua_renderer_not_opted_in",
-                remedy="opt in via `from torchlens.experimental import dagua` first",
-            )
-        from ..experimental.dagua._bridge import render_trace_with_dagua
-
-        return render_trace_with_dagua(
-            self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            path=resolved_outpath,
-            vis_save_only=vis_save_only,
-            file_format=vis_fileformat,
-            show_buffers=show_buffer_layers == "always",
-            vis_direction=direction,
-            theme=vis_theme,
-        )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
     target = RenderTarget(
@@ -1469,10 +1448,10 @@ def draw(
         segment_lookup,
         site_labels,
     )
-    work = _populate_forward_ir(self, context)
-
-    forward_render_ir = _finalize_forward_ir(self, context, work)
-    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    with edge_typography_for_draw(theme, request):
+        work = _populate_forward_ir(self, context)
+        forward_render_ir = _finalize_forward_ir(self, context, work)
+        rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
     _write_overview_expansion_manifest(self, request, target)
     return rendered
 

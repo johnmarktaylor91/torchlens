@@ -24,7 +24,7 @@ from typing import Any
 import torch
 
 from .._utils._display_constructor import clipped
-from ._display import failure_card, failure_repr
+from ._display import bind_failure_key, failure_card, failure_repr
 
 # Attribute name used to stash the structured failure on a live Trace. Private,
 # best-effort, and cleared at the start of each validation run so a stale
@@ -342,6 +342,7 @@ def record_validation_failure(trace: Any, failure: ValidationFailure) -> None:
         Structured failure description to stash.
     """
 
+    bind_failure_key(failure, trace)
     if not _LAST_RUN_FAILURE:
         _LAST_RUN_FAILURE.append(failure)
     try:

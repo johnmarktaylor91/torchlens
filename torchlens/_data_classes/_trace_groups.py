@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._utils._display_records import group_repr
+from .._utils._display_constructor import display_guard
+from .._utils._display_records import group_repr, group_str
+from . import _doors
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -24,7 +26,17 @@ class _TraceGroup:
 
         self._trace = trace
 
-    __repr__ = group_repr
+    @display_guard
+    def __repr__(self) -> str:
+        """Use the Trace card's stored-fact wording through the existing report door."""
+
+        return group_repr(self, _doors.report()._trace_summary)
+
+    @display_guard
+    def __str__(self) -> str:
+        """Show a short concern card and its existing detail attributes."""
+
+        return group_str(self, _doors.report()._trace_summary)
 
     def __dir__(self) -> list[str]:
         """List the group's public members."""

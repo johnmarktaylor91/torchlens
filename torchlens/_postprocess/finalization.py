@@ -45,6 +45,7 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
+from .._utils._display_constructor import bind_template_keys
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
@@ -1472,20 +1473,17 @@ def _build_conditional_records(self: "Trace") -> None:
 
 
 def _set_tracing_finished(self: "Trace") -> None:
-    """Step 17: Mark the Trace and all OpLogs as pass-finished.
+    """Step 17: Mark Trace and retained Ops finished and bind display-only keys.
 
-    Sets ``_tracing_finished = True`` on the Trace and every retained
-    Op entry. This flag switches various custom_methods (e.g., __str__,
-    __getitem__) from their "realtime debugging" behavior to their
-    "user-facing" behavior.
-
-    Note: _tracing_finished is NOT reset between exhaustive and fast ops.
-    This is intentional — it enables fast-path postprocessing to use
-    fully-populated lookup dicts from the exhaustive pass.
+    This switches display and lookup to user-facing behavior. The flag stays
+    true between exhaustive and fast passes so fast postprocessing can use the
+    exhaustive pass's populated lookup dictionaries.
     """
     for layer_label in self._layer_dict_main_keys:
         tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
+        bind_template_keys(tensor.args_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor.kwargs_template, self._layer_dict_all_keys)
     self._tracing_finished = True
 
 

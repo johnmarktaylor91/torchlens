@@ -48,7 +48,7 @@ def _assert_contract(exc: BaseException, expected_code: str, builtin: type[BaseE
     remedy = fields.get("remedy")
     assert isinstance(remedy, str) and remedy
     message = str(exc)
-    remedy_label = "\n  remedy    " if "\n  candidates " in message else "Remedy: "
+    remedy_label = "\n  remedy     " if "\n  candidates " in message else "Remedy: "
     assert f"{remedy_label}{remedy}" in message
 
 

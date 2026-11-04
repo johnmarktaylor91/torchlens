@@ -147,6 +147,7 @@ class Accessor(Generic[T]):
                     f"{self._item_kind} {key!r} not found.",
                     candidate_keys(suggestions, self._dict),
                     "pass an in-range integer or a key from this accessor.",
+                    query=key,
                 )
             )
         raise KeyError(f"{self._item_kind} '{key}' not found.")
