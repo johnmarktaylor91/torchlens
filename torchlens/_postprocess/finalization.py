@@ -58,7 +58,12 @@ from ._conditional_records import (
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
-from ._root_module_log import _recorded_root_calls, _root_call_build_inputs, _root_call_children
+from ._root_module_log import (
+    _recorded_root_calls,
+    _root_address_children,
+    _root_call_build_inputs,
+    _root_call_children,
+)
 from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
@@ -202,13 +207,7 @@ def _build_root_module_log(
     root_num_trainable = sum(pl.num_params for pl in self._param_logs if pl.is_trainable)
     root_num_frozen = sum(pl.num_params for pl in self._param_logs if not pl.is_trainable)
     root_fsize = Bytes(sum(int(pl.param_memory) for pl in self._param_logs))
-    root_meta_children = root_meta.get("address_children")
-    if root_meta_children is None:
-        address_children = [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
-    else:
-        address_children = [
-            child for child in root_meta_children if child != "self" and "." not in child
-        ]
+    address_children = _root_address_children(root_meta, mbd)
 
     root_ops: dict[int, ModuleCall] = {}
     # The labels are the calls' own string objects (the synthesized call's literal below), so
