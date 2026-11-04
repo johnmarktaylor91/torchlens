@@ -1025,13 +1025,13 @@ torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
 torchlens/debug/_gradients.py::grad_health	66
-torchlens/debug/_gradients.py::gradient_flow_audit_rows	146
+torchlens/debug/_gradients.py::gradient_flow_audit_rows	145
 torchlens/debug/_graph.py::_compare_rows	126
 torchlens/debug/_graph.py::dead_neurons_rows	76
 torchlens/debug/_graph.py::lineage	80
 torchlens/debug/_graph_breaks.py::graph_breaks	67
 torchlens/debug/_infer_failure_classify.py::classify_nongeometric_failure	68
-torchlens/debug/_infer_input_shape.py	2219
+torchlens/debug/_infer_input_shape.py	2163
 torchlens/debug/_infer_input_shape.py::_executed_constraint	84
 torchlens/debug/_infer_input_shape.py::_infer_input_shape_impl	156
 torchlens/debug/_infer_input_shape.py::_input_priors	180
