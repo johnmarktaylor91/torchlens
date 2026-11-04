@@ -295,7 +295,16 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # upstream libraries' call shapes carried per-line noqa with that reason, so
     # the count no longer rides on other merges (all three were later replaced
     # by converters without the noqa). Measured 440 (same pinned mode).
-    "PLR0913": 440,
+    # 440 -> 445 (2026-11-03 C-143, JMT decision d-90086c50, 12:17 PM PT: "yes u
+    # can raise the cap for lint, just make sure it sto0ps beng a blocker"; set to
+    # the unit's own measured count). New long signatures, all field-transformers
+    # df3f9bd469: receptive_field/_engine_causal.py apply_causal and
+    # transpose_causal, _query_causal.py map_extended_to_child,
+    # _reshape_blocks.py apply_blocks, rules/transforms.py _axis_map_result.
+    # Three more sites only moved (_query.py to _query_maps.py:
+    # _interpolation_source, map_interpolation_index_set,
+    # map_transposed_convolution_index_set). Measured 445 (same pinned mode).
+    "PLR0913": 445,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

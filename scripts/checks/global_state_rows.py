@@ -251,6 +251,12 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # clearing: an evicted id means a recycled id reads as new, never as swept.
         ("torchlens/backends/torch/belt.py", "_swept_ids_live"),
         ("torchlens/backends/torch/belt.py", "_swept_module_ids"),
+        # Windows probe-file cleanup queue: temp paths whose removal the OS refused
+        # (a handle still open), retried on the next probe removal and once at
+        # interpreter exit; the flag records that the atexit retry is registered.
+        # Process-lifetime bookkeeping beside the belt ledger, never per capture.
+        ("torchlens/backends/torch/belt.py", "_deferred_cleanup_registered"),
+        ("torchlens/backends/torch/belt.py", "_deferred_probe_paths"),
         # The 8ba75e99 sweep-epoch companions (_swept_modules_dirty,
         # _swept_sys_modules_size) were deleted with the sys.modules crawler
         # in fixwave-5; their rows left this ledger shrink-only.
@@ -1429,16 +1435,24 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/preprocessing/_card.py", "__all__"),
         ("torchlens/_quickstart/__init__.py", "__all__"),
         ("torchlens/receptive_field/__init__.py", "__all__"),
+        ("torchlens/receptive_field/_causal.py", "__all__"),
         ("torchlens/receptive_field/_engine.py", "__all__"),
+        ("torchlens/receptive_field/_engine_causal.py", "__all__"),
         ("torchlens/receptive_field/_engine_descriptor.py", "__all__"),
         ("torchlens/receptive_field/_engine_forward.py", "__all__"),
         ("torchlens/receptive_field/_engine_geometry.py", "__all__"),
+        ("torchlens/receptive_field/_engine_revision.py", "__all__"),
         ("torchlens/receptive_field/_errors.py", "__all__"),
         ("torchlens/receptive_field/_forward_query.py", "__all__"),
         ("torchlens/receptive_field/_gradient.py", "__all__"),
+        ("torchlens/receptive_field/_gradient_live.py", "__all__"),
+        ("torchlens/receptive_field/_index_set.py", "__all__"),
         ("torchlens/receptive_field/_influence.py", "__all__"),
         ("torchlens/receptive_field/_path.py", "__all__"),
         ("torchlens/receptive_field/_query.py", "__all__"),
+        ("torchlens/receptive_field/_query_causal.py", "__all__"),
+        ("torchlens/receptive_field/_query_maps.py", "__all__"),
+        ("torchlens/receptive_field/_reshape_blocks.py", "__all__"),
         ("torchlens/receptive_field/_rules.py", "__all__"),
         ("torchlens/receptive_field/_set_query.py", "__all__"),
         ("torchlens/receptive_field/_types.py", "__all__"),
