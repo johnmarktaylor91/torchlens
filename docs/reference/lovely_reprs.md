@@ -127,8 +127,8 @@ produced them. For a five-token GPT-2 small capture:
 Selection ACT: 12 sites, 184k values, from tl.func('tanh')
 ```
 
-`print(selection)` lists the first five sites, the number omitted, and the
-attributes for further inspection. A dense mask says `values not computed`
+`print(selection)` puts the first three site names and the number omitted
+on one `sites` row, followed by the attributes for further inspection. A dense mask says `values not computed`
 rather than scanning its elements while printing.
 
 Selectors retain parentheses so their constructor spelling rebuilds the
@@ -146,6 +146,8 @@ A recipe uses `tl.when(...)` only when that spelling rebuilds it exactly.
 Otherwise its repr reports the number of rules; `print(recipe)` lists at
 most five rules. Captured arguments and frozen intervention specs also
 show metadata and counts rather than tensor contents or callback dumps.
+Captured argument cards show parent display keys and scalar literals,
+including literals nested in tuples or lists.
 
 Options show non-default fields in repr. Printing an options object lists
 its public fields with non-None values, including defaults. Boolean card values use
@@ -190,6 +192,8 @@ contains stored model, capture, graph and save metadata; `trace.summary()`
 provides the module hierarchy. Default pristine state is omitted.
 
 ATen and event tuples keep tuple iteration, equality, hashing and slicing.
-Their bounded displays show counts and at most five records, for example
-`AtenOps: 500 calls`. Portable saves encode these sequences as ordinary
+Their reprs show only counts, for example `AtenOps: 500 calls`. Printing
+adds at most five identified members, the number omitted, and a closing
+`more` row. An ATen card puts each of its first three tensor inputs on a
+separate row, followed by the number omitted. Portable saves encode these sequences as ordinary
 tuples, so their display type does not change the artifact format.

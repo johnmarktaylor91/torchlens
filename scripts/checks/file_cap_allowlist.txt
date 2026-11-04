@@ -96,7 +96,7 @@ torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	837
-torchlens/_data_classes/interface.py::_getitem_after_pass	117
+torchlens/_data_classes/interface.py::_getitem_after_pass	113
 torchlens/_data_classes/layer.py	1767
 torchlens/_data_classes/module.py	2619
 torchlens/_data_classes/module.py::Module.__init__	210
@@ -352,7 +352,7 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1843
+torchlens/_postprocess/finalization.py	1841
 torchlens/_postprocess/finalization.py::_build_conditional_records	160
 torchlens/_postprocess/finalization.py::_build_layer_logs	114
 torchlens/_postprocess/finalization.py::_build_module_logs	206

@@ -100,7 +100,8 @@ class OpAccessor(Accessor["Op"]):
         passes = str(first.pass_number)
         if count > 1:
             passes += f"-{last.pass_number}"
-        return f"{head} of {first.short_layer_label} (passes {passes}), 0-based positions"
+        noun = "pass" if count == 1 else "passes"
+        return f"{head} of {first.short_layer_label} ({noun} {passes}), 0-based positions"
 
     def set_pass(self, pass_index: int, value: "Op") -> None:
         """Store ``value`` as pass ``pass_index`` (1-based, the storage key).

@@ -41,11 +41,20 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
         return original(label, value, width=width)
 
     monkeypatch.setattr(_display_card, "card_row", record)
+    trace = tl.trace(
+        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
+        torch.ones(2, 4),
+        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, aten_ops=True),
+    )
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     recipe = tl.when(tl.func("relu"), tl.zero_ablate())
     selection = trace[tl.func("relu")]
     objects = [
         trace.event_stream,
         *trace.aten_ops,
+        trace.autograd.grad_fns[0],
+        trace.autograd.grad_fns[0].calls[0],
+        trace.autograd.backward_passes[0],
         trace.cost,
         trace.graph,
         trace.health,
@@ -70,8 +79,9 @@ def test_ordinary_card_labels_fit_shared_column(trace, monkeypatch):
     for obj in objects:
         text = str(obj)
         assert text.splitlines()[0] == repr(obj), type(obj).__name__
-        assert "unavailable" not in text, type(obj).__name__
+        assert "metadata unavailable" not in text, type(obj).__name__
         assert text.splitlines()[-1].lstrip().startswith("more "), type(obj).__name__
+    trace.cleanup()
     assert labels
     assert all(len(label) <= 9 for label in labels), labels
 
