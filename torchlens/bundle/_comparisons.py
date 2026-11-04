@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._errors import InvalidArgumentError
+from .._io.payload_codec import get_payload_codec
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
-from ._deltas import _distance_value
+from ._deltas import _distance_value, _tensor_field as _read_tensor_field
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -183,7 +184,7 @@ def rank_changes(
         if members is None:
             continue
         outs = {
-            name: getattr(member, "out", None)
+            name: _tensor_field(member, "out")
             for name, member in members.items()
             if getattr(member, "has_saved_activation", False)
         }
@@ -242,8 +243,8 @@ def diff_members(
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             continue
         right_site = right_sites.first()
-        left_out = getattr(left_site, on, None)
-        right_out = getattr(right_site, on, None)
+        left_out = _tensor_field(left_site, on)
+        right_out = _tensor_field(right_site, on)
         if not isinstance(left_out, torch.Tensor) or not isinstance(
             right_out,
             torch.Tensor,
@@ -320,3 +321,14 @@ def weak_model(log: Trace) -> Any | None:
         return ref()
     except TypeError:
         return None
+
+
+def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | None:
+    """Read a saved field using the codec of the layer's owning trace."""
+
+    native = _read_tensor_field(layer, field)
+    if native is not None:
+        return native
+    trace = getattr(layer, "source_trace", None)
+    codec = get_payload_codec(str(getattr(trace, "_provenance_backend", "torch")))
+    return _read_tensor_field(layer, field, codec)
