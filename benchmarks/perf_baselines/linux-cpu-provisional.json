@@ -5528,7 +5528,7 @@
               "other": 0
             },
             "bytes_written": 2266662,
-            "encoder_calls": 7173,
+            "encoder_calls": 2255,
             "files_written": 9,
             "fsync_calls": 14,
             "metadata_writes": 1,

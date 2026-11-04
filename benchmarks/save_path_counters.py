@@ -11,8 +11,9 @@ Counters for one save of a fixed capture:
     the record tables and writes them with the manifest (a second pass doubles the
     dominant save cost).
 ``encoder_calls``
-    ``ValueEncoder.encode`` calls inside that pass (cells and nested values the
-    encoder visits).
+    ``ValueEncoder.encode`` calls inside that pass: one per record cell that is not
+    a plain JSON scalar (``format3.values.plain_cell`` cells are written as they
+    are, without an encoder call).
 ``verify_reloads``
     ``preflight_reload`` calls during the save: the late.21 read-back of the staged
     record tables through the bounded JSON reader and typed decoder before publish.
