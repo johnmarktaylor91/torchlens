@@ -26,8 +26,11 @@ from __future__ import annotations
 
 import collections
 import contextlib
+import importlib
+import importlib.util
 import warnings
 from collections.abc import Callable, Iterator
+from typing import Any
 
 import pytest
 import torch
@@ -41,10 +44,55 @@ from torchlens.backends.torch import rescue, wrappers
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
-_hop_cond = pytest.importorskip("torch._higher_order_ops.cond").cond
-_hop_while = pytest.importorskip("torch._higher_order_ops.while_loop").while_loop
-_hop_map = pytest.importorskip("torch._higher_order_ops.map").map
-_hop_scan = pytest.importorskip("torch._higher_order_ops.scan").scan
+_HOP_NAMES = ("cond", "while_loop", "map", "scan")
+_HOPS_PRESENT = all(
+    importlib.util.find_spec(f"torch._higher_order_ops.{name}") is not None for name in _HOP_NAMES
+)
+pytestmark = pytest.mark.skipif(
+    not _HOPS_PRESENT, reason="this torch has no cond, while_loop, map and scan operators"
+)
+
+
+def _hop(name: str) -> Callable[..., Any]:
+    """Return torch's user-facing higher-order operator ``name``.
+
+    Parameters
+    ----------
+    name:
+        Operator, also the name of its ``torch._higher_order_ops`` submodule.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The operator, or :func:`_absent_hop` when this torch lacks the
+        operators (every test in the module is then skipped).
+    """
+
+    if not _HOPS_PRESENT:
+        return _absent_hop
+    return vars(importlib.import_module(f"torch._higher_order_ops.{name}"))[name]
+
+
+def _absent_hop(*args: Any, **kwargs: Any) -> Any:
+    """Stand in for an operator this torch lacks; never called, the module is skipped.
+
+    Parameters
+    ----------
+    *args:
+        Ignored.
+    **kwargs:
+        Ignored.
+
+    Returns
+    -------
+    Any
+        Never returns.
+    """
+
+    raise AssertionError("higher-order operator called on a torch that lacks it")
+
+
+_hop_cond, _hop_while, _hop_map, _hop_scan = (_hop(name) for name in _HOP_NAMES)
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
 
