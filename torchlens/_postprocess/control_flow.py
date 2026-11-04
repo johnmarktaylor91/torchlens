@@ -533,14 +533,21 @@ def _attribute_branches_forward(
     conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
 
+    # Ops from the same call site carry the same frame positions, and the
+    # attribution reads nothing else from a frame, so each distinct stack is
+    # attributed once per pass; every op still gets its own list.
+    translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
     for layer_label in self._raw_graph_ws.raw_layer_labels_list:
         layer = self[layer_label]
         if getattr(layer, "is_orphan", False):
             continue
-        layer.conditional_branch_stack = _translate_conditional_stack(
-            layer.code_context,
-            events_by_key,
-        )
+        code_context = layer.code_context
+        stack_key = _code_context_position_key(code_context)
+        translated = translated_by_stack.get(stack_key)
+        if translated is None:
+            translated = _translate_conditional_stack(code_context, events_by_key)
+            translated_by_stack[stack_key] = translated
+        layer.conditional_branch_stack = list(translated)
         layer.conditional_branch_depth = len(layer.conditional_branch_stack)
         layer.conditional_arm_children = {}
 
@@ -677,6 +684,29 @@ def _build_conditional_record_lookup(
             for conditional_record in scope.conditionals:
                 record_lookup[conditional_record.key] = (conditional_record, scope.qualname)
     return record_lookup
+
+
+def _code_context_position_key(
+    code_context: list[FuncCallLocation],
+) -> tuple[tuple[Any, ...], ...]:
+    """Return the frame fields branch attribution reads, as a hashable stack key.
+
+    ``ast_branches.attribute_op`` and the decorator fallback read exactly
+    these six fields of each frame, so two stacks with equal keys attribute
+    identically within one pass.
+    """
+
+    return tuple(
+        (
+            frame.file,
+            frame.code_firstlineno,
+            frame.func_name,
+            frame.func_qualname,
+            frame.line_number,
+            frame.col_offset,
+        )
+        for frame in code_context
+    )
 
 
 def _translate_conditional_stack(
