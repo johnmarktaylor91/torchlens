@@ -369,7 +369,9 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
     _write_manifest(path, manifest)
 
     for door in (validate_tlspec, tl.load):
-        with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
+        with pytest.raises(
+            ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"
+        ) as excinfo:
             door(path)
         assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 

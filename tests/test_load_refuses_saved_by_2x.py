@@ -69,7 +69,8 @@ def test_restamped_2x_payload_refuses_at_the_root_listing(tmp_path: Path) -> Non
     """A 2.x payload under a manifest that names the current format still refuses as 2.x.
 
     The ``metadata.pkl`` at the root is the evidence: no manifest edit can make a 2.x
-    pickle layout look current, and the reader never opens the pickle.
+    pickle layout look current, and the reader never opens the pickle. The release stamp
+    is restamped too, so the 2.38.0 release floor at the root door does not refuse first.
     """
 
     source, _ = _FAMILIES["tlspec_v9"]
@@ -77,6 +78,7 @@ def test_restamped_2x_payload_refuses_at_the_root_listing(tmp_path: Path) -> Non
     shutil.copytree(source, work)
     manifest = _manifest(work)
     manifest["tlspec_version"] = TLSPEC_VERSION
+    manifest["torchlens_version"] = tl.__version__
     (work / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     error = assert_refuses_as_2x(work)
@@ -114,7 +116,7 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     error = assert_refuses_as_2x(_INTERVENTION_V2_16)
     assert error.fields["observed"] == "intervention format_version=1"
     assert error.fields["path"] == str(_INTERVENTION_V2_16)
-    assert "does not read files saved by torchlens 2.x" in str(error)
+    assert "does not read files saved by torchlens 2.37 and earlier" in str(error)
     assert "load it with torchlens 2.36.x" in error.fields["remedy"]
 
     with pytest.raises(ArtifactTooOldError) as excinfo:
