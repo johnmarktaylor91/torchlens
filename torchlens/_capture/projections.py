@@ -79,10 +79,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 
     if options.streaming is None or options.streaming.path is None:
         return StorageIntent(in_ram=True, on_disk=False)
-    return StorageIntent(
-        in_ram=options.streaming.retain_in_memory,
-        on_disk=True,
-    )
+    return StorageIntent(in_ram=options.streaming.retain_in_memory, on_disk=True)
 
 
 def _empty_recording(options: _RecordingConfig) -> Recording:
@@ -1274,10 +1271,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
 
     if save_mode != "reference" or not isinstance(payload, torch.Tensor):
         return {}
-    return {
-        "save_mode": "reference",
-        "saved_out_version": tensor_version_or_none(payload),
-    }
+    return {"save_mode": "reference", "saved_out_version": tensor_version_or_none(payload)}
 
 
 class LiveOpView:

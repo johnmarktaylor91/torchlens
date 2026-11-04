@@ -100,6 +100,7 @@ exclude_docs: |
   /backward.md
   /benchmarks/capture.md
   /benchmarks/summary_performance.md
+  /bridges.md
   /buffers.md
   /conditional_attribution.md
   /containers.md
@@ -116,6 +117,7 @@ exclude_docs: |
   /field-guide/generation_step_attribution.md
   /field-guide/intervene.md
   /field-guide/jacobian_lens.md
+  /field-guide/linear_probes.md
   /field-guide/lrp_epsilon_litmus.md
   /field-guide/lrp_transformers_lxt.md
   /field-guide/pretrained_saes.md
