@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -184,7 +184,11 @@ def rollback_snapshot(site: Op) -> dict[str, Any]:
     }
 
 
-def refresh_output_derivatives(log: Trace, snapshots: Mapping[str, Mapping[str, Any]]) -> None:
+def refresh_output_derivatives(
+    log: Trace,
+    snapshots: Mapping[str, Mapping[str, Any]],
+    refresh_decoded_output: Callable[[Trace], None],
+) -> None:
     """Bring the trace's output-derived values in step after a replay commit.
 
     The decoded output is re-derived from the committed output values. The
@@ -200,9 +204,11 @@ def refresh_output_derivatives(log: Trace, snapshots: Mapping[str, Mapping[str, 
     snapshots:
         Per committed label, the fields held before the commit
         (:func:`rollback_snapshot`), keyed by layer label.
+    refresh_decoded_output:
+        The decode refresher, passed in by the replay commit: importing it
+        here would pull the replay helper modules into the package's import
+        cycle.
     """
-
-    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
 
     refresh_decoded_output(log)
     for label, before in snapshots.items():

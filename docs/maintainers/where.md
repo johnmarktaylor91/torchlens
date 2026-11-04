@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1575 modules, 676185 lines, 0 modules without a docstring.
+83 packages, 1575 modules, 676202 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34229 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34239 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37074 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37081 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34229 lines)
+TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34239 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -145,7 +145,7 @@ TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34229 li
 | `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 242 |
 | `_options_removed` | Public option members removed with no alias, with the remedy each one names. | 61 |
 | `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 473 |
-| `_output_slot` | The model-output slot behind ''Trace.output'' and ''Recording.output''. | 196 |
+| `_output_slot` | The model-output slot behind ''Trace.output'' and ''Recording.output''. | 206 |
 | `_pass_tokens` | Pass tokens: the '':last'' and '':all'' spellings a layer label may end in. | 59 |
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 334 |
 | `_quantities` | Numeric quantity types with unit-aware display. | 731 |
@@ -1716,7 +1716,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37074 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37081 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1752,7 +1752,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 288 |
 | `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 340 |
 | `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 455 |
-| `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 228 |
+| `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 234 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 540 |
 | `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 739 |
@@ -1789,7 +1789,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `population` | The public population noun for stochastic/population edits (edits ). | 651 |
 | `predicates` | Predicate-time intervention decisions and sugar. | 203 |
 | `regions` | Regions: derived admissibility on the existing verbs (surgery ). | 1083 |
-| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1678 |
+| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1679 |
 | `rerun` | Full-forward rerun engine for TorchLens interventions. | 1640 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1638 |
 | `save` | Persistence for TorchLens intervention specifications. | 863 |

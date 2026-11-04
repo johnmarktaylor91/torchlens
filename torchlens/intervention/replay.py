@@ -1260,8 +1260,9 @@ def _commit_replay_updates(
     if new_digests:
         # Rebind, never mutate: the run context may be shared with a fork.
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
-    # The committed values may include the outputs: refresh what derives from them.
-    refresh_output_derivatives(log, snapshots)
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    refresh_output_derivatives(log, snapshots, refresh_decoded_output)  # outputs may have changed
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
