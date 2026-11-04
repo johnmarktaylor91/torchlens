@@ -107,7 +107,7 @@ def test_a_facet_write_that_no_longer_reproduces_refuses_typed(tmp_path: Path) -
     redigest(path, "intervention.json")
     with pytest.raises(Exception) as caught:
         tl.load(path)
-    assert _coded(caught.value).fields["code"] == "bundle_load_failed"
+    assert _coded(caught.value).fields["code"] == "facet_write_not_reproducible"
 
 
 def test_a_reader_that_predates_facet_rules_refuses_typed(
