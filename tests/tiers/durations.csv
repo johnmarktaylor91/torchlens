@@ -51,7 +51,7 @@ tests/oracles/test_legacy_peak_rss_units.py,2,0.01,0.00,unmarked
 tests/oracles/test_legacy_quantity_doors.py,7,0.17,0.05,unmarked
 tests/oracles/test_legacy_timing_bounds.py,8,2.24,0.86,unmarked
 tests/oracles/test_oracle_w0_deprecation.py,8,0.03,0.01,unmarked
-tests/oracles/test_oracle_w0_lints.py,14,6.87,6.76,heavy
+tests/oracles/test_oracle_w0_lints.py,14,5.62,5.53,heavy
 tests/oracles/test_oracle_w0_registry.py,24,0.46,0.34,unmarked
 tests/oracles/test_oracle_w0_skeleton.py,5,0.02,0.01,unmarked
 tests/oracles/test_oracle_w0_surface.py,12,0.91,0.76,unmarked
@@ -157,7 +157,7 @@ tests/test_arg_kwargs_extraction.py,5,0.19,0.07,unmarked
 tests/test_arg_positions.py,1,0.01,0.01,unmarked
 tests/test_arg_spec_coverage.py,50,0.38,0.10,unmarked
 tests/test_arg_suppression.py,1,0.00,0.00,unmarked
-tests/test_argpos_hardening.py,4,0.36,0.20,unmarked
+tests/test_argpos_hardening.py,10,2.23,0.59,unmarked
 tests/test_ast_branches.py,5,0.04,0.01,unmarked
 tests/test_aten_profile.py,11,1.19,0.45,unmarked
 tests/test_aten_public.py,3,1.57,0.99,rare
@@ -1626,7 +1626,7 @@ tests/test_tvscope_preprocessing.py,15,0.06,0.01,heavy
 tests/test_two_pass_inplace_fix.py,9,9.16,8.55,slow
 tests/test_type_checking_imports.py,1,6.29,6.29,unmarked
 tests/test_unhide_surfaces.py,5,0.89,0.80,heavy
-tests/test_union_merge_integrity.py,29,0.75,0.07,unmarked
+tests/test_union_merge_integrity.py,29,0.82,0.08,unmarked
 tests/test_unpickle_c_path.py,2,0.04,0.04,smoke
 tests/test_unpickle_c_security.py,8,6.83,4.14,unmarked
 tests/test_user_docs_currency.py,43,0.19,0.09,unmarked
