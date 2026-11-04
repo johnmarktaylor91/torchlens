@@ -1337,8 +1337,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 key=lambda kind: int(kind.split("_", 1)[1]),
             )
         )
-        if "else" in ast_branch_kinds:
-            ordered_branch_kinds.append("else")
+        ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
 
         # Per-arm test identity: phase 5c stashes ``_arm_bool_indices``
         # (branch kind -> indices into ``bool_layers`` for bools whose runtime
@@ -1416,7 +1415,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 kind=kind,  # type: ignore[arg-type]
                 terminal_bool_op_label=terminal_bool,
                 bool_value_at_run=bool_value,
-                condition_evaluated=bool(evaluation_labels) or kind == "else",
+                condition_evaluated=bool(evaluation_labels) or kind in {"else", "fallthrough"},
                 evaluation_entry_edge=_find_conditional_evaluation_entry_edge(
                     self, evaluation_labels
                 )
