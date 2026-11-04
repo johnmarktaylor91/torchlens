@@ -3911,7 +3911,6 @@ docs-md	docs/neuroai/journey.md	17
 docs-md	docs/neuroai/journey.md	200
 docs-md	docs/neuroai/journey.md	2017
 docs-md	docs/neuroai/journey.md	2048,
-docs-md	docs/neuroai/journey.md	3.0
 docs-md	docs/neuroai/journey.md	32,
 docs-md	docs/neuroai/journey.md	34
 docs-md	docs/neuroai/journey.md	44
@@ -4435,7 +4434,6 @@ docs-md	docs/reference/error_refusal_contract.md	256
 docs-md	docs/reference/error_refusal_contract.md	26.04
 docs-md	docs/reference/error_refusal_contract.md	27
 docs-md	docs/reference/error_refusal_contract.md	277
-docs-md	docs/reference/error_refusal_contract.md	3.0
 docs-md	docs/reference/error_refusal_contract.md	32
 docs-md	docs/reference/error_refusal_contract.md	32,
 docs-md	docs/reference/error_refusal_contract.md	33
@@ -4545,7 +4543,6 @@ docs-md	docs/reference/glossary.md	256
 docs-md	docs/reference/glossary.md	256,
 docs-md	docs/reference/glossary.md	28
 docs-md	docs/reference/glossary.md	299,
-docs-md	docs/reference/glossary.md	3.0
 docs-md	docs/reference/glossary.md	3.3
 docs-md	docs/reference/glossary.md	30
 docs-md	docs/reference/glossary.md	300
@@ -5253,11 +5250,8 @@ error-strings	torchlens/_io/bundle.py	256
 error-strings	torchlens/_io/format3/contract.py	11
 error-strings	torchlens/_io/format3/contract.py	2.38
 error-strings	torchlens/_io/format3/decode.py	64
-error-strings	torchlens/_io/format3/payloads.py	3.0
-error-strings	torchlens/_io/format3/reader.py	3.0
 error-strings	torchlens/_io/format3/reader.py	64
 error-strings	torchlens/_io/format3/validate.py	256
-error-strings	torchlens/_io/format3/values.py	3.0
 error-strings	torchlens/_io/lazy.py	256
 error-strings	torchlens/_io/manifest.py	256
 error-strings	torchlens/_io/rehydrate.py	256
@@ -8142,7 +8136,6 @@ package-docstrings	torchlens/intervention/types.py	11.
 package-docstrings	torchlens/intervention/types.py	1_2
 package-docstrings	torchlens/intervention/types.py	2.0
 package-docstrings	torchlens/intervention/types.py	75
-package-docstrings	torchlens/io/__init__.py	3.0
 package-docstrings	torchlens/mechinterp/_aliases.py	16
 package-docstrings	torchlens/mechinterp/_appliance.py	2026
 package-docstrings	torchlens/mechinterp/_compose.py	16,
@@ -8830,7 +8823,6 @@ package-docstrings	torchlens/transforms/_srp_hash.py	40
 package-docstrings	torchlens/transforms/_srp_hash.py	62
 package-docstrings	torchlens/transforms/_srp_hash.py	63
 package-docstrings	torchlens/transforms/_srp_hash.py	64
-package-docstrings	torchlens/validation/__init__.py	3.0
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
 package-docstrings	torchlens/validation/_destination_coverage.py	256

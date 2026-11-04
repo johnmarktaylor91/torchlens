@@ -126,7 +126,7 @@ def _index_error(blob_id: str, detail: str, *, code: str = _INDEX_CODE) -> Artif
     """Return the manifest-index refusal for a runnable blob id."""
 
     return ArtifactError(
-        f"Runnable payload {blob_id!r} does not satisfy the 3.0 saved-format contract: {detail}.",
+        f"Runnable payload {blob_id!r} does not satisfy the saved format 3 contract: {detail}.",
         code=code,
         remedy=_RESAVE,
         blob_id=blob_id,
