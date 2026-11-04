@@ -24,7 +24,7 @@ from ._site_record import bind_entries
 from .errors import SelectionError
 from .selection import Selection, Site, _site_shape
 
-__all__ = ["bind_to_target"]
+__all__ = ("bind_to_target",)
 
 
 def _fork_ancestors(trace: Any) -> list[Any]:
