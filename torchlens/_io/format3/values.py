@@ -331,10 +331,8 @@ class ValueEncoder:
             reference = self._record_ref(value)
             if reference is not None:
                 return reference
-        handler = _HANDLERS.get(kind)
-        if handler is not None:
-            return handler(self, value, at, depth)
-        return self._encode_other(value, at, depth)
+        handler = _HANDLERS.get(kind, type(self)._encode_other)
+        return handler(self, value, at, depth)
 
     def _encode_other(self, value: Any, at: str, depth: int) -> Any:
         """Encode a value whose exact type has no direct handler."""
