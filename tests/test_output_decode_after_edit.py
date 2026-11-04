@@ -115,16 +115,13 @@ def test_edited_fork_decodes_its_own_output(engine: str) -> None:
     assert _table_rows(trace, 1)[0][0] == "cat"
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 def test_in_place_replay_edit_refreshes_the_decode() -> None:
     """A confirmed in-place edit on the root trace re-derives its rows the same way."""
 
     _model, _x, trace = _capture_classifier()
     out = trace.output_layers[0]
-    trace.do(
-        tl.module("hidden"),
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
-    )
+    trace.do(tl.module("hidden"), tl.zero_ablate())
     _assert_rows_match(_table_rows(trace, 3), _expected_rows(trace[out].out, 3))
     assert _table_rows(trace, 1)[0][0] == "fox"
 

@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1564 modules, 672706 lines, 0 modules without a docstring.
+83 packages, 1565 modules, 672797 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
 | `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 75 | 34077 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1439 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26636 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39354 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 102 | 39357 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -181,7 +181,7 @@ TorchLens - extract outs and metadata from PyTorch models. (75 modules, 34077 li
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1439 lines)
+TorchLens auto-routing registries. (7 modules, 1527 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -189,6 +189,7 @@ TorchLens auto-routing registries. (6 modules, 1439 lines)
 | `_builtin_input` | Built-in input auto-route detectors. | 125 |
 | `_builtin_output` | Built-in output auto-route detectors and decoders. | 807 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
+| `_decode_refresh` | Keep a trace's automatic decoded output in step with its current output values. | 88 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
 | `_registry` | Direction-agnostic priority registry for TorchLens auto-routing. | 278 |
 
@@ -295,7 +296,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (102 modules, 39354 lines)
+Core data structures for representing a logged forward pass. (102 modules, 39357 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -368,7 +369,7 @@ Core data structures for representing a logged forward pass. (102 modules, 39354
 | `_trace_profile` | Trace model-profile helpers. | 190 |
 | `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
 | `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
-| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 647 |
+| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 650 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
