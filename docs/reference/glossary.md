@@ -3053,9 +3053,11 @@ deprecation shim owed*
 : The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
-  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` and
-  `colorblind` render the Okabe-Ito set (green input, vermillion output, blue weights), `paper`
-  and `high_contrast` the legacy set (light green input, light red output, grey weights). The functional form with grouped options reads it from
+  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` keeps the
+  released set (light green input, salmon output, light and darker grey weights, yellow branch
+  tests, every other node white), `colorblind` renders the Okabe-Ito set with grey weights (green input, vermillion output),
+  `paper` and `high_contrast` the legacy set (light green input, light red output, grey weights);
+  no skin draws blue. The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
 **theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
@@ -3089,6 +3091,14 @@ deprecation shim owed*
   summary) as a label row; skipped when the field is unset. The default label
   renders the summary automatically on rolled varying multi-pass nodes,
   directly after the title row.
+
+**"shape" node_label_fields token** — *unstable — no deprecation shim owed*
+: Selector token rendering the node's output shape row, the same row the default label draws
+  (there with the activation memory appended: `(1, 4), 16 B`). Shapes print as Python tuples,
+  except a 0-d output, which reads `scalar` (`scalar, 4 B`) and, when its activation was saved,
+  gains a value row: `= 2.31`, or one value per pass on a rolled node (`= 0.87, 1.02, 0.95`; past
+  four passes the first, `...`, the last). A terminal boolean (an if-test) prints its outcome on
+  its first row instead. Kwarg values, parameter brackets and collapse summaries keep `()`.
 
 **"dtype" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering the node's output dtype as a label row with the

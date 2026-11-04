@@ -1470,8 +1470,8 @@ def _projected_antiparallel_edge_attrs() -> dict[str, str]:
 class _RolledEdgeMaps:
     """Per-draw memo of the ``Layer`` rolled-edge map properties.
 
-    ``child_ops_per_layer``, ``parent_ops_per_layer``, ``edges_vary_across_ops``,
-    and ``parents_per_pass`` are computed properties that rebuild their dicts
+    ``child_ops_per_layer``, ``parent_ops_per_layer`` and ``parents_per_pass``
+    are computed properties that rebuild their dicts
     from every pass's op record on each access, and one rolled draw reads them
     O(edges) times.  Layer graph fields do not change during a draw, so a draw
     shares one computation per layer.  Every cached value comes from the
@@ -1480,12 +1480,11 @@ class _RolledEdgeMaps:
     op children/parents between draws.
     """
 
-    __slots__ = ("_child_ops", "_parent_ops", "_edges_vary", "_parents_per_pass")
+    __slots__ = ("_child_ops", "_parent_ops", "_parents_per_pass")
 
     def __init__(self) -> None:
         self._child_ops: dict[str, dict[str, list[int]]] = {}
         self._parent_ops: dict[str, dict[str, list[int]]] = {}
-        self._edges_vary: dict[str, bool] = {}
         self._parents_per_pass: dict[str, dict[int, list[str]]] = {}
 
     def child_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1502,14 +1501,6 @@ class _RolledEdgeMaps:
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
             found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
-        return found
-
-    def edges_vary_across_ops(self, layer: "Layer") -> bool:
-        """Per-draw memo of ``Layer.edges_vary_across_ops``."""
-
-        found = self._edges_vary.get(layer.layer_label)
-        if found is None:
-            found = self._edges_vary[layer.layer_label] = layer.edges_vary_across_ops
         return found
 
     def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
@@ -1891,6 +1882,17 @@ def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> s
     )
 
 
+def _space_from_reverse_edge(
+    child_node: "Layer", parent_node: "Layer", edge_dict: Dict[str, Any], maps: "_RolledEdgeMaps"
+) -> None:
+    """Blank-label an every-pass edge whose reverse edge is also drawn.
+
+    Both then reserve a label slot, so Graphviz keeps the loop's splines apart. The slot
+    holds a no-break space: Graphviz before 14 rejects an empty FONT element."""
+    if parent_node.layer_label in maps.child_ops_per_layer(child_node) and "label" not in edge_dict:
+        edge_dict["label"] = _html_combined_recurrence_label("\u00a0")
+
+
 def _label_rolled_call_indexs(
     child_node: "Layer",
     parent_node: "Layer",
@@ -1904,9 +1906,9 @@ def _label_rolled_call_indexs(
     """Add pass-number annotations to edges in rolled mode.
 
     In rolled mode, a single edge may represent connections from different
-    ops.  When edges vary across ops (``edges_vary_across_ops``), the edge
-    says which ops it applies to, e.g. ``"Out 1,3"`` / ``"In 2,4"``, using
-    ``int_list_to_compact_str`` for concise ranges (``"1-3"``).
+    ops.  An end used by a strict subset of its node's passes names them,
+    e.g. ``"Out 1,3"`` / ``"In 2,4"`` (``int_list_to_compact_str``: ``"1-3"``);
+    an end every pass uses carries no label.
 
     The annotations compose into ONE midpoint ``label``
     whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
@@ -1936,22 +1938,19 @@ def _label_rolled_call_indexs(
     child_call_indexs = maps.parent_ops_per_layer(child_node)[parent_node.layer_label]
     out_label = (
         f"Out {int_list_to_compact_str(parent_call_indexs)}"
-        if maps.edges_vary_across_ops(parent_node)
+        if len(set(parent_call_indexs)) < parent_node.num_passes
         else None
     )
     in_label = (
         f"In {int_list_to_compact_str(child_call_indexs)}"
-        if maps.edges_vary_across_ops(child_node)
+        if len(set(child_call_indexs)) < child_node.num_passes
         else None
     )
 
-    # Decided on the post-sink-fix numbers (stock GPT-2 rolled, 97 -> 59
-    # hard label violations at 1.008x page area): every
-    # rolled In/Out annotation the caller vouches for -- no conditional label
-    # set, no argument label coming -- composes into ONE midpoint ``label``,
-    # which Graphviz reserves layout space for (a dummy node), so it clears
-    # nodes, splines and arrowheads on every engine and font stack. Self-loops
-    # always merge a full pair. Unvouched edges keep head/tail labels.
+    if out_label is None and in_label is None:
+        _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)
+        return
+    # Measured on stock GPT-2 rolled: 97 -> 59 hard label violations.
     if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
         top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
         edge_dict["label"] = with_branch(edge_dict, _html_combined_recurrence_label(top, bottom))

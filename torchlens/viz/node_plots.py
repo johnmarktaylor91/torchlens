@@ -44,10 +44,10 @@ _COLORMAPS: dict[str, tuple[RGBColor, ...]] = {
     ),
 }
 
-_AXIS_COLOR = (215, 219, 226)
+_AXIS_COLOR = (218, 218, 218)
 _TEXT_COLOR = (35, 39, 47)
-_POINT_COLOR = (48, 93, 170)
-_POINT_OUTLINE = (20, 48, 100)
+_POINT_COLOR = (64, 64, 64)
+_POINT_OUTLINE = (20, 20, 20)
 _MORE_FILL = (255, 255, 255)
 _MORE_OUTLINE = (120, 128, 140)
 _SCATTER_CAPTION_RESERVE = 56
@@ -660,7 +660,7 @@ def _line_colors(colors: Sequence[RGBColor] | None, n_series: int) -> list[RGBCo
         RGB colors.
     """
 
-    default = [(48, 93, 170), (214, 91, 61), (82, 145, 85), (129, 82, 161)]
+    default = [(64, 64, 64), (214, 91, 61), (82, 145, 85), (129, 82, 161)]
     if colors is None:
         return [default[index % len(default)] for index in range(n_series)]
     if len(colors) < n_series:

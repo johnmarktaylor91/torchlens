@@ -2646,7 +2646,6 @@ docs-md	docs/maintainers/where.md	243
 docs-md	docs/maintainers/where.md	245
 docs-md	docs/maintainers/where.md	246
 docs-md	docs/maintainers/where.md	247
-docs-md	docs/maintainers/where.md	2470
 docs-md	docs/maintainers/where.md	248
 docs-md	docs/maintainers/where.md	249
 docs-md	docs/maintainers/where.md	2494
@@ -3097,6 +3096,7 @@ docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	732
 docs-md	docs/maintainers/where.md	7334
+docs-md	docs/maintainers/where.md	736
 docs-md	docs/maintainers/where.md	74
 docs-md	docs/maintainers/where.md	740
 docs-md	docs/maintainers/where.md	743
@@ -9436,7 +9436,6 @@ test-docstrings	tests/test_live_op_view_surface.py	111
 test-docstrings	tests/test_load_refuses_saved_by_2x.py	2.16
 test-docstrings	tests/test_log_injections_s2_forgery.py	2026
 test-docstrings	tests/test_log_injections_s2_nested_matrix.py	40
-test-docstrings	tests/test_loop_module_rolling.py	11
 test-docstrings	tests/test_loop_module_rolling.py	1_1
 test-docstrings	tests/test_loop_module_rolling.py	1_2
 test-docstrings	tests/test_loop_recurrence_hardening.py	34

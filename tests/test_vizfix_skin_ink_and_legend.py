@@ -258,9 +258,14 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
     assert "changed by the edit" not in rows
 
 
-@pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
+#: Skins with a buffer fill. The default skin draws buffers white, as released (ruling of
+#: 3 Nov 2026); there the cylinder is the cue.
+_BUFFER_FILL_SKINS = sorted(set(THEME_PRESETS) - {"torchlens"})
+
+
+@pytest.mark.parametrize("skin", _BUFFER_FILL_SKINS)
 def test_plain_op_row_and_buffer_fill_are_distinguishable(skin: str) -> None:
-    """Every skin's buffer fill differs from its plain-op fill under CVD."""
+    """Every buffer-filling skin's buffer fill differs from its plain-op fill under CVD."""
 
     plain, buffer = _fills(skin)
     findings = palette_distinguishability({"plain op": plain, "buffer": buffer})
@@ -270,7 +275,7 @@ def test_plain_op_row_and_buffer_fill_are_distinguishable(skin: str) -> None:
 
 @pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
 def test_buffer_nodes_are_painted_with_the_legend_buffer_fill(skin: str, tmp_path: Path) -> None:
-    """The drawn buffer's fill is the buffer swatch, never the plain-op fill."""
+    """The drawn buffer's fill is the buffer swatch, never the plain-op fill (default: white)."""
 
     plain, buffer = _fills(skin)
     dot = _draw(
@@ -284,6 +289,9 @@ def test_buffer_nodes_are_painted_with_the_legend_buffer_fill(skin: str, tmp_pat
     cylinders = [line for line in _node_lines(dot) if "shape=cylinder" in line]
     assert cylinders
     for line in cylinders:
+        if skin not in _BUFFER_FILL_SKINS:
+            assert _attr_values(line, "fillcolor") == ["white"]
+            continue
         assert _attr_values(line, "fillcolor") == [buffer]
         assert _attr_values(line, "fillcolor") != [plain]
 
@@ -308,6 +316,8 @@ def test_key_lists_only_the_roles_drawn() -> None:
 
     theme = THEME_PRESETS["torchlens"]
     plain_only = drawn_legend_roles([{"shape": "oval", "fillcolor": "white"}], theme)
+    # The default skin fills buffers white too; a white oval is still only a plain op.
+    assert plain_only == frozenset({"plain op"})
     assert key_swatches(theme, plain_only, has_module=False) == ()
     assert key_swatches(theme, frozenset(), has_module=False) == ()
 

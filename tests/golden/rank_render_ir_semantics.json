@@ -31,25 +31,25 @@
  ],
  "nodes": [
   {
-   "fillcolor": "#009E73",
+   "fillcolor": "#98FB98",
    "name": "input_1pass1",
    "shape": "oval",
    "style": "filled,solid"
   },
   {
-   "fillcolor": "#56B4E9",
+   "fillcolor": "#D9D9D9",
    "name": "linear_1_1pass1",
    "shape": "box",
    "style": "filled,solid"
   },
   {
-   "fillcolor": "#56B4E9",
+   "fillcolor": "#D9D9D9",
    "name": "linear_2_3pass1",
    "shape": "box",
    "style": "filled,solid"
   },
   {
-   "fillcolor": "#D55E00",
+   "fillcolor": "#ff9999",
    "name": "output_1pass1",
    "shape": "oval",
    "style": "filled,solid"

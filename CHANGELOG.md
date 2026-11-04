@@ -5,6 +5,22 @@
 
 ### Behavior changes
 
+- **viz**: rolled drawings label each edge end with its passes only when a strict subset of that
+  node's passes uses it: an end every pass uses carries no pass label (it used to print, for
+  example, `In 1-3 / Out 1-3` whenever any edge of the node varied). Loops whose edges were
+  unlabelled stay unlabelled; branching and recurrent loops lose the labels on edges every pass
+  uses and keep partial ones such as `Out 1`, `In 2` or `In 3 / Out 2`. A loop's every-pass edge
+  keeps a blank label slot when its back edge joins the same two nodes, so the two curves stay apart.
+- **viz**: no skin draws blue. Backward edges and nodes are raspberry (`#B03A6A` / `#F8E1E7`), the
+  `dark` skin is neutral grey, value ramps run pale yellow to brown, and the `colorblind` skin keeps
+  Okabe-Ito with grey weights. The default `torchlens` skin keeps the released fills. A branch
+  test names its kind and every pass's outcome on its first row (`IF: FALSE, FALSE, TRUE`) instead
+  of labelling an edge, and edge annotations are 13 pt (were 8 pt).
+- **viz**: a 0-d node's shape row reads `scalar, 4 B` instead of `(), 4 B`, and a saved 0-d value
+  prints on the next row (`= 2.31`; one value per pass on a rolled node, `= 0.87, 1.02, 0.95`).
+  If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
+  `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
+
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
   written; the default never does) in place of `vis_save_only=`.
 - **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.

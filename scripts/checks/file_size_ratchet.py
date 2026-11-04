@@ -450,7 +450,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
     "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
-    "torchlens/_visualization/_render_leaf.py": 2400,
+    # Re-keyed down 2400 -> 2300 (r7 R43-F2 slack rule): the no-blue lane moved
+    # the IF label to the test node and dropped the branch-edge helpers; measured 2262.
+    "torchlens/_visualization/_render_leaf.py": 2300,
     # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
     # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
     # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
