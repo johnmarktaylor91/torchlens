@@ -17,6 +17,7 @@ from ._base import (
     TorchLensWarning,
     TraceNotReproducibleWarning,
     ValidationError,
+    _QuietedWarning as _QuietedWarning,  # private marker base of a quieted warning
 )
 from ._quiet import quiet
 from .episode import (
