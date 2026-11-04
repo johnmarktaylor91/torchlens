@@ -1587,7 +1587,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         """Materialize lazy grads, copy shared groups, reject unsaved predicate outs."""
 
         if name not in _lazy_fields:
-            return _familiar_names.lookup_with_hint(_getattribute, self, "Op", name)
+            return _getattribute(self, name)
         if name == "grad":
             slot = _object_getattribute(self, "_slot")
             records = slot("_grad_records")
@@ -1662,7 +1662,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
             if not name.startswith("_"):
                 refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            raise _familiar_names.missing_attribute_error(type(self).__name__, name)
 
     def __setattr__(
         self,
