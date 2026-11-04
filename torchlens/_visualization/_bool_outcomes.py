@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 #: Renderer fill constant for a False test; each skin paints it as its boolean
-#: colour blended toward the page (``themes._role_fill``).
+#: colour mixed toward white (``themes._role_fill``).
 BOOL_FALSE_NODE_COLOR = "#FBEAB0"
 
 #: Most passes a rolled test's value row lists one by one, in pass order;

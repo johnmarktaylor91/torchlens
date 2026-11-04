@@ -428,15 +428,19 @@ _FALSE_TEST_SHARE = 0.45
 
 
 def _role_fill(theme: VisualizationTheme, role: str, constant: str) -> str:
-    """Return the skin's fill for one role, deriving the False-test pale."""
+    """Return the skin's fill for one role, deriving the False-test pale.
+
+    The pale is the boolean colour mixed toward white in every skin: mixing
+    toward the dark skin's page gave a dark olive that black ink could not
+    read on, and white keeps both halves of a mixed test light.
+    """
 
     if role != "boolean_false":
         return theme.semantic_palette.get(role, constant)
     boolean = _hex_rgb(theme.semantic_palette.get("boolean", "#F7D460"))
-    page = _hex_rgb(theme.default_fill)
-    if boolean is None or page is None:
+    if boolean is None:
         return constant
-    mixed = (round(page[i] + (boolean[i] - page[i]) * _FALSE_TEST_SHARE) for i in range(3))
+    mixed = (round(255 + (boolean[i] - 255) * _FALSE_TEST_SHARE) for i in range(3))
     return "#" + "".join(f"{channel:02X}" for channel in mixed)
 
 
