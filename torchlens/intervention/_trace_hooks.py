@@ -19,6 +19,7 @@ from .._data_classes._trace_intervention_records import (
 from .._errors import InvalidArgumentError
 from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
+from ._facet_union import split_facet_union_entries
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_edits import (
     ensure_intervention_spec,
@@ -76,7 +77,7 @@ def attach_sticky_hooks(  # noqa: PLR0913 - trace stands in for self on the move
             hook,
             allow_replay_only_site_targets=True,
         )
-    entries = expand_facet_hook_entries(trace, entries)
+    entries = expand_facet_hook_entries(trace, split_facet_union_entries(entries))
     refuse_chunked_batch_coupling(trace, entries)
     spec = ensure_intervention_spec(trace)
     handle_ids: list[str] = []
