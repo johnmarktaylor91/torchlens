@@ -419,18 +419,6 @@ def reshape_heads(
     return value.view(*value.shape[:-1], n_heads, inferred_d_head)
 
 
-def activation_gelu(value: Any) -> Any | AbsenceReason:
-    """Return GELU activation when the value is tensor-like."""
-
-    if isinstance(value, AbsenceReason):
-        return value
-    if isinstance(value, FacetSpec):
-        return FacetSpec.computed(lambda: F.gelu(Facet(value).value), function_id=value.function_id)
-    if isinstance(value, torch.Tensor):
-        return F.gelu(value)
-    return structural("GELU activation operand is not tensor-like")
-
-
 def activation_silu(value: Any) -> Any | AbsenceReason:
     """Return SiLU activation when the value is tensor-like."""
 
