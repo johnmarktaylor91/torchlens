@@ -32,6 +32,7 @@ import torch
 import transformers
 
 import torchlens as tl
+import torchlens.transformer as tviz
 
 PROMPT = "When Mary and John went to the store, John gave a drink to"
 words = PROMPT.replace(",", " ,").split()
@@ -51,7 +52,7 @@ model = transformers.GPT2LMHeadModel(config).eval()
 
 trace = tl.trace(model, x)
 
-view = tl.transformer.attention_view(trace, "transformer.h.0.attn", tokens=words)
+view = tviz.attention_view(trace, "transformer.h.0.attn", tokens=words)
 RESULT = tuple(view.pattern.shape) == (4, len(words), len(words))
 ```
 
