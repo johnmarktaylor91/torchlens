@@ -26,7 +26,12 @@ __all__ = (
 )
 
 #: The shape ``_render_leaf._format_branch_edge_label_html`` emits (IF, THEN, ELIF n, ...).
-_BRANCH_LABEL = re.compile(r'<<FONT POINT-SIZE="[^"]*"><b><u>.*</u></b></FONT>>', re.DOTALL)
+_BRANCH_LABEL = re.compile(
+    r'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR>'
+    r'<TD WIDTH="\d+"></TD><TD><FONT POINT-SIZE="[^"]*"><b><u>.*</u></b></FONT></TD>'
+    r'<TD WIDTH="\d+"></TD></TR></TABLE>>',
+    re.DOTALL,
+)
 
 
 def _num_passes(layer_log: Any) -> int:

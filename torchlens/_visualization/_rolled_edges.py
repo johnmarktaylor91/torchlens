@@ -1,11 +1,10 @@
-"""Rolled-view recurrence edges: node spacing, self-loop ports and pass labels.
+"""Rolled-view recurrence edges: node spacing and pass labels.
 
 A rolled draw shows a repeated op once, so the edges that carry a value from
 one pass to the next become loops. This module holds the geometry that makes
 such a loop read as one: the wider node separation (dot draws a self-loop half
-as wide as the node gap), the ports that take a self-loop from the node's
-output side back to its input side, and the label table that sits a pass
-label against its edge. It imports nothing from the edge renderer, so the
+as wide as the node gap) and the label table that sits a pass label against
+its edge; the loop ports live in ``_loop_edges``. It imports nothing from the edge renderer, so the
 graph shell can share the spacing constant without an import cycle.
 """
 
@@ -19,29 +18,6 @@ from ._typography import edge_annotation_pt
 ROLLED_NODESEP = "0.5"
 _PASS_LABEL_EDGE_GAP = 2  # points between a pass label and the edge it sits beside
 _SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer on the far side of a pass label
-
-#: Self-loop ports by rank direction: the loop leaves the node's downstream
-#: side and comes back on its upstream side, so it draws as a tall D-shaped
-#: arrow beside the node instead of Graphviz's default small curl.
-_SELF_LOOP_PORTS: dict[str, tuple[str, str]] = {
-    "BT": ("ne", "se"),
-    "TB": ("se", "ne"),
-    "LR": ("ne", "nw"),
-    "RL": ("nw", "ne"),
-}
-
-
-def _self_loop_port_attrs(rankdir: str) -> dict[str, str]:
-    """Return the tail and head ports that make a recurrence self-loop read as a loop.
-
-    A self-loop with no ports is a small curl on one side of the node that is
-    easy to miss next to a stack of straight arrows; anchoring it from the
-    output side back to the input side spans the node's height, so the loop
-    is unmistakable (JMT, 3 Nov 2026).
-    """
-
-    tail_port, head_port = _SELF_LOOP_PORTS.get(rankdir, _SELF_LOOP_PORTS["BT"])
-    return {"tailport": tail_port, "headport": head_port}
 
 
 def _html_combined_recurrence_label(top: str, bottom: str | None = None) -> str:
