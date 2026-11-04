@@ -818,14 +818,17 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
     assert "buffer_versions" not in dot
 
 
-def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: Path) -> None:
-    """A rolled recurrence self-loop merges In/Out into one midpoint label.
+def test_recurrent_self_loop_merges_in_out_into_one_label_placed_at_its_node(
+    tmp_path: Path,
+) -> None:
+    """A rolled recurrence self-loop merges In/Out into one label beside its node.
 
-    Self-loops crowd separate head/tail labels against the node, and a recurrence
-    self-edge never carries argument/conditional labels, so the In/Out pass ranges
-    are merged into a single two-line HTML midpoint ``label`` (which graphviz
-    reserves layout space for), with ``In`` above ``Out`` for the default
-    bottom-up layout. Parallel fan-out has no self-edge at all.
+    Both ends of a self-loop are one node, so its pass ranges stay one two-line HTML
+    label, ``In`` above ``Out`` for the default bottom-up layout.  It is the loop's
+    tail label, so the post-layout chooser places it beside the node clear of the
+    loop and its neighbours, as it places every rolled pass label; Graphviz's own
+    midpoint spot for a self-loop label crossed nearby edges and nodes in sideways
+    drawings.  Parallel fan-out has no self-edge at all.
     """
 
     recurrent_trace = _trace(ReusedReluLoop())
@@ -833,11 +836,10 @@ def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: P
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
-    # One combined midpoint label, not separate head/tail labels.
     assert "headlabel" not in recurrent_attrs
-    assert "taillabel" not in recurrent_attrs
-    # HTML form, In above Out for the bottom-up default.
-    assert _html_label_lines(recurrent_attrs, "label") == ["In 2-4", "Out 1-3"]
+    assert _html_label_lines(recurrent_attrs, "label") is None
+    assert _html_label_lines(recurrent_attrs, "taillabel") == ["In 2-4", "Out 1-3"]
+    assert "labelangle=" in recurrent_attrs and "minlen" not in recurrent_attrs
     assert "↻" not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
@@ -853,7 +855,7 @@ def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> No
     self_edges = _dot_self_edge_attrs(topdown_dot)
     assert len(self_edges) == 1
     # Top-down flow points down, so Out (tail) is placed above In (head).
-    assert _html_label_lines(self_edges[0], "label") == ["Out 1-3", "In 2-4"]
+    assert _html_label_lines(self_edges[0], "taillabel") == ["Out 1-3", "In 2-4"]
 
 
 def test_recurrence_back_edge_puts_out_at_its_tail_and_in_at_its_head(tmp_path: Path) -> None:
@@ -925,8 +927,8 @@ def test_varying_forward_edges_label_their_partial_ends_at_the_node(tmp_path: Pa
     back-edge (passes 1-2 into 2-3) keep theirs, each beside its node: the input
     edge's ``In 1`` as the head label at the loop's first op, the back-edge's
     ``Out 1-2`` at its tail and ``In 2-3`` at its head (restored head/tail
-    placement, JMT 3 Nov 2026).  Straight edges keep Graphviz's default endpoint
-    placement (no labeldistance/labelangle).
+    placement, JMT 3 Nov 2026).  Only pass-labelled edges get a chosen
+    labeldistance/labelangle; unlabelled body edges carry none.
     """
 
     dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", depth=1000)
@@ -946,10 +948,11 @@ def test_varying_forward_edges_label_their_partial_ends_at_the_node(tmp_path: Pa
 
     for attrs in (body_out[0], body_in[0], input_edge[0]):
         assert "taillabel" not in attrs
-        assert "labeldistance=" not in attrs
-        assert "labelangle=" not in attrs
     for attrs in (body_out[0], body_in[0]):
         assert "headlabel" not in attrs
+        assert "labeldistance=" not in attrs
+        assert "labelangle=" not in attrs
+    assert "labeldistance=" in input_edge[0] and "labelangle=" in input_edge[0]
 
     back_edge = _dot_edge_attrs(dot, "layernorm_1_3", "linear_1_1")
     assert len(back_edge) == 1

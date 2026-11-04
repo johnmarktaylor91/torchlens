@@ -177,11 +177,17 @@ def test_pass_token_is_empty_on_single_pass_nodes(linear_trace: tl.Trace) -> Non
 def test_rolled_argument_takes_the_midpoint_and_pass_range_stays_at_the_head(
     loop_if_trace: tl.Trace,
 ) -> None:
+    """``h`` enters the cell on pass 1 only (``In 1``); ``x`` enters every pass."""
+
     dot = _dot(loop_if_trace, rolled=True)
     input_edges = [line for line in _edge_lines(dot) if line.strip().startswith("input_")]
     assert len(input_edges) == 2
-    for line in input_edges:
-        assert _edge_attr(line, "xlabel") == ""
-        assert ">In " in _edge_attr(line, "headlabel")
-        assert ">arg " not in _edge_attr(line, "headlabel")
-        assert ">arg " in _edge_attr(line, "label") and ">In " not in _edge_attr(line, "label")
+    ranged = [line for line in input_edges if ">In " in line]
+    assert len(ranged) == 1
+    (line,) = ranged
+    assert _edge_attr(line, "xlabel") == ""
+    assert ">In " in _edge_attr(line, "headlabel")
+    assert ">arg " not in _edge_attr(line, "headlabel")
+    assert ">arg " in _edge_attr(line, "label") and ">In " not in _edge_attr(line, "label")
+    (every_pass,) = [other for other in input_edges if other is not line]
+    assert ">arg " in _edge_attr(every_pass, "headlabel")
