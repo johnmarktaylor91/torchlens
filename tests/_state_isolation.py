@@ -32,6 +32,11 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens._io.bundle", "_NONPERSISTENT_DISCLOSURE_WARNED", False),
     ("torchlens._io.bundle", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED", False),
     ("torchlens._state", "_functorch_warning_emitted", False),
+    # Capture size guard: once per session.
+    ("torchlens._capture.finalize.epilogue", "_CAPTURE_MEMORY_WARNED", False),
+    # tl.errors.quiet state: a bare quiet() in one test must not quiet the next.
+    ("torchlens.errors._base", "_QUIET_CODES", frozenset()),
+    ("torchlens.errors._quiet", "_QUIET_ALL", False),
     ("torchlens._state", "_dynamo_warning_emitted", False),
     ("torchlens.backends.tf._tf_compat", "_warned_missing_capabilities", set()),
     ("torchlens.backends.torch._opaque_call_advisory", "_WARNED_CODES", set()),

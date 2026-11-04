@@ -325,6 +325,8 @@ not reset per capture.
 
 _WARN_ONCE_STATE = frozenset(
     {
+        # Capture size guard: one capture_memory_threshold_exceeded per session.
+        ("torchlens/_capture/finalize/epilogue.py", "_CAPTURE_MEMORY_WARNED"),
         # Post-T52 census sweep (F27): warn-once ledgers other merged lanes
         # added without classifying -- one disclosure per key, append-only.
         ("torchlens/attribution/onebackward/_frozen.py", "_DISCLOSURE_WARNED"),
@@ -673,6 +675,10 @@ dict would otherwise keep its whole subject graph alive.
 
 _PUBLIC_REGISTRATION_STATE = frozenset(
     {
+        # tl.errors.quiet(*codes): the codes and the quiet-all flag in force; a
+        # ``with`` block restores the prior values on exit, a bare call lasts the session.
+        ("torchlens/errors/_base.py", "_QUIET_CODES"),
+        ("torchlens/errors/_quiet.py", "_QUIET_ALL"),
         # Post-T80 census sweep (F42 reconcile): registries merged lanes added
         # without heavy-census classification -- explicit register/list
         # surfaces (extraction pure-module namespaces, ecosystem plugin
@@ -743,6 +749,8 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # tl.errors.quiet: one quieted subclass per warning class, built on first use.
+        ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
         # Call-site grouping per-code memos (content token, instruction map),
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
@@ -1039,6 +1047,7 @@ failures.
 
 _STATIC_EXPORT_LISTS = frozenset(
     {
+        ("torchlens/errors/_quiet.py", "__all__"),
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture/_trace_capture_error.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
