@@ -97,15 +97,12 @@ class RosterModel:
     group: str = "config_built"
 
 
-#: Fixed RNG seeds for the torch reference adapter, so a roster row whose
-#: forward draws randomness (``random_forward``: training-mode dropout) computes
-#: the same cells on every run. A capture is RNG-neutral and draws from its own
-#: seeded stream, never the direct run's; an unseeded capture took a fresh
-#: automatic seed, so its 8-element dropout mask matched the direct run's about
-#: one run in 256 and flipped the recorded parity and validation cells. The two
-#: seeds differ on purpose: the capture's mask still differs from the direct
+#: Fixed RNG seed for the torch reference adapter's direct runs, so a roster
+#: row whose forward draws randomness (``random_forward``: training-mode
+#: dropout) sees the same stream every run. The validation capture has its own
+#: fixed seed (``_validation_cells._VALIDATION_CAPTURE_SEED``); the two differ
+#: on purpose, so the capture's dropout mask still differs from the direct
 #: run's, as the shipped scorecard records.
-_CAPTURE_SEED = 1
 _REFERENCE_SEED = 2
 
 
@@ -144,11 +141,9 @@ class TorchReferenceAdapter:
 
         The protocol's capture records what replay validation needs unless
         ``options`` carries its own ``capture=``; refusal cells pass their
-        trace options here. The capture is seeded with ``_CAPTURE_SEED``
-        unless ``options`` names its own ``seed``.
+        trace options here.
         """
 
-        options = {"seed": _CAPTURE_SEED, **options}
         return self.protocol().capture(model, example_input, None, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:

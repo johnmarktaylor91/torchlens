@@ -69,12 +69,13 @@ def test_reference_adapter_seeds_the_random_row_so_its_cells_repeat() -> None:
     """
 
     from tests.conformance._adapters import TorchReferenceAdapter
+    from tests.conformance._validation_cells import capture_for_validation
 
     adapter = TorchReferenceAdapter()
     runs = []
     for _ in range(2):
         model, example = ROWS[RANDOM_ROW].builder()
-        trace = adapter.trace(model, example)
+        trace = capture_for_validation(adapter, model, example)
         captured = trace.output_ops[0].out
         before = torch.get_rng_state()
         reference = adapter.reference_output(model, example)
