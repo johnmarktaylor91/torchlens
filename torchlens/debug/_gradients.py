@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
-from .._debug_report import Report, table_report, trace_subject
+from .._debug_report import Report, _TableReport, trace_subject
 from ._common import (
     _module_address,
     _op_label,
@@ -694,14 +694,14 @@ def _grad_health_report(trace: Trace, rows: list[dict[str, Any]], attrs: dict[st
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
-    return table_report(
-        "grad_health",
-        frame,
-        subject=trace_subject(trace),
+    return _TableReport(
+        helper="grad_health",
+        frame=frame,
+        subject_text=trace_subject(trace),
         finding_columns=("op", "module", "verdict", "grad_norm", "source_line"),
-        coverage=_scale_coverage(attrs, has_rows=bool(rows)),
-        status=_health_status(rows) if rows else None,
-        severity_counts=_verdict_counts(rows) if rows else None,
+        coverage_text=_scale_coverage(attrs, has_rows=bool(rows)),
+        status_text=_health_status(rows) if rows else None,
+        severity_counts=tuple(_verdict_counts(rows).items()) if rows else (),
     )
 
 

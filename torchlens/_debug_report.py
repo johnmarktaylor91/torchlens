@@ -441,8 +441,6 @@ def table_report(
     subject: str,
     finding_columns: Sequence[str],
     coverage: str | None = None,
-    status: str | None = None,
-    severity_counts: Mapping[str, int] | None = None,
 ) -> Report:
     """Wrap a helper's frame in the tabular :class:`Report`.
 
@@ -458,10 +456,6 @@ def table_report(
         Columns shown on each finding line of the printed card.
     coverage:
         Optional coverage line for the card (what was and was not examined).
-    status:
-        Optional verdict token for the lead line; the row count otherwise.
-    severity_counts:
-        Optional severity-token counts printed on the lead line.
 
     Returns
     -------
@@ -475,8 +469,6 @@ def table_report(
         subject_text=subject,
         finding_columns=tuple(finding_columns),
         coverage_text=coverage,
-        status_text=status,
-        severity_counts=tuple((severity_counts or {}).items()),
     )
 
 
