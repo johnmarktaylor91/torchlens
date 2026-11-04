@@ -5,12 +5,12 @@
     "T1": {"B": [], "C": [], "D": []},
     "T2": {"B": [], "C": [], "D": []},
     "T3": {
-      "B": ["torchlens.viz:causal_trace_heatmap", "torchlens.semantic.patching"],
+      "B": ["torchlens.viz:causal_trace_heatmap", "torchlens._semantic.patching"],
       "D": ["transformer_lens.patching:*"]
     },
     "T4": {
       "B": [
-        "torchlens.semantic.patching",
+        "torchlens._semantic.patching",
         "torchlens.experiment:head_ablation_candidates",
         "torchlens.experiment._head_sugar:head_ablation_candidates"
       ],
@@ -25,7 +25,7 @@
     },
     "T6": {
       "B": [
-        "torchlens.semantic.patching",
+        "torchlens._semantic.patching",
         "torchlens.experiment:head_ablation_candidates",
         "torchlens.experiment._head_sugar:head_ablation_candidates"
       ],
