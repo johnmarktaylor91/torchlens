@@ -327,8 +327,8 @@ class Selection:
         both sides; anything else refuses typed). Masks travel unchanged
         onto an identical index space; per-entry provenance discloses the
         cross-run origin. ``do()`` still refuses foreign resolved selections
-        (``selection_trace_mismatch``) — this explicit spelling is the only
-        rebind. DOCUMENTED-UNSTABLE pending naming-session ratification.
+        (``selection_trace_mismatch``) unless the fork descends from the selection's
+        trace (it then rebinds itself). DOCUMENTED-UNSTABLE pending ratification.
 
         Raises
         ------

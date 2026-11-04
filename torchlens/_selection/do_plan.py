@@ -118,6 +118,19 @@ def _build_selection_do_plan(
     return resolved, plan, audit
 
 
+def _is_fork_ancestor(source: Any, trace: Any) -> bool:
+    """Return whether ``source`` is a fork/rerun ancestor of ``trace``."""
+
+    parent = getattr(trace, "parent_trace", None)
+    seen = 0
+    while parent is not None and seen < 1024:
+        if parent is source:
+            return True
+        parent = getattr(parent, "parent_trace", None)
+        seen += 1
+    return False
+
+
 def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
     """Resolve the ``do()`` target on this trace, refusing PARAM/EDGE kinds."""
 
@@ -125,6 +138,11 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
     if lifted is None:
         raise RuntimeError("build_selection_do_plan requires a selection-shaped input")
     if isinstance(lifted, Selection):
+        if lifted._trace is not trace and _is_fork_ancestor(lifted._trace, trace):
+            # A selection resolved on the trace this fork descends from (the
+            # clean run) addresses the same captured index space: rebind it
+            # instead of making the caller resolve it again on the fork.
+            lifted = lifted.align_to(trace)
         if lifted._trace is not trace:
             raise SelectionError(
                 "the resolved selection is bound to a different trace; resolve "

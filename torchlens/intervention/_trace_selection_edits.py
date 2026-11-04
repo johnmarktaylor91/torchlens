@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
     clear_staged_unfired,
@@ -586,3 +587,25 @@ def push_from_handles(
             )
     clear_staged_unfired(trace)
     return result
+
+
+def settle_edited_product(trace: Any) -> None:
+    """Inherited evidence no longer describes an edited product.
+
+    Episode step evidence is quarantined and the decoded output rows are
+    re-derived from the edited output (``refresh_decoded_output``), so a fork
+    names its own answer after every propagating ``do()``; when the edited
+    output does not decode the stale rows are dropped and ``decode_output``
+    recomputes or refuses typed rather than answering stale.
+
+    Parameters
+    ----------
+    trace:
+        The trace (usually a fork) whose values a non-staged edit changed.
+    """
+
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    quarantine_episode_after_perturbed_replay(trace)
+    if getattr(trace, "_decoded_output", None) is not None:
+        refresh_decoded_output(trace)
