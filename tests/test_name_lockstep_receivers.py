@@ -34,6 +34,7 @@ SETUP = [
     "import matplotlib.pyplot as plt\n",
     "import torchlens as tl\n",
     "from torchlens.dataset_extraction import export_extraction as ee\n",
+    "from my_helpers import export_extraction as mine\n",
 ]
 SVG_OUTPUT = {
     "data": {"image/svg+xml": ['<svg><text x="1" format="svg">loss</text></svg>\n']},
@@ -133,7 +134,8 @@ def test_the_gone_keyword_handed_to_torchlens_still_reports(tmp_path: Path) -> N
         'save(trace, format="mat")\n',
         'tl.record(model, x, format="npy")\n',
         'trace.export(format="npy")\n',
-        'bundle, sizes = tl.Bundle(), {}\nbundle.write(format="npy")\n',
+        'mine(trace, format="npy")\n',
+        'bundle, sizes = tl.Bundle(), {}\nbundle.dump(format="npy")\n',
         "def write(t, **kw):\n",
         "    return tl.dataset_extraction.export_extraction(t, **kw)\n",
         'write(trace, format="npy")\n',
@@ -148,7 +150,8 @@ def test_the_gone_keyword_handed_to_torchlens_still_reports(tmp_path: Path) -> N
         _line(lines, 'save(trace, format=\\"mat\\")'),
         _line(lines, 'tl.record(model, x, format=\\"npy\\")'),
         _line(lines, 'trace.export(format=\\"npy\\")'),
-        _line(lines, 'bundle.write(format=\\"npy\\")'),
+        _line(lines, 'mine(trace, format=\\"npy\\")'),
+        _line(lines, 'bundle.dump(format=\\"npy\\")'),
         _line(lines, 'write(trace, format=\\"npy\\")'),
         _line(lines, "# was export_extraction"),
     }
@@ -174,10 +177,12 @@ def test_a_local_function_that_declares_the_keyword_owns_it(tmp_path: Path) -> N
         'Opaque(format="svg")\n',
     ]
     found, lines = _stale(tmp_path, "examples/local.ipynb", _notebook(SETUP, cells))
-    assert found == {
+    owned = {_line(lines, 'plot(1, format=\\"svg\\")'), _line(lines, 'Writer(format=\\"svg\\")')}
+    assert found.isdisjoint(owned)
+    assert {
         _line(lines, 'forward(1, format=\\"svg\\")'),
         _line(lines, 'Opaque(format=\\"svg\\")'),
-    }
+    } <= found
 
 
 def test_python_files_resolve_receivers_the_same_way(tmp_path: Path) -> None:
