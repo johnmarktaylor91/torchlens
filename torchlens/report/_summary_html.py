@@ -24,9 +24,10 @@ _CSS = """
   font-size: 12.5px; line-height: 1.45; color: #1a1a2e;}
 .tl-summary table {border-collapse: collapse; width: auto; max-width: 100%;}
 .tl-summary thead th {position: sticky; top: 0; background: #f4f4f8;
-  text-align: left; padding: 3px 10px; overflow-wrap: anywhere; border-bottom: 1px solid #888;}
+  text-align: left; padding: 3px 10px; border-bottom: 1px solid #888;}
 .tl-summary td {padding: 1px 10px; white-space: pre-wrap; overflow-wrap: anywhere;}
 .tl-summary td.num, .tl-summary th.num {text-align: right;}
+.tl-summary td.num {white-space: pre;}
 .tl-summary tr[data-kind="fold"] td {font-weight: 600;}
 .tl-summary tr[data-kind="elision"] td {font-style: italic; opacity: 0.85;}
 .tl-summary tr[data-kind="unexecuted"] td {opacity: 0.6;}
@@ -34,6 +35,10 @@ _CSS = """
   padding-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere;}
 .tl-summary .tl-banner {color: #8a2d0b; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere;}
 .tl-summary .tl-disclosure {opacity: 0.75;}
+@media (max-width: 600px) {
+  .tl-summary thead th {padding: 3px 4px;}
+  .tl-summary td {padding: 1px 4px;}
+}
 @media (prefers-color-scheme: dark) {
   .tl-summary {color: #e6e6ef;}
   .tl-summary thead th {background: #26263a; border-bottom-color: #666;}
