@@ -1561,8 +1561,8 @@ def _is_rolled_back_edge(
     child_node: GraphNode,
     vis_mode: str,
     rolled_maps: "_RolledEdgeMaps | None",
-    parent_segment: Optional[OpSegment],
-    child_segment: Optional[OpSegment],
+    parent_segment: SegmentDescriptor | None,
+    child_segment: SegmentDescriptor | None,
 ) -> bool:
     """Return whether a rolled edge between two different nodes closes a loop body.
 
