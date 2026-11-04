@@ -103,4 +103,4 @@ def test_resnet50_fc_resolves_to_the_classifier_output(source: str) -> None:
     torch.testing.assert_close(tl.trace(model, x, save=["fc"])["fc"].out, expected)
     trace = tl.trace(model, x)
     torch.testing.assert_close(trace["fc"].out, expected)
-    assert _until_outcome(trace, x, "fc") == _until_outcome(trace, x, trace["fc"].layer_label)
+    assert _until_outcome(trace, x, "fc") == _until_outcome(trace, x, trace.ops["fc"].layer_label)

@@ -21,8 +21,9 @@ from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class UnifiedTinyModel(nn.Module):
@@ -471,7 +472,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -547,7 +548,7 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     path = tmp_path / f"intervention_{level}.tlspec"
 

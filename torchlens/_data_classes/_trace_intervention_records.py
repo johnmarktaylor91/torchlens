@@ -33,7 +33,7 @@ class _DoTransaction(NamedTuple):
     set entries this transaction staged.
     """
 
-    hooks_or_site: Any
+    site: Any
     value_or_hook: Any
     engine: str
     transaction_start: float
@@ -58,16 +58,14 @@ def _edit_identity(edit: Any, fallback: str | None = None) -> str:
     return type(edit).__name__ if fallback is None else fallback
 
 
-def do_event_edit_names(
-    trace: Trace, hooks_or_site: Any, value_or_hook: Any
-) -> tuple[tuple[str, ...], Any]:
+def do_event_edit_names(trace: Trace, site: Any, value_or_hook: Any) -> tuple[tuple[str, ...], Any]:
     """Return the edit names and selection rendering of a non-spec ``do()`` input.
 
     Parameters
     ----------
     trace:
         The trace the ``do`` ran on.
-    hooks_or_site:
+    site:
         The transaction's site input (a selection batch or one site).
     value_or_hook:
         The transaction's edit for the ``(site, edit)`` input shape.
@@ -78,14 +76,14 @@ def do_event_edit_names(
         The edit names in order and the selection rendering.
     """
 
-    if trace._is_selection_batch(hooks_or_site):
+    if trace._is_selection_batch(site):
         # One transactional envelope for the whole batch (D33): per-pair
         # edits named in order, plus the kind-specific staged-store slots
         # disclosure so cross-kind completion needs no schema change.
-        edit_names = tuple(_edit_identity(pair_edit) for _sel, pair_edit in hooks_or_site)
-        selection_repr = " ; ".join(repr(sel) for sel, _pair_edit in hooks_or_site)
+        edit_names = tuple(_edit_identity(pair_edit) for _sel, pair_edit in site)
+        selection_repr = " ; ".join(repr(sel) for sel, _pair_edit in site)
         return edit_names, selection_repr
-    hook_specs = getattr(hooks_or_site, "hook_specs", None)
+    hook_specs = getattr(site, "hook_specs", None)
     if hook_specs is not None and value_or_hook is None:
         # A loaded session spec: one envelope naming every stored rule's edit.
         edit_names = tuple(
@@ -94,7 +92,7 @@ def do_event_edit_names(
         )
         return edit_names, " ; ".join(repr(spec.site_target) for spec in hook_specs)
     edit_name = _edit_identity(value_or_hook)
-    selection_repr = trace._history_site_payload(hooks_or_site)
+    selection_repr = trace._history_site_payload(site)
     if not isinstance(selection_repr, str):
         selection_repr = repr(selection_repr)
     return (str(edit_name),), selection_repr
@@ -102,7 +100,7 @@ def do_event_edit_names(
 
 def do_event_extra(
     trace: Trace,
-    hooks_or_site: Any,
+    site: Any,
     *,
     staged_only: bool,
     extra_fields: dict[str, Any] | None,
@@ -113,7 +111,7 @@ def do_event_extra(
     ----------
     trace:
         The trace the ``do`` ran on.
-    hooks_or_site:
+    site:
         The transaction's site input.
     staged_only:
         Whether the edit was staged without any propagation attempt.
@@ -131,10 +129,10 @@ def do_event_extra(
         extra["staged_only"] = True
     if extra_fields:
         extra.update(extra_fields)
-    if trace._is_selection_batch(hooks_or_site):
-        kinds = [trace._selection_batch_kind(selection) for selection, _edit in hooks_or_site]
+    if trace._is_selection_batch(site):
+        kinds = [trace._selection_batch_kind(selection) for selection, _edit in site]
         extra["selection_batch"] = {
-            "pairs": len(hooks_or_site),
+            "pairs": len(site),
             "kinds": kinds,
             # Kind-specific staged-store slots (D33), one count per door.
             "staged_stores": {

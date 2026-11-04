@@ -257,7 +257,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x).fork()
-reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions())
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -346,7 +346,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens).fork()
-fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+fresh.do(spec, intervention=tl.options.InterventionOptions())
 
 RESULT = [
     torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit

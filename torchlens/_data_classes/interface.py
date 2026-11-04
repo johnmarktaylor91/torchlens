@@ -34,6 +34,7 @@ from .._selection.target import FrozenTargetSpec, TargetSpec
 from .._utils._display_errors import ambiguous_substring_message, candidate_keys, lookup_message
 from . import _doors
 from ._lookup_keys import _give_user_feedback_about_lookup_key
+from ._lookup_kinds import named_record
 from .op import Op
 
 
@@ -181,20 +182,22 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     Lookup cascade:
     1. slice -> list slice of layer_list
     2. int -> Op by 0-based ordinal position
-    3. ``label:last`` / ``label:all`` -> last-pass Op / Selection of every pass
-    4. layer label -> its Op (one pass) or the multi-pass teaching refusal
-    5. accessors, alternate Op lookup keys, case-insensitive, then substring
-    6. fallback: KeyError with contextual help message (never a ``Layer``)
+    3. ``label:N`` / ``label:last`` / ``label:all`` -> that pass's Op / Selection of every pass
+    4. bare layer label -> its Layer, single- or multi-pass
+    5. the kind the key names: module address -> Module, ``addr:N`` -> ModuleCall,
+       parameter address -> Param, buffer address -> Buffer (``addr:N`` -> version Op)
+    6. accessors, alternate Op lookup keys, case-insensitive, then substring
+    7. fallback: KeyError with contextual help message
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
+        Op, Layer, Selection, Module, ModuleCall, Param, Buffer or GradFn.
 
     Raises:
         KeyError: No match found.
-        AmbiguousSiteError / AmbiguousOpLookupError: Bare multi-pass label / substring.
+        AmbiguousOpLookupError: A substring matching several layers.
         ValueError: Invalid index.
     """
     from .._selection.selection import Selector
@@ -226,31 +229,28 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if ix in ambiguous_lookup_keys:
             _raise_ambiguous_lookup_key(self, ix, ix)
 
+        if (record := named_record(self, ix)) is not None:  # the kind the key names
+            return record
+
         if ix in self._layer_dict_all_keys:
             return self._layer_dict_all_keys[ix]
 
-        for accessor in (
+        accessors = (
             self.ops,
-            self.module_calls,
             self.modules,
+            self.module_calls,
             self.params,
             self.buffers,
             self.autograd.grad_fns,
-        ):
+        )
+        for accessor in accessors:
             try:
                 return accessor[ix]
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
         lower_ix = ix.lower()
-        for accessor in (
-            self.ops,
-            self.module_calls,
-            self.modules,
-            self.params,
-            self.buffers,
-            self.autograd.grad_fns,
-        ):
+        for accessor in accessors:
             try:
                 # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.
@@ -297,12 +297,12 @@ def _ambiguous_substring_error(ix: Any, records: list[Any]) -> AmbiguousOpLookup
 def _layer_label_lookup(self: "Trace", ix: str) -> Any:
     """Resolve a layer label, bare or pass-tokened, to its record; ``None`` when ``ix`` names no layer.
 
-    A bare label of a single-pass layer returns that Op. ``label:last`` returns
-    the final pass and ``label:all`` the Selection of every pass. A bare label of
-    a multi-pass layer goes through the label selector, whose refusal
-    (``multipass_bare_label_ambiguous`` on ``AmbiguousSiteError``, the same one
-    ``tl.label`` raises) teaches ``label:N``, ``label:last``, ``label:all`` and
-    ``trace.layers[label]``; ``trace[...]`` never returns a Layer.
+    A bare layer label names the Layer, whether it ran once or several times;
+    a single-pass Layer passes single-op reads (``.out``, ``.shape``) through to
+    its Op, and a multi-pass one refuses them naming ``label:N`` and
+    ``label:last``. ``label:N`` and ``label:last`` return that pass's Op and
+    ``label:all`` the Selection of every pass. An op key that is not a layer
+    label (a raw or alternate Op spelling) returns its Op.
     """
 
     from .._selection.selectors import LabelSelector
@@ -312,8 +312,14 @@ def _layer_label_lookup(self: "Trace", ix: str) -> Any:
     ops = self.ops.resolve_all(base)
     if not ops:
         return None
-    if token is None and len(ops) == 1:
-        return ops[0]
+    if token is None:
+        named = {op.layer_label for op in ops if ix in {op.layer_label, op.short_layer_label}}
+        if len(named) == 1:
+            layer = self._layer_logs.get(next(iter(named)))
+            if layer is not None:
+                return layer
+        if len(ops) == 1:
+            return ops[0]
     return _getitem_selector(self, LabelSelector(ix))
 
 

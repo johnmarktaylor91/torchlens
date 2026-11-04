@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ._display import _call_message, _output_message, _pass_message
 from ._errors import (
@@ -410,9 +410,23 @@ def _primary_target_role(
     return min(real, key=lambda role: rank.get(descriptors[role].input_op_label, len(rank)))
 
 
+def _target_identities(target: Any) -> tuple[str, ...]:
+    """The op labels a projective target names.
+
+    A string or an Op names itself; a Module or ModuleCall (what ``trace[...]``
+    gives for a module address) names its output ops.
+    """
+
+    if isinstance(target, str):
+        return (target,)
+    if type(target).__name__ in {"Module", "ModuleCall"}:
+        return tuple(map(str, target.output_ops))
+    return (str(target.label),)
+
+
 def _select_target_descriptor(
     descriptors: Mapping[str, ReceptiveField],
-    target: Op | str | None,
+    target: Any,
     order: Sequence[str] = (),
     source_label: str | None = None,
 ) -> ReceptiveField:
@@ -421,7 +435,8 @@ def _select_target_descriptor(
     With no ``target`` and several reachable targets, the primary output is
     chosen only when the others are cache tensors (see ``_primary_target_role``;
     ``order`` is the solution's target labels in model output order). Any other
-    several-target case raises ``AmbiguousTargetError``.
+    several-target case raises ``AmbiguousTargetError``. A target naming several
+    ops (a multi-output module) must reach exactly one of them from this source.
     """
 
     if target is None:
@@ -431,13 +446,21 @@ def _select_target_descriptor(
         if primary is not None:
             return descriptors[primary]
         roles = ", ".join(descriptors)
-        prefix = "This source" if source_label is None else f"Source {source_label!r}"
-        raise AmbiguousTargetError(
-            f"{prefix} has multiple reachable targets: {roles}. "
-            "Select one with view[target_op] or target=<io_role>."
-        )
-    identity = target if isinstance(target, str) else target.label
-    for role, descriptor in descriptors.items():
-        if identity in {role, descriptor.input_op_label}:
-            return descriptor
-    raise ReceptiveFieldError(f"Target {identity!r} is not reachable from this source.")
+    else:
+        names = _target_identities(target)
+        matched = [
+            role
+            for role, descriptor in descriptors.items()
+            if {role, descriptor.input_op_label} & set(names)
+        ]
+        if not matched:
+            shown = names[0] if len(names) == 1 else ", ".join(names)
+            raise ReceptiveFieldError(f"Target {shown!r} is not reachable from this source.")
+        if len(matched) == 1 or len(names) == 1:
+            return descriptors[matched[0]]
+        roles = ", ".join(matched)  # a multi-output module reaches several of its outputs
+    prefix = "This source" if source_label is None else f"Source {source_label!r}"
+    raise AmbiguousTargetError(
+        f"{prefix} has multiple reachable targets: {roles}. "
+        "Select one with view[target_op] or target=<io_role>."
+    )

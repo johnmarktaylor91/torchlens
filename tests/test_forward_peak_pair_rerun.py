@@ -23,8 +23,10 @@ from torchlens._capture import peak_memory, trace as capture_trace
 from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions, ReplayOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _LinearRelu(nn.Module):

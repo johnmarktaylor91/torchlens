@@ -18,6 +18,7 @@ Leverage B4/B5 + surgery Build 0a/0b, one substrate:
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
@@ -25,8 +26,9 @@ import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Insertable(nn.Module):
@@ -112,7 +114,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
     inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
 
-    base._attach_hooks(tl.func("relu"), tl.scale(0.5), confirm_mutation=True)
+    base._attach_hooks(tl.func("relu"), tl.scale(0.5))
     spec_path = os.path.join(tmp_path, "spec.tlspec")
     base.save_intervention(spec_path)
     spec = load_intervention_spec(spec_path)
@@ -158,7 +160,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 
     ready = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)), confirm_mutation=True)
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     authored_path = os.path.join(tmp_path, "authored.tlspec")
     fork.save_intervention(authored_path)
     authored = load_intervention_spec(authored_path)

@@ -11,7 +11,7 @@ from ..options import CaptureOptions
 from ._dry_run import DryRun
 from ._recorder import Recorder
 from .exceptions import refuse_recorder_uninitialized
-from .options import PredicateFn
+from .options import PredicateFn, RecordingOptions
 
 
 def dry_run(
@@ -53,9 +53,11 @@ def dry_run(
     inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
-        "history_size": history_size,
-        "include_source_events": include_source_events,
-        "on_predicate_error": "fail-fast",
+        "recording": RecordingOptions(
+            history_size=history_size,
+            include_source_events=include_source_events,
+            on_predicate_error="fail-fast",
+        ),
     }
     if seed is not None:
         recorder_kwargs["capture"] = CaptureOptions(seed=seed)

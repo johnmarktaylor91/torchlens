@@ -67,9 +67,6 @@ DOCS: dict[str, str] = {
             Optional hook handle returned by a hook ``do``.
         strict:
             Whether no-op detach requests should raise.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
         
         Returns
         -------
@@ -113,19 +110,22 @@ DOCS: dict[str, str] = {
         
         Parameters
         ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
+        site:
+            Mapping/list batch input or selector-like site (positional-only:
+            ``do(site, edit)``, never ``do(site=...)``).
         value_or_hook:
-            Optional value, hook or helper for the ``(site, edit)`` input shape.
+            Optional value, hook or helper for the ``(site, edit)`` input shape
+            (positional-only).
         model:
             Model required when ``engine="rerun"``.
         inputs:
             Input required when ``engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``: ``engine``
-            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
-            ``confirm_mutation``, ``strict``, ``allow_changed_params``,
-            ``differentiable``).
+            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``, ``strict``,
+            ``allow_changed_params``, ``differentiable``). Editing a root trace warns
+            once (``TraceMutationWarning``); edit a ``fork()`` for a quiet, isolated
+            copy.
         loss:
             Callable of the returned trace giving a scalar loss, for a plan
             with a gradient site: after arming, the door runs

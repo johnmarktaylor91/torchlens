@@ -282,7 +282,7 @@ box = rf.at((3, 3))
 check = rf.check(unit)
 # Projective geometry needs a windowed path; AlexNet's dense classifier head is not,
 # so select a downstream conv endpoint explicitly with target=.
-outgoing = target.projective_field.at((3, 3), target=log['features.8'])
+outgoing = target.projective_field.at((3, 3), target=log.ops['features.8'])
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">

@@ -8,6 +8,7 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
+from .._deprecations import MISSING
 from .._ir.selector_eval import first_selector_kind_outside
 from .._quantities import Bytes
 from .._selection.selectors import BaseSelector
@@ -220,6 +221,44 @@ def pop_static_label_save_predicate(
         )
     _reject_non_static_save_predicate(save_value, backend_name=backend_name)
     return save_value
+
+
+def split_backend_save_keyword(
+    save: object,
+    *,
+    backend_name: str,
+) -> tuple[Any, Callable[[Any], Any] | BaseSelector | None]:
+    """Split a backend ``save=`` keyword into its label selection and static-label predicate.
+
+    ``tl.trace`` routes the label-list form of ``save=`` into ``capture=`` and forwards
+    a selector (or ``None``) as ``save=``. A backend whose own keyword is spelled
+    ``save=`` receives both forms through one parameter, so it splits them here the
+    way the ``tl.trace`` door does.
+
+    Parameters
+    ----------
+    save
+        The backend's ``save=`` value: ``MISSING``, ``None``, a label string, a list of
+        labels and integer indexes, or a selector.
+    backend_name
+        Backend name used in diagnostic errors.
+
+    Returns
+    -------
+    tuple[Any, Callable[[Any], Any] | BaseSelector | None]
+        ``(label selection, predicate)``. The selection is ``MISSING`` unless ``save`` is a
+        label string or list, so ``capture=``'s own selection stays in force; the
+        predicate is the static-label selector, or ``None``.
+    """
+
+    if save is MISSING or save is None:
+        return MISSING, None
+    is_label_list = isinstance(save, (list, tuple)) and all(
+        isinstance(item, (str, int)) and not isinstance(item, bool) for item in save
+    )
+    if isinstance(save, str) or is_label_list:
+        return save, None
+    return MISSING, pop_static_label_save_predicate({"save": save}, backend_name=backend_name)
 
 
 def _drop_public_activation_payload(op: Any) -> None:

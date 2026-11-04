@@ -75,6 +75,7 @@ class _TupleOut(torch.nn.Module):
         return self.lin1(x), self.lin2(x)
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> None:
     """BLOCKER-1: annotating a diff-replay fork must not mutate the parent trace."""
 
@@ -87,7 +88,7 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     fork = log.do(
         tl.func("relu"),
         _identity_hook,
-        intervention=InterventionOptions(differentiable=True, confirm_mutation=True),
+        intervention=InterventionOptions(differentiable=True),
     )
     # ``input_1`` is outside the replay cone -> it goes through the shallow-fork path.
     fork.annotate("input_1", data={"owner": "fork-only"})

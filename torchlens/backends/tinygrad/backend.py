@@ -34,7 +34,7 @@ from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
-    pop_static_label_save_predicate,
+    split_backend_save_keyword,
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
@@ -263,7 +263,7 @@ class TinygradBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: str | list[Any] | None | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -305,8 +305,8 @@ class TinygradBackend:
             Positional arguments for ``model``.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; tinygrad preview is full-save only for live traces.
+        save
+            ``"all"`` or a static-label selector, as ``tl.trace(save=)``; other shaping refuses.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -374,13 +374,13 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
+        save, save_predicate = split_backend_save_keyword(save, backend_name="tinygrad")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
+            _layers_to_save=save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,

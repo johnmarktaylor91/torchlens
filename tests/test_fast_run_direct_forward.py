@@ -21,11 +21,15 @@ from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
 
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
 )
+pytestmark = [
+    pytestmark,
+    pytest.mark.usefixtures("root_edits_in_place"),  # D.12: no per-call mutation keyword
+]
 
 
 class DirectParent(nn.Module):

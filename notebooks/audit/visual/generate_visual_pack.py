@@ -180,7 +180,7 @@ def _ablation_bundle(model_key: str):
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fork.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+            fork.do(tl.func("relu"), tl.zero_ablate())
         return tl.Bundle({"clean": trace, "ablated": fork}, baseline="clean")
 
     return _build

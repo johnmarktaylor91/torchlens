@@ -35,6 +35,8 @@ from torchlens.intervention.errors import (
     MultiMatchWarning,
 )
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 transformers = pytest.importorskip("transformers")
 
 GradFn = Callable[[torch.Tensor], torch.Tensor]
@@ -224,7 +226,7 @@ def _assert_matches_oracle(got: Grads, want: Grads, clean: Grads) -> None:
 
 
 #: Stage an edit without propagating it: the post-capture door the backward runners then read.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
@@ -383,7 +385,7 @@ def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) ->
             tl.zero_ablate(),
             model=model,
             inputs=tiny.ids,
-            intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="rerun"),
         )
     assert len(result.armed_edits) == 1
     assert _backward_fires(result) == 0

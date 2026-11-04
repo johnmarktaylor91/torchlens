@@ -31,8 +31,9 @@ from torchlens.intervention.hooks import normalize_hooks_from_spec
 from torchlens.intervention.save import check_spec_compat, load_intervention_spec
 from torchlens.intervention.types import InterventionSpec, TargetSpec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -213,7 +214,7 @@ def _saved_relu_scale_spec(tmp_path: Any, *, level: str = "executable_with_calla
         capture=tl.options.CaptureOptions(save_args=True),
         save="all",
     )
-    log_a._attach_hooks(tl.func("relu"), tl.scale(2.0), confirm_mutation=True)
+    log_a._attach_hooks(tl.func("relu"), tl.scale(2.0))
     path = tmp_path / f"scale_relu_{level}.tlspec"
     log_a.save_intervention(path, level=level)
     return load_intervention_spec(path)

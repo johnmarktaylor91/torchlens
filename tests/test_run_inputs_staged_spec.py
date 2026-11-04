@@ -25,6 +25,8 @@ from torchlens._trace_state import TraceState
 from torchlens.errors import EngineDispatchError, TorchLensWarning
 from torchlens.options import InterventionOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _DIM = 8
 
 
@@ -229,13 +231,13 @@ def test_loaded_artifact_run_inputs_refuses_a_staged_user_hook(tmp_path: Path) -
     loaded = tl.load(path)
     loaded.do(
         {tl.func("relu"): tl.zero_ablate()},
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     with pytest.raises(EngineDispatchError) as refused:
         loaded.run(inputs=x)
     assert refused.value.fields["code"] == "run_staged_spec_unapplied"
     assert "detach" in refused.value.fields["remedy"]
     # Detaching the staged hook reopens the loaded run door.
-    loaded.clear_edits(tl.func("relu"), confirm_mutation=True)
+    loaded.clear_edits(tl.func("relu"))
     rerun = loaded.run(inputs=x)
     assert rerun is not None

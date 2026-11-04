@@ -1029,7 +1029,7 @@ class Layer(_SelectionOperand):
             raise InvalidArgumentError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on one pass: trace['{self.layer_label}:1'].{field_name} "
-                f"or trace.layers['{self.layer_label}'].ops[0].{field_name}",
+                f"or trace['{self.layer_label}:last'].{field_name}",
                 code="layer_pass_ambiguous",
                 remedy=f"access {field_name!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
@@ -1568,6 +1568,7 @@ class Layer(_SelectionOperand):
     def do(
         self,
         input_transform: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1579,10 +1580,8 @@ class Layer(_SelectionOperand):
         ----------
         input_transform:
             Transform or hook to apply to this layer's output.
-        model:
-            Model required when ``intervention.engine="rerun"``.
-        inputs:
-            Input required when ``intervention.engine="rerun"``.
+        model, inputs:
+            Required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
 

@@ -30,6 +30,8 @@ from torchlens.intervention.spec import (
 )
 from torchlens.intervention.types import TargetSpec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _X = torch.randn(3, 4, generator=torch.Generator().manual_seed(7))
 
 
@@ -466,7 +468,7 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     returned = trace.do(
         tl.grad(_RELU),
         tl.scale(0),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert returned is trace
     assert trace._layer_list is layers_before
@@ -526,11 +528,11 @@ def test_staged_do_on_a_gradient_site_arms_only_and_clear_edits_disarms() -> Non
     trace.do(
         tl.grad(_RELU),
         tl.scale(0),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert len(_events(trace, door="backward")) == backward_events_before
     assert len(trace.armed_edits) == 1
-    trace.clear_edits(tl.grad(_RELU), confirm_mutation=True)
+    trace.clear_edits(tl.grad(_RELU))
     assert trace.armed_edits == ()
 
 

@@ -27,8 +27,10 @@ from torchlens._io.bundle import save as _save_bundle
 from torchlens.errors import TraceCaptureError
 from torchlens.recording._halt import StopSignal
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: The replay doors below edit a root capture in place on purpose.
-_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+_CONFIRM = tl.options.InterventionOptions()
 
 
 class ExplodingModel(nn.Module):

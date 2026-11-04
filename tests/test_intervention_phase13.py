@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class M(nn.Module):
@@ -112,7 +115,7 @@ def test_last_run_records_returns_tuple_snapshot() -> None:
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
 
     records = log.last_run_records()

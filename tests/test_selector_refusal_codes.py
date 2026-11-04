@@ -36,6 +36,8 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _LIVE_SUBJECT = SimpleNamespace(_layer_label_raw="relu_1")
 
 
@@ -116,10 +118,10 @@ def test_model_input_site_refusals_carry_one_code_from_both_doors() -> None:
         trace.do(
             tl.model_input(0),
             _scale_hook,
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     with pytest.raises(SelectorCapabilityError) as attach_info:
-        trace._attach_hooks(tl.model_input(0), _scale_hook, confirm_mutation=True)
+        trace._attach_hooks(tl.model_input(0), _scale_hook)
     assert set_info.value.fields["code"] == "model_input_selector_not_live"
     assert attach_info.value.fields["code"] == "model_input_selector_not_live"
     assert "not live hook application sites" in str(set_info.value)
