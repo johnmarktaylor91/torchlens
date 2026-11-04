@@ -3,7 +3,8 @@
 ``Recorder(recording=RecordingOptions(...))`` carries the recorder's own knobs
 (``default_op``, ``default_module``, ``history_size``, ``include_source_events``,
 ``max_predicate_failures``, ``on_predicate_error``, ``on_forward_error``,
-``default_grad``), the same shape ``tl.record`` takes. ``keep_op`` and
+``default_grad``, ``lean``), the same shape ``tl.record`` takes; ``lean``
+also arrives as the constructor's door keyword, which wins when given. ``keep_op`` and
 ``intervene`` are the constructor's own ``save=`` and ``intervene=`` and
 ``postprocess`` is a one-shot enrichment the recorder never runs: setting one
 of them on the bundle refuses instead of becoming a silent no-op.
@@ -30,11 +31,12 @@ _RECORDING_DOOR_FIELDS: tuple[str, ...] = (
     "on_predicate_error",
     "on_forward_error",
     "default_grad",
+    "lean",
 )
 
 
 def _unfold_recording_options(
-    recording: RecordingOptions | None, *, api_name: str
+    recording: RecordingOptions | None, *, api_name: str, lean: Any = MISSING
 ) -> dict[str, Any]:
     """Read the recorder knobs off ``recording=``.
 
@@ -44,6 +46,9 @@ def _unfold_recording_options(
         The grouped recording options, or ``None`` for every default.
     api_name:
         The door named in a refusal.
+    lean:
+        The constructor's ``lean=`` door keyword; when given it wins over
+        ``RecordingOptions.lean`` and is validated by the recorder config.
 
     Returns
     -------
@@ -56,6 +61,15 @@ def _unfold_recording_options(
         If a field the recorder has no door for was set explicitly
         (``record_capture_option_unsupported``).
     """
+
+    knobs = _read_recording_door(recording, api_name=api_name)
+    if lean is not MISSING:
+        knobs["lean"] = lean
+    return knobs
+
+
+def _read_recording_door(recording: RecordingOptions | None, *, api_name: str) -> dict[str, Any]:
+    """Return one entry per door field: the explicit value, else ``MISSING``."""
 
     if recording is None:
         return dict.fromkeys(_RECORDING_DOOR_FIELDS, MISSING)

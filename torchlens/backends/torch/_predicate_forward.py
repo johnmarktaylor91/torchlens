@@ -13,12 +13,13 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
 
 from ... import _state
+from ..._capture._lazy_contexts import LazyContextHistory, lazy_history_of
 from ..._ir import ModuleExitEvent
 from ..._ir.op_record import amend_module_boundary_retention
 from ...recording._halt import StopSignal
@@ -59,12 +60,11 @@ def _record_predicate_module_boundary_outputs(
     Returns
     -------
     None
-        Boundary-replaced leaves become sparse replacement ops; matching output
-        ops are added to the sparse recording once.
+        Boundary-replaced leaves become sparse replacement ops; matching outputs are added once.
     """
 
     from ..._capture.predicates import _evaluate_keep_op, _plain_module_union
-    from ..._capture.projections import _record_from_record_context
+    from ..._capture.projections import _record_from_record_context, append_projected_event
     from ..._ir.predicate import RetroactiveCaptureDecision
     from ..._ir.selector_eval import selector_contains_kind
     from ..._selection.selectors import BaseSelector
@@ -128,9 +128,7 @@ def _record_predicate_module_boundary_outputs(
             continue
         existing.add(key)
         ram_payload, disk_payload, transformed_ram, transformed_disk = state.resolve_storage(
-            tensor,
-            decision,
-            ctx=boundary_ctx,
+            tensor, decision, ctx=boundary_ctx
         )
         state.add_record(
             ActivationRecord(
@@ -157,7 +155,10 @@ def _record_predicate_module_boundary_outputs(
             raise RuntimeError("sparse freeze produced a record without a policy facet")
         boundary_label = boundary_ctx.raw_label or boundary_ctx.label
         boundary_event = trace.capture_events.op_event_by_label_raw.get(boundary_label)
-        if boundary_event is not None:
+        if boundary_event is None and state.options.lean:
+            lean_args = (trace, boundary_ctx, decision, tensor, (ram_payload, transformed_ram))
+            _journal_lean_boundary(append_projected_event, *lean_args, container_path)
+        elif boundary_event is not None:
             trace.capture_events.append_amendment(
                 amend_module_boundary_retention(
                     boundary_event.seq,
@@ -169,6 +170,35 @@ def _record_predicate_module_boundary_outputs(
                     record_context=boundary_ctx,
                 )
             )
+
+
+def _journal_lean_boundary(
+    append_event: Callable[..., None],
+    trace: Trace,
+    boundary_ctx: Any,
+    decision: CaptureSpec,
+    tensor: torch.Tensor,
+    payloads: tuple[Any, Any],
+    container_path: Any,
+) -> None:
+    """Journal a kept module output that a lean capture gave no shell event.
+
+    The default journal amends the output op's shell event with the retention
+    facts; a lean journal (``lean=True``, provisional spelling) skipped that
+    event, so the kept record itself is appended with the same module fields.
+    """
+
+    ram_payload, transformed_ram = payloads
+    append_event(
+        trace,
+        boundary_ctx,
+        decision,
+        tensor=tensor,
+        ram_payload=ram_payload,
+        transformed_ram_payload=transformed_ram,
+        predicate_matched=True,
+        container_path=tuple(container_path),
+    )
 
 
 def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: bool) -> Any:
@@ -207,15 +237,12 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
             _evaluate_halt(enter_ctx, state.options)
         else:
             enter_spec = _module_capture_spec(state.options)
-            if enter_spec.save_out or enter_spec.save_metadata:
-                if state.storage_intent.on_disk:
-                    state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
-            append_projected_event(
-                trace,
-                enter_ctx,
-                enter_spec,
-                predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
-            )
+            enter_kept = enter_spec.save_out or enter_spec.save_metadata
+            if enter_kept and state.storage_intent.on_disk:
+                state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
+            # Lean journal: an unkept module boundary gets no shell event.
+            if enter_kept or not state.options.lean:
+                append_projected_event(trace, enter_ctx, enter_spec, predicate_matched=enter_kept)
             _evaluate_halt(enter_ctx, state.options)
     except StopSignal:
         _mstack.pop_frame(state.module_stack, frame)
@@ -224,7 +251,9 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
         state.handle_predicate_exception(enter_ctx, exc)
     finally:
         if not halt_only:
-            if not _predicate_event_was_appended(trace, enter_ctx.raw_label or enter_ctx.label):
+            if not state.options.lean and not _predicate_event_was_appended(
+                trace, enter_ctx.raw_label or enter_ctx.label
+            ):
                 append_projected_event(trace, enter_ctx, skipped_spec, predicate_matched=False)
             state.append_context(enter_ctx)
             # Echo narrator slot (snoop D1, module seam): structure lines ride
@@ -278,15 +307,11 @@ def _predicate_module_exit(
             _evaluate_halt(exit_ctx, state.options, frontier_output=out)
         else:
             exit_spec = _module_capture_spec(state.options)
-            if exit_spec.save_out or exit_spec.save_metadata:
-                if state.storage_intent.on_disk:
-                    state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
-            append_projected_event(
-                trace,
-                exit_ctx,
-                exit_spec,
-                predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
-            )
+            exit_kept = exit_spec.save_out or exit_spec.save_metadata
+            if exit_kept and state.storage_intent.on_disk:
+                state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
+            if exit_kept or not state.options.lean:
+                append_projected_event(trace, exit_ctx, exit_spec, predicate_matched=exit_kept)
             _evaluate_halt(exit_ctx, state.options, frontier_output=out)
     except StopSignal:
         if active_model_exc is None:
@@ -298,7 +323,9 @@ def _predicate_module_exit(
             state.add_predicate_failure(exit_ctx, exc)
     finally:
         if not halt_only:
-            if not _predicate_event_was_appended(trace, exit_ctx.raw_label or exit_ctx.label):
+            if not state.options.lean and not _predicate_event_was_appended(
+                trace, exit_ctx.raw_label or exit_ctx.label
+            ):
                 append_projected_event(trace, exit_ctx, skipped_spec, predicate_matched=False)
             state.append_context(exit_ctx)
             # Echo module-exit line: only a COMPLETED module call claims
@@ -331,7 +358,13 @@ def _predicate_module_forward(
     frame = _mstack.push_frame(trace, state.module_stack, module)
     bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
     halt_only = _is_halt_only_capture(state.options)
-    skipped_spec = _predicate_module_enter(trace, state, frame, halt_only)
+    history = lazy_history_of(state)
+    enter, leave = (
+        (_predicate_module_enter, _predicate_module_exit)
+        if history is None
+        else (_lazy_module_enter, _lazy_module_exit)
+    )
+    skipped_spec = enter(trace, state, frame, halt_only)
     out = None
     try:
         if (
@@ -352,6 +385,8 @@ def _predicate_module_forward(
             call_args=args,
             call_kwargs=dict(kwargs),
         )
+        if history is not None:
+            history.prepare_module_boundary(f"{frame.address}:{frame.pass_number}")
         _record_predicate_module_boundary_outputs(
             trace,
             state,
@@ -361,9 +396,41 @@ def _predicate_module_forward(
         )
         return out
     finally:
-        _predicate_module_exit(
-            trace, state, (frame, halt_only, skipped_spec), out, sys.exc_info()[1]
-        )
+        leave(trace, state, (frame, halt_only, skipped_spec), out, sys.exc_info()[1])
+
+
+def _lazy_module_enter(trace: Trace, state: Any, frame: Any, halt_only: bool) -> Any:
+    """Defer a module entry's context on a pass with deferred contexts.
+
+    Matches ``_predicate_module_enter`` there: module boundary events are
+    unkept, halt is off and a lean journal appends no shell event for them, so
+    the lasting effects are the event count and the context.
+    """
+
+    del trace, halt_only
+    history = cast(LazyContextHistory, state.history)
+    label = f"{frame.address}:enter:{frame.pass_number}"
+    history.defer_module_boundary("module_enter", frame, label)
+    return CaptureSpec(save_out=False, save_metadata=False)
+
+
+def _lazy_module_exit(
+    trace: Trace,
+    state: Any,
+    entry: tuple[Any, bool, Any],
+    out: Any,
+    active_model_exc: BaseException | None,
+) -> None:
+    """Defer a module exit's context and pop the frame (see ``_lazy_module_enter``)."""
+
+    del trace, out, active_model_exc
+    frame = entry[0]
+    try:
+        history = cast(LazyContextHistory, state.history)
+        label = f"{frame.address}:exit:{frame.pass_number}"
+        history.defer_module_boundary("module_exit", frame, label)
+    finally:
+        _mstack.pop_frame(state.module_stack, frame)
 
 
 def _predicate_event_was_appended(trace: Trace, label_raw: str) -> bool:

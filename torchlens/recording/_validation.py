@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from ._lean import validate_lean_config
 from .exceptions import RecordingConfigError
 from .options import _RecordingConfig
 from .types import CaptureSpec
@@ -15,23 +16,29 @@ _POSTPROCESS_PRESETS: Final[set[str]] = {
 }
 
 
-def validate_recording_options(options: _RecordingConfig) -> None:
+def validate_recording_options(
+    options: _RecordingConfig, *, backward_requested: bool = False
+) -> None:
     """Validate fastlog options that depend on combined public settings.
 
     Parameters
     ----------
     options:
         Fully merged fastlog recording options.
+    backward_requested:
+        Whether gradient hooks were asked for; the lean journal refuses them.
 
     Raises
     ------
     RecordingConfigError
-        If no event can be selected or disk-only storage conflicts with a
-        static ``save_grad=True`` default.
+        If no event can be selected, disk-only storage conflicts with a static
+        ``save_grad=True`` default, or ``lean=True`` meets an option that reads
+        the events it drops (``record_lean_unsupported``).
     """
 
     _validate_non_empty_capture(options)
     _validate_disk_only_keep_grad_defaults(options)
+    validate_lean_config(options, backward_requested=backward_requested)
 
 
 def validate_postprocess(postprocess: str) -> None:

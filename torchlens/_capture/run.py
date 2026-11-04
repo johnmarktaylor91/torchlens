@@ -40,12 +40,14 @@ from ..backends.registry import (
     get_backend_spec,
 )
 from ..recording._halt import StopSignal
+from ._lazy_contexts import lazy_history_of
 from .outcome import (
     CapturePhase,
     demote_outcome,
     safe_exception_str,
     set_capture_phase,
 )
+from .projections import active_recording_state_or_none
 from .session import (
     attach_capture_events_session,
     attach_legacy_capture_session,
@@ -66,6 +68,7 @@ from ._forward_helpers import (
     _clear_saved_activation_dedup_caches,
     _forward_peak_memory_bracket,
     _record_fused_attention_hold,
+    _run_lazy_predicate_forward_with_root_frame,
     _run_predicate_forward_with_root_frame,
     _stamp_host_rng_verdict,
     _structure_only_forward_boundary,
@@ -532,7 +535,18 @@ def _run_forward(self: "Trace", run: _RunState) -> Any:
         _record_fused_attention_hold(self, run.compiled_prep)
         _log_inputs(self, run)
         if self._options_mode == "predicate":
+            history = lazy_history_of(active_recording_state_or_none())
             with _structure_only_forward_boundary(self):
+                if history is not None:
+                    return _run_lazy_predicate_forward_with_root_frame(
+                        self,
+                        run.backend,
+                        run.model,
+                        run.input_args,
+                        cast(dict[Any, Any], run.input_kwargs),
+                        run.model_device,
+                        history,
+                    )
                 return _run_predicate_forward_with_root_frame(
                     self,
                     run.backend,
