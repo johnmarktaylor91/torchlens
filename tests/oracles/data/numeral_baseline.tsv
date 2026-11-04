@@ -2870,6 +2870,7 @@ docs-md	docs/maintainers/where.md	1560
 docs-md	docs/maintainers/where.md	1562
 docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
+docs-md	docs/maintainers/where.md	1578
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	159
@@ -3115,6 +3116,7 @@ docs-md	docs/maintainers/where.md	310
 docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	314
+docs-md	docs/maintainers/where.md	31442
 docs-md	docs/maintainers/where.md	3148
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
@@ -3439,6 +3441,7 @@ docs-md	docs/maintainers/where.md	672
 docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
+docs-md	docs/maintainers/where.md	676894
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
@@ -3478,6 +3481,7 @@ docs-md	docs/maintainers/where.md	7259
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	731
 docs-md	docs/maintainers/where.md	732
+docs-md	docs/maintainers/where.md	734
 docs-md	docs/maintainers/where.md	739
 docs-md	docs/maintainers/where.md	74
 docs-md	docs/maintainers/where.md	740
@@ -9042,6 +9046,7 @@ package-docstrings	torchlens/validation/_invariants_topology.py	26
 package-docstrings	torchlens/validation/_invariants_topology.py	29
 package-docstrings	torchlens/validation/_layer_grad_report.py	100
 package-docstrings	torchlens/validation/_layer_grad_report.py	32
+package-docstrings	torchlens/validation/_membership_perturbation.py	0..10
 package-docstrings	torchlens/validation/_norm_running_var_proof.py	1.0,
 package-docstrings	torchlens/validation/_norm_running_var_proof.py	86
 package-docstrings	torchlens/validation/_norm_zero_weight_proof.py	040_
@@ -9070,6 +9075,7 @@ package-docstrings	torchlens/validation/backward.py	64
 package-docstrings	torchlens/validation/consolidated.py	051
 package-docstrings	torchlens/validation/consolidated.py	2.0.
 package-docstrings	torchlens/validation/consolidated.py	31
+package-docstrings	torchlens/validation/consolidated.py	67
 package-docstrings	torchlens/validation/core.py	1.0
 package-docstrings	torchlens/validation/core.py	1.0,
 package-docstrings	torchlens/validation/core.py	100
