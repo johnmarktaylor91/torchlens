@@ -777,6 +777,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_data_classes/_conditional_arms.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/_doors.py",
   "has_default": false,
