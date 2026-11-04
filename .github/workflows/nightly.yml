@@ -1829,10 +1829,10 @@ jobs:
           # others in one environment.
           - leg: examples-neuro
             extras: "dev,neuro,treescope,mcp,lightning"
-            pkgs: "dagua"
+            pkgs: ""
             files: "tests/test_docstring_examples.py::test_optional_examples_run"
-            # rsatoolbox, xarray, treescope, mcp, lightning and dagua.
-            floor: "6"
+            # rsatoolbox, xarray, treescope, mcp and lightning.
+            floor: "5"
           - leg: examples-compat
             extras: "dev,compat-shims"
             pkgs: "timm"

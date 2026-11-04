@@ -25,7 +25,7 @@ unaffected.
 | `ModuleAccessor` | none (no longer public) | removed |
 | `Module` | `torchlens.types.Module` | removed |
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
-| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
+| `NodeSpec` | `torchlens.viz.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
 | `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
@@ -46,11 +46,9 @@ unaffected.
 | `get_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
 | `list_logs` | `torchlens.io.list_traces` | removed |
 | `log_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
-| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
 | `preview_fastlog` | none (no longer public) | removed |
 | `rehydrate_nested` | `torchlens.io.materialize_nested` | removed |
 | `render_lines_to_html` | none (no longer public) | removed |
-| `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
 | `resolve_sites` | `torchlens.Trace` indexing (`trace[selector]` returns every matching site as a `torchlens.Selection`) | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |

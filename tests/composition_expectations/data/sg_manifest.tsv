@@ -43,7 +43,7 @@ SG#34	regression-node	tests/test_capopts_truth_batchnorm_warn.py	A06	train-mode 
 SG#35	ledgered-open		F32	preview draw color_by silently unencodes all nodes
 SG#36	ledgered-open		F32	legacy entry layer backend-blind (aggregate/xarray/tap)
 SG#37	ledgered-open		F32	paddle halt zero-match silent
-SG#38	ledgered-open		F15	dagua renderer silently drops render kwargs
+SG#38	regression-node	tests/test_encoding_channels.py::test_renderer_without_encoding_channels_refuses	F15	alternate renderer silently drops render kwargs
 SG#39	ledgered-open		F10	payload show() undisclosed slice/truncate/clip
 SG#40	ledgered-open		A06	preceded_by invisible 8-op window, dead window_miss
 SG#41	ledgered-open		A06	find_nan duplicate-kwarg crash on restated default
