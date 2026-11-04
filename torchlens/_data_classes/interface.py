@@ -281,13 +281,17 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if len(entries_with_substr) == 1:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
-            raise AmbiguousOpLookupError(
-                ambiguous_substring_message(str(ix), list(entries_with_substr.values()))
-            )
+            raise _ambiguous_substring_error(ix, list(entries_with_substr.values()))
 
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
+
+
+def _ambiguous_substring_error(ix: Any, records: list[Any]) -> AmbiguousOpLookupError:
+    """The substring refusal card."""
+
+    return AmbiguousOpLookupError(ambiguous_substring_message(str(ix), records))
 
 
 def _layer_label_lookup(self: "Trace", ix: str) -> Any:
