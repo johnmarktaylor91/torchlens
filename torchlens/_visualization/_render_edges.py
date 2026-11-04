@@ -1312,6 +1312,7 @@ def _add_edges_for_node(
                 show_buffer_layers,
                 render_edge.argument_label,
                 rolled_maps,
+                rolled=vis_mode == "rolled",
             )
         # Same-pair parallel arg edges under high-fan-in midpoint mode fold
         # into ONE rendered edge whose midpoint label lists every argument
@@ -1584,6 +1585,8 @@ def _label_node_arguments_if_needed(
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     occurrence_argument_label: str | None = None,
     rolled_maps: "_RolledEdgeMaps | None" = None,
+    *,
+    rolled: bool = False,
 ) -> str | None:
     """Add argument position labels to an edge when the child has multiple non-commutative parents.
 
@@ -1607,6 +1610,7 @@ def _label_node_arguments_if_needed(
         occurrence_argument_label: Optional single argument label for one repeated
             edge-use occurrence.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
+        rolled: The edge belongs to a rolled drawing (see ``_set_argument_edge_label``).
     """
     if not _should_mark_arguments_on_edge(self, child_node, show_buffer_layers, rolled_maps):
         return None
@@ -1631,7 +1635,9 @@ def _label_node_arguments_if_needed(
         _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
         >= _ARG_LABEL_MIDPOINT_FANIN
     )
-    return _set_argument_edge_label(edge_dict, arg_label, prefer_midpoint=prefer_midpoint)
+    return _set_argument_edge_label(
+        edge_dict, arg_label, prefer_midpoint=prefer_midpoint, rolled=rolled
+    )
 
 
 def _should_mark_arguments_on_edge(
