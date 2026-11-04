@@ -1491,16 +1491,16 @@ def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> 
                     return None
                 if not tensor_nanequal(probe_output, saved_output, allow_tolerance=False):
                     return True
-    except (TypeError, ValueError, RuntimeError, NotImplementedError):
-        # Typed catch (r8 R08, sol fault-injection): these are the classes a
-        # legitimate op raises when it rejects a battery substitute
-        # (dtype/shape/value refusals, unimplemented substitute dtypes) --
-        # "probe cannot run", which reverts to the DISCLOSED heuristic
-        # exemption (status quo ante). The old blanket ``except Exception``
-        # also swallowed genuine capture-bug crashes (a poisoned replay
-        # callable, a torchlens internal error) into that same evidence-free
-        # pass, disarming exactly the tripwire this probe strengthens; those
-        # now propagate.
+    except (TypeError, ValueError, RuntimeError, NotImplementedError, IndexError):
+        # Typed catch (r8 R08, sol fault-injection): the classes a legitimate op
+        # raises when it rejects a battery substitute (dtype/shape/value refusals,
+        # unimplemented substitute dtypes; an out-of-range substitute index is
+        # IndexError from advanced indexing, aten::index / Tensor.__getitem__, as
+        # in a vmapped mask builder) -- "probe cannot run", which reverts to the
+        # DISCLOSED heuristic exemption. The old blanket ``except Exception`` also
+        # swallowed genuine capture-bug crashes (a poisoned replay callable, a
+        # torchlens internal error) into that same evidence-free pass, disarming
+        # the tripwire this probe strengthens; those (KeyError included) propagate.
         return None
     return False
 
