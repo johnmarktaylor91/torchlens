@@ -17,10 +17,7 @@ import pytest
 import torchlens as tl
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_DRAW_SCRIPTS = (
-    "scripts/build_torchlens_theme_gallery.py",
-    "scripts/render_encoding_reference.py",
-)
+_DRAW_SCRIPTS = ("scripts/render_encoding_reference.py",)
 
 
 def _draw_keywords(source: str) -> dict[str, set[str]]:
