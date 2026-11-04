@@ -737,14 +737,20 @@ def recorded_custom_op_name(func: Any) -> str | None:
     str | None
         The operator's qualified name when ``func`` is the replay callable the torch.ops
         recorder builds for a non-mutating operator (a ``functools.partial`` of the class
-        ``__call__`` bound to an ``OpOverloadPacket`` or ``OpOverload``); ``None`` for any
-        other callable, including a missing one on a loaded bundle.
+        ``__call__`` bound to an operator packet or one of its overloads) and that packet is
+        the very object ``torch.ops.<namespace>.<name>`` resolves to; ``None`` for any other
+        callable, including a missing one on a loaded bundle.
     """
 
     if not isinstance(func, functools.partial) or not func.args:
         return None
-    op = func.args[0]
-    if not isinstance(op, (torch._ops.OpOverloadPacket, torch._ops.OpOverload)):
+    packet = getattr(func.args[0], "_overloadpacket", func.args[0])
+    qualified_name = getattr(packet, "_qualified_op_name", None)
+    if not isinstance(qualified_name, str) or qualified_name.count("::") != 1:
         return None
-    packet = getattr(op, "_overloadpacket", op)
-    return str(getattr(packet, "_qualified_op_name", "")) or None
+    namespace, name = qualified_name.split("::")
+    try:
+        registered = getattr(getattr(torch.ops, namespace), name)
+    except (AttributeError, RuntimeError):
+        return None
+    return qualified_name if registered is packet else None

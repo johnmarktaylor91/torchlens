@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1567 modules, 673895 lines, 0 modules without a docstring.
+83 packages, 1567 modules, 673901 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6364 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8470 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 117 | 55945 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 117 | 55951 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9135 |
@@ -1332,7 +1332,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (117 modules, 55945 lines)
+Torch backend implementation package for TorchLens capture. (117 modules, 55951 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1360,7 +1360,7 @@ Torch backend implementation package for TorchLens capture. (117 modules, 55945 
 | `_escape_detection_fields` | Field table copying escape/completeness diagnostics from a trace onto a fastlog recording. | 33 |
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
-| `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 750 |
+| `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 756 |
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 764 |
 | `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 102 |
