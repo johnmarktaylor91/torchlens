@@ -8,6 +8,8 @@ from typing import Any
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from ._nonfinite import nonfinite_op_labels
@@ -195,6 +197,21 @@ def boundary_label_rows(labels: Sequence[str], resolve: Callable[[str], Any]) ->
     ]
 
 
+def _group_by_layer_aliases(ops: Sequence[Op]) -> dict[Any, list[Op]]:
+    """Group Ops under their layer label and short layer label, in list order.
+
+    An Op lands once under each distinct alias, so ``groups[key]`` lists exactly
+    the Ops for which ``key in {op.layer_label, op.short_layer_label}``, in the
+    order a scan of ``ops`` would meet them.
+    """
+
+    groups: dict[Any, list[Op]] = {}
+    for op in ops:
+        for alias in {op.layer_label, op.short_layer_label}:
+            groups.setdefault(alias, []).append(op)
+    return groups
+
+
 @dataclass(frozen=True)
 class _AliasIndexes:
     """Reverse indexes behind ``TraceOpAccessor._resolve_substring``.
@@ -311,6 +328,8 @@ class TraceOpAccessor(Accessor[Op]):
         self._alias_indexes: _AliasIndexes | None = None
         self._alias_index_unavailable = False
         self._resolved_op_cache: dict[str, Op] = {}
+        # Bare layer label -> its Ops in list order; see ``_layer_label_matches``.
+        self._layer_label_index: dict[Any, list[Op]] | None = None
 
     def _counted_ops(self) -> list[Op]:
         """The counted op rows, in capture order.
@@ -438,7 +457,7 @@ class TraceOpAccessor(Accessor[Op]):
         token = split_pass_token(key)
         if token is None:
             return None
-        passes = [op for op in self._list if token[0] in {op.layer_label, op.short_layer_label}]
+        passes = self._layer_label_matches(token[0])
         if not passes:
             return None
         if token[1] == PASS_TOKEN_ALL:
@@ -466,7 +485,31 @@ class TraceOpAccessor(Accessor[Op]):
         direct = self._resolve_pass_qualified(key)
         if direct is not None:
             return [direct]
-        return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        return self._layer_label_matches(key)
+
+    def _layer_label_matches(self, key: str) -> list[Op]:
+        """Every Op whose layer label or short layer label is ``key``, in list order.
+
+        ``trace[label]`` resolves through ``resolve_all`` for every string key, and
+        the invariant checks look up one label per graph edge, so a scan of every
+        row per lookup made validation quadratic in graph size. Once the rows are
+        settled (the last row is finished, the predicate ``_counted_ops`` memoizes
+        on) a reverse index built in one pass answers instead; it lives on this
+        accessor instance, whose ``_list`` is replaced (with the accessor) on any
+        rebuild or rename. Before settlement the scan answers. A failed index build
+        is not cached and the scan answers, raising exactly as it always did.
+        """
+
+        index = self._layer_label_index
+        if index is None and self._list and getattr(self._list[-1], "_tracing_finished", False):
+            try:
+                index = _group_by_layer_aliases(self._list)
+            except Exception:
+                index = None
+            self._layer_label_index = index
+        if index is None:
+            return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        return list(index.get(key, ()))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
@@ -561,13 +604,14 @@ class TraceOpAccessor(Accessor[Op]):
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label
-            qualified = ", ".join(op.label for op in parent_matches[:10])
-            suffix = "..." if len(parent_matches) > 10 else ""
+            parent_label = parent_matches[0].short_layer_label
             raise AmbiguousOpLookupError(
-                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified Op label such as "
-                f"{qualified}{suffix}."
+                lookup_message(
+                    f"Layer {parent_label!r} has {len(parent_matches)} ops.",
+                    [display_key(op) for op in parent_matches],
+                    "Use a 0-based integer position or a pass-qualified label.",
+                    query=parent_label,
+                )
             )
         return None
 

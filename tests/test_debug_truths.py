@@ -225,9 +225,10 @@ def test_summary_where_finds_the_ops_of_a_module(nested_trace: tl.Trace, where: 
     text = str(nested_trace.summary(level="op", where=where))
 
     assert "showing 2/3 rows" in text
-    assert "linear_1_1" in text
-    assert "relu_1_2" in text
-    assert "linear_2_3" not in text
+    # Op rows print the short display key (STYLE A5), not the positional label.
+    assert "linear_1" in text
+    assert "relu_1" in text
+    assert "linear_2" not in text
 
 
 def test_summary_where_selector_by_function(nested_trace: tl.Trace) -> None:
@@ -236,7 +237,7 @@ def test_summary_where_selector_by_function(nested_trace: tl.Trace) -> None:
     text = str(nested_trace.summary(level="op", where=tl.func("relu")))
 
     assert "showing 1/3 rows" in text
-    assert "relu_1_2" in text
+    assert "relu_1" in text
 
 
 def test_summary_where_callable_still_receives_rows(nested_trace: tl.Trace) -> None:

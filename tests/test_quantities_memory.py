@@ -80,9 +80,9 @@ def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     assert isinstance(duration, float)
     assert isinstance(flops, int)
     assert isinstance(macs, int)
-    assert str(duration) == "1.2 ms"
-    assert repr(duration) == "Duration('1.2 ms')"
-    assert str(tl.types.Duration(3.4)) == "3.4 s"
+    assert str(duration) == "1.20 ms"
+    assert repr(duration) == "Duration('1.20 ms')"
+    assert str(tl.types.Duration(3.4)) == "3.40 s"
     assert f"{duration:raw}" == "0.0012"
     assert f"{duration:.2f ms}" == "1.20 ms"
     assert str(flops) == "1.23 GFLOPs"
