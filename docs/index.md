@@ -39,9 +39,11 @@ holds this page to the core. -->
 ## Doors
 
 <!-- One door per community, each a short hand-written page (step 14):
-mech interp | NeuroAI | vision and dynamic models | agent builders. -->
+mech interp | NeuroAI | vision and dynamic models | agent builders.
+The door pages are not published yet (docs/_site_map.yaml); link each name to its
+doors/<name>.md page when that page gets publish: true. -->
 
-- [Mechanistic interpretability](doors/mechinterp.md)
-- [NeuroAI](doors/neuroai.md)
-- [Vision and dynamic models](doors/vision.md)
-- [Agent builders](doors/agents.md)
+- Mechanistic interpretability
+- NeuroAI
+- Vision and dynamic models
+- Agent builders
