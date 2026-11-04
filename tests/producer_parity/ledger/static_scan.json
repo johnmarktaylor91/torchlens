@@ -5164,7 +5164,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_regions.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -6313,6 +6313,14 @@
  },
  {
   "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/paddle/interventions.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/backends/paddle/interventions.py",
   "has_default": false,
@@ -6699,6 +6707,14 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/torch/_consumer_kind.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "function",
+  "file": "torchlens/backends/torch/_foreign_data.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7744,6 +7760,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/bundle/_comparisons.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/bundle/_lineage.py",
@@ -7907,6 +7931,14 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/debug/_checks/_session.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/debug/_common.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -10342,6 +10374,22 @@
   "has_default": false,
   "sites": 2,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_foreign_kernel_dependence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_config",
+  "file": "torchlens/validation/_foreign_kernel_dependence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": false,
