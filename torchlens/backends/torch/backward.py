@@ -878,8 +878,7 @@ def _materialize_backward_projections(trace: Any) -> None:
     if getattr(trace, "_tl_materializing_backward_projection", False):
         return
     stream = _ensure_backward_event_stream(trace)
-    # Read the live list without copying it: a fold reads only the tail, so
-    # per-call work does not grow with the passes already projected.
+    # The live list, uncopied: a fold reads only its tail, so work stays per call.
     stream_events = getattr(stream, "backward_events", ())
     event_count = len(stream_events)
     if not event_count:
@@ -902,14 +901,15 @@ def _materialize_backward_projections(trace: Any) -> None:
     try:
         state = getattr(trace, "_backward_projection_fold_state", None)
         watermark = getattr(trace, "_backward_projection_event_count", None)
+        fold_state = state if isinstance(state, _BackwardFoldState) else None
         plan = (
-            _plan_backward_tail_fold(trace, state, stream_events, watermark)
-            if isinstance(state, _BackwardFoldState)
-            else None
+            None
+            if fold_state is None
+            else _plan_backward_tail_fold(trace, fold_state, stream_events, watermark)
         )
         fold_rows = None
-        if plan is not None:
-            fold_rows = _fold_backward_projection_tail(trace, state, *plan)
+        if fold_state is not None and plan is not None:
+            fold_rows = _fold_backward_projection_tail(trace, fold_state, *plan)
         else:
             _materialize_backward_projections_impl(trace, list(stream_events), stream=stream)
         _bind_backward_epoch(trace, fold_rows=fold_rows, revision=revision, watermark=event_count)
