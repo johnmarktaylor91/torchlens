@@ -13,10 +13,11 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
     python scripts/run_notebooks.py --write-outputs notebooks/learn/*.ipynb
 
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
-tutorial and the learning path, which GitHub renders as the first impression). ``--write-outputs`` executes
-them and writes their outputs back in place with machine paths, timings, widget state and
-other run-to-run noise scrubbed (``_scrub_outputs``); every other
-notebook is committed without outputs (``tests/test_notebook_output_policy.py``).
+tutorial, the learning path, the multi-call bundle notebook the README links, and the Jacobian lens
+recipe, whose GPT-2 small fit takes minutes to rerun; GitHub renders them as the first impression).
+``--write-outputs`` executes them and writes their outputs back in place with machine paths, timings,
+widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
+committed without outputs (``tests/test_notebook_output_policy.py``).
 
 Exit status: 0 when every selected notebook ran clean, 1 otherwise.
 """
@@ -51,6 +52,8 @@ STORED_OUTPUT_NOTEBOOKS = (
     "notebooks/learn/08_semantic_shortcuts.ipynb",
     "notebooks/learn/09_scale.ipynb",
     "notebooks/learn/10_beyond_one_forward.ipynb",
+    "examples/workflows/multi_call_bundle.ipynb",
+    "examples/methods/jacobian_lens_recipe.ipynb",
 )
 DEFAULT_CELL_TIMEOUT = 600
 DEFAULT_NOTEBOOK_TIMEOUT = 1200
