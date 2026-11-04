@@ -44,17 +44,12 @@ def main() -> None:
     clean_x = torch.randn(2, 8)
     corrupted_x = clean_x + 0.75
 
-    clean = tl.trace(model, clean_x, capture=tl.options.CaptureOptions(replayable=True))
-    corrupted = tl.trace(model, corrupted_x, capture=tl.options.CaptureOptions(replayable=True))
+    clean = tl.trace(model, clean_x)
+    corrupted = tl.trace(model, corrupted_x)
     clean_relu = clean.find_sites(tl.func("relu")).first().out
 
     patched = corrupted.fork("patched")
-    patched.do(
-        tl.func("relu"),
-        clean_relu,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
-    )
-    patched.push()
+    patched.do(tl.func("relu"), clean_relu)
 
     clean_out = clean.output_ops[-1].out
     corrupted_out = corrupted.output_ops[-1].out

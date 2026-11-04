@@ -81,7 +81,7 @@ model = AutoModelForCausalLM.from_pretrained(
 ).eval()
 ids = tokenizer("The capital of France is Paris.", return_tensors="pt").input_ids
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 site = resolve_alias(trace, sae.cfg.metadata.hook_name).module_address  # "model.layers.12"
 result = splice(trace, site=site, sae=sae, tokens=ids, exclude_bos=True)
 result.fraction_variance_explained_pooled, result.ce_loss_recovered, result.kl_divergence
@@ -152,7 +152,7 @@ a vocabulary axis.
 from torchlens.bridge.sae import splice
 from torchlens.mechinterp import resolve_alias
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 alias = resolve_alias(trace, sae.cfg.metadata.hook_name)
 result = splice(trace, site=alias.module_address, sae=sae, tokens=ids, exclude_bos=True)
 
@@ -221,7 +221,6 @@ spliced = tl.trace(
     model,
     ids,
     capture=tl.options.CaptureOptions(
-        replayable=True,
         hooks={tl.module("transformer.h.1.mlp"): tl.splice_module(transcoder, input_route="in")},
     ),
 )

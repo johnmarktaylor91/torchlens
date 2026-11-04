@@ -30,13 +30,16 @@ runtime-only predicate (:func:`refuse_unreplayable_rules`).
 from __future__ import annotations
 
 import hashlib
+import importlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
+from pathlib import Path
 from typing import Any, Literal
 
 import torch
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._ir.selector_eval import selector_contains_kind
 from .._selection.selectors import BaseSelector, CompositeSelector
 from ._content_identity import (
     collect_tensors,
@@ -44,6 +47,7 @@ from ._content_identity import (
     render_value,
     tensor_version,
 )
+from ._display import recipe_card, recipe_repr, rule_card, rule_repr
 from ._rule_match import _match_rules, _rule_decision
 from ._site_signal import (
     _selector_children,
@@ -51,6 +55,7 @@ from ._site_signal import (
     is_gradient_site as is_gradient_site,
     site_signal,
 )
+from .hooks import normalize_hook_plan
 from .predicates import as_intervention_decision
 from .types import Edit, InterventionDecision
 
@@ -122,8 +127,6 @@ def classify_where(target: Any) -> AddressClass:
     """
 
     if isinstance(target, BaseSelector):
-        from .._ir.selector_eval import selector_contains_kind
-
         if selector_contains_kind(target, "predicate", unwrap=True):
             return "value_dependent"
         worst: AddressClass = "structural"
@@ -421,13 +424,14 @@ class Rule:
         return self._identity()[0]
 
     def __repr__(self) -> str:
-        """Render the clause with its current rule identity."""
+        """Render clause metadata without computing a content-derived identity."""
 
-        return (
-            f"Rule(target={self.target!r}, edit={self.edit!r}, "
-            f"signal={self.signal!r}, rule_id={self.rule_id!r}, "
-            f"address_class={self.address_class!r})"
-        )
+        return rule_repr(self)
+
+    def __str__(self) -> str:
+        """Return the metadata-only rule card."""
+
+        return rule_card(self)
 
     @property
     def payload_fidelity(self) -> Literal["declared", "opaque"]:
@@ -457,6 +461,16 @@ class Recipe:
     """
 
     rules: tuple[Rule, ...] = ()
+
+    def __repr__(self) -> str:
+        """Return the rebuilding public spelling, or a bounded rule count."""
+
+        return recipe_repr(self, BaseSelector)
+
+    def __str__(self) -> str:
+        """Return a bounded card of intervention clauses."""
+
+        return recipe_card(self)
 
     def __post_init__(self) -> None:
         """Refuse duplicate rules typed at construction.
@@ -583,6 +597,13 @@ class Recipe:
             if _ADDRESS_CLASS_RANK[rule.address_class] > _ADDRESS_CLASS_RANK[worst]:
                 worst = rule.address_class
         return worst  # type: ignore[return-value]
+
+    def save(self, path: str | Path, *, level: str = "portable", overwrite: bool = False) -> None:
+        """Write the rules alone as a ``kind: "recipe"`` tlspec that ``tl.load`` returns as a Recipe;
+        ``level="audit"`` admits predicate WHERE terms (loads then refuse ``recipe_audit_only``)."""
+
+        recipe_io = importlib.import_module("torchlens.intervention._recipe_io")
+        recipe_io.save_recipe(self, path, level=level, overwrite=overwrite)
 
     def merge(self, *others: Recipe) -> Recipe:
         """Return the multi-clause spec joining this spec's rules and others'.
@@ -744,10 +765,6 @@ def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
     list
         ``NormalizedHookEntry`` rows in rule order.
     """
-
-    from dataclasses import replace as dc_replace
-
-    from .hooks import normalize_hook_plan
 
     refuse_unreplayable_rules(spec, door=door)
     entries: list[Any] = []

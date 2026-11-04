@@ -74,12 +74,12 @@ def test_r29_bool_int_key_twin_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(BoolKeyBranch(), (x, {True: 2.0}), tmp_path / "kt.tlspec")
-    assert tl.load(path).run(inputs=(x.clone(), {True: 2.0})).report.path_faithfulness is (
-        PathFaithfulness.VERIFIED
-    )
+    assert tl.load(path).run_transaction(
+        inputs=(x.clone(), {True: 2.0})
+    ).report.path_faithfulness is (PathFaithfulness.VERIFIED)
 
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=(x.clone(), {1: 2.0}))
+        tl.load(path).run_transaction(inputs=(x.clone(), {1: 2.0}))
 
 
 # Kept: a sole mutation kill.
@@ -89,6 +89,6 @@ def test_r29_same_empty_structure_verifies(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(FlagPresenceBranch(), (x, {"flag": {}, "extra": []}), tmp_path / "ok.tlspec")
 
-    result = tl.load(path).run(inputs=(x.clone(), {"flag": {}, "extra": []}))
+    result = tl.load(path).run_transaction(inputs=(x.clone(), {"flag": {}, "extra": []}))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, x + 100)

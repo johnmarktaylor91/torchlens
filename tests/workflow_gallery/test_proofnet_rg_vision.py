@@ -177,7 +177,7 @@ def test_rg12_runnable_save_load_rerun_verified(
         path = tmp_path / "resnet-runnable.tlspec"
         trace.save(str(path), level="runnable", include_weights=True)
         loaded = tl.load(str(path))
-        result = loaded.run(inputs=batch)
+        result = loaded.run_transaction(inputs=batch)
         assert result.report.path_faithfulness.name == "VERIFIED"
         assert torch.allclose(result.output, trace.output_ops[0].out, atol=1e-6), (
             "rerun output differs from the captured forward on real weights"

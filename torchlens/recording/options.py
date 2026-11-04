@@ -7,11 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, get_args
 
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
+from ._lean import validate_lean_value
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
@@ -49,6 +50,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "on_forward_error",
     "default_grad",
     "postprocess",
+    "lean",
 )
 """The public ``RecordingOptions`` fields, in declaration order."""
 
@@ -120,6 +122,13 @@ class RecordingOptions:
     #: Post-capture finalization pass: ``"none"`` (the default) or the
     #: ``validate_postprocess`` vocabulary (``tl.record(postprocess=...)``).
     postprocess: str
+    #: PROVISIONAL SPELLING (the public name awaits the maintainer's naming
+    #: ruling). ``True`` journals only the events the selection keeps: ops and
+    #: module boundaries the save predicate does not keep get no shell journal
+    #: event, so the per-op bookkeeping a hook never pays is skipped. The
+    #: recording then says what it omitted (``Recording.lean_omissions``) and
+    #: refuses the reads that need the full journal (``recording_lean_omitted``).
+    lean: bool
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -140,6 +149,7 @@ class RecordingOptions:
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         postprocess: str | MissingType = MISSING,
+        lean: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -174,6 +184,7 @@ class RecordingOptions:
             "postprocess": _resolve_recording_option(
                 "postprocess", postprocess, "none", specified_fields
             ),
+            "lean": _resolve_recording_option("lean", lean, False, specified_fields),
         }
         _validate_recording_values(values)
         for field_name in _RECORDING_FIELDS:
@@ -250,6 +261,9 @@ class _RecordingConfig:
     #: detached inspection copies.
     detach_saved_activations: bool = True
     postprocess: str = "none"
+    #: PROVISIONAL SPELLING. Lean journal: no shell event for unkept ops and
+    #: module boundaries (``torchlens/recording/_lean.py`` holds the contract).
+    lean: bool = False
 
     def __post_init__(self) -> None:
         """Validate every slot with the recorder's historical refusals."""
@@ -291,16 +305,15 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass an integer history_size between 0 and 1024",
             argument="history_size",
         )
-    # R64: the record surface carries its OWN codes (recording_*) so one
-    # documented code never maps to two catchable builtins -- the tl.trace
-    # twins keep TypeError lineage under the unprefixed codes, this surface
-    # keeps its historical ValueError lineage (the F1/F3/F4 split pattern).
+    # Predicate misuse raises the same code and class on tl.record and tl.trace
+    # (``_capture/prepare/resolve.py::_refuse_predicate_shapes``): one catch for both.
     if intervene is not None and not callable(intervene):
-        raise InvalidArgumentError(
-            f"intervene must be callable or None; received {type(intervene).__name__}",
-            code="recording_intervention_predicate_type_invalid",
-            remedy="pass tl.when(...), another predicate, or None",
+        raise ArgumentTypeError(
+            f"intervene received non-callable type {type(intervene).__name__}",
+            code="intervention_predicate_type_invalid",
+            remedy="pass a predicate callable such as tl.when(...) or None",
             argument="intervene",
+            received_type=type(intervene).__name__,
         )
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise InvalidArgumentError(
@@ -333,6 +346,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass a bool or CaptureSpec default_grad",
             argument="default_grad",
         )
+    validate_lean_value(values["lean"])
 
 
 def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
@@ -363,11 +377,12 @@ def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
             argument="lookback_payload_policy",
         )
     if halt is not None and not callable(halt):
-        raise InvalidArgumentError(
-            f"halt must be callable or None; received {type(halt).__name__}",
-            code="recording_halt_predicate_type_invalid",
-            remedy="pass a halt predicate or None",
+        raise ArgumentTypeError(
+            f"halt received non-callable type {type(halt).__name__}",
+            code="halt_predicate_type_invalid",
+            remedy="pass a predicate callable or None",
             argument="halt",
+            received_type=type(halt).__name__,
         )
     if activation_transform is not None and not callable(activation_transform):
         raise InvalidArgumentError(

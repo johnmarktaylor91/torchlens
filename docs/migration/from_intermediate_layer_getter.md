@@ -55,7 +55,7 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
 | --- | --- | --- |
 | `IntermediateLayerGetter(model, return_layers={"layer2": "out"})` | `tl.extract(model, x, {"out": "layer2"})` | Key first, then the address: the mapping runs the other way round. |
 | Only direct children of the model can be returned | Any module address (`"layer2.1.conv2"`) or op label | Nested modules and functional ops are lookups too. |
-| Builds a new module that drops every child after the last requested one | Runs the whole, unmodified model | Your model is never rebuilt; ask `trace.run(inputs=x, until=...)` for a truncated run. |
+| Builds a new module that drops every child after the last requested one | Runs the whole, unmodified model | Your model is never rebuilt; ask `trace.run_transaction(inputs=x, until=...)` for a truncated run. |
 | Children must be called in registration order, once each | Any forward, including reused modules and loops | Repeated calls of one module get one pass each. |
 
 ## What TorchLens adds
@@ -75,7 +75,7 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
   or export as a smaller network. `tl.extract` returns tensors for one call and leaves the
   model whole.
 - Because it drops the later children, the work after the last requested one is never done.
-  TorchLens runs everything unless you stop at a site with `trace.run(inputs=x, until=...)`.
+  TorchLens runs everything unless you stop at a site with `trace.run_transaction(inputs=x, until=...)`.
 - It needs no input to build: it works from the module's children.
 
 See [where to go instead](where_to_go_instead.md) for tools outside TorchLens's scope.

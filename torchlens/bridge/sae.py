@@ -350,8 +350,7 @@ def _tensor_outputs(log: Any) -> tuple[torch.Tensor, ...]:
         raise ValueError(
             "SAE splice needs saved tensor model outputs to compare runs; "
             "this capture retained none. Capture with the default exhaustive "
-            "save (tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)))."
+            "save (tl.trace(model, x))."
         )
     return outputs
 
@@ -469,7 +468,7 @@ def _sequence_start(site: str, out: torch.Tensor, exclude_bos: bool) -> int:
 
 
 def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
-    """Return the clean intervention-ready trace the experiment forks from.
+    """Return the clean trace the experiment forks from.
 
     Parameters
     ----------
@@ -494,11 +493,7 @@ def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
             raise TypeError("SAE splice from a live model requires `inputs`.")
         import torchlens as tl
 
-        return tl.trace(
-            model_or_log,
-            inputs,
-            capture=tl.options.CaptureOptions(replayable=True),
-        )
+        return tl.trace(model_or_log, inputs)
     if inputs is not None:
         raise TypeError(
             "SAE splice from an existing Trace takes no `inputs`; the fork replays the captured "
@@ -531,8 +526,7 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     from torchlens.intervention.helpers import splice_module
 
     fork = clean.fork(name)
-    fork._attach_hooks(label_selector(site), splice_module(module, input_route="out"))
-    fork.push()
+    fork.do(label_selector(site), splice_module(module, input_route="out"))
     return fork
 
 
@@ -697,7 +691,7 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     Parameters
     ----------
     model_or_log:
-        Live ``nn.Module`` (captured here with ``replayable=True``)
+        Live ``nn.Module`` (captured here with a plain ``tl.trace``)
         or an already-captured intervention-ready ``Trace``.
     inputs:
         Model inputs, required when ``model_or_log`` is a module and refused

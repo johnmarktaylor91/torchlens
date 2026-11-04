@@ -253,7 +253,7 @@ def _after_fast_run(cell: Cell) -> None:
     trace = cell.require_trace()
     before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    result = trace.run(inputs=cell.fresh_inputs(), fast=True)
+    result = trace.run_transaction(inputs=cell.fresh_inputs(), fast=True)
     got = [
         leaf.detach() if isinstance(leaf, torch.Tensor) else leaf
         for leaf in cell.leaves(result.output)

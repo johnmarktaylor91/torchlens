@@ -132,7 +132,7 @@ def test_set_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
     x = torch.tensor([2.0, 3.0])
     path = _save_runnable(model, [x, {"add"}], tmp_path / "set.tlspec")
 
-    changed = tl.load(path).run(inputs=[x, {"mul"}])
+    changed = tl.load(path).run_transaction(inputs=[x, {"mul"}])
     _assert_not_blessed(changed.report)
     assert not torch.equal(changed.output, model(x, {"mul"}))
 
@@ -173,10 +173,10 @@ def test_signed_zero_change_diverges(tmp_path: Path) -> None:
     # Capture recorded the negative-zero arm (value + 10); positive zero takes the
     # other arm, so replaying the recorded path would be numerically wrong.
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, +0.0])
+        tl.load(path).run_transaction(inputs=[value, +0.0])
 
     # Unchanged negative zero still verifies + attests: bit patterns match.
-    same = tl.load(path).run(inputs=[value, -0.0])
+    same = tl.load(path).run_transaction(inputs=[value, -0.0])
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
     torch.testing.assert_close(same.output, value + 10)
@@ -195,7 +195,7 @@ def test_unchanged_nan_leaf_does_not_falsely_diverge(tmp_path: Path) -> None:
     value = torch.tensor([2.0, 3.0])
     path = _save_runnable(model, [value, float("nan")], tmp_path / "nan_selfsame.tlspec")
 
-    result = tl.load(path).run(inputs=[value, float("nan")])
+    result = tl.load(path).run_transaction(inputs=[value, float("nan")])
     assert result.report.path_faithfulness is not PathFaithfulness.DIVERGED
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

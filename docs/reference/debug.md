@@ -3,7 +3,11 @@
 `tl.debug` inspects a completed trace when the graph itself is the diagnostic: it can
 locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
 recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
-with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
+with the normal `tl.trace(...)` API, then pass the resulting trace to a helper. A helper that
+takes `inputs` itself (`bisect_precision`, `check_determinism`, `find_nan`, `graph_breaks`,
+`isolated_capture`, `nonfinite_origin`, `tl.report.flops_vs_dispatch`) takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL
+image or modality dict, resolved as the trace resolves it.
 
 ## The report object (`Report`)
 
@@ -308,13 +312,18 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports units whose maximum
-activation is at most `max_activation` or whose value has zero variance in this trace. One
-trace is only one sample; aggregate runs before making a dataset-level claim. With
-`dim=None` the unit axis is picked per op: the last axis of a 2-D or 3-D activation
-(a linear layer's `(batch, features)`, a transformer block's `(batch, tokens, features)`),
-the channel axis of a convolution, pooling or per-channel norm and of the same-shaped
-ops it feeds, and axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
+`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports, for every layer, the
+units whose output is identically zero at every position in the batch: every element of
+the unit's slice has a magnitude at or below `max_activation` (absolute, on the layer's output;
+`0.0` means exactly zero). The units are a layer's output units, so there is one row per
+op a module call returned or the model's `forward` returned; the ops inside a composite
+activation (the `tanh` of a tanh-approximated GELU, the `sigmoid` of SiLU) get no row,
+because a saturated intermediate is not a dead output unit. One trace is only one sample;
+aggregate runs before making a dataset-level claim. With `dim=None` the unit axis is
+picked per op: the last axis of a 2-D or 3-D activation (a linear layer's
+`(batch, features)`, a transformer block's `(batch, tokens, features)`), the channel axis
+of a convolution, pooling or per-channel norm and of the same-shaped ops it feeds, and
+axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
 Related: [`grad_health`](#grad_health).
 
 ```python
@@ -330,7 +339,7 @@ print(report.columns.tolist())
 Output:
 
 ```text
-['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
+['op', 'module', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
 ```
 
 ## `dtype_range`

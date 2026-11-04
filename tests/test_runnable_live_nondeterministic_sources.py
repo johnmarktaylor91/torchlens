@@ -43,7 +43,7 @@ def test_live_run_declares_host_rng_source() -> None:
     value = torch.randn(2, 3)
     trace = tl.trace(model, value)
     assert bool(trace._runnable.host_rng_consumed)
-    result = trace.run(inputs=value)
+    result = trace.run_transaction(inputs=value)
     assert result.report.nondeterministic_sources == ("host_rng",)
 
 
@@ -61,5 +61,5 @@ def test_fast_live_run_declares_host_rng_source() -> None:
     value = torch.randn(2, 3)
     trace = tl.trace(model, value, save=tl.func("mul"))
     assert bool(trace._runnable.host_rng_consumed)
-    result = trace.run(inputs=value, fast=True)
+    result = trace.run_transaction(inputs=value, fast=True)
     assert result.report.nondeterministic_sources == ("host_rng",)

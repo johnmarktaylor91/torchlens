@@ -43,6 +43,7 @@ from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
     AmbiguousBackendError,
+    ArtifactError,
     BackendMismatchError,
     BackendUnsupportedError,
     UnknownBackendError,
@@ -1023,6 +1024,36 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         assert check_metadata_invariants(loaded) is True
     finally:
         tl.backends.unregister("fake")
+
+
+def test_unregistered_backend_artifact_refuses_at_load(tmp_path: Path) -> None:
+    """A backend name that is neither a contract backend nor registered now refuses."""
+
+    _register_fake_backend()
+    try:
+        trace = tl.trace(_FakeModel(), object(), backend="fake")
+        path = tmp_path / "fake.tlspec"
+        trace.save(path, level="audit")
+    finally:
+        tl.backends.unregister("fake")
+
+    with pytest.raises(ArtifactError, match="unknown backend 'fake'"):
+        tl.load(path)
+
+
+def test_format3_codec_role_admits_own_backend_hint_outside_payload_columns() -> None:
+    """A non-torch artifact's own backend hint is admitted outside payload columns only."""
+
+    from torchlens._io.format3.codec_policy import codec_backend
+
+    hint = {"logical_backend": "tinygrad"}
+    cell = "trace[0]._autograd_derived_grads._dict.inputs.0.grad"
+    codec = "numpy_safetensors_v1"
+    assert codec_backend(codec, hint, cell, manifest_backend="tinygrad") == "tinygrad"
+    assert codec_backend(codec, None, cell, manifest_backend="tinygrad") == "numpy"
+    for manifest_backend in ("torch", "jax"):
+        with pytest.raises(ArtifactError, match="disagrees with the numpy payload"):
+            codec_backend(codec, hint, cell, manifest_backend=manifest_backend)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_entry.py.

@@ -66,7 +66,7 @@ tl.trace(model, x)                       __init__.py -> user_funcs.trace
   return Trace                           _data_classes/trace.py
 trace.save(path)                         _io/bundle.py (metadata plus safetensors blobs)
 tl.load(path)                            _io/bundle.py (allowlist unpickler, manifest validation)
-trace.run(inputs=x)                      _runnable_*.py (sparse replay) or the live refresh path
+trace.run_transaction(inputs=x)                      _runnable_*.py (sparse replay) or the live refresh path
 tl.validate(model, x)                    validation/consolidated.py -> validation/core.py (forward replay),
                                          validation/backward.py, _invariants_*.py
 ```
@@ -176,7 +176,7 @@ the generated index gives each one's first docstring line.
 - A module's one-line purpose and size: [where.md](where.md).
 - Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
 - The invariants a change must keep: `docs/internal/agent-reference/critical-invariants.md`.
-- The saved-file contract: `torchlens/schemas/writer_contract_v11.json` and
+- The saved-file contract: `torchlens/schemas/writer_contract_v12.json` and
   `docs/reference/runnable_tlspec_contract.md`.
 - Every persisted key of the saved format, with its type, save level, policy and public
   accessor: [persisted_fields.md](persisted_fields.md) (generated).

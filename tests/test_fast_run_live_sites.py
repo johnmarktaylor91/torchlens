@@ -146,7 +146,7 @@ def test_fast_run_names_an_unrecorded_direct_forward_call_as_a_capability_refusa
     assert meta is not None and meta.direct_forward_called
     meta.direct_forward_called = False
     with pytest.raises(RunCapabilityUnavailableError) as info:
-        trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
+        trace.run_transaction(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "forward()" in str(info.value)
     assert "parent.inner" in str(info.value)
@@ -206,7 +206,7 @@ def test_fast_run_refuses_a_lossy_distribution_output() -> None:
     x = torch.arange(6.0).view(2, 3)
     trace = tl.trace(model, x)
     with pytest.raises(RunCapabilityUnavailableError) as info:
-        trace.run(inputs=x, fast=True)
+        trace.run_transaction(inputs=x, fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "TransformedDistribution" in str(info.value)
     assert "distribution_state_unrecordable" in str(info.value)
@@ -223,7 +223,7 @@ def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> 
         warnings.simplefilter("ignore", UserWarning)
         trace = tl.trace(model, torch.arange(6.0).view(2, 3))
         with pytest.raises(RunCapabilityUnavailableError) as info:
-            trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
+            trace.run_transaction(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "_Holder" in str(info.value)
 

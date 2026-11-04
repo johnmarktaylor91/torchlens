@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import torch
 
+from .._data_classes._lookup_kinds import _record_view
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from ..errors._base import ConfigurationError
@@ -563,7 +564,7 @@ def enumerate_trace_sites(
     seen: set[str] = set()
     for requested in requested_list:
         lookup = str(requested)
-        record = trace[lookup]
+        record = _record_view(trace, lookup)  # a module address names its output Op
         layer_label = str(getattr(record, "layer_label", lookup))
         if int(getattr(record, "num_passes", 1)) > 1 and not _is_pass_qualified(record):
             alternatives = [str(op.label) for op in getattr(record, "ops", {}).values()]
@@ -582,10 +583,8 @@ def enumerate_trace_sites(
         # Canonical key rule (memo D13): pass-qualified keys ONLY for
         # multi-pass layers; single-pass sites use the bare layer label so
         # explicit requests, default sweeps, and the repgeom verbs agree.
-        if int(getattr(record, "num_passes", 1)) > 1:
-            key = _safe_label(record) or layer_label
-        else:
-            key = layer_label
+        multi_pass = int(getattr(record, "num_passes", 1)) > 1
+        key = (_safe_label(record) or layer_label) if multi_pass else layer_label
         if key in seen:
             continue
         seen.add(key)

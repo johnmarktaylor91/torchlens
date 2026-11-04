@@ -319,7 +319,10 @@ def _stale(
     for place in ("glossary", *(label for label, _, _ in PLACES)):
         for path, text in corpus.files.get(place, []):
             lines: list[str] | None = None
+            notebook = path.endswith(".ipynb")
             for line, start, end, strength in spelling.find(text, patterns, strengths, prose=False):
+                if notebook and corpus.code_context(place, path).outside_source(line):
+                    continue
                 if strength == spelling.CONTEXTUAL:
                     lines = lines if lines is not None else text.splitlines()
                     bound = corpus.imports(place, path)

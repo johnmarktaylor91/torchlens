@@ -5,7 +5,7 @@ then the table immediately; ONE thin rule under the header and above the
 footer; NO vertical borders; merged "name (Class)" column with the
 attribute name primary; text left-aligned, numerics right-aligned;
 indentation for hierarchy; a labeled five-subject footer block; one
-contextual "More:" line. Designed IN ASCII (the modal rendering);
+contextual "more" line. Designed IN ASCII (the modal rendering);
 unicode is an upgrade applied strictly through the declared glyph table.
 
 The renderer is a pure function of typed data -- it never reads the trace
@@ -19,13 +19,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
 
+from .._utils._display_numbers import format_count, format_iec_bytes, plural
+from ._health import _health_text
 from ._summary_charset import assert_no_escape_bytes, degrade
 from ._summary_columns import ATTENTION_FULL_SQUARE_NOTE, OptimizerStateFacts
 from ._summary_config import ColumnSpec, SummaryConfig
 from ._summary_ladder import ResolvedView, ViewRow
-
-#: Micro-bar width in characters (%params emphasis; degrade-map covered).
-_BAR_WIDTH = 3
 
 #: Suffix on a FLOP cell whose count includes a full-square attention op.
 ATTENTION_MARK = "^"
@@ -117,33 +116,21 @@ def _commas(value: int | None) -> str:
 
 
 def _bytes_human(value: int | None) -> str:
-    """Binary-ish byte formatting (decimal units, B suffix)."""
+    """The shared IEC byte spelling, retaining a measured-zero disclosure."""
 
     if value is None:
         return "unavailable"
     if value == 0:
         return "0 B (measured)"
-    magnitude = float(value)
-    for suffix in ("B", "KB", "MB", "GB", "TB"):
-        if abs(magnitude) < 1000:
-            return f"{magnitude:.1f}".rstrip("0").rstrip(".") + f" {suffix}"
-        magnitude /= 1000.0
-    return f"{magnitude:.1f} PB"
+    return format_iec_bytes(value)
 
 
 def _format_number(value: int | None, units: str) -> str:
-    """Route a count/flops cell through the configured unit style."""
+    """Route a count cell through the shared precision or exact unit style."""
 
     if value is None:
         return "?"
-    return _human(value) if units == "human" else _commas(value)
-
-
-def _micro_bar(fraction: float) -> str:
-    """The %params micro-bar (unicode glyphs; ASCII via the degrade map)."""
-
-    filled = round(max(0.0, min(1.0, fraction)) * _BAR_WIDTH)
-    return "█" * filled + "░" * (_BAR_WIDTH - filled)
+    return format_count(value) if units == "human" else _commas(value)
 
 
 def _name_cell(row: ViewRow) -> str:
@@ -153,7 +140,7 @@ def _name_cell(row: ViewRow) -> str:
     if row.kind == "fold":
         label = f"{row.name} ({row.class_name} ×{row.fold_count})"
     elif row.kind == "elision":
-        label = f"{row.name} ({row.elided_count} rows elided)"
+        label = f"{row.name} ({plural(row.elided_count, 'row')} elided)"
     elif row.kind == "op":
         label = row.name
     elif row.class_name:
@@ -251,14 +238,14 @@ def _params_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str
 
 
 def _percent_text(part: int, whole: int) -> str:
-    """The micro-bar percent text of one share of a whole-model total."""
+    """The numeric percent text of one share of a whole-model total."""
 
     fraction = part / whole
-    return f"{_micro_bar(fraction)} {fraction * 100:.1f}%"
+    return f"{fraction * 100:.1f}%"
 
 
 def _params_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
-    """The %params micro-bar cell over the whole-model total."""
+    """The %params cell over the whole-model total."""
 
     del config
     if row.params_display is None or not totals.params:
@@ -290,11 +277,11 @@ def _flops_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
     if value is None:
         return "?"
     mark = ATTENTION_MARK if row.attention_full_square else ""
-    return _format_number(value, config.units) + mark
+    return (_human(value) if config.units == "human" else _commas(value)) + mark
 
 
 def _flops_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
-    """The %FLOPs micro-bar cell over the whole-model known-FLOP total."""
+    """The %FLOPs cell over the whole-model known-FLOP total."""
 
     whole = totals.flops_fma2 - (totals.macs if config.flop_convention == "fma1" else 0)
     if row.flops_display is None:
@@ -328,7 +315,9 @@ _CELL_FORMATTERS: dict[str, Callable[[ViewRow, SummaryConfig, CellTotals], str]]
     "params_trainable": lambda row, config, totals: _count_cell(row.params_trainable, config),
     "flops": _flops_cell,
     "flops_pct": _flops_pct_cell,
-    "macs": lambda row, config, totals: _format_number(row.macs_owned, config.units),
+    "macs": lambda row, config, totals: (
+        _human(row.macs_display) if config.units == "human" else _commas(row.macs_display)
+    ),
     "train": lambda row, config, totals: {
         "all": "yes",
         "none": "no",
@@ -471,7 +460,7 @@ def _compute_footer(facts: SummaryFacts, flop_convention: str = "fma2") -> str:
     macs = f"{_human(facts.macs_forward)} MACs"
     known = facts.coverage_known + facts.coverage_zero
     denominator = known + facts.coverage_unknown
-    coverage = f"{known}/{denominator} ops known (formula-exact)"
+    coverage = f"{known}/{denominator} ops known"
     if facts.coverage_unknown:
         names = ", ".join(facts.unknown_op_names[:3])
         more = max(facts.coverage_unknown - len(facts.unknown_op_names[:3]), 0)
@@ -537,11 +526,11 @@ def render_summary_pair(
     )
     lines.append(f"Memory   {memory}")
     graph = (
-        f"{facts.compute_ops} ops, {len(rows)} rows shown"
-        f" | {facts.tracked_tensor_rows} tracked tensor rows"
+        f"{plural(facts.compute_ops, 'op')}, {plural(len(rows), 'row')} shown"
+        f" | {plural(facts.tracked_tensor_rows, 'tracked tensor row')}"
     )
     if view.root_owned_ops:
-        graph += f" | {len(view.root_owned_ops)} root-level ops in footer totals"
+        graph += f" | {plural(len(view.root_owned_ops), 'root-level op')} in footer totals"
     if facts.passes_max > 1:
         graph += f" | up to {facts.passes_max} passes"
     lines.append(f"Graph    {graph}")
@@ -550,22 +539,46 @@ def render_summary_pair(
         capture_bits.append(facts.outcome_status)
     if facts.capture_verified is True:
         capture_bits.append("verified")
-    health = f"health {facts.health_verdict.upper().replace('_', '-')}"
+    health = _health_text(facts.health_verdict)
     capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
-    if any(row.tied for row in rows):
-        lines.append("*        tied parameters (identity counted once; see Params)")
-    flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}
-    if flop_columns and any(row.attention_full_square for row in rows):
-        lines.append(f"{ATTENTION_MARK}        {ATTENTION_FULL_SQUARE_NOTE}")
-    lines.append(
-        "More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
-    )
+    lines.extend(_legend_lines(rows, columns, config.flop_convention))
+    lines.append(_more_line(columns))
     unicode_text = assert_no_escape_bytes("\n".join(lines))
     return degrade(unicode_text), unicode_text
+
+
+def _more_line(columns: tuple[ColumnSpec, ...]) -> str:
+    """The footer's exits; the compute pointer shows only while no macs column is shown."""
+
+    has_macs = any(column.name == "macs" for column in columns)
+    compute_hint = "" if has_macs else " | view='compute' for per-row MACs"
+    return f"more     result.details(){compute_hint} | docs/reference/summary.md"
 
 
 def _shape_str(shape: tuple[int, ...]) -> str:
     """Render one shape tuple."""
 
     return "(" + ", ".join(str(dim) for dim in shape) + ")"
+
+
+def _legend_lines(
+    rows: tuple[ViewRow, ...], columns: tuple[ColumnSpec, ...], flop_convention: str = "fma2"
+) -> list[str]:
+    """Explain every mark used by the table in one footer line."""
+
+    # One pass over the three independent marks keeps their shared footer ordering explicit.
+    legend: list[str] = ["1 MAC = 1 FLOP" if flop_convention == "fma1" else "1 MAC = 2 FLOPs"]
+    if any(row.tied for row in rows):
+        legend.append("* tied parameters (identity counted once; see Params)")
+    flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}
+    if flop_columns and any(row.attention_full_square for row in rows):
+        legend.append(f"{ATTENTION_MARK} {ATTENTION_FULL_SQUARE_NOTE}")
+    if any(
+        row.fold_count > 1 or row.passes > 1 or "×" in _compact_shapes_text(row.output_shapes)
+        for row in rows
+    ):
+        legend.append("×N repeated modules, passes or shapes")
+    if legend:
+        return ["Legend   " + "; ".join(legend)]
+    return []

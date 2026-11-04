@@ -150,7 +150,11 @@ prompt rather than every step, see [the KV-cache recipe](kv_cache.md).
 When each step must also keep a few activations, use `tl.record` with `intervene=`. It applies
 the same edits during a recording pass and keeps only the payloads `save=` selects, without
 building the full graph a trace builds. `recording.output` is the model output, exactly as the
-model returned it. Call `recording.to_trace()` later only if you need graph structure.
+model returned it. Call `recording.to_trace()` later only if you need graph structure: a
+`Recording` has no `draw()` and no facets, and the cooked `Trace` takes every `Trace.draw`
+option and groups a reused layer into passes the way `tl.trace` does. Episode capture stays on
+`tl.trace(..., episode=...)`; `tl.record(..., episode=...)` refuses with the typed code
+`record_episode_unsupported`.
 
 ```python
 import torch
@@ -260,14 +264,15 @@ processes one token, so the package matters much less for `bind` with `generate(
 Capturing one trace and re-running it for each new input is cheap for steered generation when
 the staged intervention targets plain module selectors (`tl.module(...)`): both `run` doors
 below then take the [guarded fast steered rerun](#fast-steered-rerun). The other reuse paths
-refuse a staged intervention, refuse a change in input, or replay over the captured graph.
+apply a staged intervention through a full capture, refuse a change in input, or replay over
+the captured graph.
 
 | Reuse path | What it does | What it refuses or costs |
 | --- | --- | --- |
-| `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
-| `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
+| `trace.run_transaction(inputs=x)` | A fresh verified execution of the recorded program; with a staged intervention, a refresh capture that applies it (`last_run["engine"] == "live"`, fire receipts on `last_run`) | A full capture, not a native forward, and the verdict is `unverifiable` when staged edits applied; refuses `run_staged_spec_unapplied` only on a loaded artifact |
+| `trace.run_transaction(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
 | `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
-| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(replayable=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
+| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Works on every `tl.trace` capture (the per-op argument templates it needs are always recorded; `replayable=True` is for runnable saves and costs about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
 For steering alone, across many inputs or through generation, [`bind`](#steering-and-patching-over-many-forwards-bind)
@@ -278,7 +283,7 @@ when you want the full record of one forward, then work with that trace.
 ## Fast steered rerun
 
 On a trace captured with an `intervene=` spec that targets plain module selectors
-(`tl.module(...)`), `trace.run(model, x)` and `trace.run(inputs=x, fast=True)` do not recapture:
+(`tl.module(...)`), `trace.run(model, x)` and `trace.run_transaction(inputs=x, fast=True)` do not recapture:
 they run the model's native forward with the staged hooks and refresh the saved sites. The input may grow
 from step to step, as in generation, as long as the model makes the same sequence of torch calls
 and module entries; a structural fingerprint sealed at capture checks that after every run.
@@ -331,14 +336,14 @@ output ops, but it is not required. A changed number of output tensors still ref
   tokens identical to the hook and a maximum absolute difference of 0.0. On the small CPU
   decoders it cost 1.4 to 1.9x. `bind` stays the cheapest steering path (1.07 to 1.17x on the
   9B); the rerun costs about one more forward and in exchange refreshes the saved activations
-  each step. `trace.run(inputs=x, fast=True)` keeps its session between calls and cost 1.5 to
+  each step. `trace.run_transaction(inputs=x, fast=True)` keeps its session between calls and cost 1.5 to
   1.6x the hook on the 9B without flash-linear-attention, about 20% less than
   `trace.run(model, x)`.
 - **Fallback.** When a guard refuses, `trace.run(model, x)` falls back to the capture engine,
   which still gives the right answer, and records why. `last_run["engine"]` is `"guarded_fast"`
   when the fast engine ran and `"rerun"` after a fallback, and `last_run["fast_refused"]` names
   the refusing guard as `"<code>:<stage>"` (it is `None` on a fast run). The explicit
-  `trace.run(inputs=x, fast=True)` raises instead of falling back.
+  `trace.run_transaction(inputs=x, fast=True)` raises instead of falling back.
 - **What still takes the capture engine.** Value replacements (`set()`) and non-module targets
   (`fast_rerun_target_unsupported`), hooks attached after a plain capture or cleared after a
   steered one, which recapture once to record the current plan and are eligible afterwards

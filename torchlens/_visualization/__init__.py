@@ -1,8 +1,4 @@
-"""Computational graph visualization via Graphviz.
-
-The experimental Dagua renderer is available from
-``torchlens.experimental.dagua`` after explicit opt-in.
-"""
+"""Computational graph visualization via Graphviz."""
 
 from typing import Any
 

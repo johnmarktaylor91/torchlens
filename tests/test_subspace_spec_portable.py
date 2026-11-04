@@ -9,11 +9,13 @@ stored basis refuses at load with a code whose remedy runs.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -66,9 +68,7 @@ def _apply(spec: Any) -> Any:
     """Apply a loaded spec on a fresh capture of the same model and input."""
 
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 def _out(trace: Any) -> torch.Tensor:
@@ -127,7 +127,25 @@ def _remedy_runs(error: InvalidArgumentError, tmp_path: Path) -> None:
     fork.do(tl.subspace(_SITE, _ROTATION[:2], origin=_ORIGIN), tl.scale(2.0))
     path = tmp_path / "resaved.tlspec"
     tl.io.save_intervention(fork, path, level="portable")
-    assert torch.equal(_apply(tl.io.load_intervention_spec(path))[_SITE].out, fork[_SITE].out)
+    reapplied = _apply(tl.io.load_intervention_spec(path))
+    assert torch.equal(reapplied[_SITE].out, fork[_SITE].out)
+
+
+def test_tampered_basis_refuses_at_load(tmp_path: Path) -> None:
+    session = _edited(_ROTATION[:2], tl.scale(2.0))
+    path = tmp_path / "tampered.tlspec"
+    tl.io.save_intervention(session, path, level="portable")
+    spec_json = path / "intervention.json"
+    text = spec_json.read_text(encoding="utf-8")
+    digest = _basis_digest(_ROTATION[:2].contiguous())
+    assert digest in text
+    spec_json.write_text(text.replace(digest, "0" * 64), encoding="utf-8")
+    redigest(path, "intervention.json")
+    with pytest.raises(Exception) as excinfo:
+        tl.io.load_intervention_spec(path)
+    error = _coded(excinfo.value)
+    assert error.fields["code"] == "subspace_spec_basis_tampered"
+    _remedy_runs(error, tmp_path)
 
 
 def test_changed_rows_refuse_as_tampered_and_non_orthonormal_rows_refuse() -> None:
@@ -159,6 +177,7 @@ def test_reader_without_the_registry_entry_refuses_typed(
         return constructors
 
     monkeypatch.setattr(helpers_module, "_builtin_constructors", _older)
+    redigest(path, "intervention.json")
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     assert _coded(excinfo.value).fields["code"] == "intervention_helper_unknown"
@@ -187,3 +206,11 @@ def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, ver
     reapplied = _apply(loaded)
     assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
     assert torch.equal(_out(reapplied), _out(session))
+
+
+def test_saved_spec_json_carries_the_fields(tmp_path: Path) -> None:
+    path = tmp_path / "fields.tlspec"
+    tl.io.save_intervention(_edited(_ROTATION[:4], tl.scale(2.0)), path, level="portable")
+    text = json.dumps(json.loads((path / "intervention.json").read_text(encoding="utf-8")))
+    for field in ("subspace_edit", "basis_sha256", "origin_sha256", "source_dtype", _ORIGIN):
+        assert field in text

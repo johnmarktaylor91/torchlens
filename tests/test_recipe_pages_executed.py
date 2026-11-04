@@ -36,6 +36,8 @@ PAGES: dict[str, str] = {
     "docs/field-guide/training_ribbon.md": "matplotlib",
     "docs/field-guide/tcav.md": "torchlens",
     "docs/field-guide/generation_step_attribution.md": "transformers",
+    "docs/field-guide/generation_attention.md": "transformers",
+    "docs/field-guide/tensor_images.md": "torchvision",
     "docs/field-guide/trainable_backbone.md": "torchvision",
     "docs/field-guide/tuned_lens.md": "tuned_lens",
     "docs/field-guide/jacobian_lens.md": "transformers",
@@ -50,17 +52,26 @@ PAGES: dict[str, str] = {
     "docs/field-guide/sae_trainers.md": "sae_trainers",
     "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
     "docs/field-guide/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/linear_probes.md": "sklearn",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
-    "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
-    "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
-    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
-    "examples/recipes/clip_head_attention_recipe.ipynb": "clip",
-    "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
-    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
-    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
-    "examples/recipes/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/methods/function_vectors_recipe.ipynb": "transformers",
+    "examples/methods/clip_head_attention_recipe.ipynb": "clip",
+    "examples/methods/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
+    "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
+    "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
+    "docs/gallery/causal_tracing.md": "transformers",
+    "docs/gallery/cnn_fields.md": "torchvision",
+    "docs/gallery/neuro_rdms.md": "torchvision",
+    "docs/gallery/ioi_circuit.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -72,6 +83,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
@@ -87,6 +99,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "cornet": ("cornet",),
     "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
     "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
+    "sklearn": ("sklearn", "transformers"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -108,6 +121,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
 #: batched autograd plus a jacrev check) and is listed to keep the unmarked
 #: family inside its aggregate budget.
+#: The linear-probe page measured 5.9 s through its sixth fence alone on one
+#: core (OMP_NUM_THREADS=1), before its streaming fence.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -117,11 +132,13 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/field-guide/pretrained_saes.md",
         "docs/field-guide/sae_trainers.md",
         "docs/field-guide/feature_visualisation.md",
-        "examples/recipes/train_tuned_lens_recipe.ipynb",
+        "examples/methods/train_tuned_lens_recipe.ipynb",
         "docs/field-guide/prisma_clip_sae.md",
-        "examples/recipes/das_causal_basis_recipe.ipynb",
-        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
-        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
+        "examples/methods/das_causal_basis_recipe.ipynb",
+        "examples/methods/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/methods/cka_rsa_two_models_recipe.ipynb",
+        "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
+        "docs/field-guide/linear_probes.md",
     }
 )
 
@@ -138,13 +155,27 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: The Jacobian lens notebook downloads GPT-2 small and fits sixteen prompts of
+#: batched autograd through the whole model, then a jacrev check on two blocks.
+#: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
+#: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
+#: measured 168.3 and 193.0 s in the test call and 175.7 and 195.6 s run alone
+#: (two runs); the LEACE notebook (GPT-2 small, twelve block erasers) measured
+#: 73.3 and 72.6 s, and 82.0 and 76.9 s. The vision logit lens notebook measured
+#: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
+#: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
+#: use, so it sits in the slow tier with the CLIP notebooks.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
-        "examples/recipes/function_vectors_recipe.ipynb",
-        "examples/recipes/clip_head_attention_recipe.ipynb",
-        "examples/recipes/clip_text_decomposition_recipe.ipynb",
-        "examples/recipes/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/function_vectors_recipe.ipynb",
+        "examples/methods/clip_head_attention_recipe.ipynb",
+        "examples/methods/clip_text_decomposition_recipe.ipynb",
+        "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )
 

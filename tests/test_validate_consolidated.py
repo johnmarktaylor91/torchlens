@@ -8,6 +8,7 @@ import pytest
 import torch
 
 import torchlens as tl
+import torchlens._user_funcs as user_funcs
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens.validation.consolidated import InterventionValidationReport
 
@@ -52,6 +53,31 @@ def model_and_input() -> tuple[TinyModel, torch.Tensor]:
     model = TinyModel()
     torch.manual_seed(1)
     return model, torch.randn(1, 3)
+
+
+def test_validate_scope_defaults_to_forward(
+    model_and_input: tuple[TinyModel, torch.Tensor],
+) -> None:
+    """Omitting ``scope`` runs the forward scope and matches ``scope="forward"``."""
+
+    model, x = model_and_input
+    with (
+        mock.patch(
+            "torchlens._user_funcs.validate_forward_pass",
+            wraps=user_funcs.validate_forward_pass,
+        ) as forward_validator,
+        mock.patch(
+            "torchlens.validation.consolidated.validate_backward_pass",
+            wraps=consolidated_validation.validate_backward_pass,
+        ) as backward_validator,
+    ):
+        default_result = tl.validate(model, x, seed=42)
+        explicit_result = tl.validate(model, x, scope="forward", seed=42)
+    assert default_result is True
+    assert default_result == explicit_result
+    assert forward_validator.call_count == 2
+    assert forward_validator.call_args_list[0] == forward_validator.call_args_list[1]
+    assert backward_validator.call_count == 0
 
 
 def test_validate_backward_scope_detects_corrupted_captured_grad(

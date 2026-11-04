@@ -1,5 +1,4 @@
 """Capture torch backward execution and autograd graph metadata.
-
 This module installs backward/grad wrappers, walks grad_fn graphs, records hook
 events, and exposes Trace/Recording backward helpers.
 """
@@ -40,6 +39,7 @@ from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
+from ..._errors import TorchLensWarning
 from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -52,6 +52,7 @@ from ..._ir.events import (
 )
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
@@ -143,14 +144,12 @@ def _run_with_detached_activation_guidance(
     engine_callable: Callable[[], Any],
 ) -> Any:
     """Run autograd and augment only a proven TorchLens-detached-root failure.
-
     Parameters
     ----------
     roots:
         Tensor roots passed to the PyTorch autograd engine.
     engine_callable:
         Zero-argument invocation of the original PyTorch entry point.
-
     Returns
     -------
     Any
@@ -1094,6 +1093,8 @@ class _BackwardFoldState:
     computes along the way so that a clean appended event tail can be folded
     in O(tail) instead of re-reading every backward event ever emitted.
     """
+
+    __repr__ = short_dataclass_repr
 
     discovered: OrderedDict[int, GradFnDiscovered] = field(default_factory=OrderedDict)
     latest_topology: dict[int, tuple[int, ...]] = field(default_factory=dict)
@@ -3292,17 +3293,17 @@ def _capture_autograd_engine_call(
     # P1 supports multi-trace bracket opening by nesting setup and running the
     # engine once through the innermost capture. Later projection phases will
     # refine per-trace outer_context metadata.
-    def nested_call(index: int) -> Any:
-        """Run nested capture setup for all matched traces."""
-
-        if index == len(matched_traces):
-            return engine_callable()
+    # Built innermost-first as a chain of partials (no self-recursive closure:
+    # that cycle would hold every matched trace until the cyclic collector ran).
+    run: Callable[[], Any] = engine_callable
+    for index in reversed(range(len(matched_traces))):
         matched_trace = matched_traces[index]
         root_forward_op_count = _root_forward_op_count(matched_trace, roots)
-        return _run_backward_with_capture(
+        run = functools.partial(
+            _run_backward_with_capture,
             matched_trace,
             roots_of[index][0],
-            lambda: nested_call(index + 1),
+            run,
             extra_roots=roots_of[index][1:],
             trigger=trigger,
             outer_context=None if index == 0 else f"{trigger}:multi_trace",
@@ -3313,8 +3314,7 @@ def _capture_autograd_engine_call(
                 else forward_op_count_at_trigger
             ),
         )
-
-    return nested_call(0)
+    return run()
 
 
 # ---------------------------------------------------------------------------
@@ -3809,8 +3809,6 @@ def _warn_buried_autograd_sites(buried_sites: list[str]) -> None:
 
     if not buried_sites:
         return
-    from ..._errors import TorchLensWarning
-
     warnings.warn(
         "uninstall of TorchLens autograd wrappers left "
         f"{len(buried_sites)} slot(s) holding a third-party patch layered over "
@@ -3954,39 +3952,37 @@ def install_autograd_wrappers() -> None:
     _AUTOGRAD_WRAPPERS_INSTALLED = True
 
 
-def uninstall_autograd_wrappers() -> None:
+def uninstall_autograd_wrappers(buried_sites: list[str] | None = None) -> None:
     """Restore original global autograd entry points when installed.
 
-    Returns
-    -------
-    None
-        PyTorch autograd functions are restored in place.
+    ``buried_sites`` collects the slots left holding a foreign patch so the
+    caller reports them once its whole teardown is complete (a raised warning
+    must not abort it); without a collector this function warns itself.
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
     from ._function_boundary import uninstall_function_apply_wrapper
 
-    buried_sites: list[str] = []
-    _uninstall_saved_tensors_hooks_scope(buried_sites)
+    collected = buried_sites if buried_sites is not None else []
+    _uninstall_saved_tensors_hooks_scope(collected)
     uninstall_function_apply_wrapper()
-    if not _AUTOGRAD_WRAPPERS_INSTALLED:
-        _warn_buried_autograd_sites(buried_sites)
-        return
-    for attr_name, installed, original in (
-        ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
-        ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
-    ):
-        buried = _restore_slot_identity_checked(
-            torch.autograd,
-            attr_name,
-            installed,
-            original,
-            f"torch.autograd.{attr_name}",
-        )
-        if buried is not None:
-            buried_sites.append(buried)
-    _AUTOGRAD_WRAPPERS_INSTALLED = False
-    _warn_buried_autograd_sites(buried_sites)
+    if _AUTOGRAD_WRAPPERS_INSTALLED:
+        for attr_name, installed, original in (
+            ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
+            ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
+        ):
+            buried = _restore_slot_identity_checked(
+                torch.autograd,
+                attr_name,
+                installed,
+                original,
+                f"torch.autograd.{attr_name}",
+            )
+            if buried is not None:
+                collected.append(buried)
+        _AUTOGRAD_WRAPPERS_INSTALLED = False
+    if buried_sites is None:
+        _warn_buried_autograd_sites(collected)
 
 
 def _finalize_grad_streaming(trace: Any) -> None:

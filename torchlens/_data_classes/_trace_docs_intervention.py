@@ -55,38 +55,6 @@ DOCS: dict[str, str] = {
             Frozen public view of the current mutable intervention spec.
         """
     ),
-    "remove": (
-        """Remove the most recent legacy-returned hook attachment.
-        
-        Returns
-        -------
-        None
-            Hook specs attached by the last single-hook ``attach_hooks`` call
-            are detached.
-        """
-    ),
-    "__enter__": (
-        """Enter a legacy scoped hook attachment.
-        
-        Returns
-        -------
-        Trace
-            This log, acting as the most recent hook handle.
-        """
-    ),
-    "__exit__": (
-        """Clean up a legacy scoped hook attachment.
-        
-        Parameters
-        ----------
-        exc_type:
-            Exception type, if the body raised.
-        exc:
-            Exception value, if the body raised.
-        traceback:
-            Exception traceback, if the body raised.
-        """
-    ),
     "clear_edits": (
         """Detach sticky hooks by site or handle.
         
@@ -96,12 +64,9 @@ DOCS: dict[str, str] = {
             Optional selector-like target. When provided, all sticky hooks for
             that target are removed.
         handle:
-            Optional hook handle returned by ``attach_hooks``.
+            Optional hook handle returned by a hook ``do``.
         strict:
             Whether no-op detach requests should raise.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
         
         Returns
         -------
@@ -135,20 +100,32 @@ DOCS: dict[str, str] = {
         this trace instead. Replay re-executes forward ops only and refuses a
         gradient edit (``replay_gradient_edit_unsupported``).
         
+        ``do`` is the one editing verb on a trace. A non-callable value sets
+        the site and propagates it; a hook or helper is attached as a sticky
+        rule and propagated; a mapping of sites to edits applies several edits
+        in one propagation; an ``InterventionSpec`` applies its rules.
+        ``InterventionOptions(engine="set_only")`` stages without
+        propagating, and ``InterventionOptions(differentiable=True)`` replays
+        onto a new fork whose outputs stay differentiable.
+        
         Parameters
         ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        value_or_hook:
-            Optional hook for the ``(site, hook)`` input shape.
+        site:
+            Mapping/list batch input or selector-like site (positional-only:
+            ``do(site, edit)``, never ``do(site=...)``).
+        edit:
+            Optional value, hook or helper for the ``(site, edit)`` input shape
+            (positional-only).
         model:
             Model required when ``engine="rerun"``.
         inputs:
             Input required when ``engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``: ``engine``
-            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
-            ``confirm_mutation``, ``strict``).
+            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``, ``strict``,
+            ``allow_changed_params``, ``differentiable``). Editing a root trace warns
+            once (``TraceMutationWarning``); edit a ``fork()`` for a quiet, isolated
+            copy.
         loss:
             Callable of the returned trace giving a scalar loss, for a plan
             with a gradient site: after arming, the door runs

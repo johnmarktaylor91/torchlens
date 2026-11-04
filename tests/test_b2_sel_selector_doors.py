@@ -3,7 +3,7 @@
 The rule (DOCUMENTED-UNSTABLE): a module address, a name relative to a wrapped
 inner model, or a dotted name whose module was registered with dots flattened to
 underscores resolves to that module's output at ``tl.extract``, ``tl.pluck``,
-``trace[...]``, ``tl.trace(save=[...])``, and ``trace.run(until=...)``. The
+``trace[...]``, ``tl.trace(save=[...])``, and ``trace.run_transaction(inputs=..., until=...)``. The
 replicas below reproduce the two timm wrapper shapes without importing timm:
 ``FeatureListNet`` (a ``ModuleDict`` whose forward returns every stage output, so
 each stage is also a model output) and ``FeatureGetterNet`` (a wrapper whose stage

@@ -17,13 +17,13 @@
 from __future__ import annotations
 
 import copy
-import glob
-import pickle
 import warnings
+from pathlib import Path
 
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, write_record
 
 import torchlens as tl
 from torchlens._capture._episode_derivation import (
@@ -33,6 +33,8 @@ from torchlens._capture._episode_derivation import (
     rederived_evidence_matches,
 )
 from torchlens._capture._episode_ledger import episode_ledger_for
+from torchlens._io.format3.decode import decode_value
+from torchlens._io.format3.values import ValueEncoder
 from torchlens.errors import TorchLensError, TorchLensWarning
 from torchlens.options import CaptureOptions, EpisodeOptions
 
@@ -75,19 +77,30 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
     )
 
 
-def _save(trace: tl.Trace, path) -> str:
+def _save(trace: tl.Trace, path) -> Path:
+    """Save ``trace``; return the artifact root whose trace record the forgeries edit."""
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace.save(path)
-    return glob.glob(str(path) + "/**/metadata.pkl", recursive=True)[0]
+    return Path(path)
 
 
-def _rewrite_metadata(metadata_path: str, mutate) -> None:
-    with open(metadata_path, "rb") as handle:
-        state = pickle.load(handle)
+def _rewrite_metadata(root: Path, mutate) -> None:
+    """Forge the persisted ledger: edit the trace record's decoded annotations.
+
+    ``mutate`` sees ``{"annotations": {...}}``; the edited annotations are
+    re-encoded with the writer's value encoder and the record re-digested, so
+    the forgery reaches the load-time ledger anchors, not the file digest check.
+    """
+
+    record = read_record(root, "trace")
+    state = {"annotations": decode_value(record["fields"]["annotations"])}
     mutate(state)
-    with open(metadata_path, "wb") as handle:
-        pickle.dump(state, handle)
+    record["fields"]["annotations"] = ValueEncoder().encode(
+        state["annotations"], "trace.annotations"
+    )
+    write_record(root, "trace", record)
 
 
 def _load_quarantined(path):

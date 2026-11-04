@@ -190,20 +190,26 @@ Param -> _param_ref -> nn.Parameter
 The Trace back-references are stored as `weakref.ref` in `_source_trace_ref` slots
 (`FieldPolicy.WEAKREF_STRIP`), so these back-references themselves do NOT form strong
 cycles; reading one after the Trace dies yields `None` (and consumers that need it, such
-as `ModuleCall.module`, raise). Other strong reference cycles remain (core/facade
-reference tables and similar internal structure), so a dropped Trace is reclaimed by the
-CYCLIC collector, not by refcounting alone: measured on a live capture, `del trace` with
-`gc` disabled leaves the object alive until `gc.collect()` runs, with or without a prior
-`Trace.cleanup()`. Still call `Trace.cleanup()` when retaining many logs or after
-visualization-only workflows.
+as `ModuleCall.module`, raise). A dropped Trace with no outside references is freed by
+refcounting alone (`del trace` with `gc` disabled leaves its weakref dead; the refcount
+tests in `tests/test_trace_lifetime.py` and `tests/test_gc.py` hold this). Still call
+`Trace.cleanup()` when retaining many logs or after visualization-only workflows.
+
+Views are weak by design (JMT ruling, 3 Nov 2026): an `Op` or `Layer` never keeps its
+Trace alive, so a chained temporary such as `tl.trace(model, x).output_ops[0].out` or
+`tl.trace(model, x)["conv2d_1_1"].receptive_field` loses its Trace as soon as the view is
+taken. Every Op and Layer read that needs the Trace then refuses
+`RecordBindingError(code="trace_reference_collected")` with the remedy "keep the Trace in
+a variable"; none returns a silent `None`. Docs, docstring examples and tests bind the
+Trace first: `trace = tl.trace(model, x)`, then read `trace[...]`.
 
 Retained-Op payload lifetime (fix/fork F4): an `Op` kept past its Trace's death no longer
 pins every captured activation. Each owning `TraceCore` (the capture's core plus one per
 fork core sharing the sealed base) registers a `weakref.finalize` on the op store; when
 the LAST owner is garbage-collected the store evicts top-level tensor cells (and the
-snapshot surfaces of surviving fork `OpStoreView`s), so payload reads on the retained
-facade return the payload-absent spelling while metadata stays readable. Keep the Trace
-alive (or clone the tensor) to keep payloads. Fork views hold the fork's record
+snapshot surfaces of surviving fork `OpStoreView`s). A payload read on the retained
+facade (`op.out`) then refuses `trace_reference_collected`; metadata held on the Op itself
+stays readable. Keep the Trace alive (or clone the tensor) to keep payloads. Fork views hold the fork's record
 translator weakly (anchored on the fork core) so a retained fork Op cannot root the
 whole fork graph.
 
@@ -244,7 +250,7 @@ layer.ops  # dict[int, Op]
   creates cycles. There is NO `Trace.load` — loading is module-level `tl.load`
   (see the sibling `AGENTS.md`) — and `replay`/`rerun` are deprecated warning
   aliases of `push`/`run`.
-- `run(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
+- `run_transaction(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
   legacy `run(model, x, ...)` remains the intervention-rerun compatibility path.
 - `graph_shape_hash` is computed before `_set_tracing_finished`.
 

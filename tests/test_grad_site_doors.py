@@ -30,6 +30,8 @@ from torchlens.intervention.spec import (
 )
 from torchlens.intervention.types import TargetSpec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _X = torch.randn(3, 4, generator=torch.Generator().manual_seed(7))
 
 
@@ -75,11 +77,12 @@ def _events(trace: Any, **match: Any) -> list[dict[str, Any]]:
     "door",
     [
         lambda: tl.Trace.do,
+        lambda: tl.Trace.clear_edits,
         lambda: tl.when,
         lambda: tl.observers.tap,
         lambda: tl.stats.narrate,
     ],
-    ids=["do", "when", "tap", "narrate"],
+    ids=["do", "clear_edits", "when", "tap", "narrate"],
 )
 def test_site_doors_take_no_direction_keyword(door: Any) -> None:
     assert "direction" not in inspect.signature(door()).parameters
@@ -149,7 +152,7 @@ def test_rule_signal_is_derived_and_rule_has_no_direction() -> None:
     # Walk names.5 (JMT 2026-11-01): Rule.direction is removed; the site decides.
     assert not hasattr(forward_rule, "direction")
     assert not hasattr(mixed_rule, "direction")
-    assert "signal='forward'" in repr(forward_rule)
+    assert ", forward, structural" in repr(forward_rule)
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +226,7 @@ def test_loss_needs_a_gradient_site() -> None:
     assert _snapshot(trace) == before
 
 
-def test_push_refuses_a_recipe_holding_a_gradient_rule() -> None:
+def test_replay_do_refuses_a_recipe_holding_a_gradient_rule() -> None:
     trace = _trace(_BranchNet()).fork()
     trace._ensure_intervention_spec().add_hook(
         _grad_target(_relu_label(trace)),
@@ -232,7 +235,7 @@ def test_push_refuses_a_recipe_holding_a_gradient_rule() -> None:
         metadata={"arming_group": "arm-1", "arming_event_id": None},
     )
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.push()
+        trace.do(_relu_label(trace), tl.scale(1.0))
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     assert "Replay re-executes forward ops only" in str(excinfo.value)
 
@@ -465,7 +468,7 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     returned = trace.do(
         tl.grad(_RELU),
         tl.scale(0),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert returned is trace
     assert trace._layer_list is layers_before
@@ -518,14 +521,18 @@ def test_saved_armed_result_keeps_its_armed_row(tmp_path: Any) -> None:  # A30
         loaded.backward(torch.tensor(1.0, requires_grad=True) * 2)
 
 
-def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
+def test_staged_do_on_a_gradient_site_arms_only_and_clear_edits_disarms() -> None:
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
-    events_before = len(_events(trace))
-    handle = trace._attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
-    assert len(_events(trace)) == events_before
+    backward_events_before = len(_events(trace, door="backward"))
+    trace.do(
+        tl.grad(_RELU),
+        tl.scale(0),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
+    assert len(_events(trace, door="backward")) == backward_events_before
     assert len(trace.armed_edits) == 1
-    trace.clear_edits(handle=handle, confirm_mutation=True)
+    trace.clear_edits(tl.grad(_RELU))
     assert trace.armed_edits == ()
 
 

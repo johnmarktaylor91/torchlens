@@ -205,6 +205,8 @@ def test_attention_flop_lines_disclose_the_full_square() -> None:
     line = _body_line(str(report), sdpa.name)
     assert line.count(ATTENTION_MARK) == 2  # the flops and flops_pct cells
     assert "attention masks and is_causal are not discounted" in str(report)
+    legend = next(line for line in str(report).splitlines() if line.startswith("Legend"))
+    assert ATTENTION_MARK in legend
     proj = _body_line(str(report), "proj (Linear)")
     assert ATTENTION_MARK not in proj
     flops = tl.report.flops(model, x)

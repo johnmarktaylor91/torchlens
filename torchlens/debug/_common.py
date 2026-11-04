@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._lookup_kinds import op_at
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
 
@@ -135,7 +136,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
 def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
     """Return the aggregate Layer a bare multi-pass label names, else ``None``.
 
-    ``trace[label]`` refuses a bare multi-pass label (every pass is a distinct
+    A bare multi-pass label names a Layer, not one op (every pass is a distinct
     op); the lineage contract still owes the honest "select a pass" message,
     which needs the aggregate record's pass count.
     """
@@ -168,7 +169,7 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     candidate = op_or_label
     if not (hasattr(candidate, "parents") and hasattr(candidate, "children")):
         try:
-            candidate = trace[op_or_label]
+            candidate = op_at(trace, op_or_label)  # a module name names its output op
         except Exception as exc:  # noqa: BLE001 - debug helpers report odd inputs instead of raising.
             candidate = _multipass_layer_or_none(trace, op_or_label)
             if candidate is None:

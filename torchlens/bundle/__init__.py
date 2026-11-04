@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import torch
 
+from .._entry_refusals import require_member_name
 from .._utils.facade import refuse_removed_member
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
@@ -78,6 +79,7 @@ from ._relation_grades import (
     _bundle_relation_grades,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._removed import _REMOVED_BUNDLE_MEMBERS
 from ._token_divergence import (
     TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
     _bundle_token_divergence,
@@ -94,30 +96,6 @@ if TYPE_CHECKING:
     from ..viz._drawing import Drawing
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
-
-
-#: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
-
-
-_REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
-    "replay": "use bundle.do(site, edit) -- do replays every member",
-    "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
-    "push": "use bundle.do(site, edit) -- do applies and replays the edit on every member",
-    "attach_hooks": "use bundle.do(site, hook) -- do is the one editing verb on a bundle",
-    "node": "use bundle.at(site)",
-    "compare_at": "use bundle.at(site).compare()",
-    "joint_metric": "call fn(bundle) directly",
-    "set_capacity": "assign bundle.capacity = n",
-    "traces": "use bundle.members or bundle[name]",
-    "help": "print(bundle) shows the bundle card",
-    "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
-    "member_construction": "read bundle.history for how members entered the bundle",
-    "show_diff": "use bundle.draw(graph='diff', members=(a, b), metric=...)",
-    "delta_map": "use bundle.compare(a, b, metric=..., on=...) per pair, bundle.rank_changes() across members",
-    "norm_delta": "use bundle.compare(baseline, member, metric='relative_l2')",
-    "output_delta": "use bundle.compare(member, target, metric=...) and read the output sites",
-    "aligned_pairs": "use bundle.supergraph, the structural alignment across members",
-}
 
 
 class Bundle:
@@ -255,6 +233,21 @@ class Bundle:
 
         return _card.outcome_distribution(self)
 
+    def summary(self) -> str:
+        """Return the bundle card as text: members, outcomes, baseline, relations."""
+
+        return _card.bundle_summary(self)
+
+    def to_pandas(self) -> Any:
+        """Return one member-keyed table: a ``member`` column, then each member's rows."""
+
+        return _card.bundle_table(self)
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the ``torchlens.agent_bundle.v1`` dump: card facts plus each member's dump."""
+
+        return _card.bundle_agent_json(self, max_ops=max_ops)
+
     def __repr__(self) -> str:
         """One-line bundle card: members, baseline, outcome distribution.
 
@@ -286,9 +279,7 @@ class Bundle:
             Matching member log.
         """
 
-        if not isinstance(name, str):
-            raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
-        return self._members[name]
+        return self._members[require_member_name(name)]
 
     @property
     def outcome(self) -> CaptureOutcome:
@@ -1025,36 +1016,36 @@ class Bundle:
         *,
         k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+        by: Literal["site", "module"] = "site",
     ) -> list[tuple[str, float]]:
         """Rank sites by out distance from a baseline (the SITE axis).
 
-        Each site's score is the ``metric`` distance from the baseline's
-        activation to every other member's, AVERAGED across those members —
-        the answer to "where did the bundle diverge", never "which member
-        mattered" (the member axis lives on the effect table).
-
-        Sites pair through the structural alignment (:attr:`supergraph`), not
-        by literal label; a site some member lacks is not scored.
+        Each site's score is the ``metric`` distance from the baseline's activation to every
+        other member's, AVERAGED across them ("where did the bundle diverge", never "which
+        member mattered"). Sites pair through the structural alignment (:attr:`supergraph`),
+        not by literal label; a site some member lacks is not scored.
 
         Parameters
         ----------
         baseline:
             Optional baseline override.
         k:
-            Maximum rows to RETURN. Every site is scored first; this is a
-            display cap on the sorted result, not a compute bound.
+            Maximum rows to RETURN after every site is scored (a display cap).
         metric:
             Pairwise tensor metric.
+        by:
+            ``"site"`` (default): one row per op. ``"module"``: one row per module address
+            (``transformer.h.9``) scored by its most changed site (ops outside every module
+            keep their site rows); ``k`` caps after the fold.
 
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending. A multi-pass op
-            scores one row per pass, keyed by its pass-qualified label
-            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op scores one row per
+            pass, keyed ``tanh_1_1:2``; a single-pass op keeps its bare layer label.
         """
 
-        return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
+        return _comparisons.rank_changes(self, baseline, k=k, metric=metric, by=by)
 
     def compare(
         self,

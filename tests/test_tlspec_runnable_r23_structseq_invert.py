@@ -221,7 +221,7 @@ def test_structseq_named_runtime_paths_match_positional_saved_paths(
     loaded = _save_load(model, value, tmp_path / f"{operation}.tlspec")
     _rewrite_structseq_paths_to_positional(loaded)
 
-    result = loaded.run(inputs=value.clone(), seed=0)
+    result = loaded.run_transaction(inputs=value.clone(), seed=0)
     live = model(value)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -242,7 +242,7 @@ def test_unary_invert_is_not_classified_as_inplace_and_runs_verified(tmp_path: P
 
     path = tmp_path / "invert.tlspec"
     trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=value.clone(), seed=0)
+    result = tl.load(path).run_transaction(inputs=value.clone(), seed=0)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.equal(result.output, model(value))

@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._trace_groups import _TraceGroup
+from ._trace_source import _annotated_source
 
 
 class TraceSettings(_TraceGroup):
@@ -243,6 +244,33 @@ class TraceSource(_TraceGroup):
     """
 
     __slots__ = ()
+
+    def annotated(self) -> str:
+        """Return captured forward source with the op labels produced on each line.
+
+        Only frames belonging to the root forward are included. Calls into child
+        modules are attributed to their calling line; helpers in the same file
+        outside forward are excluded. Source text is the capture-time snapshot,
+        so a loaded trace works only when its source was embedded.
+
+        Returns
+        -------
+        str
+            Numbered source lines with captured labels after ``# ops:``.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``source_unavailable`` when the capture has no forward source.
+
+        Examples
+        --------
+        >>> import torch.nn as nn
+        >>> trace = tl.trace(nn.ReLU(), torch.ones(1))
+        >>> isinstance(trace.source.annotated(), str)
+        True
+        """
+        return _annotated_source(self._trace)
 
     @property
     def class_location(self) -> Any:

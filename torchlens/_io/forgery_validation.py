@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
 from . import ArtifactError
 from ._forgery_identity_facts import _validate_identity_facts
+from ._injected_row_cells import check_injection_provenance_row
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1675,87 +1676,6 @@ def _validate_capture_advisories(trace: Trace) -> None:
             )
         if not isinstance(row["message"], str):
             _advisories_invalid(f"row {index} message must be a string", "row_message")
-
-
-_INJECTION_PROVENANCE_FIELDS = frozenset(
-    {
-        "host_site_key",
-        "spec_rule_id",
-        "host_pass",
-        "firing_index",
-        "nesting_path",
-        "local_op_ordinal",
-        "output_slot",
-    }
-)
-
-
-def _injection_invalid(message: str, reason: str) -> NoReturn:
-    """Raise a typed injected-op identity load refusal.
-
-    Parameters
-    ----------
-    message:
-        Structural violation detail.
-    reason:
-        Machine-readable failure class.
-
-    Raises
-    ------
-    ArtifactError
-        Always.
-    """
-
-    _refuse(
-        message,
-        code="artifact_injection_provenance_invalid",
-        field="Op.injection_provenance",
-        reason=reason,
-        remedy=(
-            "re-capture with log_injections and re-save with one current "
-            "TorchLens version; do not hand-edit injected-op identity records"
-        ),
-    )
-
-
-def check_injection_provenance_row(record: Any, label: str) -> None:
-    """Validate ONE injected-op identity record fail-closed (C07 grammar).
-
-    Shared by the layer_list surface validator below (defense in depth --
-    the F44 load split removes genuine injected rows before it runs) and by
-    the F44 codec's split validator
-    (:mod:`torchlens._io.injection_codec`), so a forged record refuses with
-    the same typed code from either door.
-    """
-
-    if not isinstance(record, Mapping) or set(record) != _INJECTION_PROVENANCE_FIELDS:
-        _injection_invalid(
-            f"op {label!r} carries a malformed injected-op identity record: {record!r}",
-            "record_schema",
-        )
-    for field_name in ("host_site_key", "spec_rule_id"):
-        if not isinstance(record[field_name], str) or not record[field_name]:
-            _injection_invalid(
-                f"op {label!r} {field_name} must be a non-empty string",
-                "record_strings",
-            )
-    if not _is_int(record["host_pass"]) or record["host_pass"] < 1:
-        _injection_invalid(
-            f"op {label!r} host_pass must be a positive int (1-based pass index)",
-            "record_host_pass",
-        )
-    for field_name in ("firing_index", "local_op_ordinal", "output_slot"):
-        if not _is_int(record[field_name]) or record[field_name] < 0:
-            _injection_invalid(
-                f"op {label!r} {field_name} must be a non-negative int",
-                "record_ordinals",
-            )
-    nesting = record["nesting_path"]
-    if not _is_sequence(nesting) or any(not _is_int(step) or step < 0 for step in nesting):
-        _injection_invalid(
-            f"op {label!r} nesting_path must be a sequence of non-negative ints",
-            "record_nesting",
-        )
 
 
 def _validate_injection_provenance(trace: Trace) -> None:

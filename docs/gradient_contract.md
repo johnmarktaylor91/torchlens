@@ -21,8 +21,9 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 - A selection door edits only the selected elements, so the rest of the site keeps the graph:
   under `do(tl.units(...))` a cutting verb still lets the gradient through the unselected
   elements, and under `do(tl.subspace(...))` through the orthogonal complement.
-- The capture doors, `fork.do` (replay), `do(model=, inputs=)` (rerun), a hook staged with `do`
-  (`engine="set_only"`) + `run` and `spec.bind(model)` keep whatever the verb keeps. `push(replay=ReplayOptions(differentiable=True))`
+- The capture doors, `fork.do` (replay), `do(model=, inputs=)` (rerun), `do` with
+  `InterventionOptions(engine="set_only")` + `run` and `spec.bind(model)` keep whatever the verb
+  keeps. `do(site, edit, intervention=InterventionOptions(differentiable=True))`
   re-leafs the replayed values by design, so no gradient reaches the parameters upstream of the
   edit under any verb; the gradient stops at the replay frontier. To train parameters upstream of
   an edit, use a live door (`tl.when(site, edit).bind(model)(x)` or `tl.trace(model, x,
@@ -92,7 +93,7 @@ forward hook; `cut` means it gives none. `raises:<code>` is a typed refusal. Und
 [subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)), and the
 projection edits refuse `subspace_edit_unsupported` there. `set_affine_coordinates` is a source verb: it
 keeps the graph under `do(tl.subspace(...))` (its new coordinates `W x + b` are a function of the
-site value) and refuses `affine_source_needs_subspace` at every other door. Every `push(differentiable=True)` cell
+site value) and refuses `affine_source_needs_subspace` at every other door. Every `do(differentiable=True)` cell
 reads `cut` because the replay frontier re-leafs the edited value; each of its `keep_grad` cells
 that does not raise also carries the `keep_grad_replay_frontier` warning, and the test checks it.
 
@@ -308,36 +309,36 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | spec.bind(model) | `compose` | reaches | reaches |
 | spec.bind(model) | `at_positions` | reaches | reaches |
 | spec.bind(model) | `hook callable` | reaches | reaches |
-| push(differentiable=True) | `zero_ablate` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `mean_ablate` | cut | cut |
-| push(differentiable=True) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `scale` | cut | cut |
-| push(differentiable=True) | `clamp` | cut | cut |
-| push(differentiable=True) | `add_noise` | cut | cut |
-| push(differentiable=True) | `steer` | cut | cut |
-| push(differentiable=True) | `add(scalar)` | cut | cut |
-| push(differentiable=True) | `add(tensor)` | cut | cut |
-| push(differentiable=True) | `replace_with` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `swap_with` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `project_onto` | cut | cut |
-| push(differentiable=True) | `project_out` | cut | cut |
-| push(differentiable=True) | `scramble_elements` | cut | cut |
-| push(differentiable=True) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `splice_module` | cut | cut |
-| push(differentiable=True) | `patch_from` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `permute_batch` | cut | cut |
-| push(differentiable=True) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `mean_ablate(dim=0)` | cut | cut |
-| push(differentiable=True) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
-| push(differentiable=True) | `set_direction_mean` | cut | cut |
-| push(differentiable=True) | `subspace_ablate` | cut | cut |
-| push(differentiable=True) | `subspace_ablate(resample)` | cut | cut |
-| push(differentiable=True) | `subspace_interchange` | cut | cut |
-| push(differentiable=True) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
-| push(differentiable=True) | `compose` | cut | cut |
-| push(differentiable=True) | `at_positions` | cut | cut |
-| push(differentiable=True) | `hook callable` | cut | cut |
+| do(differentiable=True) | `zero_ablate` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `mean_ablate` | cut | cut |
+| do(differentiable=True) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `scale` | cut | cut |
+| do(differentiable=True) | `clamp` | cut | cut |
+| do(differentiable=True) | `add_noise` | cut | cut |
+| do(differentiable=True) | `steer` | cut | cut |
+| do(differentiable=True) | `add(scalar)` | cut | cut |
+| do(differentiable=True) | `add(tensor)` | cut | cut |
+| do(differentiable=True) | `replace_with` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `swap_with` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `project_onto` | cut | cut |
+| do(differentiable=True) | `project_out` | cut | cut |
+| do(differentiable=True) | `scramble_elements` | cut | cut |
+| do(differentiable=True) | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `splice_module` | cut | cut |
+| do(differentiable=True) | `patch_from` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `permute_batch` | cut | cut |
+| do(differentiable=True) | `resample_rows_from` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `mean_ablate(dim=0)` | cut | cut |
+| do(differentiable=True) | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
+| do(differentiable=True) | `set_direction_mean` | cut | cut |
+| do(differentiable=True) | `subspace_ablate` | cut | cut |
+| do(differentiable=True) | `subspace_ablate(resample)` | cut | cut |
+| do(differentiable=True) | `subspace_interchange` | cut | cut |
+| do(differentiable=True) | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| do(differentiable=True) | `compose` | cut | cut |
+| do(differentiable=True) | `at_positions` | cut | cut |
+| do(differentiable=True) | `hook callable` | cut | cut |
 | do(tl.units(...)) | `zero_ablate` | reaches | raises:edit_detached_from_graph |
 | do(tl.units(...)) | `mean_ablate` | reaches | reaches |
 | do(tl.units(...)) | `mean_ablate(source)` | reaches | raises:edit_detached_from_graph |

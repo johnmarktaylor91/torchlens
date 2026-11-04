@@ -419,10 +419,10 @@ site = "linear_1_1"
 positions = torch.zeros(1, 5, dtype=torch.bool)
 positions[:, -1] = True  # pyreft's unit_locations: the last token
 
-base = tl.trace(model, tokens, capture=tl.options.CaptureOptions(replayable=True))
+base = tl.trace(model, tokens)
 fork = base.fork()
 fork.do(artifact.subspace(site, positions=positions), artifact.edit)
-h, edited = base[site].out[0, -1], fork.push()[site].out
+h, edited = base[site].out[0, -1], fork[site].out  # do() already replayed the edit
 R, W, b = rotation.double(), weight.double(), bias.double()
 
 RESULT = [

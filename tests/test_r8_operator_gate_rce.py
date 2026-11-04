@@ -153,7 +153,7 @@ def test_operator_and_float32_forward_saves_loads_runs_verified(tmp_path: Path) 
         run, level="runnable", include_weights=True
     )
 
-    result = tl.load(run).run(inputs=x)
+    result = tl.load(run).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.is_poisoned is False
     assert torch.allclose(result.output, expected)

@@ -119,7 +119,7 @@ def test_capture_on_success_raising_runtime_input_stays_typed(tmp_path: Path) ->
     trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(RuntimeSignatureDriftError) as captured:
-        loaded.run(inputs=_non_pd_input())
+        loaded.run_transaction(inputs=_non_pd_input())
     # Provocation pin (r3 b6-opus R25-2): the typed code rides the raise; a
     # swap of the code value must fail a test that actually provokes it.
     assert captured.value.fields["code"] == RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value
@@ -139,7 +139,7 @@ def test_caught_mutating_failure_downgrades_opaque(tmp_path: Path) -> None:
     loaded = tl.load(str(path))
     descriptor = loaded._runnable.descriptor
     assert descriptor.witness_completeness is WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
-    result = loaded.run(inputs=x)
+    result = loaded.run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
@@ -169,5 +169,5 @@ def test_successful_unmodeled_host_return_also_downgrades(tmp_path: Path) -> Non
     loaded = tl.load(str(path))
     descriptor = loaded._runnable.descriptor
     assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
-    result = loaded.run(inputs=x)
+    result = loaded.run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE

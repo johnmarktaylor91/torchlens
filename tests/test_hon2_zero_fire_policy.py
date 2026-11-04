@@ -29,6 +29,11 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
 _POLICIES = ("warn", "error", "disclose")
 
 
@@ -251,7 +256,7 @@ def test_fast_run_door_policy_knob_is_accepted(policy: str) -> None:
 
     model, trace, x_of = _fast_steered_case()
     with _caught() as caught:
-        result = trace.run(inputs=x_of(1), fast=True, on_zero_fire=policy)
+        result = trace.run_transaction(inputs=x_of(1), fast=True, on_zero_fire=policy)
     del model
     assert result.trace.last_run["hooks_unfired"] == 0
     assert not [c for c in _codes(caught) if c.endswith("zero_fire")]

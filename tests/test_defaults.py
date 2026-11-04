@@ -14,6 +14,7 @@ import torchlens._capture.prepare.door as door
 import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 from torchlens import _visualization
+from torchlens._quantities import Bytes
 
 
 class _DummyLog:
@@ -30,6 +31,8 @@ class _DummyLog:
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
         self._cost_total_activation_memory = "0 B"
+        # Read by the door epilogue's once-per-session saved-activation memory guard.
+        self._cost_saved_activation_memory = Bytes(0)
         self._provenance_verified: Any = None
         self.validate_calls: list[dict[str, Any]] = []
         self._options_verbose = False

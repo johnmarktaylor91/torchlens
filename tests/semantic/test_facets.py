@@ -15,9 +15,14 @@ from torchlens._semantic import (
     facets as facets_mod,
 )
 from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
-from torchlens.errors import MissingFacetError
+from torchlens.errors import MissingFacetError, TorchLensWarning
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Record:
@@ -643,11 +648,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("fused_qk")
-    edited._attach_hooks(
+    edited.do(
         [
             (tl.head(0, "q"), tl.zero_ablate()),
             (tl.head(1, "k"), tl.zero_ablate()),
-        ]
+        ],
+        intervention=_STAGE,
     )
     edited.run(model, x)
 
@@ -658,11 +664,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
 
     conflict = clean.fork("fused_conflict")
     with pytest.raises(SiteResolutionError, match="Facet intervention conflict"):
-        conflict._attach_hooks(
+        conflict.do(
             [
                 (tl.head(0, "q"), tl.zero_ablate()),
                 (tl.facet("q").head(0), tl.zero_ablate()),
-            ]
+            ],
+            intervention=_STAGE,
         )
 
 
@@ -723,7 +730,35 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
-        log.fork("unsafe_refuse")._attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+        log.fork("unsafe_refuse").do({tl.facet("unsafe"): tl.zero_ablate()}, intervention=_STAGE)
+
+
+def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
+    """``tl.head(i)`` ablates default q/k/v head facets across the model."""
+
+    torch.manual_seed(4)
+    model = _FacetP2Model(MultiHeadSelfAttention())
+    x = torch.randn(2, 3, 8)
+    clean = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
+    )
+    clean_out = _trace_output(clean).clone()
+
+    edited = clean.fork("head_all")
+    # tl.head(i) keeps its broadcast meaning and discloses the q/k/v fan-out.
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
+    edited.run(model, x)
+
+    assert not torch.allclose(_trace_output(edited), clean_out)
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).k) == 0
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).v) == 0
+    assert edited.validate_forward_pass([_trace_output(edited)])
 
 
 def test_facets_public_module_all_is_curated() -> None:
