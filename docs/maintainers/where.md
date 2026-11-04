@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1457 modules, 651978 lines, 0 modules without a docstring.
+83 packages, 1457 modules, 651983 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34116 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 76 | 34121 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1418 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34116 lines)
+TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34121 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -121,9 +121,9 @@ TorchLens - extract outs and metadata from PyTorch models. (76 modules, 34116 li
 | `_deprecations` | The MISSING kwarg-omission sentinel. | 35 |
 | `_distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 1156 |
 | `_doctor_types` | Doctor report types: the compatibility truth-table row and the report that holds them. | 367 |
-| `_entry_refusals` | Typed, coded refusals raised by public entry points. | 596 |
+| `_entry_refusals` | Typed, coded refusals raised by public entry points. | 553 |
 | `_episode_spec` | The episode declaration dataclass for ''tl.trace(..., episode=...)''. | 179 |
-| `_errors` | Shared TorchLens exception types. | 940 |
+| `_errors` | Shared TorchLens exception types. | 988 |
 | `_extract_refusals` | Typed refusals and capture options used by ''extract'' and ''pluck''. | 43 |
 | `_extraction_provenance` | Input-preprocessing provenance seam for dataset extraction (tvscope B4/B5). | 358 |
 | `_fast_live_events` | Nested wrapped-call bookkeeping for the guarded fast live run. | 121 |
