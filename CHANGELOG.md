@@ -23,9 +23,31 @@
 - **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
   Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
   (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  A set-only `do` given a callable (an `Edit` helper such as `tl.zero_ablate()` or `tl.scale(2.0)`, or a plain
+  function) stages it as a sticky hook that the next propagating `do` or `run` fires (walk ruling names.3, 3 Nov 2026);
+  only static values are stored as one-shot set values.
   The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
   `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
   covers `Rule(direction=)`.
+- **intervention**: the hook, push and set spellings are removed and fold into `do`; each removal
+  below names its replacement through `do`. The removed `Trace`, `Layer` and `Op` members refuse
+  with the typed `facade_redirect` error naming the replacement:
+  - `Trace.attach_hooks`, `Layer.attach_hooks` and `Op.attach_hooks`: `trace.do(site, hook)` attaches
+    the sticky hook and propagates at once; `trace.do(tl.when(site, hook),
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages it without running.
+  - `Trace.clear_hooks`: `trace.clear_edits(site)` or `trace.clear_edits(handle=ids)` detaches the
+    sticky hooks `do` staged.
+  - `tl.intervention.HookHandle`: `do` returns the trace, not a handle; pass the staged hook ids to
+    `trace.clear_edits(handle=ids)`.
+  - `prepend=`: hooks staged with `do` run in the order they were staged; to run one first, clear
+    the others with `trace.clear_edits` and stage it before them.
+  - `Trace.push`: `trace.do(site, edit)` applies the edit and propagates it.
+  - `Trace.push_from`: `trace.do(site, value)` sets the value and propagates it.
+  - `Trace.set`, `Layer.set` and `Op.set`: `trace.do(site, value,
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages a value or tensor. A
+    callable passed that way becomes a sticky hook that stays for every later `do` and `run` until
+    `trace.clear_edits(site)` detaches it, where `set` applied a callable once (walk ruling names.3,
+    3 Nov 2026).
 - **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
   `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
   `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed
@@ -133,7 +155,7 @@
 
 - **replay**: replay refuses `replay_param_changed_since_capture` when a parameter the replay
   reads changed after capture (an optimizer step, `load_state_dict`, an in-place op under
-  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine, `push`, `push_from`,
+  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine,
   differentiable replay and later replays of every fork. Before, it silently computed with the
   new weight. Re-capture, or pass `allow_changed_params=True` (`InterventionOptions` or
   `ReplayOptions`) to replay with the current values; the run lists the parameters in

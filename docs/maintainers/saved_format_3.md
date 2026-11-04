@@ -44,7 +44,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `format` | string | always `"torchlens.saved_format"` |
 | `format_version` | integer | the format major; `3` for this contract |
 | `tlspec_version` | integer | the record contract version the records follow |
-| `kind` | string | `trace`, `bundle` or `intervention` |
+| `kind` | string | `trace`, `bundle`, `intervention` or `recipe` (a `Recipe.save` artifact: rules only, no model) |
 | `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC); required, never part of any digest |
 | `backend`, `backend_runtime` | string | the capture backend and its runtime, as the tlspec 11 manifest stamps them |
 | `save_level` | string | one of `portable`, `audit`, `runnable`, `executable_with_callables` |

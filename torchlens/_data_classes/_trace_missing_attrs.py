@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -50,8 +50,11 @@ _MISSING_ATTR_HINTS: dict[str, str] = {
 #: Public Trace members removed by the 2026-10-01 shim removal (remove-and-
 #: rename, no alias): a lookup names the replacement, typed.
 _REMOVED_TRACE_MEMBERS: dict[str, str] = {
-    "replay": "use trace.push(...) -- Trace.replay was renamed",
-    "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
+    "replay": "use trace.do(site, edit) -- do applies and propagates the edit",
+    "replay_from": "use trace.do(site, value) -- do sets the value and propagates it",
+    "push": "use trace.do(site, edit) -- do applies and propagates the edit",
+    "push_from": "use trace.do(site, value) -- do sets the value and propagates it",
+    "remove": "use trace.clear_edits(site) -- do returns no handle to remove",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
     "attach_hooks": (
         "use trace.do(site, edit, model=model, inputs=x) -- attach_hooks folded into do; "
@@ -84,10 +87,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "disarm_triggers": (
         "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"
     ),
-    "set": (
-        "use trace.do(site, value, intervention=tl.options.InterventionOptions("
-        "engine='set_only')) -- Trace.set was replaced by the set_only engine of do"
-    ),
+    "set": removed_set_remedy("Trace", "trace", "site, value"),
     "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
         "use trace.graph.conditional_arm_entry_edges (one mapping for every arm kind)"

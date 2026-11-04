@@ -31,6 +31,9 @@ from torchlens.intervention.hooks import normalize_hooks_from_spec
 from torchlens.intervention.save import check_spec_compat, load_intervention_spec
 from torchlens.intervention.types import InterventionSpec, TargetSpec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class MultiHeadSelfAttention(nn.Module):
     """Tiny attention block matching the DistilBERT facet recipe class name."""
