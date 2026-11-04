@@ -50,7 +50,7 @@ def _batched_operand_shapes(
     """Return the two operand shapes of a same-rank batched product, else ``None``."""
 
     parents = tuple(context.op.parents)
-    shapes = tuple(context.op.input_shapes)
+    shapes = context._parent_shapes
     if len(parents) != 2 or len(shapes) != 2 or parents[0] == parents[1]:
         return None
     left_shape, right_shape = shapes
