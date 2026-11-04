@@ -149,9 +149,8 @@ def live_label_error_message(label_value: str, selector_kind: str = "label") -> 
         "with the push engine; a rerun or a live capture never matches it. For live hooks "
         'and reruns, use a capture-time selector such as tl.func("relu") or '
         'tl.module("encoder.layer.4"). To edit one specific op by its final label, capture '
-        "first, then run an edited copy: ed = trace.fork('edit'); "
-        f"ed.attach_hooks(tl.label({label_value!r}), hook); ed.run(model, x) "
-        "(hook signature: def hook(t, *, ctx): return t * 0)."
+        f"first, then rerun with the edit: trace.do(tl.label({label_value!r}), hook, "
+        "model=model, inputs=x) (hook signature: def hook(t, *, ctx): return t * 0)."
     )
 
 
