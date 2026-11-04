@@ -1,7 +1,6 @@
 """Predicate event records and graph relationship fields."""
 
 import time
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from math import prod
@@ -88,7 +87,6 @@ __all__ = (
     "_build_graph_relationship_fields",
     "_extract_arg_tensors_and_params",
     "_build_param_fields",
-    "_build_module_context_fields",
     "_emit_lazy_predicate_operation_events",
     "install_lazy_record_contexts",
 )
@@ -482,7 +480,11 @@ def _extract_arg_tensors_and_params(
         and spec is None
         and _st._dynamic_arg_specs.get(normalized_name) is not DYNAMIC_SPEC_UNCACHEABLE
     ):
-        _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
+        cached = _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
+        # The crawl dedups by identity, but later calls extract one entry per slot
+        # through the cached spec; do the same now so a first trace matches its retrace.
+        if cached is not None and dynamic_spec_covers_call(cached, args, kwargs):
+            return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
     # A Parameter mutated in place earlier in this pass binds as a graph parent of
     # its mutation op (``promote_mutated_parameters``); the cached spec above keeps
     # recording slot positions only, so it is unaffected.
@@ -553,30 +555,6 @@ def _build_param_fields(
             p.nelement() * p.element_size() for p in resolved_parameters
         )
     return parent_param_ops
-
-
-def _build_module_context_fields(
-    self: "Trace",
-    fields_dict: dict[str, Any],
-    arg_tensors: list[torch.Tensor],
-    parent_layer_entries: list[Op],
-) -> None:
-    """Populate module nesting, address, and input/output status fields."""
-    modules = _snapshot_exhaustive_module_stack(self)
-    module = modules[-1] if modules else None
-
-    fields_dict["module"] = module
-    fields_dict["modules"] = modules
-    # B3R7-R05-1: same containment fact as ``modules`` (relabeled together at
-    # step 11), never the fed-call stack -- that is ``input_to_module_calls``.
-    fields_dict["module_call_stack"] = list(modules)
-    fields_dict["module_entry_arg_keys"] = defaultdict(list)
-    fields_dict["input_to_module_calls"] = []
-    fields_dict["output_of_modules"] = []
-    fields_dict["output_of_module_calls"] = []
-    fields_dict["is_module_output"] = False
-    fields_dict["is_atomic_module"] = False
-    fields_dict["atomic_module_call"] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -777,7 +755,6 @@ def _defer_lazy_op_output(
 # imports its siblings once every definition above exists.
 from ._ops_capture_records import (  # noqa: E402
     _is_inplace_augmented_assignment_dunder,
-    _snapshot_exhaustive_module_stack,
 )
 from ._ops_interventions import (  # noqa: E402
     _iter_loggable_live_outputs,

@@ -447,7 +447,7 @@ def _cache_dynamic_spec(
     kwargs: dict[str, object],
     found_tensors: list[torch.Tensor],
     found_params: list[torch.nn.Parameter],
-) -> None:
+) -> ArgSpec | None:
     """Construct, union-merge, and cache an ArgSpec from BFS crawl results (Tier 3).
 
     Round-22 F3 hardening. The cache used to freeze the FIRST observed call shape
@@ -481,13 +481,14 @@ def _cache_dynamic_spec(
 
     Returns
     -------
-    None
-        Mutates ``_state._dynamic_arg_specs`` in place.
+    ArgSpec | None
+        The spec now cached for the name (written to ``_state._dynamic_arg_specs``),
+        or ``None`` when the name is uncacheable.
     """
 
     existing = _state._dynamic_arg_specs.get(normalized_name)
     if existing is DYNAMIC_SPEC_UNCACHEABLE:
-        return
+        return None
 
     all_found_ids = {id(t) for t in found_tensors} | {id(p) for p in found_params}
 
@@ -533,10 +534,9 @@ def _cache_dynamic_spec(
     )
     re_tensors, re_params = extract_tensors_and_params(spec, args, kwargs)
     re_found_ids = {id(t) for t in re_tensors} | {id(p) for p in re_params}
-    if not all_found_ids <= re_found_ids:
-        _state._dynamic_arg_specs[normalized_name] = DYNAMIC_SPEC_UNCACHEABLE
-        return
-    _state._dynamic_arg_specs[normalized_name] = spec
+    cacheable = all_found_ids <= re_found_ids
+    _state._dynamic_arg_specs[normalized_name] = spec if cacheable else DYNAMIC_SPEC_UNCACHEABLE
+    return spec if cacheable else None
 
 
 # ============================================================================
