@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 import gc
 import sys
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -34,8 +35,12 @@ def _model() -> GPT2LMHeadModel:
 
 
 @pytest.fixture(scope="module")
-def parent() -> tl.Trace:
-    return tl.trace(_model(), torch.tensor([[1, 5, 7, 4, 9]]))
+def parent() -> Iterator[tl.Trace]:
+    trace = tl.trace(_model(), torch.tensor([[1, 5, 7, 4, 9]]))
+    try:
+        yield trace
+    finally:
+        trace.cleanup()
 
 
 def _fork_counts(trace: tl.Trace) -> tuple[int, int]:
