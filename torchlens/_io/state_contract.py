@@ -39,6 +39,13 @@ from contextlib import contextmanager
 from functools import cache
 from typing import Any, NoReturn
 
+from .format3 import contract as _format3_contract
+from .format3.inventory import (
+    foreign_file_note,
+    inspect_record_tables,
+    names_format3,
+    refuse_unreadable_file,
+)
 from .format_contract import TLSPEC_VERSION
 from .format_errors import UnknownPersistedFieldError
 
@@ -309,13 +316,10 @@ def _load_inventory_skeleton(metadata_path: Any) -> Any:
     import os
     import pickle
 
-    from .format3 import contract
-    from .format3.inventory import refuse_unreadable_file
-
     def refuse(reason: str) -> NoReturn:
         refuse_unreadable_file(
             metadata_path,
-            code=contract.REFUSAL_CODES["record_file_corrupt"],
+            code=_format3_contract.REFUSAL_CODES["record_file_corrupt"],
             what="metadata",
             reason=reason,
         )
@@ -388,8 +392,6 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
 
     from pathlib import Path
 
-    from .format3.inventory import foreign_file_note, inspect_record_tables, names_format3
-
     root = Path(path)
     metadata_path = root / "metadata.pkl"
     has_root_pickle = metadata_path.is_symlink() or metadata_path.exists()
@@ -401,7 +403,9 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
     return _legacy_skeleton_report(_load_inventory_skeleton(metadata_path))
 
 
-def _trace_root_rows(skeleton: Any) -> dict[str, dict[str, Any]]:
+def _trace_root_rows(
+    skeleton: Any, record_contract_classes: dict[str, tuple[str, str]]
+) -> dict[str, dict[str, Any]]:
     """Attribute a legacy ``metadata.pkl`` ROOT mapping's keys to the Trace contract.
 
     The root is the Trace's scrubbed state mapping itself (the scrub path
@@ -411,11 +415,9 @@ def _trace_root_rows(skeleton: Any) -> dict[str, dict[str, Any]]:
 
     from importlib import import_module as _import_module
 
-    from .field_registry import RECORD_CONTRACT_CLASSES
-
     if not isinstance(skeleton, dict):
         return {}
-    trace_module, trace_class = RECORD_CONTRACT_CLASSES["trace"]
+    trace_module, trace_class = record_contract_classes["trace"]
     trace_cls = getattr(_import_module(trace_module), trace_class)
     root_keys = {
         str(key): None
@@ -443,7 +445,7 @@ def _legacy_skeleton_report(skeleton: Any) -> dict[str, Any]:
         f"{module_name}.{class_name}": contract_key
         for contract_key, (module_name, class_name) in RECORD_CONTRACT_CLASSES.items()
     }
-    report = _trace_root_rows(skeleton)
+    report = _trace_root_rows(skeleton, RECORD_CONTRACT_CLASSES)
 
     for surrogate in _iter_surrogates(skeleton):
         row = report.setdefault(
