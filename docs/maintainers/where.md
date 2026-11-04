@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1512 modules, 659832 lines, 0 modules without a docstring.
+83 packages, 1512 modules, 659840 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -29,7 +29,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 33 | 17492 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 33 | 17500 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14907 |
@@ -620,7 +620,7 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 516 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (33 modules, 17492 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (33 modules, 17500 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -643,13 +643,13 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (3
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 399 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 374 |
-| `_root_module_log` | Module-build-data readers for the root module's calls. | 75 |
+| `_root_module_log` | Module-build-data readers for the root module's calls. | 84 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 343 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 293 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 35 |
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2214 |
 | `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1372 |
-| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1787 |
+| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1786 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 957 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 1057 |
