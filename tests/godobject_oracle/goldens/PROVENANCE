@@ -829,3 +829,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7839ba17b9666439c7ede0b40baa84fc866feeca (dirty)
 recorded: 2026-11-04T05:52:04.767867+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-149 viz: viz-polish-2 41a4cfae98 (1.5 pt module frames, self-loop ports, KB/MB/GB sizes) and loop-if e61bd42771 (IF/ELIF on the edge entering a test, padded branch labels, back-edge ports and floated pass label) merged with the 13/14 pt edge defaults and the rolled argument-label midpoint: godobject viz identity on the viz-polish-2 + loop-if merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad409a44c8fb9733a223530d9f494f5930d3ffd0 (dirty)
+recorded: 2026-11-04T07:30:58.071492+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-149 viz: viz-polish-2 41a4cfae98 (1.5 pt module frames, self-loop ports, KB/MB/GB sizes) and loop-if e61bd42771 (IF/ELIF on the edge entering a test, padded branch labels, back-edge ports and floated pass label) merged with the 13/14 pt edge defaults and the rolled argument-label midpoint: godobject viz identity on the viz-polish-2 + loop-if merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad409a44c8fb9733a223530d9f494f5930d3ffd0 (dirty)
+recorded: 2026-11-04T07:30:59.082943+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-149 viz: viz-polish-2 41a4cfae98 (1.5 pt module frames, self-loop ports, KB/MB/GB sizes) and loop-if e61bd42771 (IF/ELIF on the edge entering a test, padded branch labels, back-edge ports and floated pass label) merged with the 13/14 pt edge defaults and the rolled argument-label midpoint: godobject viz identity on the viz-polish-2 + loop-if merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad409a44c8fb9733a223530d9f494f5930d3ffd0 (dirty)
+recorded: 2026-11-04T07:31:00.235236+00:00
+---
+generator: tests/godobject_oracle viz
+flag: TORCHLENS_UPDATE_GODOBJECT_VIZ_ORACLE=1
+reason: C-149 viz: viz-polish-2 41a4cfae98 (1.5 pt module frames, self-loop ports, KB/MB/GB sizes) and loop-if e61bd42771 (IF/ELIF on the edge entering a test, padded branch labels, back-edge ports and floated pass label) merged with the 13/14 pt edge defaults and the rolled argument-label midpoint: godobject viz identity on the viz-polish-2 + loop-if merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad409a44c8fb9733a223530d9f494f5930d3ffd0 (dirty)
+recorded: 2026-11-04T07:31:01.188681+00:00
