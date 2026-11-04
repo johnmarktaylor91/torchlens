@@ -5,7 +5,9 @@
   (``draw_format_mismatch``), so the extension never loses silently.
 - The header's count names what it counts, and the count and the byte total
   cover the same nodes: the drawn nodes that show a tensor size (a focus's
-  input and output stubs show none and are not counted).
+  input and output stubs show none and are not counted). A rolled draw also
+  counts the op passes its layers cover and sums the size over every pass, so
+  its size equals the unrolled header's.
 - Parameter counts carry thousands separators; every drawn size divides by
   1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
@@ -25,13 +27,19 @@ import re
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization._header_block import KEY_TABLE_ID, drawn_module_marks, key_swatches
+from torchlens._visualization._header_block import (
+    KEY_TABLE_ID,
+    drawn_count_line,
+    drawn_module_marks,
+    key_swatches,
+)
 from torchlens._visualization._label_format import binary_size, format_memory
 from torchlens._visualization.modes import _compact_size
 from torchlens._visualization.overlays import format_overlay_value
@@ -45,7 +53,9 @@ from torchlens.errors import ArgumentConflictError
 pytestmark = pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
 
 _FOCUS = "transformer.h.1.mlp"
-_COUNT = re.compile(r"(\d[\d,]*) (ops|layers|nodes) \(([\d.]+ (?:B|KB|MB|GB))\)")
+_COUNT = re.compile(
+    r"(\d[\d,]*) (ops|layers|nodes) \((?:\d[\d,]* ops?, )?([\d.]+ (?:B|KB|MB|GB))\)"
+)
 _SIZE_LINE = re.compile(r"\), [\d.]+ (?:B|KB|MB|GB)<")
 _NODE = re.compile(r"^\t(\S+) \[label=<")
 _CLUSTER = re.compile(r'subgraph "?cluster_([^"\s{]+)')
@@ -199,6 +209,53 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{trace.num_params:,} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
+
+
+class _Loop(nn.Module):
+    """The README loop model: a branch, then two passes of Linear, ReLU, Linear."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.sum() < 0:
+            x = -x
+        for _ in range(2):
+            x = self.fc2(torch.relu(self.fc1(x)))
+        return x
+
+
+def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
+    torch.manual_seed(0)
+    loop = tl.trace(_Loop().eval(), torch.full((1, 4), -1.0))
+    try:
+        rolled = _header(_dot(loop, tmp_path, "rolled", rolled=True))
+        unrolled = _header(_dot(loop, tmp_path, "unrolled"))
+        # Layers: input, sum, lt, neg, fc1, relu, fc2, output; the loop adds a
+        # second pass to fc1, relu and fc2. Sizes: 16 + 4 + 1 + 16 + 6 x 16 + 16.
+        assert "<br align='left'/>8 layers (11 ops, 149 B)<br" in rolled, rolled
+        assert "<br align='left'/>11 ops (149 B)<br" in unrolled, unrolled
+        total = sum(int(op.activation_memory) for op in loop.ops.values())
+        assert binary_size(total) == "149 B"
+    finally:
+        loop.cleanup()
+
+
+def _count_unit(kind: str, node: object) -> SimpleNamespace:
+    return SimpleNamespace(
+        kind=kind, emission=SimpleNamespace(node=node, call=None), source_nodes=(node,)
+    )
+
+
+def test_rolled_count_line_keeps_singular_forms() -> None:
+    op = SimpleNamespace(activation_memory=16)
+    one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
+    assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
+    assert drawn_count_line(None, one, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
+    box = SimpleNamespace(units=(_count_unit("module_box", op),))
+    assert drawn_count_line(None, box, "rolled") == "1 node (16 B)"  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("rolled", [False, True])
