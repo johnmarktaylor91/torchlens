@@ -97,6 +97,15 @@ class RosterModel:
     group: str = "config_built"
 
 
+#: Fixed RNG seed for the torch reference adapter's direct runs, so a roster
+#: row whose forward draws randomness (``random_forward``: training-mode
+#: dropout) sees the same stream every run. The validation capture has its own
+#: fixed seed (``_validation_cells._VALIDATION_CAPTURE_SEED``); the two differ
+#: on purpose, so the capture's dropout mask still differs from the direct
+#: run's, as the shipped scorecard records.
+_REFERENCE_SEED = 2
+
+
 class TorchReferenceAdapter:
     """The reference provider adapter over the public torch capture surface."""
 
@@ -138,12 +147,21 @@ class TorchReferenceAdapter:
         return self.protocol().capture(model, example_input, None, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
-        """Run the model directly through the protocol's pristine oracle arm."""
+        """Run the model directly through the protocol's pristine oracle arm.
+
+        The run draws from a forked CPU RNG seeded with ``_REFERENCE_SEED``, so
+        a random forward sees the same stream every run and the caller's
+        global RNG is left as it was.
+        """
+
+        import torch
 
         protocol = self.protocol()
-        if protocol is None:
-            return model(example_input)
-        return protocol.reference_output(model, example_input, None)
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(_REFERENCE_SEED)
+            if protocol is None:
+                return model(example_input)
+            return protocol.reference_output(model, example_input, None)
 
     def side_effect_snapshot(self) -> Any:
         """Framework state a refusal must leave untouched: RNG bytes and wrapper count."""
