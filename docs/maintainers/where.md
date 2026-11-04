@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1500 modules, 658394 lines, 0 modules without a docstring.
+83 packages, 1500 modules, 658380 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1929 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 27 | 9505 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 27 | 9491 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
@@ -1764,7 +1764,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 425 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 9505 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 9491 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1773,7 +1773,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (27 modules, 
 | `_anchors` | Shared dataflow anchors: the lm-head / final-norm resolution (internal). | 141 |
 | `_appliance` | The ''"mi"'' appliance behind ''trace.using("mi")''. | 76 |
 | `_compose` | Stack composition helpers: norm folding, generic stackers, full grain | 324 |
-| `_controls` | Controls for an ablation claim: does its effect survive other baselines, directions and sites? | 445 |
+| `_controls` | Controls for an ablation claim: does its effect survive other baselines, directions and sites? | 431 |
 | `_demo` | The TLens-agreement demo (mikit 's first public demo; RG21 interim). | 101 |
 | `_dla` | Direct logit contributions (mikit ; TLens ''logit_attrs''). | 584 |
 | `_eap` | Edge attribution patching (EAP and EAP-IG) over the component edge graph. | 492 |

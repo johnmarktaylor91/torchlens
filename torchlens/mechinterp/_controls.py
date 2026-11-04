@@ -328,32 +328,6 @@ def _site_family(
     return rows, _agreement_family("site", rows, claimed, settings.min_ratio)
 
 
-def _run_families(
-    runner: _Runner,
-    site: Any,
-    claimed: float,
-    direction: torch.Tensor | None,
-    sites: Mapping[str, Any] | None,
-    settings: _Settings,
-) -> tuple[list[ControlRow], list[FamilyVerdict], float | None]:
-    """Run the baseline family and the direction and site families that were asked for."""
-
-    rows, verdict = _baseline_family(runner, site, claimed, settings)
-    families = [verdict]
-    direction_p = None
-    if direction is not None:
-        direction_rows, verdict, direction_p = _direction_family(runner, site, direction, settings)
-        rows += direction_rows
-        families.append(verdict)
-    if sites:
-        site_rows, verdict = _site_family(runner, sites, claimed, settings)
-        rows += site_rows
-        families.append(verdict)
-    if claimed == 0.0:
-        families = [FamilyVerdict("claim", False, "the claimed ablation does not move the metric")]
-    return rows, families, direction_p
-
-
 def ablation_controls(  # noqa: PLR0913 -- the claim plus each family's stated knobs
     model: nn.Module,
     inputs: Any,
@@ -439,7 +413,19 @@ def _report(
     """Run the claimed ablation and every family that applies, and assemble the report."""
 
     claimed = runner.effect(site, _baseline_edit(runner, settings.baseline, site, settings))
-    rows, families, direction_p = _run_families(runner, site, claimed, direction, sites, settings)
+    rows, verdict = _baseline_family(runner, site, claimed, settings)
+    families = [verdict]
+    direction_p = None
+    if direction is not None:
+        direction_rows, verdict, direction_p = _direction_family(runner, site, direction, settings)
+        rows += direction_rows
+        families.append(verdict)
+    if sites:
+        site_rows, verdict = _site_family(runner, sites, claimed, settings)
+        rows += site_rows
+        families.append(verdict)
+    if claimed == 0.0:
+        families = [FamilyVerdict("claim", False, "the claimed ablation does not move the metric")]
     return AblationControlsReport(
         runner.clean, claimed, settings.baseline, tuple(rows), tuple(families), direction_p
     )
