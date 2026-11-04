@@ -568,3 +568,122 @@ def test_causal_narrowing_survives_a_second_attention_hop() -> None:
         _all_pass(cross_validate(trace, ops=[out.label]))
     finally:
         trace.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# The default projective target when a model also returns a cache.
+# ---------------------------------------------------------------------------
+
+
+def _outcome(call):
+    """Return a comparable record of one ``at()`` call: its box or its refusal."""
+
+    from torchlens.receptive_field import ReceptiveFieldError
+
+    try:
+        box = call()
+    except ReceptiveFieldError as exc:
+        return (type(exc).__name__, str(exc))
+    return ("box", box.io_role, box.axes, box.status, box.exact)
+
+
+class _CachedOutputs(nn.Module):
+    """Return a real output beside a key/value cache, as a decoder with ``use_cache`` does."""
+
+    def __init__(self, primary: str, extra: str | None = None) -> None:
+        super().__init__()
+        self.primary, self.extra = primary, extra
+        self.conv = nn.Conv2d(1, 2, 3, padding=1)
+        self.key = nn.Conv2d(2, 2, 1)
+        self.value = nn.Conv2d(2, 2, 1)
+
+    def forward(self, x: torch.Tensor) -> dict[str, object]:
+        hidden = torch.relu(self.conv(x))
+        out: dict[str, object] = {self.primary: hidden * 2.0}
+        out["past_key_values"] = ((self.key(hidden), self.value(hidden)),)
+        if self.extra is not None:
+            out[self.extra] = hidden + 1.0
+        return out
+
+
+@pytest.mark.parametrize(
+    ("primary", "extra", "expected"),
+    [
+        ("logits", None, "output.logits"),
+        ("logits", "hidden_states", "output.logits"),
+        ("last_hidden_state", "pooler_output", "output.last_hidden_state"),
+    ],
+)
+def test_at_without_target_answers_the_primary_output_beside_a_cache(
+    primary: str, extra: str | None, expected: str
+) -> None:
+    """With caches reachable, ``at()`` answers ``logits``, else the first non-cache output."""
+
+    torch.manual_seed(0)
+    model = _CachedOutputs(primary, extra)
+    trace = tl.trace(model, torch.randn(1, 1, 8, 8), capture=_ARMED)
+    try:
+        source = next(item for item in trace._layer_list if item.is_input)
+        view = source.projective_field
+        assert any("past_key_values" in role for role in view.per_input)
+        default = view.at((4, 4))
+        assert default.io_role == expected
+        assert _outcome(lambda: view.at((4, 4))) == _outcome(
+            lambda: view.at((4, 4), target=expected)
+        )
+        assert view.axes == view[expected].axes
+        cache_role = next(role for role in view.per_input if "past_key_values" in role)
+        assert view.at((4, 4), target=cache_role).io_role == cache_role
+    finally:
+        trace.cleanup()
+
+
+def test_two_real_outputs_without_a_cache_still_refuse() -> None:
+    """Two real outputs and no cache stay ambiguous: ``at()`` names the targets."""
+
+    from torchlens.errors import AmbiguousTargetError
+
+    class TwoConvOut(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = nn.Conv2d(1, 2, 3, padding=1)
+
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            hidden = self.conv(x)
+            return hidden * 2.0, hidden + 1.0
+
+    trace = tl.trace(TwoConvOut(), torch.randn(1, 1, 8, 8), capture=_ARMED)
+    try:
+        source = next(item for item in trace._layer_list if item.is_input)
+        with pytest.raises(AmbiguousTargetError, match="target=") as exc_info:
+            source.projective_field.at((4, 4))
+        assert all(role in str(exc_info.value) for role in source.projective_field.per_input)
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.heavy
+def test_gpt2_at_without_target_answers_the_logits() -> None:
+    """GPT-2 with ``use_cache`` reaches logits and cached keys and values; ``at()`` means logits.
+
+    At base the call refused with ``AmbiguousTargetError``. Now it answers exactly
+    as ``target="output.logits"`` does (through causal attention that is the
+    window refusal pointing at ``probe_grad()``), and a cache target still works.
+    """
+
+    from torchlens.errors import AmbiguousTargetError
+
+    model, ids = _gpt2("eager")
+    trace = tl.trace(model, ids)
+    try:
+        view = _only_output(trace, "transformer.h.0.mlp").projective_field
+        caches = [role for role in view.per_input if "past_key_values" in role]
+        assert "output.logits" in view.per_input and caches
+        default = _outcome(lambda: view.at((3, 0)))
+        assert default[0] != AmbiguousTargetError.__name__
+        assert default == _outcome(lambda: view.at((3, 0), target="output.logits"))
+        assert view.axes == view["output.logits"].axes
+        keys = next(role for role in caches if role.endswith("keys"))
+        assert view.at("center", target=keys).io_role == keys
+    finally:
+        trace.cleanup()
