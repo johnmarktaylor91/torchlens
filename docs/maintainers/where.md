@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1507 modules, 658197 lines, 0 modules without a docstring.
+83 packages, 1507 modules, 658204 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26636 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1468 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 96 | 38356 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 96 | 38363 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10665 |
@@ -295,12 +295,12 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (96 modules, 38356 lines)
+Core data structures for representing a logged forward pass. (96 modules, 38363 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Core data structures for representing a logged forward pass. | 30 |
-| `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 385 |
+| `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 386 |
 | `_aten_display` | ATen cards over recorded tensor metadata, never retained tensor values. | 126 |
 | `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 83 |
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 312 |
@@ -384,16 +384,16 @@ Core data structures for representing a logged forward pass. (96 modules, 38356 
 | `container` | Runtime views over captured TorchLens output containers. | 1187 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
 | `field_policy` | Structural field-policy tables for TorchLens record classes. | 243 |
-| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 785 |
+| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 786 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 846 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 395 |
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 445 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1777 |
-| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2606 |
+| `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2608 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3466 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1086 |
-| `prehook` | Public value objects for module forward-pre-hook input provenance. | 220 |
+| `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3430 |
 
 ### `torchlens._data_substrate`
