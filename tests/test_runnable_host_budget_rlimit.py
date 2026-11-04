@@ -26,12 +26,16 @@ linux_procfs = pytest.mark.skipif(
 
 
 def _vm_size_bytes() -> int:
+    """Return this process's mapped address space (``VmSize``) in bytes."""
+
     with open("/proc/self/status", encoding="ascii") as handle:
         return next(int(line.split()[1]) * 1024 for line in handle if line.startswith("VmSize"))
 
 
 @linux_procfs
 def test_host_budget_is_bounded_by_the_address_space_limit() -> None:
+    """Under a real soft ``RLIMIT_AS`` a gigabyte above the mapped size, the budget stays inside it."""
+
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
     cap = _vm_size_bytes() + (1 << 30)
     if hard != resource.RLIM_INFINITY and hard < cap:
@@ -59,6 +63,8 @@ def test_host_budget_is_bounded_by_the_address_space_limit() -> None:
 def test_host_budget_is_the_smaller_known_bound(
     monkeypatch: pytest.MonkeyPatch, available: int | None, limit: int | None, expected: int | None
 ) -> None:
+    """The budget is the smaller of the memory probe and the limit, or whichever one is known."""
+
     from torchlens._runnable import host_budget
 
     monkeypatch.setattr(host_budget, "_available_memory_bytes", lambda: available)
