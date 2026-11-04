@@ -2,12 +2,16 @@
 
 The README's select-then-intervene form resolves a field selection on the clean
 trace and applies it to ``trace.fork()``. The fork shares the clean run's
-captured index space, so ``do()`` rebinds such a selection through
-``align_to`` instead of refusing ``selection_trace_mismatch``; a selection from
-an unrelated capture still refuses.
+captured sites, so ``do()`` rebinds such a selection onto the fork by site
+identity instead of refusing ``selection_trace_mismatch``, and every rebound
+row's provenance names the ancestor it came from; a selection from an unrelated
+capture still refuses.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 import torch
@@ -28,7 +32,7 @@ class _TwoConv(nn.Module):
 
 
 @pytest.fixture(scope="module")
-def clean():
+def clean() -> Iterator[Any]:
     torch.manual_seed(0)
     trace = tl.trace(
         _TwoConv(),
@@ -41,11 +45,11 @@ def clean():
         trace.cleanup()
 
 
-def _output(trace) -> torch.Tensor:
+def _output(trace: Any) -> torch.Tensor:
     return trace[trace.output_layers[0]].out
 
 
-def test_fork_do_accepts_a_selection_resolved_on_the_clean_trace(clean) -> None:
+def test_fork_do_accepts_a_selection_resolved_on_the_clean_trace(clean: Any) -> None:
     """``trace.fork().do(sel)`` with ``sel`` resolved on ``trace`` edits the fork."""
 
     selection = clean[tl.func("relu")]
@@ -64,7 +68,7 @@ def test_fork_do_accepts_a_selection_resolved_on_the_clean_trace(clean) -> None:
     assert torch.equal(_output(twin), _output(fork))
 
 
-def test_grandchild_fork_accepts_the_root_selection(clean) -> None:
+def test_grandchild_fork_accepts_the_root_selection(clean: Any) -> None:
     """The rebind follows the whole fork lineage, not only the direct parent.
 
     Lineage is a weak reference and traces die by refcount, so the middle fork
@@ -78,7 +82,7 @@ def test_grandchild_fork_accepts_the_root_selection(clean) -> None:
     assert torch.count_nonzero(_output(grandchild)) == 0
 
 
-def test_rebound_selection_discloses_its_origin(clean) -> None:
+def test_rebound_selection_discloses_its_origin(clean: Any) -> None:
     """The rebound selection is bound to the fork and says where it came from."""
 
     from torchlens._selection.do_plan import _resolve_do_target
@@ -86,10 +90,12 @@ def test_rebound_selection_discloses_its_origin(clean) -> None:
     fork = clean.fork()
     resolved = _resolve_do_target(fork, clean[tl.func("relu")])
     assert resolved._trace is fork
-    assert all("aligned from" in entry.provenance.source for entry in resolved)
+    origin = f"[carried over to fork from {clean.name!r}]"
+    assert len(resolved) > 0
+    assert all(entry.provenance.source.endswith(origin) for entry in resolved)
 
 
-def test_unrelated_trace_selection_still_refuses(clean) -> None:
+def test_unrelated_trace_selection_still_refuses(clean: Any) -> None:
     """A selection resolved on another capture is not a fork ancestor: typed refusal."""
 
     torch.manual_seed(1)

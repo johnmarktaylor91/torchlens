@@ -16,7 +16,8 @@ whose graph has since changed refuses typed. A selection resolved on a trace
 outside the fork's ancestry keeps the ``selection_trace_mismatch`` refusal;
 cross-run bridging stays the explicit ``Selection.align_to``. The parent's
 selection is never mutated: the fork receives a new frozen ``Selection``
-over copied rows.
+over copied rows, each row's ``provenance.source`` disclosing the ancestor it
+was carried over from (``[carried over to fork from '<name>']``).
 """
 
 from __future__ import annotations
@@ -214,9 +215,18 @@ def _site_drift(entry: Site, record: Any) -> str | None:
 
 
 def _fork_row(entry: Site, fork: Any, source: Any) -> Site:
-    """Copy one row onto ``fork``, refusing typed when the fork lacks the same site."""
+    """Copy one row onto ``fork``, refusing typed when the fork lacks the same site.
 
-    row = dataclasses.replace(entry)
+    The copy's ``provenance.source`` names ``source``, the ancestor the row was
+    resolved on, so the rebound row discloses its origin.
+    """
+
+    source_label = str(getattr(source, "name", "") or "ancestor trace")
+    provenance = dataclasses.replace(
+        entry.provenance,
+        source=f"{entry.provenance.source} [carried over to fork from {source_label!r}]",
+    )
+    row = dataclasses.replace(entry, provenance=provenance)
     bind_entries(fork, (row,))
     try:
         record = row.record
@@ -255,7 +265,8 @@ def bind_to_target(resolved: Selection, trace: Any, message: str) -> Selection:
     -------
     Selection
         ``resolved`` itself when it is bound to ``trace``; otherwise a new
-        selection over the same sites and masks, bound to ``trace``.
+        selection over the same sites and masks, bound to ``trace``, whose
+        rows' provenance names the ancestor they were carried over from.
 
     Raises
     ------
