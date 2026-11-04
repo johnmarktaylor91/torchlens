@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1461 modules, 652125 lines, 0 modules without a docstring.
+83 packages, 1461 modules, 652190 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4150 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13921 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 30 | 13986 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 24 | 7279 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
@@ -1805,7 +1805,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13921 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13986 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1817,8 +1817,8 @@ Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13921
 | `_engine_forward` | Target-anchored projective-field descriptor solver. | 816 |
 | `_engine_geometry` | Internal rational geometry primitives for the receptive-field engine. | 277 |
 | `_engine_revision` | Structural fingerprint of a trace for the receptive-field solution caches. | 102 |
-| `_errors` | Exception types for receptive-field queries and validation. | 169 |
-| `_forward_query` | Exact per-unit projective queries via membership transposition. | 645 |
+| `_errors` | Exception types for receptive-field queries and validation. | 174 |
+| `_forward_query` | Exact per-unit projective queries via membership transposition. | 626 |
 | `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 862 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 530 |
 | `_gradient_live` | Resolve the graph-connected tensor behind a same-object logging copy. | 126 |
@@ -1826,7 +1826,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13921
 | `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 602 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
 | `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
-| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 374 |
+| `_path` | Executed-DAG endpoint resolution and directed path slicing. | 455 |
 | `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 925 |
 | `_query_causal` | Per-unit index-set mapping for causal attention windows. | 179 |
 | `_query_maps` | Index-set maps for the geometry-specific window families. | 232 |
@@ -1837,7 +1837,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (30 modules, 13921
 | `_trace_tables` | Trace receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 65 |
 | `_types` | Public immutable data types for receptive-field analysis. | 868 |
 | `_validation` | Exact gradient-inside-geometric receptive-field validation. | 1409 |
-| `_view` | Entity-level receptive-field query view. | 806 |
+| `_view` | Entity-level receptive-field query view. | 804 |
 | `_viz` | PIL and graph visualization helpers for receptive-field queries. | 592 |
 
 ### `torchlens.receptive_field.rules`

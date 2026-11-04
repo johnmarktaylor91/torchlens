@@ -521,7 +521,7 @@ torchlens/_utils/facade.py::resolve_facade_attr	118
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
 torchlens/_utils/introspection.py	1097
-torchlens/_utils/introspection.py::_extend_search_stack_from_item	90
+torchlens/_utils/introspection.py::_extend_search_stack_from_item	89
 torchlens/_utils/introspection.py::_get_code_context	182
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
@@ -1002,7 +1002,7 @@ torchlens/bridge/pytorch_grad_cam.py::cam	81
 torchlens/bridge/sae.py::_next_token_metrics	68
 torchlens/bridge/sae.py::splice	125
 torchlens/bridge/shap.py::explain	67
-torchlens/bridge/transformers.py::trace_text	66
+torchlens/bridge/transformers.py::trace_text	65
 torchlens/bundle/__init__.py	1410
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	99
