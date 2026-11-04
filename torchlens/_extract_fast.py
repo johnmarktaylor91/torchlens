@@ -79,7 +79,7 @@ def try_module_output_extract(
     x: Any,
     layers: Iterable[str] | Mapping[str, str],
     *,
-    detach_saved_activations: bool,
+    detach: bool,
 ) -> dict[str, torch.Tensor] | None:
     """Return module outputs from one hooked forward, or ``None`` to run a full capture.
 
@@ -91,7 +91,7 @@ def try_module_output_extract(
         Input passed to :func:`torchlens.extract`.
     layers:
         Requested names (list) or ``user_label -> name`` mapping.
-    detach_saved_activations:
+    detach:
         Only the default ``True`` takes the fast path.
 
     Returns
@@ -100,7 +100,7 @@ def try_module_output_extract(
         Detached copies keyed as :func:`torchlens.extract` keys them, or ``None``.
     """
 
-    if not detach_saved_activations or model.training or active_capture()[1]:
+    if not detach or model.training or active_capture()[1]:
         return None
     plan = _plan(model, layers)
     if plan is None or not _input_on_model_device(model, x):

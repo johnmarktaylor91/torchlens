@@ -7,11 +7,9 @@ the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
 their owning submodules.
 
-For AI agents: start with ``torchlens.agent.guide()`` (or
-``python -m torchlens guide``), a cookbook of copyable recipes for module
-outputs, NaN origins, edits, activation patching and gradients. Also
-``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``, and the CLI
-(``python -m torchlens --help``).
+For AI agents: start with ``torchlens.agent.guide()`` (or ``python -m
+torchlens guide``), a cookbook of copyable recipes; also ``trace.to_agent_json()``,
+``trace.explain(max_tokens=N)`` and the CLI (``python -m torchlens --help``).
 """
 
 from __future__ import annotations
@@ -671,7 +669,9 @@ def extract(
     ``layers`` and ``detach_saved_activations``. Every other capture option
     (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
     ``episode=``, storage) belongs to ``tl.trace``; call it and read
-    ``trace[label].out`` when you need one of them.
+    ``trace[label].out`` when you need one of them. Exact module addresses on an
+    eval-mode model with one tensor input take one plain hooked forward (same
+    values, a fraction of the cost); anything else runs the full capture.
 
     Parameters
     ----------
@@ -693,14 +693,6 @@ def extract(
         Mapping from user labels to outs for mapping inputs, or from
         resolved layer labels to outs for list inputs.
 
-    Notes
-    -----
-    When every name is an exact module address, the model is in eval mode and
-    ``inputs`` is one tensor on the model's device, the outs come from one plain
-    forward with module hooks (same values, a fraction of the cost); a module
-    that runs more than once or returns more than one tensor falls back to the
-    full capture.
-
     Examples
     --------
     >>> outs = extract(model, x, {"stem": "0", "head": "2"})
@@ -710,9 +702,7 @@ def extract(
 
     from ._extract_fast import try_module_output_extract  # deferred: init stays torch-free
 
-    fast = try_module_output_extract(
-        model, inputs, layers, detach_saved_activations=detach_saved_activations
-    )
+    fast = try_module_output_extract(model, inputs, layers, detach=detach_saved_activations)
     if fast is not None:
         return fast
     _trace, outputs, _views = _extract_layers_with_trace(
