@@ -462,7 +462,7 @@ def _validate_module_selector(selector: Any) -> None:
 def _apply_module_exit(trace: Any, frame: Any, output: Any) -> Any:
     """Apply one selected module call to all its output tensor leaves."""
 
-    runtime = getattr(trace, "_paddle_intervention_runtime", None)
+    runtime = trace._paddle_intervention_runtime
     if runtime is None:
         return output
     predicate = runtime.intervene

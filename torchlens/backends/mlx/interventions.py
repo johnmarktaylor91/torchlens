@@ -388,7 +388,7 @@ def _validate_module_selector(selector: Any) -> None:
 def _apply_module_exit(trace: Any, backend: Any, frame: Any, output: Any) -> Any:
     """Replace each distinct output leaf once at a selected module exit."""
 
-    plan = getattr(trace, "_mlx_intervention_plan", None)
+    plan = trace._mlx_intervention_plan
     if frame is None or plan is None:
         return output
     addresses = module_union_addresses(plan.selector)
@@ -406,7 +406,7 @@ def _apply_module_exit(trace: Any, backend: Any, frame: Any, output: Any) -> Any
 def _module_capture_op(trace: Any, frame: Any, op_name: str | None) -> str | None:
     """Expose selected descendants instead of capturing their parent as one opaque op."""
 
-    plan = getattr(trace, "_mlx_intervention_plan", None)
+    plan = trace._mlx_intervention_plan
     if frame is None or plan is None:
         return op_name
     addresses = module_union_addresses(plan.selector) or ()
