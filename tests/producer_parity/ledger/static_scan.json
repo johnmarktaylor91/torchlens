@@ -6097,10 +6097,26 @@
  },
  {
   "ambiguous": false,
+  "field": "fire_results",
+  "file": "torchlens/backends/mlx/interventions.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "layer_type",
   "file": "torchlens/backends/mlx/interventions.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/backends/mlx/interventions.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -6265,7 +6281,23 @@
  },
  {
   "ambiguous": false,
+  "field": "fire_results",
+  "file": "torchlens/backends/paddle/interventions.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
+  "file": "torchlens/backends/paddle/interventions.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_edited",
   "file": "torchlens/backends/paddle/interventions.py",
   "has_default": false,
   "sites": 1,
@@ -6285,6 +6317,14 @@
   "file": "torchlens/backends/paddle/interventions.py",
   "has_default": false,
   "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/backends/paddle/interventions.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, at_source, table_report, trace_subject
+from .._io.payload_codec import get_payload_codec
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -379,8 +381,8 @@ def _compare_rows(
             rows.append(_activation_row(label, "only-a", "only-a", _source_line(op_a)))
             continue
 
-        out_a, reason_a = _safe_out(op_a)
-        out_b, reason_b = _safe_out(op_b)
+        out_a, reason_a = _safe_out(op_a, get_payload_codec(str(trace_a._provenance_backend)))
+        out_b, reason_b = _safe_out(op_b, get_payload_codec(str(trace_b._provenance_backend)))
         reason_a = reason_a or _compare_unavailable_reason(out_a)
         reason_b = reason_b or _compare_unavailable_reason(out_b)
         shape_match = getattr(op_a, "shape", None) == getattr(op_b, "shape", None)
@@ -594,7 +596,7 @@ def dead_neurons_rows(
     for op in _layer_output_ops(trace):
         module = _output_module(op)
         row_key = {"op": _op_label(op), "module": module, "source_line": _source_line(op)}
-        out, reason = _safe_out(op)
+        out, reason = _safe_out(op, get_payload_codec(str(trace._provenance_backend)))
         reason = reason or _tensor_unavailable_reason(out)
         if reason is None and not isinstance(out, torch.Tensor):
             skipped += 1
@@ -609,7 +611,7 @@ def dead_neurons_rows(
                     "dead_count": None,
                     "dead_frac": None,
                     "sample_dead_idx": [],
-                    "reason": reason or "invalid-dim",
+                    "reason": reason or _unit_axis_reason(trace, out, dim),
                 }
             )
             continue
@@ -683,9 +685,20 @@ def _feature_dim(
     """Return the unit axis for one activation tensor, or ``None`` when it is invalid."""
 
     if dim is None:
+        if str(trace._provenance_backend) != TORCH_BACKEND_NAME and out.ndim > 2:
+            return None
         return unit_axis(trace, op, out, axes)
     feature_dim = dim if dim >= 0 else out.ndim + dim
     return feature_dim if 0 <= feature_dim < out.ndim else None
+
+
+def _unit_axis_reason(trace: Trace, out: Any, dim: int | None) -> str:
+    """Explain spatial preview rows whose unit layout the trace does not specify."""
+
+    if dim is None and isinstance(out, torch.Tensor) and out.ndim > 2:
+        if str(trace._provenance_backend) != TORCH_BACKEND_NAME:
+            return "unit axis unavailable for preview spatial output; pass dim explicitly"
+    return "invalid-dim"
 
 
 def _output_module(op: Op) -> str | None:
