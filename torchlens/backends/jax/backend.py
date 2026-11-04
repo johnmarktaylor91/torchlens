@@ -2566,7 +2566,7 @@ class JAXBackend:
             op_log.module_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
-            parent_call_label: str | None = None
+            parent_call_label = "self:1" if "self" in seen_addresses else None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
                 # Torch parity (same population as
@@ -2604,7 +2604,7 @@ class JAXBackend:
                         mbd["top_level_module_ops"].append(call_label)
                     if address != "self" and address not in mbd["top_level_modules"]:
                         mbd["top_level_modules"].append(address)
-                elif parent_call_label is not None:
+                if parent_call_label is not None and parent_call_label != call_label:
                     if call_label not in seen_pass_children[parent_call_label]:
                         seen_pass_children[parent_call_label].add(call_label)
                         mbd["module_pass_children"][parent_call_label].append(call_label)
