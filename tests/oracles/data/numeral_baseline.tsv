@@ -3032,6 +3032,7 @@ docs-md	docs/maintainers/where.md	2512
 docs-md	docs/maintainers/where.md	252
 docs-md	docs/maintainers/where.md	253
 docs-md	docs/maintainers/where.md	254
+docs-md	docs/maintainers/where.md	2542
 docs-md	docs/maintainers/where.md	255
 docs-md	docs/maintainers/where.md	256
 docs-md	docs/maintainers/where.md	257
@@ -3441,6 +3442,7 @@ docs-md	docs/maintainers/where.md	672
 docs-md	docs/maintainers/where.md	673
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
+docs-md	docs/maintainers/where.md	676373
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
@@ -3559,6 +3561,7 @@ docs-md	docs/maintainers/where.md	852
 docs-md	docs/maintainers/where.md	857
 docs-md	docs/maintainers/where.md	858
 docs-md	docs/maintainers/where.md	86
+docs-md	docs/maintainers/where.md	861
 docs-md	docs/maintainers/where.md	862
 docs-md	docs/maintainers/where.md	863
 docs-md	docs/maintainers/where.md	8662
@@ -9401,6 +9404,8 @@ test-docstrings	tests/test_adversarial_scaling_gates.py	400
 test-docstrings	tests/test_adversarial_scaling_gates.py	45
 test-docstrings	tests/test_adversarial_scaling_gates.py	700
 test-docstrings	tests/test_affine_source.py	64.
+test-docstrings	tests/test_ag3a_gemma2_facets.py	1_104
+test-docstrings	tests/test_ag3a_gemma2_facets.py	1_91
 test-docstrings	tests/test_agent_surface_fold.py	051
 test-docstrings	tests/test_agent_surface_fold.py	12
 test-docstrings	tests/test_agent_surface_fold.py	18
