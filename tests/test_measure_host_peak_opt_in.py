@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 import torch
 from _format3_envelope import set_cell
-from _fresh_plant import PLANT_BYTES, touch_fresh_plant
+from _fresh_plant import PLANT_BYTES, needs_vmhwm_reset, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
@@ -112,7 +112,7 @@ def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
         trace.cleanup()
 
 
-@procfs
+@needs_vmhwm_reset
 def test_the_untouched_mark_detector_sees_the_opt_in_reset() -> None:
     """Positive control: under the opt-in the same reading drops by about a plant."""
 
@@ -125,7 +125,7 @@ def test_the_untouched_mark_detector_sees_the_opt_in_reset() -> None:
         trace.cleanup()
 
 
-@procfs
+@needs_vmhwm_reset
 def test_opt_in_measures_the_planted_buffer_as_before() -> None:
     """The arm of the negative: the opt-in reports the plant in both passes."""
 
