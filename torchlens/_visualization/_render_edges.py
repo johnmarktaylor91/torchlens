@@ -1180,7 +1180,7 @@ def _add_edges_for_node(
             edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
-        edge_is_back_edge = not edge_is_self_loop and _is_rolled_back_edge(
+        edge_is_back_edge = not (edge_is_self_loop or edge_has_boundary) and _is_rolled_back_edge(
             parent_node, child_node, vis_mode, rolled_maps, parent_segment, child_segment
         )
         if edge_is_self_loop and (parent_segment is not None or child_segment is not None):

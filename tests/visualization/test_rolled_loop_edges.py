@@ -1,9 +1,9 @@
 """A rolled loop body of more than one op draws its return as an arc, and the branch entry edge says IF.
 
 The README toy negates its input when the sum is negative, then applies ``relu(fc(x))``
-three times.  Rolled, the body is two nodes; the edge from relu back to fc must leave
-relu's output side, return to fc's input side and not constrain the ranking, so dot
-draws one tall arc around the body instead of a second line beside the forward edge.
+three times.  Rolled, the body is two nodes; the edge from relu back to fc must leave and re-enter
+on the body's right flank and not constrain the ranking, so dot bows one arc around the
+body instead of drawing a second line beside the forward edge.
 """
 
 from __future__ import annotations
@@ -57,13 +57,13 @@ def _edge_lines(dot_source: str, tail: str, head: str) -> list[str]:
 def test_loop_edge_attrs_distinguish_self_loop_back_edge_and_plain_edge() -> None:
     assert loop_edge_attrs(True, False, "BT") == {"tailport": "ne", "headport": "se"}
     assert loop_edge_attrs(False, True, "BT") == {
-        "tailport": "ne",
-        "headport": "se",
+        "tailport": "e",
+        "headport": "e",
         "constraint": "false",
     }
-    assert loop_edge_attrs(False, True, "TB") == {
-        "tailport": "se",
-        "headport": "ne",
+    assert loop_edge_attrs(False, True, "LR") == {
+        "tailport": "n",
+        "headport": "n",
         "constraint": "false",
     }
     assert loop_edge_attrs(False, False, "BT") == {}
@@ -74,8 +74,8 @@ def test_rolled_two_op_loop_body_returns_on_an_unconstrained_arc() -> None:
     back = _edge_lines(dot_source, "relu_", "linear_")
     forward = _edge_lines(dot_source, "linear_", "relu_")
     assert len(back) == 1 and len(forward) == 1, dot_source
-    assert 'tailport="ne"' in back[0] or "tailport=ne" in back[0], back[0]
-    assert 'headport="se"' in back[0] or "headport=se" in back[0], back[0]
+    assert "tailport=e" in back[0], back[0]
+    assert "headport=e" in back[0], back[0]
     assert "constraint=false" in back[0] or 'constraint="false"' in back[0], back[0]
     assert "In 2-3" in back[0] and "Out 1-2" in back[0], back[0]
     assert "tailport" not in forward[0] and "constraint" not in forward[0], forward[0]

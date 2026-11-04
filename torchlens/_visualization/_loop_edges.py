@@ -4,21 +4,31 @@ A rolled drawing folds a repeated op into one node, so the flow from one
 pass into the next becomes either a self-loop (a one-op body) or a back
 edge from the body's last op to its first (a longer body).  Without ports
 a self-loop is a small curl and a back edge is a second line almost
-parallel to the forward edge, so neither reads as a cycle.  Both now leave
-the output side of their tail and return to the input side of their head
-on the same flank, as one tall arc around the body (JMT, 3 Nov 2026).
+parallel to the forward edge, so neither reads as a cycle.  A self-loop now
+leaves the output side and returns to the input side; a back edge leaves
+and re-enters on one flank; both read as one arc around the body (JMT, 3
+Nov 2026).
 """
 
 from __future__ import annotations
 
 __all__ = ["loop_edge_attrs", "self_loop_port_attrs"]
 
-# tail port (output side), head port (input side) per rank direction
+# self-loop: tail port (output side), head port (input side) per rank direction
 _LOOP_PORTS: dict[str, tuple[str, str]] = {
     "BT": ("ne", "se"),
     "TB": ("se", "ne"),
     "LR": ("ne", "nw"),
     "RL": ("nw", "ne"),
+}
+# back edge between two body nodes: both ends on the same flank, so dot bows the
+# return out and around instead of cutting diagonally across the body's corner
+# (compared ne/se, e/se, ne/e and e/e on the README toy, 3 Nov 2026: only e/e arcs)
+_BACK_EDGE_PORTS: dict[str, tuple[str, str]] = {
+    "BT": ("e", "e"),
+    "TB": ("e", "e"),
+    "LR": ("n", "n"),
+    "RL": ("n", "n"),
 }
 
 
@@ -46,13 +56,15 @@ def loop_edge_attrs(is_self_loop: bool, is_back_edge: bool, rankdir: str) -> dic
     -------
     dict[str, str]
         Empty for an ordinary edge.  A self-loop gets its ports.  A back edge
-        gets the same ports plus ``constraint=false``, so dot ranks the body
-        by its forward edges alone and routes the return as an arc around the
-        body's flank instead of a near-parallel second line.
+        leaves and enters on one flank of the body and carries
+        ``constraint=false``, so dot ranks the body by its forward edges alone
+        and bows the return around that flank instead of drawing a second
+        line beside the forward edge.
     """
 
     if is_self_loop:
         return self_loop_port_attrs(rankdir)
     if is_back_edge:
-        return {**self_loop_port_attrs(rankdir), "constraint": "false"}
+        tail_port, head_port = _BACK_EDGE_PORTS.get(rankdir, _BACK_EDGE_PORTS["BT"])
+        return {"tailport": tail_port, "headport": head_port, "constraint": "false"}
     return {}
