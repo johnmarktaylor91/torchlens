@@ -2870,7 +2870,7 @@ docs-md	docs/maintainers/where.md	1567
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
-docs-md	docs/maintainers/where.md	1587
+docs-md	docs/maintainers/where.md	1588
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
@@ -3069,6 +3069,7 @@ docs-md	docs/maintainers/where.md	281
 docs-md	docs/maintainers/where.md	283
 docs-md	docs/maintainers/where.md	2831
 docs-md	docs/maintainers/where.md	284
+docs-md	docs/maintainers/where.md	2846
 docs-md	docs/maintainers/where.md	285
 docs-md	docs/maintainers/where.md	286
 docs-md	docs/maintainers/where.md	287
@@ -3361,9 +3362,9 @@ docs-md	docs/maintainers/where.md	566
 docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	57
-docs-md	docs/maintainers/where.md	57098
 docs-md	docs/maintainers/where.md	571
 docs-md	docs/maintainers/where.md	572
+docs-md	docs/maintainers/where.md	57270
 docs-md	docs/maintainers/where.md	574
 docs-md	docs/maintainers/where.md	577
 docs-md	docs/maintainers/where.md	580
@@ -3444,7 +3445,7 @@ docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
-docs-md	docs/maintainers/where.md	678746
+docs-md	docs/maintainers/where.md	678918
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
@@ -9946,6 +9947,7 @@ test-docstrings	tests/test_hf_attention_backend.py	64
 test-docstrings	tests/test_hon_crash_notes.py	3.10
 test-docstrings	tests/test_hon_crash_notes.py	3.11
 test-docstrings	tests/test_hon_xarray_export.py	18
+test-docstrings	tests/test_hop_grad_trace.py	2.0
 test-docstrings	tests/test_identity_shims.py	56
 test-docstrings	tests/test_import_hygiene.py	10
 test-docstrings	tests/test_import_hygiene.py	30
