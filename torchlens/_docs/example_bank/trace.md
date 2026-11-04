@@ -196,12 +196,12 @@ Index a trace by label for one record, or by a selector for a Selection.
 
 ```python
 trace = tl.trace(model, x)
-op = trace["relu_1_2"]
-print(type(op).__name__, op.label)
+layer = trace["relu_1_2"]
+print(type(layer).__name__, layer.label)
 selection = trace[tl.func("relu")]
 print(type(selection).__name__, selection.labels)
 # Output:
-# Op relu_1_2:1
+# Layer relu_1_2:1
 # Selection ('relu_1_2:1',)
 ```
 
@@ -1187,7 +1187,7 @@ Get a registered appliance bound to a trace.
 
 ```python
 trace = tl.trace(lm, ids)
-appliance = trace.using("mi")
+appliance = trace.using("mechinterp")
 print(type(appliance).__name__)
 # Output:
 # MechInterpAppliance
