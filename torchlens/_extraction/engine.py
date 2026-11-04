@@ -32,6 +32,7 @@ from torch import nn
 from torchlens.transforms._errors import TransformContractError
 
 from .._data_classes._layer_sites import layer_site_key
+from .._data_classes._lookup_kinds import extraction_view
 from .._data_classes.layer import Layer
 from .._data_substrate import (
     ArtifactWriter,
@@ -772,16 +773,15 @@ def _resolve_trace_outputs(
     views: dict[str, Any] = {}
     if plan.layers_kind == "mapping":
         for label, pattern in plan.layer_plan.items():
-            view = trace.ops[pattern]
+            views[label] = view = extraction_view(trace, pattern)
             outputs[label] = view.out
-            views[label] = view
         return outputs, views
     for pattern in plan.layer_plan.values():
         matches = _tl._matching_saved_layer_labels(trace, pattern)
         if not matches:
             raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
         for match in matches:
-            view = trace.ops[match]
+            view = extraction_view(trace, match)
             outputs[match] = view.out
             views[match] = view
     return outputs, views

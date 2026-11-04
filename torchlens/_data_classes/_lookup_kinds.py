@@ -123,6 +123,20 @@ def op_at(trace: Any, key: Any) -> Any:
     return record
 
 
+def extraction_view(trace: Any, key: str) -> Any:
+    """The view an extraction key names: its Op from ``trace.ops``, else ``op_at``.
+
+    The ops door answers op labels and record keys (a module, call or buffer
+    key names its output Op). A pattern only the plain door resolves, such as a
+    unique substring like ``"relu"``, keeps the plain door's answer.
+    """
+
+    try:
+        return trace.ops[key]
+    except KeyError:
+        return op_at(trace, key)
+
+
 # --------------------------------------------------------------------------- #
 # Typed doors: convert a key that names exactly one object of the door's kind.
 # --------------------------------------------------------------------------- #
