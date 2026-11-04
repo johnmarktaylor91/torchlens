@@ -121,10 +121,10 @@ def score_decomposition(  # noqa: PLR0913 -- one keyword per addressed coordinat
     additive: dict[str, float] = {}
     dot_term = float(products.sum()) / scale
     remainder = reference - dot_term
-    if abs(remainder) > tolerance * max(1.0, abs(reference)):
-        # One additive-mask term may close the gap exactly (an additively
-        # masked position); anything else stays open and refuses inside the
-        # record constructor.
+    if not math.isfinite(reference) or abs(remainder) > tolerance * max(1.0, abs(reference)):
+        # One additive-mask term may close the gap exactly (a masked position, or the
+        # -inf of two summed finfo.min masks); anything else stays open and refuses
+        # inside the record constructor.
         floor = torch.finfo(torch.float32).min
         if remainder <= floor / 4:
             additive["mask"] = remainder

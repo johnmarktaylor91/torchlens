@@ -25,6 +25,7 @@ warning, since there the miss is the inputs.
 
 from __future__ import annotations
 
+import math
 import warnings
 from typing import Any
 
@@ -91,8 +92,43 @@ def _oracle_logits(model: nn.Module, ids: torch.Tensor, layer: int, head: int) -
 
 
 def _max_abs(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Largest absolute difference; non-finite cells must match exactly.
+
+    A model may emit -inf itself (transformers 4.x eager GPT-2 adds two
+    finfo.min masks), and ``-inf - -inf`` is nan, so infinities compare by
+    position and sign: a mismatch returns inf. Any nan on either side returns
+    nan, which fails every comparison. Finite cells keep the plain maximum.
+    """
+
     assert a.shape == b.shape, (a.shape, b.shape)
-    return float((a.double() - b.double()).abs().max().item())
+    left, right = a.double(), b.double()
+    if bool(torch.isnan(left).any()) or bool(torch.isnan(right).any()):
+        return math.nan
+    left_inf, right_inf = torch.isinf(left), torch.isinf(right)
+    if not torch.equal(left_inf, right_inf) or not torch.equal(left[left_inf], right[right_inf]):
+        return math.inf
+    finite = ~left_inf
+    if not bool(finite.any()):
+        return 0.0
+    return float((left[finite] - right[finite]).abs().max().item())
+
+
+_NINF = float("-inf")
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "passes"),
+    [
+        pytest.param([_NINF, 1.0], [_NINF, 1.0 + ATOL / 2], True, id="matching-ninf-finite-close"),
+        pytest.param([_NINF, 1.0], [1.0, _NINF], False, id="inf-at-another-position"),
+        pytest.param([_NINF, 1.0], [float("inf"), 1.0], False, id="opposite-sign"),
+        pytest.param([float("nan"), 1.0], [float("nan"), 1.0], False, id="nan-on-both-sides"),
+        pytest.param([0.0, 1.0], [0.0, float("nan")], False, id="nan-on-one-side"),
+        pytest.param([_NINF, 1.0], [_NINF, 1.0 + 10 * ATOL], False, id="finite-over-atol"),
+    ],
+)
+def test_max_abs_matches_infinities_exactly(left: list, right: list, passes: bool) -> None:
+    assert (_max_abs(torch.tensor(left), torch.tensor(right)) <= ATOL) is passes
 
 
 def _assert_head_sweep_parity(model: nn.Module, ids: torch.Tensor) -> int:
