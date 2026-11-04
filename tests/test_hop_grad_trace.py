@@ -281,6 +281,13 @@ _LOOP_CASES: dict[str, Callable[..., nn.Module]] = {
 }
 
 _ALL_CASES = sorted([*_COND_CASES, *_LOOP_CASES])
+# ``map`` runs its body inside torch's own ``autograd.Function``, so its body ops
+# are logged below autograd and carry no grad, as in any custom Function forward.
+_DIFFERENTIABLE_BODY_CASES = [name for name in _ALL_CASES if name != "map"]
+# Validation runs with TorchLens's completeness dispatch mode active, and torch
+# skips its operator entry compile under any dispatch mode; ``map``'s eager grad
+# path then returns one tensor per row, so only the other operators validate.
+_VALIDATING_CASES = [name for name in _ALL_CASES if name != "map"]
 
 
 def _input(name: str) -> torch.Tensor:
@@ -419,7 +426,7 @@ def test_loop_hop_no_grad_ops_are_an_ordered_subsequence(name: str) -> None:
     assert _is_ordered_subsequence(no_grad, grad), (no_grad, grad)
 
 
-@pytest.mark.parametrize("name", _ALL_CASES)
+@pytest.mark.parametrize("name", _VALIDATING_CASES)
 def test_grad_operand_trace_validates_true(name: str) -> None:
     """``tl.validate`` holds on the grad trace, with the grad path's extra data ops."""
 
@@ -427,6 +434,27 @@ def test_grad_operand_trace_validates_true(name: str) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is True
+
+
+def test_map_grad_validation_refuses_the_per_row_outputs() -> None:
+    """Known gap: under grad, validating ``map`` fails on the output count.
+
+    The validate capture's own completeness dispatch mode changes torch's
+    ``map`` grad path: torch skips the operator entry compile under any
+    dispatch mode, so the eager grad path returns one tensor per row, and
+    validation reports three outputs against the untraced call's one. Plain
+    capture is unaffected. The follow-up that keeps the witness's coverage of
+    the body while the entry compile runs flips this to ``True``.
+    """
+
+    model, x = _model("map"), _input("map")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert failure.check_name == "ground_truth_missing_out"
+    assert failure.extra == {"logged_output_count": 3, "ground_truth_output_count": 1}
 
 
 @pytest.fixture
@@ -525,7 +553,7 @@ def test_grad_operands_leave_only_real_activations(name: str) -> None:
         assert op.out.device.type == x.device.type, op.func_name
 
 
-@pytest.mark.parametrize("name", _ALL_CASES)
+@pytest.mark.parametrize("name", _DIFFERENTIABLE_BODY_CASES)
 def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     """The traced output carries the graph, and backward gives the eager grads."""
 
@@ -543,6 +571,30 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     producer = trace[output.parents[0]]
     assert producer.has_saved_grad
     assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+
+
+def test_map_grad_operands_backward_runs_through_the_trace() -> None:
+    """``map``: the output carries the graph, backward gives eager grads, the input saves its grad.
+
+    The body ops ran inside torch's map ``autograd.Function`` forward, below
+    autograd, so the stacked producer has no graph of its own and no grad to save.
+    """
+
+    x = _input("map")
+    reference_input = x.clone().requires_grad_(True)
+    _model("map")(reference_input).sum().backward()
+    traced_input = x.clone().requires_grad_(True)
+    trace = tl.trace(_model("map"), traced_input, capture=CaptureOptions(save_grads=True))
+    assert len(trace.output_layers) == 1
+    output = trace[trace.output_layers[0]]
+    assert output.out.grad_fn is not None
+    trace.backward(output.out.sum())
+    assert traced_input.grad is not None
+    torch.testing.assert_close(traced_input.grad, reference_input.grad)
+    source = trace[trace.input_layers[0]]
+    assert source.has_saved_grad
+    torch.testing.assert_close(source.grads.for_pass(1).grad, reference_input.grad)
+    assert trace[output.parents[0]].out.grad_fn is None
 
 
 @contextlib.contextmanager
