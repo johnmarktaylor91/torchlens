@@ -26,6 +26,7 @@ from typing import Any, NamedTuple
 from .._io._json import loads_bounded
 from ..errors import GraphvizUnavailableError
 from . import _render_utils
+from ._loop_edges import reports_route_failure, without_compass_ports
 
 Rect = tuple[float, float, float, float]
 Point = tuple[float, float]
@@ -129,13 +130,34 @@ def place_pass_labels(source: str, *, engine: str, timeout: float, cwd: str | No
         render then reports the failure); otherwise with placement attributes added.
     """
 
-    lines = source.splitlines(keepends=True)
-    if not has_pass_labels(lines):
+    if not has_pass_labels(source.splitlines()):
         return source
-    layout = pass_label_layout(source, engine=engine, timeout=timeout, cwd=cwd)
-    if layout is None:
+    routed = _routed_layout(source, engine=engine, timeout=timeout, cwd=cwd)
+    if routed is None:
         return source
-    return "".join(choose_pass_label_placements(lines, layout))
+    source, layout = routed
+    return "".join(choose_pass_label_placements(source.splitlines(keepends=True), layout))
+
+
+def _routed_layout(
+    source: str, *, engine: str, timeout: float, cwd: str | None
+) -> tuple[str, str] | None:
+    """Return the text to render and its ``-Tjson`` layout, or ``None`` when layout fails.
+
+    When the installed Graphviz reports a spline-router failure for ``source`` (2.43 on
+    the README loop's corner ports, :mod:`._loop_edges`), the text without edge compass
+    ports is laid out instead and used only if that layout routes cleanly.
+    """
+
+    completed = _layout_run(source, engine=engine, timeout=timeout, cwd=cwd)
+    if completed is None:
+        return None
+    if reports_route_failure(completed.stderr):
+        portless = without_compass_ports(source)
+        retry = _layout_run(portless, engine=engine, timeout=timeout, cwd=cwd)
+        if portless != source and retry is not None and not reports_route_failure(retry.stderr):
+            return portless, _stdout_text(retry)
+    return source, _stdout_text(completed)
 
 
 def forward_sources(
@@ -168,12 +190,26 @@ def pass_label_layout(
     without one, and a real render reports the missing binary itself.
     """
 
+    completed = _layout_run(source, engine=engine, timeout=timeout, cwd=cwd)
+    return None if completed is None else _stdout_text(completed)
+
+
+def _layout_run(
+    source: str, *, engine: str, timeout: float, cwd: str | None
+) -> subprocess.CompletedProcess[Any] | None:
+    """Run ``engine -Tjson`` on ``source``; ``None`` when Graphviz fails or is missing."""
+
     try:
-        completed = _render_utils.run_bounded_subprocess(
+        return _render_utils.run_bounded_subprocess(
             [engine, "-Tjson"], input=source.encode("utf-8"), timeout=timeout, cwd=cwd
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GraphvizUnavailableError):
         return None
+
+
+def _stdout_text(completed: subprocess.CompletedProcess[Any]) -> str:
+    """Return a Graphviz child's stdout as text."""
+
     stdout = completed.stdout
     return stdout.decode("utf-8", "replace") if isinstance(stdout, bytes) else str(stdout)
 
