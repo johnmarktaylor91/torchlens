@@ -344,3 +344,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 99fcb28364a511f5c28d812380531c055291e8b3 (dirty)
 recorded: 2026-11-04T12:55:01.825562+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: relfix-readme-loop: rolled-header 48796e54aa and loop-labels 7bbf6ee6a0 merged onto release 2.38.1 67125ff69d: viz identity on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad9bbbedfec4801a390aa1d203dfed7f81a46ef9 (dirty)
+recorded: 2026-11-04T14:50:07.852730+00:00
