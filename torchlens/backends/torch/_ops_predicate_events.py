@@ -429,6 +429,18 @@ def _build_graph_relationship_fields(
     fields_dict["in_multi_output"] = in_multi_output
 
 
+def _extract_through_dynamic_spec(
+    normalized_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> tuple[list[torch.Tensor], list[torch.nn.Parameter]] | None:
+    """Extract one entry per slot through the Tier-2 cached spec; ``None`` if it misses the call."""
+    cached = _st._dynamic_arg_specs.get(normalized_name)
+    if isinstance(cached, ArgSpec) and dynamic_spec_covers_call(cached, args, kwargs):
+        return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
+    return None
+
+
 def _extract_arg_tensors_and_params(
     normalized_name: str,
     args: tuple[Any, ...],
@@ -466,9 +478,8 @@ def _extract_arg_tensors_and_params(
         if spec is not None and dynamic_spec_covers_call(spec, args, kwargs):
             return promote_mutated_parameters(*extract_tensors_and_params(spec, args, kwargs))
         if spec is None:
-            cached = _st._dynamic_arg_specs.get(normalized_name)
-            if isinstance(cached, ArgSpec) and dynamic_spec_covers_call(cached, args, kwargs):
-                return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
+            if (cached := _extract_through_dynamic_spec(normalized_name, args, kwargs)) is not None:
+                return cached
 
     # Tier 3 fallback: BFS crawl. Cache/union-merge the derived spec only for
     # fixed-arity functions with no static entry; variadic transform ops,
@@ -480,11 +491,11 @@ def _extract_arg_tensors_and_params(
         and spec is None
         and _st._dynamic_arg_specs.get(normalized_name) is not DYNAMIC_SPEC_UNCACHEABLE
     ):
-        cached = _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
+        _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
         # The crawl dedups by identity, but later calls extract one entry per slot
         # through the cached spec; do the same now so a first trace matches its retrace.
-        if cached is not None and dynamic_spec_covers_call(cached, args, kwargs):
-            return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
+        if (cached := _extract_through_dynamic_spec(normalized_name, args, kwargs)) is not None:
+            return cached
     # A Parameter mutated in place earlier in this pass binds as a graph parent of
     # its mutation op (``promote_mutated_parameters``); the cached spec above keeps
     # recording slot positions only, so it is unaffected.
