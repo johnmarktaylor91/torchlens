@@ -2309,3 +2309,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 03849402b7182502db552dd4e0e243baa2ea02ed (clean)
 recorded: 2026-11-03T21:18:05.870865+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: format 3 chunk naming (5b3f6d79b "feat(format3): stream payloads into 3.0 chunks and write the envelope at publish", on the train by C-128; docs/maintainers/saved_format_3.md names chunks blobs/<codec>-<nnnn>.safetensors): ground_truth.disk_storage.files lists blobs/torch_safetensors_v1-0000.safetensors and blobs/torch_safetensors_v1-0001.safetensors in place of blobs/0000000001.safetensors and blobs/0000000002.safetensors; the re-recorded record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (fixq6-g4 per-case diff, job mp-c133-g4-oracle-2).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6a81be6458cf43359728dd5e8f38648365664aee (clean)
+recorded: 2026-11-03T23:59:14.313455+00:00
