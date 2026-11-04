@@ -5,13 +5,18 @@ a time from the clean run and measure how much of the correct answer's probabili
 This entry measures the MLP-output grid on GPT-2 small with TorchLens and again with plain
 PyTorch hooks on the same facts and noise draws. The entry passes: the two implementations agree exactly (max abs difference 0 over all 72 cells), both wrong-site controls recover almost nothing, and the largest effect sits at the last subject token as the paper reports, but at layer 0 on GPT-2 small rather than in the paper's middle-layer band on GPT-2 XL.
 
+![Heatmap of average indirect effect by layer and token category for GPT-2 small: restoring one MLP output recovers the most at layer 0, last subject token (+0.0063 answer probability); a side strip on the same colour scale shows that restoring a wrong value there (layer 6, or another fact) recovers almost nothing.](../images/gallery/causal_tracing.svg)
+
+The figure is drawn from the saved `causal_tracing.json` by the shared gallery renderer; the
+script's `--figure-only` flag redraws it without rerunning the model.
+
 | | |
 |---|---|
 | Claim | Meng, Bau, Andonian and Belinkov, "Locating and Editing Factual Associations in GPT" (NeurIPS 2022, arXiv 2202.05262 v5), Section 2.2 and Figure 2b: restoring MLP outputs at the last subject token in early-to-middle layers recovers the most correct-answer probability (MLP average indirect effect 6.6% on GPT-2 XL). |
 | Script | `examples/gallery/causal_tracing.py`; run `python examples/gallery/causal_tracing.py --out DIR` |
 | Pinned inputs | `openai-community/gpt2` at revision `607a30d7`, float32, eager attention; the first 10 kept records of the ROME `known_1000.json` facts vendored in `examples/replications/data/known_facts.json`; noise 3 x the embedding standard deviation, 10 draws per fact, seed = fact index |
-| Verdict | passed; CPU (x86_64, 2 threads), 3 Nov 2026, TorchLens 2.36.3, commit `e90c3400` |
-| Cost | 16 min 52 s wall on 2 CPU cores, peak memory 5.4 GiB (10 facts, both implementations, both controls, save, reload and replay) |
+| Verdict | passed; CPU (x86_64, 2 threads), 3 Nov 2026, TorchLens 2.36.3, commit `e9122c7b` |
+| Cost | 14 min 37 s wall on 2 CPU cores, peak memory 5.3 GiB (10 facts, both implementations, both controls, save, reload, replay and the figure) |
 
 ## Oracles
 
@@ -48,7 +53,7 @@ window; `--window 10` reproduces the paper's window rule for comparison.
 ## Artifact and replay
 
 The clean trace of fact 0 is saved as a portable `causal_tracing_clean_fact0.tlspec` (24.3 MB,
-sha256 `f00d774a86f3e16f`...). The script reloads it with `tl.load`, takes the layer-0 MLP value
+sha256 `08ce6135552cbb8e`...). The script reloads it with `tl.load`, takes the layer-0 MLP value
 at the last subject token from the reloaded trace, reruns the restoration on a fresh corrupted
 trace, and gets the in-memory effect for that cell exactly (0.0013961, difference 0.0).
 
@@ -69,11 +74,11 @@ measured.
 ## The stamp
 
 ```text
-{"commit": "e90c3400944265f4d4398767ad02d5b29f56a94b", "date_utc": "2026-11-03T14:47:26Z",
+{"commit": "e9122c7bc3767c6ee529f7578ca880bc8b483b36", "date_utc": "2026-11-03T20:15:32Z",
  "device": "cpu", "libraries": {"numpy": "2.2.6", "torchvision": "0.28.0+cpu",
  "transformers": "5.18.0"}, "machine": "x86_64",
  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31", "python": "3.10.19",
- "torch": "2.13.0+cpu", "torch_threads": 2, "torchlens": "2.36.3", "wall_seconds": 1007.0}
+ "torch": "2.13.0+cpu", "torch_threads": 2, "torchlens": "2.36.3", "wall_seconds": 871.2}
 ```
 
 ## Vary it
