@@ -5352,7 +5352,6 @@ package-docstrings	torchlens/_extraction/views.py	14
 package-docstrings	torchlens/_extraction_provenance.py	10
 package-docstrings	torchlens/_extraction_provenance.py	43
 package-docstrings	torchlens/_fast_run.py	35
-package-docstrings	torchlens/_input_coerce.py	3.10
 package-docstrings	torchlens/_input_walk.py	1.0
 package-docstrings	torchlens/_input_walk.py	11.1
 package-docstrings	torchlens/_input_walk.py	11.4
