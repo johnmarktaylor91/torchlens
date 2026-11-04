@@ -91,6 +91,8 @@ def _summary(stats: Any, *, separator: str, moments: bool) -> str:
         return "all zero"
     integer = stats.dtype.startswith(("i8", "i16", "i32", "i64", "u8"))
     prefix = "magnitude " if stats.is_magnitude_based else ""
+    if stats.constant_value is not None:
+        return prefix + f"all {_number(stats.constant_value, integer=integer)}"
     parts = [
         f"{name} {_number(value, integer=integer)}"
         for name, value in (("min", stats.finite_min), ("max", stats.finite_max))

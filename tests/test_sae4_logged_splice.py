@@ -48,7 +48,7 @@ def test_logged_latents_are_trace_nodes_equal_to_the_result_latents(setup) -> No
     # Selectors see the node: the latents op is a relu of the logged trace.
     relus = list(result.spliced[tl.func("relu")].labels)
     assert result.latents_site in relus
-    assert result.latents_site.partition(":")[0] in str(result.spliced.summary())
+    assert node.short_layer_label in str(result.spliced.summary())
 
 
 def test_logged_splice_refuses_a_trace_door_with_a_running_remedy(setup) -> None:
