@@ -163,8 +163,8 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
 
     A loaded ``.tlspec`` bundle is UNTRUSTED input, so ``metadata.pkl`` is read
     with the default-deny :class:`SafeBundleUnpickler` class allowlist (which
-    closes a load-time ``__reduce__`` / ``os.system`` RCE). A global that only a 2.x release
-    wrote refuses with the one 2.x error; nothing is renamed on the way in (the class name
+    closes a load-time ``__reduce__`` / ``os.system`` RCE). A global that only a pre-2.38 release
+    wrote refuses with the one pre-2.38 error; nothing is renamed on the way in (the class name
     predates that and stays).
     """
 

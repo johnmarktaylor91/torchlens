@@ -122,7 +122,7 @@ def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None
 
 def _validate_format_version(format_version: Any, *, path: Path | None = None) -> None:
     """Check ``format_version`` against ``SPEC_FORMAT_VERSIONS``: a refused row raises the
-    one 2.x error (``artifact_version_below_floor``), an unknown version raises
+    one pre-2.38 error (``artifact_version_below_floor``), an unknown version raises
     ``spec_format_version_unsupported``. ``path`` is the spec directory when the caller
     has it, for the refusal's fields."""
 

@@ -1,9 +1,9 @@
-"""The one refusal for a file saved by torchlens 2.x.
+"""The one refusal for a file saved by torchlens 2.37 and earlier.
 
-This release carries no reader for 2.x files. Every door that can recognise one raises
+This release carries no reader for pre-2.38 files. Every door that can recognise one raises
 :func:`pre_3_artifact_error`: the restricted unpickler through
 :func:`refuse_pre_3_module_path` for each global it resolves, and the manifest checks for
-a format stamp older than the current one. A 2.x file fails with this one error instead
+a format stamp older than the current one. A pre-2.38 file fails with this one error instead
 of an unknown-global or missing-field refusal.
 """
 
@@ -106,12 +106,12 @@ def pre_3_artifact_error(
     remedy_note: str = "",
     code: str = "artifact_version_below_floor",
 ) -> ArtifactTooOldError:
-    """Build the typed refusal for an artifact saved by torchlens 2.x.
+    """Build the typed refusal for an artifact saved by torchlens 2.37 and earlier.
 
     Parameters
     ----------
     observed:
-        What marks the artifact as 2.x (a pickled module path, a format stamp, a manifest
+        What marks the artifact as pre-2.38 (a pickled module path, a format stamp, a manifest
         spelling), rendered as ``name=value`` text.
     path:
         Artifact path, when the caller has it in scope.
@@ -132,8 +132,8 @@ def pre_3_artifact_error(
 
     remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
     return ArtifactTooOldError(
-        f"This artifact was saved by torchlens 2.x ({observed}); torchlens 3 does not read "
-        f"files saved by torchlens 2.x. Remedy: {remedy}",
+        f"This artifact was saved by torchlens 2.37 and earlier ({observed}); torchlens 2.38 does not read "
+        f"files saved by torchlens 2.37 and earlier. Remedy: {remedy}",
         code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
@@ -170,7 +170,7 @@ def modellog_216_error(
 
 
 def refuse_pre_3_module_path(module: str, name: str = "") -> None:
-    """Refuse a pickled module path that only torchlens 2.x wrote.
+    """Refuse a pickled module path that only torchlens 2.37 and earlier wrote.
 
     Parameters
     ----------
@@ -183,7 +183,7 @@ def refuse_pre_3_module_path(module: str, name: str = "") -> None:
     ------
     ArtifactTooOldError
         When ``module`` lives under a package that left the public surface in 3.0, or
-        names a private module or class that only 2.x wrote.
+        names a private module or class that only pre-2.38 wrote.
     """
 
     root, _, rest = module.partition(".")
