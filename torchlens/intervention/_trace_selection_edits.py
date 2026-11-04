@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 __all__: list[str] = []
 
 from .._selection.do_plan import build_selection_do_plan
-from .._selection.errors import SelectionError
+from .._selection.fork_rebind import bind_to_target
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
@@ -379,12 +379,9 @@ def apply_selection_edge_do(  # noqa: PLR0913 - trace stands in for self on the 
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved edge selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_edges = lifted
+        resolved_edges = bind_to_target(
+            lifted, trace, "the resolved edge selection is bound to a different trace."
+        )
     else:
         resolved_edges = lifted._resolve(trace)
     payload = apply_edge_substitution_do(trace, resolved_edges, edit, engine=engine, strict=strict)
@@ -424,12 +421,9 @@ def apply_selection_param_do(  # noqa: PLR0913 - trace stands in for self on the
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved parameter selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_params = lifted
+        resolved_params = bind_to_target(
+            lifted, trace, "the resolved parameter selection is bound to a different trace."
+        )
     else:
         resolved_params = lifted._resolve(trace)
     payload = apply_param_substitution_do(

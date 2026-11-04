@@ -14,10 +14,10 @@ from typing import Any
 import torch
 
 from .._data_classes._trace_intervention_records import _edit_identity
+from .fork_rebind import bind_to_target
 from .resolver import _label_index_scope
 from .selection import (
     Selection,
-    SelectionError,
     _apply_invalid,
     _find_act_ops,
     _lift,
@@ -125,15 +125,15 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
     if lifted is None:
         raise RuntimeError("build_selection_do_plan requires a selection-shaped input")
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved selection is bound to a different trace; resolve "
-                "against this trace first, or bridge explicitly with "
-                "resolved.align_to(trace) (cross-run alignment on L1 site "
-                "keys, same-policy captures only).",
-                code="selection_trace_mismatch",
-            )
-        resolved = lifted
+        # A selection resolved on a fork ancestor carries over by site identity.
+        resolved = bind_to_target(
+            lifted,
+            trace,
+            "the resolved selection is bound to a different trace; resolve "
+            "against this trace first, or bridge explicitly with "
+            "resolved.align_to(trace) (cross-run alignment on L1 site "
+            "keys, same-policy captures only).",
+        )
     else:
         resolved = lifted._resolve(trace)
     if resolved.kind == "PARAM":
