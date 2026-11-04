@@ -2,9 +2,10 @@
 
 The README's select-then-intervene form resolves a field selection on the clean
 trace and applies it to ``trace.fork()``. The fork shares the clean run's
-captured index space, so ``do()`` rebinds such a selection through
-``align_to`` instead of refusing ``selection_trace_mismatch``; a selection from
-an unrelated capture still refuses.
+captured sites, so ``do()`` rebinds such a selection onto the fork by site
+identity instead of refusing ``selection_trace_mismatch``, and every rebound
+row's provenance names the ancestor it came from; a selection from an unrelated
+capture still refuses.
 """
 
 from __future__ import annotations
@@ -86,7 +87,9 @@ def test_rebound_selection_discloses_its_origin(clean) -> None:
     fork = clean.fork()
     resolved = _resolve_do_target(fork, clean[tl.func("relu")])
     assert resolved._trace is fork
-    assert all("aligned from" in entry.provenance.source for entry in resolved)
+    origin = f"[carried over to fork from {clean.name!r}]"
+    assert len(resolved) > 0
+    assert all(entry.provenance.source.endswith(origin) for entry in resolved)
 
 
 def test_unrelated_trace_selection_still_refuses(clean) -> None:
