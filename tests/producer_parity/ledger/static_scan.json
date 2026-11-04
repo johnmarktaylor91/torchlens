@@ -6442,6 +6442,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/backends/torch/_consumer_kind.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/backends/torch/_foreign_data.py",
   "has_default": false,
   "sites": 5,
@@ -7219,14 +7227,6 @@
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/backends/torch/sources.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/torch/structure_only_belt.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
