@@ -26,10 +26,24 @@ only when every test was false. TorchLens records them as one more arm of kind
 `fallthrough`, appended after the source arms:
 
 ```python
-def forward(self, x):
-    if x.mean() > 0:
-        return x * 2
-    return -x  # the fallthrough arm
+import torch
+from torch import nn
+
+import torchlens as tl
+
+
+class EarlyReturn(nn.Module):
+    def forward(self, x):
+        if x.mean() > 0:
+            return x * 2
+        return -x  # the fallthrough arm
+
+
+trace = tl.trace(EarlyReturn(), torch.full((2, 2), -1.0))
+conditional = trace.graph.conditionals[0]
+assert conditional.fired_arm_kind == "fallthrough"
+assert conditional.outcome == "fallthrough"
+assert not conditional.has_else
 ```
 
 On an input whose test is false, `conditional.fired_arm_kind == "fallthrough"`, the `neg`
