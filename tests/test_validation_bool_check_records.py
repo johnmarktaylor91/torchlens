@@ -152,7 +152,7 @@ def test_reused_bool_gets_one_terminal_record_per_conditional(
         assert len(clones) == n_tests - 1
         first_bool = trace[events[0].bool_layers[0]]
         for clone in clones:
-            assert list(clone.parent_layers) == [first_bool.layer_label]
+            assert list(clone.parents) == [first_bool.layer_label]
             assert clone.is_scalar_bool and clone.control_flow.is_terminal_conditional_bool
         assert check_metadata_invariants(trace)
     finally:
@@ -183,13 +183,13 @@ def test_single_conditional_bool_adds_no_record(model_cls: type[nn.Module]) -> N
 def test_clone_linked_to_the_first_conditional_still_fails_invariant_8(
     positive_input: torch.Tensor,
 ) -> None:
-    """Planted bug: a terminal bool pointing at a conditional it does not decide still fails."""
+    """Planted bug: one record listed by two conditionals (the old shared shape) still fails."""
 
     trace = _trace(TwoIfsOneBool(), positive_input)
     try:
         events = sorted(trace.graph.conditional_records, key=lambda event: event.id)
-        clone = trace[events[1].bool_layers[0]]
-        clone.terminal_conditional_id = events[0].id
+        clone_label = events[1].bool_layers[0]
+        events[0].bool_layers.append(clone_label)
         with pytest.raises(MetadataInvariantError, match="Invariant 8"):
             check_metadata_invariants(trace)
     finally:
@@ -199,7 +199,11 @@ def test_clone_linked_to_the_first_conditional_still_fails_invariant_8(
 def test_unrecorded_clone_falls_back_and_still_fails(
     monkeypatch: pytest.MonkeyPatch, positive_input: torch.Tensor
 ) -> None:
-    """Planted bug: without the per-test record the shared bool still fails validation."""
+    """Planted bug: without the per-test record the shared bool still fails its invariants.
+
+    ``if flag: ... if flag:`` fails invariant 6 (the second arm runs before any recorded
+    test of its conditional); a ternary then ``if`` fails invariant 8.
+    """
 
     from torchlens.backends.torch import _bool_check_records
 
@@ -207,10 +211,16 @@ def test_unrecorded_clone_falls_back_and_still_fails(
     trace = _trace(TwoIfsOneBool(), positive_input)
     try:
         assert _ops_named(trace, "clone") == []
-        with pytest.raises(MetadataInvariantError, match="Invariant 8"):
+        with pytest.raises(MetadataInvariantError, match="Invariant 6"):
             check_metadata_invariants(trace)
     finally:
         trace.cleanup()
+    ternary = _trace(TernaryThenIf(), positive_input)
+    try:
+        with pytest.raises(MetadataInvariantError, match="Invariant 8"):
+            check_metadata_invariants(ternary)
+    finally:
+        ternary.cleanup()
 
 
 def test_reused_bool_model_saves_runnable_and_verifies(tmp_path: Path) -> None:

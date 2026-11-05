@@ -240,7 +240,7 @@ def test_predicate_reuse_materializes_every_branch_consumer() -> None:
     second_test = _find_only_layer(trace, "clone")
     assert events[0].bool_layers == [bool_layer.layer_label]
     assert events[1].bool_layers == [second_test.layer_label]
-    assert list(second_test.parent_layers) == [bool_layer.layer_label]
+    assert list(second_test.parents) == [bool_layer.layer_label]
     assert second_test.terminal_conditional_id == events[1].id
 
     relu_layer = _find_only_layer(trace, "relu")
