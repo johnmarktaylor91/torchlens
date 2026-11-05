@@ -7,13 +7,16 @@ object would let that later mutation rewrite the record, so the record keeps a
 copy of every mutable container, nested ones included, taken when the op ran.
 
 Only containers are copied. Tensors, scalars, strings and other objects are
-kept by reference, and a tuple whose elements need no copy is returned as is,
-so the common scalar argument costs one type lookup.
+kept by reference, and a tuple whose elements need no copy is returned as is.
+Capture runs this for every op, so the common arguments (a scalar, a flat tuple
+of scalars, no keywords) are recognised by C-level type checks and cost no
+Python call beyond ``split_non_tensor_args`` itself.
 """
 
 from __future__ import annotations
 
 import copy
+import operator
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -61,16 +64,28 @@ def split_non_tensor_args(
         ``(positional, keyword)``: the non-tensor arguments in call order, each
         passed through ``snapshot_mutable_arg``.
     """
-    # The exact-type test is inlined so the common scalar argument costs no extra call.
+    # Hot path (every captured op): plain loops instead of comprehensions, and the
+    # scalar / flat-scalar-tuple test inlined, so the common call makes no Python call
+    # but this one. The two loops repeat the test because a helper would cost a call.
     atomic = _ATOMIC_TYPES
-    positional = [
-        arg if type(arg) in atomic else _snapshot(arg, None) for arg in args if not is_tensor(arg)
-    ]
-    keyword = {
-        key: value if type(value) in atomic else _snapshot(value, None)
-        for key, value in kwargs.items()
-        if not is_tensor(value)
-    }
+    positional: list[Any] = []
+    for arg in args:
+        if is_tensor(arg):
+            continue
+        arg_type = type(arg)
+        if arg_type in atomic or (arg_type is tuple and atomic.issuperset(map(type, arg))):
+            positional.append(arg)
+        else:
+            positional.append(_snapshot(arg, None))
+    keyword: dict[str, Any] = {}
+    for key, value in kwargs.items():
+        if is_tensor(value):
+            continue
+        value_type = type(value)
+        if value_type in atomic or (value_type is tuple and atomic.issuperset(map(type, value))):
+            keyword[key] = value
+        else:
+            keyword[key] = _snapshot(value, None)
     return positional, keyword
 
 
@@ -93,6 +108,8 @@ def _snapshot(value: Any, memo: dict[int, Any] | None) -> Any:
             return memo[id(value)]
         return _copy_container(value, memo)
     if isinstance(value, tuple):
+        if type(value) is tuple and _ATOMIC_TYPES.issuperset(map(type, value)):
+            return value
         return _snapshot_tuple(value, memo)
     return value
 
@@ -118,7 +135,9 @@ def _copy_container(
     memo[id(value)] = copied
     if isinstance(value, list):
         atomic = _ATOMIC_TYPES
-        copied[:] = [item if type(item) in atomic else _snapshot(item, memo) for item in value]
+        # A list of scalars is already a full snapshot once copied.
+        if not atomic.issuperset(map(type, value)):
+            copied[:] = [item if type(item) in atomic else _snapshot(item, memo) for item in value]
     elif isinstance(value, dict):
         for key, item in value.items():
             copied[key] = _snapshot(item, memo)
@@ -138,7 +157,7 @@ def _snapshot_tuple(value: tuple[Any, ...], memo: dict[int, Any] | None) -> tupl
     """
     atomic = _ATOMIC_TYPES
     items = [item if type(item) in atomic else _snapshot(item, memo) for item in value]
-    if all(new is old for new, old in zip(items, value)):
+    if all(map(operator.is_, items, value)):
         return value
     if type(value) is tuple:
         return tuple(items)
