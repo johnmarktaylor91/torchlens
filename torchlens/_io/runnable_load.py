@@ -1543,9 +1543,7 @@ def _validate_call_arity(
         raise _refuse(f"negative arity ({num_positional_args=}, {num_keyword_args=})")
     positional_roots: set[int] = set()
     keyword_names: set[str] = set()
-    paths = tuple(argument.argument_path for argument in tensor_arguments) + tuple(
-        argument.argument_path for argument in literal_arguments
-    )
+    paths = [argument.argument_path for argument in (*tensor_arguments, *literal_arguments)]
     for path in paths:
         if len(path) < 2 or path[0] not in ("args", "kwargs"):
             raise _refuse(f"argument path {path!r} is not rooted at args/kwargs")
@@ -1558,10 +1556,12 @@ def _validate_call_arity(
             if not isinstance(head, str):
                 raise _refuse(f"keyword argument root {head!r} is not a string")
             if _rawptr.is_raw_pointer_parameter_name(head):  # r50 raw-pointer family
-                raise _refuse(_rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}"))
+                detail = _rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}")
+                raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
             keyword_names.add(head)
     if _sparse_guard.invariant_switch_disabled(tensor_arguments, literal_arguments):
-        raise _refuse(_sparse_guard.invariant_keyword_refusal_detail(f"call {call_id!r}"))
+        detail = _sparse_guard.invariant_keyword_refusal_detail(f"call {call_id!r}")
+        raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
     n = num_positional_args
     dense = len(positional_roots) == n and (
         n == 0 or (min(positional_roots) == 0 and max(positional_roots) == n - 1)
