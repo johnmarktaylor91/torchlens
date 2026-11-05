@@ -11,6 +11,7 @@ operator still fails ``source_provenance``.
 
 from __future__ import annotations
 
+import dataclasses
 import shutil
 import warnings
 from pathlib import Path
@@ -357,6 +358,8 @@ def test_unrecorded_write_reader_is_left_to_the_disclosure_only_for_its_inputs()
     parent = _op_for_validation_label(trace, add.call.parent_arg_positions["args"][0])
     assert parent.func_name == "clone" and not parent.is_inplace
 
+    journal = trace.__dict__["_foreign_departures"]
+
     def explained(written: frozenset[str]) -> bool:
         """Run the tripwire on the add's first slot with ``written`` as the disclosed inputs."""
 
@@ -365,10 +368,10 @@ def test_unrecorded_write_reader_is_left_to_the_disclosure_only_for_its_inputs()
             parent,
             _saved_out_payload,
             lambda label: _op_for_validation_label(trace, label),
-            unrecorded_writes=written,
+            dataclasses.replace(journal, unrecorded_writes=set(written)),
         )
 
-    written = frozenset(trace.__dict__["_foreign_departures"].unrecorded_writes)
+    written = frozenset(journal.unrecorded_writes)
     assert parent._label_raw in written
     assert explained(written)
     assert not explained(frozenset())

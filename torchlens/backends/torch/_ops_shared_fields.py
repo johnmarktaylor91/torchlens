@@ -479,8 +479,7 @@ def _mark_foreign_written_snapshot(
         if _VIEW_MUTATION_RELABELS:
             note_alias_rebound_snapshot(
                 self,
-                parent_label,
-                child_entry._label_raw,
+                (parent_label, child_entry._label_raw),
                 positions,
                 live_call,
                 _VIEW_MUTATION_RELABELS,

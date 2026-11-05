@@ -11,6 +11,7 @@ out), and validation must fail; the unplanted control of each model validates.
 
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -342,22 +343,24 @@ def test_sibling_alias_snapshot_is_explained_only_by_its_capture_mark() -> None:
     parent = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
     assert parent.is_inplace
 
-    def explained(**marks: Any) -> bool:
-        """Run the tripwire on the sibling slot with ``marks``."""
+    def explained(marks: Any) -> bool:
+        """Run the tripwire on the sibling slot with the capture ``marks``."""
 
         return snapshot_binding_explained(
             child,
             parent,
             _saved_out_payload,
             lambda label: _op_for_validation_label(trace, label),
-            **marks,
+            marks,
         )
 
-    marks = trace.__dict__["_foreign_departures"].alias_slots
-    assert explained(alias_slots=marks)
-    assert not explained()
-    assert not explained(alias_slots={key: frozenset({("args", 1)}) for key in marks})
+    journal = trace.__dict__["_foreign_departures"]
+    moved = {key: frozenset({("args", 1)}) for key in journal.alias_slots}
+    assert explained(journal)
+    assert not explained(None)
+    assert not explained(dataclasses.replace(journal, alias_slots={}))
+    assert not explained(dataclasses.replace(journal, alias_slots=moved))
     versions = parent.out_versions_by_child
     key = next(k for k in (child.label, child.layer_label) if k in versions)
     versions[key] = versions[key].double()
-    assert not explained(alias_slots=marks)
+    assert not explained(journal)

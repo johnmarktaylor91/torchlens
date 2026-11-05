@@ -45,7 +45,7 @@ fails. The check only adds failures; it never validates what failed before.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Set as AbstractSet
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -77,10 +77,7 @@ def snapshot_binding_explained(
     parent_layer: Op,
     saved_out: Callable[[Op], Any],
     resolve: Callable[[str], Any],
-    foreign_written: Mapping[tuple[str, str], frozenset[tuple[str, Any]]] | None = None,
-    *,
-    alias_slots: Mapping[tuple[str, str], frozenset[tuple[str, Any]]] | None = None,
-    unrecorded_writes: AbstractSet[str] = frozenset(),
+    marks: Any = None,
 ) -> bool:
     """Return whether ``parent_layer``'s snapshot for ``target_layer`` follows from the graph.
 
@@ -94,13 +91,12 @@ def snapshot_binding_explained(
         Returns an op's retained saved out, or ``None`` when capture omitted it.
     resolve:
         Resolves a recorded parent label to its op.
-    foreign_written:
-        The trace's foreign-write marks: ``(parent raw label, child raw label)`` to
-        the parent's bound slots at capture; ``None`` when there are none.
-    alias_slots:
-        The trace's alias-relabel marks, keyed and valued like ``foreign_written``.
-    unrecorded_writes:
-        Raw labels of tensors passed to a disclosed unrecordable mutating call.
+    marks:
+        The trace's capture marks (its kept foreign journal), or ``None`` when there
+        are none. ``written_slots`` (foreign writes) and ``alias_slots`` (alias
+        relabels) map ``(parent raw label, child raw label)`` to the parent's bound
+        slots at capture; ``unrecorded_writes`` holds raw labels of tensors passed to
+        a disclosed unrecordable mutating call.
 
     Returns
     -------
@@ -121,15 +117,19 @@ def snapshot_binding_explained(
         if _write_alias_geometry(snapshot, parent_layer, saved_out, resolve):
             return True
         return snapshot.dtype == saved.dtype and _slots_marked(
-            target_layer, parent_layer, resolve, alias_slots or {}
+            target_layer, parent_layer, resolve, getattr(marks, "alias_slots", None) or {}
         )
     if not same_geometry:
         return False
     if _consumed_write_reaches(target_layer, parent_layer, resolve):
         return True
-    if record_member(parent_layer, "_label_raw", None) in unrecorded_writes:
+    if record_member(parent_layer, "_label_raw", None) in (
+        getattr(marks, "unrecorded_writes", None) or ()
+    ):
         return True
-    return _slots_marked(target_layer, parent_layer, resolve, foreign_written or {})
+    return _slots_marked(
+        target_layer, parent_layer, resolve, getattr(marks, "written_slots", None) or {}
+    )
 
 
 def _write_alias_geometry(

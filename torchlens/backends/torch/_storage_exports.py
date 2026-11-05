@@ -216,8 +216,7 @@ def note_foreign_written_snapshot(
 
 def note_alias_rebound_snapshot(
     trace: Any,
-    parent_label: str,
-    child_label: str,
+    key: tuple[str, str],
     parent_arg_positions: Mapping[str, Mapping[Any, str]],
     live_call: tuple[Sequence[Any], Mapping[str, Any]],
     relabels: Mapping[Any, tuple[Any, ...]],
@@ -231,9 +230,11 @@ def note_alias_rebound_snapshot(
     record (``ops._VIEW_MUTATION_RELABELS``: tensor to ``(session token, prior label,
     label it was given, ...)``). The mark is set only when every slot bound to the parent
     holds a tensor this session's propagation relabeled onto exactly this parent; any
-    other slot content is a binding the propagation does not explain.
+    other slot content is a binding the propagation does not explain. ``key`` is the
+    ``(parent raw label, child raw label)`` pair the mark is stored under.
     """
 
+    parent_label = key[0]
     token = active_label_session_token()
     sources = {"args": live_call[0], "kwargs": live_call[1]}
     slots = [
@@ -250,4 +251,4 @@ def note_alias_rebound_snapshot(
         return entry is not None and entry[0] == token and entry[2] == parent_label
 
     if slots and all(relabeled_onto_parent(_slot_value(sources[k], p)) for k, p in slots):
-        foreign_journal(trace).alias_slots[(parent_label, child_label)] = frozenset(slots)
+        foreign_journal(trace).alias_slots[key] = frozenset(slots)
