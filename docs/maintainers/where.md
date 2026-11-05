@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1592 modules, 679719 lines, 0 modules without a docstring.
+83 packages, 1592 modules, 679806 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26668 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 39983 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 40070 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (105 modules, 39983 lines)
+Core data structures for representing a logged forward pass. (105 modules, 40070 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -305,9 +305,9 @@ Core data structures for representing a logged forward pass. (105 modules, 39983
 | `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 386 |
 | `_aten_display` | ATen cards over recorded tensor metadata, never retained tensor values. | 126 |
 | `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 122 |
-| `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 312 |
+| `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 317 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 139 |
-| `_conditional_arms` | Derived reads over the arms of a recorded conditional. | 151 |
+| `_conditional_arms` | Derived reads over the arms of a recorded conditional. | 233 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
 | `_doors` | Doors from the records to the packages above them (Rule F). | 142 |
 | `_fork_flat_copy` | Flat copies for the fork builder: ''copy.deepcopy'' results without per-member recursion. | 189 |
