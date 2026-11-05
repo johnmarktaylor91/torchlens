@@ -13,6 +13,7 @@ under their original names.
 import functools
 import gc
 import logging
+import sys
 import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Iterator
@@ -51,6 +52,15 @@ _LRU_REFERENT_SKIP_TYPES = frozenset({type, types.FunctionType})
 #: not model state: the walk stops at them, as it never recurses out of a module namespace.
 #: ``nn.Module`` instances stop the object walk too, as before.
 _OBJECT_WALK_STOP_TYPES = (nn.Module, logging.Filterer, logging.Manager, logging.PlaceHolder)
+#: Function hops followed from a forward into the user helpers it names (the MLX
+#: closure-constant census follows the same number).
+_HELPER_HOP_BUDGET = 3
+#: Top-level packages whose functions are library code, never a user helper keeping
+#: model state: torch (and TorchLens's own wrappers, which copy torch's
+#: ``__module__``), TorchLens and the standard library.
+_LIBRARY_PACKAGE_ROOTS = frozenset(
+    {"torch", "torchlens", "builtins", *getattr(sys, "stdlib_module_names", ())}
+)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -390,6 +400,7 @@ def _clear_callable_session_tensor_metadata(
     callable_obj: Any,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
+    owner: type | None = None,
 ) -> None:
     """Clear TorchLens tensor metadata captured by a callable object.
 
@@ -414,6 +425,11 @@ def _clear_callable_session_tensor_metadata(
         Candidate callable, such as a model's bound ``forward`` method.
     seen
         Object ids already visited during this cleanup scan.
+    visit
+        Optional per-tensor action replacing the default ``clear_meta``.
+    owner
+        The class of the module whose forward this is, so a ``self.<method>`` the
+        forward names is followed as a helper (see :func:`_walk_named_globals`).
 
     Returns
     -------
@@ -424,17 +440,105 @@ def _clear_callable_session_tensor_metadata(
     chain = _forward_wrapper_chain(getattr(callable_obj, "__func__", callable_obj))
     for link in chain:
         _clear_callable_link_tensor_metadata(link, seen, visit)
+    _walk_named_globals(chain[-1], owner, seen, visit, _HELPER_HOP_BUDGET)
 
-    user_callable = chain[-1]
-    globals_dict = getattr(user_callable, "__globals__", None)
-    if not isinstance(globals_dict, dict):
+
+def _code_names(code: types.CodeType) -> Iterator[str]:
+    """Yield the names a code object and its nested code (comprehensions, lambdas) load."""
+
+    pending = [code]
+    seen_codes: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen_codes:
+            continue
+        seen_codes.add(id(current))
+        yield from current.co_names
+        pending.extend(const for const in current.co_consts if type(const) is types.CodeType)
+
+
+def _user_helper(value: Any) -> types.FunctionType | None:
+    """Return ``value`` when it is a plain function defined outside library packages."""
+
+    if type(value) is not types.FunctionType:
+        return None
+    module = getattr(value, "__module__", None)
+    root = module.partition(".")[0] if isinstance(module, str) else ""
+    return None if root in _LIBRARY_PACKAGE_ROOTS else value
+
+
+def _class_helper(owner: type, name: str) -> types.FunctionType | None:
+    """Return the user function ``owner`` resolves ``name`` to, ``self.<name>``'s method."""
+
+    for klass in owner.__mro__:
+        attr = vars(klass).get(name)
+        if attr is None:
+            continue
+        if type(attr) in _METHOD_DESCRIPTOR_TYPES:
+            attr = attr.__func__
+        return _user_helper(attr)
+    return None
+
+
+def _walk_named_globals(
+    func: Any,
+    owner: type | None,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None,
+    hops: int,
+) -> None:
+    """Sweep the globals ``func``'s code names, following user helpers for ``hops`` hops.
+
+    A forward often reaches module-level state only through the helpers it calls:
+    ``forward -> hyp_up -> disp_up`` reading a module-level ``lru_cache`` function,
+    or ``forward -> flow_warp -> torch_warp`` reading a module-global dict of
+    cached grids. Reading only the forward's own names left that state outside
+    the snapshot (a warm cache's tensor became an unattributed argument) and
+    outside the session clear (a cold cache filled in one capture kept a stale
+    label into the next). A named user function, or a method of ``owner`` the
+    code names (``self.forward_once``), is swept like the forward itself:
+    defaults, closure cells, its ``__dict__`` and the globals its code names,
+    one hop less each time. Library functions (torch, TorchLens, the standard
+    library) are not followed; at zero hops a function is swept as an object.
+    """
+
+    globals_dict = getattr(func, "__globals__", None)
+    code = getattr(func, "__code__", None)
+    if not isinstance(globals_dict, dict) or code is None:
         return
-    code = getattr(user_callable, "__code__", None)
-    if code is None:
+    for name in _code_names(code):
+        method = _class_helper(owner, name) if owner is not None and hops > 0 else None
+        if method is not None:
+            _walk_user_helper(method, owner, seen, visit, hops)
+        if name not in globals_dict:
+            continue
+        value = globals_dict[name]
+        helper = _user_helper(value) if hops > 0 else None
+        if helper is None:
+            _clear_session_tensor_metadata(value, seen, visit=visit)
+        else:
+            _walk_user_helper(helper, None, seen, visit, hops)
+
+
+def _walk_user_helper(
+    func: types.FunctionType,
+    owner: type | None,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None,
+    hops: int,
+) -> None:
+    """Sweep one user helper function once per sweep, then the globals it names."""
+
+    # The inverted id keys the helper walk apart from the plain object visit of the
+    # same function (``seen`` holds object ids, all non-negative), so a function met
+    # first as a module attribute is still followed when a forward names it.
+    walk_key = ~id(func)
+    if walk_key in seen:
         return
-    for name in code.co_names:
-        if name in globals_dict:
-            _clear_session_tensor_metadata(globals_dict[name], seen, visit=visit)
+    seen.add(walk_key)
+    _clear_callable_link_tensor_metadata(func, seen, visit)
+    _clear_session_tensor_metadata(func, seen, visit=visit)
+    _walk_named_globals(func, owner, seen, visit, hops - 1)
 
 
 def _lru_cache_entries(wrapper: Any) -> list[Any]:
@@ -492,7 +596,7 @@ def _clear_module_callables_tensor_metadata(
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
 ) -> None:
-    """Walk one module's forward callable, then the ``lru_cache`` contents its class holds.
+    """Walk one module's forward callable and its helpers, then its class's ``lru_cache`` contents.
 
     The callable half of the pre-forward ownership snapshot and of the session-end
     clear, so both reach the same cached tensors: the snapshot records a warm
@@ -509,6 +613,8 @@ def _clear_module_callables_tensor_metadata(
         Optional per-tensor action replacing the default ``clear_meta``.
     """
 
-    _clear_callable_session_tensor_metadata(getattr(module, "forward", None), seen, visit=visit)
+    _clear_callable_session_tensor_metadata(
+        getattr(module, "forward", None), seen, visit=visit, owner=type(module)
+    )
     for cache in _class_lru_caches(type(module)):
         _clear_session_tensor_metadata(cache, seen, visit=visit)
