@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..._ir._row_journal import _RowJournal, _RowOpRecord, _RowResidual
+from ..._ir._row_journal import _new_object, _RowJournal, _RowOpRecord, _RowResidual
 from ..._trace_core.op_store import OpRowStore
 from . import _ops_row_cells
 from ._ops_freeze_refs import (
@@ -54,25 +54,28 @@ def _residual_from_draft(
     function: FunctionCallRef,
     edge_uses: tuple[EdgeUseRecord, ...],
 ) -> _RowResidual:
-    """Snapshot the record values the cells cannot carry, read now as the freeze reads them."""
+    """Snapshot the record values the cells cannot carry, read now as the freeze reads them.
+
+    Sets every slot ``_RowResidual.__init__`` sets, without its keyword dict and call.
+    """
 
     trace, fields_dict = draft.trace, draft.fields_dict
     tensor_ref, frames, transformed_ref, backend_semantics = _exhaustive_freeze_refs(
         fields_dict, draft.tensor, draft.module_stack
     )
-    return _RowResidual(
-        kind="source" if fields_dict["is_input"] or fields_dict["is_buffer"] else "op",
-        output=_exhaustive_output_ref(fields_dict, tensor_ref, transformed_ref),
-        function=function,
-        module_stack=frames,
-        edge_uses=edge_uses,
-        params=_param_refs_from_fields(fields_dict),
-        parent_params=tuple(fields_dict["parent_params"]),
-        backend_semantics=backend_semantics,
-        policy=_exhaustive_capture_policy(trace, fields_dict),
-        is_scalar_bool=fields_dict["is_scalar_bool"],
-        fire_results=draft.fire_results,
-    )
+    rest = _new_object(_RowResidual)
+    rest.kind = "source" if fields_dict["is_input"] or fields_dict["is_buffer"] else "op"
+    rest.output = _exhaustive_output_ref(fields_dict, tensor_ref, transformed_ref)
+    rest.function = function
+    rest.module_stack = frames
+    rest.edge_uses = edge_uses
+    rest.params = _param_refs_from_fields(fields_dict)
+    rest.parent_params = tuple(fields_dict["parent_params"])
+    rest.backend_semantics = backend_semantics
+    rest.policy = _exhaustive_capture_policy(trace, fields_dict)
+    rest.is_scalar_bool = fields_dict["is_scalar_bool"]
+    rest.fire_results = draft.fire_results
+    return rest
 
 
 def commit_row_record(

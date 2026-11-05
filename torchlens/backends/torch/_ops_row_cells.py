@@ -58,7 +58,7 @@ _INTERVENTION_DEFAULT = FACET_DEFAULTS["intervention"]()
 _ANNOTATIONS_DEFAULT = FACET_DEFAULTS["annotations"]()
 
 
-class _NameKeys(dict):  # type: ignore[type-arg]
+class _NameKeys(dict[str, str]):
     """Field-id map of the dict form: every cell name is its own key."""
 
     def __missing__(self, name: str) -> str:
@@ -437,7 +437,10 @@ def write_draft_row(
         The new row's index.
     """
 
-    plan = _plan_for(store.layout)
+    layout = store.layout
+    plan = _PLANS.get(id(layout))
+    if plan is None or plan.layout is not layout:
+        plan = _plan_for(layout)
     row = plan.template.copy()
     _fill_row(row, plan.fids, trace, fields_dict, fire_results, function)
     return int(store.adopt_row(row))

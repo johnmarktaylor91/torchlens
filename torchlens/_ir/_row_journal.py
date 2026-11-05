@@ -24,7 +24,7 @@ equal to ``record_with_path_updates`` on the eager record.
 
 from __future__ import annotations
 
-from collections.abc import Container, Iterable
+from collections.abc import Iterable
 from typing import Any, cast
 
 from .events import ArgTemplateRef, ParentEdge
@@ -69,6 +69,10 @@ _FLAT_PATH: dict[str, str] = {
     "has_internal_source_ancestor": "ancestry.has_internal_source_ancestor",
 }
 _OVERLAY_PATHS: frozenset[str] = frozenset(_FLAT_PATH.values())
+
+
+#: ``object.__new__``: the commit builds handles and residuals without an ``__init__`` call.
+_new_object = object.__new__
 
 
 class _RowResidual:
@@ -126,9 +130,20 @@ class _RowJournal:
         self.fids: dict[str, int] = store.layout.fid_by_name
 
     def handle(self, row_index: int, rest: _RowResidual) -> _RowOpRecord:
-        """Return a fresh, unamended handle over committed row ``row_index``."""
+        """Return a fresh, unamended handle over committed row ``row_index``.
 
-        return _RowOpRecord(self, self.store._rows[row_index], rest, {})
+        Sets the slots ``_RowOpRecord.__init__`` sets, without the call (one per op).
+        """
+
+        handle = _new_object(_RowOpRecord)
+        handle._journal = self
+        handle._row = self.store._rows[row_index]
+        handle._rest = rest
+        handle._patch = {}
+        handle._record = None
+        handle._parents = None
+        handle.seq = 0
+        return handle
 
 
 class _RowOpRecord:
@@ -189,16 +204,6 @@ class _RowOpRecord:
         if row is None or self._patch:
             return None
         return row, self.materialize()
-
-    def build_if_reading(self, row_ids: Container[int]) -> None:
-        """Build the record now when this handle still reads a row in ``row_ids`` (capture C2c).
-
-        Ingest writes into the rows it takes; a handle built first never reads
-        them again.
-        """
-
-        if self._row is not None and id(self._row) in row_ids:
-            self.materialize()
 
     def with_patch(self, items: Iterable[tuple[str, Any]]) -> Any:
         """Return the handle (or record) with ordered facet-path updates folded on."""
@@ -303,12 +308,10 @@ def _read_module_stack(handle: _RowOpRecord) -> Any:
 def _read_scalar_bool(handle: _RowOpRecord) -> Any:
     """Return the raw ``is_scalar_bool`` (the cell is ``bool``-coerced)."""
 
-    rest = handle._rest
-    if (
-        rest.is_scalar_bool is not None
-        or handle._row[handle._journal.fids["bool_value"]] is not None
-    ):  # type: ignore[union-attr,index]
-        return rest.is_scalar_bool  # type: ignore[union-attr]
+    rest: _RowResidual = handle._rest  # type: ignore[assignment]
+    row: list[Any] = handle._row  # type: ignore[assignment]
+    if rest.is_scalar_bool is not None or row[handle._journal.fids["bool_value"]] is not None:
+        return rest.is_scalar_bool
     return None
 
 
@@ -357,8 +360,9 @@ def _frozen_cell_reader(cell_name: str) -> Any:
     def read(handle: _RowOpRecord) -> frozenset[str]:
         """Return the bound set cell as a frozenset."""
 
-        return frozenset(handle._cell(cell_name))
+        return frozenset(handle._row[handle._journal.fids[cell_name]])  # type: ignore[index]
 
+    read._frozen_cell = cell_name  # type: ignore[attr-defined]
     return read
 
 
@@ -383,6 +387,7 @@ def _constant_reader(value: Any) -> Any:
         del handle
         return value
 
+    read._constant = (value,)  # type: ignore[attr-defined]
     return read
 
 
@@ -463,6 +468,35 @@ def _fast_property(name: str, read: Any) -> property:
 
     cell_name = getattr(read, "_cell_name", None)
     rest_slot = getattr(read, "_rest_slot", None)
+    frozen_cell = getattr(read, "_frozen_cell", None)
+    constant = getattr(read, "_constant", None)
+    if frozen_cell is not None:
+
+        def get_frozen(handle: _RowOpRecord) -> Any:
+            """Read ``name`` from the record, the overlay, else its set cell as a frozenset."""
+
+            record = handle._record
+            if record is not None:
+                return getattr(record, name)
+            if handle._patch:
+                return _patched_read(handle, name)
+            return frozenset(handle._row[handle._journal.fids[frozen_cell]])  # type: ignore[index]
+
+        return property(get_frozen, doc=f"Record read ``{name}`` (set cell ``{frozen_cell}``).")
+    if constant is not None:
+        (value,) = constant
+
+        def get_constant(handle: _RowOpRecord) -> Any:
+            """Read ``name`` from the record, the overlay, else its constant."""
+
+            record = handle._record
+            if record is not None:
+                return getattr(record, name)
+            if handle._patch:
+                return _patched_read(handle, name)
+            return value
+
+        return property(get_constant, doc=f"Record read ``{name}`` (constant ``{value!r}``).")
     if cell_name is not None:
 
         def get_cell(handle: _RowOpRecord) -> Any:
@@ -648,7 +682,7 @@ def _record_from_row(handle: _RowOpRecord) -> OpRecord:
             tracing_finished=row[fids["_tracing_finished"]],
             construction_done=row[fids["_construction_done"]],
         ),
-        **_optional_facets(row, fids, rest),  # type: ignore[arg-type]
+        **_optional_facets(row, fids, rest),
     )
     if handle._patch:
         record = record_with_path_updates(record, handle._patch.items())

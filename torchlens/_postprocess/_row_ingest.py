@@ -87,8 +87,12 @@ def hand_off_capture_rows(
         # first (a raw-lane or live-index entry that is not the sealed entry).
         taken_ids = {id(row) for row in capture_rows.values()}
         for event in (*source.op_events, *source.live_index.by_raw_label.values()):
-            if type(event) is _RowOpRecord:
-                event.build_if_reading(taken_ids)
+            if (
+                type(event) is _RowOpRecord
+                and event._row is not None
+                and id(event._row) in taken_ids
+            ):
+                event.materialize()
     return projected, capture_rows
 
 

@@ -314,9 +314,12 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
 def _is_plain_position_key(key: Any) -> bool:
     """Return whether an argument-position key is an int, a str, or a tuple of them."""
 
-    if type(key) in (int, str):
+    kind = type(key)
+    if kind is int or kind is str:
         return True
-    return type(key) is tuple and all(type(part) in (int, str) for part in key)
+    if kind is not tuple:
+        return False
+    return all(type(part) in (int, str) for part in key)
 
 
 def _copy_parent_arg_positions(positions: Any) -> Any:
@@ -327,10 +330,16 @@ def _copy_parent_arg_positions(positions: Any) -> Any:
     per-object dispatch and memo. Any other shape still goes through ``deepcopy``.
     """
 
-    if type(positions) is dict and all(
-        type(inner) is dict
-        and all(type(label) is str and _is_plain_position_key(key) for key, label in inner.items())
-        for inner in positions.values()
-    ):
-        return {kind: dict(inner) for kind, inner in positions.items()}
-    return copy.deepcopy(positions)
+    if type(positions) is not dict:
+        return copy.deepcopy(positions)
+    copied = {}
+    for kind, inner in positions.items():
+        if type(inner) is not dict:
+            return copy.deepcopy(positions)
+        for key, label in inner.items():
+            if type(label) is not str or (
+                type(key) is not int and type(key) is not str and not _is_plain_position_key(key)
+            ):
+                return copy.deepcopy(positions)
+        copied[kind] = dict(inner)
+    return copied
