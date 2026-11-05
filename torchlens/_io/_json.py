@@ -21,6 +21,7 @@ below the depth ceiling.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from collections.abc import Callable
@@ -276,13 +277,26 @@ def loads_bounded(
 
         raise _refuse(f"manifest JSON contains the non-finite constant {name}", text)
 
+    def _finite_float(token: str) -> float:
+        """Parse one JSON number, refusing an overflow to infinity (``1e999``)."""
+
+        value = float(token)
+        return value if math.isfinite(value) else _reject_constant(token)
+
     try:
         return json.loads(
-            text, parse_constant=_reject_constant, object_pairs_hook=object_pairs_hook
+            text,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            object_pairs_hook=object_pairs_hook,
         )
-    except RecursionError as exc:  # pragma: no cover - prescan normally fires first
+    except (RecursionError, ValueError) as exc:
+        if isinstance(exc, json.JSONDecodeError):
+            raise
+        # RecursionError (the prescan normally fires first) or the interpreter's
+        # integer-digit limit on a huge literal: both refuse through the typed channel.
         raise _refuse(
-            "manifest JSON nesting exceeded the interpreter recursion limit", text
+            f"manifest JSON could not be decoded ({type(exc).__name__}: {str(exc)[:80]})", text
         ) from exc
 
 

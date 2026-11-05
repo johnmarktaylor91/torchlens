@@ -42,7 +42,7 @@ from torchlens._utils._unchecked_kernel_denial import (
     is_unchecked_memory_kernel,
     unchecked_switch_kernel_names,
 )
-from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.errors import RunCapabilityUnavailableError, TorchLensError
 
 # --------------------------------------------------------------------------- #
 # (1) extraction ledger rows stay inside the artifact                         #
@@ -73,7 +73,7 @@ def test_ledger_row_naming_a_file_outside_the_artifact_refuses(tmp_path: Path, k
     _ledger(container, [{"index": 0, "file": name, "row_start": 0, "n_rows": 1}])
     with pytest.raises(ExtractionArtifactError) as info:
         read_trusted_rows(container)
-    assert info.value.code == "extraction_ledger_invalid"
+    assert info.value.fields["code"] == "extraction_ledger_invalid"
 
 
 def test_symlinked_shard_and_symlinked_ledger_refuse(tmp_path: Path) -> None:
@@ -132,7 +132,7 @@ def test_pt_shard_refuses_on_a_bypassable_weights_only_torch(
     shard.write_bytes(b"crafted")
     with pytest.raises(InvalidArgumentError) as info:
         shards.read_shard(shard, "pt")
-    assert info.value.code == "extraction_pt_shard_unsafe_torch"
+    assert info.value.fields["code"] == "extraction_pt_shard_unsafe_torch"
 
 
 def test_pyreft_weights_refuse_on_unsafe_torch_and_symlinked_weight(
@@ -349,7 +349,52 @@ def test_crafted_bundle_naming_an_unchecked_kernel_never_runs(tmp_path: Path) ->
         _recompute_runtime_fingerprints(descriptor)
 
     mutate_runnable_descriptor(bundle, _craft)
-    loaded = tl.load(str(bundle))
+    try:
+        loaded = tl.load(str(bundle))
+    except TorchLensError:
+        return  # refused at load: nothing was resolved or run
     assert loaded._runnable.readiness.status is ReadinessStatus.UNAVAILABLE
     with pytest.raises(RunCapabilityUnavailableError):
         loaded.run_transaction(inputs=torch.randn(2, 4))
+
+
+@pytest.mark.parametrize("trust", [False, True])
+@pytest.mark.parametrize("import_path", ["torch:_unsafe_index", "torch:segment_reduce"])
+def test_registry_resolver_refuses_unchecked_kernels(import_path: str, trust: bool) -> None:
+    """The resolver behind validation replay of a loaded bundle refuses them, even trusted."""
+
+    from torchlens.errors import UntrustedCallableError
+    from torchlens.intervention._resolver_registry import resolve_function_registry_key
+    from torchlens.intervention.types import FunctionRegistryKey
+
+    key = FunctionRegistryKey(
+        "custom", import_path.split(":")[1], "function", import_path=import_path
+    )
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(key, trust_custom_callables=trust)
+
+
+# --------------------------------------------------------------------------- #
+# (7) hostile numbers refuse typed instead of crashing                        #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.smoke
+def test_json_huge_integer_and_float_overflow_refuse_typed() -> None:
+    """A 5000-digit integer and ``1e999`` refuse as ``JSONDecodeError``, not a raw crash."""
+
+    with pytest.raises(json.JSONDecodeError):
+        _json.loads_bounded('{"a": 1' + "0" * 5000 + "}")
+    with pytest.raises(json.JSONDecodeError):
+        _json.loads_bounded("[1e999]")
+    assert _json.loads_bounded('[1.5, 2, {"k": -3e10}]') == [1.5, 2, {"k": -3e10}]
+
+
+def test_zero_dimension_cannot_hide_an_oversized_dimension() -> None:
+    """``[0, 10**30]`` has zero elements but refuses at the cell check, not in torch."""
+
+    from torchlens._io.format3 import reader
+
+    cell = {"shape": [0, 10**30], "device": "cpu", "dtype": "float32", "requires_grad": False}
+    with pytest.raises(Exception, match="per dim"):
+        reader._tensor_geometry(cell, "probe")

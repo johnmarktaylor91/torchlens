@@ -309,12 +309,12 @@ def compare_model_identity(recorded: Any, current: Any) -> str | None:
 _SHARD_NAME = re.compile(r"batch_[0-9]{5,}\.(?:pt|safetensors)")
 
 
-def _refuse_ledger_entry(problem: str, **context: object) -> ExtractionArtifactError:
+def _refuse_ledger_entry(problem: str, *, code: str, **context: object) -> ExtractionArtifactError:
     """Build the typed refusal for a ledger entry that escapes the container."""
 
     return ExtractionArtifactError(
         problem,
-        code="extraction_ledger_invalid",
+        code=code,
         remedy="load only artifacts you trust, or re-extract into a fresh directory",
         **context,
     )
@@ -326,6 +326,7 @@ def _ledger_present(ledger_path: Path) -> bool:
     if ledger_path.is_symlink() or (ledger_path.exists() and not ledger_path.is_file()):
         raise _refuse_ledger_entry(
             f"Extraction ledger {str(ledger_path)!r} is a symlink or not a regular file.",
+            code="extraction_ledger_invalid",
             ledger_path=str(ledger_path),
         )
     return ledger_path.exists()
@@ -344,12 +345,15 @@ def _trusted_shard_path(container: Path, row: Mapping[str, Any]) -> Path:
         raise _refuse_ledger_entry(
             f"Ledger row (index {row.get('index')!r}) names shard {name!r}, which is not "
             "a bare batch_NNNNN.pt/.safetensors name inside the artifact.",
+            code="extraction_ledger_invalid",
             shard=repr(name)[:120],
         )
     shard_path = container / name
     if shard_path.is_symlink():
         raise _refuse_ledger_entry(
-            f"Ledgered shard {name!r} is a symlink; shards must be regular files.", shard=name
+            f"Ledgered shard {name!r} is a symlink; shards must be regular files.",
+            code="extraction_ledger_invalid",
+            shard=name,
         )
     return shard_path
 
