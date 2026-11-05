@@ -302,24 +302,26 @@ def _live_sibling_views(receiver: Any) -> list[tuple[Any, str]]:
     return found
 
 
-def _read_sibling_grad_fn(alias: Any) -> Any | None:
-    """Read a sibling view's ``grad_fn`` so that the read never changes capture's outcome.
+def grad_fn_read_refused(t: Any) -> bool:
+    """Return whether reading ``t.grad_fn`` raises or warns; the read shows neither.
 
-    Reading it regenerates the node now, as autograd does at the sibling's next
-    read. Torch checks a stale view on that read: a view that is an output of a
-    multi-output view op (``chunk``, ``split``, ``unbind``), was made in no-grad
-    mode or inside a custom ``autograd.Function`` raises or warns there. Any
-    warning is recorded here (never shown, never raised by a warnings-as-errors
-    filter) and, like a raise, refuses the sibling: ``None``.
+    Reading a view's ``grad_fn`` after its base was written regenerates its node
+    now, as autograd does at the view's next read, and torch checks the view on
+    that read: an output of a multi-output view op (``chunk``, ``split``,
+    ``unbind``), a view made in no-grad mode or inside a custom
+    ``autograd.Function`` raises or warns there. A capture-time bookkeeping read
+    must never change the capture's outcome, so any warning is recorded here
+    (never shown, never raised by a warnings-as-errors filter) and, like a
+    raise, answers ``True``: the caller refuses the tensor (fail closed).
     """
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            node = alias.grad_fn
+            _ = t.grad_fn
         except (RuntimeError, Warning):
-            return None
-    return None if caught else node
+            return True
+    return bool(caught)
 
 
 def _regenerated_sibling_node(
@@ -331,13 +333,15 @@ def _regenerated_sibling_node(
     ``CopySlices``'s first input that no other recorded node in ``readers`` reads
     (as for the written view's producers), and the sibling's regenerated node is
     a view node over ``CopySlices`` that no op records. A sibling whose
-    ``grad_fn`` read raises or warns is refused (``_read_sibling_grad_fn``).
+    ``grad_fn`` read raises or warns is refused (``grad_fn_read_refused``).
     """
 
     chain = _view_chain_to_prior(handles.get(label), copy_slices)
     if not chain or _chain_has_recorded_reader(chain, readers):
         return None
-    node = _read_sibling_grad_fn(alias)
+    if grad_fn_read_refused(alias):
+        return None
+    node = alias.grad_fn
     if (
         node is None
         or not _is_view_backward_class(type(node).__name__)
