@@ -337,6 +337,17 @@ Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; inst
   starts from the pristine model and reports `retrace_mismatch` for its one-time first forward. Run
   one plain forward first, or trace with `CaptureOptions(carry_state=True)`, to validate the
   steady-state model.
+- **names**: one public word for the one-based pass counter, `pass_number` (walk names.1). The
+  keyword of `for_pass` on `trace.autograd.backward_passes`, `grad_fn.calls` and `op.grads` is
+  `pass_number` (was `pass_index`); the value it takes is unchanged. `GenerationStep.pass_index`
+  is `GenerationStep.pass_number`, with the same value.
+  `BackwardFlopsRow.pass_index` and `BackwardFlopsAttribution.pass_index` are `pass_number`, same
+  value.
+  The `TraceLike` lookups take `activations_by_pass(pass_number)` and
+  `activation_by_raw_label(raw_label, pass_number=)`.
+- **trace**: `trace.provenance.summary()` is public (walk names.3); it was the interim private
+  `trace.provenance._summary()`, which is gone. It returns the same capture-provenance text block,
+  the Trace twin of `Bundle.provenance.summary()`.
 
 ### Features
 
