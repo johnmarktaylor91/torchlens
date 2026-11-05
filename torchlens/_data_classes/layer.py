@@ -72,7 +72,7 @@ from . import _doors, _familiar_names
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
 from ._layer_accessors import LayerAccessor, OpAccessor  # noqa: F401
-from ._layer_mirror import _layer_mirror_read, _layer_rep_op
+from ._layer_mirror import LAYER_VIEW_OP_PATHS, _layer_mirror_read, _layer_rep_op, layer_view_read
 from ._layer_sites import layer_shape_summary, layer_site_peers
 from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-exported)
     _layer_log_to_row,
@@ -200,17 +200,6 @@ def _build_layer_view_types() -> dict[str, type]:
 
 
 _LAYER_RELATION_VIEW_TYPES: dict[str, type] = _build_layer_view_types()
-
-#: Layer view fields whose Op spelling moved into a concern group
-#: (``module_call_stack`` -> ``module_context.call_stack``): an unstored one
-#: reads its single pass through that Op path instead of the Op refusal.
-_LAYER_VIEW_OP_PATHS: dict[str, tuple[str, str]] = {
-    name: (group, leaf)
-    for name in _LAYER_RELATION_VIEW_TYPES
-    if name not in LAYER_MOVED_MEMBERS
-    for group, _, leaf in [op_spelling(name).partition(".")]
-    if leaf
-}
 
 
 def _layer_relations_finished(layer: "Layer") -> bool:
@@ -1382,18 +1371,11 @@ class Layer(_SelectionOperand):
         # redirect caught below would otherwise fall through to a bare miss.
         refuse_removed_member("Layer", name, _REMOVED_LAYER_MEMBERS)
         refuse_removed_member(type(self).__name__, name, LAYER_MOVED_MEMBERS)
-        if name in {
-            "param_memory",
-        }:
+        if name == "param_memory":
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
-        path = _LAYER_VIEW_OP_PATHS.get(name)
-        if path is not None and ops:
-            # A Layer view field the Op table moved reads through the Op path,
-            # so the Op-side refusal below never fires on a Layer read.
-            if len(ops) > 1:
-                return self._single_pass_or_error(name)
-            return getattr(getattr(ops[0], path[0]), path[1])
+        if ops and name in LAYER_VIEW_OP_PATHS:  # the Op group path, never the Op refusal below
+            return layer_view_read(self, name)
         # A former flat Op spelling refuses here, typed, instead of being lost to
         # the plain miss below when the delegated Op read refuses it.
         refuse_removed_member(type(self).__name__, name, OP_MOVED_MEMBERS)
