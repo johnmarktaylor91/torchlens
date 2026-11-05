@@ -43,7 +43,10 @@ from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import restores_rng_streams, set_random_seed
 from ._validation_divergence import _first_reproducibility_divergence
-from ._validation_entry_options import resolve_forward_validation_entry
+from ._validation_entry_options import (
+    ForwardValidationEntryOptions,
+    resolve_forward_validation_entry,
+)
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -629,10 +632,7 @@ def validate_forward_pass(
         model,
         inputs,
         input_kwargs,
-        output_device,
-        save_budget,
-        num_threads,
-        trace_observer,
+        ForwardValidationEntryOptions(output_device, save_budget, num_threads, trace_observer),
     )
     return spec.validate_entry(
         model,

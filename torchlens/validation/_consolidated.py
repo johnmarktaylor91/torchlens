@@ -423,14 +423,20 @@ def _gradient_ready_value(value: Any) -> Any:
     return value
 
 
+@dataclass(frozen=True)
+class _ReceptiveFieldRunOptions:
+    """Capture settings of one receptive-field validation run."""
+
+    seed: int | None
+    validate_metadata: bool
+    backend: BackendName | None
+
+
 def _validate_receptive_field_scope(
     model: nn.Module,
     input_args: Any,
     input_kwargs: dict[str, Any] | None,
-    *,
-    seed: int | None,
-    validate_metadata: bool,
-    backend: BackendName | None,
+    run: _ReceptiveFieldRunOptions,
 ) -> list[ReceptiveFieldValidation]:
     """Capture and sample both RF containment directions at layer centers.
 
@@ -440,12 +446,9 @@ def _validate_receptive_field_scope(
         Model to capture.
     input_args, input_kwargs:
         Model inputs.
-    seed:
-        Optional deterministic capture seed.
-    validate_metadata:
-        Whether always-on metadata contracts should run on the captured trace.
-    backend:
-        Explicit backend selector.
+    run:
+        Optional deterministic capture seed, whether always-on metadata
+        contracts run on the captured trace, and the explicit backend selector.
 
     Returns
     -------
@@ -463,11 +466,11 @@ def _validate_receptive_field_scope(
         model,
         ready_args,
         input_kwargs=ready_kwargs,
-        capture=CaptureOptions(backward_ready=True, seed=seed, save_mode="reference"),
+        capture=CaptureOptions(backward_ready=True, seed=run.seed, save_mode="reference"),
         save="all",
-        backend=backend,
+        backend=run.backend,
     )
-    if validate_metadata:
+    if run.validate_metadata:
         check_metadata_invariants(captured)
     receptive = validate_receptive_field_trace(captured, direction="receptive")
     projective = validate_receptive_field_trace(captured, direction="projective")
@@ -520,7 +523,6 @@ def _validate_forward_scope(
     input_kwargs: dict[str, Any] | None,
     *,
     scope: str,
-    verbose: bool,
     forward_options: dict[str, Any],
 ) -> bool:
     """Run the forward/saved validation, settling every failure class as ``False``.
@@ -536,10 +538,9 @@ def _validate_forward_scope(
         Model and inputs to validate.
     scope:
         Normalized scope, ``"forward"`` or ``"saved"``.
-    verbose:
-        Whether validators should emit diagnostics.
     forward_options:
-        Keywords forwarded to ``validate_forward_pass``.
+        Keywords forwarded to ``validate_forward_pass``, ``verbose`` included;
+        its ``verbose`` also governs the failure report.
 
     Returns
     -------
@@ -553,13 +554,13 @@ def _validate_forward_scope(
     with _validation_peak_probe():
         try:
             passed = validate_forward_pass(
-                model, inputs, input_kwargs=input_kwargs, verbose=verbose, **forward_options
+                model, inputs, input_kwargs=input_kwargs, **forward_options
             )
         except MetadataInvariantError as invariant_error:
             _record_invariant_failure_if_missing(invariant_error)
             passed = False
     if passed is False:
-        _report_validation_failure(scope, verbose)
+        _report_validation_failure(scope, forward_options["verbose"])
     return passed
 
 
@@ -737,9 +738,7 @@ def validate(
             model,
             inputs,
             input_kwargs,
-            seed=seed,
-            validate_metadata=validate_metadata,
-            backend=backend,
+            _ReceptiveFieldRunOptions(seed, validate_metadata, backend),
         )
 
     if normalized_scope in {"forward", "saved"}:
@@ -748,8 +747,8 @@ def validate(
             inputs,
             input_kwargs,
             scope=normalized_scope,
-            verbose=verbose,
             forward_options={
+                "verbose": verbose,
                 "seed": seed,
                 "validate_metadata": validate_metadata,
                 "backend": backend,
