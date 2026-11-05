@@ -6,19 +6,22 @@ intermediate view node too). The op that produced the view recorded that dropped
 node, so no backward pass ever reached it and the metadata invariant reported a
 missing GradFn backpointer, inside an ``autograd.grad`` region and after a managed
 backward alike. Capture now moves such an op onto the ``CopySlices`` node that took
-its place. The invariant itself is unchanged.
+its place. The backward-graph invariant's dead-branch carve-out is narrower too: it no
+longer excuses an in-place op recorded on a view backward node while backward visited
+a ``CopySlices`` that no op records.
 """
 
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils import _autograd_view_nodes, _torch_compat
 from torchlens._utils._autograd_view_nodes import is_view_backward_class
 from torchlens.backends.torch import param_mutation
 from torchlens.backends.torch._user_grad_fn import (
@@ -27,6 +30,9 @@ from torchlens.backends.torch._user_grad_fn import (
     _view_write_node,
 )
 from torchlens.errors._validation import MetadataInvariantError
+from torchlens.validation._invariants_backward_domain import (
+    _view_write_gradient_runs_through_copy_slices,
+)
 from torchlens.validation._invariants_backward_graph import _check_backward_graph_invariants
 
 
@@ -372,7 +378,7 @@ def _assert_both_entry_points_reject(model_factory: Callable[[], nn.Module], lab
 
     with pytest.raises(MetadataInvariantError, match=label):
         _check_backward_graph_invariants(_traced_backward(model_factory()))
-    assert _backward_verdict(model_factory()) is not True
+    assert _backward_verdict(model_factory()) == "MetadataInvariantError"
 
 
 def test_a_wrong_view_op_handle_fails_both_entry_points(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -591,3 +597,153 @@ def test_without_the_rebind_the_backward_invariant_fails(monkeypatch: pytest.Mon
     trace = _traced_backward(_Plain(_view_used))
     with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
         _check_backward_graph_invariants(trace)
+
+
+# (sequence numbers off, schema enumeration off) for each capability gap.
+_CAPABILITY_GAPS: dict[str, tuple[bool, bool]] = {
+    "no_sequence_nr": (True, False),
+    "no_schema_enumeration": (False, True),
+    "neither": (True, True),
+}
+
+
+@pytest.fixture(params=sorted(_CAPABILITY_GAPS))
+def capability_gap(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[str]:
+    """Run the test as on a torch build that lacks one or both rebind capabilities.
+
+    ``HAS_NODE_SEQUENCE_NR`` off makes every node's creation order unknown;
+    ``get_jit_all_schemas`` answering ``None`` makes the set of view ops empty.
+    The cached view-op set is cleared on entry and exit so no other test sees it.
+    """
+
+    sequence_off, schemas_off = _CAPABILITY_GAPS[request.param]
+    if sequence_off:
+        monkeypatch.setattr(_torch_compat, "HAS_NODE_SEQUENCE_NR", False)
+    if schemas_off:
+        monkeypatch.setattr(_torch_compat, "get_jit_all_schemas", lambda: None)
+    _autograd_view_nodes._aten_view_op_names.cache_clear()
+    yield request.param
+    _autograd_view_nodes._aten_view_op_names.cache_clear()
+
+
+@pytest.mark.parametrize("model_factory", [_ConsumedBeforeWrite, lambda: _Plain(_view_used)])
+def test_without_a_capability_capture_binds_nothing(
+    capability_gap: str,
+    monkeypatch: pytest.MonkeyPatch,
+    model_factory: Callable[[], nn.Module],
+) -> None:
+    """A missing capability proves no view write, so no record moves to ``CopySlices``."""
+
+    rebind = param_mutation.rebind_rebased_view_producers
+    writer_nodes: list[object] = []
+    handle_classes: list[str] = []
+
+    def _spy(trace: tl.Trace, receiver: torch.Tensor) -> object:
+        writer_node = rebind(trace, receiver)
+        writer_nodes.append(writer_node)
+        handles = trace.capture_events.grad_fn_handles_by_label_raw.values()
+        handle_classes.extend(type(node).__name__ for node in handles)
+        return writer_node
+
+    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _spy)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tl.trace(model_factory(), _input().requires_grad_(True))
+    assert writer_nodes == [None]
+    assert "CopySlices" not in handle_classes
+
+
+# Backward validation's verdict on the base-read view write for each capability gap.
+_GAP_VALIDATE_VERDICT: dict[str, object] = {
+    # View classes still resolve, so the narrowed carve-out refuses the unbound writer.
+    "no_sequence_nr": "MetadataInvariantError",
+    # No view class resolves: the carve-out excuses the writer as it did before the
+    # narrowing, and the managed backward alone rejects the capture.
+    "no_schema_enumeration": True,
+    "neither": True,
+}
+
+
+def test_without_a_capability_the_carve_out_outcome_is_pinned(capability_gap: str) -> None:
+    """With a capability missing the writer stays unbound; each entry point's outcome is pinned.
+
+    The managed backward moves the base's label to the in-place op, so the op
+    feeds the loss and its missing backpointer raises whatever the carve-out
+    says. Backward validation's capture keeps the historical topology, so there
+    the narrowed carve-out decides: it needs the view-op set, and without schema
+    enumeration it is off, as before the narrowing.
+    """
+
+    trace = _traced_backward(_ConsumedBeforeWrite())
+    writer = _only_layer(trace, ("add_",))
+    assert writer.autograd.grad_fn_class_name != "CopySlices"
+    schemas_off = _CAPABILITY_GAPS[capability_gap][1]
+    assert _view_write_gradient_runs_through_copy_slices(trace, writer) is not schemas_off
+    with pytest.raises(MetadataInvariantError, match="add_"):
+        _check_backward_graph_invariants(trace)
+    assert _backward_verdict(_ConsumedBeforeWrite()) == _GAP_VALIDATE_VERDICT[capability_gap]
+
+
+class _BufferWriteBesideDeadInplace(nn.Module):
+    """Write into a view of a buffer that needs no grad, and leave a non-view in-place op dead.
+
+    The buffer's ``CopySlices`` has no prior node, so the write is never bound.
+    Reading the written view (not the buffer) keeps the writer on a visited node
+    while backward also visits the buffer's ``CopySlices``, which no op records.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.lin = nn.Linear(8, 8)
+        self.side = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sum over the written view and the projection; ``dead`` feeds nothing."""
+
+        h = self.lin(x)
+        column = torch.zeros(3, 8)[:, 0:1]
+        column.copy_(h[:, 0:1])
+        dead = self.side(x)
+        dead.mul_(2.0)
+        return column.sum() + h.sum()
+
+
+def test_an_unowned_copy_slices_leaves_a_dead_non_view_write_excused() -> None:
+    """The narrowed carve-out still excuses a dead in-place op that is not a view write.
+
+    Backward visits a ``CopySlices`` no op records (the buffer write), which is
+    the condition the narrowing keys on; the dead ``mul_`` records a non-view
+    node, so the carve-out excuses it as it always did, on both entry points.
+    """
+
+    trace = _traced_backward(_BufferWriteBesideDeadInplace())
+    assert any(
+        grad_fn.class_name == "CopySlices" and not grad_fn.has_op
+        for grad_fn in trace._grad_fn_logs.values()
+    )
+    dead = _only_layer(trace, ("mul_",))
+    assert dead.autograd.grad_fn is None
+    assert _view_write_gradient_runs_through_copy_slices(trace, dead) is False
+    _check_backward_graph_invariants(trace)
+    assert _backward_verdict(_BufferWriteBesideDeadInplace()) is True
+
+
+def test_sibling_view_read_gap_is_accepted_by_the_managed_backward() -> None:
+    """Open gap, pinned on the managed entry point: it accepts what validation rejects.
+
+    The managed capture moves the base's label to the in-place op, so the
+    sibling view's op has no forward children and the dead-branch carve-out
+    excuses its pre-write ``SliceBackward0``, which backward never visits (the
+    read goes through a view node regenerated over ``CopySlices``). Backward
+    validation rejects the same model (see the test above). The fix is the
+    capture-side rebind of regenerated view nodes; when it lands, this test
+    must change to assert that both entry points pass.
+    """
+
+    trace = _traced_backward(_AliasRead(_sibling_view))
+    _check_backward_graph_invariants(trace)
+    sibling = [layer for layer in trace._layer_list if layer.func_name == "__getitem__"][0]
+    assert sibling.autograd.grad_fn is None
