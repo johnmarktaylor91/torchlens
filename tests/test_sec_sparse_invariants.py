@@ -328,7 +328,7 @@ def _child(code: str) -> subprocess.CompletedProcess[str]:
 
 _RUN_CHILD = """
 import torch, torchlens as tl
-loaded = tl.load({path!r})
+loaded = tl.load(__PATH__)
 try:
     result = loaded.run_transaction(inputs=torch.arange(3, dtype=torch.float32))
     print("RAN", result.faithfulness, result.output.tolist())
@@ -389,7 +389,7 @@ def _sparse_bundle(tmp_path: Path, shrink: bool) -> Path:
 def test_run_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path) -> None:
     """``run_transaction`` refuses at construction with the signature-drift code."""
 
-    child = _child(_RUN_CHILD.format(path=str(_sparse_bundle(tmp_path, shrink=True))))
+    child = _child(_RUN_CHILD.replace("__PATH__", repr(str(_sparse_bundle(tmp_path, shrink=True)))))
     assert child.returncode == 0, f"child died rc={child.returncode}: {child.stderr[-2000:]}"
     assert "RAISED RuntimeSignatureDriftError" in child.stdout, child.stdout + child.stderr
     assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value in child.stdout
@@ -399,7 +399,9 @@ def test_run_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path) -> N
 def test_valid_sparse_bundle_still_runs(tmp_path: Path) -> None:
     """An honest sparse bundle replays and matches the eager result."""
 
-    child = _child(_RUN_CHILD.format(path=str(_sparse_bundle(tmp_path, shrink=False))))
+    child = _child(
+        _RUN_CHILD.replace("__PATH__", repr(str(_sparse_bundle(tmp_path, shrink=False))))
+    )
     assert child.returncode == 0, child.stderr[-2000:]
     expected = (
         torch.sparse_coo_tensor(_SparseFromBuffer().idx, torch.arange(3.0), (3, 3)).to_dense() * 2
@@ -449,8 +451,9 @@ def test_validate_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path)
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True))
     target = next(op for op in trace._layer_list if op.func_name == "embedding")
-    indices, values = target.saved_args[0], target.saved_args[1]
-    assert indices.dtype == torch.int64 and values.dtype == torch.float32
+    # The recorded argument order follows whichever spelling ran; pick by dtype.
+    indices = next(a for a in target.saved_args if a.dtype == torch.int64)
+    values = next(a for a in target.saved_args if a.dtype == torch.float32)
     target.func_name = "sparse_coo_tensor"
     target.func_id = FunctionRegistryKey("torch", "sparse_coo_tensor", "function")
     target.saved_args = (indices, values, (1, 1, 4))
