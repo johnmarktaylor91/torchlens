@@ -49,6 +49,7 @@ from ._foreign_data import (
     known_foreign_kernel_exits,
     note_plain_export,
 )
+from ._function_input_views import log_native_input_views
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -755,11 +756,13 @@ def record_function_apply(
             _FRAMES.remove(frame_exports)
 
     if marks.op_events is None:
+        log_native_input_views(trace, args, out)
         return out
     collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
     host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
     exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
+        log_native_input_views(trace, args, out)
         return out
     spec = BoundarySpec(
         replay=_make_replay_callable(cls, original_function, exits),
