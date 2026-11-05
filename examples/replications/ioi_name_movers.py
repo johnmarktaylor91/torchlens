@@ -135,7 +135,9 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
         "measured": {
             "n_heads_ranked": len(means),
             "top5_heads": [[name, round(means[name], 4)] for name in top],
-            "name_mover_ranks": {name: ranked.index(name) + 1 for name in NAME_MOVERS},
+            "name_mover_ranks": {
+                name: ranked.index(name) + 1 if name in ranked else None for name in NAME_MOVERS
+            },
             "mean_logit_diff": round(sum(diffs) / len(diffs), 4),
             "paper_mean_logit_diff": PAPER_LOGIT_DIFF,
             "fraction_io_over_s": round(sum(diff > 0 for diff in diffs) / len(diffs), 4),
