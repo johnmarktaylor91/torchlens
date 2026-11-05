@@ -411,14 +411,26 @@ def refuse_if_unknown_tlspec_format(path: object, tlspec_format: object) -> None
         )
 
 
-def refuse_validation_scope(scope: str, valid_scopes: Collection[str]) -> NoReturn:
-    """Raise ``validation_scope_invalid`` for a scope outside ``valid_scopes``."""
+def refuse_validation_scope(
+    scope: str, valid_scopes: Collection[str], keyword: str | None = None
+) -> NoReturn:
+    """Raise ``validation_scope_invalid`` for a scope outside ``valid_scopes``.
 
+    With ``keyword``, the scope is valid for ``validate`` but not for that
+    keyword, and the message and remedy name the keyword.
+    """
+
+    names = ", ".join(repr(name) for name in sorted(valid_scopes))
     raise InvalidArgumentError(
-        f"scope must be one of {sorted(valid_scopes)!r}",
+        f"{keyword} is only valid for scope {names}; got scope={scope!r}"
+        if keyword
+        else f"scope must be one of {sorted(valid_scopes)!r}",
         code="validation_scope_invalid",
-        remedy="pass scope as one of " + ", ".join(repr(name) for name in sorted(valid_scopes)),
+        remedy=f"omit {keyword}, or pass scope as one of {names}"
+        if keyword
+        else f"pass scope as one of {names}",
         scope=scope,
+        **({"keyword": keyword} if keyword else {}),
     )
 
 
