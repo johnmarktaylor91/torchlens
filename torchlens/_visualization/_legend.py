@@ -18,6 +18,7 @@ DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
@@ -26,7 +27,14 @@ from typing import TYPE_CHECKING, Any
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._edit_change import CHANGED_NODE_CLASS
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
-from ._encoding_key import RampKey, color_key, ramp_row_html, size_key_line, stack_key_line
+from ._encoding_key import (
+    RampKey,
+    color_key,
+    ramp_row_extent,
+    ramp_row_html,
+    size_key_line,
+    stack_key_line,
+)
 from ._endpoint_rings import endpoint_ring_role
 from ._header_block import _text_width
 from ._render_common import (
@@ -275,50 +283,144 @@ def backward_key_sections(
     return (LegendSection(title="backward key", rows=tuple(rows)),)
 
 
-def build_legend_table_label(sections: tuple[LegendSection, ...], theme: VisualizationTheme) -> str:
-    """Return the Graphviz HTML label for the one legend table node."""
+def build_legend_table_label(
+    sections: tuple[LegendSection, ...], theme: VisualizationTheme, *, fit: bool = False
+) -> str:
+    """Return the Graphviz HTML label for the one legend table node.
 
-    font_color = theme.default_font
-    border_color = theme.default_border
-    size = theme.typography.secondary_pt
+    Parameters
+    ----------
+    sections:
+        Ordered legend sections.
+    theme:
+        Resolved theme (fonts, border, text color).
+    fit:
+        Fix every text cell to its measured size and hold the table in a
+        fixed wrapper of exactly its content size. Graphviz stretches a nested
+        table to fill its cell, so a key under a wider header drew its border
+        out to the header's width with empty space on the right; the header
+        block passes ``True``. A standalone
+        legend node is never stretched and keeps the natural layout.
+    """
+
     cells: list[str] = []
+    extents: list[tuple[int, int, int]] = []  # (swatch column, other column, height)
     for section in sections:
         if section.title:
-            cells.append(
-                f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
-                f'COLOR="{font_color}"><B>{html_escape(section.title)}</B></FONT></TD></TR>'
-            )
+            title = f"<B>{html_escape(section.title)}</B>"
+            cell, extent = _text_cell(title, section.title, theme, span=True, bold=True, fit=fit)
+            cells.append(f"<TR>{cell}</TR>")
+            extents.append(extent)
         for row in section.rows:
-            if row.ramp:
-                cells.append(_ramp_row(row, theme))
-                continue
-            text = html_escape(row.text)
-            if row.hint is not None:
-                text += f" ({html_escape(row.hint)})"
-            if row.swatch_fill is not None:
-                swatch_border = row.swatch_border or border_color
-                swatch = (
-                    f'<TD FIXEDSIZE="TRUE" WIDTH="16" HEIGHT="10" '
-                    f'BGCOLOR="{row.swatch_fill}" BORDER="1" COLOR="{swatch_border}"></TD>'
-                )
-            elif not section.title:
-                # An untitled section (the encoding key) has no swatch column: the
-                # line spans the table, so a stretched table cannot push it right.
-                cells.append(
-                    f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
-                    f'COLOR="{font_color}">{text}</FONT></TD></TR>'
-                )
-                continue
-            else:
-                swatch = "<TD></TD>"
-            cells.append(
-                f"<TR>{swatch}"
-                f'<TD ALIGN="LEFT"><FONT POINT-SIZE="{size}" COLOR="{font_color}">'
-                f"{text}</FONT></TD></TR>"
-            )
-    return (
-        f'<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3" '
-        f'COLOR="{border_color}">' + "".join(cells) + "</TABLE>>"
+            cell, extent = _legend_row(row, theme, titled=bool(section.title), fit=fit)
+            cells.append(cell)
+            extents.append(extent)
+    table = (
+        f'<TABLE BORDER="{_LEGEND_BORDER}" CELLBORDER="0" CELLSPACING="0" '
+        f'CELLPADDING="{_LEGEND_PADDING}" COLOR="{theme.default_border}">'
+        + "".join(cells)
+        + "</TABLE>"
+    )
+    if fit:
+        # The outlined table stays natural inside a borderless fixed, left-aligned
+        # wrapper of exactly its size: Graphviz 2.43 draws the outline of a fixed
+        # table that is also ALIGN="LEFT" at the wrong width.
+        width, height = _fitted_table_size(extents)
+        table = (
+            '<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" '
+            f'FIXEDSIZE="TRUE" ALIGN="LEFT" WIDTH="{width}" HEIGHT="{height}">'
+            f"<TR><TD>{table}</TD></TR></TABLE>"
+        )
+    return f"<{table}>"
+
+
+#: Outline and cell padding of the legend table, in points.
+_LEGEND_BORDER = 1
+_LEGEND_PADDING = 3
+#: The swatch cell's fixed size, in points (its 1 pt border included).
+_SWATCH_SIZE = (16, 10)
+
+
+def _legend_row(
+    row: LegendRow, theme: VisualizationTheme, *, titled: bool, fit: bool
+) -> tuple[str, tuple[int, int, int]]:
+    """Return one legend row's ``<TR>`` and its (swatch, rest, height) extent.
+
+    A swatch extent of 0 marks a row that spans both columns.
+    """
+
+    if row.ramp:
+        width, height = _ramp_extent(row, theme)
+        pad = 2 * _LEGEND_PADDING
+        return _ramp_row(row, theme), (0, width + pad, height + pad)
+    text = html_escape(row.text)
+    plain = row.text
+    if row.hint is not None:
+        text += f" ({html_escape(row.hint)})"
+        plain += f" ({row.hint})"
+    if not titled:
+        # An untitled section (the encoding key) has no swatch column: the
+        # line spans the table, so a stretched table cannot push it right.
+        cell, extent = _text_cell(text, plain, theme, span=True, bold=False, fit=fit)
+        return f"<TR>{cell}</TR>", extent
+    cell, (_, text_w, text_h) = _text_cell(text, plain, theme, span=False, bold=False, fit=fit)
+    if row.swatch_fill is None:
+        swatch, swatch_w, swatch_h = "<TD></TD>", 2 * _LEGEND_PADDING, 2 * _LEGEND_PADDING
+    else:
+        swatch_w, swatch_h = _SWATCH_SIZE
+        swatch = (
+            f'<TD FIXEDSIZE="TRUE" WIDTH="{swatch_w}" HEIGHT="{swatch_h}" '
+            f'BGCOLOR="{row.swatch_fill}" BORDER="1" '
+            f'COLOR="{row.swatch_border or theme.default_border}"></TD>'
+        )
+    return f"<TR>{swatch}{cell}</TR>", (swatch_w, text_w, max(swatch_h, text_h))
+
+
+def _text_cell(
+    text: str, plain: str, theme: VisualizationTheme, *, span: bool, bold: bool, fit: bool
+) -> tuple[str, tuple[int, int, int]]:
+    """Return a left-aligned text ``<TD>`` and its (0, width, height) extent.
+
+    ``text`` is the escaped markup and ``plain`` the same words unescaped for
+    measuring; under ``fit`` the cell is fixed to the measured size.
+    """
+
+    size = theme.typography.secondary_size
+    pad = 2 * _LEGEND_PADDING
+    width = math.ceil(_text_width(plain, size, bold) * 1.06 + 2.0) + pad
+    height = math.ceil(size * 1.25) + pad
+    attrs = ' COLSPAN="2"' if span else ""
+    if fit:
+        attrs += f' FIXEDSIZE="TRUE" WIDTH="{width}" HEIGHT="{height}"'
+    cell = (
+        f'<TD{attrs} ALIGN="LEFT"><FONT POINT-SIZE="{theme.typography.secondary_pt}" '
+        f'COLOR="{theme.default_font}">{text}</FONT></TD>'
+    )
+    return cell, (0, width, height)
+
+
+def _fitted_table_size(extents: list[tuple[int, int, int]]) -> tuple[int, int]:
+    """Return the legend table's whole-point width and height from its row extents.
+
+    Two-column rows share the swatch and text columns; a spanning row needs
+    only its own width. The 1 pt outline adds on each side (cell spacing 0).
+    """
+
+    swatch = max((extent[0] for extent in extents), default=0)
+    paired = [extent[1] for extent in extents if extent[0]]
+    spans = [extent[1] for extent in extents if not extent[0]]
+    width = max([swatch + max(paired, default=0), *spans])
+    height = sum(extent[2] for extent in extents)
+    return width + 2 * _LEGEND_BORDER, height + 2 * _LEGEND_BORDER
+
+
+def _ramp_extent(row: LegendRow, theme: VisualizationTheme) -> tuple[int, int]:
+    """Return the colour-bar row's fixed table size, measured in the key's face."""
+
+    size = theme.typography.secondary_size
+    bold = "bold" in theme.typography.family.lower()
+    return ramp_row_extent(
+        row, theme.typography.secondary_pt, lambda text: _text_width(text, size, bold)
     )
 
 

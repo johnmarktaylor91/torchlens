@@ -759,7 +759,7 @@ def header_block_label(
     if sections:
         from ._legend import build_legend_table_label
 
-        rows += f'<TR><TD ALIGN="LEFT">{build_legend_table_label(sections, theme)[1:-1]}</TD></TR>'
+        rows += f'<TR><TD ALIGN="LEFT">{build_legend_table_label(sections, theme, fit=True)[1:-1]}</TD></TR>'
     return '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">' + rows + "</TABLE>>"
 
 
