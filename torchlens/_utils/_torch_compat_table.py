@@ -252,6 +252,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_SDPA_EMPTY_ROW_ZERO", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_SDPA_GQA", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_SET_STANCE", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
+    _row("HAS_SPARSE_INVARIANT_CHECK"),
     _row("HAS_SPARSE_SPSOLVE_CUDA", measured=False),
     _row(
         "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",

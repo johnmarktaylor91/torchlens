@@ -43,12 +43,12 @@ from typing import Any
 
 from ._torch_compat import get_jit_all_schemas
 
-__all__ = [
+__all__ = (
     "UNCHECKED_NAME_PREFIXES",
     "UNCHECKED_NAME_SUFFIXES",
     "is_unchecked_memory_kernel",
     "unchecked_switch_kernel_names",
-]
+)
 
 #: Callable-name prefixes of kernels that skip bounds validation by design.
 UNCHECKED_NAME_PREFIXES: tuple[str, ...] = (

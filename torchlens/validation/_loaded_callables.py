@@ -22,6 +22,7 @@ from .._errors import InvalidArgumentError
 from .._utils._callable_safety import _unwrap_capture_wrapper
 from .._utils._raw_pointer_denial import raw_pointer_keyword_name
 from .._utils._record_group_table import record_member
+from .._utils._sparse_invariant_guard import mapping_disables_invariants
 
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
 RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
@@ -59,8 +60,11 @@ def _resolution_candidate(layer: Any) -> Any:
 
     # A bundle-supplied pointer keyword leaves the op unresolved, so the entry
     # check refuses the bundle by name: the call is never armed.
-    pointer = raw_pointer_keyword_name(record_member(layer, "saved_kwargs", None) or ())
-    if _is_resolution_exempt(layer) or pointer is not None:
+    # So does a sparse ``check_invariants`` keyword that turns index validation off.
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
+    pointer = raw_pointer_keyword_name(saved_kwargs)
+    switch_off = isinstance(saved_kwargs, dict) and mapping_disables_invariants(saved_kwargs)
+    if _is_resolution_exempt(layer) or pointer is not None or switch_off:
         return None
     func_name = str(getattr(layer, "func_name", "none"))
     key = record_member(layer, "func_id", None)

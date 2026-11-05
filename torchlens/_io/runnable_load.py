@@ -89,7 +89,7 @@ from .._runnable import (
 )
 from .._runnable.seam import carries_intervened_values
 from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
-from .._utils import _raw_pointer_denial as _rawptr
+from .._utils import _raw_pointer_denial as _rawptr, _sparse_invariant_guard as _sparse_guard
 from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
@@ -1525,13 +1525,12 @@ def _validate_call_arity(
 ) -> None:
     """Anchor persisted call arity to the DENSE first-level argument leaves (r53 free_1).
 
-    A legitimate producer records ``num_positional_args`` equal to the count of
-    distinct dense first-level positional roots and ``num_keyword_args`` equal to
-    the count of distinct keyword names; ``_pre_call_contract_checks`` has always
-    required exactly this at run time, so anchoring it at parse cannot
-    over-trigger (density is the allocation-free pigeonhole over the root set). A
-    keyword leaf naming a RAW MEMORY ADDRESS (the legacy constructors'
-    keyword-only ``cdata`` overload and its siblings) is refused here too.
+    A legitimate producer records ``num_positional_args`` equal to the count of distinct dense
+    first-level positional roots and ``num_keyword_args`` equal to the count of distinct keyword
+    names; ``_pre_call_contract_checks`` has always required exactly this at run time, so anchoring
+    it at parse cannot over-trigger (density is the allocation-free pigeonhole over the root set). A
+    keyword leaf naming a RAW MEMORY ADDRESS (the legacy ``cdata`` overload and its siblings) or a
+    sparse ``check_invariants`` leaf turning index checks off is refused too.
     """
 
     def _refuse(
@@ -1562,10 +1561,11 @@ def _validate_call_arity(
                 detail = _rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}")
                 raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
             keyword_names.add(head)
+    if _sparse_guard.invariant_switch_disabled(tensor_arguments, literal_arguments):
+        detail = _sparse_guard.invariant_keyword_refusal_detail(f"call {call_id!r}")
+        raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
     n = num_positional_args
-    dense = len(positional_roots) == n and (
-        n == 0 or (min(positional_roots) == 0 and max(positional_roots) == n - 1)
-    )
+    dense = len(positional_roots) == n and (n == 0 or max(positional_roots) == n - 1)
     if not dense:
         raise _refuse(
             f"num_positional_args={n} does not match the dense first-level positional leaf "
