@@ -5,7 +5,7 @@ Composition-test row 16: a degenerate (min == max) domain renders UNENCODED
 with the note, never mid-ramp; a per-pass field on a rolled multi-pass node
 unencodes with its own note, never resolves to pass 1. Plus the rank
 transform's ordinal wording, unit invariance, the log floor, and the
-coverage line in the legend.
+coverage line in the method record.
 """
 
 from __future__ import annotations
@@ -20,10 +20,11 @@ from torchlens._visualization._encoding import (
     ROW_PER_PASS,
     EncodingChannelRequest,
     EncodingState,
-    _color_legend_rows,
     _normalize_color_values,
     resolve_color_by,
 )
+from torchlens._visualization._encoding_key import RampKey, color_key, encoding_method_lines
+from torchlens._visualization.overlays import legend_domain_text
 
 
 def _state_for(transform: str) -> EncodingState:
@@ -52,9 +53,10 @@ def test_degenerate_domain_unencodes_never_midramp() -> None:
     assert state.colors == {}
     assert NOTE_CONSTANT in state.notes
     assert state.values  # coercion evidence retained
-    # Legend advertises NO scale rows over zero encoded nodes.
-    rows = _color_legend_rows(state)
-    assert len(rows) == 1
+    # The key draws NO colour bar over zero encoded nodes, only a plain line.
+    key = color_key(state, legend_domain_text)
+    assert isinstance(key, str) and key.startswith("func_duration: all ")
+    assert "encoded 0 of 0 eligible nodes" in encoding_method_lines(state, legend_domain_text)
 
 
 def test_log_legend_labels_match_their_swatches() -> None:
@@ -64,8 +66,12 @@ def test_log_legend_labels_match_their_swatches() -> None:
     spec = resolve_color_by(EncodingChannelRequest(source=lambda node: 1.0, transform="log"))
     state = EncodingState(spec=spec)
     _normalize_color_values(state, {"a": -5.0, "b": 1.0, "c": 100.0})
-    labels = [row.lines[0] for row in _color_legend_rows(state)[1:]]
-    assert labels == ["min: 1", "mid: 10", "max: 100"]
+    key = color_key(state, legend_domain_text)
+    assert isinstance(key, RampKey)
+    assert (key.low_text, key.high_text) == ("<lambda>: 1", "100")
+    # The bar's ends are the encoded ends of the ramp.
+    assert key.fills[0].split(":")[0] == state.ramp_color(0.0)
+    assert key.fills[-1].split(":")[1] == state.ramp_color(1.0)
 
 
 def test_pass_number_is_the_per_pass_color_source() -> None:

@@ -62,13 +62,18 @@ class LegendRow:
         Border color for the swatch cell (defaults to the theme border).
     hint:
         Optional short suffix rendered after the text, e.g. the non-oval
-        shape vocabulary (``"cylinder node"``) or an edge-style note.
+        shape vocabulary (``"cylinder node"``) or an edge-style note; on a
+        ramp row, the label at the bar's high end.
+    ramp:
+        Colour-bar segment fills (``"low:high"`` gradient pairs); non-empty
+        draws ``text``, the bar, then ``hint`` on one row.
     """
 
     text: str
     swatch_fill: str | None = None
     swatch_border: str | None = None
     hint: str | None = None
+    ramp: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -197,23 +202,28 @@ def drawn_legend_roles(
 
 
 def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
-    """Build the channel disclosure sections from an ``EncodingState``.
+    """Build the untitled channel key section from an ``EncodingState``.
 
-    Every disclosure line the disconnected-node form carried is preserved
-    (AUTO disclosures are contract text, memo 2.3); ramp stop rows keep their
-    interpolated swatches.
+    The drawn key is plain (a labelled colour bar and one line per other
+    channel); the method details live in the graph comment
+    (:func:`~torchlens._visualization._encoding_key.record_encoding_method`).
     """
 
-    from ._encoding import _color_legend_rows, _non_color_legend_rows
+    from ._encoding_key import RampKey, color_key, size_key_line, stack_key_line
+    from .overlays import legend_domain_text
 
     rows: list[LegendRow] = []
-    for spec in (*_color_legend_rows(state), *_non_color_legend_rows(state)):
-        fill = spec.fillcolor if isinstance(spec.fillcolor, str) else None
-        for index, line in enumerate(spec.lines):
-            rows.append(LegendRow(text=str(line), swatch_fill=fill if index == 0 else None))
+    color = color_key(state, legend_domain_text)
+    if isinstance(color, RampKey):
+        rows.append(LegendRow(text=color.low_text, ramp=color.fills, hint=color.high_text))
+    elif color is not None:
+        rows.append(LegendRow(text=color))
+    for line in (size_key_line(state, legend_domain_text), stack_key_line(state)):
+        if line is not None:
+            rows.append(LegendRow(text=line))
     if not rows:
         return ()
-    return (LegendSection(title="TorchLens encoding", rows=tuple(rows)),)
+    return (LegendSection(title="", rows=tuple(rows)),)
 
 
 def backward_key_sections(
@@ -275,11 +285,17 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
     size = theme.typography.secondary_pt
     cells: list[str] = []
     for section in sections:
-        cells.append(
-            f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
-            f'COLOR="{font_color}"><B>{html_escape(section.title)}</B></FONT></TD></TR>'
-        )
+        if section.title:
+            cells.append(
+                f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
+                f'COLOR="{font_color}"><B>{html_escape(section.title)}</B></FONT></TD></TR>'
+            )
         for row in section.rows:
+            if row.ramp:
+                from ._encoding_key import ramp_row_html
+
+                cells.append(ramp_row_html(row, size, font_color, border_color))
+                continue
             text = html_escape(row.text)
             if row.hint is not None:
                 text += f" ({html_escape(row.hint)})"

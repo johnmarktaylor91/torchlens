@@ -638,7 +638,7 @@ def _add_legend(dot: graphviz.Digraph) -> None:
             label="mid",
             shape="box",
             style="filled,rounded",
-            fillcolor=_interpolate("#FFFFFF", "#C93F3F", 0.5),
+            fillcolor=_interpolate(0.5),
             color="#222222",
         )
         legend.node(
@@ -797,11 +797,11 @@ def _delta_color(value: float, max_delta: float) -> str:
     if max_delta <= 0.0:
         return "#FFFFFF"
     normalized = max(0.0, min(1.0, value / max_delta))
-    return _interpolate("#FFFFFF", "#C93F3F", normalized)
+    return _interpolate(normalized)
 
 
-def _interpolate(start: str, end: str, fraction: float) -> str:
-    """Linearly interpolate between two hex colors.
+def _interpolate(fraction: float) -> str:
+    """Return the white-to-red delta ramp's colour at ``fraction``.
 
     Thin alias of the ONE colormap interpolation home
     (:func:`torchlens._visualization._encoding.interpolate_hex`).
@@ -809,7 +809,7 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
 
     from ._encoding import interpolate_hex
 
-    return interpolate_hex(start, end, fraction)
+    return interpolate_hex(("#FFFFFF", "#C93F3F"), fraction)
 
 
 __all__ = ["bundle_diff"]
