@@ -122,6 +122,10 @@ def test_a_hop_rule_whose_module_loads_later_registers_on_mode_entry(
     """Registration skips an unloaded operator and picks it up when the mode is entered."""
 
     operator = _ProbeOperator()
+    if not hasattr(operator, "python_key_table"):
+        # torch 2.1 spells the per-mode table python_key_mode_table and no witness
+        # rule resolves there; give this private operator the later spelling.
+        operator.python_key_table = operator.python_key_mode_table  # type: ignore[attr-defined]
     operator.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(lambda x: x)
     module = types.ModuleType("torch._higher_order_ops._torchlens_test_probe")
     module.probe_op = operator  # type: ignore[attr-defined]

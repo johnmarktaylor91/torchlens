@@ -15,9 +15,9 @@ any import closure.
 Unflagged fallbacks (no ``HAS_*`` row, because torch has the mechanism and only
 loses it at run time): on torch 2.1 the first ``torch.compile`` strips the
 step-hook wrapper from every torch optimizer class, so registered step hooks
-stop firing. ``_torch_compat.stripped_step_hook_wrapper`` detects that per
-optimizer and ``torchlens._utils._optimizer_hooks`` binds torch's own wrapper on
-the instance for the life of a TorchLens session.
+stop firing. ``torchlens._utils._optimizer_hooks.stripped_step_hook_wrapper``
+detects that per optimizer and ``register_step_hooks`` in the same module binds
+torch's own wrapper on the instance for the life of a TorchLens session.
 """
 
 from __future__ import annotations
