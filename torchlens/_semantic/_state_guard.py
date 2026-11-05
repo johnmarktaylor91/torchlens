@@ -177,7 +177,7 @@ def _fork_rng_devices() -> list[int]:
 def _snapshot_rng() -> dict[str, Any]:
     """Capture the global CPU (and CUDA, when live) RNG state."""
 
-    snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
+    snapshot: dict[str, Any] = {"cpu": torch.default_generator.get_state()}
     # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
     # CUDA-less or never-initialized process without touching the driver.
     cuda_states = _snapshot_cuda_rng_states()

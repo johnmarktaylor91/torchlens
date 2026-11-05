@@ -108,17 +108,32 @@ def _record_output_shape(node: Any) -> tuple[int, ...] | None:
 
 
 def _parent_shape(trace: Trace, node: Any, op_by_label: dict[str, Any]) -> tuple[int, ...] | None:
-    """Return the single data parent's output shape, or ``None``.
+    """Return the data parents' common output shape, or ``None``.
 
-    Only a node with EXACTLY ONE incoming data edge whose source shape is
-    available is input-side checkable; multi-input or shape-less parents
-    keep the arg visible.
+    A node is input-side checkable when every incoming data edge has an
+    available source shape and all of them agree (a rolled loop head has two
+    parents, the entry and the return edge, carrying the same tensor shape).
+    A shape-less parent or parents that disagree keep the arg visible:
+    ambiguity never suppresses.
     """
 
     parents = tuple(getattr(node, "parents", ()) or ())
-    if len(parents) != 1:
+    if not parents:
         return None
-    parent_label = str(parents[0])
+    shapes: set[tuple[int, ...]] = set()
+    for parent_ref in parents:
+        shape = _one_parent_shape(trace, str(parent_ref), op_by_label)
+        if shape is None:
+            return None
+        shapes.add(shape)
+    return shapes.pop() if len(shapes) == 1 else None
+
+
+def _one_parent_shape(
+    trace: Trace, parent_label: str, op_by_label: dict[str, Any]
+) -> tuple[int, ...] | None:
+    """Return one parent's output shape from the draw universe or the layer logs."""
+
     parent = op_by_label.get(parent_label)
     if parent is not None:
         return _record_output_shape(parent)

@@ -204,7 +204,10 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
     """
 
     if getattr(op, "saved_args", None) is None or getattr(op, "saved_kwargs", None) is None:
-        return "save_args=True or reconstruction_ready=True"
+        return (
+            "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+            "capture=tl.options.CaptureOptions(save_args=True)"
+        )
     args = list(getattr(op, "saved_args", ()) or ())
     if len(args) < 3 or not all(isinstance(value, torch.Tensor) for value in args[:3]):
         return "saved SDPA Q/K/V tensor args"
@@ -486,26 +489,11 @@ def _allclose_sdpa(
 
 
 def _output_projection(module: Any) -> Any | None:
-    """Return a common output-projection child module record.
+    """Return the attention module's output-projection Module record, or ``None``."""
 
-    Parameters
-    ----------
-    module:
-        Attention module record.
+    from .recipes._helpers import output_projection_child  # deferred: cycle _semantic
 
-    Returns
-    -------
-    Any | None
-        Child module record when present.
-    """
-
-    from .recipes._helpers import child_module  # deferred: cycle _semantic
-
-    for name in ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o"):
-        child = child_module(module, name)
-        if child is not None:
-            return child
-    return None
+    return output_projection_child(module)
 
 
 def _result_or_missing(module: Any, z: torch.Tensor, sdpa_op: Any) -> torch.Tensor | MissingFacet:

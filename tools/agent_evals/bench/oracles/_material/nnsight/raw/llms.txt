@@ -1,0 +1,188 @@
+# nnsight
+
+> nnsight is a Python library for interpreting and manipulating the internals of deep learning models. It provides a clean, Pythonic interface for accessing activations, modifying them, computing gradients, and batching interventions. Developed by the NDIF team at Northeastern University, nnsight supports local execution on any PyTorch model and remote execution on large models (up to 405B+ parameters) via the NDIF infrastructure.
+
+- Documentation: https://nnsight.net
+- GitHub: https://github.com/ndif-team/nnsight
+- PyPI: https://pypi.org/project/nnsight/
+- Discord: https://discord.gg/6uFJmCSwW7
+- Forum: https://discuss.ndif.us/
+- Paper: https://arxiv.org/abs/2407.14561
+
+## Agent Setup
+
+To teach an LLM agent how to use nnsight, use one of these methods:
+
+### Claude Code Skills
+```
+claude
+/plugin marketplace add https://github.com/ndif-team/skills.git
+/plugin install nnsight@ndif-team
+```
+
+### OpenAI Codex Skills
+```
+codex
+$skill-installer install https://github.com/ndif-team/skills
+```
+
+### Context7 MCP
+Add `use context7` to prompts, or configure MCP:
+```json
+{"mcpServers": {"context7": {"url": "https://mcp.context7.com/mcp"}}}
+```
+
+### Documentation Files (add directly to agent context)
+- CLAUDE.md: https://github.com/ndif-team/nnsight/blob/main/CLAUDE.md
+- NNsight.md: https://github.com/ndif-team/nnsight/blob/main/NNsight.md
+
+## Best Practices for Agents Using nnsight
+
+### Deferred Execution Model
+nnsight uses deferred execution with thread-based synchronization. Code inside `model.trace()` is extracted, compiled, and run in a worker thread. When your code accesses `.output` or `.input`, the thread blocks and waits until the model provides the value via hooks. Values are real tensors, not proxies.
+
+### Critical Rules
+1. Access modules in forward-pass execution order within a single invoke. Accessing layer 5 then layer 2 will deadlock.
+2. Always call `.save()` on values you need outside a tracing context. Unsaved values are garbage collected.
+3. Use `nnsight.save()` (preferred) over `obj.save()` — it works on any object including non-tensors.
+4. Use in-place assignment (`output[0][:] = 0`) to modify tensors. Direct assignment (`output[0] = new`) replaces the tuple element.
+5. Clone before saving if you modify in-place: `before = output[0].clone().save()`.
+6. Use `.inputs` (not `.input`) when you need the full args tuple. `.input` returns only the first positional argument.
+7. Gradients are accessed on tensors inside `with tensor.backward():`, not on modules. Access gradients in reverse execution order.
+8. Use barriers (`tracer.barrier(n)`) when two invokes access the same module and share values.
+9. Code after an unbounded `tracer.iter[:]` loop never executes — use a separate empty invoke for post-iteration logic.
+10. `.trace()` without invokes requires at least one positional argument.
+
+### Common Patterns
+- Single forward pass: `with model.trace("input"): ...`
+- Multi-token generation: `with model.generate("input", max_new_tokens=N) as tracer: ...`
+- Batching: use `tracer.invoke("input1")` and `tracer.invoke("input2")` inside `model.trace()`
+- Cross-prompt patching: use sessions (`model.session()`) or barriers
+- Shape inspection without execution: `with model.scan("input"): ...`
+- Persistent model modifications: `with model.edit() as edited: ...`
+- Remote execution on NDIF: add `remote=True` to any trace/session
+
+## Getting Started
+
+- [Installation](https://nnsight.net/getting-started/installation/): pip install nnsight
+- [Quick Start](https://nnsight.net/getting-started/quickstart/): First steps with nnsight
+
+## Features
+
+- [Getting Activations](https://nnsight.net/features/1_getting/): Access hidden states and activations from any layer
+- [Setting Activations](https://nnsight.net/features/2_setting/): Modify activations to study causal effects
+- [Gradients](https://nnsight.net/features/3_gradients/): Compute gradients with respect to intermediate values
+- [Multiple Token Generation](https://nnsight.net/features/4_multiple_token/): Work with autoregressive generation
+- [Loading a Model](https://nnsight.net/features/5_loading/): Constructor options, meta-model dispatch, and device placement
+- [Module Access](https://nnsight.net/features/6_modules/): Navigate and access model components
+- [Model Editing](https://nnsight.net/features/7_model_editing/): Create persistent model modifications
+- [Batching](https://nnsight.net/features/8_batching/): Combine multiple prompts in one forward pass and move values between them
+- [Empty Invokers](https://nnsight.net/features/9_empty_invokers/): Run interventions without input data
+- [Cache](https://nnsight.net/features/10_cache/): Bulk-collect activations from many modules in one pass
+- [Intermediate Operations](https://nnsight.net/features/11_source/): Access intermediate operations inside modules via .source
+- [Early Stopping](https://nnsight.net/features/12_early_stopping/): Stop computation early for efficiency
+- [Skip Execution](https://nnsight.net/features/13_skip/): Skip parts of model execution
+- [Scan](https://nnsight.net/features/14_scan/): Infer shapes without full execution
+- [Remote Execution](https://nnsight.net/features/15_remote_execution/): Run on NDIF's remote infrastructure
+- [vLLM Support](https://nnsight.net/features/16_vllm_support/): High-performance inference with vLLM
+
+## API Documentation
+
+- [Intervention](https://nnsight.net/documentation/intervention/): Core intervention system (envoy, inject, batching, interleaver, serialization)
+- [Intervention Backends](https://nnsight.net/documentation/intervention/backends/): Execution backends (base, editing, execution, remote)
+- [Tracing](https://nnsight.net/documentation/intervention/tracing/): Tracer implementations (base, backwards, editing, globals, invoker, iterator, tracer, util)
+- [Modeling](https://nnsight.net/documentation/modeling/): Model wrappers (base NNsight, language, diffusion, huggingface, transformers)
+- [Modeling Mixins](https://nnsight.net/documentation/modeling/mixins/): Loadable, meta, remoteable mixins
+- [vLLM](https://nnsight.net/documentation/modeling/vllm/): vLLM integration (batching, sampling, engines, workers)
+- [Schema](https://nnsight.net/documentation/schema/): Config, request, response schemas
+- [NDIF](https://nnsight.net/documentation/ndif/): NDIF remote execution utilities
+- [Util](https://nnsight.net/documentation/util/): Utility functions
+
+## vLLM
+
+One page per job, every snippet run against Qwen/Qwen3-8B on vLLM 0.27:
+
+- [Start here](https://nnsight.net/vllm/): install, read one activation, steer one layer
+- [Locations](https://nnsight.net/vllm/locations/): the module tree as the vocabulary; tuples and the residual stream; clone what you keep
+- [Loading models](https://nnsight.net/vllm/loading/): eager, CUDA-graph taps, async; what nnsight forces and why
+- [Capabilities and limits](https://nnsight.net/vllm/capabilities/): refusals, what is not on vLLM, versions
+- [Capture](https://nnsight.net/vllm/capture/): one location, every layer, every step, many prompts, MoE routing
+- [Attention](https://nnsight.net/vllm/attention/): q/k/v, rebuilt patterns, per-head outputs
+- [Logit lens](https://nnsight.net/vllm/logit-lens/): the model's own norm and unembed, in the worker
+- [Steering](https://nnsight.net/vllm/steering/): add, ablate, cap, mask positions, write anywhere, the sampler
+- [Generation](https://nnsight.net/vllm/generation/): sampling, per-step logits/samples, tracer.result, n > 1
+- [Chat and tokens](https://nnsight.net/vllm/chat/): templates, token-id prompts, spans
+- [Async and servers](https://nnsight.net/vllm/serving/): mode="async", nnsight-serve, model.edit()
+- [Tensor parallelism](https://nnsight.net/vllm/tensor-parallel/): sharded models read whole
+- [Causal tracing](https://nnsight.net/vllm/examples/causal-tracing/): ROME-style patching, one request per (layer, position), batched
+- [Jacobian lens](https://nnsight.net/vllm/examples/jacobian-lens/): Neuronpedia's pre-fitted J-lens read out in the worker
+- [A linear probe](https://nnsight.net/vllm/examples/probe/): contrastive extraction with one installed block, then a probe that runs inside the model
+- [Concept directions](https://nnsight.net/vllm/examples/emotion-tracker/): emotion directions, tracked per generated token
+- [Performance](https://nnsight.net/vllm/performance/): eager vs graph taps, measured
+- [Comparisons](https://nnsight.net/vllm/comparisons/): the same jobs in interp-engine, vLLM-Lens and TransformerLens, one throughput grid
+
+## Tutorials
+
+### Getting Started
+- [Walkthrough](https://nnsight.net/tutorials/tutorials/get_started/walkthrough/): Comprehensive introduction to nnsight
+- [Chat Templates](https://nnsight.net/tutorials/tutorials/get_started/chat_templates/): Working with chat-formatted models
+- [Remote Access](https://nnsight.net/tutorials/tutorials/get_started/start_remote_access/): Getting started with NDIF
+
+### Causal Tracing
+- [Causal Models Intro](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/causal_models_intro/): Introduction to causal models
+- [Activation Patching](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/activation_patching/): Activation patching techniques
+- [Attribution Patching](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/attribution_patching/): Attribution patching methods
+- [Causal Mediation I](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/causal_mediation_analysis_i/): Causal mediation analysis part 1
+- [Causal Mediation II](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/causal_mediation_analysis_ii/): Causal mediation analysis part 2
+- [DAS](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/DAS/): Distributed Alignment Search
+
+### Probing
+- [Logit Lens](https://nnsight.net/tutorials/tutorials/probing/logit_lens/): Apply logit lens to intermediate layers
+- [Diffusion Lens](https://nnsight.net/tutorials/tutorials/probing/diffusion_lens/): Probing diffusion models
+
+### Steering
+- [Dictionary Learning](https://nnsight.net/tutorials/tutorials/steering/dict_learning/): Sparse autoencoders and dictionary learning
+- [LoRA Tutorial](https://nnsight.net/tutorials/tutorials/steering/LoRA_tutorial/): Low-rank adaptation with nnsight
+
+### Mini Papers (Reproductions)
+- [Function Vectors](https://nnsight.net/tutorials/mini-papers/todd_function_vectors/): Todd et al. function vectors
+- [Geometry of Truth](https://nnsight.net/tutorials/mini-papers/marks_geometry_of_truth/): Marks et al. geometry of truth
+- [LLM Depth](https://nnsight.net/tutorials/mini-papers/csordas_llm_depth/): Csordas et al. LLM depth
+- [Dual Route Induction](https://nnsight.net/tutorials/mini-papers/feucht_dual_route_induction/): Feucht et al. dual route induction
+- [Demystifying Memorization](https://nnsight.net/tutorials/mini-papers/huang_demystifying_memorization/): Huang et al. demystifying memorization
+
+## NDIF (Remote Execution)
+
+NDIF is the backend service that lets you run nnsight interventions on large models without a local GPU. Your code is packaged, sent to NDIF's servers, executed, and only .save()'d results are returned.
+
+- Get an account: https://login.ndif.us
+- Status page: https://nnsight.net/status/
+- Check model availability: `nnsight.status()` or `nnsight.is_model_running("model-name", task=None, trust_remote_code=None)`
+- A deployment is one checkpoint under one pipeline task and one `trust_remote_code` value (both are in the model key): the same repo id can be live several times, each listed separately; pass `task=` / `trust_remote_code=` to `is_model_running` to check one
+- Compare environments: `from nnsight import ndif; ndif.compare()`
+- Register custom code: `ndif.register(mymodule)` — serializes by value, not reference
+- No Python version matching required — serialization supports Python 3.9+
+- One hour time limit per request
+- Whitelisted packages: builtins, math, typing, collections, time, torch, numpy, einops, sympy, nnterp
+
+## Quick Reference
+
+```python
+from nnsight import LanguageModel
+model = LanguageModel("openai-community/gpt2", device_map="auto", dispatch=True)
+
+# Access activations
+with model.trace("The Eiffel Tower is in the city of"):
+    hidden = model.transformer.h[-1].output[0].save()
+    logits = model.lm_head.output.save()
+
+# Modify activations
+with model.trace("The Eiffel Tower is in the city of"):
+    model.transformer.h[0].output[0][:] = 0
+    result = model.lm_head.output.save()
+
+# Remote execution
+model = LanguageModel("meta-llama/Llama-3.1-70B")  # loads on meta device
+with model.trace("Hello world", remote=True):
+    hidden = model.model.layers[-1].output[0].save()
+```

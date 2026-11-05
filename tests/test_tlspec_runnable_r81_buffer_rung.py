@@ -415,7 +415,7 @@ def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     set_buffer_address(forged, "q")
 
     path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "forged.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
+    result = tl.load(path).run_transaction(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.is_poisoned
 
@@ -436,7 +436,7 @@ def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
 
     x = _nchw()
     path = _save(RegisteredBufferRebindBranch().eval(), x.clone(), tmp_path / "m4.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
+    result = tl.load(path).run_transaction(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.is_poisoned
 
@@ -478,6 +478,6 @@ def test_sequential_captures_registry_idempotent(tmp_path: Path) -> None:
 
     path = _save(model, x.clone(), tmp_path / "second.tlspec")
     assert _meta_clear(model.q)
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.is_poisoned

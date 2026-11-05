@@ -363,7 +363,7 @@ def _run_key(
 ) -> str:
     """Combine every keyed part into the cache key."""
 
-    from .._version import __version__
+    from .._vocab._package_version import __version__
 
     if any(module.training for module in model.modules()):
         raise _Unkeyable(

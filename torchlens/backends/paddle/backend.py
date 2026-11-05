@@ -45,6 +45,7 @@ from ..._validation_status import ValidationReplaySource, ValidationStatus
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
+from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -159,8 +160,7 @@ class GradOptions:
     ) -> None:
         """Initialize Paddle derived-gradient options."""
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "loss_fn", loss_fn)
         normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
         object.__setattr__(self, "input_grad_argnums", normalized)
@@ -304,7 +304,7 @@ class PaddleBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -341,7 +341,6 @@ class PaddleBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -409,7 +408,7 @@ class PaddleBackend:
         layer_visualizers = _default_if_missing(layer_visualizers, None)
         module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = _default_if_missing(grad_options, None)
-        save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
@@ -436,7 +435,7 @@ class PaddleBackend:
             )
         reject_unsupported_trace_options(
             {
-                "layers_to_save": layers_to_save,
+                "save": layers_to_save,
                 "save_grads": save_grads,
                 "output_device": output_device,
                 "activation_transform": activation_transform,
@@ -487,15 +486,15 @@ class PaddleBackend:
         fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
-        # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
-        # root, backends/_finalize.py new_preview_function_trace's for a function root.
+        # Root identity (C07X item (iv)), spelled as tf and new_preview_function_trace do; the
+        # qualname is also the saved root module record's class_qualname (a declared str).
         if module_tree is not None:
-            root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
+            qualname = f"{type(model).__module__}.{type(model).__qualname__}"
+            trace._provenance_root_entry_point = f"module_call:{qualname}.__call__"
         else:
-            trace._provenance_root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
-            )
+            qualname = getattr(model, "__qualname__", trace._source_class_name)
+            trace._provenance_root_entry_point = f"function_call:{qualname}"
+        trace._source_class_qualname = qualname
         trace.capture_events = CaptureEvents()
         trace._paddle_capture_depth = 0
         trace._paddle_module_stack = []
@@ -728,7 +727,7 @@ class PaddleBackend:
                         loss,
                         differentiated,
                         retain_graph=grad_options.intermediate_grads,
-                        create_graph=grad_options.intermediate_grads,
+                        create_graph=False,
                         allow_unused=True,
                     )
                 else:
@@ -741,7 +740,7 @@ class PaddleBackend:
                     "kind": "derived_gradient",
                     "mechanism": "paddle.grad",
                     "loss_fn": _callable_identity(grad_options.loss_fn),
-                    "create_graph": grad_options.intermediate_grads,
+                    "create_graph": False,
                 },
             )
         finally:
@@ -797,7 +796,7 @@ class PaddleBackend:
                 loss,
                 replay_values,
                 retain_graph=True,
-                create_graph=True,
+                create_graph=False,
                 allow_unused=True,
             )
             replay_grads_by_id.update(

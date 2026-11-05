@@ -13,6 +13,7 @@ from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from ._pass_marks import pass_rows
 
 PARAM_SEPARATOR: Final[str] = " · "
 
@@ -171,6 +172,120 @@ def format_shape(shape: Any) -> str:
     return f"({', '.join(str(dim) for dim in dims)})"
 
 
+#: Most per-pass values a rolled scalar node's value row lists; beyond it the
+#: row keeps the first and last pass around ``...``.
+MAX_LISTED_SCALAR_VALUES: Final[int] = 4
+
+
+def format_output_shape(shape: Any) -> str:
+    """Render a node's output shape for its label's shape row.
+
+    A 0-d tensor reads ``scalar``: ``()`` is the honest Python literal but
+    reads as "empty" on a drawing. Every other shape is :func:`format_shape`,
+    which kwarg values and parameter brackets keep using unchanged.
+
+    Parameters
+    ----------
+    shape:
+        The node's output shape.
+
+    Returns
+    -------
+    str
+        ``"scalar"`` for an empty shape, else the tuple notation.
+
+    Examples
+    --------
+    >>> format_output_shape(())
+    'scalar'
+    >>> format_output_shape((1,))
+    '(1,)'
+    """
+
+    if shape is not None and len(_shape_tuple(shape)) == 0:
+        return "scalar"
+    return format_shape(shape)
+
+
+def scalar_value_line(layer_log: Any) -> str | None:
+    """Return a 0-d node's value row (``= 2.31``), or ``None``.
+
+    Only saved activations are read (never recomputed), one ``.item()`` per
+    pass. A rolled node lists its passes in order (``= 0.87, 1.02, 0.95``), at
+    most :data:`MAX_LISTED_SCALAR_VALUES`, else first, ``...``, last. A
+    terminal boolean already prints its outcome on its first row, so it gets
+    none; a missing or unreadable value claims nothing.
+
+    Parameters
+    ----------
+    layer_log:
+        The drawn Op or rolled Layer.
+
+    Returns
+    -------
+    str | None
+        The value row, or ``None`` when there is nothing honest to print.
+    """
+
+    if layer_log.shape is None or len(_shape_tuple(layer_log.shape)) != 0:
+        return None
+    if getattr(layer_log, "is_terminal_bool", False):
+        return None
+    source = getattr(layer_log, "original", layer_log)  # a drawn wrapper names its record
+    ops = getattr(getattr(source, "ops", None), "values", None)
+    passes = sorted(ops(), key=lambda op: op.pass_number) if callable(ops) else [source]
+    texts = [_saved_scalar_text(op) for op in passes]
+    if not texts or None in texts:
+        return None
+    if len(texts) > MAX_LISTED_SCALAR_VALUES:
+        texts = [texts[0], "...", texts[-1]]
+    return "= " + ", ".join(str(text) for text in texts)
+
+
+def shape_rows(layer_log: Any, *, with_memory: bool = False) -> list[str]:
+    """Return a node's shape row, plus the value row a 0-d node carries.
+
+    Parameters
+    ----------
+    layer_log:
+        The drawn Op or rolled Layer.
+    with_memory:
+        Append the activation memory to the shape row (``scalar, 4 B``), as
+        the default label does.
+
+    Returns
+    -------
+    list[str]
+        The shape row, then the value row when :func:`scalar_value_line` has one.
+    """
+
+    shape_row = format_output_shape(layer_log.shape)
+    if with_memory:
+        shape_row = f"{shape_row}, {format_memory(layer_log.activation_memory)}"
+    value_row = scalar_value_line(layer_log)
+    return [shape_row] if value_row is None else [shape_row, value_row]
+
+
+def _saved_scalar_text(op: Any) -> str | None:
+    """Return one pass's saved 0-d value as label text, or ``None``."""
+
+    out = getattr(op, "out", None)
+    saved = getattr(op, "has_saved_activation", False)
+    if out is None or not saved or getattr(out, "ndim", None) != 0:
+        return None
+    try:
+        value = out.item()
+    except (RuntimeError, ValueError):  # meta or fake tensors hold no value to print
+        return None
+    if isinstance(value, bool):
+        return str(value).upper()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.3g}"
+    return str(value)
+
+
 def format_dtype(dtype: Any) -> str | None:
     """Format an output dtype for a node label row.
 
@@ -266,9 +381,8 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156.0 KiB"``. The divisor is 1024,
-        so the unit names are the binary ones (KiB, MiB, GiB, TiB): a picture
-        never prints a binary value under a decimal unit name.
+        Human-readable memory such as ``"156.0 KB"``: the divisor is 1024 and
+        the unit names are the released drawings' (B, KB, MB, GB, TB).
     """
 
     if isinstance(bytes_or_quantity, bool) or not isinstance(bytes_or_quantity, int | float):
@@ -276,15 +390,17 @@ def format_memory(bytes_or_quantity: Any) -> str:
     return binary_size(float(bytes_or_quantity))
 
 
-#: Binary unit names for the drawing's sizes, each 1024 times the one before.
-_BINARY_UNITS: Final = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
+#: Unit names for the drawing's sizes, each 1024 times the one before. The
+#: drawings keep the released look (``"60.0 KB"``), not the IEC names
+#: (``KiB``) that card and repr byte quantities use.
+_BINARY_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
 def binary_size(size: float) -> str:
-    """Return a byte count with its binary unit, for example ``"60.0 KiB"``.
+    """Return a byte count for a drawing, for example ``"60.0 KB"``.
 
-    Whole bytes print without a decimal (``"48 B"``); larger values print
-    one decimal under the largest unit the value reaches.
+    The divisor is 1024. Whole bytes print without a decimal (``"48 B"``);
+    larger values print one decimal under the largest unit the value reaches.
     """
 
     if size < 0:
@@ -297,7 +413,7 @@ def binary_size(size: float) -> str:
         value /= 1024.0
         if value < 1024 or unit == _BINARY_UNITS[-1]:
             break
-    return f"{round(value, 1)} {unit}"
+    return f"{value:.1f} {unit}"
 
 
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:
@@ -456,6 +572,7 @@ def compute_selected_node_lines(
     node_address: str,
     vis_mode: str,
     node_label_fields: list[str],
+    pass_mark: str = "",
 ) -> list[str]:
     """Build node-label rows from an explicit field picker.
 
@@ -469,6 +586,8 @@ def compute_selected_node_lines(
         ``"unrolled"`` or ``"rolled"``.
     node_label_fields:
         Requested field names.
+    pass_mark:
+        The default title's pass mark (``:2``, `` (x3)``) the ``"label"`` row keeps.
 
     Returns
     -------
@@ -484,11 +603,11 @@ def compute_selected_node_lines(
     rows: list[str] = []
     for field_name in node_label_fields:
         if field_name in {"label", "name"}:
-            rows.append(str(getattr(layer_log, "layer_label", "")))
+            rows.append(f"{getattr(layer_log, 'layer_label', '')}{pass_mark}")
         elif field_name in {"type", "op", "operation"}:
             rows.append(str(getattr(layer_log, "func_name", None) or record_type(layer_log)))
         elif field_name == "shape":
-            rows.append(format_shape(layer_log.shape))
+            rows.extend(shape_rows(layer_log))
         elif field_name == "shape_summary":
             # L1's across-pass summary: row only when the field is set
             # (same skip-when-absent semantics as "params").
@@ -510,14 +629,9 @@ def compute_selected_node_lines(
             if param_line is not None:
                 rows.append(param_line)
         elif field_name == "pass":
-            if vis_mode == "unrolled":
-                # Per-pass leaf node: show the op's real 1-based recurrent pass
-                # (``pass_index``). The old ``call_index`` default read 1 for every
-                # pass because Ops carry no ``call_index`` -- a field literally
-                # named "pass" that always says 1 is silent wrongness.
-                rows.append(str(get_multipass_attr(layer_log, "pass_number", 1, multipass=1)))
-            else:
-                rows.append(str(get_multipass_attr(layer_log, "num_passes", 1)))
+            # The real 1-based pass (unrolled) or the pass count (rolled); no row
+            # on a single-pass node, where a "1" on every node is noise.
+            rows.extend(pass_rows(layer_log, vis_mode))
         elif field_name == "flops":
             rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
             append_attention_note(rows, layer_log)

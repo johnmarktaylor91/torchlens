@@ -17,6 +17,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TorchLensWarning
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -66,7 +72,9 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited._attach_hooks(tl.head(1), tl.zero_ablate())
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0

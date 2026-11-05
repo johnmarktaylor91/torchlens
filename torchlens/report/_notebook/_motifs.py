@@ -80,8 +80,9 @@ _DEFAULT_MOTIF_TABLE: tuple[Motif, ...] = (
 )
 
 #: Provisional diverging anchors (negative / zero / positive) until the
-#: themes ColorMapping ships; deliberately a colorblind-safe blue-red pair.
-_DEFAULT_DIVERGING_ANCHORS = ("#2166ac", "#f7f7f7", "#b2182b")
+#: themes ColorMapping ships; a colorblind-safe green-magenta pair
+#: (ColorBrewer PiYG ends; no blue in any TorchLens drawing).
+_DEFAULT_DIVERGING_ANCHORS = ("#4d9221", "#f7f7f7", "#c51b7d")
 
 
 def resolve_motif_table(theme: str = "torchlens") -> tuple[Motif, ...]:

@@ -683,3 +683,21 @@ def test_multi_input_refusal_names_the_live_shape_keyword() -> None:
     assert "input_shape=" in message
     assert "input_size" not in message
     assert "input_shape" in inspect.signature(tl.trace).parameters
+
+
+def test_report_repr_is_one_line_without_tensor_values() -> None:
+    """The repr names found, shape, dtype, flexible dims and the constraining module only."""
+
+    cnn = nn.Sequential(
+        nn.Conv2d(3, 8, 3), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(8, 4)
+    )
+    report = tl.debug.guess_input_shape(cnn)
+    text = repr(report)
+
+    assert report.found
+    assert "\n" not in text and len(text) <= 100, text
+    shape = ", ".join(str(size) for size in report.shape)
+    assert text.startswith(f"GuessInputShapeReport: found float32 [{shape}]"), text
+    assert f"flexible dims {report.flexible_dims}" in text, text
+    assert f"constrained by {report.constraining_module}" in text, text
+    assert "tensor(" not in text and "example_input" not in text, text

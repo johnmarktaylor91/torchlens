@@ -29,6 +29,8 @@ from .events import (
     ParamGradObserved,
     PreHookProvenanceEvent,
     _AtenCallEvent,
+    _bounded_record_repr,
+    _bounded_record_str,
     _ModePausedInteriorEvent,
 )
 from .live_index import LiveIndex
@@ -39,7 +41,7 @@ from .op_record import (
     validate_amendment,
 )
 from .predicate import RecordContext
-from .refs import ParamRef, ReservedLabel
+from .refs import ParamRef, ReservedLabel, _clone_frozen_record
 
 # Op-record count at which a running capture DISCLOSES its growth exactly
 # once (r8 R60-1). Purely informational -- capture continues -- sized from
@@ -102,19 +104,15 @@ _LANE_APPENDERS: dict[str, str] = {
 
 class SealedJournalWriteError(RuntimeError):
     """Base for every refused write to a sealed source journal.
-
     ``CaptureSession.seal()`` freezes a journal into its ``CapturedRunCore``:
     the op spine is snapshotted (folded through the amendment reducer) and the
     forward sibling lanes are snapshotted onto the pre-seal projection clone.
-    A write to any of those lanes AFTER the seal silently diverges the live
-    journal from the artifact every consumer projects from, so the whole class
-    fails closed here rather than at the far end of a projection.
+    Writes after sealing diverge from the artifact; this boundary fails closed.
     """
 
 
 class SealedJournalAmendmentError(SealedJournalWriteError):
     """A typed amendment was appended to a sealed source journal.
-
     After ``CaptureSession.seal()`` folds a journal into its
     ``CapturedRunCore``, the sealed source refuses further amendment appends
     fail-closed (DoR 4.5.5): post-seal knowledge must route through a working
@@ -125,7 +123,6 @@ class SealedJournalAmendmentError(SealedJournalWriteError):
 
 class SealedJournalAppendError(SealedJournalWriteError):
     """A forward-lane event was appended to a sealed source journal.
-
     Finding B1-15: sealed-journal enforcement was HALF-HEIGHT -- only the
     amendment lane checked ``amendments_sealed``, while the op lane's
     :meth:`CaptureEvents.append` and every forward sibling appender wrote
@@ -192,14 +189,13 @@ def _clone_op_event_for_replay(event: Any) -> Any:
     ``transform_config`` and ``parent_arg_positions``. A ``_copy_for_replay``
     projection must not be able to mutate those dicts on the sealed source
     stream, so they are duplicated here. Every other field is immutable (or an
-    intentionally shared tensor payload / opaque handle), so the clone stays
-    cheap and never copies activations.
+    intentionally shared tensor payload / opaque handle) and is shared; the
+    copy itself is a slot copy (:func:`_clone_frozen_record`).
 
     Polymorphic from P3 (reviewer note O-N5): a decomposed ``OpRecord`` clones
     the facets that carry live dicts (``graph.parent_arg_positions``,
-    ``transform.transform_config``, ``annotations.annotations``) — the same
-    shared-mutable-state guarantee, NOT a blanket identity return, because the
-    record's facets are frozen but those three payloads are not. The clone
+    ``transform.transform_config``, ``annotations.annotations``): the same
+    shared-mutable-state guarantee, not a blanket identity return. The clone
     ALWAYS owns a fresh ``core``: the journal ``append`` path stamps ``seq``
     on the record's core (the one slot append mutates), so a shared core
     would let re-stamping a merged clone silently rewrite the sealed source
@@ -217,10 +213,10 @@ def _clone_op_event_for_replay(event: Any) -> Any:
     """
 
     if isinstance(event, OpRecord):
-        record_changes: dict[str, Any] = {"core": replace(event.core)}
+        record_changes: dict[str, Any] = {"core": _clone_frozen_record(event.core)}
         graph = event.graph
         if graph is not None:
-            record_changes["graph"] = replace(
+            record_changes["graph"] = _clone_frozen_record(
                 graph,
                 parent_arg_positions={
                     domain: dict(positions)
@@ -229,15 +225,15 @@ def _clone_op_event_for_replay(event: Any) -> Any:
             )
         transform = event.transform
         if transform is not None:
-            record_changes["transform"] = replace(
+            record_changes["transform"] = _clone_frozen_record(
                 transform, transform_config=dict(transform.transform_config)
             )
         annotations_facet = event.annotations_facet
         if annotations_facet is not None:
-            record_changes["annotations_facet"] = replace(
+            record_changes["annotations_facet"] = _clone_frozen_record(
                 annotations_facet, annotations=dict(annotations_facet.annotations)
             )
-        return replace(event, **record_changes)
+        return _clone_frozen_record(event, **record_changes)
     return replace(
         event,
         parent_arg_positions={
@@ -250,6 +246,9 @@ def _clone_op_event_for_replay(event: Any) -> Any:
 @dataclass(slots=False)
 class CaptureEvents:
     """Mutable event buffer allocated once per capture."""
+
+    __repr__ = _bounded_record_repr
+    __str__ = _bounded_record_str
 
     op_events: list[JournalOp] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)

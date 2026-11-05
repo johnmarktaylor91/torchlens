@@ -78,9 +78,6 @@ _EAGER_TORCHLENS_MODULES = frozenset(
         # _save_budget, _state, utils, visualization.node_spec) is fully
         # deferred behind _LAZY_ATTRS rows.
         "torchlens",
-        # The version string lives in its own module so that nothing below
-        # the facade imports the package root to read it; the root re-exports it.
-        "torchlens._version",
     }
 )
 
@@ -393,7 +390,7 @@ assert collisions == {
     "compat": ["lovely", "torchextractor", "torchshow"],
     "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
-    "experimental": ["dagua", "node_styles"], "export": [],
+    "experimental": ["node_styles"], "export": [],
     # T48 reconcile: intervention's __all__ gained the compose child module
     # (F02 stochastic-edit family). The 2.x rename removed sites and renamed
     # reference to population, the name of its defining child module (the

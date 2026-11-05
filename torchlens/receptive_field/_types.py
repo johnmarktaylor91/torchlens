@@ -54,7 +54,8 @@ class ReceptiveFieldStatus(str, Enum):
     --------
     >>> [status.value for status in ReceptiveFieldStatus][:3]
     ['exact', 'whole_input', 'upper_bound']
-    >>> tl.trace(model, x)["conv2d_2_3"].receptive_field.status is ReceptiveFieldStatus.EXACT
+    >>> trace = tl.trace(model, x)
+    >>> trace["conv2d_2_3"].receptive_field.status is ReceptiveFieldStatus.EXACT
     True
     """
 
@@ -89,7 +90,8 @@ class ReceptiveFieldDirection(str, Enum):
     --------
     >>> [direction.value for direction in ReceptiveFieldDirection]
     ['receptive', 'projective']
-    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((4, 4))
+    >>> trace = tl.trace(model, x)
+    >>> box = trace["conv2d_2_3"].receptive_field.at((4, 4))
     >>> box.direction is ReceptiveFieldDirection.RECEPTIVE
     True
     """
@@ -129,7 +131,8 @@ class GridLayout:
 
     Examples
     --------
-    >>> layout = tl.trace(model, x)["conv2d_2_3"].receptive_field.axis_roles
+    >>> trace = tl.trace(model, x)
+    >>> layout = trace["conv2d_2_3"].receptive_field.axis_roles
     >>> (isinstance(layout, GridLayout), layout.windowed_axes)
     (True, (2, 3))
     >>> GridLayout(axis_kinds=("pointwise", "windowed"), windowed_axes=(1,),
@@ -171,7 +174,8 @@ class ReceptiveFieldAxis:
 
     Examples
     --------
-    >>> axes = tl.trace(model, x)["conv2d_2_3"].receptive_field.axes
+    >>> trace = tl.trace(model, x)
+    >>> axes = trace["conv2d_2_3"].receptive_field.axes
     >>> isinstance(axes[-1], ReceptiveFieldAxis)
     True
     >>> [axis.kind for axis in axes]
@@ -226,7 +230,8 @@ class ReceptiveField:
 
     Examples
     --------
-    >>> view = tl.trace(model, x)["conv2d_2_3"].receptive_field
+    >>> trace = tl.trace(model, x)
+    >>> view = trace["conv2d_2_3"].receptive_field
     >>> descriptor = next(iter(view.per_input.values()))
     >>> (isinstance(descriptor, ReceptiveField), descriptor.size)
     (True, (5, 5))
@@ -398,7 +403,8 @@ class ReceptiveFieldBoxAxis:
 
     Examples
     --------
-    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((0, 0))
+    >>> trace = tl.trace(model, x)
+    >>> box = trace["conv2d_2_3"].receptive_field.at((0, 0))
     >>> axis = box.axes[-1]
     >>> (isinstance(axis, ReceptiveFieldBoxAxis), axis.kind)
     (True, 'windowed')
@@ -444,7 +450,8 @@ class ReceptiveFieldBox(_SelectionOperand):
 
     Examples
     --------
-    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((4, 4))
+    >>> trace = tl.trace(model, x)
+    >>> box = trace["conv2d_2_3"].receptive_field.at((4, 4))
     >>> isinstance(box, ReceptiveFieldBox)
     True
     >>> [(axis.index_start, axis.index_stop) for axis in box.axes[-2:]]

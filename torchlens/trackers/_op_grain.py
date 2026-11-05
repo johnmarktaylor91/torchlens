@@ -319,7 +319,7 @@ class OpGrainCollector:
 
         model = self.model
         fastlog_args = _fastlog_args(example)
-        cpu_rng = torch.random.get_rng_state()
+        cpu_rng = torch.default_generator.get_state()
         cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
         buffers = [(buf, buf.detach().clone()) for _, buf in model.named_buffers()]
 

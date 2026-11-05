@@ -94,7 +94,7 @@ class TFBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -148,7 +148,6 @@ class TFBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -216,7 +215,7 @@ class TFBackend:
         module_identity_mode = default_if_missing(module_identity_mode, None)
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)
-        save_predicate = _pop_tf_save_predicate(extra_kwargs)
+        save_predicate = _pop_tf_save_predicate({"save": save})
         facet_recipes = _reject_unimplemented_intervention_options(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
         if intervene is not None and grad_options is not None:
@@ -1076,7 +1075,7 @@ def _reject_unsupported_options(
     del input_kwargs
     reject_unsupported_trace_options(
         {
-            "layers_to_save": layers_to_save,
+            "save": layers_to_save,
             "activation_transform": activation_transform,
             "detach_saved_activations": detach_saved_activations,
             "save_grads": save_grads,

@@ -22,6 +22,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _BranchMLP(nn.Module):
     """``fc_out(relu(fc_a(h)) + fc_b(h))`` plus a sigmoid side output the loss ignores."""
@@ -271,8 +273,8 @@ def test_a22_gradient_edit_without_a_rerun_refuses_before_mutation(engine: str |
     assert len(trace.state_history) == history_before
 
 
-def test_push_replay_hooks_refuse_a_gradient_edit() -> None:
-    """SPEC 3.6: a gradient edit passed as push replay hooks refuses; nothing changes."""
+def test_do_mapping_refuses_a_gradient_edit_on_replay() -> None:
+    """SPEC 3.6: a gradient edit in a replay ``do`` mapping refuses; nothing changes."""
 
     model = _BranchMLP()
     trace = tl.trace(
@@ -283,9 +285,11 @@ def test_push_replay_hooks_refuse_a_gradient_edit() -> None:
     relu = _label(trace, "relu")
     out_before = trace[relu].out.clone()
     audit_before = list(trace.intervention_audit)
-    replay = tl.options.ReplayOptions(hooks={tl.grad(relu): tl.scale(0)})
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.push(replay=replay)
+        trace.do(
+            {tl.grad(relu): tl.scale(0)},
+            intervention=tl.options.InterventionOptions(),
+        )
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     assert "Replay re-executes forward ops only" in str(excinfo.value)
     assert torch.equal(trace[relu].out, out_before)

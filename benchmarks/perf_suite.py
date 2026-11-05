@@ -116,7 +116,7 @@ OP_LABELS = {
     "fastlog_all": "fastlog all-op/all-module",
     "aux_validate": "tl.validate(scope='forward')",
     "aux_compat_report": "tl.report.doctor",
-    "aux_save": "tl.save fresh tlspec path",
+    "aux_save": "Trace.save fresh tlspec bundle",
     "aux_load": "tl.load saved fixture",
     "peer_manual_hooks": "Vanilla hooks manual dict",
     "peer_context_hooks": "Vanilla hooks context manager",

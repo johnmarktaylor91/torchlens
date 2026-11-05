@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 from torchlens._distributed._ledger import (
     GroupLifecycleEvent,
@@ -429,8 +430,21 @@ def _rehash_artifact(art: Path) -> None:
     man_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
+def _plant_member_metadata(art: Path, payload: bytes) -> None:
+    """Replace rank 1's metadata record with ``payload``, keeping its own file index true.
+
+    A saved member keeps its metadata in ``records/trace.json`` (the 2.x ``metadata.pkl``
+    is gone); the member manifest's digest row is restamped so the planted bytes reach
+    the member's metadata reader instead of its file-digest check.
+    """
+
+    member = art / "members" / "rank_0001.tlspec"
+    (member / "records" / "trace.json").write_bytes(payload)
+    redigest(member, "records/trace.json")
+
+
 def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A member ``metadata.pkl`` denylist RCE gadget refuses as tamper (A-R58-1)."""
+    """A member metadata denylist RCE gadget refuses as tamper (A-R58-1)."""
 
     import os
     import pickle
@@ -440,7 +454,7 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
             return (os.system, ("echo pwned",))
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(pickle.dumps(_Evil()))
+    _plant_member_metadata(art, pickle.dumps(_Evil()))
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)
@@ -450,14 +464,46 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
 
 @pytest.mark.smoke
 def test_corrupt_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A corrupt member ``metadata.pkl`` stream refuses as tamper (A-R58-1)."""
+    """A corrupt member metadata pickle stream refuses as tamper (A-R58-1)."""
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(
-        b"\x80\x05not-a-valid-pickle-stream\xff\xff"
-    )
+    _plant_member_metadata(art, b"\x80\x05not-a-valid-pickle-stream\xff\xff")
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "bundle-integrity" in str(caught.value)
+
+
+def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path) -> None:
+    """A root ``metadata.pkl`` planted in a current-format rank core refuses as tamper, unopened.
+
+    The current writer emits no pickle, so the file is foreign content: it must refuse
+    typed, never degrade the merge to partial, and never be unpickled (its
+    ``__reduce__`` would create the marker file).
+    """
+
+    import pickle
+
+    marker = tmp_path / "unpickled.marker"
+
+    class _Marker:
+        def __reduce__(self):  # pragma: no cover - never unpickled
+            return (Path.touch, (marker,))
+
+    art = _real_two_rank_artifact(tmp_path)
+    planted = art / "members" / "rank_0001.tlspec" / "metadata.pkl"
+    planted.write_bytes(pickle.dumps(_Marker()))
+    _rehash_artifact(art)
+    with pytest.raises(MergedArtifactError) as caught:
+        load_merged(art)
+    assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
+    assert "rank 1" in str(caught.value)
+    assert "foreign root pickle (unopened)" in str(caught.value)
+    assert "metadata.pkl" in str(caught.value.__cause__)
+    assert not marker.exists()
+
+    planted.unlink()
+    _rehash_artifact(art)
+    assert load_merged(art).degradations == ()
+    assert not marker.exists()

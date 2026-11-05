@@ -352,7 +352,7 @@ def test_declared_crossing_grades_declared_and_claims_refuse() -> None:
     assert excinfo.value.fields["code"] == "episode_join_declared_crossing"
     assert "DECLARED exogenous boundary" in str(excinfo.value)
     with pytest.raises(EpisodeJoinError):
-        log.run(fast=True)
+        log.run_transaction(inputs=None, fast=True)
 
 
 # ---------------------------------------------------------------------------

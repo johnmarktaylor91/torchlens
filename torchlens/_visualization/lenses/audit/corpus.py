@@ -366,7 +366,7 @@ def build_run_manifest(
     import graphviz  # a hard core dependency (pyproject); never absent here
     import torch
 
-    from ...._version import __version__
+    from ...._vocab._package_version import __version__
 
     measured = measured or RunMeasurements()
     versions = _ManifestVersions(

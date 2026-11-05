@@ -12,9 +12,11 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._entry_refusals import refuse_validation_scope
 from .._literals import OutputDeviceLiteral
 from .._options_validation import _validate_output_device
 from .._save_budget import SaveBudgetOption, resolve_save_budget
+from .._utils._display_card import render_card
 from .._utils.display import user_stacklevel
 from .._utils.rng import restores_rng_streams
 from ..backends.registry import BackendName, resolve_backend_spec
@@ -90,13 +92,32 @@ class InterventionValidationReport:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the five verdicts lead, ``details`` is counted."""
 
-        verdicts = ", ".join(
-            f"{name}={getattr(self, name)}"
-            for name in ("is_invariant", "is_specific", "is_complete", "is_consistent", "is_local")
+        axes = (
+            self.is_invariant,
+            self.is_specific,
+            self.is_complete,
+            self.is_consistent,
+            self.is_local,
         )
-        return (
-            f"InterventionValidationReport(passed={self.passed}, {verdicts}; "
-            f"{len(self.details)} detail key(s) in .details)"
+        verdict = "passed" if self.passed else "failed"
+        return f"InterventionValidationReport: {verdict}, {sum(axes)} of 5 axes passed"
+
+    def __str__(self) -> str:
+        """Show every recorded axis verdict without recomputing a check."""
+
+        return render_card(
+            repr(self),
+            [
+                (label, "passed" if getattr(self, name) else "failed")
+                for label, name in (
+                    ("invariant", "is_invariant"),
+                    ("specific", "is_specific"),
+                    ("complete", "is_complete"),
+                    ("agreement", "is_consistent"),
+                    ("local", "is_local"),
+                )
+            ],
+            (".details",),
         )
 
     @property
@@ -428,7 +449,7 @@ def validate(
     inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
-    scope: str,
+    scope: str = "forward",
     seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
@@ -453,7 +474,7 @@ def validate(
     input_kwargs:
         Keyword model input.
     scope:
-        Validation scope: ``"forward"``, ``"backward"``, ``"saved"``,
+        Validation scope: ``"forward"`` (default), ``"backward"``, ``"saved"``,
         ``"intervention"``, or ``"receptive_field"``. ``"receptive_field"``
         captures with ``save_mode="reference"``, so a model whose forward
         writes its own buffers in place (a train-mode BatchNorm's running
@@ -536,7 +557,7 @@ def validate(
     normalized_scope = scope.lower()
     valid_scopes = {"forward", "backward", "saved", "intervention", "receptive_field"}
     if normalized_scope not in valid_scopes:
-        raise ValueError(f"scope must be one of {sorted(valid_scopes)!r}.")
+        refuse_validation_scope(scope, valid_scopes)
     _validate_scope_keywords(
         normalized_scope,
         loss_fn=loss_fn,
@@ -653,21 +674,7 @@ def validate(
 
             _trim_host_allocator()
         if passed is False:
-            # R67: the bare ``False`` used to be silent while the rich
-            # structured diagnosis sat unreferenced in the module side channel.
-            # One warning names WHAT failed and WHERE the full record lives.
-            from .diagnostics import last_validation_failure
-
-            failure = last_validation_failure()
-            detail = f" {failure.summary()}" if failure is not None else ""
-            warnings.warn(
-                f"tl.validate FAILED for scope={normalized_scope!r}.{detail} Full "
-                "structured diagnosis: "
-                "torchlens.validation.last_validation_failure() / "
-                "get_validation_diagnostics().",
-                TorchLensWarning,
-                stacklevel=user_stacklevel(),
-            )
+            _report_validation_failure(normalized_scope, verbose)
         return passed
     return _intervention_report(
         model,
@@ -677,6 +684,33 @@ def validate(
         verbose=verbose,
         validate_metadata=validate_metadata,
         save_options=save_options,
+    )
+
+
+def _report_validation_failure(normalized_scope: str, verbose: bool) -> None:
+    """Warn once that validation failed, naming the check and op; print it when verbose.
+
+    R67: the bare ``False`` used to be silent while the rich structured
+    diagnosis sat unreferenced in the module side channel. One warning names
+    WHAT failed and WHERE the full record lives. ``verbose=True`` also prints
+    the same line through the validators' verbose channel (stdout), because a
+    failure decided at a site that prints nothing (a perturbation-insensitive
+    edge, an unverified replay) otherwise left a verbose run with no output.
+    """
+
+    from .diagnostics import last_validation_failure
+
+    failure = last_validation_failure()
+    detail = f" {failure.summary()}" if failure is not None else ""
+    if verbose:
+        print(f"tl.validate FAILED for scope={normalized_scope!r}.{detail}")
+    warnings.warn(
+        f"tl.validate FAILED for scope={normalized_scope!r}.{detail} Full "
+        "structured diagnosis: "
+        "torchlens.validation.last_validation_failure() / "
+        "get_validation_diagnostics().",
+        TorchLensWarning,
+        stacklevel=user_stacklevel(),
     )
 
 

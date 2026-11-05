@@ -7,12 +7,13 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._errors import InvalidArgumentError, PayloadUnavailableError
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
-from ._dagua_bridge import render_trace_with_dagua
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
+from ._edge_shapes import _with_edge_shapes
 from ._edit_highlighter import (
     HighlighterStyle,
     HighlightJob,
@@ -22,17 +23,19 @@ from ._edit_highlighter import (
 )
 from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
-from ._focus_scope import focus_address, reading_notes, strip_focus_ancestors
+from ._focus_relabel import strip_focus_ancestors
+from ._focus_scope import focus_address, focus_relative_depth, reading_notes
+from ._graph_shell import build_graphviz_shell
 from ._header_block import (
     caption_from_label,
-    drawn_count_line,
-    graph_caption_body,
+    graph_caption_html,
     header_block_label,
     key_swatches,
     render_module_marks,
 )
 from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 from ._mutated_params import add_mutated_parameter_nodes
+from ._pass_label_placement import forward_sources
 from ._render_common import *
 from ._render_edges import *
 from ._render_flow import *
@@ -72,7 +75,7 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
 from .collapse_patterns import resolve_pattern_request
 from .node_universe import build_node_universe
 from .overlays import resolve_overlay_request
@@ -90,7 +93,6 @@ from .source_graph import _resolve_focus_module, build_source_graph
 
 def _view_rendered_file(filepath: str) -> None:
     """Open a rendered visualization file when a local viewer is available.
-
     Parameters
     ----------
     filepath:
@@ -106,13 +108,15 @@ if TYPE_CHECKING:
     from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse
-    from .render_ir import RenderIR
+    from .render_ir import RenderIR, RenderIRRankGroup
     from .source_graph import SourceGraph
 
 
 @dataclass(frozen=True)
 class _ForwardRenderContext:
     """Resolved state shared by forward-IR construction and emission."""
+
+    __repr__ = short_dataclass_repr
 
     request: ResolvedRenderRequest
     target: RenderTarget
@@ -137,6 +141,8 @@ class _ForwardRenderContext:
 class _ForwardIRWork:
     """Mutable forward-IR assembly state passed into region finalization."""
 
+    __repr__ = short_dataclass_repr
+
     render_ir: "RenderIR"
     builder: _RenderIRDecisionBuilder
     module_clusters: dict[str, Any]
@@ -149,12 +155,10 @@ class _ForwardIRWork:
 
 def _strip_render_extension(vis_outpath: str) -> str:
     """Return output path without a Graphviz-rendered file extension.
-
     Parameters
     ----------
     vis_outpath:
         User-provided render output path.
-
     Returns
     -------
     str
@@ -166,7 +170,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
 
 def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
     """Report the written graph path: always for a bare draw, else only when verbose.
-
     Parameters
     ----------
     trace:
@@ -184,7 +187,6 @@ def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
     """Raise if Graphviz did not produce a non-empty rendered artifact.
-
     Parameters
     ----------
     rendered_path:
@@ -193,7 +195,6 @@ def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: 
         DOT source path that was passed to Graphviz.
     graph_kind:
         Human-readable graph type for the error message.
-
     Raises
     ------
     GraphvizRenderError
@@ -221,7 +222,6 @@ def _raise_graphviz_timeout(
     error: subprocess.TimeoutExpired,
 ) -> None:
     """Raise a typed Graphviz timeout error with mitigation guidance.
-
     Parameters
     ----------
     graph_kind:
@@ -421,64 +421,6 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
     return resolve_pattern_request(fold_patterns)
 
 
-def _build_graphviz_shell(
-    trace: "Trace",
-    request: ResolvedRenderRequest,
-    target: RenderTarget,
-    theme: VisualizationTheme,
-    node_universe: "NodeUniverse",
-) -> tuple[str, graphviz.Digraph]:
-    """Build the caption and configured Graphviz graph shell.
-
-    Returns
-    -------
-    tuple
-        Graph caption and configured empty Graphviz graph.
-    """
-
-    count_line = drawn_count_line(trace, node_universe, request.vis_mode)
-    caption_body = graph_caption_body(trace, count_line, request)
-    graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
-
-    dot = graphviz.Digraph(
-        name=trace._source_class_name,
-        comment="Computational graph for the feedforward sweep",
-        format=target.fileformat,
-    )
-    graph_args = {
-        "rankdir": direction_to_rankdir(request.direction),
-        "label": graph_caption,
-        "labelloc": "t",
-        "labeljust": "left",
-        "ordering": "out",
-    }
-    if request.collapse_fn is not None:
-        graph_args["newrank"] = "true"
-    # r-b6 R19-6 / T9: node images are RELATIVE to the trace scratch root, which
-    # Graphviz gets out of band (subprocess cwd), never as an in-source
-    # ``imagepath``: a baked temp path broke saved DOT once the dir was GC'd.
-    graph_args.update(
-        theme_graph_attrs(
-            theme,
-            font_size=request.font_size,
-            dpi=request.dpi,
-            fileformat=target.fileformat,
-        )
-    )
-    overrides = cast(VisualizationOverrides, request.overrides)
-    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
-        if callable(arg_val):
-            graph_args[arg_name] = str(arg_val(trace))
-        else:
-            graph_args[arg_name] = str(arg_val)
-    dot.graph_attr.update(graph_args)
-    dot.node_attr.update(
-        {"ordering": "out", **theme_node_attrs(theme, font_size=request.font_size)}
-    )
-    dot.edge_attr.update(theme_edge_attrs(theme, font_size=request.font_size))
-    return graph_caption, dot
-
-
 def _resolve_forward_context(
     trace: "Trace",
     request: ResolvedRenderRequest,
@@ -508,7 +450,6 @@ def _resolve_forward_context(
     )
     entries_to_plot = source_graph.entries_to_plot
     rankdir = direction_to_rankdir(request.direction)
-
     from ._rank_layout_internal.layout import (
         RANK_LAYOUT_COST_THRESHOLD,
         RANK_LAYOUT_NOTICE,
@@ -559,7 +500,8 @@ def _resolve_forward_context(
         f"Rendering {request.vis_mode} graph ({num_nodes} nodes, format={target.fileformat})",
     )
     _vprint(trace, f"Layout engine: {engine} (estimated cost={layout_cost})")
-    graph_caption, dot = _build_graphviz_shell(trace, request, target, theme, node_universe)
+    graph_caption = graph_caption_html(trace, node_universe, request, theme)
+    dot = build_graphviz_shell(trace, request, target, theme, graph_caption)
     return _ForwardRenderContext(
         request=request,
         target=target,
@@ -758,8 +700,7 @@ def _finalize_forward_ir(
 
     request = context.request
     sibling_order_chains: tuple[SiblingOrderChain, ...] = ()
-    # Stacking fence (L5 M3): stack_by pins ranks, and two constraint systems
-    # fighting over dot's layout oscillate. Opt-in, so plain draw() never fires it.
+    # stack_by pins ranks; competing sibling constraints make dot oscillate.
     stack_channel_active = (
         request.encoding is not None and getattr(request.encoding, "stack_spec", None) is not None
     )
@@ -820,7 +761,7 @@ def _finalize_forward_ir(
         theme=context.theme,
     )
     forward_render_ir, flatten = strip_focus_ancestors(
-        forward_render_ir, work.module_clusters, request.module
+        trace, forward_render_ir, work.builder.calls, work.module_clusters, request.module
     )
     _setup_subgraphs(
         trace,
@@ -828,14 +769,14 @@ def _finalize_forward_ir(
         request.vis_mode,
         work.module_clusters,
         overrides,
-        # Cluster-scoped chains are already queued on their module cluster;
-        # re-emitting them at top level put clustered nodes in a root rankset.
+        # Cluster-scoped chains must not also enter the root rankset.
         [chain for chain in forward_render_ir.ordering_constraints if chain.lca_key == -1],
         forward_render_ir.regions,
         container_ink=_theme_cluster_attrs(context.theme),
         flatten=flatten,
     )
-    return replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
+    forward_render_ir = replace(forward_render_ir, dot_statements=tuple(work.builder.calls))
+    return _with_edge_shapes(trace, forward_render_ir)
 
 
 def _forward_header_label(
@@ -848,9 +789,10 @@ def _forward_header_label(
 
     ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
     channel disclosure when a channel is active and, on a ``module=`` focused
-    draw, the swatches and the reading key; ``False`` is honoured (the docs
-    state the encoding is then undisclosed). The key sits inside the header
-    label so both stay top left on every engine. A ``vis_graph_overrides``
+    draw, the swatches; ``True`` adds the reading key (the notes explaining
+    the picture's notation); ``False`` is honoured (the docs state the
+    encoding is then undisclosed). The key sits inside the header label so
+    both stay top left on every engine. A ``vis_graph_overrides``
     label (or a lens caption) stays the header.
     """
 
@@ -867,7 +809,8 @@ def _forward_header_label(
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
         )
-        notes = reading_notes(node_attrs, request.module)
+        if request.show_legend is True:
+            notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
     if request.encoding is not None and request.show_legend is not False:
         sections = encoding_sections(request.encoding)
@@ -880,6 +823,24 @@ def _forward_header_label(
             str(override(trace) if callable(override) else override), context.theme
         )
     return header_block_label(caption, swatches, sections, context.theme, notes=notes)
+
+
+def _emit_rank_groups(dot: Any, rank_groups: "tuple[RenderIRRankGroup, ...]") -> None:
+    """Emit the IR's rank groups as ``rank=`` subgraphs.
+
+    Stacking channel (L5 M3): rank=same groups span module clusters, so
+    newrank=true opts dot into global rank constraints (without it
+    cross-cluster rank=same is silently ignored, a dishonest no-op). A
+    focused draw's stub groups (rank=source/sink) need no newrank.
+    """
+
+    if any(group.rank == "same" for group in rank_groups):
+        dot.graph_attr.update({"newrank": "true"})
+    for rank_group in rank_groups:
+        with dot.subgraph() as rank_subgraph:
+            rank_subgraph.attr(rank=rank_group.rank)
+            for member in rank_group.members:
+                rank_subgraph.node(member)
 
 
 def _emit_and_finish_forward(
@@ -926,7 +887,7 @@ def _emit_and_finish_forward(
             # until the rank internals grow a cwd-based root.
             resolved_graph_overrides["imagepath"] = str(rank_visualizer_dir)
         rank_execution: dict[str, str] = {}
-        with _timed_phase(trace, "render:graphviz:forward"):
+        with _timed_phase(trace, "render_graphviz_forward"):
             result = render_rank_layout(
                 forward_render_ir,
                 request.vis_mode,
@@ -966,16 +927,7 @@ def _emit_and_finish_forward(
 
     dot = context.dot
     GraphvizRenderer().emit(forward_render_ir, dot)
-    if forward_render_ir.stack_rank_groups:
-        # Stacking channel (L5 M3): rank=same groups span module clusters,
-        # so newrank=true opts dot into global rank constraints (without it
-        # cross-cluster rank=same is silently ignored -- a dishonest no-op).
-        dot.graph_attr.update({"newrank": "true"})
-        for rank_group in forward_render_ir.stack_rank_groups:
-            with dot.subgraph() as rank_subgraph:
-                rank_subgraph.attr(rank="same")
-                for member in rank_group.members:
-                    rank_subgraph.node(member)
+    _emit_rank_groups(dot, forward_render_ir.stack_rank_groups)
     for overlay_edge in work.container_overlay_edges:
         dot.edge(
             tail_name=overlay_edge.tail_name,
@@ -1014,9 +966,8 @@ def _emit_and_finish_forward(
             # layout (a dot 16 init_rank error or crash), so render the plain one.
             source_override = _strip_sibling_rank_groups(dot.source)
             _warn_sibling_order_fallback_once(exc)
-    final_source = source_override if source_override is not None else dot.source
-
     render_timeout = 120
+    sources = forward_sources(dot, source_override, trace, render_timeout)
     if in_notebook() and not target.save_only:
         try:
             from IPython.display import SVG, display  # #72: lazy import
@@ -1033,7 +984,7 @@ def _emit_and_finish_forward(
         # every CLI path was already bounded at ``render_timeout`` with a
         # typed error. Timeout/failure map to the same typed raises.
         with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as notebook_source_file:
-            notebook_source_file.write(final_source)
+            notebook_source_file.write(sources[1])
             notebook_source_path = notebook_source_file.name
         try:
             notebook_image_root = getattr(trace, "_visualizer_dir", None)
@@ -1071,7 +1022,7 @@ def _emit_and_finish_forward(
     # relative image refs instead of a per-run mkdtemp path that dies with
     # the trace.
     try:
-        return _publish_forward_render(trace, context, target, final_source, speculative)
+        return _publish_forward_render(trace, context, target, sources, speculative)
     finally:
         if speculative is not None:
             shutil.rmtree(speculative.scratch_dir, ignore_errors=True)
@@ -1119,7 +1070,7 @@ def _publish_forward_render(
     trace: "Trace",
     context: _ForwardRenderContext,
     target: RenderTarget,
-    final_source: str,
+    sources: tuple[str, str],
     speculative: SpeculativeRender | None,
 ) -> Any:
     """Write the DOT source and publish the rendered artifact atomically.
@@ -1128,10 +1079,10 @@ def _publish_forward_render(
     ----------
     trace, context, target:
         Render state (``context.dot`` is the Graphviz graph).
-    final_source:
-        The DOT text to publish.
+    sources:
+        The DOT to return, and the text the image is rendered from (``forward_sources``).
     speculative:
-        Verifier layouts that may already hold the artifact for ``final_source``.
+        Verifier layouts that may already hold the artifact for the image text.
 
     Returns
     -------
@@ -1147,8 +1098,8 @@ def _publish_forward_render(
     late_visualizer_dir = getattr(trace, "_visualizer_dir", None)
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
-        source_file.write(final_source)
-    with _timed_phase(trace, "render:graphviz:forward"):
+        source_file.write(sources[1])
+    with _timed_phase(trace, "render_graphviz_forward"):
         try:
             rendered_path = f"{target.outpath}.{target.fileformat}"
             render_image_root = Path(late_visualizer_dir) if late_visualizer_dir else None
@@ -1173,7 +1124,7 @@ def _publish_forward_render(
                 # dimensions are fiction; it was silently discarded).
                 with atomic_render_target(rendered_path) as temp_rendered_path:
                     reusable = (
-                        speculative.reusable_for(final_source) if speculative is not None else None
+                        speculative.reusable_for(sources[1]) if speculative is not None else None
                     )
                     if reusable is not None:
                         # the verifier already laid out exactly this
@@ -1189,7 +1140,7 @@ def _publish_forward_render(
                                 target.fileformat,
                                 render_timeout,
                                 render_image_root,
-                                final_source,
+                                sources[1],
                                 context.highlighter,
                             ),
                         )
@@ -1221,12 +1172,14 @@ def _publish_forward_render(
             )
         except subprocess.CalledProcessError as error:
             _raise_graphviz_failure("forward graph", source_path, error)
-    return final_source
+    return sources[0]
 
 
 @dataclass(frozen=True)
 class _ForwardLayout:
     """Format, bounds and post-processing of one forward layout run."""
+
+    __repr__ = short_dataclass_repr
 
     fileformat: str
     timeout: int
@@ -1302,6 +1255,7 @@ def draw(
     code_panel: CodePanelOption = False,
     node_overlay: "str | OverlayScores | Callable[[Any], Any] | None" = None,
     node_label_fields: list[str] | None = None,
+    show_edge_shapes: bool = False,
     show_legend: bool | None = None,
     font_size: int | None = None,
     dpi: int | None = None,
@@ -1324,8 +1278,7 @@ def draw(
 
     Notes
     -----
-    ``Trace.draw`` owns the public parameter documentation. This internal
-    implementation validates and resolves one request before renderer dispatch.
+    ``Trace.draw`` documents this request validation and renderer dispatch pipeline.
 
     Returns
     -------
@@ -1337,15 +1290,14 @@ def draw(
         show_containers,
         vis_save_only=vis_save_only,
         vis_show_cone=vis_show_cone,
+        show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         order_siblings=order_siblings,
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
     )
 
-    # Option validation for the encoding channels: an unknown source refuses
-    # HERE, before any render work (encoding_source_invalid), and scale=
-    # without size_by refuses scale_requires_size_by.
+    # Refuse unknown encoding sources and scale without size_by before rendering.
     encoding_channel_spec = resolve_color_by(color_by)
     size_channel_spec = resolve_size_by(size_by)
     size_scale = resolve_size_scale(scale, size_by_active=size_channel_spec is not None)
@@ -1356,7 +1308,7 @@ def draw(
         show_containers=show_containers,
         engine=vis_node_placement,
         skip_fn=skip_fn,
-        vis_call_depth=vis_call_depth,
+        vis_call_depth=focus_relative_depth(self, module, vis_call_depth),
         module=module,
         node_mode=node_mode,
         node_spec_fn=node_spec_fn,
@@ -1376,6 +1328,7 @@ def draw(
         code_panel=code_panel,
         node_overlay=node_overlay,
         node_label_fields=tuple(node_label_fields) if node_label_fields is not None else None,
+        show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         font_size=font_size,
         dpi=dpi,
@@ -1424,31 +1377,12 @@ def draw(
     if request.encoding is not None and not bool(
         renderer_capability_rows.get("encoding_channels", False)
     ):
-        from ._encoding import raise_encoding_dagua_refusal
+        from ._encoding import raise_encoding_renderer_refusal
 
-        raise_encoding_dagua_refusal(request.encoding.active_channels())
+        raise_encoding_renderer_refusal(vis_renderer, request.encoding.active_channels())
     resolved_outpath, announce_path = resolve_draw_outpath(
         vis_outpath, vis_fileformat, announce_path
     )
-    if vis_renderer == "dagua":
-        opted_in_module = sys.modules.get("torchlens.experimental.dagua")
-        if not getattr(opted_in_module, "__torchlens_dagua_opted_in__", False):
-            raise CaptureNotActiveError(
-                "dagua renderer is experimental and has not been opted into",
-                code="dagua_renderer_not_opted_in",
-                remedy="opt in via `from torchlens.experimental import dagua` first",
-            )
-        return render_trace_with_dagua(
-            self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            path=resolved_outpath,
-            vis_save_only=vis_save_only,
-            file_format=vis_fileformat,
-            show_buffers=show_buffer_layers == "always",
-            vis_direction=direction,
-            theme=vis_theme,
-        )
     request, repeat_folds, segments, segment_lookup = _resolve_collapse_request(self, request)
 
     target = RenderTarget(
@@ -1469,10 +1403,10 @@ def draw(
         segment_lookup,
         site_labels,
     )
-    work = _populate_forward_ir(self, context)
-
-    forward_render_ir = _finalize_forward_ir(self, context, work)
-    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    with edge_typography_for_draw(theme, request):
+        work = _populate_forward_ir(self, context)
+        forward_render_ir = _finalize_forward_ir(self, context, work)
+        rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
     _write_overview_expansion_manifest(self, request, target)
     return rendered
 
@@ -1564,7 +1498,7 @@ def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
         if bool(getattr(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
-    if not orphan_logs and orphan_husks:
+    if not orphan_logs and (orphan_husks or self._orphan_labels):  # dropped: labels, no husks
         _warn_render_omission(
             "orphans were dropped from this capture; re-trace with keep_orphans=True"
         )

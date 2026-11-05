@@ -13,12 +13,17 @@ from torch import nn
 
 import torchlens
 
+from .._entry_refusals import (
+    refuse_attribute_walk_segment,
+    refuse_auto_environment,
+    refuse_if_nonpositive_every,
+)
 from .._utils.env_flags import closed_bool_env
 from ..bundle import Bundle
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
-_LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
+_LAZY_SUBMODULE_EXPORTS = {"node_styles"}
 
 
 def __getattr__(name: str) -> Any:
@@ -85,7 +90,7 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
     for part in address.split("."):
         match = _ATTRIBUTE_PART_RE.fullmatch(part)
         if match is None:
-            raise ValueError(f"Malformed attribute-walk segment: {part!r}")
+            refuse_attribute_walk_segment(part)
         name = match.group("name")
         if not hasattr(current, name):
             raise AttributeError(f"{type(current).__name__!s} has no attribute {name!r}")
@@ -308,9 +313,8 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
     """
 
     if closed_bool_env("TORCHLENS_AUTO"):
-        raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")
-    if every <= 0:
-        raise ValueError("every must be positive.")
+        refuse_auto_environment()
+    refuse_if_nonpositive_every(every)
 
     session = AutoCaptureSession(model=model, every=every)
     original_forward = model.forward
@@ -353,7 +357,6 @@ __all__ = [
     "Session",
     "attribute_walk",
     "auto_capture",
-    "dagua",
     "freeze_module",
     "node_styles",
     "stop_after",

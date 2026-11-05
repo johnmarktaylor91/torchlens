@@ -153,11 +153,11 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
 
     live_loaded = tl.load(live_path)
     live_loaded.load_state_dict(tensor_only_sd)
-    live_result = live_loaded.run(inputs=x.clone())
+    live_result = live_loaded.run_transaction(inputs=x.clone())
 
     dead_loaded = tl.load(dead_path)
     dead_loaded.load_state_dict(tensor_only_sd)
-    dead_result = dead_loaded.run(inputs=x.clone())
+    dead_result = dead_loaded.run_transaction(inputs=x.clone())
 
     # Lane parity: the pre-existing extra-state verdict ceiling is identical in both
     # lanes; the dead lane never diverges into refusal or a differing verdict class.

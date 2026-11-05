@@ -28,6 +28,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+    read_runnable_descriptor,
+)
 from torchlens._input_walk import (
     snapshot_input_boundary,
 )
@@ -67,7 +71,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
 
 def _assert_diverges(path: Path, twin) -> None:
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=twin)
+        tl.load(path).run_transaction(inputs=twin)
 
 
 # ======================================================================================
@@ -100,7 +104,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
 
     x = torch.randn(3)
     path = _save(_trace(_TwoArg(), (x, _EmptyA())), tmp_path / "empty.tlspec")
-    original = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    original = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     # Dropped argument: arity mismatch, never a silent replay.
     _assert_diverges(path, (x.clone(),))
@@ -112,7 +116,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
     # r67 code: saving a multi-positional-arg runnable artifact, or a diverged run of
     # one, breaks buffer-address resolution for the NEXT capture in the same process
     # until a loaded run heals it) -- reported to the r68 ledger, out of C2 scope.
-    replay = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    replay = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert replay.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -150,7 +154,7 @@ class _NTModel(nn.Module):
 def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_CfgModel(), _CfgA(True, x)), tmp_path / "cfg.tlspec")
-    original = tl.load(path).run(inputs=_CfgA(True, x.clone()))
+    original = tl.load(path).run_transaction(inputs=_CfgA(True, x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _CfgB(True, x.clone()))
 
@@ -158,7 +162,7 @@ def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
 def test_r67_namedtuple_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NTModel(), _NTA(x)), tmp_path / "nt.tlspec")
-    original = tl.load(path).run(inputs=_NTA(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_NTA(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _NTB(x.clone()))
 
@@ -178,7 +182,7 @@ class _NestedModel(nn.Module):
 def test_r67_nested_kind_swap_diverges(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NestedModel(), {"outer": [{"x": x}]}), tmp_path / "nested.tlspec")
-    original = tl.load(path).run(inputs={"outer": [{"x": x.clone()}]})
+    original = tl.load(path).run_transaction(inputs={"outer": [{"x": x.clone()}]})
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, {"outer": [_NTA(x.clone())]})
 
@@ -256,10 +260,10 @@ def test_r67_registered_container_round_trips_verified(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_RegModel(), _RegBox(x)), tmp_path / "reg.tlspec")
-    original = tl.load(path).run(inputs=_RegBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_RegBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = torch.randn(3)
-    rerun = tl.load(path).run(inputs=_RegBox(twin))
+    rerun = tl.load(path).run_transaction(inputs=_RegBox(twin))
     assert torch.equal(rerun.output, twin * 3.0)
     # Exact-class fence: a different registered class with identical schema diverges.
     _assert_diverges(path, _RegBoxB(x.clone()))
@@ -512,7 +516,7 @@ def test_r69_runtime_added_slot_state_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_SlotModel(), _UnsetSlotBox(x.clone())), tmp_path / "rt_slot.tlspec")
-    original = tl.load(path).run(inputs=_UnsetSlotBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_UnsetSlotBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = _UnsetSlotBox(x.clone())
     twin.maybe = "fast"  # flips the branch through slot state no snapshot declared
@@ -768,15 +772,22 @@ def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
 # ======================================================================================
 
 
-import json as _json  # noqa: E402
-import os as _os  # noqa: E402
-
 from torchlens._runnable import (  # noqa: E402
     WITNESS_FAMILY_REGISTRY,
     ReadinessStatus,
     decode_input_site_position,
     encode_input_site_position,
 )
+
+
+class _KindBranch(nn.Module):
+    """Branch on nested container KIND -- only the structure fact distinguishes."""
+
+    def forward(self, d):
+        inner = d["a"]
+        if isinstance(inner, list):
+            return inner[0] + 100.0
+        return inner[0] * 2.0
 
 
 class _LitBranch(nn.Module):
@@ -799,11 +810,8 @@ class _RichFamilies(nn.Module):
         return t + 100.0
 
 
-def _mutate_manifest(path: Path, fn) -> None:
-    manifest_path = _os.path.join(path, "manifest.json")
-    manifest = _json.load(open(manifest_path))
-    fn(manifest["run"])
-    _json.dump(manifest, open(manifest_path, "w"))
+def _mutate_descriptor(path: Path, fn) -> None:
+    mutate_runnable_descriptor(path, fn)
 
 
 def _assert_context_field_invalid(path: Path, run_inputs) -> None:
@@ -818,7 +826,7 @@ def _assert_context_field_invalid(path: Path, run_inputs) -> None:
     # An analysis-only load must refuse to run with the SPECIFIC typed capability error,
     # not merely "some exception" (a generic pytest.raises here is vacuous).
     with pytest.raises(RunCapabilityUnavailableError) as excinfo:
-        loaded.run(inputs=run_inputs)
+        loaded.run_transaction(inputs=run_inputs)
     assert excinfo.value.fields.get("code") == "run_capability_unavailable"
 
 
@@ -833,7 +841,7 @@ def _heal_capture_state(source_path: Path, run_inputs) -> None:
     must heal explicitly.
     """
 
-    result = tl.load(source_path).run(inputs=run_inputs)
+    result = tl.load(source_path).run_transaction(inputs=run_inputs)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -867,11 +875,11 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     source = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "matrix_src.tlspec")
-    manifest = _json.load(open(_os.path.join(source, "manifest.json")))
+    descriptor = read_runnable_descriptor(source)
     present_families = sorted(
         {
             str(w.get("site_label", "")).split(":", 1)[0]
-            for w in manifest["run"]["control_witnesses"]
+            for w in descriptor["control_witnesses"]
             if any(
                 str(w.get("site_label", "")).startswith(f"{family}:")
                 for family in WITNESS_FAMILY_REGISTRY
@@ -906,7 +914,7 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
                     twin["order"] = 9999
                     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-            _mutate_manifest(path, _apply)
+            _mutate_descriptor(path, _apply)
             _assert_context_field_invalid(path, run_inputs)
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -922,7 +930,7 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
     def _case(name: str, fn) -> None:
         path = tmp_path / f"forge_{name}.tlspec"
         _shutil.copytree(source, path)
-        _mutate_manifest(path, fn)
+        _mutate_descriptor(path, fn)
         _assert_context_field_invalid(path, [x.clone(), 1])
 
     def _row(run: dict, family: str) -> dict:
@@ -998,6 +1006,31 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
     _heal_capture_state(source, [x.clone(), 1])
 
 
+def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
+    tmp_path: Path,
+) -> None:
+    """secA-F1 E2E: stripping input_structure facts + kind swap used to VERIFY."""
+
+    x = torch.randn(3)
+    path = _save(_trace(_KindBranch(), {"a": [x.clone()]}), tmp_path / "seca.tlspec")
+    _mutate_descriptor(path, lambda run: _strip_family(run, "input_structure"))
+    _assert_context_field_invalid(path, {"a": (x.clone(),)})
+
+
+def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
+    """Review ADD-1: per-leaf literal stripping cannot hide behind site coverage."""
+
+    x = torch.randn(3)
+    source = _save(_trace(_LitBranch(), [x.clone(), 1]), tmp_path / "anchor_src.tlspec")
+    import shutil as _shutil
+
+    path = tmp_path / "anchor.tlspec"
+    _shutil.copytree(source, path)
+    _mutate_descriptor(path, lambda run: _strip_family(run, "model_input_literal", count=1))
+    _assert_context_field_invalid(path, [x.clone(), 1])
+    _heal_capture_state(source, [x.clone(), 1])
+
+
 def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
     """A SHAPE_STRUCTURE_FACT outside the closed registry can never ride silently."""
 
@@ -1016,7 +1049,7 @@ def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
         twin["kind"] = "shape_structure_fact"
         run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-    _mutate_manifest(path, _forge)
+    _mutate_descriptor(path, _forge)
     _assert_context_field_invalid(path, [x.clone(), 1])
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1047,12 +1080,12 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
     ]
     for model, capture_inputs, run_inputs, name in cases:
         path = _save(_trace(model, capture_inputs), tmp_path / f"pos_{name}.tlspec")
-        result = tl.load(path).run(inputs=run_inputs)
+        result = tl.load(path).run_transaction(inputs=run_inputs)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, name
     # Mixed positional + keyword sites.
     trace = tl.trace(_MixedKw(), [x.clone()], input_kwargs={"add": True}, capture=_CAPTURE)
     path = _save(trace, tmp_path / "pos_mixed.tlspec")
-    result = tl.load(path).run(inputs={"args": [x.clone()], "kwargs": {"add": True}})
+    result = tl.load(path).run_transaction(inputs={"args": [x.clone()], "kwargs": {"add": True}})
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

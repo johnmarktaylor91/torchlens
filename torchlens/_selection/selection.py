@@ -48,6 +48,7 @@ import torch
 
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
+from ._display import selection_card, selection_repr, site_card, site_repr
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
@@ -149,13 +150,8 @@ class Site:
 
         return self._mask.count()
 
-    def __repr__(self) -> str:
-        """Return a compact disclosure row."""
-
-        return (
-            f"Site({self.key!r}, {self.num_selected}/{self._mask.numel()} "
-            f"elements, relation={self.provenance.relation})"
-        )
+    __repr__ = site_repr
+    __str__ = site_card
 
 
 def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
@@ -332,8 +328,8 @@ class Selection:
         both sides; anything else refuses typed). Masks travel unchanged
         onto an identical index space; per-entry provenance discloses the
         cross-run origin. ``do()`` still refuses foreign resolved selections
-        (``selection_trace_mismatch``) — this explicit spelling is the only
-        rebind. DOCUMENTED-UNSTABLE pending naming-session ratification.
+        (``selection_trace_mismatch``) unless the fork descends from the selection's
+        trace (it then rebinds itself). DOCUMENTED-UNSTABLE pending ratification.
 
         Raises
         ------
@@ -422,11 +418,8 @@ class Selection:
 
         return hash(self._digest)
 
-    def __repr__(self) -> str:
-        """Return a compact two-level summary."""
-
-        elements = sum(entry.num_selected for entry in self._entries)
-        return f"Selection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
+    __repr__ = selection_repr
+    __str__ = selection_card
 
     def __selection__(self) -> Selection:
         """Pass anywhere a selection is expected."""
@@ -1252,7 +1245,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
 def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
-    layer_label = getattr(matches[0], "layer_label", None) or site
+    layer_label = getattr(matches[0], "short_layer_label", None) or site
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
     return _unresolvable(
         "multipass_bare_label",

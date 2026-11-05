@@ -34,7 +34,7 @@ capture machinery: the transform-metadata setter is handed in by the caller.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -488,10 +488,73 @@ FLASH_ATTENTION_4_INTERFACE_MODULE = "flash_attn.cute.interface"
 FLASH_ATTENTION_4_EXIT = "flash_attn.cute"
 """Exit name recorded in the known foreign kernel's ``transform_config["exits"]`` and warning."""
 
-_KNOWN_FOREIGN_KERNEL_MODULES: tuple[tuple[str, str, str], ...] = (
-    (FLASH_ATTENTION_4_INTERFACE_MODULE, "HAS_FLASH_ATTENTION_4_INTERFACE", FLASH_ATTENTION_4_EXIT),
+FLASH_ATTENTION_4_FUNCTION = "FlashAttnFunc"
+"""``__qualname__`` of the FlashAttention 4 Function whose per-output dependence is declared."""
+
+
+@dataclass(frozen=True)
+class OutputDependence:
+    """Which positional ``apply`` arguments ONE output of a known foreign kernel depends on.
+
+    Parameters
+    ----------
+    function:
+        ``__qualname__`` of the ``autograd.Function`` the declaration is about, or the
+        ``namespace::name`` of a native custom op (:data:`_KNOWN_NATIVE_CUSTOM_OPS`).
+    output_index:
+        ``multi_output_index`` of the output (the kernel returns a tuple).
+    depends_on:
+        Positional arguments whose values reach this output (empty: none of ``positions``).
+    positions:
+        Positional arguments the declaration speaks for. The output is declared independent
+        of exactly ``positions - depends_on``; a parent at any other position is undeclared.
+    """
+
+    function: str
+    output_index: int
+    depends_on: frozenset[int]
+    positions: frozenset[int]
+
+    def independent_of(self, position: int) -> bool:
+        """Return whether this output is declared independent of ``position``."""
+
+        return position in self.positions and position not in self.depends_on
+
+
+@dataclass(frozen=True)
+class KnownForeignKernel:
+    """One known foreign-kernel Function module: its capability flag, exit and dependence."""
+
+    module: str
+    flag: str
+    exit: str
+    dependence: tuple[OutputDependence, ...] = ()
+
+    def defines(self, module: str) -> bool:
+        """Return whether ``module`` is this kernel's interface module or a submodule of it."""
+
+        return module == self.module or module.startswith(self.module + ".")
+
+
+_KNOWN_FOREIGN_KERNEL_MODULES: tuple[KnownForeignKernel, ...] = (
+    KnownForeignKernel(
+        FLASH_ATTENTION_4_INTERFACE_MODULE,
+        "HAS_FLASH_ATTENTION_4_INTERFACE",
+        FLASH_ATTENTION_4_EXIT,
+        dependence=(
+            # FlashAttnFunc.apply(q, k, v, ...) returns (out, lse) with autograd enabled: the
+            # log-sum-exp of the q k scores (output 1) depends on q and k only. Output 0 (the
+            # attention output) has no row, so every one of its parents stays strict.
+            OutputDependence(
+                function=FLASH_ATTENTION_4_FUNCTION,
+                output_index=1,
+                depends_on=frozenset({0, 1}),
+                positions=frozenset({0, 1, 2}),
+            ),
+        ),
+    ),
 )
-"""``(module, capability flag, exit name)`` per known foreign-kernel Function module.
+"""``(module, capability flag, exit name, per-output dependence)`` per known foreign kernel.
 
 The dynamic detector in ``_function_boundary`` collapses a Function whose forward left torch
 through an export it can see (numpy, dlpack). FlashAttention 4 (``flash_attn.cute``) hands
@@ -504,6 +567,12 @@ is recorded as one ``autogradfunction`` boundary op with the exit ``flash_attn.c
 same op, census token and replay the dynamic path produces, so nothing is exempted: the
 boundary op owns every dispatch inside the call and replays by calling ``apply`` again.
 Gated by the capability flag, read at call time so a flipped flag is honoured.
+
+``dependence`` declares, per Function and returned output, which positional arguments that
+output depends on (ruling: declare per-output dependence per kernel in a table). The
+perturbation check reads it through :func:`known_foreign_kernel_output_dependence` and
+excuses a parent of that output only at a declared-independent position; an output,
+Function, kernel or position with no row stays strict.
 """
 
 
@@ -525,9 +594,163 @@ def known_foreign_kernel_exits(cls: type[Any]) -> tuple[str, ...]:
     module = getattr(cls, "__module__", None)
     if not isinstance(module, str):
         return ()
-    for known_module, flag, exit_name in _KNOWN_FOREIGN_KERNEL_MODULES:
-        if module != known_module and not module.startswith(known_module + "."):
+    for kernel in _KNOWN_FOREIGN_KERNEL_MODULES:
+        if not kernel.defines(module):
             continue
-        if getattr(_torch_compat, flag, False):
-            return (exit_name,)
+        if getattr(_torch_compat, kernel.flag, False):
+            return (kernel.exit,)
     return ()
+
+
+def known_foreign_kernel_output_dependence(
+    module: str, function: str, output_index: int, exits: Sequence[str]
+) -> OutputDependence | None:
+    """Return the declared dependence of one output of a recorded known-kernel boundary op.
+
+    Parameters
+    ----------
+    module:
+        The op's ``transform_config["function_module"]``.
+    function:
+        The op's ``transform_config["function"]`` (the Function's ``__qualname__``).
+    output_index:
+        The op's ``multi_output_index``.
+    exits:
+        The op's ``transform_config["exits"]``; the kernel's own exit must be among them,
+        which proves the op was recorded as that known kernel's boundary, not as a dynamic
+        boundary of some Function that merely shares the module name.
+
+    Returns
+    -------
+    OutputDependence | None
+        The declared row, or ``None`` when the kernel, Function, exit or output has none
+        (the caller then stays strict). Not gated by the capability flag: the declaration
+        is about the recorded call, so a saved trace validates the same on every host.
+    """
+
+    for kernel in _KNOWN_FOREIGN_KERNEL_MODULES:
+        if not kernel.defines(module) or kernel.exit not in exits:
+            continue
+        for row in kernel.dependence:
+            if row.function == function and row.output_index == output_index:
+                return row
+    return None
+
+
+FLASH_ATTENTION_2_CUSTOM_OP = "flash_attn::_flash_attn_forward"
+"""Qualified name of the FlashAttention 2 forward custom op (``torch.ops.flash_attn``)."""
+
+FLASH_ATTENTION_2_FUNC_NAME = "_flash_attn_forward"
+"""``func_name`` TorchLens records for each output of the FlashAttention 2 forward op."""
+
+
+@dataclass(frozen=True)
+class KnownNativeCustomOp:
+    """One native custom op whose per-output dependence is declared.
+
+    A ``torch.library`` custom op is recorded natively (``_torch_ops_calls``): one op per
+    returned tensor, sibling outputs of one ``func_call_id``, each carrying the call's full
+    parent set, with no boundary op, no exit and no capability flag. The op is identified
+    by the operator its recorded replay callable calls (``qualified_name``) together with
+    the recorded ``func_name``.
+    """
+
+    qualified_name: str
+    func_name: str
+    dependence: tuple[OutputDependence, ...]
+
+
+_QKV = frozenset({0, 1, 2})
+
+_KNOWN_NATIVE_CUSTOM_OPS: tuple[KnownNativeCustomOp, ...] = (
+    KnownNativeCustomOp(
+        FLASH_ATTENTION_2_CUSTOM_OP,
+        FLASH_ATTENTION_2_FUNC_NAME,
+        dependence=(
+            # _flash_attn_forward(q, k, v, dropout_p, softmax_scale, causal, ...) returns
+            # (out, softmax_lse, S_dmask, rng_state). Output 0 (the attention output) has no
+            # row: every one of its parents stays strict.
+            # Output 1, softmax_lse = logsumexp_j(scale * q k_j^T): reads q and k, not v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 1, frozenset({0, 1}), _QKV),
+            # Output 2, S_dmask: the softmax of the q k scores with dropped entries marked
+            # (return_softmax with dropout), else an empty tensor: reads q and k, not v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 2, frozenset({0, 1}), _QKV),
+            # Output 3, rng_state: the generator's (seed, offset) for the dropout mask, read
+            # from the CUDA generator, never from q, k or v.
+            OutputDependence(FLASH_ATTENTION_2_CUSTOM_OP, 3, frozenset(), _QKV),
+        ),
+    ),
+)
+"""``(qualified name, recorded func_name, per-output dependence)`` per known native custom op.
+
+FlashAttention 2 (``flash-attn`` 2.x) calls ``torch.ops.flash_attn._flash_attn_forward``,
+which TorchLens records as four native sibling ops. Its unconsumed outputs do not read every
+parent the call carries, so the perturbation check reads these rows through
+:func:`known_native_custom_op_output_dependence` and excuses a parent of a declared output
+only at a declared-independent position; an operator, output or position with no row stays
+strict. Not gated by a capability flag: the declaration is about the recorded call.
+"""
+
+
+def known_native_custom_op_output_dependence(
+    qualified_name: str, func_name: str, output_index: int
+) -> OutputDependence | None:
+    """Return the declared dependence of one output of a recorded native custom op.
+
+    Parameters
+    ----------
+    qualified_name:
+        ``namespace::name`` of the operator the op's replay callable calls
+        (:func:`recorded_custom_op_name`).
+    func_name:
+        The op's recorded ``func_name``; it must match the row's, so an operator recorded
+        under another name is not covered.
+    output_index:
+        The op's ``multi_output_index``.
+
+    Returns
+    -------
+    OutputDependence | None
+        The declared row, or ``None`` when the operator, name or output has none (the
+        caller then stays strict).
+    """
+
+    for custom_op in _KNOWN_NATIVE_CUSTOM_OPS:
+        if custom_op.qualified_name != qualified_name or custom_op.func_name != func_name:
+            continue
+        for row in custom_op.dependence:
+            if row.output_index == output_index:
+                return row
+    return None
+
+
+def recorded_custom_op_name(func: Any) -> str | None:
+    """Return the ``namespace::name`` of the ``torch.ops`` operator a recorded op replays.
+
+    Parameters
+    ----------
+    func:
+        An op record's replay callable (``Op.func``).
+
+    Returns
+    -------
+    str | None
+        The operator's qualified name when ``func`` is the replay callable the torch.ops
+        recorder builds for a non-mutating operator (a ``functools.partial`` of the class
+        ``__call__`` bound to an operator packet or one of its overloads) and that packet is
+        the very object ``torch.ops.<namespace>.<name>`` resolves to; ``None`` for any other
+        callable, including a missing one on a loaded bundle.
+    """
+
+    if not isinstance(func, functools.partial) or not func.args:
+        return None
+    packet = getattr(func.args[0], "_overloadpacket", func.args[0])
+    qualified_name = getattr(packet, "_qualified_op_name", None)
+    if not isinstance(qualified_name, str) or qualified_name.count("::") != 1:
+        return None
+    namespace, name = qualified_name.split("::")
+    try:
+        registered = getattr(getattr(torch.ops, namespace), name)
+    except (AttributeError, RuntimeError):
+        return None
+    return qualified_name if registered is packet else None

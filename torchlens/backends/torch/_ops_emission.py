@@ -33,6 +33,83 @@ __all__ = (
 )
 
 
+def _child_slot(slot: tuple[str, Any] | None, inner_key: Any) -> tuple[str, Any] | None:
+    """Return the recorder slot key for a container member, or ``None`` past depth 2."""
+
+    if slot is None:
+        return None
+    arg_type, outer_key = slot
+    if isinstance(outer_key, tuple):
+        return None  # recorder's 2-level ceiling: deeper slots have no key
+    return (arg_type, (outer_key, inner_key))
+
+
+def _walk_arg_tree(
+    value: Any,
+    path: str,
+    slot: tuple[str, Any] | None,
+    on_tensor: Callable[[Any, str, tuple[str, Any] | None], None],
+) -> None:
+    """Pre-order walk of one argument tree, calling ``on_tensor`` at every tensor.
+
+    Module-level walkers rather than self-recursive closures: a closure that
+    calls itself holds a cell pointing back at the function, a reference cycle
+    that kept every captured name (the trace among them) alive until the cyclic
+    collector ran, one cycle per logged op.
+    """
+
+    if isinstance(value, torch.Tensor):
+        on_tensor(value, path, slot)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _walk_arg_tree(item, f"{path}.{index}", _child_slot(slot, index), on_tensor)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _walk_arg_tree(item, f"{path}.{key}", _child_slot(slot, key), on_tensor)
+
+
+def _any_tensor(value: Any, predicate: Callable[[Any], bool]) -> bool:
+    """Return whether any tensor nested in ``value`` satisfies ``predicate``."""
+
+    if isinstance(value, torch.Tensor):
+        return predicate(value)
+    if isinstance(value, (list, tuple)):
+        return any(_any_tensor(item, predicate) for item in value)
+    if isinstance(value, dict):
+        return any(_any_tensor(item, predicate) for item in value.values())
+    return False
+
+
+def _dropped_edge_at_slot(
+    provenance_labels: tuple[str, ...],
+    slot: tuple[str, Any] | None,
+    parent_arg_positions: dict[str, dict[Any, str]],
+    recorded_parent_labels: set[str],
+) -> bool:
+    """Return whether a provenanced tensor at ``slot`` is a dropped or permuted parent edge.
+
+    A RUNTIME tensor at ANY input slot is a data dependency -- including
+    schema-typed ``int``/``Scalar`` control slots (``roll`` shifts, ``softmax``
+    dim, factory size dims), whose values change the op's result (round-31 H2).
+    Extraction's runtime coverage guard parents every shallow tensor slot, so a
+    provenanced tensor missing from the recorded edges is a dropped edge, never
+    a benign metadata slot; the former ATen-schema metadata-slot suppression is
+    gone because its "deliberately excluded from parents" premise no longer
+    holds anywhere.
+
+    r29 F3c: ORDERED per-slot identity. When the recorder stamped a parent
+    label AT this exact slot it must be one of the live tensor's own provenance
+    labels, else the call recipe binds the WRONG producer here (a slot
+    permutation between value-identical producers passed the former set check).
+    Without a stamp at the slot, the set check applies.
+    """
+
+    recorded_at_slot = parent_arg_positions[slot[0]].get(slot[1]) if slot is not None else None
+    if recorded_at_slot is not None:
+        return recorded_at_slot not in provenance_labels
+    return recorded_parent_labels.isdisjoint(provenance_labels)
+
+
 def _unattributed_tensor_arg_positions(
     trace: Trace,
     args: tuple[Any, ...],
@@ -131,18 +208,12 @@ def _unattributed_tensor_arg_positions(
             labels.append(meta.buffer_source)
         return tuple(labels)
 
-    def has_input_rooted_tensor(value: Any) -> bool:
-        """Return whether ``value`` contains a tensor derived from a model input."""
+    def input_rooted(tensor: Any) -> bool:
+        """Return whether ``tensor`` is derived from a model input."""
 
-        if isinstance(value, torch.Tensor):
-            label = get_tensor_label(value)
-            event = live_events.get(label) if isinstance(label, str) else None
-            return bool(event is not None and event.input_ancestors)
-        if isinstance(value, (list, tuple)):
-            return any(has_input_rooted_tensor(item) for item in value)
-        if isinstance(value, dict):
-            return any(has_input_rooted_tensor(item) for item in value.values())
-        return False
+        label = get_tensor_label(tensor)
+        event = live_events.get(label) if isinstance(label, str) else None
+        return bool(event is not None and event.input_ancestors)
 
     unsafe_receiver_with_graph_rhs = bool(
         mutates_receiver
@@ -150,104 +221,66 @@ def _unattributed_tensor_arg_positions(
         and isinstance(args[0], torch.Tensor)
         and is_tensor_data_alias(args[0])
         and (
-            any(has_input_rooted_tensor(value) for value in args[1:])
-            or any(has_input_rooted_tensor(value) for value in kwargs.values())
+            any(_any_tensor(value, input_rooted) for value in args[1:])
+            or any(_any_tensor(value, input_rooted) for value in kwargs.values())
         )
         and not data_alias_write_reaches_base(trace, args[0])
     )
 
-    def child_slot(slot: tuple[str, Any] | None, inner_key: Any) -> tuple[str, Any] | None:
-        """Return the recorder slot key for a container member, or ``None`` past depth 2."""
-
-        if slot is None:
-            return None
-        arg_type, outer_key = slot
-        if isinstance(outer_key, tuple):
-            return None  # recorder's 2-level ceiling: deeper slots have no key
-        return (arg_type, (outer_key, inner_key))
-
-    def visit(value: Any, path: str, slot: tuple[str, Any] | None) -> None:
-        """Append unattributed tensor positions under ``path``.
+    def visit_tensor(value: Any, path: str, slot: tuple[str, Any] | None) -> None:
+        """Append the tensor's position under ``path`` when it is unattributed.
 
         ``slot`` is the recorder-vocabulary key for this position (``("args",
         0)``, ``("kwargs", ("mask", 1))``) or ``None`` past the recorder's
         2-level nesting ceiling.
         """
 
-        if isinstance(value, torch.Tensor):
-            # A ``.data`` getter has a canonical detach graph node, but a receiver mutation
-            # through it reaches the base only via storage-alias label propagation (a labeled
-            # base sharing the receiver's elements). Where it does not, preserve the provenance
-            # warning for that unsafe lvalue position when an input-derived RHS would otherwise
-            # appear fully represented; the data-alias witness ceilings replay independently.
-            unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
-            # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
-            # logged as the canonical single-argument ``detach(rhs)`` call, so
-            # the rebound receiver never appears as a recorded argument and no
-            # receiver-slot exemption exists here -- ``arg0`` IS the RHS and is
-            # fully witnessed like any other operand.
-            if unsafe_data_alias_receiver or not _tensor_has_known_provenance(trace, value):
-                positions.append(path)
-                return
-            # A Parameter mutated in place earlier in this pass binds as a graph
-            # parent of its mutation op (``promote_mutated_parameters``), so it is
-            # witnessed by the label branch below, not the parameter rung.
-            if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
-                # r29 F3a: the parameter rung. A Parameter never appears in
-                # ``parent_arg_positions`` (the recorder skips it) and
-                # ``tensor_session_parent_labels`` returns ``()`` for it, so a
-                # dropped PARAM edge was invisible to both witness branches.
-                # For a session-validated prep-stamped Parameter the recorded
-                # edge set is ``parent_params``: absence by exact identity is a
-                # dropped param edge. Unprepped / in-forward / foreign
-                # Parameters keep their existing paths (branch (1), or the
-                # label-rung exemption for activation-derived params).
-                if _session_validated_parameter(trace, value) and not any(
-                    value is recorded for recorded in recorded_parent_params
-                ):
-                    positions.append(path)
-                    dropped_edge_positions.append(path)
-                return
-            provenance_labels = tensor_session_parent_labels(value)
-            # Branch (2): a fully-provenanced tensor whose producer label is not a
-            # recorded parent edge. A RUNTIME tensor at ANY input slot is a data
-            # dependency -- including schema-typed ``int``/``Scalar`` control slots
-            # (``roll`` shifts, ``softmax`` dim, factory size dims), whose values
-            # change the op's result (round-31 H2). Extraction's runtime coverage
-            # guard parents every shallow tensor slot, so a provenanced tensor
-            # missing from the recorded edges is a dropped edge, never a benign
-            # metadata slot; the former ATen-schema metadata-slot suppression is
-            # gone because its "deliberately excluded from parents" premise no
-            # longer holds anywhere. Un-provenanced tensors never reach here --
-            # branch (1) already caught them at every position.
-            if provenance_labels:
-                recorded_at_slot = (
-                    parent_arg_positions[slot[0]].get(slot[1]) if slot is not None else None
-                )
-                if recorded_at_slot is not None:
-                    # r29 F3c: ORDERED per-slot identity. The recorder stamped a
-                    # parent label AT this exact slot; it must be one of the live
-                    # tensor's own provenance labels, else the call recipe binds
-                    # the WRONG producer here (a slot permutation between
-                    # value-identical producers passed the former set check).
-                    if recorded_at_slot not in provenance_labels:
-                        positions.append(path)
-                        dropped_edge_positions.append(path)
-                elif recorded_parent_labels.isdisjoint(provenance_labels):
-                    positions.append(path)
-                    dropped_edge_positions.append(path)
+        # A ``.data`` getter has a canonical detach graph node, but a receiver mutation
+        # through it reaches the base only via storage-alias label propagation (a labeled
+        # base sharing the receiver's elements). Where it does not, preserve the provenance
+        # warning for that unsafe lvalue position when an input-derived RHS would otherwise
+        # appear fully represented; the data-alias witness ceilings replay independently.
+        unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
+        # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
+        # logged as the canonical single-argument ``detach(rhs)`` call, so
+        # the rebound receiver never appears as a recorded argument and no
+        # receiver-slot exemption exists here -- ``arg0`` IS the RHS and is
+        # fully witnessed like any other operand.
+        if unsafe_data_alias_receiver or not _tensor_has_known_provenance(trace, value):
+            positions.append(path)
             return
-        if isinstance(value, (list, tuple)):
-            for index, item in enumerate(value):
-                visit(item, f"{path}.{index}", child_slot(slot, index))
-        elif isinstance(value, dict):
-            for key, item in value.items():
-                visit(item, f"{path}.{key}", child_slot(slot, key))
+        # A Parameter mutated in place earlier in this pass binds as a graph
+        # parent of its mutation op (``promote_mutated_parameters``), so it is
+        # witnessed by the label branch below, not the parameter rung.
+        if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
+            # r29 F3a: the parameter rung. A Parameter never appears in
+            # ``parent_arg_positions`` (the recorder skips it) and
+            # ``tensor_session_parent_labels`` returns ``()`` for it, so a
+            # dropped PARAM edge was invisible to both witness branches.
+            # For a session-validated prep-stamped Parameter the recorded
+            # edge set is ``parent_params``: absence by exact identity is a
+            # dropped param edge. Unprepped / in-forward / foreign
+            # Parameters keep their existing paths (branch (1), or the
+            # label-rung exemption for activation-derived params).
+            if _session_validated_parameter(trace, value) and not any(
+                value is recorded for recorded in recorded_parent_params
+            ):
+                positions.append(path)
+                dropped_edge_positions.append(path)
+            return
+        provenance_labels = tensor_session_parent_labels(value)
+        # Branch (2): a fully-provenanced tensor whose producer label is not a
+        # recorded parent edge (un-provenanced tensors never reach here).
+        if provenance_labels and _dropped_edge_at_slot(
+            provenance_labels, slot, parent_arg_positions, recorded_parent_labels
+        ):
+            positions.append(path)
+            dropped_edge_positions.append(path)
 
     for index, arg in enumerate(args):
-        visit(arg, f"arg{index}", ("args", index))
+        _walk_arg_tree(arg, f"arg{index}", ("args", index), visit_tensor)
     for key, value in kwargs.items():
-        visit(value, f"kw:{key}", ("kwargs", key))
+        _walk_arg_tree(value, f"kw:{key}", ("kwargs", key), visit_tensor)
     return tuple(positions), tuple(dropped_edge_positions)
 
 

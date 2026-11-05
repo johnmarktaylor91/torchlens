@@ -89,8 +89,8 @@ class NodeSpec:
     >>> spec = NodeSpec(lines=["relu_1_2", "1x4x8x8"])
     >>> spec.shape
     'box'
-    >>> spec.replace(fillcolor="lightblue").fillcolor
-    'lightblue'
+    >>> spec.replace(fillcolor="lightgrey").fillcolor
+    'lightgrey'
     """
 
     lines: list[str]

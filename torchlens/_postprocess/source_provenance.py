@@ -100,17 +100,39 @@ def _warn_unattributed_tensor_args(self: Trace) -> None:
     append_capture_advisory(self, ADVISORY_ORPHAN_UNATTRIBUTED_ARGS, orphans)
     append_capture_advisory(self, ADVISORY_UNRECORDED_OPERATOR_MUTATION, mutations)
     if offenders or orphans or adoptions:
-        # Session-time escape signal: the capture entry reads this flag to decide
-        # whether a rescue re-run (TorchFunctionMode net) should be attempted.
+        # Session-time escape signal: capture entry reads it to decide on a rescue re-run.
         self._had_unattributed_tensor_args = True
     warnings.warn(
         "TorchLens found tensor arguments with no graph/source provenance. "
         "These are usually tensors captured from outside the traced model; "
         "module tensor attributes, inputs, parameters, and buffers are known sources. "
-        "Offending ops/arg positions: "
+        + _file_load_note(self)
+        + "Offending ops/arg positions: "
         + "; ".join(offenders + orphans + adoptions + outside + mutations),
         UserWarning,
         stacklevel=2,
+    )
+
+
+def _file_load_note(self: Trace) -> str:
+    """Return the warning clause naming ``torch.load`` when the forward called it.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed; its ``_torch_file_loads`` flag is popped here.
+
+    Returns
+    -------
+    str
+        The clause, or an empty string when no file load ran in the forward.
+    """
+
+    if not self.__dict__.pop("_torch_file_loads", False):
+        return ""
+    return (
+        "torch.load was called inside the forward: TorchLens records no op for a file load, "
+        "so the loaded tensor has no source, and replay will not reload files. "
     )
 
 

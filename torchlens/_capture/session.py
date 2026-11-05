@@ -22,6 +22,7 @@ from ..backends.torch.tensor_tracking import (
     _add_live_gradient_reference_hook,
     _add_tensor_backward_hook,
 )
+from ._cooked_inventory import capture_identity_facts, recording_projection_inventory
 from ._retention import _negative_selector_windows, _selector_needs_backward_context
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
@@ -849,24 +850,19 @@ class CaptureSession:
         capture_events = getattr(trace, "capture_events", None)
         recording = getattr(trace, "_fastlog_recording", None)
         records: tuple[Any, ...] = ()
+        param_logs: dict[str, Any] = {}
+        call_site_classes: dict[str, str] = {}
         if recording is not None:
-            records = tuple(object.__getattribute__(recording, "records"))
-            # A Recorder shares one Recording across its passes, so its record
-            # list is cumulative; each pass's core keeps only the records that
-            # pass added, or the projector's per-core concatenation would
-            # repeat every earlier pass's records once per later pass.
-            recording_state = object.__getattribute__(recording, "_recording_state")
-            pass_index = getattr(recording_state, "pass_index", None)
-            if pass_index is not None:
-                records = tuple(
-                    record for record in records if record.ctx.pass_number == pass_index
-                )
+            records, param_logs, call_site_classes = recording_projection_inventory(recording)
         self.projection_facts.update(
             {
                 "capture_events": (
                     None if capture_events is None else capture_events._copy_for_replay()
                 ),
                 "records": records,
+                # Cooked-Trace inventory (``_cooked_inventory`` installs it).
+                "param_logs": param_logs,
+                "call_site_classes": call_site_classes,
                 "output_tensors": tuple(output_tensors or ()),
                 "output_tensor_addresses": tuple(output_tensor_addresses or ()),
                 "output_labels": tuple(
@@ -881,6 +877,7 @@ class CaptureSession:
                 "forward_memory_backend": trace._provenance_forward_memory_backend,
                 "random_seed": trace._options_seed,
                 "source_model_ref": getattr(trace, "_source_model_ref", None),
+                "identity_facts": capture_identity_facts(trace),
                 "layer_counter": getattr(getattr(trace, "_raw_graph_ws", None), "layer_counter", 0),
             }
         )

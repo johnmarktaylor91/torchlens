@@ -339,7 +339,7 @@ def write_state(root: Any, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
-    from .._version import __version__
+    from .._vocab._package_version import __version__
 
     state_json, tensors, _paths = encode_state(root)
     metadata = {

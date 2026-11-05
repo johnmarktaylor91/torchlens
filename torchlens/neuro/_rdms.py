@@ -744,7 +744,7 @@ def _build_matrix_rdms(
     if not patterns:
         patterns = {"tl_pattern_index": np.arange(n_patterns)}
 
-    from .._version import __version__
+    from .._vocab._package_version import __version__
 
     result = rsatoolbox.rdm.RDMs(
         dissimilarities=np.stack([_condensed(array) for array in arrays]),

@@ -20,9 +20,16 @@ from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._utils._tensor_label import get_module_meta
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
 )
+pytestmark = [
+    pytestmark,
+    pytest.mark.usefixtures("root_edits_in_place"),  # D.12: no per-call mutation keyword
+]
 
 
 class DirectParent(nn.Module):
@@ -150,7 +157,7 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     baseline = _hook_count(model)
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
-    result = trace.run(inputs=new_x, fast=True)
+    result = trace.run_transaction(inputs=new_x, fast=True)
     product = result.trace
     assert product.last_run["engine"] == "guarded_fast", product.last_run.get("fast_refused")
     with torch.no_grad():
@@ -197,8 +204,8 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
         plain = model(x)
     direction = torch.tensor([1.0, -2.0, 0.5])
     trace = tl.trace(model, x)
-    trace._attach_hooks(
-        tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1), confirm_mutation=True
+    trace.do(
+        {tl.module("parent.inner"): tl.steer(direction, strength=3.0, dim=-1)}, intervention=_STAGE
     )
     trace.run(model, x)
     assert trace.last_run["engine"] == "rerun"
@@ -232,7 +239,7 @@ def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     assert any(address.endswith("embedding") for address in _marked(model))
-    trace.run(inputs=inputs, fast=True)
+    trace.run_transaction(inputs=inputs, fast=True)
     session = trace.__dict__["_fast_run_session"]
     assert session.module_index >= 2
     _assert_no_routed_forward(model)
@@ -244,8 +251,8 @@ def test_fast_run_reruns_urbandriver() -> None:
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     full_trace = tl.trace(model, inputs)
-    fast = trace.run(inputs=inputs, fast=True)
-    full = full_trace.run(inputs=inputs)
+    fast = trace.run_transaction(inputs=inputs, fast=True)
+    full = full_trace.run_transaction(inputs=inputs)
     _assert_same(full.output, fast.output)
     _assert_same_payloads(full.trace, fast.trace)
     _assert_no_routed_forward(model)
@@ -299,8 +306,8 @@ def test_fast_run_reruns_a_direct_forward_with_an_inplace_activation() -> None:
     assert _marked(model) == {"embedding"}
     assert {"relu_", "relu"} <= {str(op.func_name) for op in trace._layer_list}
     fresh = _direct_inplace_inputs(1)
-    fast = trace.run(inputs=fresh, fast=True)
-    full = tl.trace(model, _direct_inplace_inputs(0)).run(inputs=fresh)
+    fast = trace.run_transaction(inputs=fresh, fast=True)
+    full = tl.trace(model, _direct_inplace_inputs(0)).run_transaction(inputs=fresh)
     _assert_same(full.output, fast.output)
     _assert_same_payloads(full.trace, fast.trace)
     _assert_no_routed_forward(model)

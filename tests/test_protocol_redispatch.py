@@ -471,3 +471,32 @@ def test_alias_scan_reads_stored_keys_without_driving_a_lazy_subclass() -> None:
     finally:
         _protocol_redispatch.undo_table_aliases()
     assert dict(dict.items(lazy)) == {torch.cat: "cat", "name": 1}
+
+
+class _RaisingStub:
+    """A module global whose every attribute read raises (shap.plots without matplotlib)."""
+
+    def __getattribute__(self, item: str) -> Any:
+        raise ImportError("plotting is not available")
+
+
+def test_alias_scan_skips_a_global_whose_attribute_reads_raise() -> None:
+    """A raising stub (module- or class-level) never aborts the scan; tables beside it alias."""
+
+    _ensure_wrapped()
+    ledger, _ = _state.wrap_epoch_ledgers()
+    table: dict[Any, Any] = {torch.cat: "cat"}
+    module = types.ModuleType(f"_tl_scan_raising_stub_{next(_library_ids)}")
+    holder = type("Holder", (), {"STUB": _RaisingStub(), "__module__": module.__name__})
+    module.plots = _RaisingStub()  # type: ignore[attr-defined]
+    module.TABLE = table  # type: ignore[attr-defined]
+    module.Holder = holder  # type: ignore[attr-defined]
+    try:
+        added, count = _protocol_redispatch._alias_module_tables(
+            [(module.__name__, module)], ledger
+        )
+        assert (added, count.modules, count.tables) == (1, 1, 1)
+        assert _resolve(torch.cat) in table
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert table == {torch.cat: "cat"}

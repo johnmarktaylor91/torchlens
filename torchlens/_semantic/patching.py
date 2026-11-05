@@ -16,6 +16,7 @@ from ..options import _CAPTURE_FIELDS, CaptureOptions
 from ._input_patching import _model_input_home_role, _patch_input_leaf
 from ._state_guard import _CounterfactualStateGuard, _teardown
 from .facets import Facet, MissingGrad
+from .recipes._helpers import modules_with_facet as _modules_with_facet
 
 Metric = Callable[[Any], torch.Tensor]
 
@@ -77,7 +78,6 @@ def activation_patch_residual_stream(
     torch.Tensor
         Metric values shaped ``[layer, pos]`` or ``[layer]``.
     """
-
     guard = _CounterfactualStateGuard(model)
     guard.open()
     clean_log = corrupted_log = None
@@ -1003,16 +1003,6 @@ def _require_effective_patch(
         "is a real computation site, or patch an explicit op site via fork.do().",
         code="patch_ineffective",
     )
-
-
-def _modules_with_facet(log: Any, facet_name: str) -> list[str]:
-    """Return module addresses with a facet available in the current capture."""
-
-    return [
-        str(module.address)
-        for module in log.modules
-        if getattr(module, "address", None) != "self" and module.facets.has(facet_name)
-    ]
 
 
 def _ensure_matching_modules(log: Any, modules: Sequence[str], *, facet_name: str) -> None:

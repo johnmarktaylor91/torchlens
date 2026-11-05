@@ -1,5 +1,4 @@
 """Opt-in shadow detection for stale detached torch callable invocations.
-
 The detector is diagnostic only in this rollout. It reports exact callable/code
 identity escapes and marks the Trace unverified; it does not enforce capture
 completeness without the separate dispatcher witness.
@@ -24,7 +23,9 @@ import torch
 
 from ... import _state
 from ..._constants import get_orig_torch_funcs
+from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils.introspection import nested_getattr
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
@@ -162,8 +163,7 @@ AUDITED_ESCAPE_EXEMPTIONS: tuple[AuditedEscapeExemption, ...] = (
 )
 """Reviewable exact exemptions; additions require a regression test and reason."""
 
-if len(AUDITED_ESCAPE_EXEMPTIONS) > MAX_AUDITED_EXEMPTIONS:
-    raise RuntimeError("TorchLens callable escape exemption budget exceeded.")
+refuse_if_exemptions_over_budget(len(AUDITED_ESCAPE_EXEMPTIONS), MAX_AUDITED_EXEMPTIONS)
 
 
 @dataclass(frozen=True)
@@ -220,6 +220,8 @@ class ExpectedOriginalToken:
 @dataclass
 class _GuardState:
     """Per-forward detector state installed only in the capture owner thread."""
+
+    __repr__ = short_dataclass_repr
 
     trace: Any
     tables: DetectorTables
@@ -371,7 +373,6 @@ def expected_original_call(
     census_scope: Literal["owned", "expected_opaque"] = "owned",
 ) -> AbstractContextManager[ExpectedOriginalToken]:
     """Authorize exactly one immediate wrapper-to-original profiler event.
-
     Parameters
     ----------
     original:
@@ -387,7 +388,6 @@ def expected_original_call(
     census_scope:
         Whether dispatcher work belongs to a prospective captured op or an
         exact documented opaque boundary.
-
     Returns
     -------
     AbstractContextManager[ExpectedOriginalToken]

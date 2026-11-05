@@ -14,8 +14,9 @@ rectangles, so the swatches are small drawn PNG images in a shared,
 content-addressed folder under the system temp directory, referenced by
 absolute path so the DOT source renders from any working directory. Rows
 appear only for marks the picture contains; the key is opt-in
-(``show_legend=True``), except that a ``module=`` focused draw shows it by
-default with a reading key (``show_legend=False`` turns both off).
+(``show_legend=True``, which also adds the reading key, the notes explaining
+the picture's notation), except that a ``module=`` focused draw shows the key
+by default (``show_legend=False`` turns it off).
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -37,6 +38,7 @@ from ._edit_highlighter import highlighter_rgba
 from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
 from ._focus_scope import scope_caption_head
 from ._fonts import _FONT_DIR
+from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
 from ._render_common import (
     BOOL_NODE_COLOR,
@@ -49,7 +51,7 @@ from ._render_common import (
 )
 from ._render_utils import html_escape, strip_path_directories
 from .node_spec import NodeSpec, intervention_sites_for_log
-from .themes import _theme_cluster_attrs, apply_theme_to_spec, resolve_theme
+from .themes import _hex_rgb, _theme_cluster_attrs, apply_theme_to_spec, resolve_theme
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -83,8 +85,8 @@ _SWATCH_VERSION = 1
 _KEY_SPACING = 3
 #: Swatches per key row before the row wraps.
 _SWATCHES_PER_ROW = 3
-#: Stroke of the key's module frame, in points (module frames run 2 to 5 pt by depth).
-_MODULE_FRAME_LINE = 3.0
+#: Stroke of the key's module frame, in points: the same stroke as every module frame.
+_MODULE_FRAME_LINE = MODULE_PENWIDTH
 #: Node unit kinds the header counts: each draws one node that shows a tensor size
 #: (a ``module=`` focus stub, kind ``boundary``, shows none).
 _COUNTED_UNIT_KINDS = frozenset({"raw_op", "module_box"})
@@ -118,7 +120,7 @@ class KeySwatch:
 
 
 def params_caption_detail(trace: Trace) -> str:
-    """Return the header's parameter line, for example ``1,024 params (4.0 KiB, all trainable)``.
+    """Return the header's parameter line, for example ``1,024 params (4.0 KB, all trainable)``.
 
     Counts take thousands separators so a large model reads at a glance
     (``124,439,808 params``), and the memory uses the binary unit its 1024
@@ -149,10 +151,32 @@ def _unit_memory(trace: Trace, unit: Any) -> int | None:
             node = trace.ops[module_call.output_ops[-1]]
         except (KeyError, IndexError, AttributeError, TypeError):
             pass
+    return _node_memory(node)
+
+
+def _node_memory(node: Any) -> int | None:
+    """Return the node's activation size in bytes, or ``None`` when unknown."""
+
     value = getattr(node, "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)
+
+
+def _unit_passes(trace: Trace, unit: Any) -> tuple[int, int]:
+    """Return ``(op passes, bytes over those passes)`` for one rolled layer node.
+
+    A rolled node is a layer: every pass of one operation. Its passes are the
+    layer's ops; a node without them counts as one pass of its own size.
+    """
+
+    emission = unit.emission
+    node = emission.node if emission.node is not None else next(iter(unit.source_nodes), None)
+    values = getattr(getattr(node, "ops", None), "values", None)
+    if not callable(values):
+        return 1, _unit_memory(trace, unit) or 0
+    passes = list(values())
+    return len(passes), sum(_node_memory(op) or 0 for op in passes)
 
 
 def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str:
@@ -160,29 +184,44 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
 
     The count and the size cover the same nodes: every drawn node whose label
     shows a tensor size (operations, input and output tensors, collapsed
-    module boxes). The input and output stubs of a ``module=`` focus show no
-    size and are not counted; nor are repeat-fold ellipses, segment capsules
-    and container summaries. The noun names what is counted: ``ops`` in the
+    module boxes). The input and output stubs of a ``module=`` focus stand
+    for ops outside the drawn module and are not counted (an input stub names
+    the size of the tensor it brings, made outside); nor are repeat-fold
+    ellipses, segment capsules and container summaries. The noun names what is counted: ``ops`` in the
     unrolled view and ``layers`` in the rolled one when every counted node is
-    an operation, ``nodes`` when collapsed module boxes are among them.
+    an operation, ``nodes`` when collapsed module boxes are among them. A
+    rolled layer stands for every pass of its operation, so the rolled line
+    also counts those passes and sums the size over all of them
+    (``8 layers (11 ops, 149 B)``); the size then equals the unrolled
+    header's for the same trace.
     """
 
-    count = 0
-    total = 0
-    has_module_box = False
-    for unit in universe.units:
-        if unit.kind not in _COUNTED_UNIT_KINDS:
-            continue
-        count += 1
-        has_module_box = has_module_box or unit.kind == "module_box"
-        total += _unit_memory(trace, unit) or 0
+    counted = [unit for unit in universe.units if unit.kind in _COUNTED_UNIT_KINDS]
+    count = len(counted)
+    has_module_box = any(unit.kind == "module_box" for unit in counted)
+    if vis_mode == "rolled" and not has_module_box:
+        rolled = [_unit_passes(trace, unit) for unit in counted]
+        ops = sum(passes for passes, _ in rolled)
+        size = format_memory(sum(memory for _, memory in rolled))
+        layer_noun = "layer" if count == 1 else "layers"
+        op_noun = "op" if ops == 1 else "ops"
+        return f"{count:,} {layer_noun} ({ops:,} {op_noun}, {size})"
     if has_module_box:
         noun = "node" if count == 1 else "nodes"
-    elif vis_mode == "rolled":
-        noun = "layer" if count == 1 else "layers"
     else:
         noun = "op" if count == 1 else "ops"
+    total = sum(_unit_memory(trace, unit) or 0 for unit in counted)
     return f"{count:,} {noun} ({format_memory(total)})"
+
+
+def graph_caption_html(
+    trace: Trace, universe: NodeUniverse, request: ResolvedRenderRequest, theme: VisualizationTheme
+) -> str:
+    """Return the complete graph caption: the header body in the theme's ink."""
+
+    count_line = drawn_count_line(trace, universe, request.vis_mode)
+    body = graph_caption_body(trace, count_line, request)
+    return f"<<FONT COLOR='{theme.default_font}'>{body}</FONT>>"
 
 
 def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderRequest) -> str:
@@ -206,6 +245,12 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     # The picture keeps a cited source location's file name and line only.
     for banner_line in honesty_banner_lines(trace):
         banner_text = html_escape(strip_path_directories(banner_line))
+        if banner_line.startswith("capture advisory:"):
+            # An advisory discloses a gap in source provenance, not a failed
+            # capture: it stays in the header, in the key's text size, unbolded.
+            size = resolve_theme(request.theme).typography.secondary_size
+            caption_body += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
+            continue
         caption_body += f"<B>{banner_text}</B><br align='left'/>"
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
@@ -357,7 +402,7 @@ def key_swatches(
 
     Both weight greys are listed whenever any weighted node is drawn, so a
     reader can tell trainable from frozen weights. Plain operations get no
-    entry. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
+    entry, nor does an oval mark the skin fills like one. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
     an entry drawn like it; ``has_module=True`` alone means a module frame.
     An edited node adds ``edited`` (the ringed oval) and, with the downstream
     highlighter drawn, ``changed by the edit``.
@@ -379,18 +424,26 @@ def key_swatches(
         ("true/false test", "oval", BOOL_NODE_COLOR, "boolean" in drawn),
     )
     swatches = [
-        _entry_swatch(theme, text, shape, fill) for text, shape, fill, shown in entries if shown
+        swatch
+        for swatch in (_entry_swatch(theme, *entry[:3]) for entry in entries if entry[3])
+        if swatch is not None
     ]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
 
 
-def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch:
-    """Return one key entry with the skin's fill and border for its mark."""
+def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -> KeySwatch | None:
+    """Return one key entry with the skin's fill and border for its mark.
+
+    ``None`` for an oval the skin fills like a plain op: a swatch identical
+    to every function call teaches nothing.
+    """
 
     if shape == "frame":
         return _module_frame_swatch(theme)
     themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
+    if shape == "oval" and _hex_rgb(str(themed.fillcolor)) == _hex_rgb(theme.default_fill):
+        return None
     return KeySwatch(
         text=text,
         shape=shape,
@@ -402,7 +455,7 @@ def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -
 def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
     """Return the module entry: a real module frame, not a plain op's thin box.
 
-    The frame has the module box's page fill and ink and a thick stroke, so
+    The frame has the module box's page fill, ink and stroke, so
     the key matches the expanded modules in the picture (Lead, 29 Oct 2026).
     """
 

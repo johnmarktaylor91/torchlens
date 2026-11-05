@@ -18,10 +18,12 @@ DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 from ._encoding import _color_legend_rows, _non_color_legend_rows
 from ._render_common import (
@@ -132,7 +134,9 @@ def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
             f"{TRAINABLE_PARAMS_BG_COLOR}:{FROZEN_PARAMS_BG_COLOR}",
         ),
         "buffer": themed(BUFFER_NODE_COLOR),
-        "boolean": themed(BOOL_NODE_COLOR),
+        "boolean": themed(
+            BOOL_NODE_COLOR, BOOL_FALSE_NODE_COLOR, f"{BOOL_NODE_COLOR}:{BOOL_FALSE_NODE_COLOR}"
+        ),
     }
 
 
@@ -164,7 +168,8 @@ def drawn_legend_roles(
         shape = str(attrs.get("shape", "")).lower()
         if shape in _NON_ROLE_SHAPES or "invis" in str(attrs.get("style", "")):
             continue
-        fill = str(attrs.get("fillcolor", "")).lower()
+        # Drop Graphviz segment weights: a mixed if-test's split is weighted.
+        fill = re.sub(r";[0-9.]+", "", str(attrs.get("fillcolor", "")).lower())
         classes = str(attrs.get("class", "")).split()
         if EDITED_NODE_CLASS in classes:
             roles.add("edited")
@@ -176,7 +181,14 @@ def drawn_legend_roles(
             elif fill in fills["parameterized"]:
                 roles.add("mutated parameter")
             continue
+        # A fill the skin shares with plain ops (the default skin's white
+        # tests and buffers) names no other role on a non-cylinder node.
+        plain_fill = fill in fills["plain op"]
         for role, role_fills in fills.items():
+            if role == "buffer":
+                continue  # a buffer is cued by its cylinder, matched above, never by fill alone
+            if plain_fill and role != "plain op":
+                continue
             if fill in role_fills and not (role == "plain op" and shape == "box3d"):
                 roles.add(role)
     return frozenset(roles)

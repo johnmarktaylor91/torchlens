@@ -53,7 +53,9 @@ MANIFEST_PATH = TESTS_DIR / "support" / "proofnet" / "gate_manifest.tsv"
 #: new gate entering the tier.
 #: 32 -> 30 (ci-shape): the `git` and `semantic_release` rows burned down when the
 #: no-major release chain and its release-environment-only tests were removed.
-EXECUTES_NOWHERE_CEILING = 30
+#: 30 -> 29 (2026-11-03): the alternate renderer's optional-package row burned
+#: down when that renderer was removed.
+EXECUTES_NOWHERE_CEILING = 29
 
 GALLERY_DIR = TESTS_DIR / "workflow_gallery"
 
@@ -155,14 +157,14 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_distributed_census_topologies.py:107",
         "test_distributed_honesty.py:377",
         "test_distributed_honesty.py:393",
-        "test_input_coercion.py:348",
+        "test_input_coercion.py:349",
         "test_lit_bridge_real.py:53",
         "test_mlp_recipes.py:83",
-        "test_output_aesthetics.py:1584",
+        "test_output_aesthetics.py:1586",
         "test_real_world_models.py:263",
         "test_real_world_models.py:2525",
         "test_tlspec_runnable_r41_crossthread_witness.py:457",
-        "test_tlspec_runnable_r69_input_contract.py:651",
+        "test_tlspec_runnable_r69_input_contract.py:654",
         "test_transforms_lib_real_models.py:290",
         "test_weightsfree_hf.py:52",
         "test_weightsfree_hf.py:66",

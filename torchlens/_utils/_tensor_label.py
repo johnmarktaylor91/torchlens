@@ -29,8 +29,6 @@ __all__ = [
     "get_tensor_label",
     "mark_tensor_data_alias",
     "is_tensor_data_alias",
-    "set_same_object_mutation",
-    "pop_same_object_mutation",
     "raw_tensor_label",
     "get_live_tensor_label",
     "get_live_label_list",
@@ -157,10 +155,12 @@ class TensorMeta(TorchLensMeta):
     # as a canonical detach op, but a later write through this alias family must
     # still ceiling runnable faithfulness.
     data_alias: bool = False
-    # Transient handoff for a same-object return: the wrapper stamps the call's
-    # mutation verdict on the fresh copy it logs, and activation logging pops it
-    # immediately (``set_same_object_mutation`` / ``pop_same_object_mutation``).
+    # Transient handoffs for a same-object return, stamped on the fresh copy it is
+    # logged against and popped by activation logging (``_same_object_handoff``):
+    # the call's mutation verdict, and for a non-mutating return the live object
+    # the caller receives, which a by-reference save keeps instead of the copy.
     same_object_mutation: bool | None = None
+    same_object_live_value: Any | None = None
 
     def __deepcopy__(self, memo: dict[int, Any]) -> TensorMeta:
         """Copy this metadata for a deep-copied tensor, minus the source's identity.
@@ -195,6 +195,7 @@ class TensorMeta(TorchLensMeta):
             label_storage=None,
             data_alias=False,
             same_object_mutation=None,
+            same_object_live_value=None,
         )
         memo[id(self)] = copied
         return copied
@@ -798,17 +799,17 @@ def session_meta_is_anchored(meta: TensorMeta | None) -> bool:
 def _pinned_storage(t: Any) -> Any | None:
     """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
 
-    Read under ``pause_logging`` because ``untyped_storage`` is a WITNESSED
-    host-escape method (``completeness_witness._HOST_ESCAPE_METHODS``): an
-    unpaused read on the owner thread would record a spurious host-escape fact
-    for every labeled activation. Any failure (exotic/meta/fake tensor whose
-    storage cannot be read) returns ``None`` -- the validation below treats a
-    symmetric-inaccessible pair as identity-only, exactly like r81's buffer belt.
+    Calls the ORIGINAL accessor (unwrap ledger), two frames less than the wrapped read;
+    a subclass override or a live fast collector keeps the wrapped read. Both stay under
+    ``pause_logging``: a raw ``untyped_storage`` call while logging is live is a torch
+    callable outside its wrapper edge, which the shadow escape detector reports.
     """
-
     try:
         with _state.pause_logging():
-            return t.untyped_storage()
+            fast = _state._active_fast_run_collector is not None
+            ledger = {} if fast else _state.wrap_epoch_ledgers()[0]
+            original = ledger.get(id(getattr(type(t), "untyped_storage", None)))
+            return t.untyped_storage() if original is None else original(t)
     except Exception:
         return None
 
@@ -1186,42 +1187,6 @@ def is_tensor_data_alias(t: Any) -> bool:
 
     meta = get_tensor_meta(t)
     return bool(meta is not None and meta.data_alias and get_tensor_label(t) is not None)
-
-
-def set_same_object_mutation(t: Any, verdict: bool) -> None:
-    """Stamp a same-object return's mutation verdict on the tensor that gets logged.
-
-    Parameters
-    ----------
-    t : Any
-        Fresh copy of the same-object return that activation logging will see.
-    verdict : bool
-        Whether the wrapped call mutated its receiver.
-    """
-
-    _ensure_tensor_meta(t).same_object_mutation = verdict
-
-
-def pop_same_object_mutation(t: Any) -> bool | None:
-    """Return and clear a stamped same-object mutation verdict.
-
-    Parameters
-    ----------
-    t : Any
-        Tensor being logged.
-
-    Returns
-    -------
-    bool | None
-        The stamped verdict, or ``None`` when no verdict was stamped.
-    """
-
-    meta = get_tensor_meta(t)
-    if meta is None:
-        return None
-    verdict = meta.same_object_mutation
-    meta.same_object_mutation = None
-    return verdict
 
 
 def raw_tensor_label(t: Any) -> str | None:

@@ -12,6 +12,8 @@ explain FLOPs line and graph-label FLOP rows.
 
 from __future__ import annotations
 
+import re
+
 import torch
 from torch import nn
 from torch.nn.utils import prune
@@ -205,6 +207,8 @@ def test_attention_flop_lines_disclose_the_full_square() -> None:
     line = _body_line(str(report), sdpa.name)
     assert line.count(ATTENTION_MARK) == 2  # the flops and flops_pct cells
     assert "attention masks and is_causal are not discounted" in str(report)
+    legend = next(line for line in str(report).splitlines() if line.startswith("Legend"))
+    assert ATTENTION_MARK in legend
     proj = _body_line(str(report), "proj (Linear)")
     assert ATTENTION_MARK not in proj
     flops = tl.report.flops(model, x)
@@ -339,3 +343,25 @@ def test_compact_shapes_text_budget_rules() -> None:
     shown = text.count("(")
     assert text.startswith("(1, 3, 32, 32), ")
     assert text.endswith(f", ... +{20 - shown} more")
+
+
+def test_flops_and_macs_cells_use_the_params_count_spelling() -> None:
+    """FLOPs, MACs and params share one compact count spelling (lowercase k, one decimal)."""
+
+    model = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 10))
+    trace = tl.trace(model, torch.randn(2, 64))
+    try:
+        hybrid = str(trace.summary())
+        compute = str(trace.summary(view="compute"))
+    finally:
+        trace.cleanup()
+
+    for text in (hybrid, compute):
+        counts = re.findall(r"(?<![\w.])(\d+(?:\.\d+)?)([kKMGT])(?=\s|$|\^|\*)", text)
+        assert counts, text
+        for number, suffix in counts:
+            assert suffix != "K", text
+            assert re.fullmatch(r"\d+\.\d", number), text
+    assert "8.3k" in hybrid  # params of the first Linear, beside its FLOPs cell
+    flops_line = next(line for line in hybrid.splitlines() if line.startswith("Compute"))
+    assert re.match(r"Compute  \d+\.\dk FLOPs fwd \(fma=2\) \| \d+\.\dk MACs", flops_line)

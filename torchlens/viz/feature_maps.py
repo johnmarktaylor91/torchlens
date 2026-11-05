@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from .._entry_refusals import refuse_feature_map_site, refuse_feature_maps_not_spatial
 from .._plots.node_plots import _apply_colormap, _normalize_finite
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
@@ -119,7 +120,7 @@ def feature_maps(
             .replace("mds_evolution", "feature_maps")
         )
         if recast != str(exc):
-            raise ValueError(recast) from exc
+            refuse_feature_map_site(recast, exc)
         raise
     maps_by_key: FeatureMapEvolution = OrderedDict()
     staged: OrderedDict[str, torch.Tensor] = OrderedDict()
@@ -159,11 +160,7 @@ def feature_maps(
 
     if not maps_by_key:
         shape_text = "; ".join(non_spatial_shapes) if non_spatial_shapes else "no saved activations"
-        raise ValueError(
-            "feature_map_evolution requires spatial [N, C, H, W] activations; "
-            f"saw {shape_text}. Capture with save= covering the conv layers before calling "
-            "feature_map_evolution."
-        )
+        refuse_feature_maps_not_spatial(shape_text)
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
     # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
     _commit_annotation_tensors(trace, staged)

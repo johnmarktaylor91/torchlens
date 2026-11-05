@@ -232,3 +232,56 @@ class TestRefusals:
         with pytest.raises(tl.errors.AttributionError) as excinfo:
             _build(model, fx.exact_transcoders(model), 2, target=[99])
         assert self._code(excinfo) == "attribution_graph_target_invalid"
+
+    def test_op_label_is_not_a_module_name(self) -> None:
+        # trace.modules[op_label] gives the Module the op ran in; the graph's
+        # module-named sites still take module names only.
+        model = fx.build_model(2)
+        trace = _trace(model)
+        op_label = trace.modules["embed"].layer_labels[0]
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
+            tl.attribution.build_graph(
+                trace,
+                fx.exact_transcoders(model),
+                embedding_module=op_label,
+                frozen=fx.frozen_names(2),
+            )
+        assert self._code(excinfo) == "attribution_graph_site_not_found"
+
+    def test_frozen_name_of_no_site_names_both_readings(self) -> None:
+        # An op label taken from another capture (other op counts before it) is
+        # neither a module nor an op here: the refusal says so, not "missing module".
+        model = fx.build_model(2)
+        with pytest.raises(tl.errors.AttributionError) as excinfo:
+            tl.attribution.build_graph(
+                _trace(model),
+                fx.exact_transcoders(model),
+                embedding_module="embed",
+                frozen=[*fx.frozen_names(2), "softmax_99_999:1"],
+            )
+        assert self._code(excinfo) == "attribution_graph_site_not_found"
+        message = str(excinfo.value)
+        assert "The frozen= entry 'softmax_99_999:1' names neither a module nor an op" in message
+        assert "[str(op.label) for op in trace]" in message
+
+
+class TestSiteKinds:
+    """A frozen op label holds that op, not the output of the module it ran in."""
+
+    def test_frozen_op_label_inside_a_module_holds_that_op(self) -> None:
+        model = fx.build_model(2)
+        trace = _trace(model)
+        scores = next(
+            label
+            for label in trace.modules["blocks.0.attn"].layer_labels
+            if label.startswith("matmul")
+        )
+        base = _build(model, fx.exact_transcoders(model), 2)
+        graph = tl.attribution.build_graph(
+            trace,
+            fx.exact_transcoders(model),
+            embedding_module="embed",
+            frozen=[*fx.frozen_names(2), scores],
+        )
+        added = set(graph.frozen_sites) - set(base.frozen_sites)
+        assert added == {f"{scores}:1"} or added == {scores}

@@ -14,7 +14,7 @@ VisModeLiteral = Literal["none", "rolled", "unrolled"]
 VisNodeModeLiteral = Literal["default", "profiling"]
 VisDirectionLiteral = Literal["bottomup", "topdown", "leftright", "rightleft"]
 VisNodePlacementLiteral = Literal["auto", "dot", "rank"]
-VisRendererLiteral = Literal["graphviz", "dagua"]
+VisRendererLiteral = Literal["graphviz"]
 VisInterventionModeLiteral = Literal["node_mark", "as_node"]
 
 #: Postfunc callables applied to saved activations and gradients; private

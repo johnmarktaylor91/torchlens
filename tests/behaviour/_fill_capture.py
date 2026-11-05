@@ -343,7 +343,7 @@ def _after_fast_run(cell: Cell) -> None:
     runs = []
     for _ in range(2):
         torch.manual_seed(SEED)
-        result = trace.run(inputs=cell.fresh_inputs(), fast=True)
+        result = trace.run_transaction(inputs=cell.fresh_inputs(), fast=True)
         cell.expect(not result.report.is_poisoned, f"fast run poisoned: {result.report!r}")
         runs.append(
             [

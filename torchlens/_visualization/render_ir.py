@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from ._encoding_size_layout import layout_encoded_sizes
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class RenderIRNode:
     """Resolved render node independent of Graphviz mutation.
-
     Parameters
     ----------
     name:
@@ -72,6 +72,8 @@ class RenderIRNode:
 class _NodeDecisionInputs:
     """Per-draw inputs shared by every render-node presentation decision."""
 
+    __repr__ = short_dataclass_repr
+
     universe: Any
     repeat_folds: Mapping[str, ModuleRepeatFold] | None
     segment_lookup: _SegmentLookup
@@ -82,7 +84,6 @@ class _NodeDecisionInputs:
 @dataclass(frozen=True)
 class RenderIREdge:
     """Resolved forward edge independent of DOT emission.
-
     Parameters
     ----------
     source_unit:
@@ -122,7 +123,6 @@ class RenderIREdge:
 @dataclass(frozen=True)
 class RenderIRRegion:
     """One nested, renderer-neutral region selected for DOT emission.
-
     Parameters
     ----------
     key:
@@ -180,23 +180,19 @@ class RenderIROrderingConstraint:
 
 @dataclass(frozen=True)
 class RenderIRRankGroup:
-    """One stacking (rank) channel group: nodes pinned to one Graphviz rank.
+    """One rank group: nodes pinned to one Graphviz rank.
 
-    Parameters
-    ----------
-    kind:
-        Constraint kind; v1 emits ``"stack"`` only (the ``stack_by``
-        encoding channel; the license/cohort semantics live in
-        ``visualization._stacking``).
-    key:
-        Repr of the shared annotation value (rank key).
-    members:
-        Rendered node names pinned to the shared rank.
+    ``kind`` is the constraint kind: ``"stack"`` (the ``stack_by`` encoding
+    channel; semantics in ``visualization._stacking``) or ``"focus_stubs"``.
+    ``key`` is the repr of the shared rank key, ``members`` the rendered node
+    names, and ``rank`` the Graphviz rank the subgraph is given: ``"same"``,
+    or ``"source"`` / ``"sink"`` for a focused draw's input and output stubs.
     """
 
     kind: str
     key: str
     members: tuple[str, ...]
+    rank: str = "same"
 
 
 @dataclass(frozen=True)

@@ -2,11 +2,8 @@
 
 Architecture memo 6.3 seam 2: renderers are registered units with REQUIRED
 capability rows; appliances produce typed display records and ALL pictures
-render through registered renderers. This door closes the measured defect
-that ``dagua`` CAN bypass the capability gate -- its draw path short-circuits
-before ``RenderIR`` exists, so ``RendererCapabilities.require`` never ran.
-``Trace.draw`` now resolves EVERY renderer name here and runs the row-based
-gate before dispatch; the graphviz deep pipeline keeps its existing
+render through registered renderers. ``Trace.draw`` resolves EVERY renderer
+name here and runs the row-based gate before dispatch; the graphviz deep pipeline keeps its existing
 ``RendererCapabilities.require`` check on the built ``RenderIR`` (two layers
 of the same gate, not a replacement).
 
@@ -41,8 +38,7 @@ class RendererEntry:
         Stable renderer name (the ``vis_renderer=`` spelling).
     kind:
         ``"render_ir"`` for renderers consuming the neutral RenderIR through
-        the deep pipeline, ``"trace_direct"`` for renderers with their own
-        trace-consuming entry (dagua today).
+        the deep pipeline.
     """
 
     name: str
@@ -147,20 +143,5 @@ register_renderer(
         "rank_groups": True,
         "images": True,
         "formats": ("pdf", "png", "svg", "dot"),
-    },
-)
-register_renderer(
-    "dagua",
-    RendererEntry(name="dagua", kind="trace_direct"),
-    capabilities={
-        # Honest rows for the experimental GPU layout engine: the encoding
-        # channels refuse today (raise_encoding_dagua_refusal) -- the row is
-        # now the authority the draw entry consults.
-        "encoding_channels": False,
-        "nested_regions": False,
-        "rank_groups": False,
-        "images": False,
-        "formats": ("pdf", "png", "svg"),
-        "experimental_opt_in_required": True,
     },
 )

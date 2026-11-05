@@ -23,20 +23,6 @@
         "reason": "perturbation_changed"
       },
       {
-        "decision": "exempted",
-        "func_name": "none",
-        "op_label": "buffer_4:1",
-        "phase": "replay",
-        "reason": "functionless_source_or_boundary"
-      },
-      {
-        "decision": "exempted",
-        "func_name": "none",
-        "op_label": "buffer_4:1",
-        "phase": "perturbation",
-        "reason": "functionless_source_or_boundary"
-      },
-      {
         "decision": "validated",
         "func_name": "__add__",
         "op_label": "add_1_2:1",
@@ -84,25 +70,9 @@
         "op_label": "batchnorm_1_1:1",
         "phase": "perturbation",
         "reason": "perturbation_changed"
-      },
-      {
-        "decision": "exempted",
-        "func_name": "none",
-        "op_label": "buffer_3:1",
-        "phase": "replay",
-        "reason": "functionless_source_or_boundary"
-      },
-      {
-        "decision": "exempted",
-        "func_name": "none",
-        "op_label": "buffer_3:1",
-        "phase": "perturbation",
-        "reason": "functionless_source_or_boundary"
       }
     ],
-    "exempted_reason_counts": {
-      "functionless_source_or_boundary": 4
-    },
+    "exempted_reason_counts": {},
     "failed_node_count": 0,
     "replayed_node_count": 3,
     "state": "passed",
@@ -943,6 +913,124 @@
     },
     "failed_node_count": 0,
     "replayed_node_count": 3,
+    "state": "passed",
+    "unverified_node_count": 0,
+    "unverified_reason_counts": {}
+  },
+  "tiny_train_batch_norm": {
+    "decisions": [
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1",
+        "phase": "ground_truth",
+        "reason": "ground_truth_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "none",
+        "op_label": "output_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_6:1",
+        "phase": "replay",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_6:1",
+        "phase": "perturbation",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_5:1",
+        "phase": "replay",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "none",
+        "op_label": "buffer_5:1",
+        "phase": "perturbation",
+        "reason": "functionless_source_or_boundary"
+      },
+      {
+        "decision": "validated",
+        "func_name": "identity",
+        "op_label": "buffer_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "identity",
+        "op_label": "buffer_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_2:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_2:1",
+        "phase": "perturbation",
+        "reason": "pre_perturbation_exemption"
+      },
+      {
+        "decision": "exempted",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_2:1",
+        "phase": "perturbation",
+        "reason": "pre_perturbation_exemption"
+      },
+      {
+        "decision": "validated",
+        "func_name": "batch_norm",
+        "op_label": "batchnorm_1_2:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      },
+      {
+        "decision": "validated",
+        "func_name": "add_",
+        "op_label": "add_1_1:1",
+        "phase": "replay",
+        "reason": "replay_matched"
+      },
+      {
+        "decision": "validated",
+        "func_name": "add_",
+        "op_label": "add_1_1:1",
+        "phase": "perturbation",
+        "reason": "perturbation_changed"
+      }
+    ],
+    "exempted_reason_counts": {
+      "functionless_source_or_boundary": 4,
+      "pre_perturbation_exemption": 2
+    },
+    "failed_node_count": 0,
+    "replayed_node_count": 4,
     "state": "passed",
     "unverified_node_count": 0,
     "unverified_reason_counts": {}

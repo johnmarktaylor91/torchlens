@@ -40,7 +40,7 @@ from .._errors import InvalidArgumentError, _actionable_message, _ActionableErro
 from .._extraction_provenance import undeclared_input_block
 from .._io import _json
 from .._utils.tensor_leaves import tensor_payload_bytes
-from .._version import __version__
+from .._vocab._package_version import __version__
 from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
@@ -982,7 +982,7 @@ def _prepare_disk_run(
     torchlens._data_substrate.ExtractionArtifactError
         On a broken ledger prefix.
     torchlens.errors.ArtifactTooOldError
-        On a v1 artifact, which torchlens 2.x wrote.
+        On a v1 artifact, which torchlens 2.37 and earlier wrote.
     """
 
     container_path.mkdir(parents=True, exist_ok=True)

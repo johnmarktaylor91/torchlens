@@ -41,12 +41,14 @@ from ..backends.registry import (
     get_backend_spec,
 )
 from ..recording._halt import StopSignal
+from ._lazy_contexts import lazy_history_of
 from .outcome import (
     CapturePhase,
     demote_outcome,
     safe_exception_str,
     set_capture_phase,
 )
+from .projections import active_recording_state_or_none
 from .session import (
     attach_capture_events_session,
     attach_legacy_capture_session,
@@ -67,6 +69,7 @@ from ._forward_helpers import (
     _clear_saved_activation_dedup_caches,
     _forward_peak_memory_bracket,
     _record_fused_attention_hold,
+    _run_lazy_predicate_forward_with_root_frame,
     _run_predicate_forward_with_root_frame,
     _stamp_host_rng_verdict,
     _structure_only_forward_boundary,
@@ -399,7 +402,7 @@ def _instrument_model(self: "Trace", run: _RunState) -> None:
     """
 
     run.instrumentation = contextlib.ExitStack()
-    with _timed_phase(self, "ctx_build:model_prepare"):
+    with _timed_phase(self, "ctx_build_model_prepare"):
         run.compiled_prep = _enter_instrumentation(self, run, run.instrumentation)
     self._provenance_setup_duration = Duration(time.time() - self._provenance_start_time)
     _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
@@ -502,7 +505,7 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
 
     model = cast(Callable[..., Any], run.model)
     input_args, input_kwargs = run.input_args, cast(dict[Any, Any], run.input_kwargs)
-    with _timed_phase(self, "dispatch:forward_model"):
+    with _timed_phase(self, "dispatch_forward_model"):
         with _forward_peak_memory_bracket(self, run.model_device):
             with run.backend.inference_context(self):
                 self._runnable.rng_monitor_uncertain = True
@@ -531,7 +534,18 @@ def _run_forward(self: "Trace", run: _RunState) -> Any:
         _record_fused_attention_hold(self, run.compiled_prep)
         _log_inputs(self, run)
         if self._options_mode == "predicate":
+            history = lazy_history_of(active_recording_state_or_none())
             with _structure_only_forward_boundary(self):
+                if history is not None:
+                    return _run_lazy_predicate_forward_with_root_frame(
+                        self,
+                        run.backend,
+                        run.model,
+                        run.input_args,
+                        cast(dict[Any, Any], run.input_kwargs),
+                        run.model_device,
+                        history,
+                    )
                 return _run_predicate_forward_with_root_frame(
                     self,
                     run.backend,

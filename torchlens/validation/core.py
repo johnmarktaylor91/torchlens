@@ -78,7 +78,7 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
-from ._perturb import _perturb_layer_outs
+from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs
 from ._pre_replay import (
     CoreBindings,
     _is_provable_functionless_source_or_boundary,
@@ -3546,19 +3546,17 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
     dim or a ``view`` size): the adjacent value is the smallest excursion
     that still guarantees a different input.
 
-    The ``unit_step_up``/``unit_step_down`` strategies move floating parents
-    by a full magnitude (default +-1.0, or ``unit_step_up:<magnitude>`` for
-    the geometric ladder) instead of one representable step. A
-    value-DISCRETIZING child (an integer cast such as ``.long()``,
-    ``floor``/``round``/``trunc``, ``bucketize``, ``round(decimals<0)``) has
-    a dead zone around every quantization point, so a near-constant parent
-    (e.g. an all-zero ``x * 0``) whose calibrated random draw and ULP steps
-    all land inside the zone reads as non-influential even though the edge is
-    real (round-34 Finding B, round-35 R2). A magnitude step is guaranteed to
-    cross the corresponding quantization boundary; elements the dtype cannot
-    move by the magnitude fall back to the minimal step. Integer parents step
-    by the integral magnitude where the dtype range permits; bool parents and
-    unrepresentable integer magnitudes delegate to the minimal strategies.
+    The ``unit_step_up``/``unit_step_down`` strategies move floating parents by a full magnitude
+    (default +-1.0, or ``unit_step_up:<magnitude>`` for the geometric ladder) instead of one
+    representable step. A value-DISCRETIZING child (an integer cast such as ``.long()``,
+    ``floor``/``round``/``trunc``, ``bucketize``, ``round(decimals<0)``) has a dead zone around
+    every quantization point, so a near-constant parent (e.g. an all-zero ``x * 0``) whose
+    calibrated random draw and ULP steps all land inside the zone reads as non-influential even
+    though the edge is real (round-34 Finding B, round-35 R2). A magnitude step is guaranteed to
+    cross the corresponding quantization boundary; elements the dtype cannot move by the magnitude
+    fall back to the minimal step. Integer parents step by the integral magnitude where the dtype
+    range permits; bool parents and unrepresentable integer magnitudes delegate to the minimal
+    strategies.
 
     Parameters
     ----------
@@ -3575,7 +3573,9 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
         Perturbed tensor of the same shape/dtype, every element guaranteed to
         differ from the original where the dtype permits it.
     """
-
+    if tensor.dtype in _UNSIGNED_AS_SIGNED:  # CC+1 essential: uint16/32/64 lack lt/where kernels
+        signed = _directional_step_perturb(tensor.view(_UNSIGNED_AS_SIGNED[tensor.dtype]), strategy)
+        return signed.view(tensor.dtype)
     if strategy == "negate_values":
         # R08 bool-edge probe: crosses any sign-symmetric comparison
         # threshold and flips eq/ne against a nonzero comparand.

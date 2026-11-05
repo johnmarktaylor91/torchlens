@@ -53,7 +53,6 @@ DOCUMENTED-UNSTABLE semantics.
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 from collections.abc import Callable
 from typing import Any
 
@@ -64,7 +63,7 @@ from .._selection.selection import Selection, Selector, Site, _Combinator, _lift
 from .._selection.subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
-from .masked_edit import _masked_factory
+from .masked_edit import _mask_digest, _masked_factory
 from .types import Edit
 
 __all__ = [
@@ -134,7 +133,7 @@ _REFUSALS: dict[str, tuple[str, str]] = {
     "set_direction_mean": (
         _NESTED_WHY,
         "set the component to the population mean with "
-        "fork.do(tl.subspace(site, basis, origin=...), tl.mean_ablate(population, dim=None))",
+        "fork.do(tl.subspace(site, basis, origin=...), tl.mean_ablate(population, dim='members'))",
     ),
     **dict.fromkeys(
         sorted(_NESTED_PROJECTIONS - {"set_direction_mean"}),
@@ -440,15 +439,6 @@ class SubspaceProjection:
             return _hook
 
         return factory
-
-
-def _mask_digest(mask: torch.Tensor) -> str:
-    """Return the sha256 of a bool element mask (shape header plus bytes)."""
-
-    digest = hashlib.sha256()
-    digest.update(repr(tuple(mask.shape)).encode())
-    digest.update(mask.to(torch.uint8).contiguous().numpy().tobytes())
-    return digest.hexdigest()
 
 
 def masked_subspace_edit(edit: Edit, mask: _Mask, site_label: str) -> Edit:

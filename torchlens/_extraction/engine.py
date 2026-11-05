@@ -5,7 +5,7 @@ One manifested order per batch::
     collate -> position/mask validation -> model call -> selected output
             -> pool (captured dtype, raw axes, mask) -> postprocess(output, ctx)
             -> row + logical-shape validation -> per-key save-dtype cast
-            -> CPU-contiguous snapshot -> writer
+            -> contiguous snapshot (host copy in disk mode) -> writer
 
 Every selected output must retain the INPUT batch's row count after
 postprocessing or refuse typed (D13); the batch context carries identity
@@ -32,6 +32,7 @@ from torch import nn
 from torchlens.transforms._errors import TransformContractError
 
 from .._data_classes._layer_sites import layer_site_key
+from .._data_classes._lookup_kinds import _record_view
 from .._data_classes.layer import Layer
 from .._data_substrate import (
     ArtifactWriter,
@@ -43,7 +44,7 @@ from .._extraction_provenance import apply_input_transform
 from .._user_public_impls import trace as _capture_trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..transforms import TensorSpec, TransformContext, TransformPipeline
-from ._engine_batching import _iter_item_batches, _move_envelope_to_device
+from ._engine_batching import _iter_item_batches, _move_envelope_to_device, _snapshot
 from ._front_door import _extract_layers_with_trace, _matching_saved_layer_labels
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
 from .dtype_policy import cast_for_store
@@ -103,6 +104,8 @@ class _RunPlan:
         Number of stimuli per forward pass.
     device:
         Optional device for stimuli movement.
+    host_copy:
+        Host-copy stored batches (disk mode) or keep them on the capture device (memory mode).
     pipelines:
         One coerced transform chain (or ``None``) per output key.
     transform_record:
@@ -178,6 +181,7 @@ class _RunPlan:
     input_opaque: bool = False
     intervention: InterventionPlan | None = None
     store_input_ids: bool = False
+    host_copy: bool = True
 
     @property
     def resume_verifiable(self) -> bool:
@@ -764,16 +768,15 @@ def _resolve_trace_outputs(
     views: dict[str, Any] = {}
     if plan.layers_kind == "mapping":
         for label, pattern in plan.layer_plan.items():
-            view = trace[pattern]
+            views[label] = view = _record_view(trace, pattern)  # a module names its output Op
             outputs[label] = view.out
-            views[label] = view
         return outputs, views
     for pattern in plan.layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
         for match in matches:
-            view = trace[match]
+            view = _record_view(trace, match)
             outputs[match] = view.out
             views[match] = view
     return outputs, views
@@ -915,10 +918,9 @@ def _store_batch(
 ) -> tuple[dict[str, torch.Tensor | RaggedBatch], dict[str, dict[str, Any]]]:
     """Run the store pipeline on one batch (D13 order after the model call).
 
-    pool (captured dtype, raw axes, mask) -> postprocess -> row validation
-    -> ragged trim -> save-dtype cast -> CPU-contiguous snapshot, with the
-    D7 value reduction computed ON the tensor's device BEFORE the host
-    copy.
+    pool (captured dtype, raw axes, mask) -> postprocess -> row validation -> ragged trim
+    -> save-dtype cast -> snapshot (a host copy in disk mode); the D7 value reduction runs
+    ON the tensor's device BEFORE any host copy, so a later corruption stays catchable.
 
     Parameters
     ----------
@@ -964,7 +966,7 @@ def _store_batch(
             if plan.checksums != "none":
                 facts["value_reduction"] = value_reduction(key, values)
             processed[key] = RaggedBatch(
-                values=values.detach().cpu().contiguous(),
+                values=_snapshot(values, host_copy=plan.host_copy),
                 offsets=carrier.offsets,
                 row_shapes=carrier.row_shapes,
             )
@@ -975,11 +977,8 @@ def _store_batch(
             "dtype": str(stored.dtype),
         }
         if plan.checksums != "none":
-            # D7: the order-sensitive value reduction runs ON the tensor's
-            # device BEFORE the host copy, so a corruption between here and
-            # the written file is catchable later.
             facts["value_reduction"] = value_reduction(key, stored)
-        processed[key] = stored.detach().cpu().contiguous()
+        processed[key] = _snapshot(stored, host_copy=plan.host_copy)
         key_facts[key] = facts
     validate_row_counts(context, processed)
     return processed, key_facts
@@ -1556,7 +1555,7 @@ def _store_input_ids(
     geometry = run_state.get("current_geometry")
     if trimmed and geometry is not None:
         carrier = trim_batch(INPUT_IDS_KEY, ids, cast("dict[str, Any]", geometry))
-        values = carrier.values.detach().cpu().contiguous()
+        values = _snapshot(carrier.values, host_copy=plan.host_copy)
         facts: dict[str, Any] = {
             "layout": "trimmed",
             "per_stimulus_shape": [None],
@@ -1572,7 +1571,7 @@ def _store_input_ids(
         facts = {"per_stimulus_shape": list(ids.shape[1:]), "dtype": str(ids.dtype)}
         if plan.checksums != "none":
             facts["value_reduction"] = value_reduction(INPUT_IDS_KEY, ids)
-        stored = ids.detach().cpu().contiguous()
+        stored = _snapshot(ids, host_copy=plan.host_copy)
     validate_row_counts(context, {INPUT_IDS_KEY: stored})
     return stored, facts
 
@@ -1588,9 +1587,10 @@ def run_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
     Returns
     -------
     dict[str, torch.Tensor]
-        Concatenated outputs keyed as disk mode keys them.
+        Concatenated outputs keyed as disk mode keys them, on the model's device (no host copy).
     """
 
+    plan = dataclasses.replace(plan, host_copy=False)
     if plan.device is not None:
         plan.model.to(plan.device)
     accumulator: dict[str, list[torch.Tensor]] = {}

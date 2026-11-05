@@ -18,8 +18,8 @@ import copy
 import threading
 import weakref
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager
-from functools import cache
+from contextlib import AbstractContextManager, contextmanager, nullcontext
+from functools import cache, partial
 from math import prod
 from typing import Any, Literal, cast, get_args
 
@@ -825,8 +825,7 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         return torch.cat([left, right], dim=0)
 
 
-@contextmanager
-def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
+def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[Any]:
     """Pause TorchLens dispatch modes around a strict-subclass ``clone()``, when needed.
 
     Torch's default ``__torch_function__`` subclass-return conversion calls
@@ -847,10 +846,11 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
     x:
         Tensor about to be cloned with its own type preserved.
 
-    Yields
-    ------
-    None
-        The ``clone()`` call this brackets.
+    Returns
+    -------
+    AbstractContextManager[Any]
+        The bracket for the ``clone()`` call: a no-op ``nullcontext`` unless a
+        pause is needed, so the common case enters no generator per payload copy.
     """
 
     if (
@@ -858,15 +858,13 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
         or type(x) is torch.Tensor
         or type(x) is torch.nn.Parameter
     ):
-        yield
-        return
+        return nullcontext()
     # Deferred: backends.torch is upward of utils in the layer map (C01 item
     # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
     # `import torchlens` never pays for it.
     from ._dispatch_modes import pause_own_dispatch_modes
 
-    with pause_own_dispatch_modes():
-        yield
+    return pause_own_dispatch_modes()
 
 
 # Memory format for every payload copy. ``preserve_format`` gives a
@@ -982,9 +980,10 @@ _DEFER_GRAD_ENABLED: bool = closed_bool_env("TORCHLENS_DEFER_GRAD_PAYLOADS")
 # storage key -> list of pending aliases. NEVER rebound (only mutated), so the
 # wrapper can bind the dict object once and use plain truthiness on its hot
 # path. Keys are (storage_data_ptr, storage_nbytes, device_str): unique among
-# live storages, and every pending alias keeps its storage alive. Dead entries
-# (payloads the capture discarded, dropped traces) are pruned lazily on lookup
-# and at every window arm.
+# live storages, and every pending alias keeps its storage alive. A dead alias's
+# key goes with its last live alias (weakref callback): while the registry holds
+# anything, every mutating wrapped call (``Tensor.__deepcopy__`` runs ``set_``)
+# searches its arguments, so a dropped trace must leave it empty.
 _DEFER_PENDING: dict[tuple[int, int, str], list["_PendingPayloadAlias"]] = {}
 
 # Window state, armed by the torch wrapper strictly around the payload-saving
@@ -1137,9 +1136,10 @@ def _try_defer_payload_alias(
         version = int(alias._version)
     except Exception:
         return None
-    _DEFER_PENDING.setdefault(key, []).append(
-        _PendingPayloadAlias(weakref.ref(alias, _note_dead_deferred_alias), version)
-    )
+    ref = weakref.ref(alias, partial(_drop_dead_deferred_alias, key))
+    entries = _DEFER_PENDING.get(key) or []
+    entries.append(_PendingPayloadAlias(ref, version))
+    _DEFER_PENDING[key] = entries  # stored after the append: a death callback may pop ``key``
     return alias
 
 
@@ -1251,35 +1251,32 @@ def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> boo
         return False
 
 
-# Dead registry entries are FUNCTIONALLY harmless — materialization skips
-# dead weakrefs, and a reused (ptr, nbytes, device) key simply appends fresh
-# entries after the dead ones — so pruning is memory hygiene only, gated on
-# this threshold to keep window arming O(1) per op.
+# Sweeps catch dead keys a racing death callback left; gated to keep arming O(1).
 _DEFER_PRUNE_THRESHOLD = 2048
 
-# Next-prune size: doubles away from the live population after each sweep.
-# A fixed threshold alone is quadratic on large captures: once the LIVE
-# pending population crosses it, every per-op window arming re-swept the
-# whole registry and removed nothing (measured O(n^2), the dominant term at
-# 4k ops). Doubling makes total prune work linear in total insertions.
+# Next-prune size: doubles away from the live population after each sweep, so
+# total prune work is linear in insertions (a fixed threshold re-swept a large
+# live registry at every op arming: measured O(n^2) at 4k ops).
 _defer_prune_watermark = _DEFER_PRUNE_THRESHOLD
 
-# Registered-alias deaths since the last sweep, counted O(1) by weakref
-# callback. The doubling watermark alone never DECAYS: after one large
-# capture pushed it up, a registry that then went mostly DEAD but sat below
-# the doubled key-count watermark was never re-swept, pinning the dead
-# entries (and their key tuples) indefinitely (r3 bounds-gap finding on the
-# wave's own O(n^2)-kill). Crossing _DEFER_PRUNE_THRESHOLD dead entries
-# forces a sweep regardless of the watermark; the post-sweep watermark
-# reset (2x the now-live population) then decays back down. Amortization
-# holds: each forced sweep requires THRESHOLD fresh deaths.
+# Registered-alias deaths since the last sweep, counted by the weakref
+# callback. The doubling watermark alone never decays, so crossing
+# _DEFER_PRUNE_THRESHOLD deaths forces a sweep regardless of it; the
+# post-sweep reset (2x the live population) then decays back down.
 _defer_dead_alias_count = 0
 
 
-def _note_dead_deferred_alias(_ref: "weakref.ref[torch.Tensor]") -> None:
-    """Weakref callback: count one registered alias death (O(1))."""
+def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
+    """Weakref callback: count one alias death; drop ``key`` once no alias there lives."""
     global _defer_dead_alias_count
     _defer_dead_alias_count += 1
+    entries = _DEFER_PENDING.get(key)
+    if entries is not None:
+        live = [e for e in entries if e.ref() is not None]
+        if not live:
+            _DEFER_PENDING.pop(key, None)
+        elif len(live) != len(entries):
+            _DEFER_PENDING[key] = live
 
 
 def prune_dead_deferred_entries() -> None:

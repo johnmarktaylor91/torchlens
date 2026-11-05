@@ -302,7 +302,7 @@ def _split_mixed_inputs(inputs: Any) -> tuple[Sequence[Any], Mapping[Any, Any]]:
     ``forward(x, *, add)``) cannot be rebound from a bare sequence (fails the
     keyword site) or a bare mapping (fails positional binding). The runnable
     executor accepts a single combined ``{"args": [...], "kwargs": {...}}``
-    mapping so mixed captures have a representable ``run(inputs=)`` spelling.
+    mapping so mixed captures have a representable ``run_transaction(inputs=)`` spelling.
     """
 
     if not isinstance(inputs, Mapping) or not set(inputs).issubset({"args", "kwargs"}):

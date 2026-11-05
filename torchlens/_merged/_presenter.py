@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .._capture.outcome import outcome_for
+from ._display import _ambiguous_rank_message
 from ._engine import JoinKey, JoinRecord, MergeDerivation, derive_merge
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import (
@@ -534,12 +535,7 @@ class MergedTrace:
         if len(hits) > 1:
             from .._errors import AmbiguousOpLookupError
 
-            spellings = ", ".join(f"r{rank_id}/{item}" for rank_id in sorted(hits))
-            raise AmbiguousOpLookupError(
-                f"Label {item!r} resolves on {len(hits)} ranks; disambiguate "
-                f"with a rank-qualified label ({spellings}) or use "
-                "merged.at() for the cross-rank fan."
-            )
+            raise AmbiguousOpLookupError(_ambiguous_rank_message(item, hits))
         return next(iter(hits.values()))
 
     def _split_sugar(self, item: str) -> tuple[int | None, str]:

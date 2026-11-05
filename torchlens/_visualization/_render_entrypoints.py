@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from ._backward_rows import backward_rows_for
+from ._edge_shapes import _with_edge_shapes
 from ._legend import add_legend_table_to_graphviz, backward_key_sections
 from ._render_common import *
 from ._render_dot import *
@@ -284,7 +285,7 @@ def render_backward_graph(
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"
-    with _timed_phase(self, "render:graphviz:backward"):
+    with _timed_phase(self, "render_graphviz_backward"):
         try:
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
             report = GraphvizRenderer().render(render_ir, target)
@@ -348,6 +349,7 @@ def render_combined_graph(
     intervening_cluster: InterveningClusterMode = "upstream",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
+    show_edge_shapes: bool = False,
     show_legend: bool | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.
@@ -370,20 +372,18 @@ def render_combined_graph(
         If True, save without opening a viewer.
     vis_fileformat:
         Output format.
-    direction:
-        Layout direction.
-    vis_mode:
-        Combined rendering currently supports only ``"unrolled"``.
+    direction, vis_mode:
+        Layout direction; combined rendering supports only ``"unrolled"`` mode.
     intervening_cluster:
         Placement mode for grad_fns that have no corresponding forward op.
     show_buffer_layers:
         Buffer visibility mode for the forward side.
+    show_edge_shapes:
+        Label forward edges with producer output shapes.
     bwd:
         Optional one-based backward pass number or numbers to render.
     show_legend:
-        Tri-state. ``None`` (AUTO) and ``True`` render the in-frame backward
-        key for the styles actually painted (vizmech item 17); ``False``
-        suppresses it.
+        ``False`` suppresses the key; ``None`` and ``True`` show painted styles.
 
     Returns
     -------
@@ -399,8 +399,7 @@ def render_combined_graph(
     """
 
     if vis_mode == "rolled":
-        # Deliberate not-yet gate. The NotImplementedError type is pinned public
-        # behavior; at least name the supported spelling so the user knows the
+        # Preserve the public NotImplementedError and name the supported
         # way out (R65 -- retyping with a code is a public API decision).
         raise NotImplementedError(
             "draw_combined does not support vis_mode='rolled' yet; pass "
@@ -464,6 +463,7 @@ def render_combined_graph(
     context = RenderContext(
         vis_mode="unrolled",
         show_buffer_layers=show_buffer_layers,
+        show_edge_shapes=show_edge_shapes,
         node_spec_fn=node_spec_fn,
         overrides=overrides,
         direction=direction,
@@ -554,6 +554,7 @@ def render_combined_graph(
         intervening_node_names=intervening_names,
         dot_statements=tuple(ir_builder.calls),
     )
+    render_ir = _with_edge_shapes(self, render_ir)
     target = RenderTarget(
         outpath=vis_outpath,
         fileformat=vis_fileformat,
@@ -564,7 +565,7 @@ def render_combined_graph(
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"
-    with _timed_phase(self, "render:graphviz:combined"):
+    with _timed_phase(self, "render_graphviz_combined"):
         try:
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
             report = GraphvizRenderer().render(render_ir, target)

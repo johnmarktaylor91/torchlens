@@ -16,7 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPreprocessing
+from torchlens.postprocessing import ResolvedPostprocessing
 
 
 class TinyClassifier(nn.Module):
@@ -70,7 +71,7 @@ def text_to_tensor(text: str) -> torch.Tensor:
 def register_custom_decoder() -> None:
     """Register a demo output detector with a custom label bank."""
 
-    @tl._autoroute.output.register(name="demo_custom_labels", priority=5)
+    @tl.postprocessing.register(name="demo_custom_labels", priority=5)
     def demo_custom_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
         """Resolve the demo-only ``decode_output(style='demo_custom_labels')`` style."""
 
@@ -150,7 +151,7 @@ def main() -> None:
             style="demo_custom_labels",
         )
     finally:
-        tl._autoroute.output.unregister("demo_custom_labels")
+        tl.postprocessing.unregister("demo_custom_labels")
 
     text_trace = tl.trace(
         model,

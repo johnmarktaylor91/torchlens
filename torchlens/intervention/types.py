@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from .._entry_refusals import require_hook_factory
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -26,7 +27,10 @@ from .._selection.target import (
     TensorSliceSpec as TensorSliceSpec,
 )
 from .._utils._tensor_layout import CaptureLayout
+from . import _display
+from ._edit_copy import deepcopy_edit
 from ._hook_spec_match import _hook_spec_matches
+from .errors import _refuse_placeholder_edit
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -110,13 +114,15 @@ class Edit:
 
         Raises
         ------
+        NonExecutableSpecError
+            If the spec is an audit-only placeholder with no runtime factory.
         TypeError
-            If the spec does not carry a runtime factory.
+            If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
-            raise TypeError(f"Edit {self.name!r} has no hook factory")
-        return self.factory()
+            _refuse_placeholder_edit(self.name, self.portability)
+        return require_hook_factory(self.name, self.factory)()
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state, dropping factories pickle cannot carry.
@@ -165,14 +171,7 @@ class Edit:
         factory-dropping pickle path.
         """
 
-        import copy as _copy
-
-        cls = type(self)
-        clone = cls.__new__(cls)
-        memo[id(self)] = clone
-        for key, value in self.__dict__.items():
-            object.__setattr__(clone, key, _copy.deepcopy(value, memo))
-        return clone
+        return deepcopy_edit(self, memo)
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +293,9 @@ class CapturedArgTemplate:
     kwargs: tuple[tuple[str, ArgComponent], ...] = ()
     func_id: FunctionRegistryKey | None = None
     notes: tuple[str, ...] = ()
+
+    __repr__ = _display.template_repr
+    __str__ = _display.template_card
 
 
 #: The frozen replay-template records; a rerun refresh rebuilds these field by field.
@@ -423,19 +425,8 @@ class EdgeUseRecord(_SelectionOperand):
 
         return _selection_from_edge(self)
 
-    def __repr__(self) -> str:
-        """Designed per-edge line (F10): source -> target (arg k) + relations.
-
-        The storage relation prints only when POPULATED (``view``/``copy``);
-        the honest sentinel ``unknown`` stays silent rather than reading as
-        a fact (lovely bug 24's sentinel discipline).
-        """
-
-        path = ".".join(str(component) for component in self.arg_path) or "?"
-        line = f"edge {self.parent_label} -> {self.child_label} ({self.arg_kind} {path})"
-        if self.view_or_copy in ("view", "copy"):
-            line += f" [{self.view_or_copy}]"
-        return line
+    __repr__ = _display.edge_repr
+    __str__ = _display.edge_card
 
 
 @dataclass
@@ -675,6 +666,9 @@ class FrozenInterventionSpec:
     hook_specs: tuple[FrozenHookSpec, ...] = ()
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
+
+    __repr__ = _display.frozen_spec_repr
+    __str__ = _display.frozen_spec_card
 
 
 class Relationship(str, Enum):

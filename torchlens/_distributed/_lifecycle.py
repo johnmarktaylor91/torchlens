@@ -1,8 +1,6 @@
 """Arming, group-lifecycle wraps, restricted seeding, and seq counters.
-
 ``torchlens.distributed.arm()`` is the explicit process-start opt-in for
 distributed capture. Arming:
-
 1. derives and verifies the five-namespace collective recognizer (fail-closed
    arm-time census, :mod:`._recognizer`);
 2. installs the group-lifecycle wraps IMMEDIATELY (no first-capture laziness):
@@ -11,7 +9,6 @@ distributed capture. Arming:
    where present) are wrapped observationally;
 3. stamps the install-epoch record -- ``armed_before_any_group`` when no
    process group has ever been observed in this process, else ``seeded``.
-
 Group identity is ``group_uid = (membership_digest, lifetime_ordinal)``
 (exactly two fields). Ordinals are TorchLens-owned, monotone, ever-created:
 unobserved DESTRUCTION is harmless (a dead ordinal is simply retired), and
@@ -36,6 +33,7 @@ from typing import Any
 
 import torch
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..errors._base import CompatibilityError
 from ._ledger import (
     GroupLifecycleEvent,
@@ -125,6 +123,8 @@ class ArmingRecord:
 @dataclass
 class _ArmedState:
     """Process-global armed distributed-capture state."""
+
+    __repr__ = short_dataclass_repr
 
     arming: ArmingRecord
     recognizer: CollectiveRecognizer

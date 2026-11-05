@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any as _Any
 
 import torch
 
+from .._data_classes._lookup_kinds import _record_view
 from .._data_classes.trace import Trace
 from .._errors import AmbiguousOpLookupError
 from .._extract_refusals import (
@@ -23,6 +24,7 @@ from .._extract_refusals import (
 from .._selection.selectors import FacetSelector
 from .._trace_selector_helpers import canonical_module_site_key
 from .._user_public_impls import trace as _capture_trace
+from .._utils._display_errors import candidate_keys, lookup_message
 from ..options import CaptureOptions as _LazyCaptureOptions
 
 if TYPE_CHECKING:
@@ -36,7 +38,7 @@ def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
 
     if not isinstance(trace, Trace):
         return []
-    return list(trace._suggest_layer_labels(str(query)))
+    return candidate_keys(list(trace._suggest_layer_labels(str(query))), trace._layer_dict_all_keys)
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -56,8 +58,12 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """
 
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+        return lookup_message(
+            f"Layer {name!r} not found.",
+            suggestions,
+            "pass an in-range integer, a layer label, or a module address.",
+            query=name,
+        )
     return f"Layer {name!r} not found."
 
 
@@ -254,7 +260,7 @@ def _extract_with_facets(
             outputs[key], views[key] = facet.value, facet
         else:
             outputs[key] = _out_from_log(trace, str(value))
-            views[key] = trace[str(value)]
+            views[key] = _record_view(trace, str(value))
     return trace, outputs, views
 
 
@@ -303,7 +309,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            views[label] = _record_view(trace, pattern)  # the plain door canonicalizes the name
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -313,7 +319,7 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = trace[match]
+            views[match] = _record_view(trace, match)
     return trace, outputs, views
 
 
@@ -325,6 +331,12 @@ def extract(
     detach_saved_activations: bool = True,
 ) -> dict[str, torch.Tensor]:
     """Return saved outs for many layers.
+
+    ``tl.extract`` is the narrow door: it takes only ``model``, ``inputs``,
+    ``layers`` and ``detach_saved_activations``. Every other capture option
+    (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
+    ``episode=``, storage) belongs to ``tl.trace``; call it and read
+    ``trace[label].out`` when you need one of them.
 
     Parameters
     ----------

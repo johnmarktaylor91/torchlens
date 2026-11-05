@@ -13,6 +13,7 @@ from ..._data_classes.trace import (
     Trace,
 )
 from ..._deprecations import MISSING, MissingType
+from ..._input_coerce import _materialize_image_paths
 from ..._literals import (
     OutputDeviceLiteral,
     _ActivationPostfunc,
@@ -189,19 +190,19 @@ def _trace_mlx_model(
     if capture_options.input_transform is not None:
         raw_input = input_args
         transformed_input = capture_options.input_transform(input_args)
+        # As on the torch door: the caller's ``input_kwargs`` survive the transform.
         if isinstance(transformed_input, collections.abc.Mapping):
             model_input_args = []
-            model_input_kwargs = dict(transformed_input)
+            model_input_kwargs = {**dict(transformed_input), **(input_kwargs or {})}
         else:
             model_input_args = transformed_input
-            model_input_kwargs = None
 
     backend = MLXBackend()
     trace = backend.capture_trace(
         model,
         model_input_args,
         model_input_kwargs,
-        layers_to_save=capture_options._layers_to_save,
+        save=capture_options._layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         activation_transform=save_options.activation_transform,
@@ -672,7 +673,10 @@ def _dispatch_trace(
     """
 
     model = public_trace_kwargs["model"]
-    input_args = public_trace_kwargs["input_args"]
+    # A path to an image file is opened here, before routing, so it reaches
+    # the image detectors as an image instead of the text path as a string.
+    input_args = _materialize_image_paths(model, public_trace_kwargs["input_args"])
+    public_trace_kwargs["input_args"] = input_args
     input_kwargs = public_trace_kwargs["input_kwargs"]
     chunk_size = public_trace_kwargs["chunk_size"]
     capture = public_trace_kwargs["capture"]

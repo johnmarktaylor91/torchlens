@@ -187,7 +187,7 @@ def capture_concrete(  # noqa: PLR0913 -- the ONE capture door: a concrete plan 
     kwargs.setdefault("capture", CaptureOptions(inference_only=True))
     state_hash = state_dict_hash(model) if verify_state else None
     training_flags = [(module, module.training) for module in model.modules()]
-    cpu_rng = torch.get_rng_state()
+    cpu_rng = torch.default_generator.get_state()
     from .._utils.rng import _snapshot_cuda_rng_states
 
     cuda_rng = _snapshot_cuda_rng_states() or None

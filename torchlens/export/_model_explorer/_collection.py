@@ -182,7 +182,7 @@ def _episode_ledger(log: Any) -> dict[str, Any] | None:
 def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
     """Build the shared ``""`` provenance facts (memo D7 disclosure block)."""
 
-    from ..._version import __version__
+    from ..._vocab._package_version import __version__
 
     facts: dict[str, str] = {
         "produced_by": f"torchlens {__version__}",

@@ -208,7 +208,7 @@ class PreviewTraceOptionPolicy:
     input_kwargs_message:
         Error message for keyword forward inputs, or ``None`` if allowed.
     full_save_message:
-        Error message when ``layers_to_save`` is not full-save compatible.
+        Error message when ``save`` is not the full-save ``"all"``.
     rejected_truthy_messages:
         Option-specific messages for unsupported truthy options.
     output_device_message:
@@ -501,7 +501,10 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 
 MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="MLX",
-    full_save_message="MLX backend preview does not support layers_to_save; use static save= selectors.",
+    full_save_message=(
+        "MLX backend preview capture_trace takes only save='all'; pass static save= "
+        "selectors through tl.trace instead."
+    ),
     rejected_truthy_messages={
         "save_grads": "MLX backend preview does not support save_grads; backward capture is unavailable.",
     }
@@ -760,12 +763,12 @@ def reject_unsupported_trace_options(
             backend=policy.backend_name,
             option="input_kwargs",
         )
-    if policy.full_save_message is not None and options.get("layers_to_save") not in ("all", None):
+    if policy.full_save_message is not None and options.get("save") not in ("all", None):
         raise BackendUnsupportedError(
             policy.full_save_message,
-            code=_option_refusal_code("layers_to_save"),
+            code=_option_refusal_code("save"),
             backend=policy.backend_name,
-            option="layers_to_save",
+            option="save",
         )
     _reject_truthy_trace_options(options, policy, spec)
     if policy.output_device_message is not None and options.get("output_device") != "same":

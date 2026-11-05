@@ -95,6 +95,16 @@ Inside a live ``Function.apply`` frame only :data:`EXPORT_FUNC_NAMES` mark the f
 as leaving torch: ``tolist`` is metadata inside most Functions, never a kernel exit.
 """
 
+FILE_LOAD_FUNC_NAMES = frozenset({"load"})
+"""``torch.load`` / ``torch.serialization.load``: wrapped so a capture notes the call.
+
+The load records no op of its own, and replay never resolves it (``_callable_safety``), so the
+loaded tensor stays sourceless; the provenance warning names the load (exclusion on record).
+"""
+
+BOUNDARY_NOTE_FUNC_NAMES = PLAIN_EXPORT_FUNC_NAMES | FILE_LOAD_FUNC_NAMES
+"""Wrapped names whose wrapper reports through :func:`note_function_boundary`."""
+
 _FRAMES: list[set[str]] = []
 """Export names seen inside each live ``Function.apply`` frame, innermost last."""
 
@@ -139,6 +149,25 @@ def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
     trace = _active_plain_capture()
     if trace is not None and args:
         note_plain_export(trace, name, args[0])
+
+
+def note_function_boundary(name: str, args: tuple[Any, ...] = ()) -> None:
+    """Record an export (:func:`note_function_export`) or a file load in the live capture.
+
+    Parameters
+    ----------
+    name:
+        Wrapped function name, one of :data:`BOUNDARY_NOTE_FUNC_NAMES`.
+    args:
+        The call's positional arguments.
+    """
+
+    if name not in FILE_LOAD_FUNC_NAMES:
+        note_function_export(name, args)
+        return
+    trace = _active_plain_capture()
+    if trace is not None:
+        trace.__dict__["_torch_file_loads"] = True
 
 
 def _active_plain_capture() -> Any | None:

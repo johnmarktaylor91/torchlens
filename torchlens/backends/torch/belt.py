@@ -42,6 +42,7 @@ torch.frombuffer, torch.Tensor.as_subclass, torch.Tensor._make_subclass}``
 
 from __future__ import annotations
 
+import atexit
 import os
 import sys
 import tempfile
@@ -106,8 +107,10 @@ class _ProbeSubTensor(torch.Tensor):
 def _from_file_args() -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Build args/kwargs for the ``torch.from_file`` probe, backed by a temp file.
 
-    The caller removes the temporary path after the probe call. ``shared=False``
-    means the returned tensor does not require the pathname to remain present.
+    The caller removes the temporary path after the probe call, once the
+    returned tensor is released (``_run_probe``): its storage maps the file,
+    and Windows refuses to delete a mapped file. ``shared=False`` means the
+    returned tensor does not require the pathname to remain present.
     """
 
     array = np.array([0.25, 0.5], dtype=np.float32)
@@ -241,6 +244,82 @@ def _resolve_namespace(namespace_name: str) -> Any | None:
     return obj
 
 
+_deferred_probe_paths: list[str] = []
+"""Probe temp files whose removal the OS refused; retried later and at exit."""
+
+_deferred_cleanup_registered = False
+
+
+def _retry_deferred_probe_files() -> None:
+    """Retry removing probe temp files whose first removal the OS refused."""
+
+    pending = list(_deferred_probe_paths)
+    _deferred_probe_paths.clear()
+    for path in pending:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            _deferred_probe_paths.append(path)
+
+
+def _remove_probe_file(path: str) -> None:
+    """Remove a probe temp file; defer removal when the OS refuses it.
+
+    Windows refuses to delete a file while any handle or mapping still holds
+    it (``PermissionError``), and a scanner or indexer can hold
+    one briefly even after the probe released its own. The probe's
+    classification is already settled when this runs, so a refused removal
+    (any ``OSError`` other than a missing file) never changes the belt report
+    or fails the capture: the path is queued and retried on the next removal
+    and once more at interpreter exit.
+    """
+
+    global _deferred_cleanup_registered
+    _retry_deferred_probe_files()
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        return
+    except OSError:
+        _deferred_probe_paths.append(path)
+        if not _deferred_cleanup_registered:
+            atexit.register(_retry_deferred_probe_files)
+            _deferred_cleanup_registered = True
+
+
+def _run_probe(
+    namespace_name: str,
+    func_name: str,
+    recipe: Callable[[], tuple[tuple[Any, ...], dict[str, Any]]],
+    original: Any,
+) -> tuple[int, bool]:
+    """Call one candidate under the counting mode; return (mode calls, touches tensor).
+
+    The probe result is reduced to these two facts INSIDE this frame, so the
+    returned tensor (for ``from_file``, a tensor whose storage maps the temp
+    file) is released before the temp file is removed. Removing a file that a
+    live mapping still holds raises ``PermissionError`` on Windows.
+    """
+
+    mode = _CountingMode()
+    cleanup_path: str | None = None
+    try:
+        with _state.pause_logging(), _probe_rng_bracket():
+            args, kwargs = recipe()
+            if (namespace_name, func_name) == ("torch", "from_file"):
+                cleanup_path = str(args[0])
+            with mode:
+                result = original(*args, **kwargs)
+            touches_tensor = _touches_tensor(result, original)
+            del result
+    finally:
+        if cleanup_path is not None:
+            _remove_probe_file(cleanup_path)
+    return mode.calls, touches_tensor
+
+
 def _derive() -> tuple[BeltReport, dict[int, Any]]:
     """Measure the protocol-invisible wrapped set on the running build."""
 
@@ -273,29 +352,16 @@ def _derive() -> tuple[BeltReport, dict[int, Any]]:
         if recipe is None:
             unprobed_candidates.append((namespace_name, func_name))
             continue
-        mode = _CountingMode()
-        cleanup_path: str | None = None
         try:
-            with _state.pause_logging(), _probe_rng_bracket():
-                args, kwargs = recipe()
-                if (namespace_name, func_name) == ("torch", "from_file"):
-                    cleanup_path = str(args[0])
-                with mode:
-                    result = original(*args, **kwargs)
+            mode_calls, touches_tensor = _run_probe(namespace_name, func_name, recipe, original)
         except Exception as exc:
             probe_failures.append((namespace_name, func_name))
             probe_failure_details.append((namespace_name, func_name, repr(exc)))
             continue
-        finally:
-            if cleanup_path is not None:
-                try:
-                    os.unlink(cleanup_path)
-                except FileNotFoundError:
-                    pass
-        if mode.calls:
+        if mode_calls:
             probed_visible.append((namespace_name, func_name))
             continue
-        if not _touches_tensor(result, original):
+        if not touches_tensor:
             continue
         members.append((namespace_name, func_name))
         wrapper = _state._orig_to_decorated.get(id(original))
@@ -415,7 +481,11 @@ def _wrapped_callable_replacement(value: Any, member_map: dict[int, Any] | None)
 
     if member_map and (member := member_map.get(id(value))) is not None:
         return member
-    if isinstance(value, type) or not callable(value):
+    # ``issubclass(type(value), ...)`` reads the real type slot; ``isinstance``
+    # falls back to ``value.__class__``, which a module-global stub whose
+    # ``__getattribute__`` always raises turns into an aborted wrap (shap
+    # without matplotlib binds ``shap.plots`` to such an object).
+    if issubclass(type(value), type) or not callable(value):
         return None
     decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
     wrapper = orig_to_decorated.get(id(value))

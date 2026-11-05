@@ -268,6 +268,10 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
         # "warned"-shaped, but a test that degrades arming would otherwise
         # leak its reason into every later auto_arm_degradation() read.
         ("torchlens._distributed._lifecycle", "_AUTO_ARM_DEGRADATION"),
+        # tl.errors.quiet state (walk ruling names.8): a bare quiet() or a
+        # quieted code set in one test would silence every later test's warnings.
+        ("torchlens.errors._base", "_QUIET_CODES"),
+        ("torchlens.errors._quiet", "_QUIET_ALL"),
     }
     expected = discovered | runtime_only | sticky_latches
     assert configured == expected, (

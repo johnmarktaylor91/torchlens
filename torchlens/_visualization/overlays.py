@@ -13,8 +13,9 @@ from .._capture.flops import append_attention_note
 from .._errors import InvalidArgumentError
 from .._selection.selection import Selection, Selector
 from .._utils._multipass_access import get_multipass_attr
-from .._utils.display import format_flops, human_readable_size
+from .._utils.display import format_flops
 from ..errors._base import TorchLensWarning
+from ._label_format import binary_size
 
 OverlayScores = Mapping[str, Any]
 
@@ -279,7 +280,7 @@ def format_overlay_value(name: str, value: Any) -> str:
     if display_name == "time":
         return f"time: {float(value or 0.0) * 1000:.3g} ms"
     if display_name == "bytes":
-        return f"bytes: {human_readable_size(int(value or 0))}"
+        return f"bytes: {binary_size(int(value or 0))}"
     if isinstance(value, float):
         if math.isnan(value):
             return f"{display_name}: nan"

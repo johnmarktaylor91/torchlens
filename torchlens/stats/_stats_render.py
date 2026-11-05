@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 
-from .._utils._sig_format import format_sig
+from .._utils._display_numbers import format_count, format_iec_bytes, format_sig
 from ._tensor_stats import TensorStats
 
 #: The package glyph table IS the ramp and nothing else (D4): nine ASCII
@@ -54,33 +54,6 @@ def format_sampled(value: float, se: float | None, digits: int = 4) -> str:
         return f"~0 (+-{format_sig(2 * se, 1)})"
     supported = int(math.floor(math.log10(abs(value) / se)))
     return format_sig(value, max(1, min(digits, supported)))
-
-
-def format_count(count: int) -> str:
-    """Compact human count (n=803k form; exact below 1000)."""
-
-    if count < 1000:
-        return str(count)
-    for suffix, divisor in (("G", 1e9), ("M", 1e6), ("k", 1e3)):
-        if count >= divisor:
-            scaled = count / divisor
-            if scaled >= 100:
-                return f"{scaled:.0f}{suffix}"
-            return f"{scaled:.3g}{suffix}"
-    return str(count)
-
-
-def format_iec_bytes(nbytes: int) -> str:
-    """IEC byte string (KiB/MiB/GiB), 3 significant digits."""
-
-    value = float(nbytes)
-    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
-        if value < 1024 or unit == "TiB":
-            if unit == "B":
-                return f"{int(value)} B"
-            return f"{value:.3g} {unit}"
-        value /= 1024
-    return f"{int(nbytes)} B"
 
 
 def sparkline(counts: tuple[int, ...], *, style: str = "ascii") -> str:

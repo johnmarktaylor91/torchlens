@@ -8,6 +8,7 @@ import torch
 from torch.nn import functional as F
 
 from ..._data_classes._module_role_hints import multi_output_role_from_path
+from .._call_subject import CallBoundModule, bound_child
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
 
@@ -28,13 +29,27 @@ def child_module(module: Any, child_name: str) -> Any | None:
         return None
     child_address = child_name if module.address == "self" else f"{module.address}.{child_name}"
     try:
-        return trace.modules[child_address]
+        child = trace.modules[child_address]
     except (KeyError, ValueError):
         return None
+    if isinstance(module, CallBoundModule):
+        # One call of a reused module: read the child's call made inside it.
+        return bound_child(module, child)
+    return child
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return an op-anchored spec for a child module's single output."""
+    """Return an op-anchored spec for a child module's single output.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="all")
+    >>> spec = tl.facets.child_output_spec(trace.modules["self"], "0", "demo_recipe")
+    >>> isinstance(spec, tl.facets.FacetSpec)
+    True
+    >>> tl.facets.child_output_spec(trace.modules["self"], "head", "demo_recipe").status
+    'structurally_absent'
+    """
 
     child = child_module(module, child_name)
     if child is None:
@@ -153,6 +168,91 @@ def projection_input_spec(
     return module_input_op_spec(child, recipe_id)
 
 
+#: Output-projection children an attention module may own directly.
+OUTPUT_PROJECTION_CHILD_NAMES = ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o")
+
+#: Hugging Face's wrapped self-attention layout (BERT on every transformers
+#: line, ViT on 4.x): a wrapper holds the q/k/v core under one of these child
+#: names and the output projection at ``output.dense`` beside it.
+WRAPPED_CORE_CHILD_NAMES = ("self", "attention")
+WRAPPED_OUTPUT_PROJECTION = "output.dense"
+
+
+def wrapped_attention_core(module: Any) -> str | None:
+    """Return the child name holding ``query``/``key``/``value`` in a wrapped layout.
+
+    ``None`` when ``module`` is not an HF wrapper (its own children are the
+    projections, or it has no recognised core child).
+    """
+
+    for name in WRAPPED_CORE_CHILD_NAMES:
+        core = child_module(module, name)
+        if core is not None and child_module(core, "query") is not None:
+            return name
+    return None
+
+
+def relays_wrapped_core(module: Any, facet_name: str) -> bool:
+    """Return whether ``module`` wraps an attention core that also serves ``facet_name``.
+
+    Listings with one entry per attention layer skip such a wrapper, so the
+    wrapper and its core count as one layer, and the core keeps the address
+    those listings reported before wrappers had a recipe.
+    """
+
+    core_name = wrapped_attention_core(module)
+    core = child_module(module, core_name) if core_name is not None else None
+    if core is None:
+        return False
+    try:
+        return bool(core.facets.has(facet_name))
+    except Exception:  # noqa: BLE001 -- an unreadable core view cannot claim the facet
+        return False
+
+
+def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
+    """Return module addresses with a facet available, one per attention layer.
+
+    Modules come from ``trace.modules_with_facet``, which skips a reused module
+    without the facet and refuses a shared layer that has it. The root
+    (``self``) is excluded, and so is a wrapper whose core serves the
+    same facet (:func:`relays_wrapped_core`).
+    """
+
+    return [
+        str(module.address)
+        for module in trace.modules_with_facet(facet_name)
+        if getattr(module, "address", None) != "self"
+        and not relays_wrapped_core(module, facet_name)
+    ]
+
+
+def output_projection_child(module: Any) -> Any | None:
+    """Return an attention module's output-projection Module record.
+
+    Looks at the module's own children first, then the wrapped layout: a
+    wrapper's ``output.dense``, or, for the q/k/v core inside a wrapper, the
+    ``output.dense`` sibling the wrapper holds.
+    """
+
+    for name in (*OUTPUT_PROJECTION_CHILD_NAMES, WRAPPED_OUTPUT_PROJECTION):
+        child = child_module(module, name)
+        if child is not None:
+            return child
+    address = getattr(module, "address", None)
+    if not isinstance(address, str) or "." not in address:
+        return None
+    parent_address, own_name = address.rsplit(".", 1)
+    trace = getattr(module, "_source_trace", None)
+    if own_name not in WRAPPED_CORE_CHILD_NAMES or trace is None:
+        return None
+    try:
+        parent = trace.modules[parent_address]
+    except (KeyError, ValueError):
+        return None
+    return child_module(parent, WRAPPED_OUTPUT_PROJECTION)
+
+
 def module_output(module: Any) -> Any | None:
     """Return a module's first-call single output when available."""
 
@@ -236,7 +336,17 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
 
 
 def parameter_spec(module: Any, name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return a read-only spec for a named module parameter."""
+    """Return a read-only spec for a named module parameter.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="all")
+    >>> spec = tl.facets.parameter_spec(trace.modules["0"], "weight", "demo_recipe")
+    >>> isinstance(spec, tl.facets.FacetSpec)
+    True
+    >>> tl.facets.parameter_spec(trace.modules["0"], "gamma", "demo_recipe").status
+    'structurally_absent'
+    """
 
     params = getattr(module, "params", None)
     if params is None:
@@ -266,7 +376,16 @@ def add_if_present(result: dict[str, Any], name: str, value: Any) -> None:
 
 
 def config_value(obj: Any, *names: str) -> Any | AbsenceReason:
-    """Return the first available attribute from an object."""
+    """Return the first available attribute from an object.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> tl.facets.config_value(SimpleNamespace(n_heads=4), "num_heads", "n_heads")
+    4
+    >>> tl.facets.config_value(SimpleNamespace(), "num_heads").status
+    'structurally_absent'
+    """
 
     for name in names:
         if hasattr(obj, name):
@@ -390,18 +509,6 @@ def reshape_heads(
     return value.view(*value.shape[:-1], n_heads, inferred_d_head)
 
 
-def activation_gelu(value: Any) -> Any | AbsenceReason:
-    """Return GELU activation when the value is tensor-like."""
-
-    if isinstance(value, AbsenceReason):
-        return value
-    if isinstance(value, FacetSpec):
-        return FacetSpec.computed(lambda: F.gelu(Facet(value).value), function_id=value.function_id)
-    if isinstance(value, torch.Tensor):
-        return F.gelu(value)
-    return structural("GELU activation operand is not tensor-like")
-
-
 def activation_silu(value: Any) -> Any | AbsenceReason:
     """Return SiLU activation when the value is tensor-like."""
 
@@ -451,7 +558,8 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
     if isinstance(value, MissingFacet):
         return needs_capture(
             value.reason,
-            "reconstruction_ready=True or save_args=True including SDPA arguments",
+            "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+            "capture=tl.options.CaptureOptions(save_args=True) including SDPA arguments",
         )
     return value
 
@@ -466,13 +574,15 @@ def fused_sdpa_pattern(module: Any) -> Any:
     return needs_capture(
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
-        f"{value.detail} To READ pattern/scores/z, re-run with reconstruction_ready=True "
-        "(or save_args=True). To EDIT the pattern, capture a model that runs eager / "
+        f"{value.detail} To READ pattern/scores/z, re-run as "
+        "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) (or "
+        "capture=tl.options.CaptureOptions(save_args=True)). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "
         "attn_implementation='eager' (AutoModel.from_pretrained(..., attn_implementation='eager')). "
         "The reconstructed pattern is read-only by design: editing it would silently change the "
         "attention kernel, so capture eager for a consistent baseline.",
-        "reconstruction_ready=True or save_args=True including SDPA arguments",
+        "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+        "capture=tl.options.CaptureOptions(save_args=True) including SDPA arguments",
     )
 
 

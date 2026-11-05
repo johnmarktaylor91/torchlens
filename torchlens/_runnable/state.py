@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -39,6 +38,7 @@ from . import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from .host_budget import _probe_host_memory_budget_bytes
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -1872,7 +1872,7 @@ def _host_memory_budget_scope() -> Iterator[None]:
 
 
 def _host_memory_budget_bytes() -> int | None:
-    """Return available host memory plus free swap, or ``None`` when unprobeable."""
+    """Return the host allocation budget (:mod:`.host_budget`), or ``None`` when unprobeable."""
 
     cache = _HOST_MEMORY_BUDGET_CACHE.get()
     if cache is not None and "host" in cache:
@@ -1883,58 +1883,13 @@ def _host_memory_budget_bytes() -> int | None:
     return budget
 
 
-def _probe_host_memory_budget_bytes() -> int | None:
-    """Probe available host memory plus free swap without memoization."""
-
-    if sys.platform.startswith("linux"):
-        try:
-            proc_fields: dict[str, int] = {}
-            with open("/proc/meminfo", encoding="ascii") as handle:
-                for line in handle:
-                    name, separator, rest = line.partition(":")
-                    if name not in {"MemAvailable", "SwapFree"}:
-                        continue
-                    parts = rest.split()
-                    if separator != ":" or len(parts) != 2 or not parts[0].isdigit():
-                        break
-                    if parts[1] != "kB":
-                        break
-                    proc_fields[name] = int(parts[0]) * 1024
-                    if len(proc_fields) == 2:
-                        return proc_fields["MemAvailable"] + proc_fields["SwapFree"]
-        except (OSError, UnicodeError):  # pragma: no cover - missing/malformed Linux procfs
-            pass
-
-    try:
-        import psutil
-    except ImportError:
-        psutil = None
-    if psutil is not None:
-        try:
-            return int(psutil.virtual_memory().available) + int(psutil.swap_memory().free)
-        except Exception:  # pragma: no cover - defensive probe fallback
-            pass
-    try:
-        fields: dict[str, int] = {}
-        with open("/proc/meminfo", encoding="ascii") as handle:
-            for line in handle:
-                name, _, rest = line.partition(":")
-                parts = rest.split()
-                if parts and parts[0].isdigit():
-                    fields[name.strip()] = int(parts[0]) * 1024
-        if "MemAvailable" in fields:
-            return fields["MemAvailable"] + fields.get("SwapFree", 0)
-    except OSError:  # pragma: no cover - non-Linux hosts without /proc
-        pass
-    return None
-
-
 def _allocation_budget_bytes(device: torch.device) -> int:
     """Return a NEVER-under-estimating allocation budget for one device.
 
     The budget deliberately over-estimates when uncertain (free device memory
-    PLUS the caching allocator's reusable reserve for CUDA; available + swap
-    for host-backed devices; the static 1 TiB ceiling otherwise), so the
+    PLUS the caching allocator's reusable reserve for CUDA; available + swap,
+    bounded by the address-space limit, for host-backed devices; the static
+    1 TiB ceiling otherwise), so the
     preflight can only refuse requests that could never have succeeded --
     a refusal here is strictly better than the OOM-kill it replaces, and a
     legitimate large-model slot is never refused (no static per-slot cap).

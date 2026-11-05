@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._data_classes._conditional_arms import outcome_evidence_conflicts
+
 if TYPE_CHECKING:
     from .._data_classes.module import Module
 
@@ -174,6 +176,9 @@ def _check_conditional_public_accessor_summary(
         )
 
     for conditional in conditionals:
+        # ``outcome`` reads fired arms first and witnessed test values second; they must agree.
+        for conflict in outcome_evidence_conflicts(conditional.arms):
+            _fail_conditional_invariant(name, 16, f"{conditional.id} outcome evidence: {conflict}")
         fired_arm_indices = [index for index, arm in enumerate(conditional.arms) if arm.fired]
         if len(fired_arm_indices) == 1:
             fired_arm_index = fired_arm_indices[0]

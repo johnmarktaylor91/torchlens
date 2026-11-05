@@ -6,6 +6,7 @@ method per verb that forwards to these functions.
 
 from __future__ import annotations
 
+import functools
 import weakref
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
@@ -28,11 +29,12 @@ from .._literals import (
 from ..intervention.types import FireRecord
 from ..viz._drawing import Drawing, resolve_draw_target
 from ._color_sources import resolve_color_source
-from ._dagua_bridge import trace_to_dagua_graph
+from ._draw_validation import _validate_draw_flag_options
 from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from ._render_utils import _KNOWN_EXTS, DEFAULT_DRAW_STEM, collision_safe_outpath
+from ._svg_compose import render_detached_dot
 from ._trace_collapse import (
     collapse_plan as _collapse_plan,
     collapse_schedule as _collapse_schedule,
@@ -125,9 +127,12 @@ def _draw_policy(
     }
 
 
-def _require_graph_kind(graph: str) -> None:
+def _require_graph_kind(
+    graph: str, show_containers: ShowContainersLiteral, show_edge_shapes: bool
+) -> None:
     """Refuse a ``graph=`` value other than forward, backward or combined."""
 
+    _validate_draw_flag_options(show_containers, show_edge_shapes=show_edge_shapes)
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(
             f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
@@ -154,6 +159,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     direction: VisDirectionLiteral | None = None,
     node_style: VisNodeModeLiteral = "default",
     show_buffers: BufferVisibilityLiteral = "meaningful",
+    show_edge_shapes: bool = False,
     show_legend: bool | None = None,
     color_by: Any = None,
     size_by: str | Callable[[Any], Any] | None = None,
@@ -191,19 +197,16 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
-
     if highlight is not None:
         from ._highlight import draw_highlighted, explicit_draw_kwargs
 
-        # locals() is read before any parameter below is reassigned.
         return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
 
-    _require_graph_kind(graph)
+    _require_graph_kind(graph, show_containers, show_edge_shapes)
     num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     target = resolve_draw_target(path, file_format, _KNOWN_EXTS)
     path, file_format = target.path, target.file_format
-    vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
     collapse_context: Any = None
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
@@ -220,9 +223,10 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             vis_save_only=not open_viewer,
             vis_fileformat=file_format,
             direction="leftright" if direction is None else direction,
-            vis_mode=vis_mode,
+            vis_mode="rolled" if rolled else "unrolled",
             intervening_cluster=intervening_cluster,
             show_buffer_layers=show_buffers,
+            show_edge_shapes=show_edge_shapes,
             bwd=bwd,
             show_legend=show_legend,
         )
@@ -240,12 +244,27 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         str(outpath),
         num_ops=num_ops,
         policy=policy,
-        _collapse_source=weakref.ref(trace),
-        _collapse_context=collapse_context,
-        _collapse_tools=(_collapse_plan, _collapse_schedule)
+        **_detached_fields(trace, collapse_context),
+    )
+
+
+def _detached_fields(trace: Trace, collapse_context: Any) -> dict[str, Any]:
+    """Return the private ``Drawing`` fields that serve it after the draw returns.
+
+    The collapse diagnostics (a forward drawing's plan and schedule, read
+    from a weak reference to the trace) and the renderer its notebook display
+    and ``save`` to another format use: the draw's own Graphviz child, bound to
+    the trace's image root.
+    """
+
+    return {
+        "_collapse_source": weakref.ref(trace),
+        "_collapse_context": collapse_context,
+        "_collapse_tools": (_collapse_plan, _collapse_schedule)
         if collapse_context is not None
         else None,
-    )
+        "_render": functools.partial(render_detached_dot, image_root=trace._visualizer_dir),
+    }
 
 
 def animate(
@@ -279,7 +298,7 @@ def animate(
 def partial_drawing(dot: str) -> Drawing:
     """Body of ``PartialTrace.draw``'s return: the failed-capture DOT as a ``Drawing``."""
 
-    return Drawing(dot=dot)
+    return Drawing(dot=dot, _render=render_detached_dot)
 
 
 def preview_fastlog(
@@ -325,25 +344,6 @@ def last_run_records(trace: Trace) -> tuple[FireRecord, ...]:
     return tuple(records)
 
 
-def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.to_dagua_graph
-    trace: Trace,
-    rolled: bool = False,
-    depth: int = 1000,
-    show_buffers: bool = False,
-    direction: str = "bottomup",
-    include_grad_edges: bool | None = None,
-) -> Any:
-    """Body of ``Trace.to_dagua_graph``; the method docstring is the contract."""
-    return trace_to_dagua_graph(
-        trace,
-        rolled=rolled,
-        depth=depth,
-        show_buffers=show_buffers,
-        direction=direction,
-        include_grad_edges=include_grad_edges,
-    )
-
-
 __all__ = [
     "animate",
     "draw",
@@ -351,5 +351,4 @@ __all__ = [
     "partial_drawing",
     "preview_fastlog",
     "show",
-    "to_dagua_graph",
 ]

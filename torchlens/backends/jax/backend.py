@@ -78,6 +78,7 @@ from ...backends._finalize import (
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
+from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import _attach_param_usage
 from .._invariants import run_metadata_invariants
@@ -201,8 +202,7 @@ class GradOptions:
             Hard cap on saved op boundaries for the zero-tap producer and oracle.
         """
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
@@ -432,7 +432,7 @@ class JAXBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -477,8 +477,8 @@ class JAXBackend:
             Positional arguments for the callable.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; JAX preview is full-save only.
+        save
+            ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -561,7 +561,7 @@ class JAXBackend:
             Captured JAX trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
@@ -577,7 +577,6 @@ class JAXBackend:
         # distinguishable from ``MISSING`` for them.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -655,10 +654,7 @@ class JAXBackend:
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
-        if jax_control_flow not in {"reject", "unroll", "region"}:
-            raise ValueError("jax_control_flow must be 'reject', 'unroll', or 'region'")
-        if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
-            raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
+        refuse_if_bad_jax_control_flow(jax_control_flow, jax_max_control_flow_unroll)
         eqx_tree = discover_equinox_module_tree(model)
         nnx_tree = discover_nnx_module_tree(model) if eqx_tree is None else None
         module_tree = eqx_tree or nnx_tree
@@ -678,7 +674,7 @@ class JAXBackend:
             )
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,
@@ -2568,7 +2564,7 @@ class JAXBackend:
             op_log.module_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
-            parent_call_label: str | None = None
+            parent_call_label = "self:1" if "self" in seen_addresses else None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
                 # Torch parity (same population as
@@ -2606,7 +2602,7 @@ class JAXBackend:
                         mbd["top_level_module_ops"].append(call_label)
                     if address != "self" and address not in mbd["top_level_modules"]:
                         mbd["top_level_modules"].append(address)
-                elif parent_call_label is not None:
+                if parent_call_label is not None and parent_call_label != call_label:
                     if call_label not in seen_pass_children[parent_call_label]:
                         seen_pass_children[parent_call_label].add(call_label)
                         mbd["module_pass_children"][parent_call_label].append(call_label)
@@ -3642,7 +3638,7 @@ def _jax_intermediate_tap_specs(trace: Trace) -> tuple[_JaxIntermediateTapSpec, 
         label = capture_to_label.get(capture.index)
         if not isinstance(label, str) or label not in trace.op_labels:
             continue
-        op = trace[label]
+        op = trace.ops[label]
         if not getattr(op, "has_saved_activation", False):
             continue
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):

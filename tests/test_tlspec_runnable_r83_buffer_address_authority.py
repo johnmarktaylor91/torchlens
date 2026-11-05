@@ -81,7 +81,7 @@ def _replay_or_refuse(model: nn.Module, x: torch.Tensor, path: Path) -> Any | No
         trace.save(path, level="runnable", include_weights=True)
     except RunnablePreflightError:
         return None
-    return tl.load(path).run(inputs=x.clone())
+    return tl.load(path).run_transaction(inputs=x.clone())
 
 
 # --------------------------------------------------------------------------- #

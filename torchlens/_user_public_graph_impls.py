@@ -18,7 +18,7 @@ from ._capture_state_helpers import (
     unwrap_compiled_model,
 )
 from ._deprecations import MISSING, MissingType
-from ._input_coerce import _coerce_input_args
+from ._input_coerce import _coerce_inputs
 from ._literals import (
     CollapseLiteral,
     FoldRepeatsLiteral,
@@ -115,7 +115,7 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
-    input_args = _coerce_input_args(model, input_args)
+    input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
     if recurrence_detection is MISSING:

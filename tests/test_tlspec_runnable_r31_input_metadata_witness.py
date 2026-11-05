@@ -91,11 +91,11 @@ def test_r31_data_alias_storage_bytes_diverges(tmp_path: Path) -> None:
     x_view = base[0:4]  # base storage is larger
     path = _save(DataStorageBytesBranch(), x_full, tmp_path / "a3.tlspec")
 
-    assert tl.load(path).run(inputs=x_full.clone()).report.path_faithfulness is (
+    assert tl.load(path).run_transaction(inputs=x_full.clone()).report.path_faithfulness is (
         PathFaithfulness.VERIFIED
     )
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=x_view)
+        tl.load(path).run_transaction(inputs=x_view)
 
 
 class DataContiguityBranch(nn.Module):
@@ -114,10 +114,13 @@ def test_r31_data_alias_contiguity_diverges(tmp_path: Path) -> None:
     x = torch.randn(3, 4)  # contiguous
     path = _save(DataContiguityBranch(), x, tmp_path / "a4.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     noncontig = torch.randn(4, 3).t()  # same shape (3, 4), non-contiguous
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=noncontig)
+        tl.load(path).run_transaction(inputs=noncontig)
 
 
 # --- Hole B: capability-driven accessor surface ---------------------------------------------
@@ -139,9 +142,12 @@ def test_r31_is_conj_diverges(tmp_path: Path) -> None:
     x = torch.randn(4, dtype=torch.cfloat)
     path = _save(ConjBranch(), x, tmp_path / "b_conj.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=x.conj())
+        tl.load(path).run_transaction(inputs=x.conj())
 
 
 class NegBranch(nn.Module):
@@ -160,9 +166,12 @@ def test_r31_is_neg_diverges(tmp_path: Path) -> None:
     x = torch.randn(4)
     path = _save(NegBranch(), x, tmp_path / "b_neg.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=torch._neg_view(torch.randn(4)))
+        tl.load(path).run_transaction(inputs=torch._neg_view(torch.randn(4)))
 
 
 class InferenceBranch(nn.Module):
@@ -181,11 +190,14 @@ def test_r31_is_inference_diverges(tmp_path: Path) -> None:
     x = torch.randn(4)
     path = _save(InferenceBranch(), x, tmp_path / "b_inf.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     with torch.inference_mode():
         inference_input = torch.randn(4)
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=inference_input)
+        tl.load(path).run_transaction(inputs=inference_input)
 
 
 class IsSharedBranch(nn.Module):
@@ -204,11 +216,14 @@ def test_r31_is_shared_diverges(tmp_path: Path) -> None:
     x = torch.randn(4)
     path = _save(IsSharedBranch(), x, tmp_path / "b_shared.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     shared = torch.randn(4)
     shared.share_memory_()
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=shared)
+        tl.load(path).run_transaction(inputs=shared)
 
 
 class BasePresenceBranch(nn.Module):
@@ -227,10 +242,13 @@ def test_r31_base_presence_diverges(tmp_path: Path) -> None:
     x = torch.randn(4)  # own storage, _base is None
     path = _save(BasePresenceBranch(), x, tmp_path / "b_base.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     view_input = torch.randn(8)[0:4]  # _base is the parent
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=view_input)
+        tl.load(path).run_transaction(inputs=view_input)
 
 
 class RetainsGradLeafBranch(nn.Module):
@@ -249,12 +267,15 @@ def test_r31_retains_grad_leaf_diverges(tmp_path: Path) -> None:
     x = torch.randn(4)
     path = _save(RetainsGradLeafBranch(), x, tmp_path / "b_retains.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     retains = torch.randn(4, requires_grad=True) * 1.0  # non-leaf
     retains.retain_grad()  # retains_grad True only for a non-leaf
     assert bool(retains.retains_grad) is True
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=retains)
+        tl.load(path).run_transaction(inputs=retains)
 
 
 # --- Hole C: autograd/structural reads on a DERIVED VIEW fail closed -------------------------
@@ -300,7 +321,7 @@ def test_r31_autograd_structural_view_read_is_unverifiable(
     x = torch.randn(4)
     path = _save(model_cls(), x, tmp_path / "c_view.tlspec")
 
-    report = tl.load(path).run(inputs=x.clone()).report
+    report = tl.load(path).run_transaction(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
