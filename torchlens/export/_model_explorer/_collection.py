@@ -107,7 +107,7 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     entries = _iter_layers(trace)
     episode_ledger = _episode_ledger(trace)
     if episode_ledger is not None:
-        from ._episode import EpisodeExportContext, build_episode_graphs
+        from ._episode import EpisodeExportContext, build_episode_graphs  # deferred: cycle export
 
         graphs = build_episode_graphs(
             trace,
@@ -182,10 +182,10 @@ def _episode_ledger(log: Any) -> dict[str, Any] | None:
 def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
     """Build the shared ``""`` provenance facts (memo D7 disclosure block)."""
 
-    import torchlens
+    from ..._vocab._package_version import __version__
 
     facts: dict[str, str] = {
-        "produced_by": f"torchlens {torchlens.__version__}",
+        "produced_by": f"torchlens {__version__}",
         "backend": str((log._provenance_backend if is_live_trace(log) else "") or "unknown"),
         "privacy_profile": privacy_profile,
     }

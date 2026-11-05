@@ -2129,6 +2129,20 @@ routing-table read without saved router weights or expert indices. Its
   programs; SPMD processes may arm lazily at capture entry). Sharded state (DTensor,
   tensor/pipeline parallel) still refuses typed at capture entry.
 
+**tl.distributed.ArmingRecord**
+: What `arm()` established, stamped on every boundary record. Fields:
+  `ArmingRecord.install_epoch` (the `InstallEpoch` the arming installed under),
+  `ArmingRecord.recognizer_snapshot` (the recognizer snapshot id the arming derived) and
+  `ArmingRecord.source` (how arming happened: explicit or lazy at capture entry).
+
+**tl.distributed.GroupIdentity**
+: The resolved lifetime identity of one process group on this rank. Fields:
+  `GroupIdentity.membership_digest`, `GroupIdentity.lifetime_ordinal` (which lifetime of
+  that membership this group is), `GroupIdentity.ordinal_source` (where the ordinal came
+  from), `GroupIdentity.global_ranks` (the member ranks) and `GroupIdentity.backend`; the
+  `GroupIdentity.group_uid` property is the exactly-two-field correlation group identity
+  (membership digest, lifetime ordinal).
+
 **Collective boundary op**
 : A captured op whose portable `annotations["collective"]` carries the
   `collective_boundary_v1` payload: correlation key, role-indexed dual geometry, event
@@ -4928,6 +4942,7 @@ The sections above describe each surface in depth.
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
+| `ValidationStatus.__bool__` | The pass/fail result as a bool; raises `TypeError` unless replay validation ran (`state` is `passed` or `failed`) |
 | `ValidationStatus.available_live` | Build the default status for a live trace with validation support |
 | `ValidationStatus.exempted_reason_counts` | Stable reason-code counts for nodes whose replay/perturbation check had a provable exemption |
 | `ValidationStatus.from_replay_counts` | Fold replay outcome counts into a trace-level status |

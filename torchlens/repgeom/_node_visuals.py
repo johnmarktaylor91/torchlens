@@ -13,10 +13,10 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .._plots import node_plots
+from .._plots.node_plots import image_scatter, lineplot
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
-from ..viz import node_plots
-from ..viz.node_plots import image_scatter, lineplot
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
     EffectiveDimensionalityInfo,

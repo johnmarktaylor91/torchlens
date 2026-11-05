@@ -19,6 +19,10 @@ from torch import nn
 
 from .._record_type import record_type
 
+# FACADE role (Rule F): the quick-look wrappers the README documents under
+# ``torchlens._utils`` call ``torchlens.trace`` and the report layer lazily.
+__tl_layer__ = "FACADE"
+
 
 def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
     """List every module registered on a model.

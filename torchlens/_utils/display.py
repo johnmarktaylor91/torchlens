@@ -22,6 +22,7 @@ import torch
 
 from .._quantities import Bytes, Flops
 from ._package_frames import is_torchlens_code
+from ._sig_format import format_sig
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -306,8 +307,6 @@ def _format_number(value: float | None) -> str:
 
     if value is None:
         return "n/a"
-    from ..stats._stats_render import format_sig
-
     return format_sig(float(value))
 
 
@@ -410,7 +409,7 @@ def tensor_stats_summary(tensor: Any) -> str:
     # synced eight times per line. Field layout is preserved; the numbers
     # now come from ``torchlens.stats``.
     try:
-        from ..stats._tensor_stats import tensor_stats
+        from ..stats._tensor_stats import tensor_stats  # deferred: cycle stats
 
         stats = tensor_stats(tensor)
         if stats.num_true is not None:

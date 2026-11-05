@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils.facade import resolve_facade_attr
 from ..bundle._bytes import bundle_retained_bytes as retained_bytes
 from ._effects import EffectsView
 from ._engine import sweep_sites
@@ -75,8 +76,6 @@ if not TYPE_CHECKING:
             Typed ``facade_redirect`` for a removed ledger spelling; plain for
             any other unknown name.
         """
-
-        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

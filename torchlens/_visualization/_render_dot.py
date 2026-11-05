@@ -21,10 +21,20 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
+from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
+from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
 from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
 from ._graph_shell import build_graphviz_shell
-from ._header_block import graph_caption_html
+from ._header_block import (
+    caption_from_label,
+    graph_caption_html,
+    header_block_label,
+    key_swatches,
+    render_module_marks,
+)
+from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
+from ._mutated_params import add_mutated_parameter_nodes
 from ._pass_label_placement import forward_sources
 from ._render_common import *
 from ._render_edges import *
@@ -52,7 +62,11 @@ from ._render_regions import (
     _setup_subgraphs,
     _setup_subgraphs_recurse,
 )
-from ._render_utils import announce_written_graph, resolve_draw_outpath
+from ._render_utils import (
+    announce_written_graph,
+    resolve_draw_outpath,
+    strip_known_extension,
+)
 from ._stacking import resolve_stack_by
 from ._svg_compose import (
     _inline_svg_file_local_images,
@@ -62,6 +76,8 @@ from ._svg_compose import (
     _write_composed_code_panel,
 )
 from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
+from .collapse_patterns import resolve_pattern_request
+from .node_universe import build_node_universe
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -69,6 +85,7 @@ from .render_execution import (
     surface_layout_stderr,
     warn_oversize_vector,
 )
+from .renderer_registry import renderer_info, renderer_names
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
 from .source_graph import _resolve_focus_module, build_source_graph
@@ -147,8 +164,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
     str
         Path without a recognized render extension.
     """
-
-    from ._render_utils import strip_known_extension
 
     return strip_known_extension(vis_outpath)
 
@@ -402,7 +417,6 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
 
     if not fold_patterns:
         return ()
-    from .collapse_patterns import resolve_pattern_request
 
     return resolve_pattern_request(fold_patterns)
 
@@ -426,7 +440,6 @@ def _resolve_forward_context(
     """
 
     source_graph = build_source_graph(trace, request)
-    from .node_universe import build_node_universe
 
     node_universe = build_node_universe(
         source_graph,
@@ -633,7 +646,6 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
-    from ._mutated_params import add_mutated_parameter_nodes
 
     mutated_parameter_nodes = add_mutated_parameter_nodes(
         trace, context, forward_ir_builder, module_cluster_dict
@@ -780,14 +792,6 @@ def _forward_header_label(
     the swatches; ``True`` adds the reading key; ``False`` draws no key. The key sits in
     the header label (top left on every engine); a label override stays the header.
     """
-
-    from ._header_block import (
-        caption_from_label,
-        header_block_label,
-        key_swatches,
-        render_module_marks,
-    )
-    from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 
     request = context.request
     swatches: tuple[Any, ...] = ()
@@ -1289,7 +1293,6 @@ def draw(
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
     )
-    from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 
     # Refuse unknown encoding sources and scale without size_by before rendering.
     encoding_channel_spec = resolve_color_by(color_by)
@@ -1358,8 +1361,6 @@ def draw(
         # schedule of the returned Drawing are computed against.
         request_sink["request"] = request
 
-    from .renderer_registry import renderer_info, renderer_names
-
     if vis_renderer not in renderer_names():
         raise InvalidArgumentError(
             f"vis_renderer must be one of {sorted(renderer_names())}; received "
@@ -1426,7 +1427,6 @@ def _write_overview_expansion_manifest(
         Render target (the manifest rides beside ``target.outpath``).
     """
 
-    from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
     from .auto_collapse import _readable_band_high
     from .collapse_plan import collapse_plan_for_trace, count
 

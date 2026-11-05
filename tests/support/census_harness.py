@@ -964,7 +964,7 @@ _COMPLETION_OP_BASES: frozenset[str] = frozenset(
 def _seq_counter_snapshot() -> dict[tuple[str, int, str], int]:
     """Copy the armed state's issue-time seq counters (empty when unarmed)."""
 
-    from torchlens.distributed._lifecycle import armed_state
+    from torchlens._distributed._lifecycle import armed_state
 
     state = armed_state()
     return dict(state.seq_counters) if state is not None else {}

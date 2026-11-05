@@ -13,7 +13,16 @@ import torch
 from torchlens._runnable import ContractCheck
 
 from .._io._torch_symbols import torch_attr
-from .._utils._torch_compat import tensor_version_or_none
+from .._utils._torch_compat import (
+    apply_ambient_execution_context,
+    autocast_is_enabled,
+    get_current_function_mode_stack,
+    get_fake_tensor_mode_class,
+    restore_fp32_precision_controls,
+    snapshot_ambient_execution_context,
+    snapshot_fp32_precision_controls,
+    tensor_version_or_none,
+)
 from ..errors import (
     RunPreconditionError,
 )
@@ -303,13 +312,6 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
     -- never a silent ambient passthrough.
     """
 
-    from .._utils._torch_compat import (
-        apply_ambient_execution_context,
-        restore_fp32_precision_controls,
-        snapshot_ambient_execution_context,
-        snapshot_fp32_precision_controls,
-    )
-
     recorded = {
         "default_dtype": ambient.default_dtype,
         "default_device": ambient.default_device,
@@ -348,7 +350,6 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             device_scope = torch.device(str(ambient.default_device))
         except (RuntimeError, TypeError, ValueError) as exc:
             raise _context_unavailable_error("default_device", str(exc)) from exc
-    from .._utils._torch_compat import get_current_function_mode_stack
 
     stack_before = get_current_function_mode_stack()
     depth_before = len(list(stack_before)) if stack_before is not None else None
@@ -423,8 +424,6 @@ def _call_execution_context_entered(context: Any) -> Any:
     the caller's context is restored in reverse order on every exit. An
     un-enterable recorded context is a typed refusal, never a raw torch error.
     """
-
-    from .._utils._torch_compat import autocast_is_enabled
 
     stack: list[Any] = []
     try:
@@ -521,8 +520,6 @@ def _fake_tensor_mode_class() -> type[Any] | None:
     degradation now flips a named flag visible in doctor/compat instead of
     silently vanishing.
     """
-
-    from .._utils._torch_compat import get_fake_tensor_mode_class
 
     return get_fake_tensor_mode_class()
 

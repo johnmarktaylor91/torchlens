@@ -32,15 +32,15 @@ from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
-from torchlens._io._safe_unpickle import SafeBundleUnpickler, _PurePythonBundleUnpickler
-from torchlens._merged._artifact import canonical_json_bytes, load_merged, tree_hash
-from torchlens._merged._enums import MergedErrorCode
-from torchlens._merged._errors import MergedArtifactError
-from torchlens.distributed._ledger import (
+from torchlens._distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
+from torchlens._io._safe_unpickle import SafeBundleUnpickler, _PurePythonBundleUnpickler
+from torchlens._merged._artifact import canonical_json_bytes, load_merged, tree_hash
+from torchlens._merged._enums import MergedErrorCode
+from torchlens._merged._errors import MergedArtifactError
 
 WORLD = membership_digest_for_ranks([0, 1])
 _CC = hashlib.sha256(b"cc").hexdigest()

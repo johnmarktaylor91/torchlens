@@ -25,6 +25,10 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._semantic import _families
+from .._semantic.facets import FacetSpec, TransformPrimitive
+from .._utils.tensor_utils import get_tensor_label
+from ..intervention.errors import MultiMatchWarning, SiteResolutionError
 from ._utils import module_for_site, resolve_one_site
 
 _DOCS = "docs/field-guide/pretrained_saes.md"
@@ -237,8 +241,6 @@ class _SAEFamily:
     def _spec(self, record: Any, index: int | tuple[int, ...] | None) -> Any:
         """Build the codec facet spec anchored to ``record``."""
 
-        from .._semantic.facets import FacetSpec, TransformPrimitive
-
         codec = _LatentCodec(self.name, self.sae, index)
         primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
         home = FacetSpec.from_home(record, function_id=f"sae:{self.name}")
@@ -291,8 +293,6 @@ class _SAEFamily:
         every pass of that layer; so a string site must name a layer that
         runs once, and a selector keeps one home per matched layer.
         """
-
-        from ..intervention.errors import MultiMatchWarning, SiteResolutionError
 
         if not isinstance(self.site, str):
             # The edit's own fan-out warning reports the count; resolving the
@@ -461,8 +461,6 @@ def register(name: str, sae: Any, *, site: Any) -> None:
     >>> tl.bridge.sae.unregister("demo_register")
     """
 
-    from .._semantic import _families
-
     require_codec(sae, "tl.bridge.sae.register")
     if (
         not isinstance(name, str)
@@ -509,8 +507,6 @@ def unregister(name: str) -> None:
     ...     print(type(err).__name__)
     InvalidArgumentError
     """
-
-    from .._semantic import _families
 
     if name not in _families._FACET_FAMILIES:
         registered = sorted(_families._FACET_FAMILIES)
@@ -564,9 +560,7 @@ def logged_splice_trace(
         when that module returns a non-tensor.
     """
 
-    import torchlens as tl
-
-    from .._utils.tensor_utils import get_tensor_label
+    from .._user_public_impls import release_model, trace as _capture_trace
 
     module = module_for_site(clean, site_label, bridge="splice(..., log_latents=True)")
     raw: dict[str, str | None] = {}
@@ -585,7 +579,7 @@ def logged_splice_trace(
                 remedy="splice without log_latents=True, or at a site a module returns as a "
                 f"tensor; see {_DOCS}",
             )
-        from .sae import _encode_decode
+        from .sae import _encode_decode  # deferred: cycle bridge
 
         latents, _edited, replacement = _encode_decode(
             reconstruction._sae, output, reconstruction._latents_edit, reconstruction._start
@@ -598,15 +592,15 @@ def logged_splice_trace(
     # scratch, so the temporary child (and any submodules the SAE calls) carry
     # TorchLens metadata; releasing again after removing it leaves the model
     # as a plain module whose next capture prepares the tree it really has.
-    tl.release_model(model)
+    release_model(model)
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs)
+        logged = _capture_trace(model, inputs)
     finally:
         handle.remove()
         del model._modules[child]
-        tl.release_model(model)
+        release_model(model)
     return logged, str(_record_label(logged[raw["latents"]]))
 
 

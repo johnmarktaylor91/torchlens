@@ -155,7 +155,7 @@ def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
 ) -> None:
     """A failure between the two wrap families must leave no unowned wraps."""
 
-    from torchlens.distributed import _lifecycle
+    from torchlens._distributed import _lifecycle
 
     if _lifecycle._STATE is not None:
         _lifecycle.disarm()

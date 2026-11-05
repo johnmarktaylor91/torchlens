@@ -14,6 +14,7 @@ import os
 from html import escape
 from typing import TYPE_CHECKING, Any
 
+from .._selection import resolver as _resolver
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_CONE_COLOR,
@@ -28,6 +29,7 @@ from .._vocab.node_spec import (  # noqa: F401
     NodeSpec,
     NodeSpecFn,
 )
+from ..intervention.replay import cone_of_effect
 from ._intervention_sites import (  # noqa: F401
     _forward_site,
     _site_sort_key,
@@ -78,7 +80,7 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
         such a node is drawn without it and is not an image node).
     """
 
-    from ._render_nodes import BoundaryNode, _layer_log_for_node
+    from ._render_nodes import BoundaryNode, _layer_log_for_node  # deferred: cycle _visualization
 
     if isinstance(node, BoundaryNode):
         return None
@@ -118,7 +120,7 @@ def render_lines_to_html(lines: list[str]) -> str:
         A string suitable for Graphviz ``label=<...>`` syntax.
     """
 
-    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html
+    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html  # deferred: cycle _visualization
 
     rows = []
     gap_drawn = False
@@ -209,9 +211,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
         Distinct intervention sites in execution order.
     """
 
-    from .._selection.resolver import _resolve_sites
-
-    return _sites_for_log(trace, _resolve_sites)
+    return _sites_for_log(trace, _resolver._resolve_sites)
 
 
 def intervention_site_and_cone_labels(
@@ -239,8 +239,6 @@ def intervention_site_and_cone_labels(
     if not sites or not show_cone:
         return site_labels, set()
 
-    from ..intervention.replay import cone_of_effect
-
     cone = cone_of_effect(trace, sites)
     cone_labels = {site.layer_label for site in cone}
     return site_labels, cone_labels - site_labels
@@ -248,8 +246,6 @@ def intervention_site_and_cone_labels(
 
 def _cone_pass_labels(trace: Trace, sites: list[Op], site_pass_labels: set[str]) -> set[str]:
     """Return the pass-qualified labels downstream of ``sites``, sites excluded."""
-
-    from ..intervention.replay import cone_of_effect
 
     return {_site_sort_key(op) for op in cone_of_effect(trace, sites)} - site_pass_labels
 
@@ -326,7 +322,7 @@ def make_intervention_node_spec_fn(
         intervention overlay to apply.
     """
 
-    from ._edit_marks import (
+    from ._edit_marks import (  # deferred: cycle _visualization
         DOWNSTREAM_NODE_CLASS,
         EDIT_RING_PENWIDTH,
         EDITED_NODE_CLASS,

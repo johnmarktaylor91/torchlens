@@ -25,8 +25,25 @@ from typing import TYPE_CHECKING, Any
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._edit_change import CHANGED_NODE_CLASS
+from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 from ._encoding_key import RampKey, color_key, ramp_row_html, size_key_line, stack_key_line
+from ._render_common import (
+    BACKWARD_HIGHER_ORDER_COLOR,
+    BACKWARD_NODE_COLOR,
+    BOOL_NODE_COLOR,
+    BUFFER_NODE_COLOR,
+    DEFAULT_BG_COLOR,
+    FROZEN_PARAMS_BG_COLOR,
+    GRADIENT_ARROW_COLOR,
+    INPUT_COLOR,
+    OUTPUT_COLOR,
+    PARAMS_NODE_BG_COLOR,
+    TRAINABLE_PARAMS_BG_COLOR,
+)
 from ._render_utils import html_escape
+from .node_spec import NodeSpec
+from .overlays import legend_domain_text
+from .themes import apply_theme_to_spec
 
 if TYPE_CHECKING:
     import graphviz
@@ -107,19 +124,6 @@ _NON_ROLE_SHAPES = frozenset({"plaintext", "plain", "none", "point"})
 def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
     """Return each fill-coded role's rendered fills under ``theme``, lowercased."""
 
-    from ._render_common import (
-        BOOL_NODE_COLOR,
-        BUFFER_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        FROZEN_PARAMS_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        PARAMS_NODE_BG_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
-
     def themed(*constants: str) -> frozenset[str]:
         """Return the lowercased fills ``theme`` paints for ``constants``."""
         return frozenset(
@@ -166,8 +170,6 @@ def drawn_legend_roles(
     counts as parameterized.
     """
 
-    from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
-
     fills = _role_fills(theme)
     roles: set[str] = set()
     for attrs in node_attrs:
@@ -209,8 +211,6 @@ def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
     channel, nothing else.
     """
 
-    from .overlays import legend_domain_text
-
     rows: list[LegendRow] = []
     color = color_key(state, legend_domain_text)
     if isinstance(color, RampKey):
@@ -240,12 +240,6 @@ def backward_key_sections(
     for a style the render does not use would itself be an unexplained claim,
     so each row is gated on the corresponding inventory flag.
     """
-
-    from ._render_common import (
-        BACKWARD_HIGHER_ORDER_COLOR,
-        BACKWARD_NODE_COLOR,
-        GRADIENT_ARROW_COLOR,
-    )
 
     rows: list[LegendRow] = [
         LegendRow(text="backward op (grad_fn)", swatch_fill=BACKWARD_NODE_COLOR)

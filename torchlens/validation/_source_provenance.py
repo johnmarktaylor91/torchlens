@@ -55,7 +55,7 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
         source-less tensor arguments first, then gap advisories.
     """
 
-    from .core import _is_intentional_intervention_replacement
+    from .core import _is_intentional_intervention_replacement  # deferred: cycle validation
 
     gaps: list[tuple[str, str | None, str]] = []
     for op in trace._layer_list:

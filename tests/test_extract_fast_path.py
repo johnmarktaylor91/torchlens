@@ -13,8 +13,8 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens as _tl_pkg
 import torchlens as tl
+from torchlens._extraction import _front_door as _extract_home
 from torchlens.errors import AmbiguousOpLookupError, InvalidArgumentError
 
 
@@ -72,18 +72,18 @@ class _NoisyPairNet(_PairNet):
 
 
 def _full(model: nn.Module, x: Any, layers: Any) -> dict[str, torch.Tensor]:
-    return _tl_pkg._extract_layers_with_trace(model, x, layers)[1]
+    return _extract_home._extract_layers_with_trace(model, x, layers)[1]
 
 
 def _spy(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     ran: list[int] = []
-    real = _tl_pkg._extract_layers_with_trace
+    real = _extract_home._extract_layers_with_trace
 
     def counting(*args: Any, **kwargs: Any) -> Any:
         ran.append(1)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(_tl_pkg, "_extract_layers_with_trace", counting)
+    monkeypatch.setattr(_extract_home, "_extract_layers_with_trace", counting)
     return ran
 
 

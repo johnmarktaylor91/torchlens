@@ -16,18 +16,20 @@ pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available(), reason="torch.distributed unavailable"
 )
 
-from torchlens.distributed import (  # noqa: E402
+from torchlens._distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
-    is_vetted_build,
-    verify_membership_lineages,
 )
-from torchlens.distributed._ledger import (  # noqa: E402
+from torchlens._distributed._ledger import (  # noqa: E402
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
-from torchlens.distributed._recognizer import derive_collective_recognizer  # noqa: E402
+from torchlens._distributed._recognizer import derive_collective_recognizer  # noqa: E402
+from torchlens.distributed import (  # noqa: E402
+    is_vetted_build,
+    verify_membership_lineages,
+)
 from torchlens.errors import AmbiguousGroupLifetimeError, UncapturedCollectiveOpError  # noqa: E402
 
 # ---------------------------------------------------------------------------

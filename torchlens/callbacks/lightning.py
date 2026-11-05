@@ -18,6 +18,8 @@ import torch
 
 from torchlens.errors import TorchLensError, TorchLensWarning
 
+from .._user_public_impls import _validate_summary_grammar, summary, trace
+
 
 def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
@@ -301,9 +303,6 @@ class _LayerProfilerCallbackMixin:
             The trace, or ``None`` when the batch was skipped.
         """
 
-        from torchlens import trace
-        from torchlens.errors import TorchLensError, TorchLensWarning
-
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
         training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
@@ -393,8 +392,6 @@ class _SummaryCallbackMixin:
             so a bad option fails when the callback is built, not mid-fit.
         """
 
-        from torchlens._user_public_impls import _validate_summary_grammar
-
         _validate_summary_grammar(summary_kwargs)
         super().__init__()
         self.input_getter = input_getter
@@ -473,8 +470,6 @@ class _SummaryCallbackMixin:
             Which sample was used, named in the printed header.
         """
 
-        import torchlens as tl
-
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):
             return
@@ -483,7 +478,7 @@ class _SummaryCallbackMixin:
         if isinstance(model_input, dict):
             input_args, input_kwargs = None, dict(model_input)
         try:
-            report = tl.summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
+            report = summary(pl_module, input_args, input_kwargs, **self.summary_kwargs)
         # A fit must never die for a summary (disclosed below). These are what a
         # forward fed a guessed sample raises (wrong arity or keys, shape or dtype
         # mismatch, missing attribute) plus every TorchLens refusal.

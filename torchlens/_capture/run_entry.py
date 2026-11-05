@@ -31,18 +31,20 @@ from .._ir import ParentEdge
 from .._ir.op_record import amend_graph_edge_insertion
 from .._literals import (
     OutputDeviceLiteral,
+    _ActivationPostfunc,
+    _GradientPostfunc,
 )
 from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
+from .._utils._tensor_label import get_tensor_label
 from .._utils.tensor_utils import SaveMode
-from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
 from ..intervention._zero_fire import capture_rule_fire_ledger
 from ..intervention.predicates import InterventionPredicate
+from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
 from ..recording.exceptions import PredicateError
 from ..recording.options import HaltPredicateFn, PredicateFn
-from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._run_setup import (
     _configure_predicate_options,
     _construct_trace,
@@ -476,8 +478,6 @@ def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: o
     """
 
     from contextlib import nullcontext
-
-    from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
 
     live_minter_scope = (
         armed_live_minter()

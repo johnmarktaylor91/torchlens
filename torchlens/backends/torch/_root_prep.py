@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 import torch.nn as nn
 
 from ... import _state
+from ..._utils._tensor_label import set_module_meta
 from ._module_class_metadata import _source_start_line
-from ._tl import set_module_meta
 from .bound_root import ROOT_ADDRESS, TLBoundMethodRoot
 
 if TYPE_CHECKING:
