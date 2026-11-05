@@ -108,15 +108,15 @@ def test_sae_logged_splice_captures_the_live_model_plainly() -> None:
 
 
 def test_causal_audit_traces_the_model_plainly(monkeypatch: pytest.MonkeyPatch) -> None:
-    import torchlens._user_funcs as user_funcs
+    import torchlens._user_public_impls as user_public_impls
 
     model = _LinearResidual().double().eval()
     x = torch.randint(-3, 4, (2, 4), generator=torch.Generator().manual_seed(1)).double()
     site = attribution.SiteTarget("fc2", unit=2)
     claim = attribution.layer_attribution(model, x, target=site, layer="fc1")
-    # The audit captures through the capture door (torchlens._user_funcs.trace), the
-    # function tl.trace names; patching the door sees every audit capture.
-    produced = _recording(monkeypatch, user_funcs)
+    # The audit's captures go through the facade's trace (it forwards to tl.trace's
+    # door), which each audit step looks up when it runs.
+    produced = _recording(monkeypatch, user_public_impls)
     result = attribution.causal_audit(model, x, claim=claim, target=site, k=1)
     assert result.rank_agreement == 1.0
     assert produced, "the audit captures the model through tl.trace"

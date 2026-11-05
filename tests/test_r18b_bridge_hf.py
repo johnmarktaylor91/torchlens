@@ -170,11 +170,14 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
         def __call__(self, text: Any, **kwargs: Any) -> Any:
             return {"input_ids": text}
 
-    import torchlens._user_funcs as user_funcs
+    import torchlens._user_public_impls as user_public_impls
 
-    # trace_text captures through the capture door that tl.trace names.
+    # trace_text captures through the facade's trace (it forwards to tl.trace's door),
+    # looked up when the call runs.
     monkeypatch.setattr(
-        user_funcs, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
+        user_public_impls,
+        "trace",
+        lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None),
     )
     log = hf.trace_text(Model(), "hello", tokenizer=ExplicitCustomTokenizer())
     record = log._provenance_input_preprocessor
