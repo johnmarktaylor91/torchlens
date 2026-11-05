@@ -424,5 +424,10 @@ These keywords of `Trace.draw` are not pictured above:
 | `node_spec_fn`, `collapsed_node_spec_fn`, `backward_node_spec_fn` | a function that restyles each node |
 | `graph_overrides`, `node_overrides`, `edge_overrides`, `module_overrides` | raw Graphviz attributes for the graph, edges and module boxes |
 
+To put a picture on a node, annotate it before drawing: `trace.annotate(label, image=...)`
+takes a path to any image file Pillow can open (PNG, JPEG, WebP, ...) or a PIL image. A PNG
+file is drawn as it is; any other picture is drawn from a PNG copy, because some Graphviz
+builds cannot read JPEG node images.
+
 The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
 lists every keyword with its accepted values.

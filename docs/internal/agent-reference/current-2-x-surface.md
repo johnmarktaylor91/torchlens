@@ -642,6 +642,15 @@ expert contributions from routing indices alone.
   `newrank=true` (cross-cluster constraints are silently ignored without it). While stacking
   is active the sibling-ordering post-pass NO-OPS (two rank-constraint systems would fight);
   collapsed boxes and fold reps stay un-annotated in v1; v1 has exactly ONE cohort.
+- ANNOTATION PICTURES: `trace.annotate(label, image=...)` takes a path to any image Pillow
+  opens (PNG, JPEG, WebP, ...) or a PIL image; a path that does not open refuses
+  `image_path_unreadable` at annotate time. The record keeps the caller's path
+  (`annotations["user"]["image"]`), so a saved trace carries a path, never pixels. At draw
+  time a `.png` path goes to Graphviz as is and any other format is written as a PNG copy
+  into the trace's visualizer scratch folder (`annotation_images/`), since some Graphviz
+  builds cannot read JPEG. A PIL image is written there as a PNG at annotate time and its
+  path stored; that file lives only as long as the trace object (annotate again after a
+  load). Code: `torchlens/_data_classes/_annotation_image.py`.
 - CHECKED SUPPRESSION (UNSTABLE spelling `show_redundant_args`, DEFAULT-ON): `draw()` node
   labels omit a module constructor arg exactly when the equality check licenses it — the arg
   value provably equals the captured shape dimension it duplicates on THIS trace (closed torch
