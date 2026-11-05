@@ -257,7 +257,7 @@ class TestSubclassCtorUnderWitness:
         """A foreign top mode and every owned mode below it remain untouched."""
         from torch.utils._python_dispatch import TorchDispatchMode
 
-        from torchlens.backends.torch._modes import (
+        from torchlens._utils._dispatch_modes import (
             _TorchLensDispatchMode,
             pause_own_dispatch_modes,
         )
@@ -276,7 +276,7 @@ class TestSubclassCtorUnderWitness:
     # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_modes.py.
     def test_owned_modes_restore_when_paused_call_raises(self) -> None:
         """The pause bracket restores owned modes before propagating an exception."""
-        from torchlens.backends.torch._modes import (
+        from torchlens._utils._dispatch_modes import (
             _TorchLensDispatchMode,
             pause_own_dispatch_modes,
         )
@@ -334,7 +334,7 @@ class TestAsSubclassOpIdentity:
         if not _flag("HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE"):
             # Floor-torch capability gap (torch 2.1/2.2): see
             # TensorSubclassUnsupportedError.
-            from torchlens.backends.torch._modes import (
+            from torchlens._utils._dispatch_modes import (
                 TensorSubclassUnsupportedError,
             )
 

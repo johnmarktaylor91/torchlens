@@ -82,7 +82,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec as _find_spec
 
-from .._utils.facade import DependencyGate as _DependencyGate
+from .._utils.facade import DependencyGate as _DependencyGate, facade_dir, resolve_facade_attr
 from ._conflicts import (
     check_rsatoolbox_conflict as _check_rsatoolbox_conflict,
     rsatoolbox_conflict as _rsatoolbox_conflict,
@@ -308,8 +308,6 @@ def __getattr__(name: str) -> object:
         for gated names whose dependency is absent.
     """
 
-    from .._utils.facade import resolve_facade_attr
-
     return resolve_facade_attr(
         owner=__name__,
         name=name,
@@ -331,8 +329,6 @@ def __dir__() -> list[str]:
         refusal rows are teaching surfaces, not attributes, and
         implementation imports are not advertised.
     """
-
-    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), __all__)
 

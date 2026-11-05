@@ -17,6 +17,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from ..errors import InvalidArgumentError
+
 __all__ = ["FacetCoverageReport", "ModuleCoverageRow", "facet_coverage"]
 
 
@@ -166,8 +168,6 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
     >>> len(report.rows) > 0
     True
     """
-
-    from ..errors import InvalidArgumentError
 
     rows: list[ModuleCoverageRow] = []
     for module in trace.modules:

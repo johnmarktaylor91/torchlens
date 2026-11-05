@@ -8,8 +8,12 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils.display import user_stacklevel
+from ..errors._base import TorchLensWarning
 from ._encoding_size_layout import layout_encoded_sizes
+from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
 from .request import RenderContext
+from .themes import _theme_cluster_attrs, resolve_theme
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -237,7 +241,7 @@ class RenderIR:
             Capability set inferred from decision-complete records.
         """
 
-        from .renderers.base import RendererCapabilities
+        from .renderers.base import RendererCapabilities  # deferred: cycle _visualization
 
         return RendererCapabilities(
             nested_regions=bool(self.regions),
@@ -323,7 +327,7 @@ def build_render_ir(
 
     resolved_context = RenderContext() if context is None else context
     if segment_lookup is None:
-        from ._render_edges import _build_segment_lookup
+        from ._render_edges import _build_segment_lookup  # deferred: cycle _visualization
 
         segment_lookup = _build_segment_lookup(segments)
     if universe is None:
@@ -333,8 +337,8 @@ def build_render_ir(
         universe = build_node_universe(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
-    from ._encoding import populate_encoding_state
-    from ._render_nodes import BOX_SCOPE_HELPERS, _atomic_module_sibling_counts
+    from ._encoding import populate_encoding_state  # deferred: cycle _visualization
+    from ._render_nodes import BOX_SCOPE_HELPERS, _atomic_module_sibling_counts  # deferred: cycle
 
     encoding = getattr(resolved_context, "encoding", None)
     scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
@@ -364,7 +368,7 @@ def build_render_ir(
         )
         for unit in universe.units
     )
-    from ._boundary_bundle import bundle_labels, relabel_bundle_nodes
+    from ._boundary_bundle import bundle_labels, relabel_bundle_nodes  # deferred: cycle
 
     entries = universe.source_graph.entries_to_plot
     labels = bundle_labels(trace, entries, resolved_context, collapse_fn)
@@ -411,9 +415,6 @@ def _warn_if_render_exceeds_disclosure_ceiling(num_nodes: int, num_edges: int) -
     if num_nodes <= RENDER_DISCLOSURE_NODE_CEILING and num_edges <= RENDER_DISCLOSURE_EDGE_CEILING:
         return
     import warnings
-
-    from .._utils.display import user_stacklevel
-    from ..errors._base import TorchLensWarning
 
     warnings.warn(
         f"TorchLens is rendering {num_nodes} nodes / {num_edges} edges; Graphviz "
@@ -525,7 +526,7 @@ def _normalize_backward_nodes(
 ) -> tuple[tuple[RenderIRNode, ...], dict[int, list[tuple[Any, Any]]]]:
     """Normalize visible grad-function handles or calls into IR nodes."""
 
-    from ._render_leaf import (
+    from ._render_leaf import (  # deferred: cycle _visualization
         _backward_dot_call_node_name,
         _backward_dot_node_name,
         _grad_fn_call_matches_backward_filter,
@@ -574,7 +575,7 @@ def _normalize_backward_edges(
 ) -> tuple[RenderIREdge, ...]:
     """Normalize visible grad-function dependencies into IR edges."""
 
-    from ._render_leaf import (
+    from ._render_leaf import (  # deferred: cycle _visualization
         _backward_dot_call_node_name,
         _backward_dot_node_name,
         _grad_fn_matches_backward_filter,
@@ -636,7 +637,7 @@ def _normalized_grad_edge(
 ) -> RenderIREdge:
     """Create one normalized backward dependency edge."""
 
-    from ._render_leaf import _backward_edge_attrs
+    from ._render_leaf import _backward_edge_attrs  # deferred: cycle _visualization
 
     return RenderIREdge(
         source_unit=tail_name,
@@ -657,6 +658,7 @@ def _normalize_correspondence_edges(
 ) -> tuple[RenderIREdge, ...]:
     """Normalize visible forward-to-grad-function correspondence edges."""
 
+    # deferred: cycle _visualization
     from ._render_leaf import _backward_dot_node_name, _grad_fn_matches_backward_filter
 
     edges: list[RenderIREdge] = []
@@ -761,7 +763,7 @@ def _node_from_unit(
     source_label = emission.op_label or emission.call or emission.boundary_kind
     owner_cluster = emission.module_address
     if emission.kind == "module_box" and emission.call is not None:
-        from ._render_edges import _collapsed_module_owner_key
+        from ._render_edges import _collapsed_module_owner_key  # deferred: cycle _visualization
 
         address, _, call_index = emission.call.partition(":")
         owner_cluster = _collapsed_module_owner_key(
@@ -771,7 +773,7 @@ def _node_from_unit(
             context.vis_mode,
         )
     elif emission.kind == "run_fold_ellipsis" and emission.fold is not None:
-        from ._render_edges import _run_fold_ellipsis_owner_key
+        from ._render_edges import _run_fold_ellipsis_owner_key  # deferred: cycle _visualization
 
         owner_cluster = _run_fold_ellipsis_owner_key(trace, emission.fold, context.vis_mode)
     node_calls: tuple[Any, ...] = ()
@@ -840,15 +842,14 @@ def _resolve_node_decision(
     tuple
         Recorded top-level calls, owned node arguments, edge color, and structured label spans.
     """
-    from ._render_common import _RenderIRDecisionBuilder
-    from ._render_edges import _segment_for_node
-    from ._render_flow import _collapsed_container_leaf_nodes
-    from ._render_nodes import (
+    from ._render_common import _RenderIRDecisionBuilder  # deferred: cycle _visualization
+    from ._render_edges import _segment_for_node  # deferred: cycle _visualization
+    from ._render_flow import _collapsed_container_leaf_nodes  # deferred: cycle _visualization
+    from ._render_nodes import (  # deferred: cycle _visualization
         _build_collapsed_module_node,
         _build_layer_node,
         _normalize_buffer_visibility,
     )
-    from .themes import resolve_theme
 
     node = emission.node
     if node is None:
@@ -1074,9 +1075,7 @@ def finalize_forward_regions(
         The same IR with immutable, decision-complete nested region records.
     """
 
-    from ._render_flow import _get_max_call_depth
-    from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
-    from .themes import _theme_cluster_attrs
+    from ._render_flow import _get_max_call_depth  # deferred: cycle _visualization
 
     cluster_ink = _theme_cluster_attrs(theme) if theme is not None else {}
 
@@ -1189,7 +1188,7 @@ def finalize_forward_regions(
 def _region_display_label(trace: Trace, module: Any, key: str, address: str, vis_mode: str) -> str:
     """Return the cluster display label for one module region."""
 
-    from ._render_leaf import _collapsed_module_rolling_suffix
+    from ._render_leaf import _collapsed_module_rolling_suffix  # deferred: cycle _visualization
 
     if vis_mode == "unrolled" and getattr(module, "num_calls", 1) > 1:
         return key

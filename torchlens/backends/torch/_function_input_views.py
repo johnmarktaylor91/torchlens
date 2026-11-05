@@ -27,7 +27,7 @@ import torch
 
 from ... import _state
 from ..._utils import _torch_compat
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 
 
 def _same_view(output: torch.Tensor, source: torch.Tensor) -> bool:

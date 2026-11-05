@@ -16,6 +16,8 @@ from typing import Any
 
 import torch
 
+from ..._events import active_profiler_session
+
 _GRADFN_MARKER_TOKENS: weakref.WeakKeyDictionary[Any, dict[int, list[Any]]]
 _GRADFN_MARKER_TOKENS = weakref.WeakKeyDictionary()
 """Per-trace ``grad_fn_object_id -> open profiler-marker LIFO`` (F27 FLIP-2).
@@ -47,11 +49,7 @@ def _obs_session_profiler() -> Any | None:
     session without a profiler) means no marker work at all.
     """
 
-    try:
-        from ..._observability._session import active_session
-    except ImportError:  # pragma: no cover - torn install without the substrate
-        return None
-    session = active_session()
+    session = active_profiler_session()
     return session.profiler if session is not None else None
 
 

@@ -24,11 +24,15 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._capture.predicates import _evaluate_intervene_op
 from .._ir.intervention import FireResult
-from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+from .._ir.live_index import LiveIndexWindowError
+from .._ir.selector_eval import selector_contains_kind
+from .._selection.selectors import BaseSelector
+from .._utils._tensor_label import clear_tensor_label, get_tensor_label
 from ._rule_match import _match_rules, _rule_decision
 from ._zero_fire import note_capture_rule_fired
-from .hooks import make_live_site_proxy
+from .hooks import make_live_site_proxy, normalize_hook_plan
 from .spec import Recipe
 
 #: ``backends.torch._ops_interventions``, bound on first use: the backend module
@@ -94,9 +98,6 @@ class _BoundaryPredicate:
 def _addresses_module(selector: Any) -> bool:
     """Return whether ``selector`` is a ``BaseSelector`` with a ``module`` term."""
 
-    from .._ir.selector_eval import selector_contains_kind
-    from .._selection.selectors import BaseSelector
-
     return isinstance(selector, BaseSelector) and selector_contains_kind(selector, "module")
 
 
@@ -141,7 +142,6 @@ def _boundary_decision(predicate: _BoundaryPredicate, site: Any) -> tuple[Any, A
             return None
         decision = _rule_decision(rule)
         return None if decision is None else (decision, rule.target)
-    from .._capture.predicates import _evaluate_intervene_op
 
     decision = _evaluate_intervene_op(site, predicate.options)
     return None if decision is None else (decision, predicate.selector)
@@ -175,7 +175,6 @@ def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str,
     label = get_tensor_label(out)
     if label is None:
         return False
-    from .._ir.live_index import LiveIndexWindowError
 
     try:
         event = trace.capture_events.live_index.require_event(label)
@@ -228,7 +227,6 @@ def _fire_boundary_predicate_hooks(
     """
 
     from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
-    from .hooks import normalize_hook_plan
     from .runtime import (
         _apply_live_hooks,
         _armed_injection_state,

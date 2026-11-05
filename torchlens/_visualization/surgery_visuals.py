@@ -755,7 +755,7 @@ def draw_interventions(
         Whatever ``Trace.draw`` returns for the resolved keywords.
     """
 
-    from .lenses._resolve import draw_with_lens
+    from .lenses._resolve import draw_with_lens  # deferred: cycle _visualization
 
     result = draw_with_lens(trace, "interventions", **user_kwargs)
     # Nothing was written when the draw wrote no file; a census then would

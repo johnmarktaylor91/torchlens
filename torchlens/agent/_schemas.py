@@ -69,6 +69,6 @@ def load_schema(schema_id: str) -> dict[str, Any]:
             code="agent_schema_unknown",
             remedy=f"fetch the index first; served ids: {', '.join(schema_index())}",
         )
-    from ._artifacts import _loads_bounded
+    from ._artifacts import _loads_bounded  # deferred: startup cost
 
     return _loads_bounded((_SCHEMA_DIR / filename).read_text(encoding="utf-8"))

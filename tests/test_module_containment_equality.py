@@ -21,7 +21,7 @@ from _oracle_env import (
 from fixtures.module_containment_models import ALL_FIXTURES, FixtureBuilder
 
 import torchlens as tl
-from torchlens.backends.torch._tl import get_module_meta
+from torchlens._utils._tensor_label import get_module_meta
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "module_containment"
 #: Update flag for the module-containment golden corpus (b10 R78-1 round 3:

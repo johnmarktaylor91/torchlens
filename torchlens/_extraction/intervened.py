@@ -26,7 +26,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._ir.selector_eval import selector_contains_kind
 from .._utils.hashing import sha256_canonical_json
+from ..intervention.audit import site_keys_for_labels
+from ..intervention.spec import Recipe
+from ..intervention.types import Edit, InterventionDecision
 from .harvest_schema import (
     ADDRESS_CLASSES,
     HarvestSpec,
@@ -119,7 +123,6 @@ def _rule_address_class(rule: Any) -> str:
         return "selection"
     if rule.address_class == "recorded":
         return "label"
-    from .._ir.selector_eval import selector_contains_kind
 
     for kind, address_class in _STRUCTURAL_KIND_CLASSES:
         if selector_contains_kind(rule.target, kind, unwrap=True):
@@ -140,8 +143,6 @@ def _rule_helper(rule: Any) -> Any:
     Edit | None
         The helper spec carrying the batch-independence declaration.
     """
-
-    from ..intervention.types import Edit, InterventionDecision
 
     action = rule.edit
     if isinstance(action, InterventionDecision):
@@ -206,7 +207,6 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
 
     if intervene is None:
         return None
-    from ..intervention.spec import Recipe
 
     if not isinstance(intervene, Recipe) or not intervene.rules:
         raise InvalidArgumentError(
@@ -280,8 +280,6 @@ def batch_receipt(trace: Any) -> dict[str, Any]:
         structural keys of the fired ops), and ``event_digest`` (the capture
         door's audit digest for this transaction, when recorded).
     """
-
-    from ..intervention.audit import site_keys_for_labels
 
     fired: list[str] = []
     fire_count = 0

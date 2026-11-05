@@ -22,12 +22,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 import torchlens as tl  # noqa: E402
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens.backends.torch.collectives import (  # noqa: E402
     WildcardRecvUnsupportedError,
     remove_collective_wraps,
 )
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 from torchlens.errors import UncapturedCollectiveOpError  # noqa: E402

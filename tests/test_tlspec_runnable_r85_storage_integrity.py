@@ -384,7 +384,7 @@ def test_buffer_source_rung_honors_storage_pin() -> None:
     promotion and fails on rebind while an untouched object stays intact.
     """
 
-    from torchlens.backends.torch import _tl
+    from torchlens._utils import _tensor_label as _tl
 
     _tl.begin_label_session()
     try:

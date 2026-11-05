@@ -25,8 +25,8 @@ import torch
 from torch._ops import HigherOrderOperator
 
 import torchlens._utils._torch_compat as tc
+from torchlens._utils._dispatch_modes import _TorchLensDispatchMode
 from torchlens.backends.torch import _completeness_hop as hop
-from torchlens.backends.torch._modes import _TorchLensDispatchMode
 
 
 class _ImportRecorder(importlib.abc.MetaPathFinder):

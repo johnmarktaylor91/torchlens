@@ -406,7 +406,7 @@ def test_unvetted_collective_build_route_accepts_only_the_arm_refusal() -> None:
 def _unvetted_refusal_stand_in() -> BaseException:
     """Build the layer-1 arm refusal without needing an unvetted torch."""
 
-    from torchlens.distributed._recognizer import (
+    from torchlens._distributed._recognizer import (
         UNCAPTURED_COLLECTIVE_OP,
         UncapturedCollectiveOpError,
     )

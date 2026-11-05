@@ -30,6 +30,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from torchlens._selection.selection import units
 from torchlens.attribution._core import (
     InputKwargs,
     _AttributionTarget,
@@ -53,6 +54,7 @@ from torchlens.attribution._curve_settings import (
 )
 from torchlens.attribution._eval_maps import _DOCS_POINTER, _input_space_maps
 from torchlens.attribution._result import Attribution, AttributionError
+from torchlens.intervention.predicates import replace_with
 
 _DEFAULT_STEPS = 20
 _DEFAULT_PATCH = 8
@@ -380,9 +382,6 @@ def _step_intervention(
         mask selects anything.
     """
 
-    from torchlens._selection.selection import units
-    from torchlens.intervention.predicates import replace_with
-
     if not any(bool(mask.any()) for mask in masks):
         return ()
     return tuple(
@@ -411,12 +410,12 @@ def _match_input_labels(plan: _CurvePlan) -> tuple[str, ...]:
         If a leaf matches no input layer.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     inputs, kwargs = _rebuild_inputs(plan.prepared, plan.leaves)
     positional = (inputs,) if plan.prepared.is_single_tensor else tuple(inputs)
     with _temporarily_eval(plan.model), torch.no_grad():
-        trace = tl.trace(plan.model, list(positional), input_kwargs=kwargs or None)
+        trace = _capture_trace(plan.model, list(positional), input_kwargs=kwargs or None)
     candidates = [(name, trace[name].out) for name in trace.input_layers]
     used: set[str] = set()
     labels: list[str] = []

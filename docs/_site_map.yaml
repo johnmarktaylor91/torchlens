@@ -255,6 +255,8 @@ pages:
     section: gallery
   - path: gallery/basis_grid.md
     section: gallery
+  - path: gallery/bundles_harness.md
+    section: gallery
   - path: gallery/causal_tracing.md
     section: gallery
   - path: gallery/cnn_fields.md
@@ -262,6 +264,8 @@ pages:
   - path: gallery/index.md
     section: gallery
   - path: gallery/ioi_circuit.md
+    section: gallery
+  - path: gallery/jacobian_lens.md
     section: gallery
   - path: gallery/neuro_rdms.md
     section: gallery

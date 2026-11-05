@@ -164,7 +164,7 @@ def _disclosed_value(op: Any, field: str) -> Any:
     """Return one disclosure-field value for a class row."""
 
     if field == "payload_state":
-        from ..report._agent_json import _payload_state
+        from ..report._agent_json import _payload_state  # deferred: startup cost
 
         return _payload_state(op)
     if field == "device":

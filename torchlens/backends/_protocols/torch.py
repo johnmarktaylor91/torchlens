@@ -12,6 +12,7 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
+from ...options import CaptureOptions
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
 from .._trace_options import TORCH_TRACE_OPTIONS
@@ -33,8 +34,6 @@ def replay_ready_capture() -> Any:
     and RNG state, which a default ``tl.trace`` does not record (the preview
     backends record what their replay needs by default).
     """
-
-    from ...options import CaptureOptions
 
     return CaptureOptions(save_args=True, save_rng=True)
 
@@ -96,7 +95,7 @@ class TorchProtocol(SpecBackedProtocol):
             ``trace_option_unsupported`` for an unknown trace keyword.
         """
 
-        from ..._user_funcs import trace
+        from ..._user_funcs import trace  # deferred: cycle _user_funcs
 
         unknown = sorted(set(options) - _trace_keyword_names())
         if unknown:
@@ -171,7 +170,7 @@ class TorchProtocol(SpecBackedProtocol):
 def _trace_keyword_names() -> frozenset[str]:
     """Named ``tl.trace`` parameters other than the model, its inputs and ``backend``."""
 
-    from ..._user_funcs import trace
+    from ..._user_funcs import trace  # deferred: cycle _user_funcs
 
     parameters = inspect.signature(trace).parameters.values()
     return frozenset(

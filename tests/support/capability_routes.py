@@ -125,7 +125,7 @@ def _vetted_collective_build() -> bool:
 def unvetted_arm_refusal(exc: BaseException) -> bool:
     """Match ``arm()``'s layer-1 refusal on a torch whose collective census is not vetted."""
 
-    from torchlens.distributed._recognizer import UncapturedCollectiveOpError
+    from torchlens._distributed._recognizer import UncapturedCollectiveOpError
 
     fields = getattr(exc, "fields", None)
     return (

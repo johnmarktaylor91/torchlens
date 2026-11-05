@@ -599,7 +599,7 @@ def roofline(
     True
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[RooflineRow] = []
     coverage = dict.fromkeys(ROOFLINE_REASONS, 0)
@@ -816,7 +816,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
     the join remedy.
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[InstrumentedRateRow] = []
     any_applicable = False
@@ -960,7 +960,7 @@ def overhead(
 
     import torch
 
-    from .._user_funcs import trace as _trace
+    from .._user_public_impls import trace as _trace
 
     _validate_cost_tiers(tiers)
     kwargs = input_kwargs or {}

@@ -296,7 +296,7 @@ class RecordContext:
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
 
-        from ..recording.exceptions import RecordContextFieldError
+        from ..recording.exceptions import RecordContextFieldError  # deferred: vocabulary closure
 
         raise RecordContextFieldError(name)
 
@@ -382,7 +382,7 @@ class CaptureSpec:
     def __post_init__(self) -> None:
         """Normalize and validate capture save-mode settings."""
 
-        from .._utils.tensor_utils import SAVE_MODES
+        from .._utils.tensor_utils import SAVE_MODES  # deferred: vocabulary closure
 
         if self.save_mode not in SAVE_MODES:
             raise InvalidArgumentError(

@@ -21,6 +21,7 @@ from typing import Any
 
 import torch
 
+from .._semantic import _hops
 from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
@@ -78,8 +79,6 @@ def _deepest_value_ancestor(trace: Any, op: Any) -> tuple[Any, str]:
     def _grammar_stop(candidate: Any) -> bool:
         """Anchor at the first op the grammar does not propose across."""
 
-        from .._semantic import _hops
-
         return _hops._propose(candidate, VALUE_GRAMMAR) is None
 
     walk = walk_upstream(trace, op, _grammar_stop, grammar=VALUE_GRAMMAR)
@@ -97,7 +96,7 @@ def _resolve_target_op(trace: Any, target: Any) -> Any:
     """
 
     if target is None or target == "final":
-        from ._anchors import resolve_lm_head
+        from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
         return resolve_lm_head(trace).target_op
     if isinstance(target, str):

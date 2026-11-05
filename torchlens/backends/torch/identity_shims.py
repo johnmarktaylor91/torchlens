@@ -92,6 +92,7 @@ from ._identity_shim_views import (
     _resolve,
 )
 from ._jit_identity_shims import install_jit_entry_shims
+from .wrappers import _wrapper_install_lock
 
 __all__ = [
     "identity_shims_installed",
@@ -196,7 +197,6 @@ class _ShimOnExecLoader:
         """
 
         self._loader.exec_module(module)
-        from .wrappers import _wrapper_install_lock
 
         with _wrapper_install_lock:
             if not _family_installed:
