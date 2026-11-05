@@ -214,15 +214,14 @@ def snapshot_tensor(value: torch.Tensor, attr_path: str) -> PlainAttrTensorSnaps
 
 
 def _tensor_snapshots_equal(left: PlainAttrTensorSnapshot, right: PlainAttrTensorSnapshot) -> bool:
-    """Return whether two tensor snapshots hold the same dtype, shape and bytes."""
+    """Return whether two tensor snapshots name the same tensor holding the same bytes.
+
+    A reassignment is a change even to an equal tensor: the restore puts the
+    original object back, so every other reference to it agrees again.
+    """
 
     a, b = left.saved, right.saved
-    if (
-        a.dtype != b.dtype
-        or a.shape != b.shape
-        or left.value.device != right.value.device
-        or a.device != b.device
-    ):
+    if left.value is not right.value or a.dtype != b.dtype or a.shape != b.shape:
         return False
     with torch.no_grad():
         return bool(torch.equal(flat_byte_view(a), flat_byte_view(b)))
@@ -254,10 +253,15 @@ def snapshot_array(value: np.ndarray, attr_path: str) -> PlainAttrArraySnapshot:
 
 
 def _arrays_equal(left: PlainAttrArraySnapshot, right: PlainAttrArraySnapshot) -> bool:
-    """Return whether two array snapshots hold the same dtype, shape and bytes."""
+    """Return whether two array snapshots name the same array holding the same bytes."""
 
     a, b = left.saved, right.saved
-    return a.dtype == b.dtype and a.shape == b.shape and a.tobytes() == b.tobytes()
+    return (
+        left.value is right.value
+        and a.dtype == b.dtype
+        and a.shape == b.shape
+        and a.tobytes() == b.tobytes()
+    )
 
 
 def _restore_array(snapshot: PlainAttrArraySnapshot) -> np.ndarray:
@@ -426,8 +430,8 @@ def _entries_equal(
 def rich_values_equal(left: Any, right: Any, attr_path: str, compare_item: Comparer) -> bool:
     """Return whether two snapshots from :func:`snapshot_rich_value` match.
 
-    Objects, deques and generators must also be the same object: a reassignment
-    is a change even when the new object holds equal values.
+    Every kind must also be the same object: a reassignment is a change even
+    when the new object holds equal values.
     """
 
     if type(left) is not type(right):
