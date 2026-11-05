@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils._display_numbers import format_percent
 from ..._vocab.node_spec import (
     EDITED_HEADER_OMITTED_BANNERS,
     LENS_BANNER_OMIT_KEY,
@@ -265,7 +266,7 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:
                 spec.lines.append(
-                    f"top-{ranks[candidate]} of {len(top)} ({shares[candidate]:.0%} of total)"
+                    f"top-{ranks[candidate]} of {len(top)} ({format_percent(shares[candidate])} of total)"
                 )
                 break
         return spec

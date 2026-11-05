@@ -34,6 +34,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._display_numbers import format_percent
 from torchlens._visualization._header_block import (
     KEY_TABLE_ID,
     drawn_module_marks,
@@ -42,6 +43,10 @@ from torchlens._visualization._header_block import (
     params_caption_detail,
 )
 from torchlens._visualization._label_format import compact_count, decimal_size, format_memory
+from torchlens._visualization._render_nodes import (
+    _format_batch_topk_output_lines,
+    _format_label_score_row,
+)
 from torchlens._visualization.modes import _compact_size
 from torchlens._visualization.overlays import format_overlay_value, legend_domain_text
 from torchlens._visualization.themes import (
@@ -201,6 +206,26 @@ def test_drawn_sizes_divide_by_the_divisor_their_unit_names_mean() -> None:
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         decimal_size(-1)
+
+
+@pytest.mark.parametrize(
+    ("fraction", "expected"),
+    [(0.0, "0%"), (0.001, "<1%"), (0.0049, "<1%"), (0.42, "42%"), (0.9951, ">99%"), (1.0, "100%")],
+)
+def test_drawn_percents_never_round_to_a_false_bound(fraction: float, expected: str) -> None:
+    assert format_percent(fraction) == expected
+
+
+def test_output_node_topk_labels_print_tiny_probabilities_as_under_one_percent() -> None:
+    rows = [
+        {"batch_item": 0, "rank": 1, "label": "tabby", "prob": 0.9971},
+        {"batch_item": 0, "rank": 2, "label": "tiger cat", "prob": 0.0012},
+        {"batch_item": 0, "rank": 3, "label": "lynx", "prob": 0.0},
+    ]
+    lines = _format_batch_topk_output_lines({"kind": "batch_topk", "rows": rows})
+    assert lines == ["output", "1. tabby >99%", "2. tiger cat <1%", "3. lynx 0%"]
+    assert _format_label_score_row("tabby", 0.001) == "tabby <1%"
+    assert _format_label_score_row("tabby", 1.0) == "tabby 100%"
 
 
 def test_drawn_counts_carry_thousands_separators() -> None:
