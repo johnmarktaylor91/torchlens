@@ -424,8 +424,10 @@ def test_equal_values_draw_equal_sizes_whatever_the_label(
     # The two labels genuinely differ: the linear's longest row is far longer.
     assert _longest_row(long_node[2]) >= 2 * _longest_row(short_node[2])
     assert short_node[:2] == long_node[:2]
+    # Graphviz lays a node out at its encoded size rounded up to whole points.
     finals = {key.split(":")[0]: size for key, size in _state(mlp_log).final_sizes.items()}
-    assert finals[short] == finals[long] == pytest.approx(short_node[:2], abs=1e-3)
+    assert finals[short] == finals[long]
+    assert short_node[:2] == pytest.approx(finals[short], abs=1.0 / 72.0)
 
 
 # ---------------------------------------------------------------------------
