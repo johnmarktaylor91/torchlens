@@ -173,7 +173,7 @@ def test_key_border_fits_its_bar_under_a_wide_header(tmp_path: Path) -> None:
     finally:
         log.cleanup()
     graph_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
-    assert 'FIXEDSIZE="TRUE" ALIGN="LEFT" WIDTH=' in graph_line.split(" label=", 1)[1]
+    assert 'CELLSPACING="0" CELLPADDING="0" FIXEDSIZE="TRUE" ALIGN="LEFT"' in graph_line
     svg = (tmp_path / "g.svg").read_text(encoding="utf-8")
     texts = re.findall(
         r'<text text-anchor="start" x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)</text>', svg
@@ -189,6 +189,7 @@ def test_key_border_fits_its_bar_under_a_wide_header(tmp_path: Path) -> None:
         if min(ys) < low_y < max(ys) and min(xs) <= float(low[0]):
             borders.append(max(xs))
     assert borders, "no key outline around the bar's low label"
-    # The high label ("N KB" or "N bytes") is short; before the fix the outline
-    # ran hundreds of points further, to the header's measured width.
-    assert max(borders) - high_x < 60.0, (max(borders), high_x, header_x)
+    # The outline encloses the short high label ("N KB") and ends just after it;
+    # before the fix it ran hundreds of points further, to the header's width.
+    right = max(borders)
+    assert high_x < right < high_x + 60.0, (right, high_x, header_x)

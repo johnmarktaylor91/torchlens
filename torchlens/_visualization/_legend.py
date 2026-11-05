@@ -295,10 +295,11 @@ def build_legend_table_label(
     theme:
         Resolved theme (fonts, border, text color).
     fit:
-        Fix the table and every text cell to their measured content size.
-        Graphviz stretches a nested table to fill its cell, so a key under a
-        wider header drew its border out to the header's width with empty
-        space on the right; the header block passes ``True``. A standalone
+        Fix every text cell to its measured size and hold the table in a
+        fixed wrapper of exactly its content size. Graphviz stretches a nested
+        table to fill its cell, so a key under a wider header drew its border
+        out to the header's width with empty space on the right; the header
+        block passes ``True``. A standalone
         legend node is never stretched and keeps the natural layout.
     """
 
@@ -314,17 +315,23 @@ def build_legend_table_label(
             cell, extent = _legend_row(row, theme, titled=bool(section.title), fit=fit)
             cells.append(cell)
             extents.append(extent)
-    size = ""
-    if fit:
-        width, height = _fitted_table_size(extents)
-        # A fixed table is placed by its own ALIGN inside a wider cell.
-        size = f' FIXEDSIZE="TRUE" ALIGN="LEFT" WIDTH="{width}" HEIGHT="{height}"'
-    return (
-        f'<<TABLE BORDER="{_LEGEND_BORDER}" CELLBORDER="0" CELLSPACING="0" '
-        f'CELLPADDING="{_LEGEND_PADDING}" COLOR="{theme.default_border}"{size}>'
+    table = (
+        f'<TABLE BORDER="{_LEGEND_BORDER}" CELLBORDER="0" CELLSPACING="0" '
+        f'CELLPADDING="{_LEGEND_PADDING}" COLOR="{theme.default_border}">'
         + "".join(cells)
-        + "</TABLE>>"
+        + "</TABLE>"
     )
+    if fit:
+        # The outlined table stays natural inside a borderless fixed, left-aligned
+        # wrapper of exactly its size: Graphviz 2.43 draws the outline of a fixed
+        # table that is also ALIGN="LEFT" at the wrong width.
+        width, height = _fitted_table_size(extents)
+        table = (
+            '<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" '
+            f'FIXEDSIZE="TRUE" ALIGN="LEFT" WIDTH="{width}" HEIGHT="{height}">'
+            f"<TR><TD>{table}</TD></TR></TABLE>"
+        )
+    return f"<{table}>"
 
 
 #: Outline and cell padding of the legend table, in points.
