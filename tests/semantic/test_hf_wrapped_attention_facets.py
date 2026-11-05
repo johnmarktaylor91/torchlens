@@ -18,7 +18,8 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.transformer as tviz
-from torchlens.errors import TorchLensWarning
+from torchlens._semantic.recipes._helpers import modules_with_facet as listing_modules_with_facet
+from torchlens.errors import InvalidArgumentError, TorchLensWarning
 from torchlens.mechinterp._heads import _attention_modules
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")
@@ -287,6 +288,42 @@ def test_layer_listings_count_wrapper_and_core_as_one_layer(
     assert tuple(by_layer.shape) == (1,)
     by_head = patching.activation_patch_attention_heads(model, x, corrupted, _metric)
     assert tuple(by_head.shape) == (1, _HEADS)
+
+
+class _SharedWrapperBlock(nn.Module):
+    """One BERT wrapper called twice under ``attn`` (an ALBERT-style shared layer)."""
+
+    def __init__(self) -> None:
+        """Initialize the shared wrapper."""
+
+        super().__init__()
+        self.attn = BertAttention()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the shared wrapper twice."""
+
+        return self.attn(self.attn(x))
+
+
+def test_patching_listing_refuses_a_shared_wrapper_instead_of_listing_wrapper_and_core() -> None:
+    """A reused wrapper and its reused core never both survive the one-per-layer dedup.
+
+    The sweep yields both Modules; the wrapper's core view refuses (two calls),
+    so the dedup cannot match them, and the patching listing refuses by name
+    instead of handing two addresses for one layer to a whole-module sweep.
+    """
+
+    torch.manual_seed(5)
+    clean = tl.trace(_SharedWrapperBlock().eval(), torch.randn(2, 5, _HIDDEN), save="all")
+
+    assert sorted(module.address for module in clean.modules_with_facet("q")) == [
+        "attn",
+        "attn.self",
+    ]
+    with pytest.raises(InvalidArgumentError, match=r"'attn(\.self)?' has 2 calls") as info:
+        listing_modules_with_facet(clean, "q")
+    assert info.value.fields["code"] == "module_call_ambiguous"
+    assert "patching sweeps patch whole modules" in info.value.fields["remedy"]
 
 
 def test_bert_core_alone_keeps_its_head_edit() -> None:
