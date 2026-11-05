@@ -102,10 +102,10 @@ class TraceAppendMixin:
         with this Trace's staged intervention spec, checked against the
         captured graph, and stacked onto every saved tensor along batch
         dimension 0. Op counts, pass indexes and labels are unchanged (the
-        graph must be identical); ``is_appended`` becomes ``True``,
+        graph must be identical); ``provenance.is_appended`` becomes ``True``,
         ``last_run`` describes the append (``engine="append"``) and
-        ``state_history`` gains an ``"append"`` record. The stored input and
-        output transforms apply as they do for ``run``.
+        ``state_history`` gains an ``"append"`` record. The stored input
+        transform applies as it does for ``run``.
 
         Parameters
         ----------
@@ -135,9 +135,10 @@ class TraceAppendMixin:
         >>> import torch
         >>> import torchlens as tl
         >>> model = torch.nn.Linear(3, 2)
-        >>> trace = tl.trace(model, torch.randn(2, 3))
+        >>> opts = tl.options.CaptureOptions(replayable=True)
+        >>> trace = tl.trace(model, torch.randn(2, 3), capture=opts)
         >>> trace.append(torch.randn(1, 3), model=model)
-        >>> trace.is_appended
+        >>> trace.provenance.is_appended
         True
         """
 
