@@ -5457,3 +5457,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1a3f3e9dc98ecf5598c37d701d035eb22c99d862 (dirty)
 recorded: 2026-11-05T10:08:04.827273+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: corpus-w2-src-prov remerge onto mq-b12s: validation copy combines the sys.modules-sharing deepcopy with closure rebinding; warm lru_cache output capture
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c266ab862104807fe41a1410e3290dfcc4e4d868 (dirty)
+recorded: 2026-11-05T11:19:53.157926+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: corpus-w2-src-prov remerge onto mq-b12s: validation copy combines the sys.modules-sharing deepcopy with closure rebinding; warm lru_cache output capture
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c266ab862104807fe41a1410e3290dfcc4e4d868 (dirty)
+recorded: 2026-11-05T11:19:59.870040+00:00
