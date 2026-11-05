@@ -150,9 +150,13 @@ def _parent_perturbations_change_output(
     positions_by_parent: dict[str, list[int]] = {}
     for position, parent_label in graph_positions.items():
         positions_by_parent.setdefault(parent_label, []).append(position)
+    bool_child = _all_bool_outputs(saved_outputs)
     for positions in positions_by_parent.values():
         first_position = positions[0]
-        for candidate in _perturb_candidates(inputs[first_position]):
+        candidates = _perturb_candidates(inputs[first_position])
+        if bool_child:
+            candidates = (*candidates, *_bool_child_substitutes(capture, inputs, positions))
+        for candidate in candidates:
             perturbed_inputs = list(inputs)
             for position in positions:
                 perturbed_inputs[position] = candidate
@@ -165,6 +169,135 @@ def _parent_perturbations_change_output(
             if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
                 return True
     return False
+
+
+#: Elementwise comparison primitives whose bool output admits the comparand
+#: straddle (torch parity: ``validation/_influence_probes.py``).
+_COMPARISON_PRIMITIVES = frozenset({"eq", "ne", "lt", "le", "gt", "ge"})
+
+
+def _all_bool_outputs(saved_outputs: tuple[Any, ...]) -> bool:
+    """Return whether every saved output of an equation is a bool array."""
+
+    import jax.numpy as jnp
+
+    return bool(saved_outputs) and all(
+        getattr(output, "dtype", None) == jnp.bool_ for output in saved_outputs
+    )
+
+
+def _bool_child_substitutes(
+    capture: JaxEquationCapture, inputs: Sequence[Any], positions: Sequence[int]
+) -> tuple[Any, ...]:
+    """Return threshold-crossing substitutes for one parent of a bool-output equation.
+
+    A bool child is a threshold op, so the additive steps of
+    :func:`_perturb_candidates` routinely fail to cross it (``mask != 0`` on an
+    all-nonzero mask, the ``x != x`` NaN test). As the torch validator does
+    for bool children, the parent is also replaced by a dtype battery (zero,
+    one, sign, non-finite and extreme values) and, for a two-operand
+    comparison where the parent fills one operand, by the comparand and its
+    two adjacent representable values. A substitute that moves the output
+    proves the edge transmits value; when every substitute leaves the output
+    at its saved value the check still fails.
+
+    Parameters
+    ----------
+    capture
+        Captured JAX equation metadata.
+    inputs
+        Replay inputs derived from trace graph parents.
+    positions
+        Primitive argument positions the perturbed parent fills.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Substitute values with the parent's shape and dtype.
+    """
+
+    import jax.numpy as jnp
+
+    parent = jnp.asarray(inputs[positions[0]])
+    substitutes = list(_bool_probe_battery(parent))
+    if (
+        str(capture.primitive) in _COMPARISON_PRIMITIVES
+        and len(inputs) == 2
+        and len(positions) == 1
+    ):
+        other = jnp.asarray(inputs[1 - positions[0]])
+        substitutes.extend(_straddle_substitutes(parent, other))
+    return tuple(substitutes)
+
+
+def _bool_probe_battery(parent: Any) -> tuple[Any, ...]:
+    """Return dtype-directed substitutes that flip a value-transmitting predicate."""
+
+    import jax.numpy as jnp
+
+    dtype = parent.dtype
+    if dtype == jnp.bool_:
+        return (jnp.zeros_like(parent), jnp.ones_like(parent), jnp.logical_not(parent))
+    if jnp.issubdtype(dtype, jnp.complexfloating):
+        return (
+            jnp.zeros_like(parent),
+            jnp.ones_like(parent),
+            jnp.full_like(parent, 1j),
+            jnp.full_like(parent, complex(float("nan"), 0.0)),
+        )
+    if jnp.issubdtype(dtype, jnp.floating):
+        return (
+            jnp.zeros_like(parent),
+            jnp.ones_like(parent),
+            -jnp.ones_like(parent),
+            -parent,
+            jnp.full_like(parent, jnp.nan),
+            jnp.full_like(parent, jnp.inf),
+            jnp.full_like(parent, -jnp.inf),
+            jnp.full_like(parent, jnp.finfo(dtype).max / 2),
+        )
+    if jnp.issubdtype(dtype, jnp.integer):
+        info = jnp.iinfo(dtype)
+        battery = [
+            jnp.zeros_like(parent),
+            jnp.ones_like(parent),
+            jnp.full_like(parent, info.max),
+            jnp.full_like(parent, info.min),
+        ]
+        if info.min < 0:
+            battery.append(-jnp.ones_like(parent))
+        return tuple(battery)
+    return ()
+
+
+def _straddle_substitutes(parent: Any, other: Any) -> tuple[Any, ...]:
+    """Return the comparand and its two adjacent representable values, shaped as ``parent``."""
+
+    import jax.numpy as jnp
+
+    dtype = parent.dtype
+    numeric = jnp.issubdtype(dtype, jnp.floating) or jnp.issubdtype(dtype, jnp.integer)
+    if not numeric or not (
+        jnp.issubdtype(other.dtype, jnp.floating) or jnp.issubdtype(other.dtype, jnp.integer)
+    ):
+        return ()
+    try:
+        base = jnp.broadcast_to(other.astype(dtype), parent.shape)
+    except ValueError:  # the comparand broadcasts wider than the parent: no straddle
+        return ()
+    if jnp.issubdtype(dtype, jnp.floating):
+        if not bool(jnp.all(jnp.isfinite(base))):
+            return ()
+        try:
+            return (
+                base,
+                jnp.nextafter(base, jnp.full_like(base, -jnp.inf)),
+                jnp.nextafter(base, jnp.full_like(base, jnp.inf)),
+            )
+        except (TypeError, NotImplementedError):  # no nextafter for this float dtype
+            return (base,)
+    one = jnp.ones_like(base)
+    return (base, base - one, base + one)
 
 
 def _control_parent_labels(op: Any) -> set[str]:
