@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1657 modules, 691800 lines, 0 modules without a docstring.
+85 packages, 1657 modules, 692438 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,7 +56,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3862 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 19 | 6957 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 927 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8660 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8793 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6976 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6498 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5263 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5419 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 77 | 31807 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 77 | 32312 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2752 |
 
 ## Modules by package
@@ -1318,7 +1318,7 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 927 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (10 modules, 8660 lines)
+JAX backend preview exports. (10 modules, 8793 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1326,7 +1326,7 @@ JAX backend preview exports. (10 modules, 8660 lines)
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 72 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
-| `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 530 |
+| `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 663 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 86 |
 | `backend` | Jaxpr-first JAX backend preview. | 4357 |
 | `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
@@ -2252,7 +2252,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (77 modules, 31807 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (77 modules, 32312 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2262,16 +2262,16 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 111 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 240 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 39 |
-| `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'' and integer saturation. | 244 |
+| `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'', saturation and clamp bounds. | 387 |
 | `_ctc_lengths_perturbation` | Sum-preserving length perturbation for ''ctc_loss''. | 78 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |
 | `_descriptor_versions` | Runnable descriptor version tripwire shared by the sparse-descriptor and artifact validators. | 67 |
 | `_destination_coverage` | Destination-overwrite coverage proofs for indexed writes. | 466 |
 | `_display` | Validation printouts; independent of checks, tolerances and verdict production. | 112 |
-| `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 620 |
+| `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 687 |
 | `_edge_boundary` | Edge-intervention boundary validation (L6 4.3), split out of ''core.py''. | 344 |
-| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 643 |
-| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 497 |
+| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 655 |
+| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 494 |
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
 | `_exemption_table` | The declared table of validation exemptions. | 91 |
 | `_foreign_kernel_dependence` | Pre-perturbation check for the declared per-output dependence of known foreign kernels. | 138 |
@@ -2306,7 +2306,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_norm_zero_weight_proof` | Value proof for a normalization input annihilated by an all-zero affine weight. | 146 |
 | `_operand_value_proofs` | Value proofs for calls whose perturbed operand provably cannot reach the output. | 472 |
 | `_output_walk` | Validation-owned independent output-tensor traversal ( R74/75-1). | 98 |
-| `_perturb` | Validation perturbations: a random wrong value per dtype for the replay tripwire. | 249 |
+| `_perturb` | Validation perturbations: a random wrong value per dtype for the replay tripwire. | 280 |
 | `_posthoc_decision` | The structured decision every posthoc perturbation predicate returns. | 29 |
 | `_pre_replay` | Pre-replay verdicts: ops validation settles before any replay is attempted. | 148 |
 | `_pristine` | Pristine-torch context for wrap-state-independent validation oracles. | 143 |
@@ -2317,10 +2317,10 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_replay_storage_context` | Replay a storage-geometry or view-function receiver on a clone of its saved context. | 202 |
 | `_replay_warnings` | Keep validation verdicts independent of the caller's warning filters. | 67 |
 | `_saved_outs_steps` | Recorded failure and diagnostic steps of one forward-replay validation run. | 281 |
-| `_saved_value_proofs` | Posthoc value proofs for parents that provably cannot reach an op's output. | 418 |
+| `_saved_value_proofs` | Posthoc value proofs for parents that provably cannot reach an op's output. | 462 |
 | `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 269 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 290 |
-| `_shift_probe` | Non-uniform perturbation probe for shift-invariant children. | 83 |
+| `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 294 |
 | `_source_provenance` | Source-provenance completeness: fail forward validation on source-less tensor args. | 127 |
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
 | `_structural_slot_checks` | Pre-perturbation checks for argument slots whose value is pinned by structure. | 171 |
