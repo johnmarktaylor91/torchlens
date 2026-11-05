@@ -5419,3 +5419,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bd6482c4452c0ea46f2ea96ff427155aedebf845 (dirty)
 recorded: 2026-11-05T09:40:47.632708+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq5: fixq4 75ad8666fb + train ad6555f335; internal readers read storage, so producer read sites move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f870a5cf381e3e2b19625829565f85d32eaa9fc (dirty)
+recorded: 2026-11-05T10:07:10.032337+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq5: fixq4 75ad8666fb + train ad6555f335; internal readers read storage, so producer read sites move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f870a5cf381e3e2b19625829565f85d32eaa9fc (dirty)
+recorded: 2026-11-05T10:07:17.174937+00:00
