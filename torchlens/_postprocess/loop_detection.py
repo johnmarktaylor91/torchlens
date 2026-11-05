@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from .._data_classes._site_key import SiteKeyMinter
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
-from ..errors.validation import MetadataInvariantError
+from ..errors._validation import MetadataInvariantError
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,

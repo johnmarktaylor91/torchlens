@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from .._events import register_metadata_invariants
-from ..errors.validation import MetadataInvariantError as MetadataInvariantError
+from ..errors._validation import MetadataInvariantError as MetadataInvariantError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

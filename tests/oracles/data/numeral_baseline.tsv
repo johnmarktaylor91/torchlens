@@ -8309,7 +8309,7 @@ package-docstrings	torchlens/distributed/_audit.py	1.3
 package-docstrings	torchlens/errors/_episode.py	40
 package-docstrings	torchlens/errors/_runnable.py	051
 package-docstrings	torchlens/errors/_runnable.py	18
-package-docstrings	torchlens/errors/validation.py	64
+package-docstrings	torchlens/errors/_validation.py	64
 package-docstrings	torchlens/experiment/__init__.py	2026
 package-docstrings	torchlens/experiment/_effects.py	1_1
 package-docstrings	torchlens/experiment/_effects.py	1_2

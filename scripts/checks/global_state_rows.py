@@ -1122,7 +1122,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_episode_spec.py", "__all__"),
         ("torchlens/_utils/_sig_format.py", "__all__"),
         ("torchlens/_utils/_input_tree.py", "__all__"),
-        ("torchlens/errors/validation.py", "__all__"),
+        ("torchlens/errors/_validation.py", "__all__"),
         ("torchlens/_events.py", "__all__"),
         ("torchlens/backends/_invariants.py", "__all__"),
         ("torchlens/_extract_refusals.py", "__all__"),
