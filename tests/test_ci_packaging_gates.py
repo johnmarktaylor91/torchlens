@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shlex
 from pathlib import Path
 from types import ModuleType
 
@@ -177,6 +178,68 @@ def test_every_smoke_step_collects_tests_through_the_smoke_skip() -> None:
     assert seen == {"pr.yml": 1, "nightly.yml": 3}, seen
     parity = (_PROJECT_ROOT / "scripts" / "smoke_ci_parity.py").read_text()
     assert '[*pytest, "tests/", "-m", "smoke",' in parity
+
+
+#: Stand-in for the serial-marked file list both the workflow and the script compute.
+_SERIAL_FILES = "<serial files>"
+
+
+def _pytest_signature(paths: list[str], marker: str | None) -> tuple[tuple[str, ...], str | None]:
+    """Return one pytest command's identity: its test paths and its ``-m`` expression."""
+
+    return tuple(paths), marker
+
+
+def _ci_smoke_step_pytest_commands() -> set[tuple[tuple[str, ...], str | None]]:
+    """Return the signature of every ``pytest`` command in the PR smoke step."""
+
+    run_step = next(
+        step for step in _smoke_job()["steps"] if step.get("name", "").startswith("Run smoke")
+    )
+    script_text = run_step["run"].replace("\\\n", " ")
+    commands = set()
+    for line in script_text.splitlines():
+        tokens = shlex.split(line.strip(), comments=True)
+        if not tokens or tokens[0] != "pytest":
+            continue
+        marker = tokens[tokens.index("-m") + 1] if "-m" in tokens else None
+        paths = [
+            _SERIAL_FILES if token == "${serial_files[@]}" else token
+            for token in tokens[1:]
+            if token.startswith(("tests/", "${serial_files"))
+        ]
+        commands.add(_pytest_signature(paths, marker))
+    return commands
+
+
+def _script_pytest_commands() -> set[tuple[tuple[str, ...], str | None]]:
+    """Return the signature of every ``pytest`` command the commit gate script runs."""
+
+    script = _load_smoke_ci_parity_script()
+    serial = script.serial_test_files()
+    commands = set()
+    for command in script.gate_commands(Path("python"), 4, [], "smoke.junit.xml"):
+        if command[1:3] != ["-m", "pytest"]:
+            continue
+        tokens = command[3:]
+        marker = tokens[tokens.index("-m") + 1] if "-m" in tokens else None
+        paths = [token for token in tokens if token.startswith("tests/")]
+        commands.add(_pytest_signature([_SERIAL_FILES] if paths == serial else paths, marker))
+    return commands
+
+
+def test_local_ci_smoke_script_runs_every_pytest_command_of_the_smoke_step() -> None:
+    """The commit gate runs the same ``pytest`` commands as CI's smoke step, no more, no fewer.
+
+    The release-guard command joined the PR smoke step without joining
+    ``scripts/smoke_ci_parity.py``, so a green from the commit gate stopped
+    covering everything the CI smoke step runs. Each command is compared by
+    its test paths and ``-m`` expression.
+    """
+
+    ci_commands = _ci_smoke_step_pytest_commands()
+    assert len(ci_commands) >= 4, ci_commands
+    assert _script_pytest_commands() == ci_commands
 
 
 def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
