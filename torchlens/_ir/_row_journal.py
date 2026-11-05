@@ -267,7 +267,8 @@ def _read_parents(handle: _RowOpRecord) -> tuple[ParentEdge, ...]:
 
     edges = handle._parents
     if edges is None:
-        edges = _parent_edges(handle._cell("parents"), handle._cell("parent_arg_positions"))
+        row, fids = handle._row, handle._journal.fids
+        edges = _parent_edges(row[fids["parents"]], row[fids["parent_arg_positions"]])  # type: ignore[index]
         handle._parents = edges
     return edges
 
@@ -275,14 +276,14 @@ def _read_parents(handle: _RowOpRecord) -> tuple[ParentEdge, ...]:
 def _read_modules(handle: _RowOpRecord) -> tuple[Any, ...]:
     """Return the ``modules`` tuple the record's modules facet (or default) carries."""
 
-    return tuple(handle._cell("modules"))
+    return tuple(handle._row[handle._journal.fids["modules"]])  # type: ignore[index]
 
 
 def _read_module_stack(handle: _RowOpRecord) -> Any:
     """Return the module frames, mirroring the freeze's facet presence."""
 
     stack = handle._rest.module_stack  # type: ignore[union-attr]
-    if stack or handle._cell("modules"):
+    if stack or handle._row[handle._journal.fids["modules"]]:  # type: ignore[index]
         return stack
     return ()
 
@@ -291,7 +292,10 @@ def _read_scalar_bool(handle: _RowOpRecord) -> Any:
     """Return the raw ``is_scalar_bool`` (the cell is ``bool``-coerced)."""
 
     rest = handle._rest
-    if rest.is_scalar_bool is not None or handle._cell("bool_value") is not None:  # type: ignore[union-attr]
+    if (
+        rest.is_scalar_bool is not None
+        or handle._row[handle._journal.fids["bool_value"]] is not None
+    ):  # type: ignore[union-attr,index]
         return rest.is_scalar_bool  # type: ignore[union-attr]
     return None
 
@@ -299,23 +303,28 @@ def _read_scalar_bool(handle: _RowOpRecord) -> Any:
 def _read_transform_config(handle: _RowOpRecord) -> dict[str, object]:
     """Return the clean user transform mapping (the cell re-injects two channels)."""
 
-    config = dict(handle._cell("transform_config"))
+    config = dict(handle._row[handle._journal.fids["transform_config"]])  # type: ignore[index]
     config.pop("_tl_annotations", None)
     config.pop("fn_code_location", None)
     return config
 
 
+def _templates_from_row(row: list[Any], fids: dict[str, int]) -> ArgTemplateRef:
+    """Return the argument-template ref built from a row's five template cells."""
+
+    return ArgTemplateRef(
+        saved_args=row[fids["saved_args"]],
+        saved_kwargs=row[fids["saved_kwargs"]],
+        args_template=row[fids["args_template"]],
+        kwargs_template=row[fids["kwargs_template"]],
+        has_saved_args=row[fids["has_saved_args"]],
+    )
+
+
 def _read_templates(handle: _RowOpRecord) -> ArgTemplateRef:
     """Return the argument-template ref built from its five cells."""
 
-    cell = handle._cell
-    return ArgTemplateRef(
-        saved_args=cell("saved_args"),
-        saved_kwargs=cell("saved_kwargs"),
-        args_template=cell("args_template"),
-        kwargs_template=cell("kwargs_template"),
-        has_saved_args=cell("has_saved_args"),
-    )
+    return _templates_from_row(handle._row, handle._journal.fids)  # type: ignore[arg-type]
 
 
 def _cell_reader(cell_name: str) -> Any:
@@ -324,8 +333,9 @@ def _cell_reader(cell_name: str) -> Any:
     def read(handle: _RowOpRecord) -> Any:
         """Return the bound cell of ``handle``'s row."""
 
-        return handle._cell(cell_name)
+        return handle._row[handle._journal.fids[cell_name]]  # type: ignore[index]
 
+    read._cell_name = cell_name  # type: ignore[attr-defined]
     return read
 
 
@@ -348,6 +358,7 @@ def _rest_reader(slot: str) -> Any:
 
         return getattr(handle._rest, slot)
 
+    read._rest_slot = slot  # type: ignore[attr-defined]
     return read
 
 
@@ -419,20 +430,88 @@ _FAST_READS: dict[str, Any] = {
 }
 
 
-def _transform_facet(cell: Any) -> TransformFacet | None:
+def _patched_read(handle: _RowOpRecord, name: str) -> Any:
+    """Answer a fast name on an amended, unbuilt handle (the ``__getattr__`` overlay rule)."""
+
+    patch = handle._patch
+    if not _overlay_known(patch):
+        return getattr(handle.materialize(), name)
+    path = _FLAT_PATH.get(name)
+    if path is not None and path in patch:
+        return patch[path]
+    return _FAST_READS[name](handle)
+
+
+def _fast_property(name: str, read: Any) -> property:
+    """Return the handle property answering ``name`` in one call, without a failed lookup.
+
+    The order is ``__getattr__``'s: the built record, then an amendment overlay,
+    then the row (a cell read inline, a residual slot inline, else ``read``).
+    """
+
+    cell_name = getattr(read, "_cell_name", None)
+    rest_slot = getattr(read, "_rest_slot", None)
+    if cell_name is not None:
+
+        def get_cell(handle: _RowOpRecord) -> Any:
+            """Read ``name`` from the record, the overlay, else its row cell."""
+
+            record = handle._record
+            if record is not None:
+                return getattr(record, name)
+            if handle._patch:
+                return _patched_read(handle, name)
+            return handle._row[handle._journal.fids[cell_name]]  # type: ignore[index]
+
+        return property(get_cell, doc=f"Record read ``{name}`` (row cell ``{cell_name}``).")
+    if rest_slot is not None:
+
+        def get_rest(handle: _RowOpRecord) -> Any:
+            """Read ``name`` from the record, the overlay, else its residual slot."""
+
+            record = handle._record
+            if record is not None:
+                return getattr(record, name)
+            if handle._patch:
+                return _patched_read(handle, name)
+            return getattr(handle._rest, rest_slot)
+
+        return property(get_rest, doc=f"Record read ``{name}`` (residual ``{rest_slot}``).")
+
+    def get(handle: _RowOpRecord) -> Any:
+        """Read ``name`` from the record, the overlay, else its fast reader."""
+
+        record = handle._record
+        if record is not None:
+            return getattr(record, name)
+        if handle._patch:
+            return _patched_read(handle, name)
+        return read(handle)
+
+    return property(get, doc=f"Record read ``{name}``.")
+
+
+# The fast names are class properties, so a read is one call; ``__getattr__``
+# (reached only after a failed normal lookup) keeps every other record name.
+for _fast_name, _fast_read in _FAST_READS.items():
+    setattr(_RowOpRecord, _fast_name, _fast_property(_fast_name, _fast_read))
+del _fast_name, _fast_read
+
+
+def _transform_facet(row: list[Any], fids: dict[str, int]) -> TransformFacet | None:
     """Return the transform facet the freeze builds, or ``None`` when it omits it."""
 
-    config = dict(cell("transform_config"))
+    config = dict(row[fids["transform_config"]])
     config.pop("_tl_annotations", None)
     fn_code_location = config.pop("fn_code_location", None)
     facet = TransformFacet(
-        is_transform=cell("is_transform"),
-        transform_kind=cell("transform_kind"),
-        transform_chain=cell("transform_chain"),
+        is_transform=row[fids["is_transform"]],
+        transform_kind=row[fids["transform_kind"]],
+        transform_chain=row[fids["transform_chain"]],
         transform_config=config,
-        transform_fn_name=cell("transform_fn_name"),
-        transform_fn_qualname=cell("transform_fn_qualname"),
-        transform_fn_source=cell("transform_fn_source"),
+        transform_fn_name=row[fids["transform_fn_name"]],
+        transform_fn_qualname=row[fids["transform_fn_qualname"]],
+        transform_fn_source=row[fids["transform_fn_source"]],
         fn_code_location=fn_code_location,
     )
     present = (
@@ -448,13 +527,13 @@ def _transform_facet(cell: Any) -> TransformFacet | None:
     return facet if present else None
 
 
-def _ancestry_facet(cell: Any) -> AncestryFacet | None:
+def _ancestry_facet(row: list[Any], fids: dict[str, int]) -> AncestryFacet | None:
     """Return the ancestry facet the freeze builds, or ``None`` when it omits it."""
 
-    input_ancestors = frozenset(cell("input_ancestors"))
-    internal = frozenset(cell("internal_source_ancestors"))
-    root = frozenset(cell("root_ancestors"))
-    has_internal = cell("has_internal_source_ancestor")
+    input_ancestors = frozenset(row[fids["input_ancestors"]])
+    internal = frozenset(row[fids["internal_source_ancestors"]])
+    root = frozenset(row[fids["root_ancestors"]])
+    has_internal = row[fids["has_internal_source_ancestor"]]
     if not (input_ancestors or internal or root or has_internal):
         return None
     return AncestryFacet(
@@ -465,14 +544,14 @@ def _ancestry_facet(cell: Any) -> AncestryFacet | None:
     )
 
 
-def _optional_facets(cell: Any, rest: _RowResidual) -> dict[str, Any]:
+def _optional_facets(row: list[Any], fids: dict[str, int], rest: _RowResidual) -> dict[str, Any]:
     """Return the optional facets keyed by record attribute, ``None`` when omitted."""
 
-    modules = tuple(cell("modules"))
-    qualname = cell("grad_fn_class_qualname")
-    bool_value = cell("bool_value")
-    annotations = dict(cell("annotations"))
-    is_edited = cell("is_edited")
+    modules = tuple(row[fids["modules"]])
+    qualname = row[fids["grad_fn_class_qualname"]]
+    bool_value = row[fids["bool_value"]]
+    annotations = dict(row[fids["annotations"]])
+    is_edited = row[fids["is_edited"]]
     fire_results = rest.fire_results
     present_control = rest.is_scalar_bool is not None or bool_value is not None
     return {
@@ -481,11 +560,11 @@ def _optional_facets(cell: Any, rest: _RowResidual) -> dict[str, Any]:
             if rest.module_stack or modules
             else None
         ),
-        "ancestry": _ancestry_facet(cell),
+        "ancestry": _ancestry_facet(row, fids),
         "autograd": AutogradFacet(grad_fn_class_qualname=qualname)
         if qualname is not None
         else None,
-        "transform": _transform_facet(cell),
+        "transform": _transform_facet(row, fids),
         "control": (
             ControlFacet(is_scalar_bool=rest.is_scalar_bool, bool_value=bool_value)
             if present_control
@@ -517,50 +596,47 @@ def _record_from_row(handle: _RowOpRecord) -> OpRecord:
     primitive the eager journal uses.
     """
 
-    row, fids, rest = handle._row, handle._journal.fids, handle._rest
+    row = cast(list[Any], handle._row)
+    rest = cast(_RowResidual, handle._rest)
+    fids = handle._journal.fids
 
-    def cell(name: str) -> Any:
-        """Return one committed cell of the row being inverted."""
-
-        return row[fids[name]]  # type: ignore[index]
-
-    positions = cell("parent_arg_positions")
+    positions = row[fids["parent_arg_positions"]]
     core = OpCore(
         seq=handle.seq,
-        kind=rest.kind,  # type: ignore[union-attr]
-        label_raw=cell("_label_raw"),
-        layer_label_raw=cell("_layer_label_raw"),
-        layer_type=cell("type"),
-        raw_index=cell("raw_index"),
-        type_index=cell("type_index"),
-        step_index=cell("step_index"),
-        pass_index=cell("pass_number"),
-        parents=_parent_edges(cell("parents"), positions),
-        output=rest.output,  # type: ignore[union-attr]
+        kind=rest.kind,
+        label_raw=row[fids["_label_raw"]],
+        layer_label_raw=row[fids["_layer_label_raw"]],
+        layer_type=row[fids["type"]],
+        raw_index=row[fids["raw_index"]],
+        type_index=row[fids["type_index"]],
+        step_index=row[fids["step_index"]],
+        pass_index=row[fids["pass_number"]],
+        parents=_parent_edges(row[fids["parents"]], positions),
+        output=rest.output,
         is_bottom_level=True,
-        func_call_id=cell("func_call_id"),
+        func_call_id=row[fids["func_call_id"]],
     )
     record = OpRecord(
         core=core,
-        function=rest.function,  # type: ignore[union-attr]
-        templates=_read_templates(handle),
+        function=rest.function,
+        templates=_templates_from_row(row, fids),
         graph=GraphFacet(
             parent_arg_positions={kind: dict(inner) for kind, inner in positions.items()},
-            edge_uses=rest.edge_uses,  # type: ignore[union-attr]
-            unattributed_tensor_args=cell("unattributed_tensor_args"),
-            dropped_edge_tensor_args=cell("dropped_edge_tensor_args"),
-            is_output_parent=cell("is_output_parent"),
-            input_was_parameter=cell("input_was_parameter"),
-            equivalence_class=cell("equivalence_class"),
+            edge_uses=rest.edge_uses,
+            unattributed_tensor_args=row[fids["unattributed_tensor_args"]],
+            dropped_edge_tensor_args=row[fids["dropped_edge_tensor_args"]],
+            is_output_parent=row[fids["is_output_parent"]],
+            input_was_parameter=row[fids["input_was_parameter"]],
+            equivalence_class=row[fids["equivalence_class"]],
         ),
         policy_facet=PolicyFacet(
-            backend_semantics=rest.backend_semantics,  # type: ignore[union-attr]
-            policy=rest.policy,  # type: ignore[union-attr]
+            backend_semantics=rest.backend_semantics,
+            policy=rest.policy,
             predicate_matched=True,
-            tracing_finished=cell("_tracing_finished"),
-            construction_done=cell("_construction_done"),
+            tracing_finished=row[fids["_tracing_finished"]],
+            construction_done=row[fids["_construction_done"]],
         ),
-        **_optional_facets(cell, rest),  # type: ignore[arg-type]
+        **_optional_facets(row, fids, rest),  # type: ignore[arg-type]
     )
     if handle._patch:
         record = record_with_path_updates(record, handle._patch.items())

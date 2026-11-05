@@ -1,7 +1,7 @@
 """Exhaustive commit into the row-backed capture journal (capture C2b).
 
 The exhaustive commit writes the op's store cells into the journal's
-capture-time ``OpRowStore`` (C2a's :func:`op_row_cells` / :func:`write_op_row`)
+capture-time ``OpRowStore`` (C2a's cells, written by :func:`write_draft_row`)
 and returns a private row handle instead of freezing an ``OpRecord``. The values
 the cells cannot carry exactly are snapshotted into the handle's residual here,
 at commit, from the same builders the eager freeze uses
@@ -84,7 +84,7 @@ def commit_row_record(
 
     Reads what ``_op_record_from_log`` reads off the draft. The function-call
     ref is resolved once through the call box (sibling outputs share it as the
-    freeze shares it), then the cells are written from the same draft.
+    freeze shares it), then the row is written from the same draft and that ref.
 
     Parameters
     ----------
@@ -109,5 +109,7 @@ def commit_row_record(
     box = draft.call_ref_box if draft.call_ref_box is not None else []
     function = _resolve_call_function_ref(fields_dict, box)
     rest = _residual_from_draft(draft, function, edge_uses)
-    cells = _ops_row_cells.op_row_cells(trace, fields_dict, draft.fire_results, box)
-    return journal.handle(_ops_row_cells.write_op_row(journal.store, cells), rest)
+    row = _ops_row_cells.write_draft_row(
+        journal.store, trace, fields_dict, draft.fire_results, function
+    )
+    return journal.handle(row, rest)
