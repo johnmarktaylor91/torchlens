@@ -17,11 +17,11 @@ import ast
 import importlib
 import warnings
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
+from _record_fakes import FlatNamespace
 from _source_corpus import package_files, package_source
 from test_validation_exemption_ledger import (
     EXEMPTION_LEDGER,
@@ -355,7 +355,7 @@ def test_table_modules_emit_no_decisions() -> None:
 
 
 def _fake_layer(**fields: Any) -> Any:
-    return SimpleNamespace(**fields)
+    return FlatNamespace(**fields)
 
 
 def test_scalar_setitem_full_overwrite_is_exempted() -> None:
