@@ -55,7 +55,7 @@ from .request import _DoorState
 #    user, or one whose permissions cannot be tightened, refuses typed. Ancestors ABOVE
 #    the configured cache directory are the caller's to secure and are not inspected.
 # 2. Every entry is ONE self-authenticating record: a fixed-size header (magic +
-#    HMAC-SHA256 tag keyed by a 0600 secret inside that directory) followed by the
+#    HMAC-SHA256 tag keyed by a per-user 0600 secret) followed by the
 #    pickled payload, committed by a single ``os.replace``. Bytes we cannot
 #    authenticate are NEVER handed to ``pickle`` -- they are a cache MISS with a
 #    warning, so a planted, stale, or corrupt entry is inert while a legitimate
@@ -68,8 +68,16 @@ from .request import _DoorState
 # (2) is the load-bearing guard and (1) is defense in depth: a mode check alone cannot
 # speak to a file planted while the mode was briefly permissive, nor to bytes copied in
 # from an untrusted archive, while the tag makes any such entry inert.
+#
+# The secret lives OUTSIDE every cache directory, in a per-user state directory
+# (``$XDG_STATE_HOME/torchlens``, default ``~/.local/state/torchlens``). A secret stored
+# beside the entries travelled with them: whoever supplied the whole cache directory (a
+# poisoned CI cache restore, an unpacked archive) supplied a matching secret too, and the
+# restored files are owned by the current user with mode 0600, so no ownership or mode
+# check could tell. Entries tagged with a secret this user does not hold simply miss and
+# are rebuilt. A legacy ``.capture_cache_secret`` left inside a cache directory is ignored.
 
-_CAPTURE_CACHE_SECRET_FILE = ".capture_cache_secret"
+_CAPTURE_CACHE_SECRET_FILE = "capture_cache_secret"
 # Legacy pair-format sidecar suffix: recognized only for cleanup/eviction debris.
 _CAPTURE_CACHE_TAG_SUFFIX = ".hmac"
 _CAPTURE_CACHE_SECRET_BYTES = 32
@@ -177,24 +185,52 @@ def _prepare_capture_cache_dir(cache_dir_value: str | Path | None) -> tuple[Path
     # may be shared with other purposes, and silently tightening it would be a surprising
     # side effect on a path torchlens does not own. ``capture/`` is unambiguously ours and
     # is always hardened -- and the authentication tag, not the mode, is what makes a
-    # permissive ancestor harmless (a planted entry carries no valid tag, and an
-    # attacker-supplied secret fails the ownership check).
+    # permissive ancestor harmless (a planted entry carries no valid tag, and the secret
+    # is never read from the cache directory).
     created_cache_dir = not cache_dir.exists()
     cache_root = cache_dir / "capture"
     cache_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     if created_cache_dir:
         _harden_capture_cache_dir(cache_dir)
     _harden_capture_cache_dir(cache_root)
-    return cache_root, _capture_cache_secret(cache_root)
+    return cache_root, _capture_cache_secret()
 
 
-def _capture_cache_secret(cache_root: Path) -> bytes:
-    """Return the per-root HMAC secret, creating it 0600 on first use.
+def _capture_cache_secret_dir() -> Path:
+    """Create and harden the per-user directory holding the capture-cache secret.
 
-    Parameters
-    ----------
-    cache_root
-        Private capture-cache directory (already validated).
+    Returns
+    -------
+    pathlib.Path
+        ``$XDG_STATE_HOME/torchlens`` (default ``~/.local/state/torchlens``), private to
+        this user. It is never inside a cache directory, so a supplied cache directory
+        cannot carry a secret that authenticates its own entries.
+
+    Raises
+    ------
+    torchlens.errors.ArtifactError
+        When the directory cannot be created, or is owned by another user or stays
+        group- or world-writable.
+    """
+
+    state_home = os.environ.get("XDG_STATE_HOME") or "~/.local/state"
+    secret_dir = Path(state_home).expanduser() / "torchlens"
+    try:
+        secret_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except OSError as exc:
+        from ..._io import ArtifactError
+
+        raise ArtifactError(
+            f"TorchLens capture cache secret directory {secret_dir} cannot be created ({exc}).",
+            code="capture_cache_secret_unavailable",
+            remedy="Set XDG_STATE_HOME to a private writable directory, or drop cache=True.",
+        ) from exc
+    _harden_capture_cache_dir(secret_dir)
+    return secret_dir
+
+
+def _capture_cache_secret() -> bytes:
+    """Return the per-user HMAC secret, creating it 0600 on first use.
 
     Returns
     -------
@@ -208,7 +244,7 @@ def _capture_cache_secret(cache_root: Path) -> bytes:
         computed with it would prove nothing.
     """
 
-    secret_path = cache_root / _CAPTURE_CACHE_SECRET_FILE
+    secret_path = _capture_cache_secret_dir() / _CAPTURE_CACHE_SECRET_FILE
     if secret_path.exists():
         if secret_path.is_symlink() or not secret_path.is_file():
             raise _capture_cache_io_error(

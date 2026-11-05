@@ -143,9 +143,10 @@ def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     cache_root = tmp_path / "capture"
     assert len(list(cache_root.glob("*.pkl"))) == 2
+    secret_before = prepare_cache._capture_cache_secret()
     assert user_funcs.clear_cache(tmp_path) == 2
     assert list(cache_root.glob("*.pkl")) == []
-    assert (cache_root / ".capture_cache_secret").is_file()
+    assert prepare_cache._capture_cache_secret() == secret_before
 
 
 def test_scrub_preserves_shared_and_cyclic_mutable_containers() -> None:

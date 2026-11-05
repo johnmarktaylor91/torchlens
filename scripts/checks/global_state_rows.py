@@ -1114,6 +1114,7 @@ failures.
 _STATIC_EXPORT_LISTS = frozenset(
     {
         ("torchlens/errors/_quiet.py", "__all__"),
+        ("torchlens/_utils/_unchecked_kernel_denial.py", "__all__"),
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture/_trace_capture_error.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
