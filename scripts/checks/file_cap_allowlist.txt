@@ -333,10 +333,9 @@ torchlens/_postprocess/_materialize.py::ingest_op_records	122
 torchlens/_postprocess/_primitive_profile.py::_materialize_backward_primitive_profile	64
 torchlens/_postprocess/_recurrence.py::_build_preview_recurrence_graph	111
 torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
-torchlens/_postprocess/ast_branches.py	2214
+torchlens/_postprocess/ast_branches.py	2202
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
-torchlens/_postprocess/ast_branches.py::get_file_index	91
 torchlens/_postprocess/control_flow.py	1140
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82

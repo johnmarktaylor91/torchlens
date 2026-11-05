@@ -67,8 +67,8 @@ class ReadmeLoop(nn.Module):
         return x
 
 
-#: The same model as source text, run with no file behind it (``exec`` of a
-#: string, as stdin, ``python -c`` and notebook cells do).
+#: The same model as source text, run with no file and no ``linecache`` entry
+#: behind it (``exec`` of a string, as stdin and ``python -c`` do).
 _README_LOOP_SOURCE = """
 import torch
 from torch import nn
