@@ -5,32 +5,59 @@
 
 ### Security
 
-Load bundles and artifacts from untrusted sources only with this version or later. Earlier
-releases could be made to do more than replay tensor operations when loading or running a
-crafted file. These load paths are fixed:
+- **runnable replay**: a crafted bundle could make `trace.run()` or `validate_forward_pass()` on a
+  loaded trace call a torch function with a raw memory address (`Tensor.new(cdata=...)`), call a
+  kernel that skips its own bounds checks (`torch._unsafe_index`, `torch._unsafe_index_put`,
+  `torch.segment_reduce(..., unsafe=True)`, `torch._nested_view_from_buffer` and their siblings),
+  or build a sparse tensor whose indices lie outside its shape. Each could crash the interpreter
+  or read and write memory outside any tensor. TorchLens now refuses a keyword that names a raw
+  address, every kernel without bounds checks, and the `check_invariants` switch that turns sparse
+  checks off, at load and again before each call, and runs every replay of a recorded call with
+  `torch.sparse.check_sparse_tensor_invariants` on. Where torch lacks that switch
+  (`HAS_SPARSE_INVARIANT_CHECK` is `False`), replayed sparse construction is refused. Behavior
+  change: an op whose schema has an `unsafe` argument is refused even with `unsafe=False`, so a
+  bundle that records `torch.segment_reduce` no longer replays.
 
-- **replay**: running a loaded bundle (`tl.load(path).run(...)`) could make TorchLens build a
-  tensor from a raw memory address taken from the bundle, which can crash the interpreter or
-  touch arbitrary memory. Replay now refuses every tensor and storage constructor that accepts
-  a raw address, and any bundle-supplied argument that names one. Affects 2.32.1 through
-  2.38.1.
-- **replay**: replay now refuses torch kernels that skip their own memory bounds checks.
-  Affects earlier releases.
-- **extraction**: opening a dataset-extraction artifact, including through `tl.load(dir)`, could
-  read files outside the artifact directory. Shards are now read only from inside it, under
-  the names TorchLens writes. Affects 2.35.0 and later (through plain `tl.load` since 2.38.0).
-- **extraction, pyreft bridge**: on torch 2.5.1 or older, whose safe-load mode can be bypassed
-  (CVE-2025-32434), reading a `.pt` extraction shard or a pyreft weight file could run code.
-  TorchLens now refuses to read these files on those torch versions. Affects 2.35.0 and later
-  for shards, 2.38.0 and later for pyreft weight files.
-- **images**: images stored in a bundle are decoded only as PNG or JPEG, the formats TorchLens
-  writes. Before, any format the installed Pillow could open was decoded, including formats
-  that hand the data to an external program. Affects 2.20.0 and later.
-- **loading**: a crafted bundle could make `tl.load` hang. Affects 2.17.0 and later.
-- **loading**: malformed bundle metadata (an unlisted runnable file, out-of-range numbers, an
-  oversized tensor shape) now refuses with a typed load error instead of being read, crashing
-  or loading a wrong value. Affects 2.38.0 and later for the unlisted file and the shape check,
-  and earlier releases for the numbers.
+- **intervention**: with `trust_custom_callables=True`, a bundle could resolve the legacy tensor
+  and storage classes (`torch.cuda.FloatTensor`, `torch.sparse.FloatTensor`,
+  `torch.cuda.sparse.*Tensor`, `torch.cuda.*Storage`) and private torch builtins that adopt a raw
+  pointer, such as `torch._C._aoti.alloc_tensor_by_stealing_from_void_ptr`. These are now refused
+  even under trust: every torch tensor or storage class, every callable with a raw-pointer
+  parameter, and every `torch._C` or signature-less torch callable whose module is not explicitly
+  allowed. Behavior change: a recorded legacy `torch.sparse.FloatTensor(indices, values, size)`
+  no longer resolves under trust.
+
+- **dataset extraction**: a ledger row in an extraction artifact could name any file on disk (an
+  absolute path, a `..` path, or a symlinked shard), and `tl.dataset_extraction.open_extraction`
+  or `tl.load` on the directory read it as a shard. A shard name must now be the writer's own
+  `batch_NNNNN.pt` or `batch_NNNNN.safetensors` inside the artifact, and symlinked shards and
+  ledgers are refused.
+
+- **dataset extraction, pyreft**: on torch 2.5.1 and older, `torch.load(weights_only=True)` can
+  be bypassed (CVE-2025-32434), so a crafted `.pt` shard or pyreft weight file could execute code.
+  On those torch versions TorchLens now refuses to read `.pt` extraction shards and pyreft weight
+  files, and refuses to write extractions with `shard_format="pt"`. Upgrade torch to 2.6 or newer,
+  or use `.safetensors` shards.
+
+- **io**: an image embedded in a bundle's raw input or output was handed to every Pillow decoder,
+  including EPS, which runs Ghostscript where it is installed. Embedded images are now decoded
+  only as PNG or JPEG, the two formats TorchLens writes.
+
+- **capture cache**: the secret that authenticates `cache=True` entries was stored inside the
+  cache directory, so anyone who supplied the whole directory (a restored CI cache, an unpacked
+  archive) could plant an entry that ran code on the next cache hit. The secret now lives outside
+  every cache directory, in `$XDG_STATE_HOME/torchlens` (default `~/.local/state/torchlens`).
+  After upgrading, each existing entry warns once and is rebuilt.
+
+- **io**: smaller load hardening. A FIFO or other non-regular file named `manifest.json`, or used
+  as a fastlog sidecar, blob or index, or as a history chunk, made `tl.load`,
+  `tl.recording.recover` or `tl.trackers.HistoryReader` hang; these are now refused. Fastlog
+  recovery no longer follows symlinked sidecars or blobs. A history artifact chunk must be named
+  `chunk-NNNNNN.npz`. A bundle whose `members/` directory is a symlink is refused. A runnable
+  descriptor that the bundle manifest does not list is refused before it is read. A JSON number
+  too large to parse, or one that parses to infinity, is refused with a typed error instead of
+  crashing or loading as `inf`. A zero dimension in a stored tensor shape can no longer hide an
+  oversized one.
 
 ### Fixed
 
