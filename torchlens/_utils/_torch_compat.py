@@ -780,16 +780,13 @@ def _probe_code_qualname() -> bool:
 def _probe_saved_tensors_hooks_patchable() -> bool:
     """Return whether the saved-tensors-hooks context class accepts an init patch.
 
-    ``torch.autograd.graph.saved_tensors_hooks`` is the public context manager
-    that installs user pack/unpack hooks (``save_on_cpu`` and the non-reentrant
-    checkpoint hook subclass it). TorchLens scopes user hook bodies as
-    autograd-internal during an active capture by patching the class
-    ``__init__`` (construction-time scoping) AND ``__enter__`` (use-time
-    re-scoping, covering contexts constructed before the first capture) at
-    wrap time, so the patch needs a plain-Python ``__init__`` with the
-    ``(self, pack_hook, unpack_hook)`` shape and a plain-Python ``__enter__``
-    taking only ``self``. Probe the shape behaviorally; never parse
-    ``torch.__version__``.
+    ``torch.autograd.graph.saved_tensors_hooks`` is the public context manager that installs user
+    pack/unpack hooks (``save_on_cpu`` and the non-reentrant checkpoint hook subclass it).
+    TorchLens scopes user hook bodies as autograd-internal during an active capture by patching the
+    class ``__init__`` (construction-time scoping) AND ``__enter__`` (use-time re-scoping, covering
+    contexts constructed before the first capture) at wrap time, so the patch needs a plain-Python
+    ``__init__`` with the ``(self, pack_hook, unpack_hook)`` shape and a plain-Python ``__enter__``
+    taking only ``self``. Probe the shape behaviorally; never parse ``torch.__version__``.
 
     Returns
     -------
@@ -1004,19 +1001,16 @@ def _probe_gradient_edge() -> bool:
     Returns
     -------
     bool
-        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
-        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
-        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
-        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
-        an explicit cotangent succeeds. Attribute presence alone is
-        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
-        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
-        every output -- including a bare ``GradientEdge``, which has no such
-        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
-        matching this read's long-documented "2.4+" remedy text). Absent on
-        older torch or broken on this intermediate band is a healthy old
-        install either way, not a TorchLens degradation: the read refuses
-        typed.
+        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge`` and
+        ``get_gradient_edge`` -- the ``(node, output slot)`` addressing pair the one-backward read
+        engine seeds ``autograd.grad`` with -- AND a real ``autograd.grad`` call seeding an OUTPUT
+        ``GradientEdge`` with an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its own internal
+        ``torch.autograd._make_grads`` calls ``out.is_nested`` on every output -- including a bare
+        ``GradientEdge``, which has no such attribute -- and raises ``AttributeError`` (fixed
+        upstream by 2.4, matching this read's long-documented "2.4+" remedy text). Absent on older
+        torch or broken on this intermediate band is a healthy old install either way, not a
+        TorchLens degradation: the read refuses typed.
     """
 
     if (
@@ -1360,20 +1354,16 @@ def _probe_meta_item_guard() -> bool:
     Returns
     -------
     bool
-        ``True`` when calling ``.item()`` (or any other scalar extraction,
-        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
-        carrying torch's own "Tensor.item() cannot be called on meta
-        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
-        falls all the way through to the aten dispatcher's generic
-        ``NotImplementedError`` ("... not implemented for this backend").
-        TorchLens's structure-only forward-boundary backstop
-        (``backends/torch/structure_only_belt.py``) classifies a caught
-        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
-        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
-        raising-frame PROVENANCE, never message text -- correctly, since
-        the two exception FAMILIES genuinely differ here. Absence is a
-        healthy old install surfacing the honest alternate typed refusal,
-        not a TorchLens degradation.
+        ``True`` when calling ``.item()`` (or any other scalar extraction, e.g. ``bool()``) on a
+        meta tensor raises a plain ``RuntimeError`` carrying torch's own "Tensor.item() cannot be
+        called on meta tensors" guard. torch 2.1-2.2 have no such guard: the call instead falls all
+        the way through to the aten dispatcher's generic ``NotImplementedError`` ("... not
+        implemented for this backend"). TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught ``NotImplementedError`` as
+        ``meta_kernel_unavailable`` and a generic ``RuntimeError`` as
+        ``value_dependent_branch_unsupported`` by raising-frame PROVENANCE, never message text --
+        correctly, since the two exception FAMILIES genuinely differ here. Absence is a healthy old
+        install surfacing the honest alternate typed refusal, not a TorchLens degradation.
     """
 
     try:
@@ -2533,6 +2523,20 @@ def get_scan_eager_body() -> Callable[..., Any] | None:
     return body if callable(body) else None
 
 
+def swap_hop_entry_compile(replacement: Any) -> Any | None:
+    """Return torch's operator entry compile, first installing ``replacement`` unless ``None``.
+
+    ``torch._higher_order_ops.utils._hop_compile_and_call``, which ``cond``, ``map``,
+    ``while_loop`` and ``scan`` enter through; ``None`` (nothing installed) when absent.
+    """
+
+    utils = sys.modules.get("torch._higher_order_ops.utils")
+    prior = vars(utils).get("_hop_compile_and_call") if utils is not None else None
+    if callable(prior) and replacement is not None:
+        setattr(utils, "_hop_compile_and_call", replacement)
+    return prior if callable(prior) else None
+
+
 def get_dtensor_shard_geometry_fn() -> Callable[..., Any] | None:
     """Return DTensor's shard-geometry helper, or ``None`` when unavailable.
 
@@ -2613,17 +2617,14 @@ def probe_funcol_wait_interposition() -> bool:
     """Probe the dispatcher surfaces the plane-W wait interposition needs.
 
     The mode-independent completion authority registers a scoped
-    ``torch.library.Library("_c10d_functional", "IMPL")`` wrapper for
-    ``wait_tensor`` at the CPU key and redispatches below itself through
-    ``torch._C._ExcludeDispatchKeyGuard`` (design-merge-ranks-c v5, 1.4c; probe
-    P3a). All five surfaces (the guard trio, ``torch.library.Library``, and the
-    ``torch.ops._c10d_functional.wait_tensor.default`` op handle) are
-    feature-detected here; absence flips the named
-    ``HAS_FUNCOL_WAIT_INTERPOSITION`` flag and funcol completions then stay
-    honestly ``unobserved`` (fail-closed disclosure, never a crash). The
-    resolved redispatch surfaces are served by
-    :func:`get_funcol_wait_redispatch`, so no caller ever touches the private
-    dispatcher spellings directly.
+    ``torch.library.Library("_c10d_functional", "IMPL")`` wrapper for ``wait_tensor`` at the CPU
+    key and redispatches below itself through ``torch._C._ExcludeDispatchKeyGuard``
+    (design-merge-ranks-c v5, 1.4c; probe P3a). All five surfaces (the guard trio,
+    ``torch.library.Library``, and the ``torch.ops._c10d_functional.wait_tensor.default`` op
+    handle) are feature-detected here; absence flips the named ``HAS_FUNCOL_WAIT_INTERPOSITION``
+    flag and funcol completions then stay honestly ``unobserved`` (fail-closed disclosure, never a
+    crash). The resolved redispatch surfaces are served by :func:`get_funcol_wait_redispatch`, so
+    no caller ever touches the private dispatcher spellings directly.
     """
 
     global HAS_FUNCOL_WAIT_INTERPOSITION, _FUNCOL_WAIT_INTERPOSITION_PROBED
@@ -4197,19 +4198,16 @@ def set_mha_fastpath_enabled(value: bool) -> None:
 def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
     """Hold the fused MHA/TransformerEncoderLayer fast path OFF for ``model``.
 
-    Uses the public ``torch.backends.mha`` switch when available
-    (``HAS_MHA_FASTPATH_SWITCH``); otherwise falls back to setting the
-    ``training`` ATTRIBUTE directly (never the recursive ``.train()``
-    method, which would also flip nested dropout/norm submodules and could
-    change their op counts) to ``True`` on every
-    ``torch.nn.MultiheadAttention`` and ``torch.nn.TransformerEncoderLayer``
-    instance reachable from ``model`` -- a REAL fallback, not a degradation:
-    both fused fast paths independently check their OWN module's
-    ``self.training`` on every supported torch version (the layer's native
-    op and its inner attention's native op gate separately), so the public
-    switch merely adds an earlier, version-independent gate on top. Every
-    flag this context manager touches is restored to its prior value on
-    exit, success or failure.
+    Uses the public ``torch.backends.mha`` switch when available (``HAS_MHA_FASTPATH_SWITCH``);
+    otherwise falls back to setting the ``training`` ATTRIBUTE directly (never the recursive
+    ``.train()`` method, which would also flip nested dropout/norm submodules and could change
+    their op counts) to ``True`` on every ``torch.nn.MultiheadAttention`` and
+    ``torch.nn.TransformerEncoderLayer`` instance reachable from ``model`` -- a REAL fallback, not
+    a degradation: both fused fast paths independently check their OWN module's ``self.training``
+    on every supported torch version (the layer's native op and its inner attention's native op
+    gate separately), so the public switch merely adds an earlier, version-independent gate on top.
+    Every flag this context manager touches is restored to its prior value on exit, success or
+    failure.
 
     Parameters
     ----------

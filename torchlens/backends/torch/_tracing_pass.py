@@ -12,33 +12,47 @@ or crashes reading ``.device`` of a half-built ``FakeTensor``. The capture
 wrapper therefore passes such calls through unlogged; only the eager run is
 recorded, exactly as when no operand requires grad.
 
-``map`` is the exception. Capture runs under the ``force_eager`` stance, which
-skips the compile a grad-requiring ``map`` normally runs, and torch's eager
-``map`` autograd then returns one tensor per row instead of the stacked tensor.
-Passing its tracing pass through would turn the old crash into a silently
-different result, so that pass is left to fail as before.
+Capture runs under the ``force_eager`` stance, which would also skip the
+compile torch's operator entry points run (it lifts closure parameters into
+operands and gives ``map`` its stacked output). That compile is let through
+(``_hop_entry_compile.hop_compile_stance_lift_scope``) inside
+:func:`hop_internal_compile_scope`; while Dynamo traces it, the wrappers call
+the original unlogged (:func:`inside_hop_internal_compile`), and the compiled
+wrapper's eager run is captured as usual.
 
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
-tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class); an
-absent probe answers "not a tracing pass", which leaves capture unchanged.
+tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class) or
+its sibling ``_hop_entry_compile`` (the operator entry compile); an absent
+probe answers "not a tracing pass", which leaves capture unchanged.
 """
 
 from __future__ import annotations
 
-import sys
-from collections.abc import Callable
-from types import FrameType
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
 from ... import _state
+from ..._utils import _torch_compat
+from ..._utils._hop_entry_compile import hop_compile_stance_lift_scope
 from ..._utils._torch_compat import (
+    dynamo_is_compiling,
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
-    get_higher_order_operator,
     get_tracing_tensor_types,
 )
 
-__all__ = ("call_inside_tracing_pass", "inside_tracing_tensor_pass")
+__all__ = (
+    "call_inside_tracing_pass",
+    "hop_internal_compile_scope",
+    "inside_hop_internal_compile",
+    "inside_tracing_tensor_pass",
+    "lift_hop_entry_compiles",
+)
+
+#: Depth of TorchLens-lifted higher-order-operator entry compiles in progress;
+#: the wrappers' hot path tests it before anything else (zero outside them).
+hop_compile_depth = 0
 
 
 def _is_tracing_value(value: Any, tracing_types: tuple[type[Any], ...]) -> bool:
@@ -85,29 +99,54 @@ def _fake_tensor_mode_active() -> bool:
     return any(isinstance(mode, fake_mode_cls) for mode in stack)
 
 
-def _inside_unsupported_grad_operator() -> bool:
-    """Return whether the running tracing pass belongs to a grad-requiring ``map``.
+@contextmanager
+def hop_internal_compile_scope() -> Iterator[None]:
+    """Mark one higher-order-operator entry compile that TorchLens let run.
+
+    Yields
+    ------
+    None
+        While the scope is open :data:`hop_compile_depth` is above zero.
+    """
+
+    global hop_compile_depth
+    hop_compile_depth += 1
+    try:
+        yield
+    finally:
+        hop_compile_depth -= 1
+
+
+def inside_hop_internal_compile() -> bool:
+    """Return whether Dynamo is tracing a TorchLens-lifted operator entry compile.
 
     Returns
     -------
     bool
-        ``True`` when a frame of the module defining ``map_impl`` is on the
-        Python stack: the ``map`` entry point compiling its body, the operator's
-        autograd kernel, or its eager kernel. Its eager autograd result differs
-        from the untraced call under the capture stance (see the module
-        docstring), so that pass is not passed through.
+        ``True`` only when :data:`hop_compile_depth` is above zero and Dynamo is
+        tracing (not running) the frame. Calls then reach the wrappers with
+        data-free values, so they go to the original unlogged; the compiled
+        wrapper's real run that follows is logged as usual. A user
+        ``torch.compile`` region never raises the depth, so it still meets the
+        Dynamo-region guard.
     """
 
-    map_impl = get_higher_order_operator("map", "map_impl")
-    if map_impl is None:
-        return False
-    map_module = type(map_impl).__module__
-    frame: FrameType | None = sys._getframe(1)
-    while frame is not None:
-        if frame.f_globals.get("__name__") == map_module:
-            return True
-        frame = frame.f_back
-    return False
+    return hop_compile_depth > 0 and dynamo_is_compiling()
+
+
+def lift_hop_entry_compiles() -> AbstractContextManager[bool]:
+    """Let torch's operator entry compiles run inside the capture's forced-eager scope.
+
+    Returns
+    -------
+    AbstractContextManager[bool]
+        Yields whether the entry was hooked; each lifted compile runs inside
+        :func:`hop_internal_compile_scope`.
+    """
+
+    return hop_compile_stance_lift_scope(
+        hop_internal_compile_scope, enabled=_torch_compat.HAS_SET_STANCE
+    )
 
 
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
@@ -124,8 +163,7 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     -------
     bool
         ``True`` when an argument is a tracing tensor or tracing tensor class,
-        or a ``FakeTensorMode`` is active, unless the pass belongs to a
-        grad-requiring ``map``. ``False`` whenever the tracing classes were
+        or a ``FakeTensorMode`` is active. ``False`` whenever the tracing classes were
         never imported in this process, so ordinary capture pays one cached
         probe per logged call.
     """
@@ -134,9 +172,7 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     if not tracing_types:
         return False
     in_pass = any(_is_tracing_value(value, tracing_types) for value in (*args, *kwargs.values()))
-    if not (in_pass or _fake_tensor_mode_active()):
-        return False
-    return not _inside_unsupported_grad_operator()
+    return in_pass or _fake_tensor_mode_active()
 
 
 def call_inside_tracing_pass(
