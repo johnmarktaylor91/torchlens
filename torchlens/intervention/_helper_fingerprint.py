@@ -206,7 +206,7 @@ def alias_staged_helpers(source_spec: Any, copy_spec: Any) -> None:
         twin = helper_of(copied.hook, copied.helper)
         if helper is not None and twin is not None:
             object.__setattr__(twin, "args", helper.args)
-            object.__setattr__(twin, "kwargs", dict(helper.kwargs))
+            object.__setattr__(twin, "kwargs", helper.kwargs)
 
 
 def changed_message(door: str, changed: list[str]) -> str:
