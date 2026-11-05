@@ -20,9 +20,9 @@ GitHub renders them as the first impression).
 widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
 committed without outputs (``tests/test_notebook_output_policy.py``).
 
-Notebooks in ``HEAVY_NOTEBOOKS`` run minutes of batched backward passes through GPT-2
-small. Two of them sharing a 4-CPU runner each slow several-fold (past the cell timeout),
-so the runner executes the light notebooks in the ``-j`` pool first and then each heavy
+Notebooks in ``HEAVY_NOTEBOOKS`` each run for minutes (batched backward passes through
+GPT-2 small, or a long concept-erasure sweep). Two of them sharing a 4-CPU runner each slow
+several-fold (past the cell timeout), so the runner executes the light notebooks in the ``-j`` pool first and then each heavy
 notebook alone, one at a time. The per-cell and whole-notebook timeouts are the same for
 both, so a heavy notebook that slows down still fails.
 
@@ -63,13 +63,15 @@ STORED_OUTPUT_NOTEBOOKS = (
     "examples/workflows/paired_prompt_patching.ipynb",
     "examples/methods/jacobian_lens_recipe.ipynb",
 )
-# Run alone, after the parallel pool: each spends minutes in batched backward passes, and
-# two at once on a 4-CPU runner each ran past the 600 s cell timeout.
+# Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
+# another of them pushed each past the 600 s cell timeout (the LEACE recipe also took about
+# 450 s inside the pool, three quarters of the cap).
 HEAVY_NOTEBOOKS = frozenset(
     {
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
         "examples/methods/eap_ig_circuit_recipe.ipynb",
         "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )
 DEFAULT_CELL_TIMEOUT = 600

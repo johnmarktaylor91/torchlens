@@ -1,7 +1,7 @@
 """The notebook runner runs ``HEAVY_NOTEBOOKS`` alone, after the parallel pool.
 
-Two GPT-2 recipes that spend minutes in batched backward passes ran past the 600 s cell
-timeout when they shared a 4-CPU runner, and each passed alone. These tests pin the
+The notebooks that each run for minutes ran past the 600 s cell timeout when they shared a
+4-CPU runner, and each passed alone. These tests pin the
 schedule (no heavy notebook overlaps any other notebook) and that every heavy entry is a
 committed user notebook, with ``_run_child`` replaced by a recorder: no kernel starts.
 """
@@ -52,8 +52,8 @@ def test_heavy_notebooks_run_alone_after_the_pool(monkeypatch: pytest.MonkeyPatc
         rel
         for rel in (path.relative_to(REPO_ROOT).as_posix() for path in runner.user_notebooks())
         if rel not in runner.HEAVY_NOTEBOOKS
-    ][:4]
-    order = [heavy[0], light[0], heavy[1], light[1], light[2], heavy[2], light[3]]
+    ][: len(runner.HEAVY_NOTEBOOKS) + 2]
+    order = [rel for pair in zip(heavy, light, strict=False) for rel in pair] + light[len(heavy) :]
     lock = threading.Lock()
     active: set[str] = set()
     overlaps: dict[str, set[str]] = {rel: set() for rel in order}
@@ -78,4 +78,4 @@ def test_heavy_notebooks_run_alone_after_the_pool(monkeypatch: pytest.MonkeyPatc
     assert runner.main(["-j", "3", *(str(REPO_ROOT / rel) for rel in order)]) == 0
     assert all(not overlaps[rel] for rel in heavy), overlaps
     assert any(overlaps[rel] for rel in light), "the light notebooks lost their parallel pool"
-    assert finished[-3:] == heavy
+    assert finished[-len(heavy) :] == heavy
