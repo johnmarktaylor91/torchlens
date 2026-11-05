@@ -45,6 +45,9 @@ the unified named access layer. If a module was called more than once,
 A call's view runs the module's recipes for that call alone, and child modules
 resolve to their call inside it: for an attention layer shared across depth
 (ALBERT), `module.calls[n].facets.q` is the query projection of pass `n`.
+`trace.modules_with_facet(name)` and `trace.attention_blocks()` still yield such a
+reused Module when its recipe declares the facet and at least one of its calls has
+it available now; loop over `module.calls.values()` to read each pass.
 
 `keys()`, iteration, `in`, `has(name)`, and item/attribute access are
 available-now surfaces: recipes run once and only facets readable in the current

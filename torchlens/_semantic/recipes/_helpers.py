@@ -209,21 +209,38 @@ def relays_wrapped_core(module: Any, facet_name: str) -> bool:
         return False
 
 
+#: Remedy for a whole-module listing that meets a module called more than once.
+_PER_CALL_PATCH_REMEDY = (
+    "patching sweeps patch whole modules; patch one call's facet home op "
+    "(module.calls[N].facets) as an explicit op site via fork.do()"
+)
+
+
 def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
     """Return module addresses with a facet available, one per attention layer.
 
-    Modules come from ``trace.modules_with_facet``, which skips a reused module
-    without the facet and refuses a shared layer that has it. The root
-    (``self``) is excluded, and so is a wrapper whose core serves the
-    same facet (:func:`relays_wrapped_core`).
+    Modules come from ``trace.modules_with_facet``. The root (``self``) is
+    excluded, and so is a wrapper whose core serves the same facet
+    (:func:`relays_wrapped_core`). The callers patch or read whole modules, so
+    a module called more than once is refused here (code
+    ``module_call_ambiguous``), before any patched forward runs and before the
+    wrapper dedup, which cannot read a reused core's view.
+
+    Raises
+    ------
+    InvalidArgumentError
+        Code ``module_call_ambiguous``: a module carrying the facet was called
+        more than once.
     """
 
-    return [
-        str(module.address)
-        for module in trace.modules_with_facet(facet_name)
-        if getattr(module, "address", None) != "self"
-        and not relays_wrapped_core(module, facet_name)
-    ]
+    addresses: list[str] = []
+    for module in trace.modules_with_facet(facet_name):
+        if getattr(module, "address", None) == "self":
+            continue
+        module._single_call_or_error(remedy=_PER_CALL_PATCH_REMEDY)
+        if not relays_wrapped_core(module, facet_name):
+            addresses.append(str(module.address))
+    return addresses
 
 
 def output_projection_child(module: Any) -> Any | None:
