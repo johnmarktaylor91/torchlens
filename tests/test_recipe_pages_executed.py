@@ -82,6 +82,7 @@ PAGES: dict[str, str] = {
     "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
     "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
     "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/logit_lens_recipe.ipynb": "transformers",
     "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
@@ -176,6 +177,8 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The two CLIP notebooks download the public ``openai/clip-vit-base-patch32``
 #: checkpoint (about 600 MB) on first use and trace its vision tower on real
 #: pictures, so they sit in the slow tier with the other real-checkpoint pages.
+#: The logit lens notebook downloads GPT-2 small (about 550 MB) on a cold cache
+#: and sits in the slow tier with the other real-checkpoint pages.
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
@@ -206,6 +209,7 @@ SLOW_PAGES: frozenset[str] = frozenset(
         "examples/methods/jacobian_lens_recipe.ipynb",
         "examples/methods/eap_ig_circuit_recipe.ipynb",
         "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/logit_lens_recipe.ipynb",
         "examples/methods/leace_concept_erasure_recipe.ipynb",
         "docs/field-guide/das_gpt2.md",
         "docs/field-guide/entropy_steering.md",
