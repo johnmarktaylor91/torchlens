@@ -4520,14 +4520,6 @@
   "via_getattr": true
  },
  {
-  "ambiguous": false,
-  "field": "bool_value",
-  "file": "torchlens/_visualization/_bool_outcomes.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_boundary_bundle.py",
