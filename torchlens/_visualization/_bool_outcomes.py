@@ -50,7 +50,7 @@ def bool_outcomes(node: Any) -> tuple[bool | None, ...]:
     source = getattr(node, "original", node)
     passes = sorted(_pass_ops(source), key=lambda op: op.pass_number)
     if len(passes) > 1:
-        return tuple(_as_bool(op.control_flow.bool_value) for op in passes)
+        return tuple(_as_bool(record_member(op, "bool_value", None)) for op in passes)
     return (_as_bool(record_member(source, "bool_value", None)),)
 
 

@@ -41,7 +41,7 @@ def _install_builtin_pack() -> None:
     Notes
     -----
     The pack is captured lazily ONCE per process: the first caller imports
-    ``torchlens.receptive_field.rules`` and, when the registry is still empty
+    ``torchlens.receptive_field._builtin_rules`` and, when the registry is still empty
     (the idempotent import-time install already ran earlier in the process),
     reloads each built-in rule module so its registration decorators re-fire.
     Later callers replay the cached snapshot without touching the modules.

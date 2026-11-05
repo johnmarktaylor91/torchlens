@@ -158,7 +158,8 @@ def test_public_members_do_not_depend_on_a_prior_save_or_load(tmp_path: Path) ->
         f"members only after a save/load: {sorted(after - fresh)}; "
         f"members only before: {sorted(fresh - after)}"
     )
-    assert {"reached:Op.gpu_kernels", "reached:AtenOp.gpu_kernels"} <= fresh
+    # GPU kernel recording is not public in this release: its record member stays off the list.
+    assert not {"reached:Op.gpu_kernels", "reached:AtenOp.gpu_kernels"} & (fresh | after)
 
 
 #: Package cells whose examples build real small models for most symbols and so run past

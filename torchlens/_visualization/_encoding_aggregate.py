@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 #: Key prefix separating aggregate-node keys from op/layer keys in the
 #: shared per-draw encoding maps (an op label can never start with it).
 AGGREGATE_KEY_PREFIX = "aggregate::"
@@ -144,7 +146,7 @@ def unaggregatable_note(spec: Any) -> str:
 def _op_value(op: Any, field_name: str) -> float | None:
     """Return one member op's additive value, or ``None`` when it is missing."""
 
-    value = getattr(op, field_name, None)
+    value = record_member(op, field_name, None)
     if value is None:
         if field_name in _ZERO_WITHOUT_FUNCTION and getattr(op, "func", None) is None:
             return 0.0

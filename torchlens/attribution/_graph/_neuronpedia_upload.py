@@ -302,6 +302,17 @@ def upload_to_neuronpedia(exported: dict[str, Any] | str | Path, *, api_key: str
         outside its limits; ``neuronpedia_upload_http_error`` for a non-2xx
         answer or an unreachable host; ``neuronpedia_upload_response_invalid``
         for an answer without its documented fields.
+
+    Examples
+    --------
+    A missing key is refused before any request leaves the machine:
+
+    >>> import torchlens as tl
+    >>> try:
+    ...     tl.attribution.upload_to_neuronpedia({}, api_key="")
+    ... except tl.errors.AttributionError as err:
+    ...     print(err.fields["code"])
+    neuronpedia_upload_argument_invalid
     """
 
     key = _check_key(api_key)

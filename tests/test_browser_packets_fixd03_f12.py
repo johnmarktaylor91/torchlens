@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization import lenses
 from torchlens._visualization.lenses import audit
 from torchlens._visualization.lenses.audit import stage0
@@ -236,9 +237,9 @@ def test_tied_extrema_accept_any_tied_label(keyed_speed: Any) -> None:
     log, resolution, key = keyed_speed
     member = resolution.source.member
     values = {
-        op.layer_label: float(getattr(op, member))
+        op.layer_label: float(record_member(op, member))
         for op in log._layer_list
-        if getattr(op, member, None) is not None
+        if record_member(op, member, None) is not None
     }
     minimum = min(values.values())
     tied = tuple(sorted(label for label, value in values.items() if value == minimum))

@@ -58,7 +58,7 @@ def _builtin_rules_when_registry_empty() -> Iterator[None]:
         # populated registry or a half-advanced epoch: the finally always restores
         # the exact pre-entry mapping and epoch, whether install, the reload loop,
         # or the guarded body raised.
-        module = importlib.import_module(f"{__package__}.rules")
+        module = importlib.import_module(f"{__package__}._builtin_rules")
         if not _rules._RF_RULES:
             for name in module.__all__:
                 importlib.reload(getattr(module, name))
