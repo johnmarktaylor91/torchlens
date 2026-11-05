@@ -15,6 +15,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._entry_refusals import refuse_if_foreign_workspace
 from ..._ir import BufferWriteEvent
 from ..._utils._torch_compat import tensor_version_or_none
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.tensor_utils import safe_copy
 from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
 from ._identity_cache import IdentityCache, identity_cached
@@ -1438,7 +1439,7 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
 
     try:
         with _state.pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             if tensor.is_meta:
                 from ..._capture._weightsfree_admission import meta_storage_key
 
@@ -1689,10 +1690,7 @@ def _witness_marker_state() -> Any:
     return _WITNESS_MARKER_STATE
 
 
-def _resolve_buffer_address(
-    tracker: BufferWriteTracker,
-    tensor: torch.Tensor,
-) -> str | None:
+def _resolve_buffer_address(tracker: BufferWriteTracker, tensor: torch.Tensor) -> str | None:
     """Resolve a tensor/view/data tensor to a registered-buffer address."""
 
     direct = get_buffer_address(tensor)

@@ -605,39 +605,29 @@ def suggest_layer_labels(trace: Trace, selector: str, *, limit: int = 10) -> lis
 
 
 def modules_with_facet(trace: Trace, name: str) -> Iterator[Any]:
-    """Yield single-call Modules whose facet view has ``name`` available now.
+    """Yield Modules that have the facet ``name`` available now.
 
-    Facets are read on a module called once; a module called more than once has
-    no module-level facet view. Such a module is skipped when no facet recipe for
-    its class declares ``name`` (a reused dropout or activation), and refused by
-    name when one does (a shared attention layer), so a sweep never drops a layer
-    that carries the facet without saying so. The refusal's remedy names the
-    per-call views, ``module.calls[N].facets``, which read each call alone.
-
-    Raises
-    ------
-    InvalidArgumentError
-        Code ``module_call_ambiguous``: a module called more than once has a
-        recipe declaring ``name``.
+    A module called once is yielded when its facet view has ``name``. A module
+    called more than once (a shared attention layer, as in ALBERT) is yielded
+    when a facet recipe for its class declares ``name`` and at least one of its
+    calls has ``name`` available now; reused modules without such a recipe
+    (dropout, activations) are skipped without building call views. A reused
+    Module's own ``.facets`` still refuses at read time (code
+    ``module_call_ambiguous``); read each call with ``module.calls[N].facets``.
     """
 
     for module in trace.modules:
         if module.num_calls == 1 and len(module.ops) == 1:
             if module.facets.has(name):
                 yield module
-        elif _recipe_declares_facet(module, name):
-            # The coded single-call refusal names the module and its call count.
-            module._single_call_or_error(remedy=_per_call_facet_remedy(module, name))
+        elif _recipe_declares_facet(module, name) and _some_call_has_facet(module, name):
+            yield module
 
 
-def _per_call_facet_remedy(module: Any, name: str) -> str:
-    """Return the remedy that points a refused sweep at the per-call facet views."""
+def _some_call_has_facet(module: Any, name: str) -> bool:
+    """Return whether at least one call of ``module`` has ``name`` available now."""
 
-    return (
-        f"read each call's facets instead: trace.modules[{module.address!r}].calls[N]"
-        f".facets.{name} for N in range({module.num_calls}), or "
-        f"trace.module_calls[{module.address + ':1'!r}].facets.{name}"
-    )
+    return any(call.facets.has(name) for call in module.calls.values())
 
 
 def _recipe_declares_facet(module: Any, name: str) -> bool:
