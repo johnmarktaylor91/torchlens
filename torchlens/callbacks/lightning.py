@@ -532,6 +532,19 @@ def _build_layer_profiler_callback() -> type[_LayerProfilerCallbackMixin]:
         carries ``run_id`` (fresh per Lightning run unless fixed with
         ``run_id=``) and that ``disclosure``. A batch the forward cannot take
         skips with a ``lightning_profile_skipped`` warning; training goes on.
+
+        Examples
+        --------
+        >>> # requires: lightning
+        >>> import pathlib, tempfile
+        >>> path = pathlib.Path(tempfile.mkdtemp()) / "profile.jsonl"
+        >>> callback = LayerProfilerCallback(path, run_id="demo")
+        >>> callback.on_train_batch_end(None, model, None, (x,), 0)
+        >>> record = callback.records[0]
+        >>> (record["run_id"], record["stage"], record["batch_idx"], record["num_layers"] > 0)
+        ('demo', 'train', 0, True)
+        >>> len(path.read_text().splitlines())
+        1
         """
 
     LayerProfilerCallback.__module__ = __name__
@@ -564,6 +577,17 @@ def _build_summary_callback() -> type[_SummaryCallbackMixin]:
         global rank zero only. A sample the forward cannot take skips the
         summary with a ``lightning_summary_skipped`` warning; the fit goes on.
         The last report is kept on ``self.report``.
+
+        Examples
+        --------
+        >>> # requires: lightning
+        >>> printed = []
+        >>> callback = SummaryCallback(print_fn=printed.append)
+        >>> callback.on_train_batch_start(None, model, (x,), 0)
+        >>> "SummaryCallback; sample: first training batch" in printed[0]
+        True
+        >>> callback.report is not None
+        True
         """
 
     SummaryCallback.__module__ = __name__

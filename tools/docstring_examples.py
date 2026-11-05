@@ -16,6 +16,12 @@ module is the one place that knows which objects owe an example and how one is r
 An example whose first line is ``>>> # requires: <module>`` is skipped when ``<module>``
 does not import; that is how an optional-dependency bridge keeps a runnable example.
 
+A module in :data:`OPTIONAL_PEER_MODULES` builds its public classes on an optional peer's
+base class at first access, so they cannot be reached where the peer is absent. There
+its exports and their members are read from the module source instead
+(:func:`optional_peer_symbols`, :func:`optional_peer_members`), so the census renders the
+same rows with or without the extra installed.
+
 Command line: ``python tools/docstring_examples.py census [--out PATH]`` writes the
 per-package census table (missing examples per package); ``--list`` prints one line per
 public symbol with its status.
@@ -24,9 +30,11 @@ public symbol with its status.
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
 import doctest
 import importlib
+import importlib.util
 import inspect
 import io
 import sys
@@ -38,7 +46,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 
-from name_lockstep.inventory import build_inventory  # noqa: E402
+from name_lockstep.inventory import PROTOCOL_DUNDERS, build_inventory  # noqa: E402
 
 PACKAGE = "torchlens"
 #: Row kinds that carry the example obligation.
@@ -49,6 +57,10 @@ MEMBER_SUBKINDS = frozenset({"method", "classmethod", "staticmethod", "property"
 REQUIRES_PREFIX = "# requires:"
 #: Doctest option flags every example runs under.
 OPTION_FLAGS = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE | doctest.IGNORE_EXCEPTION_DETAIL
+#: Modules whose public classes subclass an optional peer's base class, built on first
+#: access, mapped to the import that peer provides. Where the peer is absent their exports
+#: and members are read from source (see the module docstring).
+OPTIONAL_PEER_MODULES: dict[str, str] = {"torchlens.callbacks.lightning": "lightning"}
 #: Default home of the committed census.
 CENSUS_PATH = REPO / "docs" / "maintainers" / "docstring_examples_census.md"
 
@@ -177,7 +189,9 @@ def public_symbols(inventory: dict[str, Any] | None = None) -> list[PublicSymbol
         key = _identity(obj)
         if key not in seen:
             seen[key] = PublicSymbol(row["path"], row["module"], row["subkind"], obj)
-    return sorted(seen.values(), key=lambda s: s.path)
+    reached = {symbol.path for symbol in seen.values()}
+    static = [symbol for symbol in optional_peer_symbols() if symbol.path not in reached]
+    return sorted([*seen.values(), *static], key=lambda s: s.path)
 
 
 def public_members(inventory: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -201,7 +215,163 @@ def public_members(inventory: dict[str, Any] | None = None) -> list[dict[str, An
     """
 
     rows = (inventory or build_inventory(PACKAGE))["rows"]
-    return [row for row in rows if row["kind"] == "member" and row["subkind"] in MEMBER_SUBKINDS]
+    reached = [row for row in rows if row["kind"] == "member" and row["subkind"] in MEMBER_SUBKINDS]
+    ids = {row["id"] for row in reached}
+    static = [row for row in optional_peer_members() if row["id"] not in ids]
+    return sorted([*reached, *static], key=lambda row: row["id"])
+
+
+def _module_tree(module: str) -> ast.Module:
+    """Parse a module's source without importing it (its parent packages do import)."""
+
+    spec = importlib.util.find_spec(module)
+    if spec is None or spec.origin is None:
+        raise ImportError(f"no source file for {module}")
+    return ast.parse(Path(spec.origin).read_text(encoding="utf-8"))
+
+
+def _static_all(tree: ast.Module) -> list[str]:
+    """Return a module's literal ``__all__`` (empty when it has none)."""
+
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else []
+        if any(isinstance(target, ast.Name) and target.id == "__all__" for target in targets):
+            return [str(name) for name in ast.literal_eval(node.value)]
+    return []
+
+
+def _peer_absent(module: str, name: str) -> bool:
+    """Return True when reading ``module.name`` raises ImportError (its peer is missing)."""
+
+    try:
+        getattr(importlib.import_module(module), name)
+    except ImportError:
+        return True
+    return False
+
+
+_Definition = ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+
+
+def _unreached_exports() -> Iterator[tuple[str, str, _Definition, dict[str, _Definition]]]:
+    """Yield ``(module, name, definition, all definitions)`` per unreachable peer export.
+
+    A definition is found anywhere in the module (the Lightning callbacks are defined in
+    their builder functions); a module-level one wins over a nested one of the same name.
+    """
+
+    for module in sorted(OPTIONAL_PEER_MODULES):
+        tree = _module_tree(module)
+        definitions: dict[str, _Definition] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                definitions.setdefault(node.name, node)
+        for name in _static_all(tree):
+            node = definitions.get(name)
+            if node is not None and _peer_absent(module, name):
+                yield module, name, node, definitions
+
+
+def optional_peer_symbols() -> list[PublicSymbol]:
+    """List the optional-peer exports that cannot be reached here, read from source.
+
+    Each symbol's ``obj`` is a stand-in class carrying the definition's docstring, so
+    :func:`example_of` counts its example; that example declares the peer on its
+    ``# requires:`` line and :func:`run_example` skips it.
+
+    Returns
+    -------
+    list[PublicSymbol]
+        Empty where every peer in :data:`OPTIONAL_PEER_MODULES` imports.
+
+    Examples
+    --------
+    >>> all(s.module in OPTIONAL_PEER_MODULES for s in optional_peer_symbols())
+    True
+    """
+
+    symbols = []
+    for module, name, node, _ in _unreached_exports():
+        stand_in = type(name, (), {"__doc__": ast.get_docstring(node), "__module__": module})
+        subkind = "class" if isinstance(node, ast.ClassDef) else "function"
+        path = f"tl.{module.removeprefix(PACKAGE + '.')}.{name}"
+        symbols.append(PublicSymbol(path, module, subkind, stand_in))
+    return symbols
+
+
+def _member_subkind(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Return the inventory subkind a method definition's decorators give it."""
+
+    names = {getattr(d, "id", getattr(d, "attr", "")) for d in node.decorator_list}
+    if names & {"property", "cached_property"}:
+        return "property"
+    for subkind in ("classmethod", "staticmethod"):
+        if subkind in names:
+            return subkind
+    return "method"
+
+
+def _static_mro(node: ast.ClassDef, definitions: dict[str, _Definition]) -> list[ast.ClassDef]:
+    """Return a class and its same-module base classes, depth first.
+
+    Bases defined elsewhere (the peer's own base class) are skipped, as the inventory
+    skips bases outside the package.
+    """
+
+    chain = [node]
+    for base in node.bases:
+        target = definitions.get(base.id) if isinstance(base, ast.Name) else None
+        if isinstance(target, ast.ClassDef) and target is not node:
+            chain.extend(c for c in _static_mro(target, definitions) if c not in chain)
+    return chain
+
+
+def optional_peer_members() -> list[dict[str, Any]]:
+    """Return member rows of the unreachable optional-peer classes, read from source.
+
+    Each row has the inventory member row's identifying keys (``id``, ``kind``,
+    ``subkind``, ``name``, ``path``, ``owner``, ``owner_names``, ``module``); a public
+    method or property of the class or of a same-module base counts once per defining
+    class, as the inventory counts it.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Sorted by id; empty where every peer imports.
+
+    Examples
+    --------
+    >>> all(row["kind"] == "member" for row in optional_peer_members())
+    True
+    """
+
+    rows: dict[str, dict[str, Any]] = {}
+    for module, name, node, definitions in _unreached_exports():
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for defining in _static_mro(node, definitions):
+            for item in defining.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if item.name.startswith("_") and item.name not in PROTOCOL_DUNDERS:
+                    continue
+                row_id = f"member:{module}:{defining.name}.{item.name}"
+                row = rows.setdefault(
+                    row_id,
+                    {
+                        "id": row_id,
+                        "kind": "member",
+                        "subkind": _member_subkind(item),
+                        "name": item.name,
+                        "path": f"{defining.name}.{item.name}",
+                        "owner": f"{module}:{defining.name}",
+                        "owner_names": [],
+                        "module": module,
+                    },
+                )
+                if name not in row["owner_names"]:
+                    row["owner_names"].append(name)
+    return sorted(rows.values(), key=lambda row: row["id"])
 
 
 def example_of(obj: Any) -> list[doctest.Example]:
