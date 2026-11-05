@@ -32,8 +32,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ..._ir.op_record import FACET_DEFAULTS
 from ..._ir.op_record_scatter import _function_ref_cells, _resolve_dtype
 from ..._trace_core.op_store import _MISSING
-from ._ops_capture_records import _resolve_call_function_ref
-from ._ops_container_base import _copy_parent_arg_positions
+from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

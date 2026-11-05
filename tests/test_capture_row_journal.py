@@ -145,12 +145,12 @@ class _CommitSpy:
         self.build_eager = True
         self.fast_diffs: list[str] = []
 
-    def commit(self, real: Any, draft: Any) -> Any:
+    def commit(self, real: Any, draft: Any, layout: Any, edge_uses: Any) -> Any:
         """Build the eager record from ``draft``, then commit the row as production does."""
 
         self.journal = draft.trace.capture_events
         if not self.build_eager:
-            return real(draft)
+            return real(draft, layout, edge_uses)
         if draft.call_ref_box is None:
             # The commit resolves a lone output through a fresh box; share one so
             # the eager freeze and the row commit see the same function ref.
@@ -163,7 +163,7 @@ class _CommitSpy:
             module_stack=draft.module_stack,
             call_ref_box=draft.call_ref_box,
         )
-        handle = real(draft)
+        handle = real(draft, layout, edge_uses)
         self.fast_diffs.extend(f"commit {d}" for d in fast_read_diffs(handle, eager))
         self.eager.append((handle, eager))
         self.residuals.append(weakref.ref(handle._rest))
@@ -177,7 +177,9 @@ def commit_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[_CommitSpy]:
     spy = _CommitSpy()
     real_commit = _ops_row_journal.commit_row_record
     monkeypatch.setattr(
-        _ops_row_journal, "commit_row_record", lambda draft: spy.commit(real_commit, draft)
+        _ops_row_journal,
+        "commit_row_record",
+        lambda draft, layout, edge_uses: spy.commit(real_commit, draft, layout, edge_uses),
     )
     real_clone = postprocess_module._clone_op_event_for_replay
 
