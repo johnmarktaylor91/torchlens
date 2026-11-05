@@ -77,7 +77,7 @@ def _validate_non_empty_capture(options: _RecordingConfig) -> None:
     """Reject statically empty fastlog configurations.
 
     An armed ``narrate=`` narrator is a legal capture on its own ("narrate
-    everything, keep nothing" is the narrate-only fast path, snoop D1): the
+    everything, keep nothing" is the narrate-only fast path): the
     echo term keeps ``tl.record(model, x, narrate=...)`` from being refused as
     capturing nothing.
     """
@@ -89,7 +89,7 @@ def _validate_non_empty_capture(options: _RecordingConfig) -> None:
         and options.default_module is False
         and options.echo is None
     ):
-        # User-vocabulary refusal (R65): the caller typed tl.record(), not
+        # User-vocabulary refusal: the caller typed tl.record(), not
         # "fastlog", and the remedy is one token.
         raise RecordingConfigError(
             "tl.record() would capture nothing: no save= predicate was given and "

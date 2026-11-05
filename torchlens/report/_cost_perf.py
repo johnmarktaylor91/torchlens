@@ -1,39 +1,37 @@
 """Performance metrics: peaks, MFU, roofline, instrumented rate, cost measurer.
 
-F09 (costreport items 13-16, 25; D16-D21, D27). The words law (memo 3.8)
-governs every string here: "measured" is banned for analytic FLOP counts;
+The words law governs every string here: "measured" is banned for analytic FLOP counts;
 "achieved" and "throughput" are banned without joined device time; "MFU"
 is banned over a kernel-union denominator or a measured-achievable peak
 (those quantities get their own names).
 
-- :func:`device_peaks` -- the explicit peaks constructor (D18): per-row
+-:func:`device_peaks` -- the explicit peaks constructor: per-row
   provenance, typed refusal for unknown devices, nothing auto-selected;
   a zero-row catalog still refuses correctly, so launch does not gate on
   row curation (the row-data task is separately owned, post-launch).
-- :func:`mfu` -- dtype-SPLIT and time-normalized (D16/D17): ideal seconds
+-:func:`mfu` -- dtype-SPLIT and time-normalized: ideal seconds
   summed per execution mode over ADVERTISED dense peaks, divided by
   uninstrumented end-to-end step wall time ONLY. The kernel-union
   quantity is a different metric with its own name and stays a typed
-  refusal until the correlation-ID join lands (D22).
-- :func:`measure_clean_step` -- the opt-in clean-step helper (D16): warmups,
+  refusal until the correlation-ID join lands.
+-:func:`measure_clean_step` -- the opt-in clean-step helper: warmups,
   median, method disclosed; it states plainly that it re-runs the
   caller's forward.
-- :func:`roofline` -- theoretical intensity/work map (D21): read-once/
+-:func:`roofline` -- theoretical intensity/work map: read-once/
   write-once ideal traffic (a TWO-SIDED estimate), bound verdicts are
   HYPOTHESES, aggregate intensity is sum/sum, coverage prints by reason,
   and sub-cache ops are excluded from headline bound counts.
-- :func:`machine_balance` -- re-scoped to roofline ceilings (D18): the
+-:func:`machine_balance` -- re-scoped to roofline ceilings: the
   basis (measured-achievable vs advertised) is REQUIRED and disclosed;
   a ratio against a measured peak is never called MFU.
-- :func:`instrumented_rate` -- the boxed opt-in diagnostic (D20):
+-:func:`instrumented_rate` -- the boxed opt-in diagnostic:
   CPU-cells only, "instrumented" in the header, per-row applicability by
   execution device, typed refusal when the whole trace executed on CUDA.
-- :func:`overhead` -- a cost MEASURER, never an estimator (D27): runs
+-:func:`overhead` -- a cost MEASURER, never an estimator: runs
   the requested tiers on the user's own model and host and discloses
   that it ran N forwards.
 
-Everything is live-only/session-time (no persisted fields; F09 holds no
-adjudicated field-intent rows). Spellings DOCUMENTED-UNSTABLE pending
+Everything is live-only/session-time (no persisted fields). Spellings DOCUMENTED-UNSTABLE pending
 naming-session ratification.
 """
 
@@ -53,16 +51,16 @@ from ._cost_tiers import COST_REPORT_TIERS, COST_REPORT_UNSHIPPED_TIERS, _valida
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Peak-provenance vocabulary (D18): nothing is ever auto-selected and
+#: Peak-provenance vocabulary: nothing is ever auto-selected and
 #: sparse marketing peaks never default.
 PEAK_SOURCES: tuple[str, ...] = ("user_supplied", "catalog")
 
-#: The one lawful MFU denominator (D16): uninstrumented end-to-end step
+#: The one lawful MFU denominator: uninstrumented end-to-end step
 #: wall time. The kernel-union quotient is a DIFFERENT metric with its
 #: own name; feeding it here is a typed refusal, never a bigger number.
 MFU_DENOMINATOR: str = "step_wall_time"
 
-#: Roofline coverage reasons (D21): the split prints BY REASON.
+#: Roofline coverage reasons: the split prints BY REASON.
 ROOFLINE_REASONS: tuple[str, ...] = (
     "covered",
     "no_rule",
@@ -70,14 +68,14 @@ ROOFLINE_REASONS: tuple[str, ...] = (
     "missing_shape_dtype",
 )
 
-#: Sub-cache exclusion threshold for headline bound counts (D21): a
+#: Sub-cache exclusion threshold for headline bound counts: a
 #: roofline that confidently classifies a 4 KB elementwise op is lying
 #: with precision.
 CACHE_RESIDENT_BYTES_DEFAULT: int = 4 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------
-# Peaks (D18)
+# Peaks
 
 
 @dataclass(frozen=True)
@@ -118,7 +116,7 @@ class DevicePeaks:
     rows: tuple[PeakRow, ...]
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         devices = sorted({row.device_identity for row in self.rows})
         shown = ", ".join(devices[:3]) + (" ..." if len(devices) > 3 else "")
@@ -143,7 +141,7 @@ class DevicePeaks:
 
 
 def device_peaks(rows: Any) -> DevicePeaks:
-    """Construct the explicit peaks catalog (D18).
+    """Construct the explicit peaks catalog.
 
     Every row must carry full provenance: exact device identity, execution
     mode, the ADVERTISED dense peak, a source citation, a date, and clock
@@ -184,15 +182,15 @@ def device_peaks(rows: Any) -> DevicePeaks:
 
 
 # ---------------------------------------------------------------------------
-# MFU (D16/D17)
+# MFU
 
 
 @dataclass(frozen=True)
 class MfuReport:
-    """The mode-split time-normalized MFU facts (D16).
+    """The mode-split time-normalized MFU facts.
 
     ``mode_terms`` disclose each execution mode's (flops, peak, ideal
-    seconds); the peaks' source rides ``peaks_source`` (D17: modes are
+    seconds); the peaks' source rides ``peaks_source`` (modes are
     recorded ``user_supplied`` until joined kernel metadata can discharge
     them).
 
@@ -216,7 +214,7 @@ class MfuReport:
     peaks_source: str
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): mode terms point, never dump."""
+        """Bounded identity card: mode terms point, never dump."""
 
         return (
             f"MfuReport(mfu={self.mfu:.4f}, ideal={self.ideal_seconds:.6f} s / "
@@ -227,12 +225,12 @@ class MfuReport:
 
 @dataclass(frozen=True)
 class MfuProvenance:
-    """Where the MFU inputs came from (the D16/D17 disclosure knobs).
+    """Where the MFU inputs came from (the disclosure knobs).
 
     ``denominator`` names the time base (exactly one is lawful; validated
     at the :func:`mfu` door), ``denominator_scope`` discloses which passes
     the step covers, and ``peaks_source`` records where the advertised
-    peaks came from (D17: ``user_supplied`` until joined kernel metadata
+    peaks came from (``user_supplied`` until joined kernel metadata
     can discharge a ``catalog`` claim).
 
     Examples
@@ -257,14 +255,14 @@ def mfu(
     step_seconds: float,
     provenance: MfuProvenance | None = None,
 ) -> MfuReport:
-    """Model FLOPs utilization: mode-split, step-wall-time-normalized (D16).
+    """Model FLOPs utilization: mode-split, step-wall-time-normalized.
 
     ``ideal_seconds = sum_m flops_m / advertised_dense_peak_m``;
     ``MFU = ideal_seconds / step_seconds``. At one mode this reduces
     exactly to ``F / (T * P)`` (the property test). The denominator is
     uninstrumented end-to-end step wall time ONLY -- launch bubbles,
     dataloader stalls, and collective waits are the point of the metric.
-    ``provenance`` bundles the D16/D17 disclosure knobs; the defaults are
+    ``provenance`` bundles the disclosure knobs; the defaults are
     the honest ones (``step_wall_time`` over the forward, user-supplied
     peaks) and every non-default claim is validated here.
 
@@ -360,7 +358,7 @@ def mfu(
 def attributed_kernel_utilization(*_args: Any, **_kwargs: Any) -> Any:
     """Utilization within attributed kernels: NOT MFU; gated on the join.
 
-    The kernel-union quotient is a genuinely useful DIFFERENT metric (D16)
+    The kernel-union quotient is a genuinely useful DIFFERENT metric
     -- it gets its own name and stays a typed refusal until the
     correlation-ID device-time join lands (D22's real-GPU acceptance
     gate). Never renders under the letters M-F-U.
@@ -459,12 +457,12 @@ def measure_clean_step(
 
 
 # ---------------------------------------------------------------------------
-# Roofline (D21) + machine balance (D18)
+# Roofline + machine balance
 
 
 @dataclass(frozen=True)
 class RooflineRow:
-    """One op's theoretical intensity/work coordinates (D21).
+    """One op's theoretical intensity/work coordinates.
 
     ``ideal_traffic_bytes`` is the read-once/write-once model -- a
     TWO-SIDED estimate (fusion and cache residency push real traffic
@@ -512,7 +510,7 @@ class RooflineReport:
     excluded_cache_resident: int
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         aggregate = (
             "None" if self.aggregate_intensity is None else f"{self.aggregate_intensity:.3f}"
@@ -524,12 +522,12 @@ class RooflineReport:
         )
 
 
-#: The Op record fields the roofline traffic model reads (D21: read-once /
+#: The Op record fields the roofline traffic model reads (read-once /
 #: write-once ideal traffic = parent outputs + own output + parameters
 #: consumed). Pinned against the Op field vocabulary at import by
 #: :func:`_pin_traffic_fields`, so a field rename can never silently zero a
-#: traffic term again (AUD-CODE 2.11: a ``params_memory`` misspelling read
-#: ``None`` through ``getattr`` and dropped ALL parameter traffic, reporting a
+#: traffic term (a ``params_memory`` misspelling would read
+#: ``None`` through ``getattr`` and drop ALL parameter traffic, reporting a
 #: Linear(256, 512) at 85 FLOP/B instead of 1.96 FLOP/B).
 ROOFLINE_TRAFFIC_FIELDS: tuple[str, ...] = ("activation_memory", "param_memory")
 _TRAFFIC_OUTPUT_FIELD, _TRAFFIC_PARAM_FIELD = ROOFLINE_TRAFFIC_FIELDS
@@ -577,7 +575,7 @@ def roofline(
     ridge_intensity: float | None = None,
     cache_resident_bytes: int = CACHE_RESIDENT_BYTES_DEFAULT,
 ) -> RooflineReport:
-    """Build the theoretical intensity/work map over known compute ops (D21).
+    """Build the theoretical intensity/work map over known compute ops.
 
     Parameters
     ----------
@@ -724,7 +722,7 @@ def machine_balance(
     basis: str,
     method: str = "user_supplied ceilings",
 ) -> MachineBalance:
-    """Roofline ceilings and the ridge point (D18): scoped to ROOFLINE only.
+    """Roofline ceilings and the ridge point: scoped to ROOFLINE only.
 
     ``basis`` is REQUIRED: ``"measured_achievable"`` (the roofline
     literature's own practice -- DGEMM roof, STREAM diagonal; disclose the
@@ -754,12 +752,12 @@ def machine_balance(
 
 
 # ---------------------------------------------------------------------------
-# Instrumented rate (D19/D20)
+# Instrumented rate
 
 
 @dataclass(frozen=True)
 class InstrumentedRateRow:
-    """One CPU-cell instrumented-rate diagnostic row (D20)."""
+    """One CPU-cell instrumented-rate diagnostic row."""
 
     label: str
     flops: int | None
@@ -771,7 +769,7 @@ class InstrumentedRateRow:
 
 @dataclass(frozen=True)
 class InstrumentedRateTable:
-    """The boxed opt-in diagnostic (D20): never in any default view.
+    """The boxed opt-in diagnostic: never in any default view.
 
     The header carries "instrumented" (screenshots lose footnotes); the
     known distortion DIRECTION: per-op instrumentation overhead
@@ -784,7 +782,7 @@ class InstrumentedRateTable:
     header: str = "FLOPs per instrumented second (diagnostic; not a device rate)"
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         applicable = sum(1 for row in self.rows if row.applicable)
         return (
@@ -807,7 +805,7 @@ class InstrumentedRateTable:
 
 
 def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
-    """The opt-in CPU-only FLOPs-per-instrumented-time diagnostic (D20).
+    """The opt-in CPU-only FLOPs-per-instrumented-time diagnostic.
 
     Applicability is decided PER ROW by the op's execution device: a
     CUDA-executed row renders "-" even though the column was explicitly
@@ -867,7 +865,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
 
 
 # ---------------------------------------------------------------------------
-# The cost measurer (D27)
+# The cost measurer
 
 
 @dataclass(frozen=True)
@@ -904,7 +902,7 @@ class OverheadReport:
     environment: dict[str, str]
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): tiers point, never dump."""
+        """Bounded identity card: tiers point, never dump."""
 
         tiers = ", ".join(tier.tier for tier in self.tiers)
         return (
@@ -939,7 +937,7 @@ def overhead(
     tiers: tuple[str, ...] = COST_REPORT_TIERS,
     repeats: int = 3,
 ) -> OverheadReport:
-    """Measure requested capture tiers on the user's own model/host (D27).
+    """Measure requested capture tiers on the user's own model/host.
 
     A cost MEASURER, never an estimator: the published grid varies 15x
     across models and 6x across hosts for one cell, so nothing is

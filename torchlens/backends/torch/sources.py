@@ -164,7 +164,7 @@ def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
 def _emit_source_echo(trace: "Trace", ctx: Any) -> None:
     """Feed one committed input/buffer event to the echo narrator, if armed.
 
-    Duck-typed runtime-only session read (snoop D1): the hot path imports
+    Duck-typed runtime-only session read: the hot path imports
     nothing and pays one dict read when echo is off.
     """
 
@@ -320,7 +320,7 @@ def _echo_and_halt_on_source(
     """Emit the echo line and evaluate the halt predicate for one exhaustive source tensor."""
 
     options = getattr(self, "_predicate_save_options", None)
-    # Echo narrator slot (snoop D1, source seam, exhaustive tier): the halt
+    # Echo narrator slot (source seam, exhaustive tier): the halt
     # path below already builds this context shape on demand; echo shares the
     # build so the source line renders from the same record. Duck-typed
     # session read: the hot path imports nothing.
@@ -408,8 +408,8 @@ def log_source_tensor_exhaustive(
         extra_addr: either the buffer address or the input address
     """
     layer_type = source
-    # r65: TorchLens's OWN source-bookkeeping ``grad_fn`` read, hoisted under the explicit
-    # internal-read marker so the r65 state-metadata property observer never mistakes it for
+    # TorchLens's OWN source-bookkeeping ``grad_fn`` read, hoisted under the explicit
+    # internal-read marker so the state-metadata property observer never mistakes it for
     # a user autograd read on a registered buffer/param receiver.
     with internal_scalar_read():
         _grad_fn_handle = t.grad_fn

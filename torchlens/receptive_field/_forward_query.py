@@ -517,9 +517,8 @@ def _map_axis_forward(
     (``child = (parent - start) / step``, dropping coordinates off the slice
     lattice); a scalar-selected parent axis whose constrained source set
     excludes the recorded index prunes the whole forward influence to empty.
-    Both were silently ignored before (disputed-r2 b6/R20-2/R20-3), so a
-    projective query through a rank-changing getitem served unshifted,
-    over-covering images.
+    Ignoring either would let a projective query through a rank-changing
+    getitem serve unshifted, over-covering images.
     """
 
     raw = result.values.get("out_to_parent_axis", {})

@@ -39,7 +39,7 @@ class AttributionError(ConfigurationError, ValueError):
 
 
 class AttributionWarning(TorchLensWarning):
-    """Coded disclosure warning for attribution methods and metrics (S-18)."""
+    """Coded disclosure warning for attribution methods and metrics."""
 
 
 def _summarize_attribution_tree(value: Any) -> str:

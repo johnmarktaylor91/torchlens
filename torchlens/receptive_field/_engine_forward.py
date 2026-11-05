@@ -725,8 +725,8 @@ def _transpose_axis_map(
             if edge is not None and isinstance(geometry, _Mapped):
                 # Walking child->parent, the new frame coordinate ``p`` maps
                 # to the old child coordinate ``(p - start) / step``; without
-                # this inverse-affine composition every slice offset was
-                # dropped from the transposed relation (disputed-r2 b6/R20-2).
+                # this inverse-affine composition every slice offset would be
+                # dropped from the transposed relation.
                 step, start = int(edge[0]), int(edge[1])
                 inverse_slope = Fraction(1, step)
                 local = _Mapped(
@@ -771,7 +771,7 @@ def _degrade_for_selected_axes(
     select also rebases batch indices across the boundary, so the known
     target batch axis widens to a whole-extent full claim, DECLARING the
     coupling geometrically instead of serving an identity pointwise claim
-    that misses the true mapping (disputed-r3 F2).
+    that misses the true mapping.
     """
 
     raw_selected = result.values.get("selected_parent_axes", ())

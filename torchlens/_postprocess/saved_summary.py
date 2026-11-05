@@ -180,9 +180,9 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self._num_saved_ops = len(saved_layers)
-    # F20 (brainpipe D-17): read the ONE byte model -- physically retained
+    # Read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
-    # explorer P4 memory truth (reduce-only captures count the retained
+    # explorer memory truth (reduce-only captures count the retained
     # TRANSFORMED bytes, raw-retaining captures the raw bytes) is served by
     # this same aggregate: it counts the payloads capture actually kept.
     from .._save_budget import retained_activation_bytes

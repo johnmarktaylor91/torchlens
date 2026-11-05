@@ -1,4 +1,4 @@
-"""Regions: derived admissibility on the existing verbs (F01, surgery memo 3.4).
+"""Regions: derived admissibility on the existing verbs.
 
 A region is a user-selected contiguous chunk of the executed graph treated as
 ONE unit, with entry edges (values flowing in) and exit edges (values flowing
@@ -25,7 +25,7 @@ asserted by the user:
    channel and op; for channels TorchLens cannot observe the audit says
    "effect closure not certified", never "effect-free".
 
-MECHANISM HONESTY (foldA D17): the replay lowering substitutes the region's
+MECHANISM HONESTY: the replay lowering substitutes the region's
 EXIT values and re-executes the consumers -- the interior is NOT replayed --
 so every region firing disclosure carries the engine-set closed
 ``execution_effect`` value ``"exits_substituted_interior_not_replayed"``.
@@ -403,7 +403,7 @@ def _validate_declared_exits(exit_edges: tuple[RegionEdge, ...], exits: Any) -> 
 
 
 def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
-    """Derive an admissible region from a ``TraceSlice`` (F01, memo 3.4).
+    """Derive an admissible region from a ``TraceSlice``.
 
     Parameters
     ----------
@@ -461,7 +461,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
 
     by_call = _edge_records_by_call(trace)
     # A boundary crossing into a VALUE-UNCHANGED buffer sink is not an exit:
-    # no value leaves (the write re-stores the same bytes; D18's eval-mode
+    # no value leaves (the write re-stores the same bytes; the eval-mode
     # BatchNorm evidence class). Value-changing / unproven buffer sinks stay
     # in the exit set so the do()-time effect-closure delegation refuses
     # them by name.
@@ -610,7 +610,7 @@ def _check_member_side_channels(graph: Any, members: frozenset[str], label: str,
 def _replace_at_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
     """Rebuild ``container`` with ``value`` at the nested ``path``.
 
-    The container-consumed exit EXTENSION (memo 3.4): tuple/list/dict
+    The container-consumed exit EXTENSION: tuple/list/dict
     positions extend at any depth; an unsupported container kind refuses
     typed rather than guessing.
     """
@@ -980,7 +980,7 @@ def apply_region_do(
     nothing committed), then all tier-(ii) entries + fire records + replay
     updates commit and downstream cones push (phase B, rolled back on
     failure). The canonical REGION audit row (the renderer-neutral fact
-    F43 reads) carries the engine-set ``execution_effect``.
+    that renderers read) carries the engine-set ``execution_effect``.
 
     Returns the do() mutation kind (``"region_replayed"``).
     """
@@ -1050,10 +1050,10 @@ def apply_region_do(
             child_op._internal_set("edge_replacement_stamps", stamps or None)
         raise
 
-    # The renderer-neutral region fact row (F43 reads, never writes): it
+    # The renderer-neutral region fact row (renderers read, never write): it
     # rides the persisted FREE-FORM state_history stream, not the closed
-    # intervention_audit grammar -- a new audit-row KIND is a C07-owned
-    # schema amendment, and the do() transaction envelope (EVENT row)
+    # intervention_audit grammar -- a new audit-row KIND is a
+    # schema change, and the do() transaction envelope (EVENT row)
     # already lands in intervention_audit through the one chokepoint.
     trace._record_operation(
         "region_do",

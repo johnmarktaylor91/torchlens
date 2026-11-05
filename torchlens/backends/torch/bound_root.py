@@ -1,6 +1,6 @@
-"""TL-authored synthetic root for bound-method capture (lane F41).
+"""TL-authored synthetic root for bound-method capture.
 
-The ruled root contract (foldA MEMO s5 item 9 + D11, a direct maintainer ruling):
+The root contract:
 ``tl.trace`` accepts an ``nn.Module`` OR a bound method of one. The owner
 is resolved via ``method.__self__``; this TorchLens-authored wrapper root
 calls the bound method EXACTLY ONCE (no probing, no retry) and presents the
@@ -19,7 +19,7 @@ root op record (the output-boundary op records, the terminal records of the
 wrapper's DAG) -- and its model identity reads ``type(owner).__name__``,
 never the string ``"method"``.
 
-Interim posture (foldA D11, never widened past the ruling): bound-method
+Interim posture: bound-method
 captures refuse rerun/append at the ONE rerun identity gate
 (``Trace._validate_supplied_model_matches_capture``), because re-executing
 a capture of ``owner.generate`` by supplying ``owner`` would pass the
@@ -181,7 +181,7 @@ def instrumented_modules(model: nn.Module) -> Iterator[nn.Module]:
 def _reject_non_module_ladder_root(model: Any) -> nn.Module:
     """Return the model if it is an ``nn.Module``; refuse typed otherwise.
 
-    F41: the quickstart rungs synthesize or infer inputs from an
+    the quickstart rungs synthesize or infer inputs from an
     ``nn.Module``'s geometry; a bound-method (or any other callable) root
     takes the gold rung only. Previously this path leaked a bare
     ``AttributeError`` from the ladder.

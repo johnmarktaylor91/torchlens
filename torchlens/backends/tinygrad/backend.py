@@ -1725,7 +1725,7 @@ class TinygradBackend:
             ) from error
 
     def _assert_runtime_supported(self) -> None:
-        """Reject tinygrad runtimes outside the S0.G-proven live-payload envelope.
+        """Reject tinygrad runtimes outside the proven live-payload envelope.
 
         Returns
         -------
@@ -3139,10 +3139,7 @@ def _payload_values_close(left: Any, right: Any, dtype_name: str) -> bool:
         )
     if "bool" in dtype_name or "int" in dtype_name:
         return left == right
-    # The ONE shared eps-derived band + scalar NaN/inf doctrine (b5-opus
-    # R17-1 sweep: this oracle kept the dtype-blind 1e-6/1e-5 decimal pair
-    # the R13 port replaced everywhere else, and its naive band test
-    # false-FAILED byte-identical NaN replays -- the only backend where an
-    # honest NaN-bearing capture could not validate).
+    # The ONE shared eps-derived band + scalar NaN/inf doctrine: byte-identical
+    # NaN replays must agree, so an honest NaN-bearing capture can validate.
     rtol, atol = float_replay_tolerances_for_dtype_name(dtype_name)
     return scalar_replay_close(left, right, rtol, atol)

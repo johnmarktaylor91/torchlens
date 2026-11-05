@@ -554,7 +554,7 @@ def _mint_preview_site_keys(trace: Trace) -> None:
     facts from raw records, identical whether grouping runs or not -- P4), so
     the preview node builder copies the minted key into its
     ``RecurrenceNode`` and the ungrouped path carries keys all the same.
-    Orphan ops consume no ordinals and keep ``site_key=None`` (SF-63).
+    Orphan ops consume no ordinals and keep ``site_key=None``.
 
     Parameters
     ----------
@@ -954,7 +954,7 @@ def stable_callable_name(fn: Callable[..., Any] | None) -> str | None:
 def mirror_param_derived_grads(trace: Trace, records: Any) -> None:
     """Mirror unambiguous param derived gradients onto param records.
 
-    The ONE five-backend implementation (R17-3): every backend records the
+    The ONE five-backend implementation: every backend records the
     full superset metadata -- payload, record path, ``has_grad``,
     ``grad_shape``, ``grad_dtype``, and ``gradient_memory``. (mlx/paddle/tf
     historically stopped at ``grad_shape``; that drift is exactly why this
@@ -988,7 +988,7 @@ def mirror_param_derived_grads(trace: Trace, records: Any) -> None:
 def normalize_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:
     """Normalize an op's raw module-call records to ``(address, call_index)``.
 
-    The ONE five-backend normalizer (R17-6). Accepted spellings:
+    The ONE five-backend normalizer. Accepted spellings:
     ``(address, call_index)`` tuples, single-element tuples (call index
     defaults to ``1``), ``"address:index"`` strings, and bare address strings
     (legacy, call index ``1``). A string with a ``":"`` whose tail is not a

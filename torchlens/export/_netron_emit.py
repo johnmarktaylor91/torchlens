@@ -1,4 +1,4 @@
-"""ModelProto JSON emission for the netron export (lane F14, memo s4).
+"""ModelProto JSON emission for the netron export.
 
 Serializes a :class:`~._netron_records.NetronProjection` into camelCase
 protobuf-JSON accepted by netron's ProtoReader door and by a strict
@@ -33,10 +33,10 @@ __all__ = ["emit_model_json", "onnx_elem_type"]
 
 __tl_layer__ = "L8"
 
-#: Declared IR version for enriched exports (memo D-03).
+#: Declared IR version for enriched exports.
 NETRON_IR_VERSION = 10
 
-#: Artifact schema stamp (memo D-19); bump on breaking payload changes.
+#: Artifact schema stamp; bump on breaking payload changes.
 NETRON_SCHEMA_VERSION = "2"
 
 #: Byte size above which the JSON switches to compact separators.
@@ -66,7 +66,7 @@ def _encode_attr(attr: NetronAttr) -> dict[str, Any]:
 def _encode_type(info: NetronValueInfo) -> dict[str, Any] | None:
     """Encode a value's TypeProto; ``None`` when nothing honest can be said.
 
-    The dtype/shape rules (memo D-05): shape is always emitted when the rank
+    The dtype/shape rules: shape is always emitted when the rank
     is known (empty ``dim`` for rank-0), integer ``dimValue`` for concrete
     axes, ``dimParam`` only for genuinely unknown axes, and an unknown dtype
     OMITS the type entirely -- elemType 0 is UNDEFINED pretending to be
@@ -117,7 +117,7 @@ def _encode_node(node: NetronNode) -> dict[str, Any]:
         # netron's undocumented hook (onnx.js:313): a node metadataProps key
         # ``input_names`` holding a well-formed python list literal names the
         # input ports; it fires only for op types netron cannot resolve, so
-        # it works exactly because we stay in the custom domain (memo D-16).
+        # it works exactly because we stay in the custom domain.
         row["metadataProps"] = [
             {"key": "input_names", "value": repr([str(n) for n in node.input_names])}
         ]
@@ -172,7 +172,7 @@ def emit_model_json(
     disclaimer:
         Honesty disclaimer riding ``docString`` at model and graph level.
     metadata_props:
-        Ordered model-level metadata rows (memo D-19).
+        Ordered model-level metadata rows.
 
     Returns
     -------

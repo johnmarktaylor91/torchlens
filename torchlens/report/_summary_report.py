@@ -1,4 +1,4 @@
-"""The detached immutable summary report layer (C02; summary memo item 10).
+"""The detached immutable summary report layer.
 
 The structural deliverable: typed ``SummaryRow`` / ``SummaryTotals`` /
 ``CaptureFacts`` under a ``SummaryReport(str)`` result, built by a split
@@ -7,14 +7,14 @@ renders FROM the data instead of minting numbers in f-strings.
 
 Binding laws carried here:
 
-- RAW-NUMBERS PIN (summary memo 3.8, r4): every numeric field is a plain
+- RAW-NUMBERS PIN: every numeric field is a plain
   int or None -- ``format(raw_field, ',')`` yields digits; the
   MACs-through-the-FLOPs-formatter disease cannot leak into user format
   strings through a typed report.
 - DETACHED: the report retains neither the model nor the Trace and
   survives cleanup and GC (pin: build report; del trace; to_dict() works).
 - ``SummaryReport`` subclasses ``str``. From ``summary()`` the text IS the
-  canonical byte-stable ASCII contract (memo 3.9). A report assembled from
+  canonical byte-stable ASCII contract. A report assembled from
   caller text (``summary``) carries no rebuilt payload, and
   the rebuilt-only result methods refuse it typed.
 
@@ -33,7 +33,7 @@ from ._summary_charset import degrade
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: The five-value evidence enum (summary item 10 / costreport D2). Orthogonal
+#: The five-value evidence enum. Orthogonal
 #: to applicability; a mixed aggregate never upgrades past its weakest member.
 EVIDENCE_VALUES: tuple[str, ...] = (
     "measured",
@@ -136,13 +136,13 @@ class CaptureFacts:
 
 
 class SummaryReport(str):
-    """The summary text WITH its typed, detached data (items 10 + 12).
+    """The summary text WITH its typed, detached data.
 
     A ``str`` subclass: the string payload is the canonical byte-stable
-    ASCII contract (memo 3.9), while ``rows`` / ``totals`` / ``capture`` /
+    ASCII contract, while ``rows`` / ``totals`` / ``capture`` /
     ``to_dict()`` serve the numbers as data. ``__repr__`` is ``__str__``
-    (bare display renders the designed form, sumfam D7). Rebuilt-grammar
-    results additionally carry the F08 render payload serving
+    (bare display renders the designed form). Rebuilt-grammar
+    results additionally carry the render payload serving
     ``render``/``print``/``to_pandas``/``to_markdown``/``to_html``/
     ``details`` and the scalar conveniences; the report retains neither
     the model nor the Trace and survives cleanup and GC.
@@ -175,7 +175,7 @@ class SummaryReport(str):
         """Build the report around the rendered text."""
 
         # The payload is the canonical ASCII contract on every build path
-        # (summary D1): a non-ASCII name degrades one character per character.
+        # a non-ASCII name degrades one character per character.
         report = super().__new__(cls, degrade(text))
         report._rows = rows
         report._totals = totals
@@ -212,7 +212,7 @@ class SummaryReport(str):
         return str(self)
 
     # ------------------------------------------------------------------
-    # F08 result API (memo item 12). Heavy logic lives in _summary_result.
+    # Result API. Heavy logic lives in _summary_result.
 
     def _rebuilt_or_refuse(self, method: str) -> Any:
         """The rebuilt payload, or a typed teaching refusal when there is none."""
@@ -249,7 +249,7 @@ class SummaryReport(str):
         )
 
     def print(self, style: str = "auto", file: Any = None) -> None:
-        """Print with charset resolved at THIS display boundary (memo 3.9)."""
+        """Print with charset resolved at THIS display boundary."""
 
         import sys
 
@@ -443,7 +443,7 @@ class SummaryReport(str):
         ]
 
     def _repr_html_(self) -> str:
-        """Dependency-free escaped HTML table (the F08 renderer when rebuilt)."""
+        """Dependency-free escaped HTML table (the renderer when rebuilt)."""
 
         if self._stats is not None:
             return self._stats_html()

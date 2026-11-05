@@ -1,14 +1,14 @@
-"""Seam adapters: cell density + echo observer (F10; lovely item 10).
+"""Seam adapters: cell density + echo observer.
 
 Three consumers read the ONE TensorStats record without re-deriving the
-grammar (D1: no formatter touches a tensor; a number may never exist only
+grammar (no formatter touches a tensor; a number may never exist only
 in HTML):
 
 - ``summary_cell`` -- the CELL density for the summary panel's value
-  columns (F08 renders it verbatim; the seam test pins byte equality with
+  columns (the summary renders it verbatim; the seam test pins byte equality with
   the line renderer's distribution zone).
 - ``treescope_card_fields`` -- the semantic fixture the treescope/notebook
-  card renderers (F16) consume: named fields, honesty tokens, and the
+  card renderers consume: named fields, honesty tokens, and the
   ascii/unicode sparkline pair, so an HTML card can never invent a number.
 - ``EchoObserver`` / ``echo`` -- the live line density mounted on the
   shipped ``hooks=``/observer surface: one core line per firing, address
@@ -36,7 +36,7 @@ def summary_cell(stats: TensorStats, *, max_width: int = 40, style: str = "ascii
     """Render the bounded CELL density for one record (summary-panel seam).
 
     The cell is the core line's distribution zone under a hard width bound:
-    the D14 retention order applies (extrema/health survive; bytes, ``n=``,
+    the retention order applies (extrema/health survive; bytes, ``n=``,
     and the sparkline drop first), so a table column never wraps.
 
     Parameters
@@ -75,8 +75,8 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
     -------
     dict[str, Any]
         ``line_ascii``/``line_unicode`` (full core, both encodings),
-        ``sparkline_ascii``/``sparkline_unicode`` (or None below the D13
-        minimum), scalar facts, and per-family evidence tokens.
+        ``sparkline_ascii``/``sparkline_unicode`` (or None below the
+        small-tensor minimum), scalar facts, and per-family evidence tokens.
     """
 
     def evidence_token(evidence: FamilyEvidence) -> str:
@@ -147,7 +147,7 @@ class NarrationObserver:
     lines: list[str] = field(default_factory=list)
 
     def __repr__(self) -> str:
-        """Bounded identity card: never dump the accumulated lines (D31)."""
+        """Bounded identity card: never dump the accumulated lines."""
 
         return (
             f"EchoObserver(site={self.site!r}, {len(self.lines)} lines echoed, style={self.style})"

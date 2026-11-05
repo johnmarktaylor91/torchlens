@@ -5,18 +5,17 @@ validation (coherence rules C1-C8), and the canonical degraded settlement.
 trace was grouped AND how its product rows were site-joined -- two distinct
 axes: ``policy`` records only the step-7 grouping that actually ran;
 ``site_join`` records the product-layer join (always ``"none"`` from the
-wave-0 writers; episode products are L2's).
+writers here; episode products are out of scope).
 
-S3 DISCIPLINE: the field is ``FieldPolicy.DROP`` under tlspec v7 and
+The field is ``FieldPolicy.DROP`` under tlspec v7 and
 prerelease-registered; portability gates run under the test-only switch --
 never an active v7 write.
 
-S2 STATUS: ALL vocabulary and refusal spellings here are PROVISIONAL
-pending the S2 amendment (memo 4.3; the amendment also updates the
-marker-combination table and the P1 totality test in the same change).
-C8's capture-kind predicate is L2's spelling wired at that amendment; until
-then any ``site_join != "none"`` is fail-closed incoherent (no wave-0
-writer can legitimately produce one).
+All vocabulary and refusal spellings here are provisional; changing them
+means a schema change that also updates the marker-combination table and the
+totality test. Rule ``C8`` has no capture-kind predicate yet, so any
+``site_join != "none"`` is fail-closed incoherent (no current writer can
+legitimately produce one).
 
 Adopt-or-degrade at load: parse failure or incoherence warns ONCE and
 settles the stamp to the canonical DEGRADED SETTLEMENT -- a payload legal
@@ -34,7 +33,7 @@ from ..errors._base import TorchLensWarning
 
 GROUPING_POLICY_SCHEMA = "grouping_policy_v1"
 
-#: Closed step-7 policy vocabulary (S2-provisional).
+#: Closed step-7 policy vocabulary (provisional).
 POLICY_VALUES = frozenset({"structural", "strict_shapes", "fold_sites", "params_only", "unknown"})
 
 #: Closed requested-knob vocabulary ("unknown" is the degraded value).
@@ -72,7 +71,7 @@ def validate_grouping_knob(value: Any) -> None:
         ``grouping_policy_unavailable`` for legal vocabulary that is not
         entry-legal yet: ``"strict_shapes"`` is refused until its own
         reviewed design + churn census land, and ``"fold_sites"`` is
-        refused on plain captures until an affirmative D1 ruling (episode
+        refused on plain captures until within-capture folding is enabled (episode
         products fold by default via the product-layer site join instead).
     """
 
@@ -152,7 +151,7 @@ def degraded_grouping_policy_stamp(reason: str) -> dict[str, Any]:
 
 
 def _site_list_valid(value: Any) -> bool:
-    """Validate a folded_sites/site_join entry list (C4): parseable ``s1|``
+    """Validate a folded_sites/site_join entry list: parseable ``s1|``
     site keys, sorted, unique."""
 
     if not isinstance(value, list) or not value:
@@ -230,25 +229,25 @@ def validate_grouping_policy_stamp(
         if not _site_list_valid(axis_value):
             return "C4"
     coherence_rules: tuple[tuple[str, bool], ...] = (
-        # C1/C2: fold state must match the policy that claims it.
+        # fold state must match the policy that claims it.
         ("C1", policy == "fold_sites" and folded_sites == "none"),
         ("C2", policy != "fold_sites" and folded_sites != "none"),
-        # C3: a degraded/declined grouping never claims a policy it did not run.
+        # a degraded/declined grouping never claims a policy it did not run.
         ("C3", effective is False and policy != "unknown"),
-        # C5: stamp/recurrence_detection coherence (params_only <-> False).
+        # stamp/recurrence_detection coherence (params_only <-> False).
         (
             "C5",
             recurrence_detection is not None
             and policy in ("structural", "params_only")
             and (policy == "params_only") != (recurrence_detection is False),
         ),
-        # C6: mirror coherence with the requested-knob field.
+        # mirror coherence with the requested-knob field.
         ("C6", grouping is not None and requested != "unknown" and requested != grouping),
-        # C7: a healthy stamp never carries a settlement; a settled stamp never
+        # a healthy stamp never carries a settlement; a settled stamp never
         # claims health.
         ("C7", settlement_note is not None and not (policy == "unknown" and effective is False)),
-        # C8: a product-layer join is only legal on episode products. The exact
-        # capture_kind predicate is L2's spelling (wired at the S2 amendment);
+        # a product-layer join is only legal on episode products. The exact
+        # capture_kind predicate is L2's spelling (wired at the amendment);
         # until then no artifact can legitimately carry one -- fail closed.
         ("C8", site_join != "none"),
     )

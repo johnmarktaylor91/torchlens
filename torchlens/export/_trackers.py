@@ -1,4 +1,4 @@
-"""Tracker-sink export targets (bridge tier; subpackage promotion, C01 item 18).
+"""Tracker-sink export targets (bridge tier; subpackage promotion).
 
 Each function writes TorchLens summaries into an EXISTING foreign tracker
 object (TensorBoard writer, W&B run, MLflow client, Aim run) -- bridge-tier
@@ -37,9 +37,9 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
     writer:
         Existing writer object, for example ``SummaryWriter``.
     step:
-        Global step for emitted summaries. REQUIRED: the historical
-        ``step=0`` default was exactly the axis footgun the tracker design
-        bans (F26; every emission path carries a caller step).
+        Global step for emitted summaries. REQUIRED: a silent ``step=0``
+        default would stack every emission on one axis position, so every
+        emission path carries a caller-supplied step.
     prefix:
         Metric name prefix.
 
@@ -63,8 +63,8 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
     # a non-Trace input used to write plausible zeros (getattr defaults).
     _require_trace(trace, exporter="tl.export.tensorboard")
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
-    # One converter for every tracker exporter (F26 unification): the four
-    # historical exporters had drifted onto three different summary sets.
+    # One converter for every tracker exporter, so they all emit the same
+    # summary set.
     for key, value in _summary_metrics(trace).items():
         writer.add_scalar(f"{prefix}/{key}", value, step)
     writer.add_text(

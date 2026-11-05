@@ -45,7 +45,7 @@ from ._summary_op_metadata import _op_metadata
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: The derived default body-row budget (memo 3.4): hybrid(vgg19) exactly.
+#: The derived default body-row budget: hybrid(vgg19) exactly.
 DEFAULT_ROW_BUDGET = 48
 
 #: Row kinds emitted by the ladder (closed vocabulary).
@@ -58,7 +58,7 @@ ROW_KINDS: tuple[str, ...] = (
     "unexecuted",
 )
 
-#: Trainability tri-state vocabulary (A12).
+#: Trainability tri-state vocabulary.
 TRAIN_STATES: tuple[str, ...] = ("all", "some", "none")
 
 
@@ -143,7 +143,7 @@ class ResolvedView:
 class _OpFact:
     """One executed layer-at-address joined across compute face and layer list.
 
-    The multi-pass row model (memo 3.4): a layer owning p passes is ONE
+    The multi-pass row model: a layer owning p passes is ONE
     fact with summed additive values and pass-qualified owned labels; the
     per-pass grain survives on ``pass_facts`` for ``level="op"``.
     """
@@ -225,7 +225,7 @@ def _stack_owner(stack: tuple[str, ...]) -> str:
 class _ModelIndex:
     """Everything the rung builders need, gathered from the trace ONCE.
 
-    Reads the canonical compute aggregation (C02) for op values -- the
+    Reads the canonical compute aggregation for op values -- the
     ladder never re-derives compute from raw per-op fields -- and the
     module/param records for structure. Essential complexity: this is the
     one trace-shaped adapter; the rung builders below it are pure.
@@ -604,7 +604,7 @@ def _root_children(trace: Trace, facts: dict[str, _ModuleFact]) -> list[str]:
 
 
 def _train_state(params: list[_ParamFact]) -> str | None:
-    """A12 tri-state over one row's parameter set."""
+    """Tri-state over one row's parameter set."""
 
     known = [fact.trainable for fact in params if fact.trainable is not None]
     if not known:
@@ -789,7 +789,7 @@ def build_hybrid(index: _ModelIndex) -> list[ViewRow]:
 
 
 def _subtree_signature(index: _ModelIndex, address: str, cache: dict[str, Any]) -> Any:
-    """The strict fold signature (memo 3.4), computed recursively.
+    """The strict fold signature, computed recursively.
 
     Class, ordered child topology, parameter shapes+trainability, executed-op
     schema, output-shape schema, evidence states, and tie ownership -- the
@@ -971,7 +971,7 @@ def build_tree(index: _ModelIndex, depth: int, *, fold: bool = True) -> list[Vie
 
 
 def _mark_protected(rows: list[ViewRow], filter_hits: set[str]) -> list[ViewRow]:
-    """Apply the deterministic elision-protection rules (memo 3.4)."""
+    """Apply the deterministic elision-protection rules."""
 
     marked: list[ViewRow] = []
     by_parent: dict[str | None, list[int]] = {}
@@ -1129,7 +1129,7 @@ def resolve_auto(
     *,
     fold: bool = True,
 ) -> ResolvedView:
-    """The auto ladder resolver (memo 3.4 pseudocode, verbatim semantics)."""
+    """The auto ladder resolver."""
 
     rungs: list[tuple[str, int | None, list[ViewRow]]] = []
     rungs.append(("hybrid", None, build_hybrid(index)))

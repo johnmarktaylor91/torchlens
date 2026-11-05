@@ -926,8 +926,8 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
     # Local import: ``add``/``replace_with`` live in ``predicates`` (which
     # imports this module), so a module-level import would cycle. They mint
     # portability="builtin" specs like every entry below, and their absence
-    # here made a saved/pickled spec a dead artifact (R10-1: save succeeded,
-    # load raised intervention_helper_unknown).
+    # here would make a saved/pickled spec a dead artifact (save would succeed,
+    # load would raise intervention_helper_unknown).
     from ._affine_source import set_affine_coordinates
     from ._subspace_spec import rebuild_subspace_edit
     from .compose import compose
@@ -939,7 +939,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "add": add,
         "replace_with": replace_with,
         "sweep_replace": sweep_replace,
-        # F02 stochastic/population family (builtin-portability members only:
+        # Stochastic/population family (builtin-portability members only:
         # the population-carrying verbs are opaque_audit and never rebuild).
         "compose": compose,
         "permute_batch": permute_batch,
@@ -1237,7 +1237,7 @@ def patch_from(
     an audit-only spec; no executable-save path exists for it in v1.
 
     A :class:`~torchlens.intervention.stochastic.SamplingPlan` source lowers
-    onto the seeded donor-sampling substrate (edits memo D1: the plan is the
+    onto the seeded donor-sampling substrate (the plan is the
     ONE stochastic primitive; ``patch_from(plan)`` applies it -- one coherent
     donor per logical firing under the derived-seed law).
 

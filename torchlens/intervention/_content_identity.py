@@ -1,4 +1,4 @@
-"""Content identity for intervention rule terms (F4).
+"""Content identity for intervention rule terms.
 
 Rule ids, ``action_repr`` and ``spec_digest`` render tensor arguments through
 these helpers instead of ``repr``: torch's ``repr`` truncates above 1000

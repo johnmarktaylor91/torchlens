@@ -84,7 +84,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         self.__dict__.get("_defer_streaming_bundle_finalization", False)
         and self.__dict__.get("_out_writer") is not None
     )
-    # WT1 A-IV item 18 (lane A08): a step-18 STAGED streamed bundle publishes
+    # A step-18 STAGED streamed bundle publishes
     # at the settlement seam (_capture/trace.py), which runs after this scrub;
     # popping the writer here would strand the staged bundle in its temp dir.
     keep_staged_publish = bool(
@@ -102,14 +102,14 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         "_wrapper_runtime_ws",
         "capture_events",
         "_output_container_specs_by_raw_label",
-        # B1-02: session-time semantic-output scratch. Both pin live
+        # session-time semantic-output scratch. Both pin live
         # user objects (an HF tokenizer, a model-derived metadata key), so this
         # seam is the postprocess-side belt for the capture-boundary drop in
         # ``_capture/trace.py`` -- including the halted postprocess, which
         # reaches here through ``_finalize_halted_trace``.
         "_output_tokenizer",
         "_semantic_output_metadata",
-        # B1-17 companion (INTERVENED axis): capture-time dedup caches for the
+        # Capture-time dedup caches for the
         # predicate-intervention spec/target mirrors. `..._target_keys` holds a
         # STRONG reference to the live intervention spec plus a frozen-target
         # set, so leaving it on the finished product retains capture-time
@@ -152,7 +152,7 @@ def postprocess(
     Transforms the raw Trace captured during the forward pass into its
     final user-facing form.
 
-    B1-18: the H2 hot-AST release used to be a success-path epilogue
+    the H2 hot-AST release used to be a success-path epilogue
     statement, so a postprocess failure -- and the zero-layer early return --
     left the process-wide file cache holding parsed ASTs, parent maps, and line
     splits for whole torch-library files. Distinct failing files accumulate up
@@ -270,7 +270,7 @@ def _postprocess_body(
         )
     )
 
-    # The compaction passes belong to the freeze (M11 fold): ancestor
+    # The compaction passes belong to the freeze: ancestor
     # closures intern into shared bitmaps and repeated immutable Op metadata
     # pools onto shared instances, right before the physical seal.
     _compact_ancestor_sets(self)
@@ -279,11 +279,11 @@ def _postprocess_body(
 
     # The core freeze point (trace_core_design.md section 3.3): forward
     # topology froze logically at step 17, the payload plane settled through
-    # step 20, and the ancestor closures were just interned. The M6 relation
+    # step 20, and the ancestor closures were just interned. The relation
     # conversion runs here — parents/children project into the core's
     # canonical dataflow edge table (differentially verified before the
     # staging cells die) and the remaining relation families become interned
-    # immutable views — the M7 group and shared-fact conversions follow
+    # immutable views — the group and shared-fact conversions follow
     # (equivalence/recurrence GroupRefs, FunctionCall/ParamAlias fact
     # blocks) — then the Op row store seals (columnar transpose on large
     # traces). Later public writes land in the store's sparse overlay;
@@ -292,7 +292,7 @@ def _postprocess_body(
     if _core is not None and _core.ops is not None:
         _freeze_relation_views(self)
         _core.ops.freeze()
-        # Payload-lifetime owner (fix/fork F4): when the LAST owning core
+        # Payload-lifetime owner: when the LAST owning core
         # (this one plus any fork cores viewing the sealed base) is
         # garbage-collected, the store evicts tensor payload cells so a
         # retained Op facade stops pinning every captured activation.
@@ -312,7 +312,7 @@ def _postprocess_body(
             from .._trace_core.record_rows import adopt_records
 
             adopt_records(_core, "func_call_location", _fcl_seen.values())
-        # The M8 non-Op kind tables (param/module/module_call/buffer/
+        # The non-Op kind tables (param/module/module_call/buffer/
         # func_call_location) seal with the same lifecycle: appends stop,
         # later writes keep landing in row cells via the sealed-store path.
         for _kind_store in _core.kind_rows.values():
@@ -328,7 +328,7 @@ def _postprocess_body(
         # source_trace backrefs, so this strong edge closes no new cycle.
         self.__dict__["_capture_events"] = capture_events
     # H2 retention seal: steps 5/11.5 are done with the parsed ASTs. The drop
-    # itself now lives in `postprocess`'s `finally` (B1-18) so a failing
+    # itself now lives in `postprocess`'s `finally` so a failing
     # pipeline and the zero-layer early return release it too; span data and
     # projected calls survive, so lazy post-capture queries
     # (Op.arg_expressions) stay re-parse-free in the common case and re-parse

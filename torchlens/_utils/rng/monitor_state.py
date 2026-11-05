@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import Any
 
 _ACTIVE_MONITOR: host_nondeterminism_monitor | None = None
-"""The capture-scoped monitor currently installed, or ``None`` (r41 hon2_1).
+"""The capture-scoped monitor currently installed, or ``None``.
 
 Published as the LAST statement of ``__enter__`` and restored to the PREVIOUS occupant
 FIRST in the teardown, so readers never observe a partially-installed window and a
@@ -79,10 +79,10 @@ genuine pre-monitor value.
 
 @contextmanager
 def _suppress_active_monitor_marks() -> Iterator[None]:
-    """Suppress channel marks for a TorchLens-OWNED RNG bookkeeping bracket (r65 Z).
+    """Suppress channel marks for a TorchLens-OWNED RNG bookkeeping bracket.
 
     TorchLens's own seed / snapshot / restore helpers legitimately touch the torch RNG
-    APIs that the r65 registry rows monitor -- per-op state logging and in-forward
+    APIs that the registry rows monitor -- per-op state logging and in-forward
     intervention replay run INSIDE the capture window (``set_rng_from_saved_states``
     calls the patched ``torch.random.set_rng_state``). A TorchLens-initiated
     restore is NOT model host nondeterminism, so these helpers bracket themselves with
@@ -123,7 +123,6 @@ def _skip_retired_hooks(candidate: Any, predecessor_attr: str) -> Any:
         # window carries that window's THREADING hook even when the slot under
         # restore is the sys slot, and following the slot's attr handed it the
         # dead owner's sys predecessor instead of the threading chain
-        # (grind-r5 b8 R57).
         if candidate is getattr(owner, "_threading_hook", None):
             candidate = getattr(owner, "_previous_threading_profile", None)
         elif candidate is getattr(owner, "_sys_hook", None):

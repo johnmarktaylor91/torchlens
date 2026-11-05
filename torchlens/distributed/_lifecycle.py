@@ -220,7 +220,7 @@ def capture_armed_state() -> _ArmedState | None:
 
 
 def _refuse_if_broken(state: _ArmedState) -> None:
-    """Refuse typed on a poisoned half-armed state (deep-hunt F9).
+    """Refuse typed on a poisoned half-armed state.
 
     A failed arm whose restore also failed leaves SOME collective sites
     wrapped and others pristine; proceeding "armed" would silently omit the
@@ -647,7 +647,7 @@ def _arm(source: str) -> ArmingRecord:
             if restore_error is not None:
                 # Published ONLY so disarm() can retry restoration; poisoned
                 # so no arming entry point presents the half-wrapped process
-                # as armed (deep-hunt F9).
+                # as armed.
                 state.broken = True
                 _STATE = state
                 raise restore_error from arm_error

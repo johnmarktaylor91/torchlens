@@ -93,8 +93,8 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
 
     Falls back to resolving the input through the op graph -- the same fallback
     ``module_input_op_spec`` already implements -- when ``call.forward_args`` is
-    empty/``None``. Finalization ("GC-11",
-    ``torchlens/_postprocess/finalization.py``) unconditionally nulls
+    empty/``None``. Finalization
+    (``torchlens/_postprocess/finalization.py``) unconditionally nulls
     ``forward_args``/``forward_kwargs`` for every ``module_identity_mode`` except
     ``pytree_module``/``object_module`` -- i.e. for the standard/default
     ``torch_module`` mode used by ordinary ``nn.Module`` tracing -- regardless of
@@ -270,7 +270,7 @@ def module_output_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason
     minted from the leaf's container path at capture time. ``ModuleCall.output_ops``
     order is NOT container order (finalization rebuilds it in op order), so
     positional pairing with ``output_paths`` would silently pick the wrong leaf
-    (F2, walkthrough A-I: eager ``attn_out`` reported structurally absent while
+    (eager ``attn_out`` would be reported structurally absent while
     the value sat captured one lookup away).
     """
 

@@ -1,13 +1,12 @@
-"""The sink-neutral emission view over the C06 history records (memo 3.1-3.5).
+"""The sink-neutral emission view over the history records.
 
-One conversion layer turns explorer-owned completed records
+One conversion layer turns completed history records
 (:class:`~torchlens._observability.StepBlockRecord` +
 :class:`~torchlens._observability.ObservationRecord`) into immutable,
 tensor-free emission points every sink serializes from. Nothing here touches
 a live tensor, rescans a payload, or invents a second step axis.
 
-Namespace grammar (memo 3.4; structure panel-decided, spellings
-DOCUMENTED-UNSTABLE):
+Namespace grammar (spellings DOCUMENTED-UNSTABLE):
 
 - ``<family>/<statistic>/<leaf>`` for scalars,
 - ``<family>/hist/<leaf>`` for histograms,
@@ -20,7 +19,7 @@ Family comes FIRST because both major dashboards group on the first slash
 component only (measured); statistic-before-leaf keeps the cross-layer scan
 property (``gradients/norm/*`` sorts adjacent).
 
-Tag safety is an ASSERTION, never a rewrite (D4 majority rule): torch 2.13
+Tag safety is an ASSERTION, never a rewrite: torch 2.13
 ships no sanitizer, older torch silently rewrote -- so enforcement is ours,
 and a tag that would need sanitizing refuses and names the site.
 """
@@ -47,7 +46,7 @@ __tl_layer__ = "L8"
 #: Emission-view schema version (rides the manifest and every JSONL row).
 EMISSION_SCHEMA_VERSION = 1
 
-#: The closed tag families (memo 3.4). ``torchlens`` is the reserved
+#: The closed tag families. ``torchlens`` is the reserved
 #: run-health/meta/check root, deliberately NOT a data family.
 FAMILIES = (
     "parameters",
@@ -58,7 +57,7 @@ FAMILIES = (
     "nonfinite",
 )
 
-#: C06 stream -> tag family.
+#: Observability stream -> tag family.
 STREAM_FAMILIES = {
     "param": "parameters",
     "param_grad": "gradients",
@@ -69,7 +68,7 @@ STREAM_FAMILIES = {
 
 #: Scalar statistics derived from the always-on spine, in emission order.
 #: Every histogram's summary series ships as these first-class scalar tags
-#: because scalars are the ONLY cross-sink-portable form (memo 3.3).
+#: because scalars are the ONLY cross-sink-portable form.
 SPINE_STATISTICS = (
     "mean",
     "std",
@@ -80,7 +79,7 @@ SPINE_STATISTICS = (
     "zero_fraction",
 )
 
-#: Versioned tag-safety check (D4). Printable ASCII only; the URL-hazard and
+#: Versioned tag-safety check. Printable ASCII only; the URL-hazard and
 #: markdown-table characters that break dashboard routing refuse. A bump to
 #: this version is a documented behavior change, never silent.
 TAG_SAFETY_CHECK_VERSION = 1
@@ -159,7 +158,7 @@ class HistogramPoint:
 
     ``bin_edges`` has ``len(counts) + 1`` entries; bin ``i`` covers
     ``[edges[i], edges[i+1])``. The signed-log2 grid is NON-uniform, which
-    is why relay paths refuse histogram series (G6): a relay reconstructs
+    is why relay paths refuse histogram series: a relay reconstructs
     outer edges by linear extrapolation, exact only for uniform bins.
     ``summary`` carries the spine fields TB's histogram proto wants
     (min/max/num/sum/sum_squares); every relay destroys them (measured), so
@@ -216,7 +215,7 @@ class StepEmission:
 
 
 class TagGrammar:
-    """The tag renderer: one function over one internal identity (D1).
+    """The tag renderer: one function over one internal identity.
 
     ``name=`` inserts the multi-model component after the family;
     ``namespace=`` re-roots every tag (the collision remedy the refusal
@@ -398,11 +397,11 @@ def emission_from_block(
     sites: dict[str, SiteRecord],
     grammar: TagGrammar,
 ) -> StepEmission:
-    """Convert one committed C06 block into its full emission view.
+    """Convert one committed observability block into its full emission view.
 
     Every observed observation yields its spine scalar series; gradient
     streams additionally stamp nothing here -- the scale basis already rides
-    the record (D7) and the run-health series carries the scale itself.
+    the record and the run-health series carries the scale itself.
     Non-observed presences yield NO points: missing is never zero, and the
     close report (not a fabricated series) is where skips are disclosed.
 
@@ -489,12 +488,12 @@ def build_manifest(
     grains: dict[str, str] | None = None,
     extra: dict[str, object] | None = None,
 ) -> TextPoint:
-    """Build the versioned series manifest (one ``add_text``, memo 3.5).
+    """Build the versioned series manifest (one ``add_text``).
 
     Maps every series leaf to its site identity (module path / param name /
     shape / dtype / grain / structural-key crosslink), and carries the
     architecture fingerprint, histogram descriptor (the versioned edge
-    policy: C06 owns it; an edge-policy change starts a NEW series), and the
+    policy: the observability layer owns it; an edge-policy change starts a NEW series), and the
     emission schema version.
 
     Examples

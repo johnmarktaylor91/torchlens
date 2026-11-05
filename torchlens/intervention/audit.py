@@ -1,7 +1,7 @@
-"""The ONE FireRecord builder and the InterventionEvent envelope (C03).
+"""The ONE FireRecord builder and the InterventionEvent envelope.
 
-Ledger memo D1a / edits memo D12 / leverage B6, one substrate: every
-intervention write door mints its per-fire :class:`FireRecord` through ONE
+Every
+intervention write door shares this substrate and mints its per-fire :class:`FireRecord` through ONE
 builder (uniform seed/notes/timestamp lift -- before this, 1 of 8
 construction sites lifted disclosure notes), and every top-level intervention
 TRANSACTION writes one envelope through ONE writer, so the trace-level record
@@ -10,13 +10,13 @@ differing in any edit parameter are distinguishable (the misfire /
 distinguishability oracle: ``noise(std=0.1)`` vs ``noise(std=0.9)`` carried
 byte-identical audit rows before this module existed).
 
-Persistence boundary (pre-C07, disclosed): the persisted
+Persistence boundary (disclosed): the persisted
 ``trace.intervention_audit`` row family is CLOSED at load validation
 (``_io/forgery_validation.py``), so the envelope's rich fields ride the
 free-form persisted ``state_history`` stream (``op="intervention_event"``
 rows) while the canonical audit gains a closed-schema ACT row per
 transaction. The full ``intervention_event_v2`` persisted row family is
-declared in the field-intent ledger for the C07 coordinated schema write;
+declared in the field-intent ledger for the coordinated schema write;
 nothing here edits schema files. Every spelling DOCUMENTED-UNSTABLE pending
 naming-session ratification.
 """
@@ -41,11 +41,11 @@ _UNSET: Any = object()
 #: happened yet, and a later settle row (``door="backward"``) says what did.
 EventStatus = Literal["fired", "no_fire", "error", "armed"]
 
-#: Closed lane vocabulary for the envelope (surgery memo lanes; ``bind`` is
-#: reserved for F01).
+#: Closed lane vocabulary for the envelope (``bind`` is
+#: reserved for the bound-executor lane).
 EventLane = Literal["replay", "rerun", "capture", "live_hook", "set_only", "bind"]
 
-#: The closed execution-effect vocabulary (surgery memo section 4, foldA D17):
+#: The closed execution-effect vocabulary:
 #: the ENGINE that fires an edit writes exactly one of these on every firing
 #: disclosure -- live/bound lanes run the original op and replace its value
 #: downstream (``values_replaced_after_execution``); replay substitutes exit
@@ -245,13 +245,13 @@ def record_intervention_event(
     audit_event_row:
         Whether to ALSO append the ``kind="EVENT"`` transaction envelope to
         the canonical persisted audit (the tlspec-v9 ``intervention_event_v2``
-        row kind with its hash-chain extension -- the F03 writer the v9
+        row kind with its hash-chain extension -- the writer the v9
         admission declared). Experiment-layer doors (vary / site sweeps / the
         candidate engine) pass ``True``; the plain doors keep their shipped
         audit shapes (``intervention_audit[-1]`` stays the door's own row).
     execution_effect:
         Engine-set closed :data:`ExecutionEffect` value disclosing what the
-        firing mechanism DID (foldA D17). Rides the free-form envelope stream
+        firing mechanism DID. Rides the free-form envelope stream
         (never the closed EVENT row family); a value outside the closed
         vocabulary refuses typed (``execution_effect_invalid``) -- the banned
         verbs ("skipped"/"deleted"/"removed") are unrepresentable here by
@@ -367,7 +367,7 @@ def append_event_audit_row(trace: Any, envelope: Mapping[str, Any]) -> dict[str,
     ``prev_event_digest`` carries the prior EVENT row's ``event_digest``
     (``None`` on the first row), so the persisted transaction chronology is
     tamper-evident -- dropping, reordering, or editing a row breaks the
-    chain. This is the F03 writer the v9 admission declared; it writes
+    chain. This is the writer the v9 admission declared; it writes
     exactly the contract field set (door-specific ``extra`` disclosures stay
     on the free-form ``state_history`` envelope).
 

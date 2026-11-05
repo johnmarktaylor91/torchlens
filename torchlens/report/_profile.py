@@ -1,11 +1,11 @@
 """Unified performance and resource profile tables for completed traces.
 
-F09 re-base (sumfam item 12; costreport items 6-7): compute figures come
+Compute figures come
 from the ONE canonical aggregation (``compute_aggregation``), never a
-private re-sum; every export carries row roles and column additivity
-(D5); percents are of the whole-capture KNOWN partition total (D4/D6);
+private re-sum; every export carries row roles and column additivity;
+percents are of the whole-capture KNOWN partition total;
 ``honesty()`` is a projection of per-cell evidence facts, never a null
-check (D2/D9); instrumented wall time is labeled as such everywhere it
+check; instrumented wall time is labeled as such everywhere it
 appears.
 """
 
@@ -27,7 +27,7 @@ ProfileLevel = Literal["op", "module", "call"]
 ProfileSort = Literal["time", "flops", "activation_memory", "param_count"]
 ProfileGroupBy = Literal["source_line"]
 
-#: Column additivity metadata (costreport D5): stamped on every export so
+#: Column additivity metadata: stamped on every export so
 #: no consumer sums an inclusive column. At op level the self and subtree
 #: families coincide, so ``flops`` is additive there and ``flops_self``
 #: is only emitted at module/call level.
@@ -40,7 +40,7 @@ PROFILE_COLUMN_ADDITIVITY: dict[str, bool] = {
     "param_count": False,  # module rollups share containing params; never sum
 }
 
-#: The evidence rendering vocabulary (D2/D9): a closed enum with the
+#: The evidence rendering vocabulary: a closed enum with the
 #: mandatory qualifier spellings. Host time is never bare "measured";
 #: parameter counts are a declared inventory (never "measured" or
 #: "estimated"); structure-only shape-derived cells are hypotheses.
@@ -54,7 +54,7 @@ HONESTY_LABELS: tuple[str, ...] = (
     "not_applicable",
 )
 
-#: Evidence strength order (weakest first) for D2 aggregation: a mixed
+#: Evidence strength order (weakest first) for aggregation: a mixed
 #: subtotal never upgrades to exact.
 _EVIDENCE_STRENGTH: tuple[str, ...] = (
     "unknown",
@@ -66,7 +66,7 @@ _EVIDENCE_STRENGTH: tuple[str, ...] = (
 
 
 def _weakest_evidence(labels: list[str]) -> str:
-    """The weakest evidence among members (D2); unknown when empty."""
+    """The weakest evidence among members; unknown when empty."""
 
     if not labels:
         return "unknown"
@@ -107,7 +107,7 @@ class ProfileReport:
     level: ProfileLevel
     _honesty_frame: pd.DataFrame | None = None
     _tree_text: str = ""
-    # Capture-level verification facts (round-7 R67/R88): the report honesty
+    # Capture-level verification facts: the report honesty
     # contract requires a rescued/ceilinged capture to stay visible in profile
     # output, so these are stamped from the source trace at build time.
     capture_status: str = "unknown"
@@ -115,7 +115,7 @@ class ProfileReport:
     capture_verification_reason: str | None = None
     has_rescue_rerun: bool = False
     is_structure_only: bool = False
-    # F09 (costreport D4/D6): the whole-capture KNOWN forward partition
+    # The whole-capture KNOWN forward partition
     # total -- the invariant percent denominator -- plus the unknown EVENT
     # count disclosed beside it (never a FLOP percentage).
     partition_total: int | None = None
@@ -209,7 +209,7 @@ class ProfileReport:
         The time column header names its basis (instrumented wall time --
         relative hotspot guidance, not a clean benchmark), and the footer
         prints the invariant partition total plus the unknown EVENT count
-        (D4: never a FLOP percentage).
+        (never a FLOP percentage).
 
         Returns
         -------
@@ -249,8 +249,7 @@ class ProfileReport:
         """
 
         notes = []
-        # L7a G3 render honesty: hypothesis shapes must never present as
-        # measurements (memo sec 3.4).
+        # Render honesty: hypothesis shapes must never present as measurements.
         if self.is_structure_only:
             notes.append("structure-only capture -- shapes/dtypes are HYPOTHESES, not measurements")
         if self.capture_status not in ("complete", "unknown"):
@@ -265,7 +264,7 @@ class ProfileReport:
         return "! " + "; ".join(notes) + " -- rows below may undercount what ran"
 
     def evidence_labels(self, *, as_summary: bool = False) -> pd.DataFrame | str:
-        """Return per-cell evidence labels for resource quantities (D2/D9).
+        """Return per-cell evidence labels for resource quantities.
 
         A projection of cell facts, never a null check: FLOP labels come
         from each op's compute-record evidence (``formula_exact`` /
@@ -501,7 +500,7 @@ def _honesty_row(
     flops_evidence: str | None = None,
     structure_only: bool = False,
 ) -> dict[str, str]:
-    """Return per-cell evidence labels for one profile row (D2/D9).
+    """Return per-cell evidence labels for one profile row.
 
     Parameters
     ----------
@@ -526,7 +525,7 @@ def _honesty_row(
     if row.get("kind") == "boundary":
         # A boundary pseudo-row executed nothing: its absent cells are NOT
         # APPLICABLE, never "unknown" -- and never a fabricated evidence label
-        # (costreport D2). Its retained input bytes are shape-derived facts.
+        # Its retained input bytes are shape-derived facts.
         memory_label = "formula_exact+shape_derived" if structure_only is False else "hypothesis"
         return {
             "name": str(row["name"]),
@@ -555,14 +554,14 @@ def _honesty_row(
         }
     return {
         "name": str(row["name"]),
-        # D9: host time is never bare "measured" -- instrumentation overhead
+        # host time is never bare "measured" -- instrumentation overhead
         # is inside the number.
         "time": ("measured+instrumentation_inclusive" if row["time"] is not None else "unknown"),
         "flops": flops_evidence if row["flops"] is not None else "unknown",
         "activation_memory": (
             "formula_exact+shape_derived" if row["activation_memory"] is not None else "unknown"
         ),
-        # D9: a parameter count is a declared inventory -- never "measured",
+        # a parameter count is a declared inventory -- never "measured",
         # never "estimated"; an op that owns no parameters has no cell.
         "param_count": ("formula_exact" if row["param_count"] is not None else "not_applicable"),
     }
@@ -604,8 +603,7 @@ def _build_call_tree(trace: Trace) -> str:
         """Append one call and its recorded descendants."""
 
         label = str(call.label)
-        # ASCII rails: returned report strings are ASCII-canonical (lovely
-        # bug 10 / summary-memo string contract).
+        # ASCII rails: returned report strings are ASCII-canonical.
         connector = "" if is_root else ("`-- " if is_last else "|-- ")
         lines.append(f"{prefix}{connector}{label}")
         if label in visited:
@@ -627,7 +625,7 @@ def _build_call_tree(trace: Trace) -> str:
 def _op_level_rows(trace: Trace) -> list[dict[str, Any]]:
     """Build op-level profile rows; boundary pseudo-rows own nothing additive.
 
-    Identity partition (A1 / costreport D7): a non-null additive cell on a
+    Identity partition: a non-null additive cell on a
     boundary row is a CI failure, never a display choice. Input rows keep
     their owned external-input bytes; output alias rows own no bytes either.
     """
@@ -755,7 +753,7 @@ def _rollup_row(
     scope: set[str],
     context: dict[str, Any],
 ) -> tuple[dict[str, Any], str | None]:
-    """One module/call SUBTOTAL row with both compute families (D5).
+    """One module/call SUBTOTAL row with both compute families.
 
     ``identity`` is the (name, kind, param_count) triple of the rollup.
     """
@@ -831,7 +829,7 @@ def _assemble_level_rows(
             )
             op_label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             if row["kind"] == "op":
-                # One aggregation for ALL compute facts (sumfam item 12):
+                # One aggregation for ALL compute facts:
                 # the op row's FLOPs cell is the service row's value.
                 row["flops"] = flops_by_label.get(op_label)
             row_evidence.append(flops_evidence.get(op_label))
@@ -891,7 +889,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         Whether to reverse the default descending order.
     k:
         Number of sorted bottleneck rows to retain. ``None`` retains all rows.
-        Percent denominators are UNAFFECTED (D6: a view never changes the
+        Percent denominators are UNAFFECTED (a view never changes the
         partition total).
     group_by:
         ``"source_line"`` folds the op rows into one row per user source
@@ -1017,7 +1015,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     }
     if level in ("module", "call"):
         # Inclusive rollups: the ``flops`` column is the subtree family
-        # there and must never be summed (D5).
+        # there and must never be summed.
         additivity["flops"] = False
     return ProfileReport(
         frame=frame,

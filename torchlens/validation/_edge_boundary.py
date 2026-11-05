@@ -128,7 +128,7 @@ def _splice_edge_substitution_args(
         arg_kind, arg_path = store_key
         is_region = isinstance(payload, dict) and payload.get("substitution_kind") == "region"
         if is_region:
-            # Region exit substitutions (F01) may sit at nested container
+            # Region exit substitutions may sit at nested container
             # paths; the region splice rebuilds the container faithfully, so
             # the SAME re-execute-and-compare check runs at the nested
             # address -- a capability extension of this check, never a

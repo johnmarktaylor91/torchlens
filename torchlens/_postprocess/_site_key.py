@@ -1,8 +1,7 @@
 """Re-export shim: the site-key minter moved to :mod:`torchlens._data_classes._site_key`.
 
-Ratified relocation (architecture memo 3.3 / Rule V3, C01 item 6):
-``SiteKeyMinter`` reads type-shaped but MINTS site keys, so it fails V3's
-no-smuggling test and moves to L1 with the coordinates it mints. Historical
+``SiteKeyMinter`` reads type-shaped but MINTS site keys, so it fails the
+layering no-smuggling test and lives in L1 with the coordinates it mints. Historical
 spellings stay importable here; lower-layer consumers import the L1 home.
 """
 

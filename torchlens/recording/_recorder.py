@@ -248,7 +248,7 @@ class Recorder:
             from .._snoop import EchoSession
 
             # One narrator per Recorder: per-forward state resets each pass,
-            # the configured scope/sink/stats persist (snoop D1).
+            # the configured scope/sink/stats persist.
             self._echo_session = EchoSession(self.options.echo, tier="record")
 
     def __enter__(self) -> Recorder:
@@ -368,7 +368,7 @@ class Recorder:
             # (tensor_tracking._build_fastlog_grad_payloads), not from
             # RecordingOptions; omitting these silently ignored
             # grad_transform and save_raw_gradients on every Recorder /
-            # record() backward (explorer rider: Recorder backward coverage).
+            # record() backward.
             grad_transform=self.options.grad_transform,
             save_raw_grads=self.options.save_raw_grads,
             detach_saved_activations=False,
@@ -394,7 +394,7 @@ class Recorder:
         self._state.recording.start_times.append(time.time())
         try:
             # The reservation must wrap the recording-state install: a refused
-            # concurrent record() used to overwrite the admitted recorder's
+            # concurrent record() would otherwise overwrite the admitted recorder's
             # RecordingState for the window until its inner refusal unwound,
             # projecting the winner's events into the loser's state. The inner
             # orchestration re-enters the reservation same-thread (passthrough).
@@ -435,7 +435,7 @@ class Recorder:
             retain_run_core(self._captured_run_cores, captured_run_core, self._trim_pass_cores)
             forward_disposition = stop_directive_for_trace(trace).forward_disposition(exc)
             if self._echo_session is not None:
-                # Crash tail (snoop D5 tail 2): flush synchronously, extend the
+                # Crash tail: flush synchronously, extend the
                 # exception's note when it propagates. Original exception wins.
                 echo_note = self._echo_session.on_forward_failure(exc)
                 if echo_note is not None and forward_disposition != "return_partial":
@@ -597,7 +597,7 @@ class Recorder:
         op_events = tuple(
             self._capture_events.amended_op_records() if self._capture_events is not None else ()
         )
-        # B8-46: the exception unwind records module-exit events AFTER the
+        # the exception unwind records module-exit events AFTER the
         # failure point (a mid-forward submodule failure leaves a trailing
         # ``boom:exit:1`` / ``root:exit:1`` run), so the raw last event names
         # the unwind, not the failure frontier. Skip trailing module-exit

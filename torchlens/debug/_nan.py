@@ -659,7 +659,7 @@ with torch.autograd.set_detect_anomaly(True):
 
 @dataclass(frozen=True)
 class NonfiniteReport(Report):
-    """One-call NaN forensics report (torchnative 6.5 / W3.1).
+    """One-call NaN forensics report.
 
     The pitch is STRUCTURAL: the default capture names the ORIGIN op (not
     where a NaN would surface in backward) with module address and

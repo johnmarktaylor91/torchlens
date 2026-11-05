@@ -1,11 +1,11 @@
 """EPISODE capture export: one collection, full graph + per-step graphs.
 
-Memo D11-D14. Step membership joins through the persisted
+Step membership joins through the persisted
 ``trace.module_calls["<stepped>:<member_call_index>"].ops`` list (KEEP-policy
 portable state, measured intact on saved-and-reloaded real episodes) with
 the ``module_call_stack[0]`` pass-suffix join as the MANDATORY cross-check
-asserted EQUAL -- a lane coding any single-source spelling ships one of the
-two measured crashes. Stackless driver ops are assigned exactly ONCE by
+asserted EQUAL -- relying on either source alone hits one of two measured
+crashes. Stackless driver ops are assigned exactly ONCE by
 execution window and grouped under a ``driver`` namespace. Cross-step edges
 get deterministic boundary proxies by default (reserved id prefix, derived
 from the SOURCE site key + graph-local ordinal, never an absolute step
@@ -128,7 +128,7 @@ def _plan_steps(
         coord = row.get("coord") or {}
         call_index = coord.get("member_call_index")
         # pass_range is None on every row of a complete episode; it is
-        # deliberately never dereferenced (memo D11 crash 2).
+        # deliberately never dereferenced (doing so crashes).
         call_label = f"{stepped_address}:{int(call_index)}" if call_index is not None else None
         members = _step_members(log, entries, call_label, stepped_address)
         for member in members:
@@ -200,7 +200,7 @@ def _assign_drivers(
     member_positions: set[int],
     position: dict[int, int],
 ) -> frozenset[str]:
-    """Window-assign stackless driver ops exactly once (memo D11)."""
+    """Window-assign stackless driver ops exactly once."""
 
     # Essential complexity (CC>10 named): window assignment, boundary
     # exemption, and driver labeling are one execution-order sweep; the
@@ -336,7 +336,7 @@ def _boundary_proxies(
     """Mint deterministic boundary-proxy nodes for cross-step parents.
 
     One proxy per out-of-step source op; ids derive from the SOURCE site key
-    plus a graph-local ordinal (memo D12), so per-step id sets stay
+    plus a graph-local ordinal, so per-step id sets stay
     step-stable. Proxies carry ``kind=step_boundary`` and shape/dtype
     metadata, NO measured values.
     """

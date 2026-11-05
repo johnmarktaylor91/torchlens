@@ -459,7 +459,7 @@ def _decorate_direct_transforms() -> None:
     """
 
     for namespace_name, attr_name, transform_kind, func_name in DIRECT_TRANSFORM_SITES:
-        # r-b4 R26-5b: tolerant resolution, matching _decorate_transform_builders.
+        # tolerant resolution, matching _decorate_transform_builders.
         namespace = get_optional_torch_namespace(namespace_name)
         if namespace is None or not hasattr(namespace, attr_name):
             continue
@@ -485,18 +485,18 @@ def _decorate_direct_transforms() -> None:
 # ``t.real = rhs`` / ``t.imag = rhs`` write through the receiver's storage,
 # ``t.data = rhs`` REBINDS the receiver onto ``rhs``'s storage. These execute
 # real dataflow yet return ``None``, so without receiver reconstruction no op
-# is ever emitted and consumers keep stale/absent parents (round-31 M6).
+# is ever emitted and consumers keep stale/absent parents.
 # ``requires_grad`` / ``grad`` and similar setters change autograd bookkeeping,
 # not forward values, and are deliberately NOT listed.
 def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
     """Set a torch namespace attribute, suppressing ADVISORY warnings only.
 
-    Wrap/unwrap setattr over deprecated torch aliases legitimately fires
-    deprecation-family advisories, but the historical bare
-    ``simplefilter("ignore")`` also hid every OTHER warning category raised in
-    scope and invalidated the process ``__warningregistry__`` per entry
-    (B8-39). Only the advisory categories are ignored; a genuine torch
-    ``RuntimeWarning`` (or anything else) still reaches the user.
+        Wrap/unwrap setattr over deprecated torch aliases legitimately fires
+        deprecation-family advisories, but the historical bare
+        ``simplefilter("ignore")`` also hid every OTHER warning category raised in
+        scope and invalidated the process ``__warningregistry__`` per entry
+    . Only the advisory categories are ignored; a genuine torch
+        ``RuntimeWarning`` (or anything else) still reaches the user.
     """
 
     with warnings.catch_warnings():

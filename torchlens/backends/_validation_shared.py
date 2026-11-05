@@ -1,19 +1,14 @@
 """Backend-neutral helpers shared by the preview backends' validation modules.
 
-The b5-parity R46-1 dedup wave hoisted the capture-side helper families into
-``backends/_finalize.py`` but deferred the ``*/validation.py`` halves to the
-b4-V territory owner (the copies were byte-identical across tf/mlx/paddle).
-This module is that landing: validation-side helpers only, no backend
-imports, safe to import from any preview backend.
+Validation-side helpers only, no backend imports, safe to import from any
+preview backend. The capture-side helper families live in
+``backends/_finalize.py``.
 
-The float replay tolerance derivation lives here as the ONE reviewed policy
-(b5-opus R17-1): the per-backend bands were four byte-identical eps-derived
-copies (tf/mlx/jax/paddle) plus two stale hold-outs -- the mlx VALIDATION
-oracle kept a hardcoded decimal ladder whose fp64 band sat orders of
-magnitude above fp64 round-off, and the tinygrad oracle kept a dtype-blind
-fp32 decimal pair with no NaN doctrine. Unifying them is a REVIEWED
-tolerance change with rationale (tightening the stale copies to the derived
-band), not a casual one; any future band change edits exactly this module.
+The float replay tolerance derivation lives here as the ONE reviewed policy:
+every preview backend's replay and validation oracle derives its band from
+the dtype's eps (plus a scalar NaN/inf rule) instead of a hardcoded decimal
+pair. A band change is a reviewed tolerance change with a rationale; any
+future one edits exactly this module.
 """
 
 from __future__ import annotations
@@ -80,7 +75,7 @@ def float_replay_tolerances(finfo: Any) -> tuple[float, float]:
     """Derive the dtype-honest ``(rtol, atol)`` replay band from a float finfo.
 
     The ONE reviewed tolerance policy for every preview backend's replay and
-    validation oracle (b5-opus R17-1), replacing the dtype-blind fp32 decimal
+    validation oracle, replacing the dtype-blind fp32 decimal
     pair (rtol 1e-5 / atol 1e-6) that was wrong in both directions: fp64
     corruption ~4.5e9 of its own ULPs read as agreement, while a legitimate
     one-ULP fp16 storage-rounding difference false-failed.

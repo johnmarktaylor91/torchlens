@@ -93,8 +93,7 @@ def _plain_missing(
 
     Step 5 stays a PLAIN ``AttributeError`` by contract (the five-step type
     promise), but the MESSAGE may teach: when ``known`` names are supplied,
-    close matches ride a did-you-mean suffix (agent memo 3.10 item 3 -- the
-    package's one bare-AttributeError hole).
+    close matches ride a did-you-mean suffix.
 
     Parameters
     ----------

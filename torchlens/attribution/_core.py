@@ -1098,7 +1098,7 @@ def input_x_grad(
 
 
 def _completeness_extra(attribution_sum: Tensor, target_delta: Tensor) -> dict[str, Any]:
-    """Build the kit-wide completeness disclosure fields (attrib memo D27).
+    """Build the kit-wide completeness disclosure fields.
 
     Every result carrying a completeness residual also carries the absolute
     target delta: a relative certificate over a near-zero output change
@@ -1491,7 +1491,7 @@ def smoothgrad(
             code="smoothgrad_noise_level_invalid",
         )
     _normalize_model_inputs(inputs, input_kwargs, _Caller("smoothgrad", model, target))
-    # D7: SmoothGrad is the thin alias over the sampling substrate. The
+    # SmoothGrad is the thin alias over the sampling substrate. The
     # per-sample ABSOLUTE VALUE happens before the mean because the child is
     # saliency, which absolute-values each sample's gradients itself; the
     # noise draw order (one draw per unique leaf per sample, per-device

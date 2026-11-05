@@ -1,4 +1,4 @@
-"""``frozen=`` linearization policy (M(reads) item 3, decisions D5/D6).
+"""``frozen=`` linearization policy.
 
 Three-state contract: omitted / ``DEFAULT`` freezes every trustworthy
 executed transformer MLP-output facet home (the published attribution-graph
@@ -15,12 +15,12 @@ failure mode in the feature). Hook bodies are batch-compatible arithmetic
 (multiply only; no detach/clone/item/views under vmap); every handle is
 removed in ``finally``, with restoration measured bit-exact in the tests.
 
-Documented semantics, verbatim (D6): "prehook at this node, post-freeze for
+Documented semantics, verbatim: "prehook at this node, post-freeze for
 downstream frozen sites" -- a frozen site's OWN row is NOT its gradient from
 an otherwise-unfrozen graph. ``frozen_applied`` is cone-dependent: assert
 ``<=`` requested and non-empty, never an exact count.
 
-The frozen-default disclosure (FORK-1) ships as ONE detector with BOTH
+The frozen-default disclosure ships as ONE detector with BOTH
 branches wired behind ``FROZEN_DEFAULT_DISCLOSURE_BRANCH``: branch W (the
 panel recommendation and the shipped default) warns once per process and
 proceeds with MLP-out stops; branch R refuses typed until the user chooses.
@@ -62,9 +62,8 @@ class _DefaultFrozenSentinel:
 DEFAULT = _DefaultFrozenSentinel()
 """Explicit spelling of the default frozen policy (placeholder name)."""
 
-# FORK-1 branch constant: "warn" (branch W, panel recommendation 3-0, the
-# digest ruling's reading) or "refuse" (branch R, fully designed and kept
-# buildable). One word flips the shipped behavior; both branches are tested.
+# Branch constant: "warn" (the shipped branch) or "refuse" (fully designed and
+# kept buildable). One word flips the shipped behavior; both branches are tested.
 FROZEN_DEFAULT_DISCLOSURE_BRANCH: str = "warn"
 
 _DISCLOSURE_WARNED: set[str] = set()
@@ -98,7 +97,7 @@ class FrozenPlan:
         row stamping.
     alias_disclosures:
         label -> sibling labels sharing the frozen ``(node, slot)``:
-        freezing one alias freezes the whole group and says so (D11).
+        freezing one alias freezes the whole group and says so.
     disclosures:
         Policy-level disclosure strings (for provenance warnings).
     """
@@ -138,7 +137,7 @@ def _alias_disclosures(
 
 
 def _emit_default_disclosure(method: str) -> tuple[str, ...]:
-    """Run the FORK-1 detector's disclosure arm; returns warning codes emitted.
+    """Run the detector's disclosure arm; returns warning codes emitted.
 
     Branch W warns exactly once per process; branch R refuses typed with the
     same message. The detector itself (attention-bearing AND gradient-bearing

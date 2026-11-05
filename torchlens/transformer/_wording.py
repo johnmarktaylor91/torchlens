@@ -27,25 +27,25 @@ __all__ = [
     "UNMARKED_MASK_WORDING",
 ]
 
-#: Permanent footer on every attention picture (tviz memo D5).
+#: Permanent footer on every attention picture.
 ROUTING_FOOTER = "attention weights are routing measurements, not causal importance"
 
-#: Fixed axis semantics printed on every attention artifact (tviz memo D5).
+#: Fixed axis semantics printed on every attention artifact.
 AXES_WORDING = "rows attend from (query); columns attend to (key)"
 
-#: Rendered when no mask provenance source is available (tviz memo D6) --
+#: Rendered when no mask provenance source is available --
 #: masked-position inference from zeros is BANNED, so absent provenance
 #: renders unmarked with this exact wording.
 UNMARKED_MASK_WORDING = "zero and masked positions are not distinguished"
 
 #: Visible label whenever per-panel rescale replaces the fixed shared
-#: [0, 1] probability domain (expert-only mode, tviz memo D5).
+#: [0, 1] probability domain (expert-only mode).
 PANELS_NOT_COMPARABLE = "panels not comparable: per-panel color rescale"
 
-#: Printed on every receipt grid beside the sum of cells (tviz memo D13).
+#: Printed on every receipt grid beside the sum of cells.
 NOT_ADDITIVE_WORDING = "single-head effects need not be additive"
 
-#: The joint-measurement line template for receipt grids (tviz memo D13).
+#: The joint-measurement line template for receipt grids.
 JOINT_EFFECT_WORDING = (
     "joint effect of the same intervention on all {n} measured heads together: {joint:+.4g} "
     "(sum of single-head cells: {cell_sum:+.4g}; " + NOT_ADDITIVE_WORDING + ")"
@@ -62,14 +62,14 @@ RECEIPT_CELL_NO_BASELINE_WORDING = (
     "each cell: change in {metric} under the intervention (baseline value not recorded)"
 )
 
-#: Coverage disclosure on annotated figures (tviz memo D16).
+#: Coverage disclosure on annotated figures.
 MEASURED_N_OF_M = "measured {n} of {m}"
 
-#: The qualified fused-lowering disclosure (tviz memo D11): a lowered
+#: The qualified fused-lowering disclosure: a lowered
 #: counterfactual is labeled this, never "wrote the reconstructed facet".
 OUTPUT_EQUIVALENT_WORDING = "output-equivalent counterfactual"
 
-#: GQA header disclosure (tviz memo D15): shared KV storage is never
+#: GQA header disclosure: shared KV storage is never
 #: presented as independent per-query-head measurement.
 KV_GROUP_WORDING = "kv group {group} of {n_groups}, shared by query heads {first}-{last}"
 

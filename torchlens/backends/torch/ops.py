@@ -222,8 +222,8 @@ class _AncestorBitset:
     One instance per distinct closure per trace (interned by
     ``_compact_ancestor_sets``), so the lazily cached frozen view is also
     one-per-closure: the first public read of any member materializes the
-    ``frozenset`` once and every sibling read shares it (M6 immutable-view
-    contract, FORK-1).
+    ``frozenset`` once and every sibling read shares it (the immutable-view
+    contract).
 
     Parameters
     ----------
@@ -271,7 +271,7 @@ class _AncestorBitset:
 
 
 # All four label-set closure fields intern into bitmaps at the freeze
-# (r8 R60-2 widened the historical root/internal pair): ``input_ancestors``
+# (not just the root/internal pair): ``input_ancestors``
 # and ``output_descendants`` grow O(N*L) on deep graphs too, and leaving
 # them as per-op frozensets kept the dominant retained-memory term.
 _ANCESTOR_FIELD_NAMES = (
@@ -390,7 +390,7 @@ Entries are ``(label_session_token, version)`` pairs. A tensor that survives acr
 (a reused ``out=`` buffer, a cached activation the user held onto) keeps its module-lifetime
 weak entry, so a baseline recorded by an EARLIER session must never be consulted by a LATER
 one: the tensor may have been mutated between captures, and a stale baseline would falsely
-classify a non-mutating identity return as in-place (W3 audit F7). Reads go through
+classify a non-mutating identity return as in-place. Reads go through
 :func:`_label_version_baseline`, which discards any entry whose session token is not the
 active label session; writes go through :func:`_record_label_version_snapshot`.
 """
@@ -408,10 +408,9 @@ Capture-transient, kept off the Trace field schema, dropped on tensor GC.
 
 CaptureProducerMode = Literal["exhaustive", "predicate"]
 
-# The producer-unification dual-path env switch died
-# with the legacy producer in P7: every torch capture freezes decomposed
-# ``OpRecord`` rows. Preview backends keep emitting compat ``OpEvent``s until
-# S15 and adapt at the one ingest boundary (``op_record_from_event``).
+# Every torch capture freezes decomposed ``OpRecord`` rows. Preview backends
+# keep emitting compat ``OpEvent``s for now and adapt at the one ingest
+# boundary (``op_record_from_event``).
 
 
 @dataclass(frozen=True, slots=True)
@@ -511,7 +510,7 @@ class _OutputTensorEntry:
 #: (``_log_output_tensor_info``): FLOPs derive from the output shape and
 #: ``is_inplace`` from the output tensor's version. Everything else on the
 #: ref is a call-level fact, so sibling outputs of one wrapped call share
-#: ONE frozen ref (M7); a sibling whose per-output facts differ gets a
+#: ONE frozen ref; a sibling whose per-output facts differ gets a
 #: ``dataclasses.replace`` derivative that still shares every container
 #: field by reference.
 _FUNCTION_REF_PER_OUTPUT_FIELDS = ("flops_forward", "flops_backward", "is_inplace")
@@ -552,12 +551,12 @@ class ExhaustiveOpDraft:
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
 # keyer, the load-side resolver, and the security gate's recognized-operator predicate
 # can never drift apart on the safe pure-read property surface. The set is STRUCTURALLY
-# computed there (r45) by probing every live ``TensorBase`` getset descriptor for a
+# computed there by probing every live ``TensorBase`` getset descriptor for a
 # storage-sharing, autograd-preserving, non-mutating view -- it admits
 # ``{T, mT, H, mH, real, imag}`` and denies ``data`` (autograd-detaching lvalue alias).
 # ``.H`` / ``.mH`` are keyed here as ``("torch.Tensor", <name>, "method")`` exactly like
 # ``.T`` / ``.mT`` rather than falling through to an unresolvable custom
-# ``getset_descriptor.__get__`` key (the r44 corr1_1 / secF_1 over-deny).
+# ``getset_descriptor.__get__`` key (which would over-deny it).
 _SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = _PURE_TENSOR_PROPERTY_NAMES
 
 

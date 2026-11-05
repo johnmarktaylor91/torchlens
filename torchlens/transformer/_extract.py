@@ -1,4 +1,4 @@
-"""Trace-side extractors: attention views with mask provenance (memo D5/D6).
+"""Trace-side extractors: attention views with mask provenance.
 
 ``attention_view`` / ``attention_views`` read the semantic ``pattern`` facet
 (served head-major ``[batch, head, destination, source]``) into the canonical
@@ -6,7 +6,7 @@
 an eager captured softmax output is ``"captured"``; a fused-kernel
 reconstruction is ``"reconstructed"`` (read-only, disclosed on the artifact).
 
-Mask provenance is the D6 three-source hierarchy and NOTHING else: recorded
+Mask provenance is the three-source hierarchy and NOTHING else: recorded
 SDPA call arguments first, the captured eager additive-mask operand second,
 explicit user metadata third; a view with none of these renders unmarked
 with the exact "zero and masked positions are not distinguished" wording.
@@ -94,7 +94,7 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
 
 
 def _mask_from_sdpa(module: Any, n_dst: int, n_src: int, batch_index: int) -> MaskInfo | None:
-    """Mask source 1: recorded SDPA call arguments (memo D6/M8)."""
+    """Mask source 1: recorded SDPA call arguments."""
 
     try:
         from .._semantic.reconstruction import find_sdpa_op
@@ -126,7 +126,7 @@ def _masked_positions(
     if work.dtype == torch.bool:
         masked = ~work  # torch semantics: True = allowed to attend
     else:
-        # Real HF fills are finfo(dtype).min, NOT -inf (memo M7): an
+        # Real HF fills are finfo(dtype).min, NOT -inf: an
         # isinf-keyed detector silently finds nothing.
         floor = torch.finfo(work.dtype).min
         masked = work <= floor / 2
@@ -166,7 +166,7 @@ def _squeeze_to_grid(masked: torch.Tensor, batch_index: int) -> torch.Tensor:
 
 
 def _mask_from_eager(trace: Any, module: Any, batch_index: int) -> MaskInfo | None:
-    """Mask source 2: the captured eager additive-mask operand (memo M6).
+    """Mask source 2: the captured eager additive-mask operand.
 
     Reads the ADDITIVE MASK OPERAND itself (the tensor the model added to
     the scores), never the zero pattern cells: find the op that produced
@@ -337,7 +337,7 @@ def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (ax
     mask: torch.Tensor | None = None,
     step: int | None = None,
 ) -> AttentionView:
-    """Extract one layer's attention pattern as a typed view (memo D5/D6).
+    """Extract one layer's attention pattern as a typed view.
 
     Parameters
     ----------

@@ -79,8 +79,7 @@ class BackendCapabilities:
         Whether streaming save is supported.
     structure_only_capture:
         Whether structure-only capture (``structure_only=True``) is
-        supported. DOCUMENTED-UNSTABLE surface pending naming-session/S2
-        ratification.
+        supported. DOCUMENTED-UNSTABLE surface; its spelling may still change.
     intermediate_derived_grads:
         Whether the backend can derive exact op-level gradients outside true
         backward capture.

@@ -1,14 +1,12 @@
 """Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows.
 
-The F03-designed shapes for the C07X split-off join (foldB s4.4 item 12, SOL
-r3 proviso applied: the Bundle-side ledger rows waited on F03 to supply their
-constructor shape; their ``bundle.json`` carriage — the known-section
-partition plus preserve-and-disclose loader — landed with the amendment).
+The ledger-row shapes for the Bundle lineage join. Their ``bundle.json``
+carriage is the known-section partition plus a preserve-and-disclose loader.
 Three persisted surfaces, all OPTIONAL and entry-dark on plain bundles:
 
 - ``bundle_id`` — one random hex identity per container, minted at
-  construction, NEVER a hash of timestamps/labels/values (the ledger memo
-  D1a id law: content hashes collide across genuinely distinct experiments
+  construction, NEVER a hash of timestamps/labels/values (content
+  hashes collide across genuinely distinct experiments
   and drift under re-serialization). Forks mint a NEW id and anchor the old
   one; loads restore the saved id verbatim.
 - ``member_construction`` — one anchor per member: how this member entered
@@ -20,13 +18,13 @@ Three persisted surfaces, all OPTIONAL and entry-dark on plain bundles:
 - ``operations`` — the BundleOperation ledger: one row per top-level bundle
   action (``vary`` / ``site_sweep`` / ``fork`` / ...), hash-chained with the
   same ``seq``/``prev_*_digest`` spelling the v9 EVENT audit rows carry, so
-  two orderings can never grow separately on one container (foldB brief-delta:
-  fork lineage and semantic chronology are SEPARATE typed relations; the
-  operation ledger is the chronology).
+  two orderings can never grow separately on one container (fork lineage and
+  semantic chronology are SEPARATE typed relations; the operation ledger is
+  the chronology).
 
 Effect tables (``MemberEffectTable``) persist beside the operations keyed by
 ``operation_id`` — the per-candidate effect rows survive member release,
-save, load, and an unarmed experiment ledger (ledger memo D3c).
+save, load, and an unarmed experiment ledger.
 
 Every spelling DOCUMENTED-UNSTABLE pending naming-session ratification.
 Pattern-of-record for the validators: :mod:`torchlens.bundle._relations`
@@ -109,7 +107,7 @@ _EFFECT_ROW_KEYS = frozenset(
     }
 )
 
-#: Closed per-candidate outcome vocabulary (ledger memo D3c: released,
+#: Closed per-candidate outcome vocabulary (released,
 #: refused, and failed candidates are table rows, never falsely members).
 _EFFECT_ROW_STATUSES = frozenset({"completed", "released", "refused", "failed"})
 
@@ -214,7 +212,7 @@ class BundleOperation:
     same spelling as the v9 EVENT audit rows (``seq`` starts at 1; the first
     row's ``prev_operation_digest`` is ``None``). The chain attests
     TorchLens's OWN records only — no harness event ingestion, correlation
-    ids only (foldB F03 brief-delta).
+    ids only.
     """
 
     operation_id: str
@@ -338,7 +336,7 @@ def validate_operation_chain(rows: Sequence[BundleOperation]) -> None:
 
 @dataclass(frozen=True)
 class MemberEffectRow:
-    """One candidate's effect-table row (ledger memo D3c).
+    """One candidate's effect-table row.
 
     Released, refused, and failed candidates keep their rows — the numbers
     survive discard — and ``member_name`` is None exactly when no retained
@@ -417,7 +415,7 @@ class MemberEffectTable:
     """The complete per-candidate effect table for ONE bundle operation.
 
     Persisted inside the ``.tlspec`` bundle artifact keyed by
-    ``operation_id`` (ledger memo D3c): the numbers survive member release,
+    ``operation_id``: the numbers survive member release,
     save, load, and an unarmed experiment ledger. The table is DATA the
     engine wrote once, never a derivation loads recompute.
     """

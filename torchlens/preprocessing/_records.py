@@ -1,4 +1,4 @@
-"""Neutral preprocessing declaration + resolution records (tvscope B2/B3).
+"""Neutral preprocessing declaration + resolution records.
 
 The comparable-field schema is the ONE vocabulary every authority adapter
 normalizes into and the audit compares over. Every field is optional:
@@ -10,7 +10,7 @@ corner.
 
 Every spelling in this package is DOCUMENTED-UNSTABLE pending the naming
 sprint; the SEPARATIONS (authority record vs field-level audit vs opt-in
-tensor diagnostics, tvscope memo D4) are the decision.
+tensor diagnostics) are the decision.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 __tl_layer__ = "L5"
 
-#: The closed comparable-field vocabulary (tvscope memo B3): resize, crop,
+#: The closed comparable-field vocabulary: resize, crop,
 #: interpolation, antialias, channel order, value range, mean AND std --
 #: stds can differ when means agree, so the pair is two fields, never one.
 COMPARABLE_FIELDS: tuple[str, ...] = (
@@ -192,7 +192,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
 
 
 def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> Resolution:
-    """Build the honest nothing-resolved record (tvscope memo D8).
+    """Build the honest nothing-resolved record.
 
     Network failure yields ``unknown`` -- never a lower tier's silent guess --
     and the fetch disclosure rides the config so the failure is inspectable.

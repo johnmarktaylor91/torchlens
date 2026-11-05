@@ -48,7 +48,7 @@ __all__ = [
 def _row_equivariance_facts(
     edit: Edit, entry: Site, site_label: str
 ) -> tuple[tuple[str, Any], ...]:
-    """Apply the D23 mask-equivariance law to a row-coherent element-masked edit.
+    """Apply the mask-equivariance law to a row-coherent element-masked edit.
 
     The v1 check is DRAW-INDEPENDENT (adjudicated over SOL's per-permutation
     rule, which would make legality depend on the realized seed and

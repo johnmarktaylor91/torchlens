@@ -15,7 +15,7 @@ re-entry, so the nested op is genuinely invisible to the witness and cannot be
 detected. This is an adversarial construction, not a capture bug -- a normal
 model validating its own forward pass cannot trigger it. See docs/LIMITATIONS.md.
 
-Thread posture (r43, locked by design): the aten census is OWNER-thread-scoped (a
+Thread posture (locked by design): the aten census is OWNER-thread-scoped (a
 ``TorchDispatchMode`` is thread-local), while the mode-independent tensor->host
 escape belt (method/module/property/storage patches) fires on EVERY thread and is
 the designated CROSS-thread observer. The belt collapses to ONE fail-closed
@@ -29,9 +29,8 @@ accessors that bypass every torchlens wrapper). The non-owner gate keys on the
 per-capture ``belt_armed`` flag, NEVER the racy ``_logging_enabled`` toggle (which
 the owner flips constantly under ``pause_logging``). A benign non-owner thread that
 never touches a captured tensor -- or that only reads its OWN uncaptured tensors --
-records nothing and stays ``verified``. This ONE rule subsumes the r42 hon2_1
-(raw ``_thread``), hon2_2 (owner-derived alias on a worker), hon2_3 (the
-``pause_logging`` toggle race), and hon2_4 (the string hook) findings.
+records nothing and stays ``verified``. This ONE rule covers a raw ``_thread``, an
+owner-derived alias on a worker, the ``pause_logging`` toggle race, and the string hook.
 """
 
 # ruff: noqa: F401
@@ -54,7 +53,7 @@ from types import MappingProxyType
 from typing import Any, Literal, cast
 
 import torch
-import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __call__ classes
+import torch._ops as _torch_ops  # enumerate the ``torch.ops.*`` __call__ classes
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
@@ -202,9 +201,8 @@ _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS: weakref.WeakKeyDictionary[
 ] = weakref.WeakKeyDictionary()
 """Per-trace user source locations where labelled bool tensors reached ``__bool__``."""
 
-# r37 INV-1 (hon2_2): the former ``_HOST_ESCAPE_UNATTRIBUTABLE_VALUES`` table -- scalar
-# values of unlabelled escapes, discharged by value-equality against sinks/state -- is
-# REMOVED. Scalar value equality is not a provenance proof (a colliding constant sink or
+# There is no table of scalar values of unlabelled escapes discharged by value-equality
+# against sinks/state. Scalar value equality is not a provenance proof (a colliding constant sink or
 # threshold buffer silently blessed a changed-input run as VERIFIED). Unlabelled escape
 # sources now resolve through the positive attribution ladder in
 # ``_record_escape_source_tensor`` (direct state alias -> dispatch origins) or fail closed.
@@ -260,22 +258,22 @@ STORAGE_BRIDGE_ESCAPE_FUNCS: frozenset[str] = frozenset(
 )
 """Census-invisible tensor methods that hand the host a ZERO-COPY handle onto the source
 tensor's raw storage, through which a host WRITE can mutate the tensor's bytes with no aten
-dispatch, no version bump, and no escape record (r14-H3).
+dispatch, no version bump, and no escape record.
 
-``tensor.untyped_storage()`` / ``tensor.storage()`` / ``tensor._typed_storage()`` (r67 C3:
-the private spelling ``storage()`` itself delegates to) return a Storage object aliasing the
+``tensor.untyped_storage()`` / ``tensor.storage()`` / ``tensor._typed_storage()`` (the
+private spelling ``storage()`` itself delegates to) return a Storage object aliasing the
 tensor's memory (``s.fill_(0)`` / ``s[0] = 99`` mutate the source), and ``tensor.data_ptr()``
 hands out the raw data pointer that ``ctypes`` / a foreign kernel writes through directly. Like
 ``.numpy()`` / ``.data`` these bypass the dispatcher entirely, so a write-back leaves the sparse
 replay recomputing the pre-write value and would falsely VERIFY. They are therefore bracketed with
 the SAME before/after byte snapshot as the mutable numpy alias (see ``_observe_invisible_host_escapes``
 -> ``_check_writeback_watch``): a source whose WHOLE-STORAGE bytes changed after exposure -> opaque
-host write-back -> UNVERIFIABLE. Storage ACQUISITION is ORIGIN+WATCH-ONLY (r67 C3/C6): the
+host write-back -> UNVERIFIABLE. Storage ACQUISITION is ORIGIN+WATCH-ONLY: the
 bridge registers the returned handle in the capture-scoped storage-origin map and keeps the
 byte watch, but records NO read kind and NO geometry fact -- a discarded handle is not an
 observation; the ACTUAL accessor call on the handle (``.nbytes()`` / ``.is_shared()`` / ...)
 is what records, through ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``. ``data_ptr()`` is the
-exception (r15-H1): it hands out a RAW pointer that a foreign READ (baking a stale literal) or
+exception: it hands out a RAW pointer that a foreign READ (baking a stale literal) or
 a post-snapshot WRITE can use with no observable trace at all, so a genuine user ``data_ptr()``
 call fails closed to UNVERIFIABLE (see ``_HOST_ESCAPE_RAW_POINTER``), never relying on the byte
 watch alone.
@@ -314,12 +312,12 @@ HOST_VALUE_ESCAPE_METHODS: frozenset[str] = frozenset(
         "is_nonzero",
     }
 )
-"""Tensor **methods** that read a captured tensor's VALUE out to the Python host (r39 hon2_1).
+"""Tensor **methods** that read a captured tensor's VALUE out to the Python host.
 
 These are the mode-independent belt for the aten census: every one is patched on
 ``torch.Tensor`` for the duration of one runnable forward and records its tensor operand(s)
 through the SAME ``_record_escape_source_tensor(...)`` attribution ladder as
-the census. Coupled to :data:`HOST_ESCAPE_OPERATORS` by the r39 census<->observer meta-test:
+the census. Coupled to:data:`HOST_ESCAPE_OPERATORS` by the census<->observer meta-test:
 a one-sided addition (a new census op without a method/module observer, or vice versa) fails
 CI. ``__repr__``/``__str__``/``__format__`` are deliberately NOT patched -- every string/format
 spelling transits patched ``item``/``tolist`` under ``_disable_current_modes`` (E6), so patching
@@ -337,7 +335,7 @@ source, mirroring the Tensor-method belt.
 
 INPUT_METADATA_PREDICATE_FUNCS = frozenset({"is_contiguous", "stride", "storage_offset"})
 """Tensor LAYOUT-PREDICATE **methods** whose result on a MODEL INPUT can steer unobserved
-Python control flow (r27-H2, extended r29-C1). Special-cased (memory_format / full-stride
+Python control flow. Special-cased (memory_format / full-stride
 recording) by :func:`_make_input_metadata_wrapper`; the broader host-value method surface is
 :data:`INPUT_METADATA_BOOL_METHODS`.
 
@@ -354,8 +352,8 @@ input before the executor's detach-clone.
 These reads emit no aten dispatch (pure metadata, deliberately excluded from the escape
 census -- see ``HOST_ESCAPE_OPERATORS``), so they are observed by the same scoped method
 patch as the invisible escapes, but with a DIFFERENT recording rule: only a read whose
-receiver is a MODEL-INPUT leaf tensor (or a ``.data`` / ``.detach()`` storage-alias of one,
-r31) records a (site, predicate, observed value) fact, so a model that never reads input
+receiver is a MODEL-INPUT leaf tensor (or a ``.data`` / ``.detach()`` storage-alias of one)
+records a (site, predicate, observed value) fact, so a model that never reads input
 layout records nothing and can never over-trigger. ``size``/``dim``/``numel``/``dtype``
 derive from shape+dtype and stay covered by the existing input contract; they are
 deliberately NOT observed (a real model reads shapes constantly -- patching them buys no
@@ -374,9 +372,9 @@ INPUT_METADATA_BOOL_METHODS = frozenset(
     }
 )
 """Host-value-returning tensor-metadata **methods** (beyond the layout trio) NOT pinned by the
-shape+dtype input contract (r31, capability-driven accessor table).
+shape+dtype input contract (a capability-driven accessor table).
 
-Round-30 confirmed false VERIFIED via control flow steered on these accessors, each of which
+Control flow steered on these accessors can produce a false VERIFIED, each of which
 the shape+dtype contract does NOT pin, so a same-shape/same-dtype runtime input differing in
 the property silently replays the captured arm:
 
@@ -399,7 +397,7 @@ DELIBERATELY EXCLUDED (shape+dtype-derived or already covered, would only add no
 ``sym_size`` / ``numel`` / ``dim`` / ``ndimension`` / ``element_size`` / ``nelement`` /
 ``is_contiguous`` variants already in the layout trio / ``is_floating_point`` / ``is_complex`` /
 ``is_signed`` (dtype-derived). ``data_ptr`` / ``untyped_storage().data_ptr`` fail closed
-(r15/r16-C1). ``dtype`` / ``device`` / ``shape`` / ``layout`` are shape+dtype/device covered.
+. ``dtype`` / ``device`` / ``shape`` / ``layout`` are shape+dtype/device covered.
 """
 
 INPUT_METADATA_PROPERTY_NAMES = frozenset(
@@ -416,12 +414,11 @@ INPUT_METADATA_PROPERTY_NAMES = frozenset(
     }
 )
 """Tensor autograd / structural getset PROPERTIES whose read on a MODEL INPUT is witnessed
-(r27-H2 ``requires_grad``; r29-C1 adds ``grad_fn`` / ``is_leaf``; r31 adds ``retains_grad`` /
-``_base``; r33 adds ``grad`` / ``_grad`` as PRESENCE facts and ``_version`` / ``output_nr`` as
-INT facts).
+(``requires_grad``, ``grad_fn`` / ``is_leaf``, ``retains_grad`` / ``_base``; ``grad`` /
+``_grad`` as PRESENCE facts and ``_version`` / ``output_nr`` as INT facts).
 
-r33 additions (each a control decision the shape+dtype contract does NOT pin, confirmed by
-oracle to falsely VERIFY otherwise):
+The presence/int additions (each a control decision the shape+dtype contract does NOT
+pin, confirmed by oracle to falsely VERIFY otherwise):
 
 * ``grad`` / ``_grad`` -- ``if x.grad is None:`` steers on whether a gradient has been
   accumulated on the input leaf. The detach-clone erases it (a fresh clone has ``grad=None``),
@@ -448,15 +445,15 @@ works); ``grad_fn`` / ``is_leaf`` / ``retains_grad`` / ``_base`` are read-only.
 _INPUT_METADATA_PRESENCE_PROPERTY_NAMES = frozenset({"grad_fn", "_base", "grad", "_grad"})
 """Autograd/structural PROPERTIES recorded as a PRESENCE boolean (``value is not None``): the
 exact backward object (``grad_fn``), base tensor (``_base``), and accumulated gradient
-(``grad`` / ``_grad``, r33) are not comparable across runs, so only their presence witnesses
+(``grad`` / ``_grad``) are not comparable across runs, so only their presence witnesses
 the control decision."""
 
 _INPUT_METADATA_INT_PROPERTY_NAMES = frozenset({"_version", "output_nr"})
-"""PROPERTIES recorded as their INT value (r33): the in-place mutation counter (``_version``)
+"""PROPERTIES recorded as their INT value: the in-place mutation counter (``_version``)
 and the autograd output index (``output_nr``). Neither is pinned by the shape+dtype contract;
 both compare exactly across runs."""
 
-# --- Accessor FAMILIES governing alias/view attribution (r31) -------------------------------
+# --- Accessor FAMILIES governing alias/view attribution -------------------------------
 #
 # A metadata read whose receiver is not the input leaf OBJECT itself is attributed by the
 # receiver's relationship to an input leaf, which differs per accessor family:
@@ -468,7 +465,7 @@ leaf); a ``.data`` / ``.detach()`` storage-alias (identical geometry) records th
 
 INPUT_DERIVED_LAYOUT_FACT_NAME = "derived_layout_read"
 """Synthetic ``model_input_metadata`` fact name for an INPUT-DERIVED activation layout read
-(r73 F1).
+.
 
 A layout-trio read (``is_contiguous`` / ``stride`` / ``storage_offset``) whose receiver is a
 genuinely NEW activation (fresh storage -- not the input leaf, not a storage alias, not a
@@ -476,14 +473,14 @@ genuinely NEW activation (fresh storage -- not the input leaf, not a storage ali
 memory format, so ``(x * 2).is_contiguous(memory_format=torch.channels_last)`` steers a branch
 on the runtime input's layout while the input contract pins only shape+dtype -- a
 channels_last twin of the capture input replayed the captured arm as a false VERIFIED
-(confirmed r72 hon1 F1). The traced value DAG makes the rooting attributable: the receiver's
+(confirmed by oracle). The traced value DAG makes the rooting attributable: the receiver's
 ``OpEvent.input_ancestors`` names exactly the model-input ops its VALUE derives from, so the
 observer records this fact -- carrying the ROOTING LEAF's capture-time stride tuple -- on each
 ancestor input site. At run time the executor compares the RAW runtime leaf's strides against
 the recorded tuple and, on ANY difference, ceilings the run UNVERIFIABLE (never DIVERGED: a
 changed input layout does not PROVE the intermediate's layout differs -- e.g. a ``reshape``
 between input and read can canonicalize it -- so the honest verdict is "cannot verify", per
-the r35 three-state rule). A same-stride runtime input compares equal and stays VERIFIED, so
+the three-state rule). A same-stride runtime input compares equal and stays VERIFIED, so
 honest channels_last-on-channels_last models are untouched (zero collateral). The mirrored
 consumer constants live in ``torchlens._io.runnable._INPUT_METADATA_FACT_NAMES`` and
 ``torchlens._runnable.execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
@@ -494,8 +491,8 @@ Scope / documented residuals (future intermediate-metadata escape kinds route HE
   are allocator/ambient facts, not input-propagated ones; extending coverage to a new
   input-propagated metadata kind means adding its accessor family to this same
   ancestry-attributed net, not a new mechanism.
-* An UNLABELED receiver NEVER records nothing (r75 F1 -- the r73 fail-open here reopened the
-  escape one ``.data`` away from the fixed spelling). It resolves through the dispatch-origin
+* An UNLABELED receiver NEVER records nothing (a fail-open here would reopen the
+  escape one ``.data`` away from the labeled spelling). It resolves through the dispatch-origin
   ledger's leaf origins, then live captured-storage identity, and otherwise FAILS CLOSED
   (``_INPUT_METADATA_VIEW_READ`` -> completeness downgrade -> UNVERIFIABLE), mirroring the
   sibling ``_HOST_ESCAPE_UNATTRIBUTABLE_*`` nets for the same receiver class. The same
@@ -516,14 +513,14 @@ Scope / documented residuals (future intermediate-metadata escape kinds route HE
 _INPUT_METADATA_ALIAS_SAFE_NAMES = _INPUT_METADATA_LAYOUT_NAMES | frozenset(
     {"is_conj", "is_neg", "is_inference", "is_pinned", "is_shared", "is_coalesced"}
 )
-"""Accessors attributed by STORAGE IDENTITY (r31, hole A). A read on a tensor sharing an input
+"""Accessors attributed by STORAGE IDENTITY. A read on a tensor sharing an input
 leaf's storage with IDENTICAL geometry (``.data`` / ``.detach()``) records the leaf fact -- the
 value is provably equal to a direct leaf read; a storage-alias with DIFFERENT geometry (a
 derived view) fails closed. This closes the ``x.data.storage_offset()`` /
 ``x.detach().is_contiguous()`` class the object-identity map missed."""
 
 _INPUT_METADATA_CONJ_NEG_NAMES = frozenset({"is_conj", "is_neg"})
-"""ALIAS-SAFE accessors whose value FLIPS on a same-geometry conjugate/negative VIEW (r33 F5).
+"""ALIAS-SAFE accessors whose value FLIPS on a same-geometry conjugate/negative VIEW.
 A ``.conj()`` / ``torch._neg_view()`` of an input leaf shares its storage AND geometry but sets
 this dispatch bit, so a same-storage/same-geometry receiver is EQUIVALENT only if its bit also
 equals the leaf's; a bit mismatch is a genuine derived view and fails closed (else a wrong leaf
@@ -532,8 +529,8 @@ fact forces a false divergence on the original complex input)."""
 _INPUT_METADATA_VIEW_FAIL_AUTOGRAD_NAMES = frozenset(
     {"is_leaf", "retains_grad", "_base", "_is_view", "output_nr"}
 )
-"""AUTOGRAD / structural accessors whose read on a DERIVED VIEW of an input leaf fails closed
-(r31 hole C). On a ``.data`` / ``.detach()`` storage-alias these are CONSTANT (detached:
+"""AUTOGRAD / structural accessors whose read on a DERIVED VIEW of an input leaf fails closed.
+On a ``.data`` / ``.detach()`` storage-alias these are CONSTANT (detached:
 ``is_leaf=True``, ``retains_grad=False``, ``_base`` set, ``_is_view`` True), input-INDEPENDENT,
 no hole -- IGNORED. On a DERIVED VIEW (``x.view(-1).is_leaf``, ``retains_grad`` on a non-leaf
 view) the state is not re-derivable from the runtime leaf, so the read fails closed. The
@@ -546,7 +543,7 @@ _INPUT_METADATA_LEAF_ONLY_AUTOGRAD_NAMES = frozenset(
     {"requires_grad", "grad_fn", "grad", "_grad", "_version"}
 )
 """AUTOGRAD accessors witnessed ONLY on the input LEAF (object identity), never attributed to a
-view or alias (r31). TorchLens's OWN per-op capture bookkeeping reads ``output.grad_fn`` and
+view or alias. TorchLens's OWN per-op capture bookkeeping reads ``output.grad_fn`` and
 ``output.requires_grad`` on EVERY op output -- INCLUDING input-derived views (``x[i]`` /
 ``x.view(-1)``) -- while logging is enabled and unmarked (verified: grad_fn ~30x, requires_grad
 ~10x on input views for a trivial model). Those framework reads are indistinguishable at the
@@ -558,7 +555,7 @@ per-op autograd reads live outside this witness surface (in ``backend.py``), so 
 accessors stay LEAF-ONLY: a direct ``x.requires_grad`` / ``x.grad_fn`` leaf read is witnessed
 and diverges correctly; a read reached ONLY through a view is a documented residual. (``grad_fn``
 is not even view-invariant -- a view of a leaf has a ``ViewBackward`` grad_fn the leaf lacks --
-so a leaf record would be wrong regardless.) r33 adds ``grad`` / ``_grad`` / ``_version`` here
+so a leaf record would be wrong regardless.) ``grad`` / ``_grad`` / ``_version`` are here
 on the same principle: ``grad`` / ``_grad`` / ``_version`` are not view-invariant (a view has a
 distinct ``grad`` slot and a fresh ``_version``), so a view read is a documented leaf-only
 residual, never a leaf-attributed record."""
@@ -567,7 +564,7 @@ residual, never a leaf-attributed record."""
 # Per-trace map from an input leaf's BASE-storage data pointer to the list of
 # ``(site, size, stride, storage_offset)`` geometries of the model-input leaves that own it.
 # Kept in a weak-keyed module table (NOT ``trace.__dict__``) so it never enters the portable
-# schema and needs no scrub allow-list entry (r31); dropped when the Trace is GC'd.
+# schema and needs no scrub allow-list entry; dropped when the Trace is GC'd.
 _RUNNABLE_INPUT_STORAGE_SITES: weakref.WeakKeyDictionary[Any, dict[int, list[Any]]] = (
     weakref.WeakKeyDictionary()
 )
@@ -582,7 +579,7 @@ _ALIAS_DERIVED_VIEW = "derived_view"
 
 
 _LAYOUT_ANCESTRY_CLEAN: weakref.WeakKeyDictionary[Any, set[str]] = weakref.WeakKeyDictionary()
-"""Per-trace memo of raw labels whose ENTIRE traced ancestry is attribution-intact (r75 F1).
+"""Per-trace memo of raw labels whose ENTIRE traced ancestry is attribution-intact.
 
 A label enters only after a full parent-chain walk found no op with
 ``unattributed_tensor_args`` (and no unresolvable parent label), so repeated layout reads
@@ -593,43 +590,43 @@ is rare by construction. Weak-keyed off the schema; dropped with the Trace."""
 _STORAGE_REBIND_BARRIER_LABELS: weakref.WeakKeyDictionary[Any, set[str]] = (
     weakref.WeakKeyDictionary()
 )
-"""Per-trace raw labels of storage-SWAPPING ``.data=`` rebind ops (r28 reconcile).
+"""Per-trace raw labels of storage-SWAPPING ``.data=`` rebind ops.
 
 A ``t.data = rhs`` whose RHS lives on a DIFFERENT storage object swaps the
-receiver's storage pointer -- the exact laundering primitive the r79/r81/r85
+receiver's storage pointer -- the exact laundering primitive the
 session belts refuse to attribute verdict-steering facts across (stale/forged
 stamp launders, plain-attr and registered-buffer rebind layout branches). The
 capture graph legitimately threads consumers through the emitted rebind op
-(round-31 M6), but ancestry rooted through one of these labels must FAIL CLOSED
-for layout/witness attribution exactly as the pre-M6 unattributed break did:
+, but ancestry rooted through one of these labels must FAIL CLOSED
+for layout/witness attribution exactly as an unattributed break would:
 :func:`_layout_ancestry_tainted` treats a barrier label like an op with
 ``unattributed_tensor_args``. A pointer-PRESERVING rebind (``y.data =
 y.view(...)``) is never registered here, so honest same-storage siblings keep
-their attribution (r85) and input-strided same-storage rebinds keep honest
-divergence semantics (hon1 V6)."""
+their attribution and input-strided same-storage rebinds keep honest
+divergence semantics."""
 
 
-# --- r65 Cluster X: THE authoritative state-metadata accessor mirror ------------------------
+# --- THE authoritative state-metadata accessor mirror ------------------------
 #
 # The input-metadata net's authority is the union of four frozen constants
 # (INPUT_METADATA_PREDICATE_FUNCS | INPUT_METADATA_BOOL_METHODS | INPUT_METADATA_PROPERTY_NAMES
 # | {"storage_nbytes"}), which equals the 20 ACCESSOR names of the ``_INPUT_METADATA_FACT_NAMES``
-# vocabulary in ``torchlens._io.runnable`` (r73 adds the vocabulary's one SYNTHETIC,
+# vocabulary in ``torchlens._io.runnable`` (the vocabulary also has one SYNTHETIC,
 # ancestry-attributed fact -- ``derived_layout_read`` -- which owes no mirror row; see
-# ``_INPUT_METADATA_SYNTHETIC_FACT_NAMES`` there). r63 mirrored only 5 of those 20 onto
-# registered state, leaving an
-# "Nth unwitnessed state read" class open (r64 F2/F3). This table closes the CLASS: every input
+# ``_INPUT_METADATA_SYNTHETIC_FACT_NAMES`` there). Mirroring only some of those 20 onto
+# registered state would leave an "Nth unwitnessed state read" class open. This table
+# closes the CLASS: every input
 # accessor carries an EXPLICIT state disposition, and the wrappers dispatch through the table
 # instead of hardcoded name tuples, so a future accessor added to any input constant without a
-# state disposition is a RED parity test (T-X1), never a silent gap.
+# state disposition is a RED parity test, never a silent gap.
 
 _STATE_ROUTE_READ_KIND = "read_kind"
-"""Disposition: the read joins the escape-gated r63 machinery -- the slot is digest-witnessed
+"""Disposition: the read joins the escape-gated machinery -- the slot is digest-witnessed
 (``_HOST_ESCAPE_STATE_SOURCE_NAMES``) and the read KIND enters the per-slot ledger consumed by
 the producer preflight, which refuses the save iff the read dim was non-canonical at capture."""
 
 _STATE_ROUTE_DECLARED_FACT = "declared_fact"
-"""Disposition: the read records a DECLARED-STATE FACT (r65 F-1 ruling) -- the observed bit is
+"""Disposition: the read records a DECLARED-STATE FACT -- the observed bit is
 persisted as a ``state_metadata:<name>`` witness and staging REPRODUCES it (no escape-source
 join, no read-kind, no refusal except a fact staging provably cannot reproduce). Escape-gating
 ``requires_grad`` would refuse every frozen model and is contamination-fragile against
@@ -642,15 +639,15 @@ _STATE_ROUTE_STRUCTURAL = "structural"
 
 STATE_METADATA_MIRROR: Mapping[str, tuple[str, str]] = MappingProxyType(
     {
-        # -- layout trio (r63, unchanged; ``is_contiguous`` probed with an explicit
+        # -- layout trio (``is_contiguous`` probed with an explicit
         #    memory_format resolves to the ``stride`` row's kind at the wrapper) --
         "is_contiguous": (_STATE_ROUTE_READ_KIND, "contiguous_default"),
         "stride": (_STATE_ROUTE_READ_KIND, "stride_exact"),
         "storage_offset": (_STATE_ROUTE_READ_KIND, "storage_offset"),
-        # -- lazy dispatch bits (r63, unchanged) --
+        # -- lazy dispatch bits --
         "is_conj": (_STATE_ROUTE_READ_KIND, "is_conj"),
         "is_neg": (_STATE_ROUTE_READ_KIND, "is_neg"),
-        # -- storage/creation placement bits (r65; r67 C3 observed-value rows): value is a
+        # -- storage/creation placement bits (observed-value rows): value is a
         #    pure function of the slot's storage, invariant across every view/alias. The
         #    wrappers additionally carry the ACTUAL accessor return into the observation
         #    ledger (``_record_state_metadata_observation``) -- the producer validates the
@@ -659,11 +656,11 @@ STATE_METADATA_MIRROR: Mapping[str, tuple[str, str]] = MappingProxyType(
         "is_shared": (_STATE_ROUTE_READ_KIND, "is_shared"),
         "is_pinned": (_STATE_ROUTE_READ_KIND, "is_pinned"),
         "is_inference": (_STATE_ROUTE_READ_KIND, "is_inference"),
-        # -- base-storage geometry (r65 F3; r67 C6): recorded at the ACTUAL
+        # -- base-storage geometry: recorded at the ACTUAL
         #    ``.nbytes()``/``.size()``/``__len__`` accessor call on the storage handle,
-        #    never at handle acquisition (corr1-4) --
+        #    never at handle acquisition --
         "storage_nbytes": (_STATE_ROUTE_READ_KIND, "storage_nbytes"),
-        # -- autograd/structural family (r65): DIRECT-receiver-only attribution (see
+        # -- autograd/structural family: DIRECT-receiver-only attribution (see
         #    ``_STATE_METADATA_DIRECT_ONLY_NAMES``); ``_base`` presence <=> is-view --
         "_is_view": (_STATE_ROUTE_READ_KIND, "is_view"),
         "_base": (_STATE_ROUTE_READ_KIND, "is_view"),
@@ -672,13 +669,13 @@ STATE_METADATA_MIRROR: Mapping[str, tuple[str, str]] = MappingProxyType(
         "output_nr": (_STATE_ROUTE_READ_KIND, "output_nr"),
         "grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
         "_grad": (_STATE_ROUTE_READ_KIND, "grad_presence"),
-        # -- in-place mutation counter (r67 C4 ruling): the read kind is a
+        # -- in-place mutation counter: the read kind is a
         #    ``refuse_on_any_read`` oracle-policy row -- oracle-1's default
         #    ``load_state_dict`` copy perturbs constructor-owned counters (0 -> 1 plain,
         #    1 -> 2 initialized), so NO captured version is reproducible and EVERY
         #    attributed ``_version`` read refuses the runnable save --
         "_version": (_STATE_ROUTE_READ_KIND, "_version"),
-        # -- declared-state facts (r65 F-1 ruling; grad_fn presence is the
+        # -- declared-state facts (grad_fn presence is the
         #    contamination-immune twin) --
         "requires_grad": (_STATE_ROUTE_DECLARED_FACT, "requires_grad"),
         "grad_fn": (_STATE_ROUTE_DECLARED_FACT, "grad_fn"),
@@ -715,14 +712,14 @@ _STATE_METADATA_DIRECT_ONLY_NAMES = frozenset(
 )
 """AUTOGRAD/structural accessors attributed ONLY on the DIRECT registered object (the
 ``nn.Parameter`` / registered-buffer object itself), never through a storage alias or derived
-view (r65; the state twin of the input net's leaf-only rule).
+view (the state twin of the input net's leaf-only rule).
 
-Two reasons, mirroring r31/r33: (1) CONTAMINATION -- TorchLens's own per-op bookkeeping reads
+Two reasons, mirroring the input net: (1) CONTAMINATION -- TorchLens's own per-op bookkeeping reads
 ``requires_grad`` / ``grad_fn`` / ``_version`` on op outputs (including param-storage-sharing
 view outputs like ``self.w[:]``) while logging is enabled; attributing a view's
 ``grad_fn``-present read to its slot would refuse/ceiling ordinary models (a ``ViewBackward``
 on a param view is NOT a slot fact). The known DIRECT-receiver bookkeeping reads are excluded
-at their source under the ``internal_scalar_read`` marker (r65). (2) NON-INVARIANCE -- unlike
+at their source under the ``internal_scalar_read`` marker. (2) NON-INVARIANCE -- unlike
 the alias-safe family, a view's autograd state (``is_leaf`` False, fresh ``_version``, own
 ``grad`` slot) is NOT a pure function of the slot's canonical form, so a slot-attributed alias
 read would be wrong regardless. An alias/view read of this family on state is the documented
@@ -731,8 +728,8 @@ residual (contract residual: the state twin of the input-derived-view autograd r
 _STATE_METADATA_ALIAS_SAFE_STATE_NAMES = frozenset(
     {"is_conj", "is_neg", "is_inference", "is_pinned", "is_shared"}
 )
-"""BOOL-method accessors attributed on state by STORAGE IDENTITY (``_state_derived_addresses``,
-r63 semantics): the value on ANY view/alias is a pure function of the slot's storage/creation
+"""BOOL-method accessors attributed on state by STORAGE IDENTITY (``_state_derived_addresses``):
+the value on ANY view/alias is a pure function of the slot's storage/creation
 placement (a view of a pinned/shared/inference tensor is itself pinned/shared/inference), and
 the replay re-derives every view from the canonical staged slot through the recorded DAG, so a
 slot-attributed alias read is provably reproducible iff the slot dim was canonical."""
@@ -740,7 +737,7 @@ slot-attributed alias read is provably reproducible iff the slot dim was canonic
 _STATE_METADATA_FACTS: weakref.WeakKeyDictionary[Any, dict[str, dict[str, bool]]] = (
     weakref.WeakKeyDictionary()
 )
-"""Per-trace DECLARED-STATE fact ledger: state name -> {fact name -> observed bool} (r65 F-1).
+"""Per-trace DECLARED-STATE fact ledger: state name -> {fact name -> observed bool}.
 
 Populated by the property wrapper's state branch for ``requires_grad`` (bool value) and
 ``grad_fn`` (presence bool) reads on DIRECT registered param/buffer receivers. These slots do
@@ -754,7 +751,7 @@ carry a grad_fn). Kept weak-keyed off the schema."""
 _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS: weakref.WeakKeyDictionary[
     Any, dict[str, dict[str, bool | None]]
 ] = weakref.WeakKeyDictionary()
-"""Per-trace ledger of the ACTUAL values returned by placement accessor calls on state (r67 C3).
+"""Per-trace ledger of the ACTUAL values returned by placement accessor calls on state.
 
 ``is_pinned`` / ``is_shared`` are OBSERVED-VALUE read kinds: the honest producer predicate is
 "the user's one actual accessor return equals the device-defined staged/oracle value", never a
@@ -767,10 +764,10 @@ off the schema like its read-kind sibling.
 
 
 _STATE_METADATA_PLACEMENT_OBSERVED_NAMES = frozenset({"is_shared", "is_pinned"})
-"""Accessor names whose STATE reads are OBSERVED-VALUE read kinds (r67 C3): the producer
+"""Accessor names whose STATE reads are OBSERVED-VALUE read kinds: the producer
 predicate compares the user's one actual return against the device-defined staged/oracle
 value -- never a TorchLens speculative re-read, never an accelerator-initialization
-inference (free-F4: the CUDA-init proof-by-absence stamped canonical False on genuinely
+inference (a CUDA-init proof-by-absence would stamp canonical False on genuinely
 pinned XPU/MPS/externally-registered memory)."""
 
 
@@ -792,7 +789,7 @@ witness.
 _HOST_ESCAPE_STATE_METADATA_READS: weakref.WeakKeyDictionary[Any, dict[str, set[str]]] = (
     weakref.WeakKeyDictionary()
 )
-"""Per-trace ledger of METADATA reads on registered state: state name -> read kinds (r63 C1).
+"""Per-trace ledger of METADATA reads on registered state: state name -> read kinds.
 
 ``self.weight.is_contiguous()`` / ``.stride()`` / ``.storage_offset()`` / ``.is_conj()`` /
 ``.is_neg()`` on a registered param/buffer (or a storage alias of one) returns a host value
@@ -828,7 +825,7 @@ cannot be witnessed, so the runnable producer fails closed (UNVERIFIABLE). Prese
 
 
 _INPUT_METADATA_VIEW_READ: weakref.WeakSet[Any] = weakref.WeakSet()
-"""Traces that read a metadata predicate on a DERIVED VIEW of a model input (r29-C1, F5).
+"""Traces that read a metadata predicate on a DERIVED VIEW of a model input.
 
 ``x.t().is_contiguous()`` reads layout metadata on a pure view of an input leaf. The view is
 an orphan-pruned intermediate the sparse replay never re-derives, so the read cannot be
@@ -842,7 +839,7 @@ allow-list entry. Presence-only.
 _HOST_ESCAPE_LABEL_LEAF_ORIGINS: weakref.WeakKeyDictionary[
     Any, dict[str, tuple[frozenset[str], frozenset[str]] | None]
 ] = weakref.WeakKeyDictionary()
-"""Per-trace fallback witness basis for escape-source labels (r37 mechanism A).
+"""Per-trace fallback witness basis for escape-source labels.
 
 Maps each recorded escape-source RAW label to the escape source's propagated LEAF
 origins, split as ``(leaf_labels, leaf_state_names)`` -- or ``None`` when the leaf set
@@ -927,7 +924,7 @@ the bytes unchanged and is never recorded, so it stays honestly VERIFIED. Presen
 
 
 _HOST_ESCAPE_RAW_POINTER: weakref.WeakSet[Any] = weakref.WeakSet()
-"""Traces where a raw ``Tensor.data_ptr()`` pointer escaped to the host (r15-H1).
+"""Traces where a raw ``Tensor.data_ptr()`` pointer escaped to the host.
 
 ``tensor.data_ptr()`` hands out the raw integer data pointer that ``ctypes`` / a foreign kernel
 reads or writes through DIRECTLY, with no aten dispatch, no version bump, and -- unlike a
@@ -945,17 +942,17 @@ over-triggers at ~zero cost. TorchLens's own capture-internal ``data_ptr`` reads
 """
 
 
-# --- r43 CLASS 2: non-owner captured-tensor touch (ONE fail-closed rule) --------------------
+# --- Non-owner captured-tensor touch (ONE fail-closed rule) --------------------
 #
 # Locked by design: ANY non-owner thread that TOUCHES A CAPTURED TENSOR during the armed forward
 # window permanently ceilings the artifact to UNVERIFIABLE (+ NOT_APPLICABLE). This subsumes
-# the whole r41 in-window/foreign 3-class distinction (which let raw ``_thread`` and
+# the whole in-window/foreign 3-class distinction (which would let raw ``_thread`` and
 # pre-existing workers slip through). Captured membership is decided by
 # :func:`_nonowner_touch_is_captured`; the storage-identity catch-all uses the true-original
 # accessors captured at import (below), which bypass every torchlens wrapper.
 
 _HOST_ESCAPE_CROSS_THREAD_CAPTURED: weakref.WeakSet[Any] = weakref.WeakSet()
-"""Traces where a NON-OWNER thread touched a CAPTURED tensor during the armed window (r43).
+"""Traces where a NON-OWNER thread touched a CAPTURED tensor during the armed window.
 
 The single locked-by-design concurrency ceiling: a captured tensor's Python-visible value/pointer/
 string/metadata escape (or a positively-known captured-derived alias) observed on any thread
@@ -968,7 +965,7 @@ Presence-only. A non-owner thread that never touches a captured tensor records n
 _CAPTURED_STORAGE_PTRS: weakref.WeakKeyDictionary[Any, dict[int, tuple[weakref.ref[Any], ...]]] = (
     weakref.WeakKeyDictionary()
 )
-"""Per-trace ptr -> LIVE producing-tensor weakrefs for the activation storage-identity catch-all (r43).
+"""Per-trace ptr -> LIVE producing-tensor weakrefs for the activation storage-identity catch-all.
 
 Populated by :func:`_register_dispatch_result_origins` (owner thread) so the storage-identity
 catch-all recognizes a ``.data`` / view / detach alias of a captured ACTIVATION touched off-owner.
@@ -976,7 +973,7 @@ Input-leaf pointers (``_RUNNABLE_INPUT_STORAGE_SITES``) and parameter pointers
 (``_param_storage_addresses``) are held ALIVE for the whole capture, so their addresses never
 churn and a FLAT int set is sound for them. Transient activation storages, by contrast, are freed
 mid-forward and their addresses REUSED by unrelated (possibly worker-thread) allocations -- a flat
-int set would then false-positive a benign own-tensor touch (hon2_4 over-trigger). Storing a WEAKREF
+int set would then false-positive a benign own-tensor touch (an over-trigger). Storing a WEAKREF
 to each producing tensor makes the check LIVENESS-VERIFIED: a ptr matches only when a captured
 tensor is STILL ALIVE and STILL occupies that address (i.e. the touched tensor genuinely aliases
 it); a freed-then-reused address has only dead weakrefs and never matches. Meta/storageless tensors
@@ -991,14 +988,14 @@ it); a freed-then-reused address has only dead weakrefs and never matches. Meta/
 # shadows ``torch.Tensor`` only), and ``UntypedStorage.data_ptr`` IS patched per-forward, so both
 # originals must be snapshotted here.
 # ``torch._C.TensorBase`` (torch >= 2.2) vs ``torch._C._TensorBase`` (torch 2.1):
-# feature-detected through the ONE _torch_compat accessor (HAS_TENSORBASE_CLASS,
-# r-b4 R26-2). The witness originals below are structurally REQUIRED, so absence
+# feature-detected through the ONE _torch_compat accessor (HAS_TENSORBASE_CLASS).
+# The witness originals below are structurally REQUIRED, so absence
 # raises explicitly -- a module-level ``assert`` here was stripped under
 # ``python -O``, leaving ``_TENSORBASE_CLS = None`` and a delayed AttributeError.
 _TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
 _ORIG_TENSORBASE_UNTYPED_STORAGE = _TENSORBASE_CLS.untyped_storage
 _ORIG_UNTYPED_STORAGE_DATA_PTR = torch.UntypedStorage.data_ptr
-# r67 C3: the true-original byte-count accessor, for TorchLens's OWN base-geometry reads
+# the true-original byte-count accessor, for TorchLens's OWN base-geometry reads
 # (origin resolution, input nbytes fact) -- bypasses the per-forward storage accessor
 # wrappers so internal resolution never recurses into observation.
 _ORIG_UNTYPED_STORAGE_NBYTES = torch.UntypedStorage.nbytes
@@ -1020,7 +1017,7 @@ _AUTHORIZED_INTERNAL_CALLER_CODE_IDS: set[int] = set()
 
 
 _ACTIVE_WITNESS_STATE: _WitnessState | None = None
-"""The runnable-capture witness state currently installed, or ``None`` (r43).
+"""The runnable-capture witness state currently installed, or ``None``.
 
 Published as the LAST step of ``capture_completeness_witness`` armation and cleared on exit so
 the wrappers.py string interception can classify owner vs non-owner without threading the state
@@ -1029,7 +1026,7 @@ through the torch-function wrapper. Captures do not nest, so a single slot suffi
 
 
 _HOST_ESCAPE_OBSERVER_FAILED: weakref.WeakSet[Any] = weakref.WeakSet()
-"""Traces where a REQUIRED tensor->host value observer could not be installed/restored (r39).
+"""Traces where a REQUIRED tensor->host value observer could not be installed/restored.
 
 The mode-independent method/module observers (:data:`HOST_VALUE_ESCAPE_METHODS` /
 :data:`HOST_VALUE_ESCAPE_MODULE_FUNCS`) are the belt that closes the ``_disable_current_modes``
@@ -1082,7 +1079,7 @@ _DISABLE_MODE_SITE_CATEGORIES = frozenset(
         "_logging",
     }
 )
-"""Categories of torch modules that legitimately host ``_disable_current_modes`` sites (r39)."""
+"""Categories of torch modules that legitimately host ``_disable_current_modes`` sites."""
 
 
 _COMPLETENESS_WITNESS_FILE = Path(__file__).resolve()
@@ -1103,7 +1100,7 @@ _DISPATCH_TENSOR_ORIGINS: weakref.WeakKeyDictionary[Any, _TensorOriginRegistry] 
 )
 """Per-trace dispatch-origin ledger: unlabelled tensor -> propagated value origins.
 
-r37 mechanism A (INV-1). Every in-scope aten dispatch registers each tensor RESULT with
+Every in-scope aten dispatch registers each tensor RESULT with
 the union of its tensor OPERANDS' origins, so a fresh unlabelled tensor (a ``.data`` /
 ``.detach()`` alias, or any raw-dispatch product) carries a positive record of which
 witnessable sources -- capture-labeled ops/inputs (``label:<raw_label>``), registered
@@ -1116,7 +1113,7 @@ tensor objects so entries vanish with them.
 _ORIGIN_UNKNOWN = "unknown"
 _ORIGIN_RNG = "rng"
 _ORIGIN_UNINIT = "uninit"
-"""r53 hon_2: distinct uninitialized-memory origin marker.
+"""Distinct uninitialized-memory origin marker.
 
 Deliberately NOT overloading ``rng``: the report vocabulary and the torch-RNG
 nets stay clean, while ``_resolved_dispatch_origins`` fails closed on BOTH --
@@ -1158,7 +1155,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         self.state = state
 
     def _record_plane_p(self, func: Any) -> None:
-        """Append one plane-P dispatch record (merge-ranks C2; never raises).
+        """Append one plane-P dispatch record (never raises).
 
         Records EVERY dispatched op on the owner thread -- any namespace,
         paused (TorchLens-internal) windows included -- as physical evidence
@@ -1281,13 +1278,14 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
                     state_view_accessor,
                 )
                 self.state.events.append(event)
-            # Per-consumption host write-back sample (r16-H1 TOCTOU): if a mutable zero-copy alias
-            # is live and THIS traced op consumes a watched source whose bytes were transiently
-            # written, catch it now -- BEFORE redispatch reads the mutated input -- rather than only
-            # at forward end where a byte-exact restore would have already hidden it.
+            # Per-consumption host write-back sample (closes a TOCTOU window): if a mutable
+            # zero-copy alias is live and THIS traced op consumes a watched source whose bytes
+            # were transiently written, catch it now -- BEFORE redispatch reads the mutated
+            # input -- rather than only at forward end where a byte-exact restore would have
+            # already hidden it.
             if in_scope:
                 _sample_writeback_at_consumption(self.state, args, kwargs)
-            # r53 hon_2: a resize-family receiver must be sized BEFORE dispatch --
+            # A resize-family receiver must be sized BEFORE dispatch --
             # afterwards the receiver has already been resized, so the grow fact
             # (stale-byte exposure) would be unrecoverable. ``numel`` is a
             # torch-function-wrapped accessor, so the read runs PAUSED (an
@@ -1310,7 +1308,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         try:
             result = func(*args, **(kwargs or {}))
         except BaseException as exc:
-            # r35 I2 lifecycle ledger: an op that RAISED left no captured artifact,
+            # Lifecycle ledger: an op that RAISED left no captured artifact,
             # so a branch taken *because* it raised has no witness anchor. Record
             # only safe facts (type module+qualname) and re-raise unchanged.
             if event is not None:
@@ -1347,7 +1345,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
         # returning a NON-TENSOR host value from a tensor operand (equal/allclose/
         # is_nonzero/_local_scalar_dense). Recorded after redispatch so the result is
         # observable; still gated to the owner thread / active trace / logging window.
-        # Origin propagation (r37 mechanism A) registers every tensor RESULT with the
+        # Origin propagation registers every tensor RESULT with the
         # union of its operands' origins FIRST, so an escape observed later on an
         # unlabelled product of this dispatch resolves positively instead of opaquely.
         if in_scope and self.state.record_escapes:
@@ -1370,7 +1368,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
 _RUNNABLE_LEDGER_FACTS: weakref.WeakKeyDictionary[Any, list[dict[str, Any]]] = (
     weakref.WeakKeyDictionary()
 )
-"""Per-trace undischarged event-lifecycle facts (r35 I2, hon2_1).
+"""Per-trace undischarged event-lifecycle facts.
 
 Each fact is a safe, value-free record naming the site of an event the census
 could not discharge: a caught in-forward raise (``caught_exception_control``),
@@ -1384,13 +1382,13 @@ run of that artifact ceilings at ``unverifiable`` + ``not_applicable``.
 _PURE_VIEW_DISPATCH_OPERATORS = frozenset({"aten.detach", "aten.alias"})
 """Non-mutating pure-aliasing operators discharged as an audited ``returned_tensor`` row.
 
-r37 INV-1 narrow audited row (never a blanket outcome exemption): an unowned
+Narrow audited row (never a blanket outcome exemption): an unowned
 ``aten.detach`` / ``aten.alias`` is the C-level ``.data`` property accessor (on ANY
 tensor, not only registered buffers). The view itself moves no value to the host and
 computes no new bytes; every hazard THROUGH it is owned by another disposition -- a
 VALUE escape of the alias is attributed by the escape ladder (origin propagation
 resolves the alias to its base), a MUTATION through the alias is a separate mutating
-dispatch event, and a metadata read is the r31 input-metadata witness's domain. A
+dispatch event, and a metadata read is the input-metadata witness's domain. A
 value-PRODUCING unowned op (``aten.add``/``aten.mul``/...) is NOT in this set and
 records an incomplete fact. ``aten.as_strided`` (emitted unowned by C-level DLPack /
 array-interop consumers) is discharged by the SAME argument but ONLY when its result
@@ -1400,7 +1398,7 @@ incomplete fact.
 """
 
 
-# PERF (w15 F1): exact classes whose ``untyped_storage``/``data_ptr`` provably resolve to the
+# PERF: exact classes whose ``untyped_storage``/``data_ptr`` provably resolve to the
 # snapshotted true originals (`_ORIG_TENSORBASE_UNTYPED_STORAGE` / `_ORIG_UNTYPED_STORAGE_DATA_PTR`).
 # The per-consumption TOCTOU scans run under ``pause_logging`` on the OWNER thread, where the
 # per-forward escape patches are a pure call-through (the recording branch is gated on
@@ -1411,11 +1409,11 @@ _PLAIN_TENSOR_CLS = torch.Tensor
 _PLAIN_PARAM_CLS = torch.nn.Parameter
 
 
-# --- r67 C3/C6: THE atomic storage-accessor disposition table -------------------------------
+# --- THE atomic storage-accessor disposition table ------------------------------
 #
-# corr1-4 root cause: handle ACQUISITION stamped ``storage_nbytes`` ("one attribute away"),
-# while equivalent reads through the handle (``is_shared()``/``is_pinned()``/``nbytes()`` on
-# the storage OBJECT) were unwitnessed. One table now covers the public receiver surface of
+# Stamping ``storage_nbytes`` at handle ACQUISITION ("one attribute away") would leave
+# equivalent reads through the handle (``is_shared()``/``is_pinned()``/``nbytes()`` on
+# the storage OBJECT) unwitnessed. One table covers the public receiver surface of
 # BOTH ``UntypedStorage`` and ``TypedStorage``: acquisition records origin/watch only, and the
 # ACTUAL accessor call records the real result -- the ledger claims exactly the observations
 # that occurred, no more (no discarded-handle over-trigger) and no less (no storage-spelling
@@ -1431,7 +1429,7 @@ the Tensor spelling, attributed via the origin map to the input site or full sta
 group."""
 
 _STORAGE_ACCESSOR_RAW_POINTER = "raw_pointer"
-"""Disposition: hands out the raw address (``data_ptr``/``_cdata``) -- the existing r15/r16
+"""Disposition: hands out the raw address (``data_ptr``/``_cdata``) -- the existing
 fail-closed belt."""
 
 _STORAGE_ACCESSOR_MUTATOR = "captured_mutator"
@@ -1462,7 +1460,7 @@ from ``_walk_output_tensors_with_paths`` / ``_search_stack_for_vars_of_type`` on
 ``self.b.storage()`` call). A wrapper cannot distinguish that framework walk from a user
 read (the LOCKED allowlist-by-construction principle forbids a spoofable stack-filename
 discriminator), so wrapping would permanently ceiling every model that merely acquires a
-storage handle. Exactly like the r31/r65 leaf-only autograd rows, these two properties are
+storage handle. Exactly like the leaf-only autograd rows, these two properties are
 the NAMED documented residual of the storage surface -- classified, never silently omitted."""
 
 _STORAGE_ACCESSOR_STRUCTURAL = "structural"
@@ -1573,7 +1571,7 @@ STORAGE_METADATA_ACCESSOR_DISPOSITIONS: Mapping[str, Mapping[str, tuple[str, str
         }
     )
 )
-"""ONE authoritative disposition per public storage accessor, per class (r67 C3/C6).
+"""ONE authoritative disposition per public storage accessor, per class.
 
 Keys cover the public (non-underscore) ``dir()`` surface of each class on the declared torch
 floor->ceiling, plus the NAMED private/dunder rows (``_cdata``, ``__len__``, ``__getitem__``,

@@ -1,4 +1,4 @@
-"""NodeSpec value vocabulary (ratified V2 relocation; C01 item 6).
+"""NodeSpec value vocabulary (ratified V2 relocation).
 
 The node-presentation VALUE vocabulary consumed by strata below PRESENT:
 ``options`` at the engine boundary and the viz/repgeom/receptive-field
@@ -124,7 +124,7 @@ class NodeSpec:
         return dataclass_replace(self, **kwargs)
 
 
-# S5 contract (C4): the three node-callback aliases have ONE declaration home
+# The three node-callback aliases have ONE declaration home
 # (this module); ``_render_common`` re-exports them for internal consumers.
 NodeSpecFn = Callable[["Layer", NodeSpec], NodeSpec | None]
 BackwardNodeSpecFn = Callable[["GradFn", NodeSpec], NodeSpec | None]

@@ -1,4 +1,4 @@
-"""The envelope grammar and card assembly (F10; lovely memo 4.2 / D15).
+"""The envelope grammar and card assembly.
 
 The CORE (rendered by :mod:`._stats_render`) is byte-identical on every
 surface; the ENVELOPE is the provenance affix supplied by whatever
@@ -7,7 +7,7 @@ surrounds it::
     <trace>/<address>:<pass> [<kind> <position> <function>] -> <core>
 
 ``repr(x)`` is ONE nestable line; ``str(x)`` is a bounded card whose FIRST
-line IS the repr (D15). Cards never exceed :data:`CARD_MAX_LINES` lines,
+line IS the repr. Cards never exceed:data:`CARD_MAX_LINES` lines,
 every card names its exits on a ``More:`` line (voice rule 6), and
 collections point instead of dumping (voice rule 1). Pure string
 functions: nothing here touches a tensor or a record.
@@ -35,7 +35,7 @@ def envelope_line(
     pass_token: str | None = None,
     bracket: tuple[str | None, ...] = (),
 ) -> str:
-    """Compose one envelope+core line (memo 4.2 grammar).
+    """Compose one envelope+core line.
 
     Parameters
     ----------
@@ -49,9 +49,9 @@ def envelope_line(
         Site address (layer label / module address / param address).
     pass_token:
         Pass tag ``k/n``; rendered as ``(pass k/n)`` after the address
-        (the A10 vocabulary law: multiplicity spells passes, never ops).
+        (multiplicity spells passes, never ops).
     bracket:
-        The ``[<kind> <position> <function>]`` affix of the memo 4.2
+        The ``[<kind> <position> <function>]`` affix of the
         grammar, as one triple in that order (trailing entries optional;
         ``None``/empty parts are omitted). Width overflow degrades through
         the core's own retention order by re-rendering upstream, never
@@ -87,7 +87,7 @@ def record_card(
     more: tuple[str, ...] = (),
     max_lines: int = CARD_MAX_LINES,
 ) -> str:
-    """Assemble a bounded record card (D15: line 1 IS the repr).
+    """Assemble a bounded record card (line 1 IS the repr).
 
     Body lines are indented two spaces; when the budget would overflow,
     body lines are dropped from the END with an exact remainder line

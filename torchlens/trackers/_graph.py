@@ -1,4 +1,4 @@
-"""The TB graph with real StepStats: executed DAG, truthful fields (memo 3.14).
+"""The TB graph with real StepStats: executed DAG, truthful fields.
 
 Two layers, deliberately split:
 
@@ -19,7 +19,7 @@ is OMITTED until the kernel-telemetry join supplies device durations
 (``func_duration`` has no CUDA sync -- painting dispatch as kernel cost is a
 beautiful lie); allocator-memory coloring is OFF (TB's frontend never reads
 ``allocator_name``; filling an allocator-labeled widget with output bytes
-violates the no-fake-colors ruling). Output shapes/bytes go where the
+violates the no-fake-colors rule). Output shapes/bytes go where the
 frontend actually reads them. Missing evidence omits a field; it never
 writes zero.
 """
@@ -34,7 +34,7 @@ from ._errors import SinkProtocolError
 
 __tl_layer__ = "L8"
 
-#: The one timing-evidence token launch ships (memo 3.14 / section 9).
+#: The one timing-evidence token the tracker ships.
 TIMING_EVIDENCE = "instrumented_host_bracket"
 
 
@@ -124,7 +124,7 @@ class GraphIR:
 
 
 def node_name_for(layer: Any) -> str:
-    """The ONE deterministic node-name encoder (memo 3.14).
+    """The ONE deterministic node-name encoder.
 
     Namespaces from ``module_call_stack`` (``module_address`` is verified
     empty on real models), with ``:`` replaced -- the same slash-grouped

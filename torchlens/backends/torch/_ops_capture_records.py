@@ -237,7 +237,7 @@ def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | Non
             get_tensor_label(t),
             id(view),
         )
-    # ``_version`` is a WITNESSED input-metadata property (r33): the scoped patch
+    # ``_version`` is a WITNESSED input-metadata property: the scoped patch
     # records a genuine USER ``x._version`` read on a model-input leaf. This snapshot is
     # TorchLens's OWN bookkeeping read, so it must run under the internal marker or it
     # spuriously records a ``_version`` fact for every model, falsely diverging any
@@ -477,8 +477,8 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
         Backend-neutral tensor metadata and optional payload reference.
     """
 
-    # r65: TorchLens's OWN IR-bookkeeping ``requires_grad`` read runs under the explicit
-    # internal-read marker so the r65 state-metadata property observer never mistakes it
+    # TorchLens's OWN IR-bookkeeping ``requires_grad`` read runs under the explicit
+    # internal-read marker so the state-metadata property observer never mistakes it
     # for a user autograd read on a registered buffer/param receiver.
     with internal_scalar_read():
         _requires_grad = bool(tensor.requires_grad)
@@ -547,7 +547,7 @@ def _param_refs_from_fields(fields_dict: dict[str, Any]) -> tuple[ParamRef, ...]
     # ``parent_params`` misaligned every pairing after a repeated param
     # (weight-tied einsum/hypernetwork class): ``[A, B, A, C]`` persisted
     # ``ParamRef(barcode=C, geometry-of-A)`` and dropped a ref while
-    # ``num_params`` said four (R23-3).
+    # ``num_params`` said four.
     for param in fields_dict["parent_params"]:
         param_meta = get_param_meta(param)
         if param_meta is None or param_meta.param_barcode is None:
@@ -562,8 +562,8 @@ def _param_refs_from_fields(fields_dict: dict[str, Any]) -> tuple[ParamRef, ...]
             if param_meta is None or param_meta.param_address is None
             else param_meta.param_address
         )
-        # r65: TorchLens's OWN per-op parent-param ``requires_grad`` read runs under the
-        # explicit internal-read marker so the r65 state-metadata property observer never
+        # TorchLens's OWN per-op parent-param ``requires_grad`` read runs under the
+        # explicit internal-read marker so the state-metadata property observer never
         # mistakes it for a user autograd read on the registered parameter (it fires for
         # EVERY op with parent params -- unmarked it would spuriously fact-record every
         # consumed slot of every model).

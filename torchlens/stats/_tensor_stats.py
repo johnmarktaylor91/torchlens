@@ -1,12 +1,11 @@
-"""The frozen TensorStats record (C02; lovely memo item 2).
+"""The frozen TensorStats record.
 
 One backend-neutral record owning the NUMBERS; every stats line, card,
-table cell, and seam adapter is a pure formatter over it (D1: the shipped
-cost bug existed BECAUSE the helper was a string function). Per-family
-evidence carries exact/sampled/unavailable/verdict per D16; known counts
-are exact integers per D17; ``dim``/``dim_names``/``role``/``relations`` are RESERVED
+table cell, and seam adapter is a pure formatter over it. Per-family
+evidence carries exact/sampled/unavailable/verdict; known counts
+are exact integers; ``dim``/``dim_names``/``role``/``relations`` are RESERVED
 from day one so per-channel tables, semantic roles, and ``= parent`` marks
-land as renderers, never rework (memo section 8 plumbing table).
+land as renderers, never rework.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -27,7 +26,7 @@ TENSOR_STATS_SCHEMA_VERSION = 2
 
 @dataclass(frozen=True)
 class FamilyEvidence:
-    """Per-family computation evidence (D16).
+    """Per-family computation evidence.
 
     ``policy`` is one of ``exact`` / ``sampled`` / ``unavailable`` /
     ``verdict``. A nonfinite ``verdict`` proves presence without counts; the
@@ -95,13 +94,13 @@ class TensorStats:
     histogram_counts: tuple[int, ...] | None
     histogram_edges: tuple[float, ...] | None
     histogram_evidence: FamilyEvidence
-    #: True when moments describe |z| magnitudes (D12: complex stats are
+    #: True when moments describe |z| magnitudes (complex stats are
     #: explicitly magnitude-labeled, never presented as value stats).
     is_magnitude_based: bool
     #: Live tensor ``_version`` at computation; a mutated tensor invalidates
-    #: the cache and the next render says so (D30).
+    #: the cache and the next render says so.
     tensor_version: int | None
-    #: Raw values for tiny tensors (D13: at small n the values ARE the
+    #: Raw values for tiny tensors (at small n the values ARE the
     #: summary); ``None`` above the smallness bound.
     small_values: tuple[float, ...] | None = None
     #: RESERVED plumbing (deferred != forgotten): per-dim reductions,
@@ -112,7 +111,7 @@ class TensorStats:
     relations: tuple[str, ...] = field(default_factory=tuple)
 
     def __repr__(self) -> str:
-        """The record reprs as its own core line (F10; records show).
+        """The record reprs as its own core line.
 
         The dataclass auto-repr printed every field including histogram
         tuples -- a wall; the designed repr IS the grammar this record
@@ -307,7 +306,7 @@ def _record_from_kernel(
     )
 
 
-#: ``_version``-keyed record cache (D30): a repr must never be a compute
+#: ``_version``-keyed record cache: a repr must never be a compute
 #: trigger twice, and a cached line that ignores ``_version`` is a stale
 #: number presented as current. Keyed by ``id`` with weakref eviction
 #: (never key a dict on tensors: ``weakref.ref`` equality calls tensor

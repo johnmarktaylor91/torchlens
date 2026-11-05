@@ -17,7 +17,7 @@ from torch import nn
 
 from .._input_walk import INPUT_TREE_MAX_DEPTH
 
-# r-b4 R26-6c: read capability flags at USE time through the module object --
+# read capability flags at USE time through the module object --
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
@@ -94,7 +94,7 @@ def _build_col_offset_map(code: CodeType) -> dict[int, int | None]:
     INSIDE that cache region. Without spreading each instruction's column
     across its cache slots, every ``x.sum()``-style call site resolved to a
     missing key -- silently degrading branch attribution to line-only mode
-    for method-produced bools (round-24 condbranch seal, S2). Every code unit
+    for method-produced bools. Every code unit
     from the instruction's offset up to the next listed instruction (or the
     end of ``co_code``) therefore maps to that instruction's column.
 

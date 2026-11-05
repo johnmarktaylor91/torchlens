@@ -1,13 +1,6 @@
-"""One-backward attribution reads (workstream F04; M(reads) memo).
+"""One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:`ReadTable` whose columns state how far each number can be trusted.
 
-One backward pass, a table of "how much does each site matter": the read
-seeds ``autograd.grad`` at GradientEdges resolved from EXISTING op fields,
-runs inside a mandatory suppression context, and returns a :class:`ReadTable`
-with honesty as columns. Every spelling here is DOCUMENTED-UNSTABLE pending
-the naming sprint; the semantics and the stable error codes are the contract.
-
-Doc of record: ``docs/reference/onebackward_reads.md``.
-"""
+Doc of record: ``docs/reference/onebackward_reads.md``."""
 
 from ._accessor import ReadEdgeIndex, SiteEdge, read_edge_index
 from ._edge_plumbing import (

@@ -86,7 +86,7 @@ def _op_record_from_log(
 
     Reads the final exhaustive draft (``fields_dict``) through the shared
     ref builders; facet PRESENCE mirrors
-    ``op_record_from_event`` applied to the equivalent compat event (S5:
+    ``op_record_from_event`` applied to the equivalent compat event (an
     absent facet != fabricated empty facet).
     """
 
@@ -275,7 +275,7 @@ def _is_namedtuple_instance(value: Any) -> bool:
 def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
     """Return public field names for a ``torch.return_types`` structseq.
 
-    r35 hon1_4: delegates to the shared repr-independent helper in
+    Delegates to the shared repr-independent helper in
     ``utils/_torch_compat.py`` (``__match_args__`` primary; identity round-trip
     fallback when it is absent; refusal otherwise). Structural facts must NEVER derive
     from ``repr()``/``str()`` of tensor-bearing values -- a wrapped tensor repr
@@ -349,7 +349,7 @@ def _try_build_container_spec(
     value
         Child output value to describe.
     _depth
-        Internal recursion depth forwarded to the guarded builder (r-b4 R27-4).
+        Internal recursion depth forwarded to the guarded builder.
     _in_progress
         Internal path-scoped container-id set forwarded to the guarded builder.
 
@@ -499,10 +499,10 @@ def _leaf_is_reconstructable(item: Any) -> bool:
     UNVERIFIABLE and the runnable save refuses at preflight instead of
     advertising a contract the codec cannot fill: a pure non-tensor object
     (``memoryview``, an arbitrary object with no tensors) AND a tensor-HOLDING
-    opaque object (HuggingFace ``DynamicCache``) alike. The latter used to pass
-    as a leaf (W051-HONESTY H1): the spec then declared one slot where the
-    capture's BFS fallback held several tensors, and the rebuild ran dry with a
-    bare ``ValueError``. The BFS tolerance that still CAPTURES those tensors
+    opaque object (HuggingFace ``DynamicCache``) alike. The latter must not pass
+    as a leaf: the spec would then declare one slot where the capture's BFS
+    fallback holds several tensors, and the rebuild would run dry with a bare
+    ``ValueError``. The BFS tolerance that still CAPTURES those tensors
     lives in the output walker, not here; this predicate is the spec builder's.
     """
 

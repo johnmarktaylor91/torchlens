@@ -41,8 +41,8 @@ class HostRngMonitorResult:
 
     def __init__(self) -> None:
         self.channels: set[str] = set()
-        # r65 CLUSTER Z: torch RNG reads fully determined by the capture seed
-        # (``initial_seed`` family) and, as of W051, the Python/NumPy GLOBAL-engine
+        # Torch RNG reads fully determined by the capture seed
+        # (``initial_seed`` family) and the Python/NumPy GLOBAL-engine
         # state surface (``random.getstate``/``setstate``/``seed`` and the legacy
         # ``numpy.random`` twins). A member sets ``host_rng_consumed`` WITHOUT
         # poisoning the capture seed: a run at the capture seed stays verified and any
@@ -61,7 +61,7 @@ class HostRngMonitorResult:
         # a ceiling BY THEMSELVES. They settle at teardown against
         # ``owner_thread_waits`` (see :func:`settle_foreign_reads`).
         self.foreign_thread_reads: set[str] = set()
-        # W051 (AUD-CODE 2.16): the blocking stdlib synchronization primitives the OWNER
+        # The blocking stdlib synchronization primitives the OWNER
         # thread entered in-window from a non-TorchLens frame (``threading.Event.wait``,
         # ``concurrent.futures.Future.result``, ...), session-only. ``owner_unhooked_joins``
         # is the subset whose resolved counterpart thread lies OUTSIDE the capture's
@@ -173,7 +173,7 @@ def clock_wrapper(
     return wrapper
 
 
-# ---- Owner-thread synchronization vocabulary (W051 / AUD-CODE 2.16) --------------------
+# ---- Owner-thread synchronization vocabulary --------------------
 #
 # Blocking Python-level entry points through which the capture's OWNER thread can wait
 # for another thread's result. Rows are ``(display, module, qualname-or-None, method,
@@ -383,7 +383,7 @@ class _OwnerSyncSession:
 
 
 def install_owner_sync_surfaces(monitor: host_nondeterminism_monitor) -> None:
-    """Install the counterpart-resolving class patches of the owner-sync layer (W051 2.16)."""
+    """Install the counterpart-resolving class patches of the owner-sync layer."""
 
     session = _OwnerSyncSession(monitor)
     monitor._owner_sync_session = session
@@ -582,7 +582,7 @@ def classify_owner_wait(session: _OwnerSyncSession, wait: OwnerWait) -> None:
 def classify_consumed_only_receiver(
     monitor: host_nondeterminism_monitor, receiver: Any, arg: Any, frame: Any
 ) -> bool:
-    """Route a W051 consumed-only ``c_call`` receiver; ``True`` when claimed here.
+    """Route a consumed-only ``c_call`` receiver; ``True`` when claimed here.
 
     The C-level owner sync primitive (``queue.SimpleQueue.get``, 2.16) is an owner wait;
     the Python / legacy-NumPy GLOBAL-engine singletons (2.17) are draw-exempt receivers
@@ -626,7 +626,7 @@ def note_owner_wait(monitor: host_nondeterminism_monitor, primitive: str, frame:
 
 
 def settle_foreign_reads(monitor: host_nondeterminism_monitor) -> None:
-    """Join the in-window waits with the foreign-thread disclosure (W051 2.16).
+    """Join the in-window waits with the foreign-thread disclosure.
 
     Disclosed foreign reads are promoted to UNCERTAIN iff the capture's thread universe
     had at least one UNHOOKED join (received from a thread outside the universe) or
@@ -641,7 +641,7 @@ def settle_foreign_reads(monitor: host_nondeterminism_monitor) -> None:
     profile-only channel (``datetime.now``, a held clock builtin) that nothing can observe
     on an unhooked thread -- the clause-(iv) residual of the contract. Settling that case
     uncertain is the named design fork "unhooked join alone ceilings" (one call below),
-    left unruled because it changes the r41 doctrine that a digest-witnessed draw on a
+    left unruled because it changes the doctrine that a digest-witnessed draw on a
     pre-existing worker is CERTAIN.
     """
 

@@ -1,12 +1,12 @@
-"""The ONE input resolver behind summary / render / trace (quickstart D1-D4).
+"""The ONE input resolver behind summary / render / trace.
 
 Layer 3 of the four-layer split: applies the rung law, synthesizes declared
 inputs, runs the inference search for the zero-argument rung (consuming its
-exact verified trace, never recapturing -- memo D9 in-call reuse), and builds
+exact verified trace, never recapturing -- in-call reuse), and builds
 the provenance record every rung carries.
 
 A failed explicit size never falls through to inference; a failed inference
-never falls through to a stock tensor (memo D2).
+never falls through to a stock tensor.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def _is_hf_model(model: nn.Module) -> bool:
 
 
 def _inference_remedies(model: nn.Module) -> str:
-    """Return the D10 ordered-remedy text, population-aware for HF models."""
+    """Return the ordered-remedy text, population-aware for HF models."""
 
     remedies = (
         "(1) pass the real forward call -- tl.<verb>(model, x) or "
@@ -70,7 +70,7 @@ def _inference_remedies(model: nn.Module) -> str:
 
 
 def _grade_for_inference(result: Any) -> str:
-    """Map an inference result onto the D5 evidence-grade vocabulary.
+    """Map an inference result onto the evidence-grade vocabulary.
 
     ``verified_exact``: the winning input ran and verified, and no dimension
     claims flexibility beyond the batch axis. ``empirically_flexible``: the
@@ -226,7 +226,7 @@ def attach_provenance(trace: Any, provenance: InputProvenance) -> None:
 
     Nests any pre-existing preprocessing record (e.g. the HF tokenizer
     provenance written by the string-input bridge) inside the input record
-    rather than clobbering it (memo D4: a supported HF string is a gold
+    rather than clobbering it (a supported HF string is a gold
     input with tokenizer provenance nested in the record).
     """
 

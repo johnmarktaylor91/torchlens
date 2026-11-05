@@ -209,8 +209,8 @@ def _effective_param_geometry(pl: Any) -> tuple[int, Any]:
     (``_finalize_lazy_param_geometry``), so a parameter that was
     UninitializedParameter at prep and materialized IN PLACE during the one
     captured forward still holds zero geometry on its record here. Reading
-    the live reference keeps the trace/module totals truthful (quickstart
-    memo 4.4 item 6: finalize before aggregation, on BOTH readers -- a
+    the live reference keeps the trace/module totals truthful (finalize
+    before aggregation, on BOTH readers -- a
     plausible report whose totals silently miss the lazy head is worse than
     a crash). Never-materialized rows honestly keep zero.
     """
@@ -655,10 +655,10 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
             self.layer_labels.append(layer_entry.layer_label)
         self.op_labels.append(layer_entry.label)
         self._layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
-        # F20 (brainpipe D-17): no per-layer byte increment here -- the
+        # No per-layer byte increment here -- the
         # saved-summary refresh later in this same step writes the aggregate
         # from the ONE alias-aware byte model (retained_activation_bytes),
-        # which also serves the explorer P4 memory truth (reduce-only
+        # which also serves the explorer memory truth (reduce-only
         # captures count the retained TRANSFORMED bytes).
         i += 1
 
@@ -723,7 +723,7 @@ def _add_lookup_keys_for_layer_entry(
         layer_entry.modules = [
             _module_call_label(module_call) for module_call in layer_entry.modules
         ]
-        # B3R7-R05-1: ``module_call_stack`` carries the same containment fact
+        # ``module_call_stack`` carries the same containment fact
         # as ``modules`` (seeded from the modules facet at ingest), so it is
         # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
         layer_entry.module_call_stack = [

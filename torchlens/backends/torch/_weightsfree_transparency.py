@@ -1,4 +1,4 @@
-"""The decomposition-transparency belt (W1, weightsfree memo D3 / defect L1).
+"""The decomposition-transparency belt.
 
 On the meta substrate torch implements many ops as PYTHON decompositions
 (``torch/_refs``, ``_prims``, ``_meta_registrations``, ``_library``, ...).
@@ -6,10 +6,9 @@ TorchLens wraps at the torch-function level, so without this belt it records
 the decomposition's inner allocator call INSTEAD of the user's op and its
 in-place/barcode bookkeeping folds the outer user op into it — measured:
 distilgpt2's 291 records collapsed to 24, a six-op chain became one
-allocator record carrying the last op's shape (defect L1, found by all
-three labs in round 1).
+allocator record carrying the last op's shape.
 
-The fix is DO-NOT-RECORD, never normalize-after (D3): a wrapped call whose
+The fix is DO-NOT-RECORD, never normalize-after: a wrapped call whose
 first non-TorchLens caller frame sits inside torch decomposition machinery
 is not recorded; the enclosing USER op stays the record. Suppressing the
 frames restores byte-identical labels and shapes with ZERO maintained
@@ -18,11 +17,11 @@ memoized per code object, root set FEATURE-DETECTED against the running
 torch (published via ``tl.report.doctor()``), and
 exception flow is never suppressed — the belt gates RECORDING only.
 
-Disclosed table condition (D3): a direct USER call to a private
+Disclosed table condition: a direct USER call to a private
 ``torch._refs.*`` function inside ``forward`` is indistinguishable from a
 decomposition frame and is likewise unrecorded.
 
-Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
+Every spelling is DOCUMENTED-UNSTABLE.
 """
 
 from __future__ import annotations

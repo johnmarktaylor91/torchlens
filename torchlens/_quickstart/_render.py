@@ -39,7 +39,7 @@ __tl_layer__ = "FACADE"
 BARE_RENDER_WRITES_FILE_IN_SCRIPTS = True
 
 #: Value-driven encoding sources that are DERIVED-SEMANTICS claims on a
-#: synthesized-value trace (memo D7): activations/gradients of random data.
+#: synthesized-value trace: activations/gradients of random data.
 _VALUE_CHANNEL_SOURCES = frozenset({"magnitude", "grad_norm"})
 
 
@@ -47,7 +47,7 @@ def _collision_safe_path(stem: str, fileformat: str) -> Path:
     """Return ``<stem>-graph.<format>``, suffixed ``-2``, ``-3``... if taken.
 
     The shared-generic-filename silent-overwrite trap (two renders, first
-    picture gone) dies here either way fork F1 is ruled.
+    picture gone) dies here whichever script-policy branch is selected.
     """
 
     candidate = Path(f"{stem}-graph.{fileformat}")
@@ -84,7 +84,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
 ) -> Drawing:
     """One-call model picture: resolve input, capture metadata-only, draw.
 
-    The three input rungs (memo D2/D4)::
+    The three input rungs::
 
         tl.draw(model, x)                            # best: your real input
         tl.draw(model, input_shape=(1, 3, 224, 224))  # your shape, random values; disclosed

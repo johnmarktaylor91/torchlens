@@ -31,7 +31,7 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
     """
     state: dict[str, dict[str, Any]] = {}
-    # r35 corr2_8: record the grad/inference execution mode alongside autocast in the
+    # record the grad/inference execution mode alongside autocast in the
     # same per-op KEEP field, under a reserved non-device key. ``enabled`` stays False
     # so every autocast consumer (AutocastRestore) skips it structurally.
     state["__execution__"] = {

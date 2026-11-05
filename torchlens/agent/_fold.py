@@ -1,6 +1,6 @@
 """The recurrence fold: the agent surface's default structural view.
 
-Contract (agent memo 3.4, normative 3-0): a repeated transformer block is
+Contract: a repeated transformer block is
 stated ONCE with ``n_instances``, losslessly -- any class whose members
 disagree on shape/dtype/num_params is SPLIT into field-uniform subclasses,
 other varying fields carry ``varies`` disclosures, and membership reassembles
@@ -8,7 +8,7 @@ exactly to the op-row set. The fold key is explicit and versioned; ZERO
 render-context inputs participate (criterion vi); ``pass_index`` joins the key
 on multi-pass ops so uniformity is never claimed across a pass boundary.
 
-Seam decision (memo D1, rule fixed at panel time): the renderer's collapse
+Seam decision: the renderer's collapse
 schedule is measured-DEGENERATE at depth (12/24-block models reach only "the
 full graph" or "one box"), so the run-aware fold ships agent-side under the
 six acceptance criteria, with the FOLD COHERENCE TEST guaranteeing membership
@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-#: Versioned, documented fold key (agent memo 3.4). Recorded in every folded
+#: Versioned, documented fold key. Recorded in every folded
 #: payload so a consumer can branch on the key generation.
 FOLD_KEY_VERSION = "torchlens.agent_fold_key.v1"
 

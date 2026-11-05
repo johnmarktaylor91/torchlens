@@ -417,7 +417,7 @@ def _prepare_model_session(
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
     """
-    # r83 C1: install this capture's label-anchoring session FIRST, before any
+    # install this capture's label-anchoring session FIRST, before any
     # path can stamp a label. A previously installed session is dropped here,
     # so a label issued by an earlier capture resolves against nothing. The
     # registry is module-level state in ``_tl`` (not a Trace field): it must be
@@ -521,7 +521,7 @@ def _prepare_model_session(
         model,
         forward_hook_wrapper_factory=_make_user_forward_hook_wrapper,
     )
-    # Accelerate offload/dispatch hooks (lane F37): run hook internals under
+    # Accelerate offload/dispatch hooks: run hook internals under
     # pause_logging and re-stamp hook-materialized params so offloaded models
     # capture with clean graphs and attributed weights.
     from .offload_hooks import install_offload_hook_shims
@@ -556,7 +556,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     param_logs: dict[str, Param] = {}
     seen_param_ids: set[int] = set()
     param_id_to_address: dict[int, str] = {}
-    # r79 session-leak fix: record every parameter this prep STAMPS so cleanup can
+    # Record every parameter this prep STAMPS so cleanup can
     # clear stamps from this inventory instead of re-traversing the live model tree.
     # A param popped from ``_parameters`` mid-forward escapes the re-traversal but
     # never escapes this list (session-scoped strong refs, dropped at cleanup).
@@ -896,12 +896,12 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     walks the MRO via ``dir()``). Tracks tagged tensor ids in
     ``_state._tagged_buffer_ids`` for fast cleanup.
 
-    r79 session-leak fix: every tensor stamped here is ALSO recorded in
+    Every tensor stamped here is ALSO recorded in
     ``trace._session_buffer_inventory`` (session-scoped strong refs) so cleanup
     clears the stamps from the recorded inventory instead of relying on a model
     re-traversal that a mid-forward ``_buffers.pop(...)`` can escape.
 
-    r81 buffer-rung parity: every stamp routes through
+    Every stamp routes through
     ``register_session_buffer_stamp`` so it also joins the session identity
     registry (``trace._session_buffer_identity``) consulted by the buffer-rung
     storage-identity belt; the registry is reset here at session start.
@@ -918,7 +918,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
         """Stamp one buffer into the session registries, collecting failures."""
         # A failed stamp is EVIDENCE LOSS -- the buffer's reads may log as
         # internal sources instead of buffer versions -- so it is collected
-        # and disclosed once below instead of silently swallowed (B1-13a).
+        # and disclosed once below instead of silently swallowed.
         try:
             register_session_buffer_stamp(trace, tensor, address)
             _state._tagged_buffer_ids.add(id(tensor))
@@ -971,8 +971,8 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
     so the buffer gets a fresh source-tensor entry on next use.
 
     Dynamically stamped buffers join ``trace._session_buffer_inventory`` so the
-    r79 inventory-driven cleanup clears them even if they are popped from
-    ``_buffers`` later in the same forward. r81: the stamp routes through
+    inventory-driven cleanup clears them even if they are popped from
+    ``_buffers`` later in the same forward. The stamp routes through
     ``register_session_buffer_stamp`` so it also joins the session identity
     registry consulted by the buffer-rung storage-identity belt.
     """
@@ -1061,7 +1061,7 @@ def _record_module_entry_metadata(
     if module_call_index <= 0:
         # A hard raise, not an assert: ``python -O`` strips asserts, and this
         # guard catches a broken push_frame/entry ordering that would silently
-        # mislabel every module call in the capture (R24-5).
+        # mislabel every module call in the capture.
         raise RuntimeError(
             "TorchLens internal error: _module_stack.push_frame must increment "
             f"before module entry (module {module_address!r} has call index "
@@ -1116,7 +1116,7 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         if is_functorch_wrapped_tensor(t):
             continue
-        # Lazily register buffer tensors that haven't been logged yet. r81: the
+        # Lazily register buffer tensors that haven't been logged yet. The
         # module-entry gate validates the static stamp through the session belt
         # (current-session object + storage identity), never raw.
         label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
@@ -1157,10 +1157,10 @@ def _record_module_entry_metadata(
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
     _tag_untagged_buffers(trace, module)
-    # F20 W1a (release-at-emission): neither the workspace stash nor the
+    # Release at emission: neither the workspace stash nor the
     # enter event may pin live payloads for the rest of the forward. Every
     # consumer on the torch trace path reads shape/dtype facts only, and
-    # GC-11 nulls ``ModuleCall.forward_args`` before the trace is returned.
+    # ``ModuleCall.forward_args`` is nulled before the trace is returned.
     # Stubbing waits until here so the input-adoption loop above has stamped
     # labels the stubs can carry.
     stub_args = stub_module_arg_payloads(args)
@@ -1810,7 +1810,7 @@ def _record_module_exit_metadata(
                 # Re-attach through the robust recorders: the side channels
                 # absorb attr-rejecting tensors, and a tensor writable through
                 # NEITHER channel refuses typed instead of silently losing the
-                # intervention provenance (B1-13a, strengthened).
+                # intervention provenance.
                 _record_tensor_live_fire_results(t, fire_results)
                 if intervention_parent_labels:
                     _record_module_intervention_parent_labels(
@@ -1972,7 +1972,7 @@ def module_forward_decorator(
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
             )
-            # Echo narrator slot (snoop D1, module seam, exhaustive tier).
+            # Echo narrator slot (module seam, exhaustive tier).
             # Duck-typed session read: the hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")
             if echo_session is not None:
@@ -2106,7 +2106,7 @@ def _restore_session_param_state(trace: "Trace", model: nn.Module) -> None:
     capture. Callers invoke it from teardown paths that may be handling any
     ``BaseException`` raised by user code.
 
-    r79 session-leak fix: the AUTHORITATIVE clear iterates the RECORDED prep
+    The AUTHORITATIVE clear iterates the RECORDED prep
     inventory (``trace._session_param_inventory``), never only the live model
     tree -- a parameter popped from ``_parameters`` mid-forward escapes a
     ``model.parameters()`` re-traversal, and its surviving prep stamp would let
@@ -2188,7 +2188,7 @@ def _cleanup_model_session(
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
 
-    # r83 C1: retire this capture's label-anchoring session LAST, after every
+    # retire this capture's label-anchoring session LAST, after every
     # cleanup pass that consults it. Any label still carried by an object that
     # outlives the capture is now anchored to a retired session and can never
     # be accepted as provenance by a later capture, whatever route it escaped by.
@@ -2202,14 +2202,14 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
     (slow dir() + getattr MRO walk). Handles tensors stored directly as
     attributes, inside Python containers, and inside model-owned helper objects.
 
-    r79 session-leak fix: the AUTHORITATIVE clear iterates the RECORDED buffer
+    The AUTHORITATIVE clear iterates the RECORDED buffer
     inventory (``trace._session_buffer_inventory``) first -- a buffer popped
     from ``_buffers`` mid-forward escapes the ``model.modules()`` re-traversal
     below, and its surviving ``TensorMeta`` address would let a later capture
     accept stale buffer provenance. The traversal is kept as belt-and-suspenders
     for unstamped model-owned tensors; ``clear_meta`` is idempotent.
 
-    r81: the session identity registry (``trace._session_buffer_identity``) is
+    the session identity registry (``trace._session_buffer_identity``) is
     cleared alongside -- its entries pin the stamped objects and their stamp-time
     storages, so releasing it both clears any stamp the inventory might ever
     miss and drops the storage keepers.

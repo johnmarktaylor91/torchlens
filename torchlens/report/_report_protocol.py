@@ -1,11 +1,11 @@
-"""The common report protocol (F10; lovely matrix "report objects" row).
+"""The common report protocol.
 
 One lead for every report-shaped object: type, subject, status, severity
 counts, coverage, truncation -- then at most five findings and an EXACT
 remainder. Helpers RETURN report objects that HAVE ``.to_pandas()``; they
 are never bare DataFrames (a DataFrame elides its best column and carries
 no honesty facts). ``tl.debug``'s three dialects migrate onto this
-protocol under their owning lanes (lovely section 14 ownership seam); the
+protocol under their owning modules; the
 protocol and its conformance test land here so the target shape is law
 before the migrations.
 
@@ -44,7 +44,7 @@ class BoundedReport(Protocol):
 class ReportLead:
     """The common lead block every report card opens with.
 
-    Parameters mirror the lovely matrix row: type/subject/status/severity
+    Parameters: type/subject/status/severity
     counts/coverage/truncation. ``severity_counts`` keys are free-form
     severity tokens; ``coverage`` states what was and was not examined
     (evidence, never vibes); ``truncation`` is the exact-remainder note

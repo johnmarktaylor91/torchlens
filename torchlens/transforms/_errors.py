@@ -1,4 +1,4 @@
-"""Typed teaching refusals for the transforms substrate (transforms memo B1).
+"""Typed teaching refusals for the transforms substrate.
 
 Every refusal raised by :mod:`torchlens.transforms` carries a stable
 ``fields["code"]`` and a concrete remedy, per the repo-wide error-refusal

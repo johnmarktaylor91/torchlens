@@ -1,4 +1,4 @@
-"""Live site-key minting (C03; surgery memo Build 0c).
+"""Live site-key minting.
 
 Site keys (``site_key_v1``) are minted at postprocess step 7 today, which
 makes structural site addressing REPLAY-ONLY: mid-forward, no op carries a
@@ -18,10 +18,10 @@ Design constraints honored:
   execution order, and several rules may evaluate one op, so the minter
   memoizes by the context's monotone ``event_index`` -- ordinals count each
   executed candidate exactly once.
-- THE HONEST BOUNDARY (surgery risk 1, verified by the parity pin in
+- THE HONEST BOUNDARY (verified by the parity pin in
   ``tests/test_interv_substrate_site_selector.py``): live ordinals count
   EXECUTED occurrences; postprocess ordinals count RETAINED ops (orphans
-  consume no ordinals, SF-63). On a model whose pruned dead ops share a
+  consume no ordinals). On a model whose pruned dead ops share a
   cohort with later live ops the two numberings diverge -- the parity test
   pins agreement on orphan-free models, and the divergence is detectable
   post hoc by comparing ``op.site_key`` against the live-minted key.
@@ -129,8 +129,8 @@ def mint_keys_in_execution_order(trace: Any) -> dict[str, str]:
 
     The parity harness: feeding the SAME streaming minter the retained ops
     in raw execution order must reproduce ``op.site_key`` byte-identically
-    (property P4 sibling). Used by the C03 parity pin; also the reference
-    implementation the F01 bind runtime can consume.
+    (property P4 sibling). Used by the parity pin; also the reference
+    implementation the bind runtime can consume.
 
     Returns
     -------

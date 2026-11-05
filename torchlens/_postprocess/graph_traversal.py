@@ -578,9 +578,9 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
     nodes_seen = set()
     node_stack = _orphan_flood_seeds(self)
-    # Shadow sets over the two trace-level list[str] sink ledgers: the former
-    # per-node `label not in <list>` scans were O(k^2) in sink count
-    # (hunt-6 R52-2). The lists stay the portable source of truth.
+    # Shadow sets over the two trace-level list[str] sink ledgers: per-node
+    # `label not in <list>` scans would be O(k^2) in sink count.
+    # The lists stay the portable source of truth.
     seen_sink_labels = set(self.internal_sink_ops)
     seen_terminated_bool_labels = set(self.internally_terminated_bool_ops)
     while len(node_stack) > 0:
@@ -654,7 +654,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
 
 
 def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label: str) -> bool:
-    """Return whether a child op TOTALLY overwrites the walked tensor's bytes (r53 hon_2).
+    """Return whether a child op TOTALLY overwrites the walked tensor's bytes.
 
     The sanitized pruned-orphan walk stops at a total-writer edge whose
     DESTINATION is the walked tensor (``copy_``/``zero_``/``fill_``/RNG-fill
@@ -691,8 +691,8 @@ def _rng_orphan_drove_control_or_output(
     """Return whether an orphaned nondeterministic op's value steered control or output.
 
     Walks the forward (child) chain from ``start_label``. The nondeterministic
-    result (a seeded torch-RNG draw or an uninitialized-memory family product,
-    r53 hon_2) "influenced control" when the op itself or any descendant is a
+    result (a seeded torch-RNG draw or an uninitialized-memory family product)
+    "influenced control" when the op itself or any descendant is a
     recorded tensor->host escape source (its value was read by
     ``bool()``/``.item()`` to steer pure-Python control flow); it "influenced
     output" when a descendant is an output node (defensive: an output-reaching
@@ -725,7 +725,7 @@ def _rng_orphan_drove_control_or_output(
 
 
 def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
-    """Return whether an orphaned op is an uninitialized-memory value source (r53 hon_2).
+    """Return whether an orphaned op is an uninitialized-memory value source.
 
     Keys on the shared closed family table (``utils/rng.py``): the ``empty``
     factory family taints unless its product has zero elements; a resize
@@ -782,7 +782,7 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
 
     An orphaned op is a nondeterministic value source when its captured
     callable maps to an ATen ``nondeterministic_seeded`` overload OR to the
-    uninitialized-memory family (r53 hon_2, shared predicate). When such an
+    uninitialized-memory family (shared predicate). When such an
     op's value reached a control decision (or, defensively, an output) through
     the sanitized child walk, the recorded taken branch is nondeterministic yet
     fully pruned from the visible graph. Recording its raw label in the
@@ -889,8 +889,7 @@ def _log_internally_terminated_tensor(
     ``seen_sink_labels`` / ``seen_terminated_bool_labels`` are the caller's
     persistent shadow sets over ``internal_sink_ops`` /
     ``internally_terminated_bool_ops``; the membership guards read them
-    instead of rescanning the growing lists once per visited node
-    (hunt-6 R52-2).
+    instead of rescanning the growing lists once per visited node.
     """
     layer_entry = self[tensor_label]
     layer_entry.is_internal_sink = True

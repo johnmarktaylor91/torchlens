@@ -1,4 +1,4 @@
-"""TransformContext + axis-role declarations (transforms memo B4; contract T-C1/T-C5).
+"""TransformContext + axis-role declarations.
 
 Axis semantics are EVIDENCE-BASED; rank is never evidence. Roles come from
 the closed evidence vocabulary ``declared | op_contract | unknown`` with
@@ -7,7 +7,7 @@ Capability dispatch is by explicit DECLARATION, never ``inspect.signature``:
 every ``nn.Module`` and C-implemented torch op reports ``(*args, **kwargs)``
 and would be falsely called with ctx, while keyword-only-ctx partials report
 unary and would silently run mask-blind — both failure directions measured on
-15 real callables (transforms memo decision 15). One isinstance check fixes
+15 real callables. One isinstance check fixes
 it: :func:`wants_context` tests :class:`ContextTransform` and nothing else.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -38,7 +38,7 @@ __all__ = [
     "with_context",
 ]
 
-#: Closed axis-role evidence vocabulary (transforms memo decision 11).
+#: Closed axis-role evidence vocabulary.
 #: ``inferred`` is RESERVED: rank-based guessing is never admissible evidence.
 ROLE_EVIDENCE: tuple[str, ...] = ("declared", "op_contract", "unknown")
 
@@ -159,10 +159,9 @@ def axis_for_role(roles: RoleDeclaration | None, rank: int, role: str) -> int:
 class SpecialTokenFacts:
     """Recorded special-token evidence for semantic token addressing.
 
-    ``cls_token`` pooling is gated on these facts (transforms memo decision
-    12): a model family without a CLS token (gpt2) must REFUSE the request
-    rather than gather a fictional position. The facts are a recorded caller
-    assertion (typically derived from tokenizer attributes such as
+    ``cls_token`` pooling is gated on these facts: a model family without a CLS token
+    (gpt2) must REFUSE the request rather than gather a fictional position. The facts are a recorded
+    caller assertion (typically derived from tokenizer attributes such as
     ``tokenizer.cls_token_id is not None``), never guessed from tensor shape.
 
     Attributes
@@ -236,7 +235,7 @@ class TransformContext:
 
 
 class ContextTransform:
-    """Base class DECLARING context capability for a user transform (T-C1).
+    """Base class DECLARING context capability for a user transform.
 
     Subclass (or wrap a callable with :func:`with_context`) to receive the
     :class:`TransformContext` alongside each tensor. Raw callables stay
@@ -271,7 +270,7 @@ class ContextTransform:
         Returns
         -------
         torch.Tensor
-            Transformed tensor with the stimulus axis preserved (T-C2).
+            Transformed tensor with the stimulus axis preserved.
         """
 
         raise NotImplementedError
@@ -318,7 +317,7 @@ class _WrappedContextTransform(ContextTransform):
 def with_context(
     fn: Callable[[torch.Tensor, TransformContext | None], torch.Tensor],
 ) -> ContextTransform:
-    """Declare a two-argument callable context-capable (the T-C1 wrapper door).
+    """Declare a two-argument callable context-capable (the wrapper door).
 
     Parameters
     ----------

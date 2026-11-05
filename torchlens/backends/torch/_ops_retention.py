@@ -158,9 +158,8 @@ def _admit_saved_args_budget(
 ) -> list[Any] | None:
     """Admit projected ``save_arg_values`` bytes BEFORE the clones allocate.
 
-    r8 R34 (sol 2): both exhaustive paths cloned every tensor argument first
-    and charged only afterward, so a large argument snapshot could allocate
-    well beyond the configured budget before the accountant noticed --
+    Charging only after the clones exist would let a large argument snapshot
+    allocate well beyond the configured budget before the accountant noticed,
     violating the pre-admission half of the save-budget contract for exactly
     the retention family it exists to bound. The source tensors and alias
     graph are available before the clone: project alias-deduped physical
@@ -511,7 +510,7 @@ def _copy_lookback_payload(
         retain_in_ram=True,
         site="lookback_window",
     )
-    # Single-transport retention (r8 b5 R35): the copy materializes directly
+    # Single-transport retention: the copy materializes directly
     # on the retention device; the follow-up move is a safety net for
     # transport-fallback results and stays a no-op on the common path.
     raw_out = safe_copy(tensor, detach, target_device=fields_dict["output_device"])

@@ -58,7 +58,7 @@ class PartialTrace:
         }
     )
 
-    # b1-opus-R06-1: the sanctioned outcome-delegation hop. ``outcome_for``
+    # The sanctioned outcome-delegation hop. ``outcome_for``
     # (and through it every capability gate) reads the inner trace's settled
     # stamp instead of this wrapper's empty ``__dict__`` -- one answer,
     # whether callers ask the wrapper or the trace.
@@ -120,7 +120,7 @@ class PartialTrace:
     def narrate(self, last: int | None = None, *, select: Any = None) -> str:
         """Render the recorded frontier in the live-narration grammar.
 
-        The headline crash workflow (snoop D5, tail 1): works when ``narrate=``
+        The headline crash workflow: works when ``narrate=``
         was never enabled, because the partial the library already attaches
         to the exception carries everything a line needs. The op that raised
         is ABSENT from the record (it never produced an output); the footer
@@ -262,7 +262,7 @@ class PartialTrace:
         -------
         str
             HTML fragment summarizing the failed capture, generated through
-            the CardTree presentation IR (treescope memo B1/B2) with the
+            the CardTree presentation IR with the
             failure-first contract: the partial/failure banner is the badge
             in the always-visible header, never folded.
         """
@@ -272,7 +272,7 @@ class PartialTrace:
         return partial_repr_html(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
-        """Thin lazy treescope hook (treescope memo 3.2; lane F16).
+        """Thin lazy treescope hook.
 
         ``PartialTrace`` is the second dataclass treescope reflects into a
         megabyte dump; see ``Trace.__treescope_repr__`` for the contract
@@ -286,10 +286,10 @@ class PartialTrace:
             return NotImplemented
 
     def __repr__(self) -> str:
-        """Badge-first one-line representation (F10; lovely matrix).
+        """Badge-first one-line representation.
 
         ``partial`` leads -- state precedes detail when state invalidates
-        detail (voice rule 7).
+        detail.
 
         Returns
         -------
@@ -323,8 +323,8 @@ class PartialTrace:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
-    # F09 (sumfam D25/item 15): the five report-family members that used
-    # to die with bare AttributeError refuse TYPED, pointing at the two
+    # The five report-family members refuse TYPED (never a bare
+    # AttributeError), pointing at the two
     # surfaces that DO answer on a partial capture. The interim contract:
     # degraded report or typed refusal, never AttributeError. The
     # capture-side label/identity finalization that would enable real
@@ -348,27 +348,27 @@ class PartialTrace:
         )
 
     def summary(self, **_kwargs: Any) -> Any:
-        """Typed refusal (D25): orientation needs finalized identities."""
+        """Typed refusal: orientation needs finalized identities."""
 
         return self._refuse_partial_member("summary()")
 
     def profile(self, *_args: Any, **_kwargs: Any) -> Any:
-        """Typed refusal (D25): resource ranking needs finalized identities."""
+        """Typed refusal: resource ranking needs finalized identities."""
 
         return self._refuse_partial_member("profile()")
 
     def to_pandas(self, **_kwargs: Any) -> Any:
-        """Typed refusal (D25): the per-op ledger needs finalized identities."""
+        """Typed refusal: the per-op ledger needs finalized identities."""
 
         return self._refuse_partial_member("to_pandas()")
 
     def to_agent_json(self, **_kwargs: Any) -> Any:
-        """Typed refusal (D25): the machine map needs finalized identities."""
+        """Typed refusal: the machine map needs finalized identities."""
 
         return self._refuse_partial_member("to_agent_json()")
 
     def output_table(self, **_kwargs: Any) -> Any:
-        """Typed refusal (D25): no outputs exist on a failed forward."""
+        """Typed refusal: no outputs exist on a failed forward."""
 
         return self._refuse_partial_member("output_table()")
 
@@ -404,7 +404,7 @@ class PartialTrace:
         return explain(self, audience, max_tokens=max_tokens)
 
     def capability_card(self) -> Any:
-        """The D24 capability card: which family members work on THIS object."""
+        """The capability card: which family members work on THIS object."""
 
         from ..report._registry import capability_card
 

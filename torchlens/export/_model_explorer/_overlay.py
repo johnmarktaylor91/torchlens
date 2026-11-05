@@ -1,4 +1,4 @@
-"""Node-data overlay writer over the existing overlay vocabulary (memo D8).
+"""Node-data overlay writer over the existing overlay vocabulary.
 
 A thin serializer, not a second resolver: values come from the SAME closed
 overlay vocabulary ``Trace.draw`` uses (``torchlens/_visualization/
@@ -26,11 +26,11 @@ from ._ids import PROXY_ID_PREFIX
 
 __tl_layer__ = "L8"
 
-#: The standard packet (memo D8): measurement providers always; value-derived
+#: The standard packet: measurement providers always; value-derived
 #: providers only by explicit request, because retention is capture policy.
 STANDARD_OVERLAYS: tuple[str, ...] = ("time", "flops", "bytes", "nan")
 
-#: Provider display names carry unit and aggregation (memo D8).
+#: Provider display names carry unit and aggregation.
 _PROVIDER_NAMES = {
     "time": "time (ms per op)",
     "flops": "flops (forward FLOPs per op)",
@@ -43,7 +43,7 @@ _PROVIDER_NAMES = {
 }
 
 #: Providers whose values derive from activation/gradient VALUES: dropped by
-#: the public privacy profile BY CONSTRUCTION (memo D14) and refused on
+#: the public privacy profile BY CONSTRUCTION and refused on
 #: captures that retained no values.
 _VALUE_DERIVED = frozenset({"magnitude", "grad_norm", "nan"})
 

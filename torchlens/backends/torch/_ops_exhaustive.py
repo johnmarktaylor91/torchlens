@@ -143,8 +143,8 @@ def _emit_exhaustive_operation_events(
     # hands back the caller's own tensor inside the returned tuple. Labeling
     # the live input directly would steal its label (last-wins for duplicated
     # entries), leave phantom dead-end siblings, and reroute downstream direct
-    # consumers of the input through an op whose result the user may never use
-    # (W3 audit F4). Mirror the scalar pass-through machinery: log each such
+    # consumers of the input through an op whose result the user may never use.
+    # Mirror the scalar pass-through machinery: log each such
     # entry against a minted safe copy so the live input keeps its label.
     # out= destinations are excluded -- the op genuinely WROTE into them, so
     # the live destination must keep advancing to this op's label.
@@ -161,7 +161,7 @@ def _emit_exhaustive_operation_events(
     # ``torch._foreach_*`` semantics are ZIPPED: output ``i`` is computed from
     # member ``i`` of each tensor-list argument (plus any whole-call scalar or
     # single-tensor operand). Sharing the call-level parent set across every
-    # output invented all-to-all dependencies (round-31 M3), corrupting
+    # output would invent all-to-all dependencies, corrupting
     # influence geometry for every consumer.
     is_foreach_call = func_name.startswith("_foreach_")
 
@@ -184,7 +184,7 @@ def _emit_exhaustive_operation_events(
         else frozenset()
     )
 
-    # One shared FunctionCallRef per wrapped call (M7): the first logged
+    # One shared FunctionCallRef per wrapped call: the first logged
     # output parks the frozen ref here and every sibling reuses it.
     call_ref_box: list[FunctionCallRef] = []
 
@@ -198,13 +198,13 @@ def _emit_exhaustive_operation_events(
             and id(out_tensor) not in out_destination_ids
             and any(out_tensor is arg_tensor for arg_tensor in arg_tensors)
         ):
-            # Round-31 M5: preserve the live member's real autograd node; the
+            # Preserve the live member's real autograd node; the
             # minted copy's ``CloneBackward`` is bookkeeping, not op metadata.
             live_member_grad_fn = out_tensor.grad_fn
             out_tensor = safe_copy(out_tensor)
             stamp_user_grad_fn(out_tensor, live_member_grad_fn)
 
-        # M7: per-output isolation is a plain dict copy. Every per-output
+        # per-output isolation is a plain dict copy. Every per-output
         # writer REASSIGNS its fields (``_log_output_tensor_info``,
         # ``_build_graph_relationship_fields``, the foreach projection, and
         # this loop all bind fresh containers; the single-output path has
@@ -453,7 +453,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
          ops dispatch through the same wrapped functions and are just as real.
          The exact-type spelling ``type(out) is not torch.Tensor`` silently
          dropped every op in a subclass region (missing ops that still
-         validated True — W3 F5). ``nn.Parameter`` stays excluded: parameters
+         validated True). ``nn.Parameter`` stays excluded: parameters
          are SOURCE tensors, never op outputs.
       2. Either the tensor is genuinely new (no ``_tl.label_raw`` value),
          OR this is a bottom-level function.  Bottom-level functions are leaf
@@ -513,7 +513,7 @@ def _iter_autograd_saved_candidates(grad_fn_handle: Any) -> list[Any]:
     for checkpoint, a full RECOMPUTE of the checkpointed region inside the
     traced forward, which both records phantom ops in the captured graph and
     overcounts memory the checkpoint deliberately does not retain. Packed
-    values are therefore skipped (r33 F-2). When the runtime cannot answer the
+    values are therefore skipped. When the runtime cannot answer the
     hooks-installed question, the reads run under ``pause_logging`` so a
     triggered recompute can never corrupt the captured graph.
     """

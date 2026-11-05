@@ -127,7 +127,7 @@ class ValidationFailure:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): the summary line leads, ``extra`` is counted."""
+        """Bounded identity card: the summary line leads, ``extra`` is counted."""
 
         return failure_repr(self)
 
@@ -167,7 +167,7 @@ class ValidationFailure:
         if metrics:
             parts.append(": " + " ".join(metrics))
         if self.nan_mismatch or self.inf_mismatch:
-            # Signpost the purpose-built tooling (R67): the flags already name
+            # Signpost the purpose-built tooling: the flags already name
             # the symptom; point at the tracer that localizes it.
             parts.append(" -- localize with tl.debug.find_nan_in_trace(trace)")
         shapes: list[str] = []
@@ -233,7 +233,7 @@ class ValidationDiagnostic:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): the check and a clipped message, ``extra`` counted."""
+        """Bounded identity card: the check and a clipped message, ``extra`` counted."""
 
         return clipped(f"ValidationDiagnostic {self.check_name}: {self.message}")
 
@@ -252,16 +252,16 @@ class ValidationDiagnostic:
 #: Mirror of the CURRENT run's first failure. The internal validation trace
 #: never escapes ``tl.validate`` / ``validate_forward_pass`` (they collapse to
 #: a bool), so this module-level slot is the one place a caller can read the
-#: rich record from (b8 B8-42). Cleared by ``reset_validation_failure`` at
+#: rich record from. Cleared by ``reset_validation_failure`` at
 #: each run entry; single-threaded by design like the rest of capture.
 _LAST_RUN_FAILURE: list[ValidationFailure] = []
 
-#: Upper bound on retained per-run diagnostics (b8 B8-43): the ledger is
+#: Upper bound on retained per-run diagnostics: the ledger is
 #: per-run evidence, not an unbounded process log.
 MAX_VALIDATION_DIAGNOSTICS = 256
 
 
-#: Peak-memory observation of the most recent ``tl.validate`` run (b6 R33-2):
+#: Peak-memory observation of the most recent ``tl.validate`` run:
 #: validation is the largest peak in the product (measured 11.5x the model's
 #: own grad-on forward) and previously had NO instrumentation at all.
 _LAST_RUN_PEAKS: dict[str, int] = {}
@@ -276,7 +276,7 @@ def last_validation_peak_memory() -> dict[str, int] | None:
         ``host_rss_peak_delta_bytes`` (growth of the process RSS high-water
         mark across the run -- a lower bound, ``0`` when validation fit in
         already-resident headroom) and, when CUDA ran,
-        ``cuda_peak_allocated_bytes`` (snapshot-based, R36-2: the exact device
+        ``cuda_peak_allocated_bytes`` (snapshot-based: the exact device
         peak when the run pushed a new high-water mark, ``0`` when it stayed
         under the pre-existing peak). ``None`` before any instrumented run.
 
@@ -381,7 +381,7 @@ def get_validation_failure(trace: Any) -> ValidationFailure | None:
 def reset_validation_diagnostics(trace: Any) -> None:
     """Clear retained diagnostics so a run reports THIS-run evidence only.
 
-    b8 B8-43: ``validate_saved_outs`` claims this-run semantics, but only the
+    ``validate_saved_outs`` claims this-run semantics, but only the
     failure slot was reset at entry -- diagnostics accumulated across runs on
     a reused trace. Best-effort, never raises.
 
@@ -413,7 +413,7 @@ def record_validation_diagnostic(trace: Any, diagnostic: ValidationDiagnostic) -
     validation warning into a validation failure. The ledger is bounded at
     :data:`MAX_VALIDATION_DIAGNOSTICS` entries per run (first-N-wins, matching
     the failure slot's first-mismatch semantics); the former
-    copy-the-whole-tuple append was also O(history) per record (b8 B8-43).
+    copy-the-whole-tuple append was also O(history) per record.
     """
 
     try:

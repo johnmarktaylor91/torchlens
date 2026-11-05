@@ -11,7 +11,7 @@ point:
   rows attach per-site dual geometry, so a refused TP/FSDP2 model is refused
   with its parameters precisely IDENTIFIED (logical shape, placements, shard
   offset) instead of silently mis-counted;
-* C0 boundary ``RoleEntry`` dual-geometry slots and the C2 rank-local capture
+* C0 boundary ``RoleEntry`` dual-geometry slots and the rank-local capture
   substrate consume the same helper when DTensor values flow through capture.
 
 Everything degrades gracefully: any probe failure yields ``None`` fields,
@@ -79,7 +79,7 @@ def dtensor_dual_geometry(value: Any) -> dict[str, Any] | None:
         pass
 
     shard_offset: list[int] | None = None
-    # r-b4 R26-2: the geometry helper routes through _torch_compat
+    # the geometry helper routes through _torch_compat
     # (HAS_DTENSOR_SHARD_GEOMETRY), so "the private API moved" flips a named
     # flag visible in doctor/compat instead of collapsing into the same silent
     # None as a legitimately off-mesh rank.
@@ -117,8 +117,8 @@ def dtensor_dual_geometry(value: Any) -> dict[str, Any] | None:
     }
 
 
-#: The one distributed-scope marker value (DOCUMENTED-UNSTABLE pending its S2
-#: amendment; census plan 3.1). A fully replicated DTensor is NOT shard-local.
+#: The one distributed-scope marker value (DOCUMENTED-UNSTABLE: the value may
+#: change). A fully replicated DTensor is NOT shard-local.
 RANK_LOCAL_SHARD = "rank_local_shard"
 
 

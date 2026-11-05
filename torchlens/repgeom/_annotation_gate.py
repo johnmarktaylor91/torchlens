@@ -1,8 +1,8 @@
 """Stimulus-indexed annotation gating shared by the *_evolution verbs.
 
-Split out of ``torchlens.repgeom`` (lane A11): the eligibility gate that
-stopped the fabricated buffer pseudo-RDMs (neuro MEMO D4/D5), the gated
-ATOMIC annotation commit (D4), and the verb-aware shared diagnostics. The
+Split out of ``torchlens.repgeom``: the eligibility gate that
+stops fabricated buffer pseudo-RDMs, the gated
+ATOMIC annotation commit, and the verb-aware shared diagnostics. The
 public verbs re-export these privately through ``torchlens.repgeom``.
 """
 
@@ -71,7 +71,7 @@ def _expected_stimulus_counts(trace: Any) -> frozenset[int]:
 def _site_ineligibility(site: Any, expected_counts: frozenset[int]) -> str | None:
     """Return why a site is not stimulus-indexed, or ``None`` when eligible.
 
-    Evidence order (neuro MEMO D4): record kind first (a buffer overwrite is
+    Evidence order: record kind first (a buffer overwrite is
     never stimulus-indexed), then defended shape equality against the
     capture's input-site leading axis. When the stimulus count is underivable
     (no input evidence) shape equality cannot be defended and only the record
@@ -171,10 +171,10 @@ def _warn_skipped_sites(verb: str, skipped: OrderedDict[str, str]) -> None:
 def _commit_annotation_tensors(trace: Any, staged: OrderedDict[str, torch.Tensor]) -> None:
     """Atomically commit staged annotation tensors to a torch trace.
 
-    The gated-write contract (neuro MEMO D4): annotation tensors are staged
+    The gated-write contract: annotation tensors are staged
     while a sweep runs and committed only after the WHOLE sweep succeeds, so
-    a failure at site k never leaves sites 0..k-1 annotated (a forced late
-    failure used to leave exactly the fabricated blobs behind). Every payload
+    a failure at site k never leaves sites 0..k-1 annotated (without the gate a late
+    failure would leave fabricated blobs behind). Every payload
     is validated BEFORE the first write, so the commit loop itself cannot
     fail partway.
 

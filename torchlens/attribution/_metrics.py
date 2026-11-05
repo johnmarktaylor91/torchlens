@@ -1,4 +1,4 @@
-"""Attribution quality metrics: infidelity and sensitivity (memo D14-D15).
+"""Attribution quality metrics: infidelity and sensitivity.
 
 Infidelity judges the perturbation as much as the attribution. It ships with
 a USABLE named default (``perturb="gaussian"``, ``noise_std`` disclosed in
@@ -10,7 +10,7 @@ the reference-parity primary. "Lower is better" holds only under identical
 target / baseline / perturbation / radius / norm / normalization / sample
 bank -- that qualification rides in every result.
 
-Sensitivity enforces the determinism ladder (D15): estimator noise must never
+Sensitivity enforces the determinism ladder: estimator noise must never
 masquerade as input sensitivity. (1) a native/bound method known stochastic
 must carry a fixed seed or stored bank or sensitivity refuses BEFORE work;
 (2) an opaque callable whose first result disclosed stochastic-method
@@ -61,7 +61,7 @@ from torchlens.attribution._sampling import (
     _validate_tree_invariance,
 )
 
-# The behavioral probe's RELATIVE tolerance (D15). Measured detection margins
+# The behavioral probe's RELATIVE tolerance. Measured detection margins
 # for genuinely stochastic methods run 2.0e-02 .. 3.9e-01 -- about four
 # orders of magnitude above float wobble -- which is why the tolerance must
 # stay tight.
@@ -79,7 +79,7 @@ _LOWER_IS_BETTER_QUALIFICATION = (
 
 @dataclass(frozen=True)
 class AttributionMetric:
-    """Frozen container for one attribution quality metric (memo D14).
+    """Frozen container for one attribution quality metric.
 
     Attributes
     ----------
@@ -228,7 +228,7 @@ def _warn_out_of_range(perturbed_leaves: tuple[Tensor, ...], prepared: _Prepared
     """Warn (coded, once per call) when perturbed values leave the input hull.
 
     Valid input ranges are rarely knowable, so out-of-range perturbations WARN
-    rather than refuse (memo D14): the metric still computes, but the user is
+    rather than refuse: the metric still computes, but the user is
     told the perturbation left the observed data range.
 
     Parameters
@@ -577,7 +577,7 @@ def _enforce_determinism_ladder(
     first_result: Attribution,
     probe_result: Attribution | None,
 ) -> dict[str, Any]:
-    """Apply the D15 determinism ladder and return the probe disclosure.
+    """Apply the determinism ladder and return the probe disclosure.
 
     Parameters
     ----------
@@ -748,7 +748,7 @@ def sensitivity(
     if bound.kind == "opaque":
         # The probe's second call supplies the unperturbed-attribution
         # denominator the metric needs anyway, so part of its cost is
-        # reclaimed (memo D15).
+        # reclaimed.
         probe_result = bound.call(*_perturbed_user_inputs(prepared, prepared.attributed_leaves))
     probe_disclosure = _enforce_determinism_ladder(bound, baseline_result, probe_result)
     reference = probe_result if probe_result is not None else baseline_result

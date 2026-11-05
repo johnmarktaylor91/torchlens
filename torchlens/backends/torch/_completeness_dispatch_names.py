@@ -68,8 +68,8 @@ def _resolved_dispatch_origins(
     Returns ``None`` -- the caller MUST fail closed -- when the source's propagated
     origin set contains ``unknown`` (an operand the census could not attribute),
     ``rng`` (raw seeded-RNG output; the torch-RNG nets own that class, and value
-    attribution through it would launder nondeterminism), or ``uninit`` (r53
-    hon_2: uninitialized allocator bytes are not a function of the recorded
+    attribution through it would launder nondeterminism), or ``uninit``
+    (uninitialized allocator bytes are not a function of the recorded
     computation, so attributing through them would launder nondeterminism as a
     deterministic chain). An empty origin pair is a positive result: the value
     derives from a literal-only deterministic chain that replays identically, so
@@ -114,15 +114,15 @@ def _record_escape_source_tensor(
     (``aten._local_scalar_dense`` scalar escapes) — feed the SAME per-trace side
     tables so the runnable descriptor witnesses every source class -- input, internal op, bound/unbound param, bound/unbound buffer --
     by its capture-time digest through one uniform pass. Side tables are mutated via
-    GIL-atomic ``set.add``/``dict`` writes (CPython), so cross-thread recording (r41)
+    GIL-atomic ``set.add``/``dict`` writes (CPython), so cross-thread recording
     needs no extra locking.
 
-    ``fail_closed`` (r41 hon2_1/F): ``False`` -- the FOREIGN (pre-existing) thread
+    ``fail_closed``: ``False`` -- the FOREIGN (pre-existing) thread
     posture -- skips exactly the two unattributable rungs (the fail-closed bool/opaque
     records), so an unattributable foreign-thread read never ceilings the capture while
     every POSITIVE rung (label, registered-state alias, dispatch origin) still records.
 
-    ``resolve_origins`` (r41): ``False`` skips the dispatch-origin resolution rung and
+    ``resolve_origins``: ``False`` skips the dispatch-origin resolution rung and
     the leaf-origin fallback recording, both of which take ``pause_logging`` (a GLOBAL
     toggle a non-owner thread must never flip mid-forward). An absent fallback entry is
     consumed by the producer exactly like the fail-closed ``None`` marker (an
@@ -145,18 +145,18 @@ def _record_escape_source_tensor(
     label = None if data_alias else get_tensor_label(source)
     if not isinstance(label, str):
         # An UNLABELLED escape source (a ``.data`` alias, a raw-dispatch product):
-        # r37 INV-1 single-exit attribution ladder. Every rung is a POSITIVE
+        # Single-exit attribution ladder. Every rung is a POSITIVE
         # attribution to a witnessable source; the fallthrough IS the fail-closed
         # record. Banned forever as discharge mechanisms: scalar value equality
-        # (hon2_2), ``.item()`` re-extraction on unknown-arity operands (hon2_1),
-        # and any autograd-graph structural purity argument (hon2_3 / exp1).
+        # ``.item()`` re-extraction on unknown-arity operands,
+        # and any autograd-graph structural purity argument.
         if is_bool:
             # A pruned, unlabelled bool predicate is covered by NO net -> fail closed
             # (skipped for a foreign thread: no attribution, no ceiling).
             if fail_closed:
                 _HOST_ESCAPE_UNATTRIBUTABLE_BOOL.add(trace)
             return
-        # Rung 1 (r18): direct registered-param storage alias -- witnessed by the
+        # Rung 1: direct registered-param storage alias -- witnessed by the
         # param state slot (``self.w.tolist()`` directly on a param carries no label).
         param_addresses = _param_derived_addresses(trace, source)
         if param_addresses:
@@ -166,7 +166,7 @@ def _record_escape_source_tensor(
                 _HOST_ESCAPE_STATE_SOURCE_NAMES[trace] = state_names
             state_names |= param_addresses
             return
-        # Rung 2 (r37 mechanism A): positive dispatch-origin propagation. The census
+        # Rung 2: positive dispatch-origin propagation. The census
         # registered this tensor's value origins at its producing dispatch; resolve
         # them to witnessable raw labels (tensor-op/input sources -> PASS B digest)
         # and state names (param/buffer sources -> PASS A digest). Multi-element and
@@ -199,7 +199,7 @@ def _record_escape_source_tensor(
             # baked value replays identically -- positively attributed, witness-free.
             return
         # Fallthrough: no positive attribution -> fail closed (INCOMPLETE). This is
-        # the ONLY other exit; there is no third state (INV-1). A foreign thread
+        # the ONLY other exit; there is no third state. A foreign thread
         # (``fail_closed=False``) skips the record: no attribution, no ceiling.
         if fail_closed:
             _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE.add(trace)
@@ -209,10 +209,10 @@ def _record_escape_source_tensor(
         sources = set()
         _HOST_ESCAPE_SOURCE_LABELS[trace] = sources
     sources.add(label)
-    # r37 mechanism A: record the leaf-origin fallback basis NOW (the live tensor and
+    # Record the leaf-origin fallback basis NOW (the live tensor and
     # its propagated origins exist only during capture). Consumed by the producer only
-    # if this label turns out orphan-pruned. Skipped on non-owner threads (r41,
-    # ``resolve_origins=False``): an absent entry reads exactly like the fail-closed
+    # if this label turns out orphan-pruned. Skipped on non-owner threads
+    # (``resolve_origins=False``): an absent entry reads exactly like the fail-closed
     # marker if the label is later orphan-pruned -- never weaker.
     if resolve_origins:
         _record_escape_label_fallback(trace, label, source)
@@ -234,7 +234,7 @@ def _record_escape_source_tensor(
     # escape witness).
     meta = get_tensor_meta(source)
     address = getattr(meta, "address", None) if meta is not None else None
-    # r18 + r19-C: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
+    # A PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
     # keeps a graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses
     # by its kept op; a parameter carries NO source node, so a param-rooted read op is orphan-pruned
     # and its raw label resolves to no final op -> the escape would fail closed (INCOMPLETE_SCALAR_
@@ -242,8 +242,8 @@ def _record_escape_source_tensor(
     # state slot(s) so the read-only escape is witnessed by the param's capture-time digest (value-
     # correct -- an unchanged param re-digests identically -> VERIFIED; a changed param -> UNVERIFIABLE),
     # the same honest read/write distinction the buffer path draws. ``_param_derived_addresses`` covers
-    # both a DIRECT param alias (r18: ``self.w.detach()``, ``self.w[0]``) and a DERIVED pruned read
-    # rooted purely in params (r19-C: ``self.w.sum()``, ``float(self.w.max())``). A genuine host WRITE
+    # both a DIRECT param alias (``self.w.detach()``, ``self.w[0]``) and a DERIVED pruned read
+    # rooted purely in params (``self.w.sum()``, ``float(self.w.max())``). A genuine host WRITE
     # is caught independently by the parameter whole-storage byte tripwire
     # (``buffer_writes._reconcile_params`` -> ``_HOST_ESCAPE_MUTABLE_WRITEBACK``), so read resolution
     # never blesses a mutated param.
@@ -376,8 +376,8 @@ def _is_buffer_state_view_dispatch(
       value-affecting in-place drop can never be credited here.
     * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views. A dropped value-producing
       op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
-    * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
-      current-session object + live storage identity -- a stale or input-rebound
+    * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED
+      (current-session object + live storage identity -- a stale or input-rebound
       stamp is never credited as a benign state view).
     * or ``args[0]`` is a PENDING LAZY slot (``UninitializedParameter`` /
       ``UninitializedBuffer``): torch's in-place materialization reads the slot's

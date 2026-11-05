@@ -1,18 +1,17 @@
-"""FactCore: the ONE numbers substrate (C02; sumfam item 7, megaplan D6).
+"""FactCore: the ONE numbers substrate.
 
-Single-source law (sumfam D1): no family surface computes a headline fact
+Single-source law: no family surface computes a headline fact
 (count, total, coverage figure, label) from raw trace attributes --
-everything reads FactCore. IdentityIndex owns identities and join rules
-(D2); the counts record names its grains explicitly (D3: the bare word
+everything reads FactCore. IdentityIndex owns identities and join rules;
+the counts record names its grains explicitly (the bare word
 "operations" cannot denote both 69 and 151); every fact carries evidence,
 reason, and coverage; payload figures are tagged ``at_capture`` vs
-``retained_now`` (D8); the capture fingerprint lets envelope composition
+``retained_now``; the capture fingerprint lets envelope composition
 refuse mismatched captures.
 
 Everything here is a READ-TIME derivation over persisted facts (live-only,
 declared in the field-intent ledger); spellings DOCUMENTED-UNSTABLE
-pending naming-session ratification. Renderers are projections; A07 ->
-C02 -> F08/F09/F10 is the fence chain.
+pending naming-session ratification. Renderers are projections of it.
 """
 
 from __future__ import annotations
@@ -32,25 +31,25 @@ if TYPE_CHECKING:
 #: FactCore schema version (bump on any section/field change).
 FACTCORE_SCHEMA_VERSION = 2
 
-#: The grain menu (D3): one vocabulary used identically by every level=
+#: The grain menu: one vocabulary used identically by every level=
 #: argument. op = pass-qualified executed operations; layer = recurrence-
 #: grouped layers; site = structural L1 sites; module = declared modules;
 #: call = module call instances.
 GRAINS: tuple[str, ...] = ("op", "layer", "site", "module", "call")
 
-#: Payload-scope vocabulary (D8): an immutable capture fact vs what THIS
+#: Payload-scope vocabulary: an immutable capture fact vs what THIS
 #: object holds right now.
 PAYLOAD_SCOPES: tuple[str, ...] = ("at_capture", "retained_now")
 
 
 @dataclass(frozen=True)
 class CountsRecord:
-    """The explicit counts vocabulary (D3).
+    """The explicit counts vocabulary.
 
     ``compute_ops`` counts real executed compute operations (the identity
     partition's op rows: alias/boundary/buffer rows excluded);
     ``tracked_tensor_rows`` counts EVERY layer-list row including alias and
-    boundary pseudo-rows -- the two numbers a bare "operations" used to
+    boundary pseudo-rows -- the two numbers a bare "operations" would
     conflate.
     """
 
@@ -83,7 +82,7 @@ class CountsRecord:
 
 @dataclass(frozen=True)
 class IdentityIndex:
-    """Shared identities and join rules (D2): joins refuse ambiguity.
+    """Shared identities and join rules: joins refuse ambiguity.
 
     One identity spine, typed projections -- never one physical row table.
     ``op_labels`` are pass-qualified and execution-ordered; ``op_sites``
@@ -98,7 +97,7 @@ class IdentityIndex:
     module_call_labels: tuple[str, ...]
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): the spine points, never dumps."""
+        """Bounded identity card: the spine points, never dumps."""
 
         return (
             f"IdentityIndex({len(self.op_labels)} ops, "
@@ -179,7 +178,7 @@ class PrunedParamFacts:
 
 @dataclass(frozen=True)
 class ParamFacts:
-    """Parameter truth (A07's identity partition, read as facts).
+    """Parameter truth (the identity partition, read as facts).
 
     ``total`` is torch's own dedup identity rule; ``per_path_total`` is the
     remove_duplicate=False sum DISCLOSED BESIDE it (torchinfo's number),
@@ -208,7 +207,7 @@ class ParamFacts:
 
 @dataclass(frozen=True)
 class MemoryFacts:
-    """Payload byte figures under the D8 scope law.
+    """Payload byte figures under the scope law.
 
     ``captured_bytes`` is the immutable capture fact (what the capture
     retained when it ran); ``retained_bytes`` is what THIS object holds
@@ -236,9 +235,9 @@ class MemoryFacts:
 class FactCore:
     """The one numbers substrate for a finished trace.
 
-    Sections: counts (D3 grains), identity (D2 joins), params (A07 truth),
-    compute (the costreport-D1 aggregation face), memory (D8 scopes).
-    Health facts ride ``trace.health_facts`` (sumfam item 8) and are
+    Sections: counts (by grain), identity (joins), params (by parameter
+    identity), compute (the aggregation face), memory (payload scopes).
+    Health facts ride ``trace.health_facts`` and are
     deliberately NOT duplicated here -- one observation store.
     """
 
@@ -251,7 +250,7 @@ class FactCore:
     memory: MemoryFacts
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): sections point, never dump.
+        """Bounded identity card: sections point, never dump.
 
         The generated repr chained per-op compute rows -- 9.4k chars on a
         ten-layer toy and unbounded on real models.
@@ -271,7 +270,7 @@ class FactCore:
 
 
 def capture_fingerprint(trace: Any) -> str:
-    """Stable digest of one capture's identity (sumfam item 7).
+    """Stable digest of one capture's identity.
 
     Survives save/load of the SAME capture (derived from persisted facts
     only); distinguishes different captures so envelope composition can
@@ -338,7 +337,7 @@ def _identity(trace: Any) -> IdentityIndex:
 
 
 def _params(trace: Any) -> ParamFacts:
-    """Read A07's parameter truth as facts."""
+    """Read the parameter truth as facts."""
 
     def read(name: str) -> int | None:
         """Read one optional integer trace attribute."""
@@ -425,7 +424,7 @@ def _pruned_params(trace: Any) -> PrunedParamFacts | None:
 
 
 def _memory(trace: Any) -> MemoryFacts:
-    """Derive the D8 payload-scope figures."""
+    """Derive the payload-scope figures."""
 
     from ._agent_json import _payload_state
 

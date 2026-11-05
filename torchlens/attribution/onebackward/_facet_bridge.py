@@ -1,4 +1,4 @@
-"""Read-side facet -> site bridge (M(reads) item 3b, decision D7).
+"""Read-side facet -> site bridge.
 
 The frozen resolver is SEMANTIC-EVIDENCE-ONLY: it consumes the facet system's
 recipe-matched module views (``trace.modules_with_facet("output")`` -- the
@@ -77,7 +77,7 @@ def _attention_bearing(trace: Any) -> bool:
 
 
 def _resolve_mlp_out(trace: Any, index: ReadEdgeIndex) -> FrozenResolution:
-    """Resolve the global MLP-output stop set (the D5 default policy).
+    """Resolve the global MLP-output stop set (the default policy).
 
     A module qualifies through semantic facet evidence only: its recipe view
     exposes an ``"output"`` facet whose home is a whole op output

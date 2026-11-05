@@ -1,18 +1,18 @@
-"""Typed display records for transformer pictures (tviz memo D2).
+"""Typed display records for transformer pictures.
 
 A small CLOSED family of immutable records -- attention view, token scores,
 prediction trajectory, prediction table, token metrics, score decomposition,
 causal receipt, annotation, artifact -- carrying coordinates, provenance, and
 honesty metadata. One semantic truth feeds matplotlib, the zero-dependency
 HTML emitter, and the CircuitsVis bridge without re-derivation (no general
-vector IR; the memo's D2 ruling). Records share the site-key/pass coordinate
+vector IR). Records share the site-key/pass coordinate
 protocol with the mech-interp kit (:class:`torchlens.mechinterp.Coordinate`);
 attachment is by coordinates, never array position.
 
 Records are SESSION-ONLY display values: they are never persisted into
 ``.tlspec`` artifacts and declare no schema fields (live-only, field-intent
 declaration in the lane report). Episode coordinates land in the records from
-day one (tviz memo D22) so the wave-2 generation views recompute nothing.
+the start so later generation views recompute nothing.
 
 All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -54,7 +54,7 @@ __all__ = [
     "TokenScores",
 ]
 
-#: Closed annotation-kind vocabulary (tviz memo D16). ``intervention_effect``
+#: Closed annotation-kind vocabulary. ``intervention_effect``
 #: is constructible ONLY from a valid :class:`CausalReceipt`.
 ANNOTATION_KINDS = (
     "descriptive_head_score",
@@ -63,8 +63,8 @@ ANNOTATION_KINDS = (
     "intervention_effect",
 )
 
-#: Closed provenance vocabulary for attention views (tviz memo D5/D12:
-#: pattern source is disclosed separately from effect source).
+#: Closed provenance vocabulary for attention views (pattern source is
+#: disclosed separately from effect source).
 _PROVENANCE_VOCAB = ("captured", "reconstructed", "user_supplied")
 
 #: Display wording per provenance token (composition row 12: raw-tensor
@@ -75,7 +75,7 @@ PROVENANCE_WORDING = {
     "user_supplied": PROVENANCE_USER_SUPPLIED,
 }
 
-#: Closed mask-provenance vocabulary (tviz memo D6, the three-source
+#: Closed mask-provenance vocabulary (the three-source
 #: hierarchy; inference from zeros is banned and has no token).
 _MASK_SOURCES = ("sdpa_call_args", "eager_additive_mask", "user_metadata")
 
@@ -115,7 +115,7 @@ def tensor_fingerprint(tensor: torch.Tensor) -> str:
 
 @dataclass(frozen=True)
 class TokenAxis:
-    """One labeled token axis (query and key stay SEPARATE records, D5).
+    """One labeled token axis (query and key stay SEPARATE records).
 
     Parameters
     ----------
@@ -163,7 +163,7 @@ class TokenAxis:
 
 @dataclass(frozen=True)
 class EpisodeCoordinates:
-    """Episode coordinates carried by records from day one (tviz memo D22).
+    """Episode coordinates carried by records from day one.
 
     Parameters
     ----------
@@ -203,7 +203,7 @@ class EpisodeCoordinates:
 
 @dataclass(frozen=True)
 class MaskInfo:
-    """Mask provenance for an attention view (tviz memo D6).
+    """Mask provenance for an attention view.
 
     The three-source hierarchy: recorded SDPA call arguments, the captured
     eager additive-mask operand, or explicit user/model metadata. Inference
@@ -249,7 +249,7 @@ class MaskInfo:
 
 @dataclass(frozen=True)
 class CropInfo:
-    """Crop disclosure: cropping never renormalizes (tviz memo D5).
+    """Crop disclosure: cropping never renormalizes.
 
     Parameters
     ----------
@@ -290,7 +290,7 @@ class CropInfo:
 
 @dataclass(frozen=True)
 class GqaInfo:
-    """Grouped-query-attention disclosure (tviz memo D5/D15).
+    """Grouped-query-attention disclosure.
 
     Parameters
     ----------
@@ -425,7 +425,7 @@ def _validate_attention_values(view: AttentionView) -> None:
 
 @dataclass(frozen=True)
 class AttentionView:
-    """One attention pattern in canonical coordinates (tviz memo D5).
+    """One attention pattern in canonical coordinates.
 
     Canonical layout is ``[query_head, destination_query, source_key]``;
     every artifact prints "rows attend from, columns attend to". The fixed
@@ -539,7 +539,7 @@ class AttentionView:
     def crop_to(self, query_slice: slice, keys: slice) -> AttentionView:
         """Return a cropped view with an exact omitted-mass disclosure.
 
-        Cropping NEVER renormalizes (tviz memo D5): the omitted key count
+        Cropping NEVER renormalizes: the omitted key count
         and the maximum omitted per-row mass are measured on the uncropped
         pattern and travel on the returned view's :class:`CropInfo`.
 
@@ -632,7 +632,7 @@ class TokenScoreRow:
 
 @dataclass(frozen=True)
 class TokenScores:
-    """Colored-token strip record, single- or multi-row (tviz memo roster).
+    """Colored-token strip record, single- or multi-row.
 
     The multi-row form serves the NMF factor view and any per-method
     comparison strip; all rows share ONE token axis.
@@ -694,7 +694,7 @@ class TokenScores:
 
     @classmethod
     def from_attribution(cls, payload: Any) -> TokenScores:
-        """Build a strip record from an attribution token payload (D28).
+        """Build a strip record from an attribution token payload.
 
         Parameters
         ----------
@@ -729,7 +729,7 @@ class PredictionTrajectory:
 
     Built from the streaming lens result; provenance wording travels row by
     row so an intermediate projection can never claim to be the native
-    output (tviz memo D9 boundary; UNVALIDATED-LENS-AS-NATIVE sentinel).
+    output (UNVALIDATED-LENS-AS-NATIVE sentinel).
 
     Parameters
     ----------
@@ -909,7 +909,7 @@ class TokenMetrics:
 
 @dataclass(frozen=True)
 class ScoreDecomposition:
-    """Term-complete score decomposition for one (head, dst, src) pair (D19).
+    """Term-complete score decomposition for one (head, dst, src) pair.
 
     The BertViz neuron-view DATA record: post-transform q/k vectors, their
     per-dimension products, the scale, and every additive term, with a HARD
@@ -998,7 +998,7 @@ class ScoreDecomposition:
 
 
 def _validate_receipt_controls(receipt: CausalReceipt) -> None:
-    """Refuse ``tv_receipt_invalid`` unless both controls pass (D12)."""
+    """Refuse ``tv_receipt_invalid`` unless both controls pass."""
 
     if receipt.fires <= 0:
         refuse(
@@ -1031,9 +1031,9 @@ def _validate_receipt_controls(receipt: CausalReceipt) -> None:
 
 @dataclass(frozen=True)
 class CausalReceipt:
-    """Validated measured-intervention evidence for annotation (D11/D12).
+    """Validated measured-intervention evidence for annotation.
 
-    tviz owns ATTACHMENT validation: a receipt refuses at construction on
+    Attachment validation lives here: a receipt refuses at construction on
     zero fires, a moved negative control, or an unmoved positive control.
     Effects are per original head index; an unmeasured head is ``None``
     (rendered blank, never zero).
@@ -1067,7 +1067,7 @@ class CausalReceipt:
         Measured large-perturbation metric delta (must move).
     joint_effect:
         Measured effect of ablating ALL displayed heads together (one extra
-        forward); REQUIRED by the grid figure (tviz memo D13).
+        forward); REQUIRED by the grid figure.
     negative_control_tol / positive_control_min:
         Control thresholds, printed with the controls.
     pattern_source / effect_source:
@@ -1180,7 +1180,7 @@ class CausalReceipt:
 
 @dataclass(frozen=True)
 class Annotation:
-    """One typed annotation attached to an attention picture (D16).
+    """One typed annotation attached to an attention picture.
 
     The closed four-kind vocabulary keeps descriptive scores from quietly
     becoming causal claims: each kind renders with its own glyph and legend
@@ -1295,7 +1295,7 @@ class SavedFigure:
         Content fingerprint of the underlying record.
     svg_fonttype:
         The matplotlib ``svg.fonttype`` used (``"path"`` default; ``"none"``
-        is the editing opt-in), recorded per the memo's manifest rule.
+        is the editing opt-in), recorded in the manifest.
     num_pages:
         Total page count (equals ``len(paths)`` for file output).
 

@@ -1,4 +1,4 @@
-"""Structure-only teaching-refusal belts (L7a memo sec 2, D8-default branch).
+"""Structure-only teaching-refusal belts.
 
 Two layers over the torch capture path, both active ONLY when the session
 trace carries ``structure_only=True`` (the default path is zero-diff):
@@ -33,7 +33,7 @@ user errors stay user errors; on 3.10 the degradation is a RuntimeWarning).
 Unclassifiable exceptions propagate annotated: the fail direction is "don't
 claim what we can't classify", never "wrap everything".
 
-NAMING: all spellings DOCUMENTED-UNSTABLE pending naming-session/S2
+NAMING: all spellings DOCUMENTED-UNSTABLE pending naming
 ratification.
 """
 
@@ -69,8 +69,8 @@ from .completeness_witness import (
 
 _TORCH_ROOT: Final[Path] = Path(torch.__file__).resolve().parent
 
-# The belt surface IS the union of the five existing closed sets (memo sec
-# 2.2; opus r2 M2): computed from the constituents at import so a new member
+# The belt surface IS the union of the five existing closed sets:
+# computed from the constituents at import so a new member
 # in any constituent set is inherited automatically. Pinned against all five
 # by the belt-census meta-test.
 STRUCTURE_ONLY_ESCAPE_SURFACE: Final[frozenset[str]] = (
@@ -108,8 +108,8 @@ def _first_non_torchlens_caller() -> tuple[str, int, bool] | None:
     and classifies the very next frame: a torchlens-internal or torch-internal
     caller retains today's behavior (``is_user`` False) — torchlens internals
     legitimately touch real-tensor storage in form (b) and torch's own
-    formatting reads scalars — while a user-code caller refuses (memo sec 2.2:
-    the scoping is PROVENANCE, not device). Classifying the immediate caller,
+    formatting reads scalars — while a user-code caller refuses (the
+    scoping is PROVENANCE, not device). Classifying the immediate caller,
     not "the first user frame anywhere below", is load-bearing: every capture
     ultimately has user frames below it.
     """
@@ -469,7 +469,7 @@ def _wrapper_op_name(exc: BaseException) -> str | None:
 
 
 def _substrate_mismatch_kind(exc: BaseException) -> str | None:
-    """Classify a RuntimeError as a substrate mismatch, or ``None`` (W1-CLS).
+    """Classify a RuntimeError as a substrate mismatch, or ``None``.
 
     Two provenance-based mechanisms, never message text: (a) the innermost
     TorchLens wrapper frame's failing call OBSERVABLY mixed meta and real
@@ -527,7 +527,7 @@ def _frame_operand_substrates(frame: types.FrameType) -> tuple[bool, bool]:
 
 @contextmanager
 def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
-    """LAYER 2: classify exceptions escaping the user forward (memo 2.2/2.4).
+    """LAYER 2: classify exceptions escaping the user forward.
 
     No-op unless ``trace.options.structure_only``. TorchLens-typed exceptions
     (including Layer-1 refusals and halt/stop signals) always pass through
@@ -554,7 +554,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         externals = _external_frames(exc)
         # The INNERMOST external frame is the failing callsite (a traceback
         # enumerates OUTER frames first, so "last in tb order" is the frame
-        # adjacent to the transition into torch — sol r2 M2); the outermost
+        # adjacent to the transition into torch); the outermost
         # is recorded for orientation only.
         failing_file, failing_line = (
             (str(externals[-1][0]), externals[-1][1]) if externals else (None, None)
@@ -589,7 +589,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
             else None
         )
         if mismatch_kind is not None:
-            # W1-CLS (weightsfree memo D11): device-mismatch RuntimeErrors and
+            # Device-mismatch RuntimeErrors and
             # the autocast/unsupported-scalarType family classify into the
             # SUBSTRATE family BEFORE the value-escape fallback — both were
             # measured to mis-teach the user to hunt a value branch that does

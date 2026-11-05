@@ -1,6 +1,6 @@
 """Guided backpropagation and deconvolution: strict exact-ReLU, op-level.
 
-Attrib memo D11-D13. Both methods are DEFINED in the literature for exact
+Both methods are DEFINED in the literature for exact
 ReLU only, so the coverage rule is strict: ``torch.relu``/``torch.relu_``,
 ``F.relu`` (either ``inplace``), ``Tensor.relu``/``Tensor.relu_``, and module
 ``nn.ReLU`` dispatch (which reaches ``F.relu``) are rewritten; GELU, SiLU,
@@ -13,7 +13,7 @@ Coverage is OP-LEVEL via a ``TorchFunctionMode``: module-dispatched,
 functional, in-place, and reused firings are all rewritten -- this is exactly
 where module-hook implementations diverge (captum's GuidedBackprop cannot see
 the one functional ``F.relu`` in torchvision's ``DenseNet.forward``; the
-three-way identity row pins that divergence bit-exactly, memo D13).
+three-way identity row pins that divergence bit-exactly).
 
 In-place spellings are served OUT-OF-PLACE by the rewrite (the returned
 tensor carries the rule; the input is never mutated). A forward that DISCARDS
@@ -21,7 +21,7 @@ the in-place return value would silently change semantics, so every call
 verifies FORWARD FIDELITY: the rewritten forward must reproduce the plain
 forward bit-exactly, or the call refuses typed.
 
-Rules (D12): guided ReLU passes ``clamp(grad, min=0)`` through the native
+Rules: guided ReLU passes ``clamp(grad, min=0)`` through the native
 ReLU backward (positive upstream gradient times the forward-positive mask);
 deconvolution passes ``clamp(grad, min=0)`` WITHOUT the forward mask. Results
 are SIGNED by default (``absolute=False``); shipped ``saliency`` still
@@ -31,7 +31,7 @@ classic name in v1.
 There is deliberately NO spelling that mounts these backward rules on IG,
 layer IG, conductance, or GradientShap: modified backward rules invalidate
 path and completeness semantics, so the refusal is the absence of the knob.
-``noise_tunnel(method=guided_backprop)`` works (D12).
+``noise_tunnel(method=guided_backprop)`` works.
 """
 
 from __future__ import annotations
@@ -262,7 +262,7 @@ def _modified_backward_attribution(
         ``"module"`` (only ``nn.ReLU``-dispatched firings -- the module-hook
         coverage class the three-way identity row compares against captum).
     absolute
-        Whether to absolute-value the signed result (default signed, D12).
+        Whether to absolute-value the signed result (default signed).
 
     Returns
     -------

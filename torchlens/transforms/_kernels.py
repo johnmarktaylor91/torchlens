@@ -1,11 +1,11 @@
-"""Role-free builtin kernels: flatten, cast, magnitude, unit_norm, take_index, reduce (memo B3).
+"""Role-free builtin kernels: flatten, cast, magnitude, unit_norm, take_index, reduce.
 
 Each kernel is a frozen :class:`~torchlens.transforms.TransformSpec` factory
-whose ``plan`` predicts output shape/dtype (T-C6) and whose ``apply`` is pure
-and row-preserving (T-C2: the stimulus axis is inviolable — no kernel ever
-addresses axis 0). Dtype domains follow T-C7: float-only cast, fp32
+whose ``plan`` predicts output shape/dtype and whose ``apply`` is pure
+and row-preserving (the stimulus axis is inviolable — no kernel ever
+addresses axis 0). Dtype domains: float-only cast, fp32
 accumulation for half inputs, fp64 stays fp64. Aliasing is a first-class
-planning fact (T-C11): flatten/cast/take_index may return views.
+planning fact: flatten/cast/take_index may return views.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -27,10 +27,10 @@ __tl_layer__ = "L4"
 
 __all__ = ["cast", "flatten", "magnitude", "reduce", "take_index", "unit_norm"]
 
-#: Closed reduce-op vocabulary (memo section 4 roster).
+#: Closed reduce-op vocabulary.
 _REDUCE_OPS: tuple[str, ...] = ("mean", "sum", "max", "min")
 
-#: Float dtypes admissible as an explicit save/compute cast target (T-C7).
+#: Float dtypes admissible as an explicit save/compute cast target.
 _FLOAT_DTYPES: dict[str, torch.dtype] = {
     "torch.float16": torch.float16,
     "torch.bfloat16": torch.bfloat16,
@@ -42,7 +42,7 @@ _FLOAT_DTYPES: dict[str, torch.dtype] = {
     "float64": torch.float64,
 }
 
-#: Half-precision dtypes that accumulate in fp32 (T-C7).
+#: Half-precision dtypes that accumulate in fp32.
 _HALF_DTYPES: frozenset[str] = frozenset({"torch.float16", "torch.bfloat16"})
 
 
@@ -314,7 +314,7 @@ def flatten(start_axis: int = 1) -> TransformSpec:
 
 
 def _cast_normalize(params: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalize cast params (float-only target, T-C7).
+    """Normalize cast params (float-only target).
 
     Parameters
     ----------
@@ -400,7 +400,7 @@ def _cast_apply(
 
 
 def cast(dtype: torch.dtype | str) -> TransformSpec:
-    """Cast to an explicit float dtype (the save-cast chain step, T-C7).
+    """Cast to an explicit float dtype (the save-cast chain step).
 
     Parameters
     ----------
@@ -595,7 +595,7 @@ def _unit_norm_plan(
 def _unit_norm_apply(
     spec: TransformSpec, tensor: torch.Tensor, ctx: TransformContext | None
 ) -> torch.Tensor:
-    """Apply unit_norm with fp32 accumulation for half inputs (T-C7).
+    """Apply unit_norm with fp32 accumulation for half inputs.
 
     Parameters
     ----------
@@ -868,7 +868,7 @@ def _reduce_plan(
 def _reduce_apply(
     spec: TransformSpec, tensor: torch.Tensor, ctx: TransformContext | None
 ) -> torch.Tensor:
-    """Apply reduce with fp32 accumulation for half inputs on mean/sum (T-C7).
+    """Apply reduce with fp32 accumulation for half inputs on mean/sum.
 
     Parameters
     ----------

@@ -55,7 +55,7 @@ class LMHeadAnchor:
         return self.owner.facets
 
     def norm_reconstruction(self) -> NormReconstruction:
-        """Build the validated final-norm reconstruction (mikit D8).
+        """Build the validated final-norm reconstruction.
 
         Input = the captured tensor entering the norm; output = the norm
         module's captured output; gamma/beta = live parameter reads as the

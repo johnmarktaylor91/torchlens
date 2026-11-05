@@ -1,10 +1,10 @@
-"""Ordered transform chains + the portable ``tl_transform_pipeline_v1`` record (memo B2).
+"""Ordered transform chains + the portable ``tl_transform_pipeline_v1`` record.
 
 Chains are ordered sequences planned and applied LEFT TO RIGHT, one numeric
-record (T-C8). The canonical JSON of the static chain is the RESUME IDENTITY:
-any numerics-visible change mismatches (memo 3.17). Opaque callables are
+record. The canonical JSON of the static chain is the RESUME IDENTITY:
+any numerics-visible change mismatches. Opaque callables are
 accepted and identified (``identification_only``); the strict opaque-resume
-rule (memo decision 14) makes cross-process resume with an opaque step a
+rule makes cross-process resume with an opaque step a
 typed refusal — enforced by the consuming engine, disclosed here through
 :attr:`TransformPipeline.resume_verifiable`.
 
@@ -38,7 +38,7 @@ __all__ = [
     "pipeline_record",
 ]
 
-#: Portable sub-schema id for the static pipeline record (memo 3.17).
+#: Portable sub-schema id for the static pipeline record.
 PIPELINE_SCHEMA = "tl_transform_pipeline_v1"
 
 
@@ -184,7 +184,7 @@ class TransformPipeline:
     def plan(
         self, input_spec: TensorSpec, ctx: TransformContext | None = None
     ) -> tuple[PlannedStep | None, ...]:
-        """Plan the chain left to right (T-C6/T-C8).
+        """Plan the chain left to right.
 
         Parameters
         ----------
@@ -218,7 +218,7 @@ class TransformPipeline:
         return tuple(planned)
 
     def apply(self, tensor: torch.Tensor, ctx: TransformContext | None = None) -> torch.Tensor:
-        """Apply the chain left to right with declared ctx dispatch (T-C1).
+        """Apply the chain left to right with declared ctx dispatch.
 
         Parameters
         ----------
@@ -354,7 +354,7 @@ def pipeline_from_record(record: Mapping[str, Any]) -> TransformPipeline:
 
 
 def apply_dispatch(step: Any, tensor: torch.Tensor, ctx: TransformContext | None) -> torch.Tensor:
-    """Invoke one raw callable with ctx dispatch BY DECLARATION (P2).
+    """Invoke one raw callable with ctx dispatch BY DECLARATION.
 
     Parameters
     ----------

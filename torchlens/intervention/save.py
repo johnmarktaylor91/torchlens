@@ -128,10 +128,10 @@ def save_intervention(
     True
     """
 
-    # WT1 A-IV item 20 (lane A08): the intervention-spec door had NO settled-
-    # outcome gate, so a FAILED/aborted/unknown capture could export its spec
-    # (fire records, target manifest) as if nothing happened. Same N1 authority
-    # and ordering as trace.save(): outcome gate first, then the poison gate.
+    # The intervention-spec door has a settled-outcome gate so a
+    # FAILED/aborted/unknown capture cannot export its spec (fire records,
+    # target manifest) as if nothing happened. Same authority and ordering as
+    # trace.save(): outcome gate first, then the poison gate.
     from .._capture.outcome import require_capture_capability
 
     require_capture_capability(trace, "save_analysis")
@@ -682,7 +682,7 @@ def _build_target_manifest(
             {
                 "selector": _target_spec_to_json(target, save_level),
                 "resolved_labels": list(resolved.labels()),
-                # C03 site-key-primary targets (surgery Build 0a): the join
+                # Site-key-primary targets: the join
                 # identity is the structural site key; labels are display-only
                 # disclosure (ME ordinal rule). Keyless rows (backward sites,
                 # legacy captures) record None.

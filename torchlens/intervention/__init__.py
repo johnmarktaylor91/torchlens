@@ -45,7 +45,7 @@ from ._topology.topology import (
     build_supergraph as build_supergraph,
 )
 
-# F01 surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
+# Live lanes: the capture-free bound executor (``recipe.bind(model)``
 # returns a ``BoundModel`` whose ``.generate`` is the generation door; the
 # ``steer`` attribute is the helper from .helpers) and the region noun (derived
 # admissibility on the existing verbs).
@@ -66,7 +66,7 @@ from .hooks import (
 from .population import Population, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
 
-# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
+# The PUBLIC immutable multi-clause spec
 # claims the package-level ``InterventionSpec`` name. The historical mutable
 # sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
 # internal code and persisted pickles are untouched.

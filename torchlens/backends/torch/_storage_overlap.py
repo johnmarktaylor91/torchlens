@@ -90,7 +90,7 @@ def _strided_views_share_storage_elements(mutated: torch.Tensor, alias: torch.Te
     reducible to one arithmetic progression of equal-width element starts --
     the answer is computed exactly, so element-DISJOINT interleaved views
     (``base[::2]`` vs ``base[1::2]``) no longer receive an invented mutation
-    edge (round-31 M4), while genuinely overlapping views keep theirs.
+    edge, while genuinely overlapping views keep theirs.
 
     Parameters
     ----------

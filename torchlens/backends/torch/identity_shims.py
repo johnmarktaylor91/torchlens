@@ -39,7 +39,7 @@ globals. The standing installed-tree grep gate lives
 in ``tests/test_wrap_state_compat.py``; the ``nested/_internal`` NJT
 identity reads it surfaces are a documented unshimmed residual (nested
 jagged tensors are not supported capture inputs). An eighth normalizes the
-PROTOCOL-ARG identity for pure-Python functionals (grind-r6 b8 R56): their
+PROTOCOL-ARG identity for pure-Python functionals: their
 bodies dispatch ``handle_torch_function(<module-global self-reference>,
 ...)``, which resolves to the torchlens wrapper during the wrap epoch, so
 every host module's ``handle_torch_function`` global gets a translating
@@ -110,9 +110,8 @@ _live_shims: dict[int, Any] = {}
 Restore keys on THIS identity registry, never on the ``_SHIM_MARKER``
 attribute alone: the marker is spoofable (any foreign function can set
 ``_torchlens_identity_shim = True``), and a marker-keyed teardown would then
-CLOBBER the user's monkeypatched site with our stored original (grind-r6 b8
-R56, sol). The strong references also prevent id reuse for the registry's
-lifetime.
+CLOBBER the user's monkeypatched site with our stored original. The strong
+references also prevent id reuse for the registry's lifetime.
 """
 
 # True ONLY between a successful FULL family install and the matching remove.
@@ -120,7 +119,7 @@ lifetime.
 # a raced import callback could append one causal-bias record into a
 # post-teardown empty list, and the next ``install_identity_shims`` would then
 # skip the full install, leaving the transformer/expanded-weights shims absent
-# (the SF-53 fastpath bug re-created through the lifecycle seam).
+# (the fastpath bug re-created through the lifecycle seam).
 _family_installed = False
 
 # Live import hook covering the lazily-importable causal-bias site, or None.
@@ -268,9 +267,9 @@ def _is_our_live_shim(value: Any) -> bool:
 def identity_shims_installed() -> bool:
     """Return whether the FULL identity-shim family is currently installed.
 
-    Keyed on ``_family_installed``, never on ``_installed`` being non-empty
-    (grind-r6 b7 R47-A2, 3rd round): a raced import callback can append one
-    causal-bias record into a post-teardown empty list, and the non-empty
+    Keyed on ``_family_installed``, never on ``_installed`` being non-empty:
+    a raced import callback can append one causal-bias record into a
+    post-teardown empty list, and the non-empty
     proxy would then report "installed" with the transformer/
     expanded-weights shims absent.
     """
@@ -358,7 +357,7 @@ def _restore(records: list[tuple[Any, str, Any]]) -> None:
     layered on top) is left untouched rather than clobbered, mirroring the
     namespace-drift tolerance of wrapper teardown. "Our shim" is decided by
     exact object IDENTITY against the live registry, never by the spoofable
-    marker attribute (grind-r6 b8 R56, sol: a foreign function carrying
+    marker attribute (a foreign function carrying
     ``_torchlens_identity_shim = True`` must not be clobbered at teardown).
     """
 
@@ -502,7 +501,7 @@ def _install_causal_bias_shim(records: list[tuple[Any, str, Any]]) -> None:
 
     if not _torch_compat.HAS_ATTENTION_CAUSAL_BIAS:
         return
-    # Resolve ONLY through sys.modules (r45/r49 lazy-import belt): importing
+    # Resolve ONLY through sys.modules (lazy-import belt): importing
     # torch.nn.attention.bias fires torch._dynamo.allow_in_graph at module
     # top level, dragging the _dynamo/_inductor tree into every wrap. A live
     # CausalBias can only exist after the USER imported the module, so an
@@ -726,7 +725,7 @@ def _install_jit_overload_shim(records: list[tuple[Any, str, Any]]) -> None:
         ``__dict__`` markers (``__tl_wrapper_name__``,
         ``__prepare_scriptable__``), and the attribute-keyed check silently
         swapped such a wrapper for the pristine original -- dropping the
-        foreign behavior from overload resolution (b8-fable R56,
+        foreign behavior from overload resolution (an
         attribute-vs-identity anti-pattern).
         """
         original = _state._decorated_to_orig.get(id(obj))
@@ -754,7 +753,7 @@ def _install_fx_trace_shim(records: list[tuple[Any, str, Any]]) -> None:
     keyed fx pass (``node.target == F.relu`` -- the standard torch.ao
     quantization matcher shape) then silently mismatched once wrappers were
     removed or in any other process, and the GraphModule artifact permanently
-    embedded a torchlens object (grind-r5 b8 R56). Remapping targets through
+    embedded a torchlens object. Remapping targets through
     the wrapper ledger after the trace hands every consumer the same graph an
     unwrapped eager trace produces; subclassed tracers (HF-style) funnel
     through the same base method.
@@ -835,8 +834,8 @@ def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> 
                 if view is None:
                     if isinstance(table, collections.defaultdict):
                         # Preserve the upstream auto-vivification contract
-                        # (grind-r6 b8 R56 opus residue: the plain-dict view
-                        # turned missing-namespace reads into KeyError).
+                        # (a plain-dict view would turn missing-namespace reads
+                        # into KeyError).
                         view = _LedgerResolvingDefaultTable(table.default_factory)
                         view.update(
                             (key, _LedgerResolvingMembers(members))
@@ -857,9 +856,9 @@ def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> 
 
             # The upstream accessors are @functools.lru_cache functions;
             # functools.wraps copies __dict__ only, so cache management
-            # attributes vanished from the shimmed surface (grind-r6 b8 R56
-            # opus residue: get_testing_overrides.cache_clear() raised
-            # AttributeError during the wrap epoch). Forward them.
+            # attributes vanished from the shimmed surface
+            # (get_testing_overrides.cache_clear() raised AttributeError
+            # during the wrap epoch). Forward them.
             for cache_attr in ("cache_clear", "cache_info", "cache_parameters"):
                 upstream = getattr(orig, cache_attr, None)
                 if upstream is not None:
@@ -924,8 +923,8 @@ def _install_protocol_identity_shims(records: list[tuple[Any, str, Any]]) -> Non
     the torchlens WRAPPER once wrappers are installed. Every user handler
     keyed on originals (the documented import-time ``HANDLED_FUNCTIONS``
     table shape) then silently missed, process-wide, for as long as wrappers
-    stayed installed after the first capture (grind-r6 b8 R56: sol HIGH,
-    fable MED, same root; ~105+ pure-Python functionals).
+    stayed installed after the first capture (roughly 105 or more
+    pure-Python functionals are affected).
 
     The shim patches the ``handle_torch_function`` global of every module
     hosting a wrapped pure-Python functional, translating a wrapper

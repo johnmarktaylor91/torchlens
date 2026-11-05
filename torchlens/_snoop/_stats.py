@@ -1,4 +1,4 @@
-"""Echo's stats rungs on the shared C02 tensor-stats kernel (snoop D4).
+"""Echo's stats rungs on the shared tensor-stats kernel.
 
 Four rungs, shaped by two measurements: the shipped whole-tensor stats
 helper costs up to ~800 ms PER LINE at an ordinary training activation
@@ -13,7 +13,7 @@ subsample -- measured false negative).
 - ``sampled``: moments from a bounded seeded-sample element budget, riding
   the kernel's ``seeded_sample`` gather; ``~``-marked with ``sampled=k/N``
   evidence; NO finiteness claim, ever.
-- ``exact``: the full C02 kernel record, refused typed above a documented
+- ``exact``: the full kernel record, refused typed above a documented
   numel budget with the remedy naming ``sampled``.
 
 This lane never forks the kernel; the kernel has four consumers whether or
@@ -120,7 +120,7 @@ def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Tenso
 
 
 def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorStats:
-    """Compute the exact rung via the shared C02 kernel record.
+    """Compute the exact rung via the shared kernel record.
 
     Parameters
     ----------

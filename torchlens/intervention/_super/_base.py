@@ -302,7 +302,7 @@ class _TensorBearing:
     #: means a cross-member read asserts capture-time PARAMETER values -- a
     #: historical claim TorchLens cannot prove from live handles -- so the
     #: ``_tensor_dict`` funnel refuses before tensor lookup unless every
-    #: member carries immutable parameter evidence (A-CKPT; foldB D7).
+    #: member carries immutable parameter evidence (A-CKPT).
     _cross_member_param_claim: ClassVar[bool] = False
 
     #: Comparison gate installed by ``Bundle.at``: called before

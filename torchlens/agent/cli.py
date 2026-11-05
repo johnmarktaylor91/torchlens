@@ -1,4 +1,4 @@
-"""The TorchLens CLI: one registry, tiered process shapes (agent memo 3.11).
+"""The TorchLens CLI: one registry, tiered process shapes.
 
 Tier 0 (torch-free, target < 0.2 s): ``info`` / ``overview --manifest-only``,
 ``schema``, ``guide``, ``version``, ``ls`` -- manifest and package data only --
@@ -92,7 +92,7 @@ def _tier0_info(path_arg: str, as_json: bool) -> int:
 
 
 def _tier0_ls(dir_arg: str, as_json: bool) -> int:
-    """List .tlspec artifacts under one directory (tier 0; memo D5 majority)."""
+    """List .tlspec artifacts under one directory (tier 0)."""
 
     from pathlib import Path
 

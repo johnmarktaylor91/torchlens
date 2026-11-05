@@ -143,9 +143,9 @@ def _build_shared_fields_dict(
     for tensor in tensors_to_resolve:
         if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
             continue
-        # r81: never source-log a "buffer" off the raw static stamp -- a stale
-        # cross-capture stamp (F1) or a legitimately stamped receiver whose
-        # storage was rebound to input data mid-forward (F2) would re-root an
+        # never source-log a "buffer" off the raw static stamp -- a stale
+        # cross-capture stamp or a legitimately stamped receiver whose
+        # storage was rebound to input data mid-forward would re-root an
         # input-derived value as internal state. The session belt validates
         # object + storage identity; the tracker fallback is storage-anchored.
         buffer_address = session_validated_buffer_address(self, tensor)
@@ -205,8 +205,8 @@ def _build_shared_fields_dict(
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-    # Exact-name lookup first (add / add_ / __add__ have distinct signatures --
-    # W3 F9). The underscore-stripped key remains a best-effort fallback for
+    # Exact-name lookup first (add / add_ / __add__ have distinct signatures).
+    # The underscore-stripped key remains a best-effort fallback for
     # NON-dunder names whose own introspection stored nothing; a dunder whose
     # signature is opaque stays honestly unknown (empty) rather than borrowing
     # the namesake torch function's different signature.

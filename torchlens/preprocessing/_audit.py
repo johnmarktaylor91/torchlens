@@ -1,17 +1,17 @@
-"""The preprocessing verifier: field-level configuration audit (tvscope B3).
+"""The preprocessing verifier: field-level configuration audit.
 
 The verdict ORACLE is the configuration comparison against the user's own
-authority (tvscope memo D3): tensor heuristics were measured to
+authority: tensor heuristics were measured to
 false-positive on five of seven legitimate pipelines while missing both
 wrong-preprocessing controls, so they live in the opt-in diagnostics module
 and may NEVER return a match. This module compares DECLARED fields only.
 
-Verdict law (memo D4): opaque callables and partial metadata never become
+Verdict law: opaque callables and partial metadata never become
 ``match``; the TorchLens-authored ImageNet fallback never yields
 ``verified``; default is non-raising, and the explicit strict mode refuses
 ``mismatch`` AND ``unknown`` with DISTINCT typed codes. The audit never
 returns a transform, never auto-fixes, and never consults a constants table
-(memo D7).
+.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -46,7 +46,7 @@ VERDICT_VERIFIED = "verified"
 VERDICT_MISMATCH = "mismatch"
 VERDICT_UNKNOWN = "unknown"
 
-#: Closed evidence-class ranking (memo D5): a property of OUR evidence.
+#: Closed evidence-class ranking: a property of OUR evidence.
 #: ``contradiction`` is reserved for tensor diagnostics; a config-vs-config
 #: disagreement is ``mismatch``; conventions-premised findings are
 #: ``premised``; disclosures are ``info``.
@@ -58,7 +58,7 @@ EVIDENCE_INFO = "info"
 #: Relative tolerance for float field comparison (mean/std/value_range).
 _FLOAT_RTOL = 1e-6
 
-#: Consequence prose per comparable field (memo D5/D18): family-split, names
+#: Consequence prose per comparable field: family-split, names
 #: the stimulus set behind every number, never alarmist, never dismissive.
 #: Measured on the seeded 128-image COCO test2017 sample ("diverse natural
 #: photographs"; severity is a property of stimulus STRUCTURE).
@@ -109,7 +109,7 @@ _CONSEQUENCES: dict[str, str] = {
 
 
 class PreprocessingAuditError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
-    """Strict-mode refusal from the preprocessing audit (tvscope B3).
+    """Strict-mode refusal from the preprocessing audit.
 
     Distinct stable codes separate the two strict failures: a measured
     disagreement (``preprocessing_audit_mismatch``) and inability to compare
@@ -156,7 +156,7 @@ class AuditFinding:
     Attributes
     ----------
     field:
-        Comparable field name (closed vocabulary, memo B3).
+        Comparable field name (closed vocabulary).
     verdict:
         ``"match"`` / ``"mismatch"`` / ``"unknown"``.
     authority_value:
@@ -166,7 +166,7 @@ class AuditFinding:
     unknown_reason:
         Why the field could not be compared, when ``verdict="unknown"``.
     evidence_class:
-        Evidence-class ranking token (memo D5).
+        Evidence-class ranking token.
     consequence:
         Family-split consequence prose with its stimulus set named.
 
@@ -203,7 +203,7 @@ class AuditFinding:
 
 @dataclass(frozen=True)
 class PreprocessingComparison:
-    """The field-level audit report (tvscope memo D4, record two of three).
+    """The field-level audit report (the second of three records).
 
     Attributes
     ----------
@@ -418,8 +418,8 @@ def _overall_verdict(findings: tuple[AuditFinding, ...], authority_status: str) 
 
     ``verified`` requires EVERY field matched and an AUTHORITATIVE authority:
     the demoted ImageNet fallback (and an unknown authority) can never anchor
-    a ``verified`` verdict (memo D9), and partial metadata never becomes a
-    match (memo D4).
+    a ``verified`` verdict, and partial metadata never becomes a
+    match.
 
     Parameters
     ----------
@@ -472,8 +472,8 @@ def compare(
     strict:
         When True, refuse ``mismatch`` and ``unknown`` verdicts with
         DISTINCT typed codes (``preprocessing_audit_mismatch`` /
-        ``preprocessing_audit_unknown``). Default is non-raising (memo D6:
-        no automatic warnings in v1; the report is the product).
+        ``preprocessing_audit_unknown``). Default is non-raising (no automatic
+        warnings in v1; the report is the product).
 
     Returns
     -------

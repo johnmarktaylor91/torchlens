@@ -1,4 +1,4 @@
-"""Single-graph assembly for Model Explorer payloads (memo B1-B3, D10).
+"""Single-graph assembly for Model Explorer payloads.
 
 ``build_graph`` assembles one unrolled (exact-execution) graph from a
 layer-pass entry sequence; ``build_rolled_graph`` assembles the disclosed
@@ -199,7 +199,7 @@ def rolling_changes_identity(entries: list[Any]) -> bool:
     """Return whether a rolled projection differs from the unrolled graph.
 
     Feed-forward models have ZERO multi-pass ops and emit NO rolled graph at
-    all (memo D10): the rolled/feedback machinery is real only for episode
+    all: the rolled/feedback machinery is real only for episode
     and recurrent captures.
     """
 
@@ -269,7 +269,7 @@ def _derive_namespaces(
 
 
 def _boundary_namespace(entry: Any, driver_labels: frozenset[str]) -> tuple[str, int]:
-    """Assign the D19 boundary namespace for one stackless entry."""
+    """Assign the boundary namespace for one stackless entry."""
 
     if getattr(entry, "is_input", False):
         return INPUTS_NAMESPACE, 0
@@ -323,7 +323,7 @@ def _build_nodes(
 
 
 def _apply_boundary_config(node: dict[str, Any], entry: Any) -> None:
-    """Pin true graph inputs to the top of their boundary group (D19)."""
+    """Pin true graph inputs to the top of their boundary group."""
 
     if getattr(entry, "is_input", False):
         node["config"] = {"pinToGroupTop": True}

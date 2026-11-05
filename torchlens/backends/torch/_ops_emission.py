@@ -133,7 +133,7 @@ def _unattributed_tensor_arg_positions(
     parent_arg_positions:
         Recorded parent-edge locations for the current call.
     recorded_parent_params:
-        The call's resolved ``parent_params`` (r29 F3a): the recorded param
+        The call's resolved ``parent_params`` the recorded param
         edge set a session-validated Parameter slot must appear in.
 
     Returns
@@ -144,10 +144,10 @@ def _unattributed_tensor_arg_positions(
         ``"kw:mask.0"``). The second is the branch-(2) subset: slots whose
         tensor has a LIVE traced producer that is absent from the recorded
         parent edges -- an identity-witnessed dropped edge, independent of the
-        slot value (round-31 FN-1..6: a dropped bool/all-zero/all-one edge is
+        slot value (a dropped bool/all-zero/all-one edge is
         invisible to value evidence, and a wrong-parent swap between
         value-identical producers is invisible by construction; the live-label
-        identity witness catches both). r29 F3a/F3c extend the branch: a
+        identity witness catches both). The branch also covers: a
         session-validated PARAMETER slot missing from ``parent_params`` is a
         dropped param edge, and a slot whose RECORDED parent label disagrees
         with the live tensor's own provenance labels is a permuted/wrong edge
@@ -308,7 +308,7 @@ def log_function_output_tensors(
     bool
         Whether the selected capture producer logged at least one output op.
     """
-    # F20 lazy-buffer completion: torch's lazy pre-hook plumbing can emit a
+    # Lazy-buffer completion: torch's lazy pre-hook plumbing can emit a
     # still-pending UninitializedBuffer as a wrapped call's OUTPUT (the
     # ``__torch_function__`` ``_convert``/``as_subclass`` step). It has no
     # geometry to log and is pre-forward materialization, not model
@@ -316,7 +316,7 @@ def log_function_output_tensors(
     # gate. Mirrors the receiver passthrough in ``wrapped_func``.
     if isinstance(out_orig, torch.Tensor) and _is_uninitialized_param(out_orig):
         return False
-    # W1 decomposition transparency (weightsfree memo D3, defect L1): on an
+    # Decomposition transparency: on an
     # ADMITTED meta structure-only capture, a wrapped call issued BY torch's
     # own Python decomposition machinery (torch/_refs, _prims,
     # _meta_registrations, ...) is not recorded — the enclosing USER op stays

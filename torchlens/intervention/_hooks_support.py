@@ -30,7 +30,7 @@ _LAYER_LOG_CONTEXT_FIELDS = (
     "label",
     "pass_number",
     # L1 structural site key (where minted): the derived-seed law's logical
-    # firing coordinate prefers it over the display label (F02, edits memo D6).
+    # firing coordinate prefers it over the display label.
     "site_key",
     "layer_type",
     "shape",

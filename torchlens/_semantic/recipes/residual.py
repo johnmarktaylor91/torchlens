@@ -207,7 +207,7 @@ def _resolve_input_op(trace: Any, label: Any, member_labels: set[str]) -> Any | 
     lookup refuses as ambiguous. The pass is disambiguated by CONSUMPTION:
     the input op is the pass with at least one child op inside this module
     call. Zero or several qualifying passes stay unresolved -- never a
-    last-pass default (mikit D4).
+    last-pass default.
     """
 
     try:

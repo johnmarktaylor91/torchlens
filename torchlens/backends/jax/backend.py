@@ -3799,7 +3799,7 @@ def _finite_difference_directional_check(
 
     The comparison is between the observed central loss delta and the
     first-order prediction ``sum(grad * perturbation)``, judged against a
-    WRITTEN-DOWN error model (F13-A): the dtype replay band
+    WRITTEN-DOWN error model: the dtype replay band
     (``float_replay_tolerances``) widened by the central-difference
     truncation term (``~step**2`` relative, 8x headroom) plus the
     loss-evaluation roundoff (``8 * eps * max(|L+|, |L-|)`` absolute — the
@@ -3829,12 +3829,12 @@ def _finite_difference_directional_check(
     direction = jnp.sign(grad)
     if not bool(jnp.any(direction)):
         direction = jnp.ones_like(grad)
-    # Dtype-derived step (r4 sweep): the former flat 1e-4 for every
-    # non-fp32 dtype sat BELOW fp16/bf16 spacing at unit scale, so
-    # ``value +/- eps`` rounded back to ``value`` and the second oracle
-    # was vacuous there. Wide dtypes keep their tuned historical steps;
-    # storage-rounding dtypes take cbrt(eps) (the central-difference
-    # optimum: ~0.1 fp16, ~0.2 bf16), which survives their spacing.
+    # Dtype-derived step: a flat 1e-4 for every non-fp32 dtype would sit BELOW
+    # fp16/bf16 spacing at unit scale, so ``value +/- eps`` would round back to
+    # ``value`` and the second oracle would be vacuous there. Wide dtypes keep
+    # their tuned steps; storage-rounding dtypes take cbrt(eps) (the
+    # central-difference optimum: ~0.1 fp16, ~0.2 bf16), which survives their
+    # spacing.
     finfo = jnp.finfo(value.dtype)
     eps32 = float(jnp.finfo(jnp.float32).eps)
     if value.dtype == jnp.float32:
@@ -3843,7 +3843,7 @@ def _finite_difference_directional_check(
         step = 1e-4
     else:
         step = float(finfo.eps) ** (1.0 / 3.0)
-    # Per-element step scaling (F13-A a): float spacing is RELATIVE while a
+    # Per-element step scaling: float spacing is RELATIVE while a
     # scalar step is ABSOLUTE, so an element of magnitude ~1e6 fp32 has
     # spacing far above the raw step and stays frozen in both probes. Scale
     # each element's step by max(1, |value|) so every intended probe moves.

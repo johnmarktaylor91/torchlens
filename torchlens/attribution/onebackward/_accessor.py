@@ -1,4 +1,4 @@
-"""Site -> ``(autograd node, output slot)`` accessor (M(reads) item 0, D1).
+"""Site -> ``(autograd node, output slot)`` accessor (M(reads) item 0).
 
 The substrate already exists on every finished torch trace: each op records
 its real autograd producer (``op.grad_fn_handle``, live), a durable object id
@@ -13,7 +13,7 @@ consumes the handles, so the rejoin exists for the one real case of a user
 ``backward`` before the read (which nulls per-op handles while the
 trace's strong-ref list keeps the objects alive).
 
-Alias identity is ``(id(node), slot)`` (D11): distinct slots of one split
+Alias identity is ``(id(node), slot)``: distinct slots of one split
 node are NOT aliases (q/k/v must never merge); distinct ops producing the
 same ``(node, slot)`` are true aliases sharing one gradient.
 """
@@ -36,7 +36,7 @@ __all__ = [
     "require_gradient_edge_support",
 ]
 
-# The v1 read is live-PyTorch-only (D14); the named constant keeps the gate
+# The v1 read is live-PyTorch-only; the named constant keeps the gate
 # greppable without a hard-coded backend literal branch (the registry lint).
 _SUPPORTED_BACKEND: str = "torch"
 
@@ -99,7 +99,7 @@ class SiteEdge:
         Live autograd node (the registry object, not a payload walk).
     slot:
         Output slot on ``node``: ``multi_output_index`` when the op is part
-        of a multi-output call, else ``0`` (the D1 slot rule).
+        of a multi-output call, else ``0`` (the slot rule).
     via_rejoin:
         ``True`` when the node was recovered through the object-id rejoin
         fallback rather than the per-op live handle.
@@ -122,7 +122,7 @@ class SiteEdge:
 
     @property
     def alias_key(self) -> tuple[int, int]:
-        """Identity key for engine dedup: ``(id(node), slot)`` (D11)."""
+        """Identity key for engine dedup: ``(id(node), slot)``."""
 
         return (id(self.node), self.slot)
 
@@ -204,7 +204,7 @@ def _refuse_trace(trace: Any, reason: str, detail: str, remedy: str) -> None:
 
 
 def _check_trace_liveness(trace: Any) -> None:
-    """Run the closed liveness gate (D1/D14) before any index build.
+    """Run the closed liveness gate before any index build.
 
     Raises
     ------

@@ -1,4 +1,4 @@
-"""Authority adapters + the neutral resolver (tvscope B2, memo D8).
+"""Authority adapters + the neutral resolver.
 
 An AUTHORITY is the preprocessing metadata shipped by the user's own loader:
 a torchvision ``Weights`` preset, a Hugging Face image processor, a timm data
@@ -8,7 +8,7 @@ adapter normalizes one authority kind into the neutral
 registry is the small protocol future loaders extend (one probe + one adapt
 function per type).
 
-Resolution law (memo D8): explicit authority objects at the public entry;
+Resolution law: explicit authority objects at the public entry;
 auto-discovery ONLY where the user's own model object genuinely carries
 metadata (a planted torchvision weights handle, a timm ``default_cfg``, an HF
 ``name_or_path``); an explicit offline policy with fetch disclosure; network
@@ -279,9 +279,9 @@ def _coerce_antialias(value: Any) -> bool | str | None:
     transitional default: antialiasing applies to PIL input but not Tensor
     input, with a one-time warning) before later releases default to the
     explicit ``True``. Collapsing that declared sentinel to ``None``
-    ("undeclared") used to make a transform's self-audit against its own
+    ("undeclared") would make a transform's self-audit against its own
     declaration register as ``unknown`` (one undeclared-on-both-sides field
-    forces the whole verdict to ``unknown``, memo D4) even though both sides
+    forces the whole verdict to ``unknown``) even though both sides
     agree exactly -- declare it honestly instead of guessing a bool.
     """
 
@@ -669,7 +669,7 @@ def _offline_policy(offline: bool | None) -> tuple[bool, str]:
 
 
 def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
-    """Auto-discover an authority from model-attached metadata (memo D8).
+    """Auto-discover an authority from model-attached metadata.
 
     Order: no-network tiers first (an authority recorded by
     ``attach_authority``, a planted torchvision weights handle, a torchvision
@@ -748,7 +748,7 @@ def _discover_hf(model: Any, offline: bool | None) -> Resolution:
         from transformers import AutoImageProcessor
 
         processor = AutoImageProcessor.from_pretrained(str(name_or_path))
-    except Exception as exc:  # network failure -> unknown, NEVER a guess (D8)
+    except Exception as exc:  # network failure -> unknown, NEVER a guess
         fetch["error"] = f"{type(exc).__name__}: {exc}"
         return unknown_resolution(
             f"processor resolution failed for {name_or_path!r}",
@@ -779,7 +779,7 @@ def resolve(
         nothing) with the callable preserved as the transform.
     model:
         Auto-discovery source, used only when ``authority`` is ``None`` and
-        only for metadata the model object genuinely carries (memo D8);
+        only for metadata the model object genuinely carries;
         torchvision weights are never inferred from the model class.
     offline:
         ``None`` (default) respects ``HF_HUB_OFFLINE``/``TRANSFORMERS_OFFLINE``;

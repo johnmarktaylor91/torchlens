@@ -215,7 +215,7 @@ def _metric_field(by: CostMetric) -> str:
 def _device_time_lookup(trace: Trace) -> dict[str, int]:
     """Return the per-op joined device-time table, refusing typed when absent.
 
-    The Kineto join is session-time (torchnative W2.2): it exists only on a
+    The Kineto join is session-time: it exists only on a
     trace captured under ``torchlens.report.kernel_profile`` (or an
     owned session joined via ``join_session``) whose join reached
     ``joined``. Asking for ``by="device_time"`` anywhere else raises the
@@ -257,7 +257,7 @@ def hot_path_rows(
     by:
         Cost metric: ``"flops"``, ``"memory"``, ``"duration"``, or
         ``"device_time"`` (joined Kineto device nanoseconds; refuses typed
-        without a joined session -- see torchnative W2.2/W2.3).
+        without a joined session).
 
     Returns
     -------

@@ -70,16 +70,17 @@ def _internal_torch_builtin_key(
         otherwise ``None``.
     """
 
-    # r-b4 R26-2: routed through _torch_compat (HAS_VARIABLE_FUNCTIONS_CLASS) --
+    # routed through _torch_compat (HAS_VARIABLE_FUNCTIONS_CLASS) --
     # namespace drift used to silently downgrade the recorded replay key to the
     # public torch wrapper (a different argument convention); it now flips the
     # named flag so the downgrade is visible in doctor/compat.
     internal = getattr(get_variable_functions_class(), name, None)
-    # r47 secD_1: resolve the public alias through ``torch_attr`` so an attacker callable ``name``
+    # Resolve the public alias through ``torch_attr`` so an attacker callable ``name``
     # reads ``torch.__dict__`` directly and never fires the PEP-562 lazy ``torch.__getattr__``.
     # While capture wrappers are installed, ``torch.__dict__`` holds the TorchLens wrapper,
-    # whose provenance stamp (B8-1a pickle fix) claims ``__module__ == "torch"`` for every
-    # module-namespace wrapper -- the direct-builtin-export test must read the ORIGINAL.
+    # whose install-site provenance stamp (so wrappers pickle by reference) claims
+    # ``__module__ == "torch"`` for every module-namespace wrapper --
+    # the direct-builtin-export test must read the ORIGINAL.
     public = torch_attr(name)
     if callable(public):
         public = _unwrap_capture_wrapper(public)
@@ -258,7 +259,7 @@ def resolve_function_registry_key(
             return allowlisted
         if key.namespace == "custom":
             if not key.import_path:
-                # SF-07: a malformed spec refusal is a typed configuration door
+                # a malformed spec refusal is a typed configuration door
                 # (sibling of resolve_import_ref's ``import_path_invalid``), not a
                 # raw AttributeError laundered through the resolution wrapper.
                 # InvalidArgumentError is not in the wrap-except tuple below, so
@@ -332,7 +333,7 @@ def resolve_function_registry_key(
                 "import os": a satisfied ``trust_custom_callables`` (or a matching
                 allowlist entry) must not be able to resolve ``os:system`` and hand
                 back a live ``os.system`` callable. This closes the trust-path leg of
-                the r23 ``LazyImportRef(import_path="os:system", trust=True)`` RCE.
+                the ``LazyImportRef(import_path="os:system", trust=True)`` code-execution path.
                 """
 
                 if _matches(resolved_module, _DENIED_MODULES):
@@ -346,7 +347,7 @@ def resolve_function_registry_key(
                         module=resolved_module,
                         import_path=key.import_path,
                     )
-                # STRUCTURAL close of the denylist-completeness class (r31): DENY any
+                # STRUCTURAL close of the denylist-completeness class: DENY any
                 # STANDARD-LIBRARY / BUILTIN module (keyed on the resolved real
                 # top-level package), regardless of trust or allowlist. This closes
                 # the whole class the explicit denylist above kept chasing one module
@@ -432,7 +433,7 @@ def resolve_function_registry_key(
                             import_path=f"{module_name}:{qualname}",
                         )
                 elif not is_inert_first_party_callable(obj):
-                    # Defense-in-depth (mirrors the r21 bundle-unpickler narrowing):
+                    # Defense-in-depth (mirrors the bundle-unpickler narrowing):
                     # a genuinely torchlens-owned callable is auto-trusted ONLY if it
                     # is a vetted-inert first-party symbol (public facet recipe /
                     # transform / intervention helper). A PRIVATE torchlens util --
@@ -481,7 +482,7 @@ def resolve_function_registry_key(
                         module=resolved_owner,
                         import_path=f"{module_name}:{qualname}",
                     )
-                # STRUCTURAL stdlib/builtin close (r31): a dotted qualname can walk OFF
+                # STRUCTURAL stdlib/builtin close: a dotted qualname can walk OFF
                 # a permitted user/torch module and land on a stdlib/builtin callable
                 # (e.g. a trusted ``mymod:io.open`` resolving ``io.open``, real module
                 # ``io``). ``_DENIED_MODULES`` above never enumerates every such owner;
@@ -496,7 +497,7 @@ def resolve_function_registry_key(
                         module=resolved_owner,
                         import_path=f"{module_name}:{qualname}",
                     )
-                # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked BACK into
+                # PURITY PARITY. A callable that walked BACK into
                 # the torch namespace via a dotted qualname -- OR a module-less C tensor
                 # method (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a
                 # PURE forward op: ``torch`` also hosts side-effecting builtins
@@ -508,8 +509,8 @@ def resolve_function_registry_key(
                 # ``__module__ is None``), and on ``"torchlens.backends.torch.wrappers"``
                 # for ANY torch op TorchLens has capture-wrapped (the near-universal live
                 # state) -- so a raw string torch/prefix check misses a wrapped
-                # ``resize_`` / ``torch.load`` (the r36 hole). Mirror the r35
-                # torchlens-walk fix on the REAL identity: when the real owner is
+                # ``resize_`` / ``torch.load`` (the hole). Mirror the
+                # torchlens-walk gate on the REAL identity: when the real owner is
                 # module-less OR torch, hold it to ``is_pure_forward_callable`` (which
                 # unwraps + covers the tensor-method-descriptor case, the storage-unsafe /
                 # ``apply_`` / ``map_`` name guards, and torch name/purity). Genuinely
@@ -537,7 +538,7 @@ def resolve_function_registry_key(
                         import_path=f"{module_name}:{qualname}",
                     )
 
-            # OPERATOR GADGET name-scope (r33, A-R32-1). The ``operator`` /
+            # OPERATOR GADGET name-scope. The ``operator`` /
             # ``_operator`` root is carved out of the stdlib denial so ``operator:neg``
             # survives, but that carve-out must NOT re-admit the generic operator
             # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
@@ -664,11 +665,11 @@ def _import_ref_registry_key(module_name: str, qualname: str) -> FunctionRegistr
         if module_name == "torch.nn.functional":
             return FunctionRegistryKey("torch.nn.functional", terminal, dispatch_kind)
         # Route BOTH ``operator`` and its C accelerator ``_operator`` onto the fixed,
-        # name-allowlisted operator root (r33, A-R32-1): the fixed root purity-gate
+        # name-allowlisted operator root: the fixed root purity-gate
         # restricts operator to ``_ALLOWED_OPERATOR_NAMES``, so ``_operator:neg`` still
         # resolves while ``_operator:attrgetter`` / ``_operator:setitem`` are DENIED --
         # instead of ``_operator:*`` falling through to the foreign ``custom`` tail
-        # (which, before r33, applied no operator name filter).
+        # (which applies no operator name filter).
         if module_name in {"operator", "_operator"}:
             return FunctionRegistryKey("operator", terminal, dispatch_kind)
     if module_name in {"torch._tensor", "torch.Tensor"} and "." not in qualname:

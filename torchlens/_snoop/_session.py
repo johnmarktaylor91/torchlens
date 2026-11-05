@@ -1,4 +1,4 @@
-"""The one read-only narration observer slot (snoop D1; lane F28).
+"""The one read-only narration observer slot.
 
 ``EchoSession`` is installed at capture entry as the runtime-only attribute
 ``trace.__dict__["_echo_session"]`` (never a declared Trace field, never
@@ -473,8 +473,7 @@ class EchoSession:
                 self._module_stack.append(frame)
                 if self._select_all:
                     # Unscoped narration prints structure lines immediately
-                    # (default ON with narrate=True; the review's op-only default is a
-                    # recorded dissent, snoop s10 D3).
+                    # (default ON with narrate=True).
                     frame.printed = True
                     self._deliver(
                         NarrationEvent(
@@ -639,7 +638,7 @@ class EchoSession:
             self._disable(exc)
 
     def render_failure_tail(self, exc: BaseException) -> list[str]:
-        """Render the crash tail block, oldest line first (snoop D5)."""
+        """Render the crash tail block, oldest line first."""
 
         # The headline names the forward's own exception, not the door's
         # TraceCaptureError wrapper around it.

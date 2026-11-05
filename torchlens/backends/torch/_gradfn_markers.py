@@ -1,11 +1,11 @@
-"""FLIP-2 grad_fn-fire marker sink helpers (torchnative W2.0, lane F27).
+"""Grad_fn-fire marker sink helpers.
 
 The backward join's carrier state: the per-trace open-marker LIFOs
 (weak-keyed by the owning trace, drained at every pass boundary), the
 observability-session probe, and the push / pop / typed-internal-bracket
-primitives ``backends/torch/backward.py`` rides. Split out of the backward
-god-file under its size ratchet; backward.py remains the ONE node-hook
-registration path (the no-parallel-hook-stack dependency test).
+primitives ``backends/torch/backward.py`` rides. Split out of backward.py,
+which remains the ONE node-hook registration path (the no-parallel-hook-stack
+dependency test).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import torch
 
 _GRADFN_MARKER_TOKENS: weakref.WeakKeyDictionary[Any, dict[int, list[Any]]]
 _GRADFN_MARKER_TOKENS = weakref.WeakKeyDictionary()
-"""Per-trace ``grad_fn_object_id -> open profiler-marker LIFO`` (F27 FLIP-2).
+"""Per-trace ``grad_fn_object_id -> open profiler-marker LIFO``.
 
 The grad_fn-fire ``record_function`` sink rides the existing node-hook
 bracket: the timing prehook pushes a marker at its start-stamp line, the
@@ -31,7 +31,7 @@ cleanup closes anything still open (disclosed, never dropped).
 
 
 def _gradfn_marker_list(trace: Any, grad_fn_object_id: int) -> list[Any]:
-    """Return (and lazily build) one node's open-marker LIFO (FLIP-2)."""
+    """Return (and lazily build) one node's open-marker LIFO."""
 
     by_node = _GRADFN_MARKER_TOKENS.get(trace)
     if by_node is None:
@@ -58,7 +58,7 @@ def _obs_session_profiler() -> Any | None:
 def _push_gradfn_marker(
     trace: Any, gradfn_marker_tokens: list[Any], grad_fn_object_id: int, call_index: int
 ) -> None:
-    """Open one grad_fn-fire marker at the start-stamp line (FLIP-2).
+    """Open one grad_fn-fire marker at the start-stamp line.
 
     A registration failure emits a typed ``marker_registration_gap`` fact
     (a session-time counter the join facts disclose) and the fire stays
@@ -79,7 +79,7 @@ def _push_gradfn_marker(
         marker.__enter__()
     # A registration failure of ANY kind degrades this fire to unmarkered
     # and emits the typed marker_registration_gap fact -- an optional
-    # measurement never interrupts the user's backward (memo W2.0).
+    # measurement never interrupts the user's backward.
     except Exception:  # noqa: BLE001 - typed-gap degradation, never a swallowed verdict
         gaps = trace.__dict__.get("_tl_gradfn_marker_gaps", 0)
         trace.__dict__["_tl_gradfn_marker_gaps"] = gaps + 1
@@ -99,7 +99,7 @@ def _exit_gradfn_marker(marker: Any) -> None:
 def _enter_internal_gradfn_bracket(grad_fn_object_id: int) -> Any | None:
     """Bracket TorchLens's OWN posthook logging with a typed internal span.
 
-    TN-D18: on a gradient-saving capture our own posthook logging outnumbers
+    On a gradient-saving capture our own posthook logging outnumbers
     true engine work 1513:12 -- without the typed bracket the complement
     bucket would publish our clone storm under torch's name.
     """
@@ -118,7 +118,7 @@ def _enter_internal_gradfn_bracket(grad_fn_object_id: int) -> Any | None:
 
 
 def _drain_gradfn_markers(trace: Any) -> int:
-    """Close every still-open grad_fn marker at a pass boundary (FLIP-2).
+    """Close every still-open grad_fn marker at a pass boundary.
 
     A raising node never runs its posthook (reproduced: 5 nodes hooked, 3
     markers, 1 leak), so the boundary cleanup closes anything still open

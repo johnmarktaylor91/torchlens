@@ -1,13 +1,13 @@
-"""The tier-P/M watch engine over the C06 collector (memo build item 5-6).
+"""The tier-P/M watch engine over the collector.
 
 ``watch(model, to=sink, ...)`` attaches ONCE with disclosed cost tiers:
 
-- **Tier P (default)** -- parameters / gradients / updates through the C06
+- **Tier P (default)** -- parameters / gradients / updates through the
   optimizer-boundary hooks. Wraps NO forward, runs NO discovery forward:
   parameter sites are catalogued directly, so the default tier never
   executes the user's model at all.
 - **Tier M** -- module-output activations through ordinary forward hooks
-  (the C06 Route-A collector). Requires an explicit selector AND
+  (the Route-A collector). Requires an explicit selector AND
   ``inputs=`` (the one real attach-time forward, run in the model's
   CURRENT mode -- never the shipped Lightning callback's eval()/no_grad()
   re-trace flaw); zero matches refuse at attach with the live module census.
@@ -18,13 +18,13 @@
   capture, and that cost is calibrated and disclosed at attach
   (``trackers/_op_grain.py``).
 
-Step law (memo 3.7): the caller's ``global_step`` is mandatory; there is no
+Step law: the caller's ``global_step`` is mandatory; there is no
 hidden counter, ever. Sources: the ``with watch.step(n):`` scope
 (authoritative), ``step=callable`` at attach for unchanged loops, or the
 framework callbacks. An optimizer boundary reached with NO step source
 refuses typed naming all three.
 
-Enablement law (memo 3.16): watching is a visible call. The kill switch
+Enablement law: watching is a visible call. The kill switch
 ``TORCHLENS_WATCH_DISABLE=1`` only ever turns things OFF, and a disabled
 watcher still writes its ``torchlens/run`` rows saying it was disabled and
 by what.
@@ -77,7 +77,7 @@ __tl_layer__ = "L8"
 #: The kill switch (off-only; registered in torchlens._utils.env_flags).
 WATCH_DISABLE_ENV = "TORCHLENS_WATCH_DISABLE"
 
-#: Closed signal vocabulary -> C06 stream (or a typed deferral).
+#: Closed signal vocabulary -> observability stream (or a typed deferral).
 SIGNALS = ("parameters", "gradients", "updates", "activations", "activation_grads")
 
 _SIGNAL_STREAMS = {
@@ -92,25 +92,24 @@ _SIGNAL_STREAMS = {
 #: this, so only a forced cadence of 1 ever samples.
 _NEVER = 2**62
 
-#: Default scalar cadence (memo 3.8, majority; the G1 gate may tune the
-#: constant, never the first/last rule).
+#: Default scalar cadence.
 DEFAULT_EVERY = 50
 
 #: Live (unclosed) sessions per model, keyed by the tag-grammar components
 #: ``(name, namespace)``. A second ``watch()`` on the same model under the
 #: same grammar would install a second hook set and emit every point TWICE
-#: into a shared sink (AUD-CODE 2.14); it refuses typed, while distinct
+#: into a shared sink; it refuses typed, while distinct
 #: ``name=`` values keep the documented multi-session spelling.
 _ACTIVE_SESSIONS: weakref.WeakKeyDictionary[
     torch.nn.Module, dict[tuple[str | None, str | None], WatchSession]
 ] = weakref.WeakKeyDictionary()
 
-#: Boundary scale evidence -> the StepBlock ``unscaled`` tri-state (the C06
+#: Boundary scale evidence -> the StepBlock ``unscaled`` tri-state (the
 #: record keeps the numbers it measured; "no" = still scaled, corrected at
 #: emission). Anything else is "unknown", never a default.
 _EVIDENCE_TO_UNSCALED = {"unscaled_observed": "yes", "unscaled_derived": "no"}
 
-#: Boundary scale evidence -> the per-observation ``grad_scale`` stamp (D7).
+#: Boundary scale evidence -> the per-observation ``grad_scale`` stamp.
 _EVIDENCE_TO_GRAD_SCALE = {"unscaled_observed": "unscaled", "unscaled_derived": "scaled"}
 
 
@@ -126,7 +125,7 @@ def _module_census(model: torch.nn.Module) -> dict[str, int]:
 
 
 def _foreign_watch_prefixes(model: torch.nn.Module) -> tuple[str, ...]:
-    """Detect a foreign watcher's hooks on this model (G7).
+    """Detect a foreign watcher's hooks on this model.
 
     ``wandb.watch`` installs forward/backward hooks whose callables live in
     the ``wandb`` package; the scan is vendor-agnostic (any non-torchlens
@@ -208,7 +207,7 @@ class CloseReport:
 
 @dataclass(frozen=True)
 class _SessionConfig:
-    """The session-plumbing bundle (the C06 WatchSettings precedent):
+    """The session-plumbing bundle (the WatchSettings precedent):
     scheduling, step sourcing, phase policy, and the event seam travel as
     one object so the session constructor stays flat-and-small."""
 
@@ -284,9 +283,9 @@ class WatchSession:
         self._pending_events: list[ObserverEvent] = []
         if self.event_stream is not None:
             # Subscribe a METHOD, never the bound ``append`` of the initial
-            # list: the old subscription kept feeding the original list after
-            # the first drain rebound ``_pending_events`` to a fresh one, so
-            # every verdict after the first drain was orphaned (AUD-CODE 2.14c).
+            # list: that subscription would keep feeding the original list after
+            # the first drain rebinds ``_pending_events`` to a fresh one, so
+            # every verdict after the first drain would be orphaned.
             self.event_stream.subscribe(self._receive_event)
 
     # -- emission plumbing -------------------------------------------------
@@ -322,15 +321,14 @@ class WatchSession:
                 )
 
     def _stage_attach_rows(self) -> None:
-        """Build the manifest (memo 3.5) + heartbeat rows; emission is deferred.
+        """Build the manifest + heartbeat rows; emission is deferred.
 
-        Both used to land at step 0 the moment ``watch()`` returned. A resumed
-        wandb run (already at step N) DROPS every ``log(step=0)`` call, so the
-        rows saying "this run is being watched" were exactly the ones that
-        vanished (AUD-CODE 2.14). They now ride the first step the session
-        actually sees (``_emit_attach_rows``); ``close()`` emits them at the
-        last seen step (or 0 when no step ever ran) so no run ends without
-        them. Emission order is preserved: they precede the first data row.
+        Landing them at step 0 the moment ``watch()`` returns would lose them: a
+        resumed wandb run (already at step N) DROPS every ``log(step=0)`` call.
+        They ride the first step the session actually sees
+        (``_emit_attach_rows``); ``close()`` emits them at the last seen step
+        (or 0 when no step ever ran) so no run ends without them. Emission
+        order is preserved: they precede the first data row.
         """
 
         if self._manifest_emitted or self.collector is None:
@@ -379,15 +377,15 @@ class WatchSession:
             self._drain_events(block)
 
     def _unscale_derived(self, block: CommittedBlock) -> tuple[CommittedBlock, int]:
-        """Correct a block reduced from SCALED grads in closed form (memo 3.11).
+        """Correct a block reduced from SCALED grads in closed form.
 
         The boundary stamped ``unscaled="no"`` plus the observed power-of-two
         scale when the scaler had NOT unscaled this optimizer (a plain
         ``opt.step()`` after ``scaler.scale(loss).backward()``). The ring
         record keeps the scaled numbers it measured; the EMISSION carries the
         corrected ones (evidence ``unscaled_derived``, disclosed on
-        ``torchlens/run/amp_unscale_derived``). Scaled numbers used to ship
-        stamped ``unscaled='yes'`` (AUD-CODE 2.14b).
+        ``torchlens/run/amp_unscale_derived``). Scaled numbers are never stamped
+        ``unscaled='yes'``.
         """
 
         truth = block.block
@@ -437,7 +435,7 @@ class WatchSession:
         self._emit(StepEmission(step=step, scalars=(point,), histograms=()))
 
     def emit_check(self, name: str, outcome: int, step: int) -> None:
-        """The explicit checks-finding door (memo build item 5).
+        """The explicit checks-finding door.
 
         ``outcome`` is the closed 0/1/2 vocabulary (pass/warn/fail); a
         failure's retained-trace artifact link rides the close report, not
@@ -491,7 +489,7 @@ class WatchSession:
     # -- the optimizer boundary --------------------------------------------
 
     def _boundary_pre_hook(self, optimizer: Any, args: Any, kwargs: Any) -> None:
-        """Registered FIRST: step-source law + AMP scale read (memo 3.7/3.11).
+        """Registered FIRST: step-source law + AMP scale read.
 
         Fires inside ``scaler.step(optimizer)`` after the scaler's own
         unscale and BEFORE ``scaler.update()`` -- the one moment the scale
@@ -534,8 +532,8 @@ class WatchSession:
         ``scaler.scale(loss).backward()`` leaves the factor on every grad, so
         the reduction is corrected in closed form at emission (evidence
         ``unscaled_derived``); an unreadable stage is ``scaled_unknown_factor``
-        and the record says so. A readable ``get_scale()`` alone used to be
-        taken as proof of unscaling (AUD-CODE 2.14b).
+        and the record says so. A readable ``get_scale()`` alone is not
+        taken as proof of unscaling.
         """
 
         scale, evidence = observed_grad_scale(self._current_scaler)
@@ -559,10 +557,9 @@ class WatchSession:
         Under ``step=callable`` the module forward hooks fill the collector's
         staging buffers BEFORE ``optimizer.step()`` reaches this boundary, and
         ``_open_block`` zeroes those buffers as part of opening -- so tier M
-        emitted ZERO activations on the documented ``step=`` spelling and never
-        refused (AUD-CODE 2.14a). The pending forward staging is carried across
-        the open here; an open that ADOPTS pending staging on the collector
-        side is the durable home (filed).
+        would emit ZERO activations on the documented ``step=`` spelling and
+        never refuse. The pending forward staging is carried across the open
+        here.
         """
 
         collector = self.collector
@@ -627,7 +624,7 @@ class WatchSession:
         new_segment: bool = False,
         micro_batches: int | None = None,
     ) -> Iterator[None]:
-        """The authoritative step transaction (memo 3.7).
+        """The authoritative step transaction.
 
         Brackets one training step on the CALLER's axis; also the home of
         AMP scale stamping and skipped-step truth. Duplicate or decreasing
@@ -742,7 +739,7 @@ class WatchSession:
             return
         collector._block_truth.update(truth_updates)
         if scaler is not None:
-            # D7: every gradient observation carries the boundary's scale
+            # every gradient observation carries the boundary's scale
             # truth, never a default; the emitter corrects "scaled" rows.
             stamp = _EVIDENCE_TO_GRAD_SCALE.get(self._scale_evidence, "unknown")
             for key in list(collector._block_grad_scale):
@@ -814,7 +811,7 @@ class WatchSession:
 
         Reduces parameters (and any still-present gradients) directly and
         emits at the last seen step -- so no correct short run ends
-        one-point (memo 3.8). Updates cannot be re-derived here (they need
+        one-point. Updates cannot be re-derived here (they need
         the pre/post boundary pair) and are not fabricated.
         """
 
@@ -917,8 +914,8 @@ class WatchSession:
         self._flush_and_close_sinks()
         report = self._report()
         # DATA points only: a heartbeat or manifest landing in a sink is not
-        # "the dashboard has data" (the old count let run-health rows mask an
-        # empty run, AUD-CODE 2.14a).
+        # "the dashboard has data" (counting them would let run-health rows mask
+        # an empty run).
         emitted_any = any(row.emitted_data_points for row in self.ledger.sinks.values())
         if (
             not unwinding
@@ -943,8 +940,8 @@ class WatchSession:
     def _flush_and_close_sinks(self) -> None:
         """Flush then close every sink, latching failures on its ledger row.
 
-        flush and close are SEPARATE attempts: a flush that raised used to
-        skip close() entirely and leak the handle (AUD-CODE 2.14).
+        flush and close are SEPARATE attempts: a flush that raised must
+        not skip close() and leak the handle.
         """
 
         for sink in self.sinks:
@@ -1315,7 +1312,7 @@ def _resolve_settings(
     descriptor: HistogramDescriptor | None,
     needs_histograms: bool,
 ) -> WatchSettings:
-    """Fold the descriptor override and the sketch tier into the C06 settings."""
+    """Fold the descriptor override and the sketch tier into the settings."""
 
     base_settings = settings if settings is not None else WatchSettings()
     if descriptor is not None or needs_histograms:
@@ -1420,8 +1417,8 @@ def _preflight_histogram_sinks(
     """Attach-time histogram admission for sinks that declare a check.
 
     A sink may expose ``preflight_histograms(descriptor)`` raising typed;
-    the same refusal raised inside ``emit_histogram`` used to be swallowed
-    by the runtime latch and silently stopped every later row.
+    the same refusal raised inside ``emit_histogram`` would be swallowed
+    by the runtime latch and silently stop every later row.
     """
 
     if not needs_histograms:
@@ -1439,8 +1436,8 @@ def _preflight_tags(
 ) -> None:
     """Render one tag per catalogued site at ATTACH so an unsafe leaf refuses now.
 
-    The first render used to happen inside the first drain -- inside a
-    ``finally`` -- where the typed refusal masked the user's own exception.
+    Rendering inside the first drain would happen inside a ``finally``,
+    where the typed refusal would mask the user's own exception.
     """
 
     param_families = tuple(f for f in ("parameters", "gradients", "updates") if f in requested)
@@ -1453,7 +1450,7 @@ def _preflight_tags(
 def _refuse_sparse_gradients(collector: HistoryCollector, requested: tuple[str, ...]) -> None:
     """Gradient watching over ``sparse=True`` modules refuses at attach.
 
-    The gradient reduction kernel needs dense grads; a sparse grad used to
+    The gradient reduction kernel needs dense grads; a sparse grad would
     crash UNTYPED inside the optimizer pre-hook, aborting the user's step.
     """
 
@@ -1482,12 +1479,12 @@ def _refuse_sparse_gradients(collector: HistoryCollector, requested: tuple[str, 
 def _discover_without_forward(collector: HistoryCollector) -> None:
     """Tier-P discovery: catalog parameter sites with NO forward pass.
 
-    The C06 ``discover()`` spelling runs one real discovery forward because
+    The collector's ``discover()`` spelling runs one real discovery forward because
     module sites need output geometry; parameter sites do not. This is the
     param-only door tier P uses so the DEFAULT tier never executes the
     user's model. Seam note: uses the collector's internal catalog steps in
-    their documented order; a public param-only discovery door on the C06
-    collector is filed as a follow-up.
+    their documented order; a public param-only discovery door on the
+    collector does not exist yet.
     """
 
     if any(stream == "activation" for stream in collector.streams):
@@ -1522,7 +1519,7 @@ def _discover_without_forward(collector: HistoryCollector) -> None:
 def _check_budgets(
     collector: HistoryCollector | OpGrainCollector, budgets: Mapping[str, int] | None
 ) -> None:
-    """Enforce the hard preflight caps against the plan FACTS (memo 3.9)."""
+    """Enforce the hard preflight caps against the plan FACTS."""
 
     if not budgets:
         return

@@ -107,7 +107,7 @@ def completeness_scope_for_wrapper(
 def record_runnable_input_storage_sites(
     trace: Any, tensor_leaves: list[tuple[torch.Tensor, Any]]
 ) -> None:
-    """Index model-input TENSOR leaves by BASE-storage identity for alias-read witnessing (r31).
+    """Index model-input TENSOR leaves by BASE-storage identity for alias-read witnessing.
 
     The object-identity map (``_runnable_input_tensor_sites``) misses a metadata read routed
     through a ``.data`` / ``.detach()`` alias (or any derived view) of an input leaf: the alias
@@ -122,13 +122,13 @@ def record_runnable_input_storage_sites(
 
     if not tensor_leaves:
         return
-    # INV-2 annotation (r37): this map keys candidate input-leaf sites by storage
+    # This map keys candidate input-leaf sites by storage
     # POINTER for attribution-only lookups (a ``.data``/view metadata read resolves
     # to its leaf). A pointer miss fails CLOSED (no attribution -> the fail-closed
     # nets keep the run honest), never proves disjointness, so identity keying is
     # sound without the absolute-interval engine.
     storage_sites: dict[int, list[Any]] = {}
-    # r73 F1: LABEL-keyed capture-layout map for the input-DERIVED activation layout
+    # LABEL-keyed capture-layout map for the input-DERIVED activation layout
     # net. Input source tensors are logged (and labeled) BEFORE this indexer runs, so
     # each leaf's raw label resolves an ``OpEvent.input_ancestors`` member back to its
     # boundary site plus the leaf's capture-time stride tuple -- the layout basis a
@@ -146,7 +146,7 @@ def record_runnable_input_storage_sites(
                     tuple(int(v) for v in tensor.stride()),
                     int(tensor.storage_offset()),
                 )
-                # r33 F5: the LEAF's conj/neg dispatch bits. A conj/neg VIEW of an input leaf
+                # the LEAF's conj/neg dispatch bits. A conj/neg VIEW of an input leaf
                 # shares its storage AND geometry but flips these bits; recording the leaf's
                 # true bits here lets the classifier reject such a same-geometry view instead
                 # of misattributing its ``is_conj``/``is_neg`` read as a leaf fact.
@@ -166,7 +166,7 @@ def record_runnable_input_storage_sites(
 def _classify_input_storage_alias(
     trace: Any, source: torch.Tensor
 ) -> tuple[str | None, Any, tuple[bool, bool] | None]:
-    """Classify ``source`` against the input-leaf storage map (r31, holes A/C).
+    """Classify ``source`` against the input-leaf storage map.
 
     Returns ``(_ALIAS_EQUIVALENT, site, leaf_conj_neg)`` when ``source`` shares an input leaf's
     base storage with IDENTICAL geometry (a ``.data`` / ``.detach()`` alias -- a metadata read on
@@ -174,7 +174,7 @@ def _classify_input_storage_alias(
     storage with DIFFERENT geometry (a derived view the replay never re-derives), or
     ``(None, None, None)`` when it does not alias any input leaf's storage (a genuine unrelated
     activation). ``leaf_conj_neg`` is the matched leaf's ``(is_conj, is_neg)`` bits so the caller
-    can reject a same-geometry conj/neg view (r33 F5). Storage-pointer/geometry reads run under
+    can reject a same-geometry conj/neg view. Storage-pointer/geometry reads run under
     the internal marker so the live patches stay pass-through and cannot recurse back into
     observation.
     """
@@ -207,7 +207,7 @@ def _classify_input_storage_alias(
 
 
 def _input_base_tensor(source: torch.Tensor) -> torch.Tensor | None:
-    """Return ``source._base`` read under the internal marker (r31).
+    """Return ``source._base`` read under the internal marker.
 
     ``_base`` is a witnessed getset PROPERTY replaced by a recording descriptor during a
     runnable forward; reading it here for the view-linkage check must go under the
@@ -255,7 +255,7 @@ def _record_input_metadata_read(trace: Any, source: torch.Tensor, name: str, val
 
 
 def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
-    """Attribute one metadata read to a model-input leaf, an alias, or a fail-closed view (r31).
+    """Attribute one metadata read to a model-input leaf, an alias, or a fail-closed view.
 
     Cases, in order:
 
@@ -265,7 +265,7 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
       reads these on input-derived views while logging is enabled (verified), indistinguishable
       from a user view read, so a non-leaf read is IGNORED (leaf-only; documented residual).
     * VIEW-FAIL AUTOGRAD / structural (``is_leaf`` / ``retains_grad`` / ``_base`` / ``_is_view``):
-      a read on a DERIVED VIEW of an input leaf (``retains_grad`` on a non-leaf view, r31 hole C)
+      a read on a DERIVED VIEW of an input leaf (``retains_grad`` on a non-leaf view)
       is attributed by the CHEAP ``_base``-in-sites linkage and fails closed -- the view's state
       is not re-derivable from the runtime leaf. A ``.data`` / ``.detach()`` storage-alias
       (``_base`` None) is IGNORED (CONSTANT/detached, input-independent, no hole). These four are
@@ -273,7 +273,7 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
       Python view read -- the framework-vs-user discriminator is the linkage itself.
     * ALIAS-SAFE family (layout methods + ``is_conj`` / ``is_neg`` / ``is_inference`` /
       ``is_pinned`` / ``is_shared`` / ``is_coalesced``): attributed by STORAGE IDENTITY. A read
-      on a ``.data`` / ``.detach()`` storage-alias with IDENTICAL geometry (r31 hole A) records
+      on a ``.data`` / ``.detach()`` storage-alias with IDENTICAL geometry records
       the leaf fact -- its value provably equals a direct leaf read. A storage-alias with
       DIFFERENT geometry (a derived view, ``x.t().is_contiguous()``) fails closed. Only
       Python-level reads reach this patch; torch's internal C++ layout reads bypass it, so a
@@ -299,11 +299,11 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
     if name in _INPUT_METADATA_ALIAS_SAFE_NAMES:
         kind, site, leaf_conj_neg = _classify_input_storage_alias(trace, source)
         if kind == _ALIAS_EQUIVALENT:
-            # r33 F5 (over-trigger fix): a conj/neg VIEW shares an input leaf's storage AND
+            # Avoids an over-trigger: a conj/neg VIEW shares an input leaf's storage AND
             # geometry but FLIPS the conj/neg dispatch bit. Geometry alone would record the
             # view's ``is_conj=True`` as a LEAF fact, which the RAW runtime leaf (``is_conj``
             # False) then contradicts -> a forced FALSE divergence on the ORIGINAL input
-            # (complex models permanently diverged, r31 regression). For ``is_conj``/``is_neg``
+            # (complex models permanently diverged). For ``is_conj``/``is_neg``
             # the observed bit must EQUAL the leaf's; a same-geometry bit MISMATCH is a genuine
             # derived (conj/neg) view and fails closed rather than misrecording a leaf fact.
             if name in _INPUT_METADATA_CONJ_NEG_NAMES and leaf_conj_neg is not None:
@@ -319,7 +319,7 @@ def _observe_input_metadata_read(trace: Any, source: torch.Tensor, name: str, va
             if base is not None and id(base) in sites:
                 _INPUT_METADATA_VIEW_READ.add(trace)
             elif name in _INPUT_METADATA_LAYOUT_NAMES:
-                # r73 F1: a layout read on a genuinely NEW activation (fresh storage,
+                # a layout read on a genuinely NEW activation (fresh storage,
                 # no input alias/view linkage). Memory format PROPAGATES through
                 # elementwise ops, so if the receiver's value DAG roots at a model
                 # input, the read steers on the runtime input's layout -- attribute

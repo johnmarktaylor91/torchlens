@@ -1,4 +1,4 @@
-"""Representation-geometry math kernel (repgeom/ promotion, C01 item 18).
+"""Representation-geometry math kernel (repgeom/ promotion).
 
 NumPy/Torch-only geometry: distances, RDMs, classical MDS, scree,
 effective dimensionality, Procrustes. No Trace access, no rendering.
@@ -426,7 +426,7 @@ def _kernel_angular(*, center_rows: bool) -> Any:
     return kernel
 
 
-# D-5 metric dispatch table: callable metrics and a streaming-Gram backend
+# Metric dispatch table: callable metrics and a streaming-Gram backend
 # land later as new rows here, without an API change.
 _TORCH_METRIC_KERNELS: dict[str, Any] = {
     "euclidean": _kernel_minkowski(2.0),
@@ -444,7 +444,7 @@ def _condensed_upper(distances: torch.Tensor) -> torch.Tensor:
     return distances[index[0], index[1]]
 
 
-def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the D-5 public rdm() keyword set one-to-one
+def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the public rdm() keyword set one-to-one
     features: torch.Tensor,
     metric: str,
     *,
@@ -453,7 +453,7 @@ def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the D-5 public rdm() keyword se
     output_device: Any,
     output: str,
 ) -> Any:
-    """Blocked torch RDM path behind the D-5 keyword-only options.
+    """Blocked torch RDM path behind the keyword-only options.
 
     Parameters
     ----------
@@ -500,7 +500,7 @@ def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the D-5 public rdm() keyword se
     return result
 
 
-def rdm(  # noqa: PLR0913 -- the D-5-widened public signature (brainpipe memo): each keyword is a spec'd GPU-scale knob, documented verbatim
+def rdm(  # noqa: PLR0913 -- public signature; each keyword is a documented GPU-scale knob
     activations: Any,
     metric: DistanceMetric = "euclidean",
     *,
@@ -515,7 +515,7 @@ def rdm(  # noqa: PLR0913 -- the D-5-widened public signature (brainpipe memo): 
 
     The first activation dimension is treated as the stimulus dimension and
     all remaining dimensions are flattened per stimulus. The keyword-only
-    options (F20, brainpipe memo D-5; spellings DOCUMENTED-UNSTABLE) widen
+    options (spellings DOCUMENTED-UNSTABLE) widen
     the existing name for GPU-scale work: the no-new-keyword call is
     bit-identical to the historical behavior.
 
@@ -583,7 +583,7 @@ def rdm(  # noqa: PLR0913 -- the D-5-widened public signature (brainpipe memo): 
         or metric == "manhattan"
     )
     if not modern:
-        # Bit-identical legacy path (D-5: the no-new-keyword call must not
+        # Bit-identical legacy path (the no-new-keyword call must not
         # move a single existing caller's numbers).
         return activation_distance_matrix(activations, metric=metric)
 
@@ -653,7 +653,7 @@ def _kendall_tau_a(a: np.ndarray, b: np.ndarray) -> float:
 def compare_rdms(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
     """Return a descriptive rank correlation between two model RDMs.
 
-    F20, brainpipe memo D-6 (spelling DOCUMENTED-UNSTABLE): the same class
+    Spelling DOCUMENTED-UNSTABLE: the same class
     of descriptive object as CKA. Both RDMs are aligned on their strict
     upper triangles with the diagonal EXCLUDED -- the two silent hand-rolled
     errors this function exists to prevent are including the diagonal and

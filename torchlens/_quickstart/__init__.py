@@ -40,10 +40,9 @@ from ._resolve import ResolvedInputs, attach_provenance, resolve_inputs
 
 __tl_layer__ = "FACADE"
 
-#: Typed root-surface registration fragment for lane F35 (merge law s5:
-#: feature lanes submit registrations in their own packages; F35 lands them
-#: on the root facade). Keys are requested ``tl.<name>`` spellings; values
-#: are ``(home_module, attribute)`` rows in ``_LAZY_ATTRS`` form.
+#: Typed root-surface registration fragment (feature packages submit registrations in their own
+#: packages; the root facade collects them). Keys are requested ``tl.<name>`` spellings; values are
+#: ``(home_module, attribute)`` rows in ``_LAZY_ATTRS`` form.
 ROOT_SURFACE_REGISTRATION: dict[str, tuple[str, str]] = {
     "draw": ("torchlens._user_funcs", "draw"),
     "Drawing": ("torchlens.viz", "Drawing"),

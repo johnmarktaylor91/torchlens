@@ -286,7 +286,7 @@ def format_flops(
 def _format_number(value: float | None) -> str:
     """Format a compact tensor statistic value.
 
-    Precision law (C02 / lovely D7): 4 significant digits with trailing
+    Precision law: 4 significant digits with trailing
     zeros KEPT -- ``%.4g`` stripped them, so ``0.99997`` printed ``1`` and
     no column aligned (the former live bug here).
 
@@ -402,16 +402,15 @@ def tensor_stats_summary(tensor: Any) -> str:
     if tensor.numel() == 0:
         return f"{prefix} empty"
 
-    # COMPAT WRAPPER over the sound stats kernel (C02; lovely bug 4): the
-    # former body cast the whole tensor to f64, built boolean masks, and
-    # synced eight times per line. Field layout is preserved; the numbers
-    # now come from ``torchlens.stats``.
+    # Compat wrapper over the stats kernel: it avoids casting the whole tensor
+    # to f64, building boolean masks, and syncing eight times per line. The
+    # numbers come from ``torchlens.stats``.
     try:
         from ..stats._tensor_stats import tensor_stats
 
         stats = tensor_stats(tensor)
         if stats.num_true is not None:
-            # bool family: the truth rate IS the semantics (lovely D12).
+            # bool family: the truth rate IS the semantics.
             return f"{prefix} true={stats.num_true}/{stats.numel}"
         if stats.num_nan is None or stats.num_posinf is None or stats.num_neginf is None:
             return prefix
@@ -424,9 +423,8 @@ def tensor_stats_summary(tensor: Any) -> str:
     except (RuntimeError, TypeError, ValueError):
         return prefix
 
-    # Complex moments are magnitude statistics and say so (lovely bug 3).
-    # The neg% field is RETIRED from the default line (F10 executes the D9
-    # ruling C02 carried as a residual): ~50% on 60% of real float lines,
+    # Complex moments are magnitude statistics and say so.
+    # The neg% field is absent from the default line: ~50% on 60% of real float lines,
     # and the exact count cost a full extra traversal for a fact the
     # sparkline already shows on the core grammar surfaces.
     mean_label, std_label = ("|mean|", "|std|") if stats.is_magnitude_based else ("mean", "std")
@@ -437,7 +435,7 @@ def tensor_stats_summary(tensor: Any) -> str:
         f"nan={_format_percent(nan_percent)} inf={_format_percent(inf_percent)} "
         f"zero={_format_percent(zero_percent)}"
     )
-    # Hazard marker is ASCII '!' in both encodings (lovely D4/bug 10).
+    # Hazard marker is ASCII '!' in both encodings.
     if nan_percent > 0:
         summary += f" [! {_format_percent(nan_percent)} NaN]"
     if inf_percent > 0:
@@ -591,7 +589,7 @@ def user_stacklevel(extra: int = 0) -> int:
     return 2 + extra
 
 
-#: PID of the interpreter that imported this module (r-b6 R40-3b). A raw
+#: PID of the interpreter that imported this module. A raw
 #: ``os.fork()`` child inherits the stamp with a different ``getpid()``, which
 #: is how ``warn_parallel`` sees through multiprocessing-invisible forks.
 _WARN_PARALLEL_IMPORT_PID: int = os.getpid()
@@ -638,7 +636,7 @@ def warn_parallel() -> None:
         If called from a child process that is not a distributed rank
         (code ``child_process_capture_unsupported``).
     """
-    # r-b6 R40-3b: child detection does NOT trust ``process.name`` — it is a
+    # child detection does NOT trust ``process.name`` — it is a
     # user-assignable constructor kwarg (``mp.Process(name="MainProcess")``),
     # and a raw ``os.fork()`` child is invisible to multiprocessing entirely
     # (it inherits the parent's process object wholesale). ``parent_process()``
@@ -647,10 +645,10 @@ def warn_parallel() -> None:
     # (and the wrapped-torch toggle state that makes their captures unsafe).
     process = mp.current_process()
     if mp.parent_process() is None and os.getpid() == _WARN_PARALLEL_IMPORT_PID:
-        # r5 b6-fable R40 (4th round): stamp rank ownership on THIS return
-        # too. The early-return skipped the stamp, so a MAIN-process rank
-        # that captured first never claimed it -- a raw ``os.fork()`` child
-        # then setdefault'ed its OWN pid below and was accepted as a rank.
+        # Stamp rank ownership on THIS return too. Skipping the stamp would let a
+        # MAIN-process rank that captured first never claim it, and a raw
+        # ``os.fork()`` child would then setdefault its OWN pid below and be
+        # accepted as a rank.
         try:
             import torch.distributed as dist
 
@@ -668,7 +666,7 @@ def warn_parallel() -> None:
             # "initialized" alone does not prove this process is a rank. The
             # first process to reach this check with an initialized group
             # stamps its PID; an inheritor of somebody else's stamp is a fork
-            # child of a rank, not a rank (r-b6 R40-3b). A rank whose parent
+            # child of a rank, not a rank. A rank whose parent
             # never captured is stamped here on ITS first capture — the stamp
             # is per-interpreter state, reset by spawn's fresh import.
             owner_pid = _DIST_GROUP_OBSERVED_PID.setdefault("pid", os.getpid())

@@ -1,11 +1,11 @@
-"""The ONE persistent input-provenance record (quickstart memo D5).
+"""The ONE persistent input-provenance record.
 
 ``InputProvenance`` is the rich runtime view; it serializes INTO the shipped
 ``ResolvedPreprocessing`` field shape (source / identifier / verified /
 config / description) and rides the existing KEEP-registered
 ``Trace.provenance.input_preprocessor`` slot on the ``Trace.save``/``tl.load`` bundle path,
 so a synthesized trace can never masquerade as a real one after a handoff --
-with ZERO new persisted schema fields (the C07 census is closed; this lane
+with ZERO new persisted schema fields (the census is closed; this lane
 mints none).
 
 Loading re-hydrates the rich view from the record's ``config`` payload via
@@ -29,7 +29,7 @@ __tl_layer__ = "L2"
 #: Version stamp for the config payload (bump = additive, load stays lenient).
 _PROVENANCE_VERSION = 1
 
-#: The binding trust sentence for inference (memo D6, verbatim in docs).
+#: The binding trust sentence for inference (verbatim in docs).
 EXACT_PATH_CAVEAT = (
     "Successful inference proves that this exact synthesized call ran under "
     "the stated execution policy and its capture verified. It does not prove "
@@ -60,7 +60,7 @@ class TensorFacts:
 class InputProvenance:
     """Persistent provenance for how a capture's input came to exist.
 
-    Attached for EVERY rung, including gold (memo D5): a record that only
+    Attached for EVERY rung, including gold: a record that only
     exists on suspicious traces would itself be a signal that can be lost in
     a handoff.
 
@@ -70,10 +70,10 @@ class InputProvenance:
         ``"user"`` (rung 1), ``"declared"`` (rung 2), or ``"inferred"``
         (rung 3).
     rung:
-        The ladder rung, 1-3 (rung 4 / meta is reserved behind D8).
+        The ladder rung, 1-3 (rung 4 / meta is reserved).
     has_semantic_values:
         True only when the values are caller-supplied real data. Gates
-        derived-semantics claims (memo D7).
+        derived-semantics claims.
     call_structure:
         Normalized call description: positional count, keyword names, and
         whether non-tensor arguments are present.
@@ -92,12 +92,12 @@ class InputProvenance:
     evidence_grade:
         ``verified_exact`` / ``empirically_flexible`` / ``under_determined``
         / ``unsupported`` -- exact-verification evidence held separately
-        from authoritative-canonical evidence (memo D5/D10).
+        from authoritative-canonical evidence.
     execution_policy:
         ``"caller_mode"`` (tl.trace keeps the caller's flags) or
         ``"eval_no_grad_restored"`` (summary/render pin and restore).
     caveats:
-        Rendered disclosure sentences (the D6 trust sentence and the
+        Rendered disclosure sentences (the trust sentence and the
         synthetic-graph caveat ride here on non-gold rungs).
     lazy_transitions:
         Module addresses whose lazy parameters materialized during the ONE
@@ -190,7 +190,7 @@ def provenance_for_plan(  # noqa: PLR0913 -- each kwarg is one NAMED evidence fi
 ) -> InputProvenance:
     """Build the provenance record for a resolved plan.
 
-    Non-gold rungs automatically carry the D6 trust sentence and the
+    Non-gold rungs automatically carry the trust sentence and the
     synthetic-graph caveat; the gold rung carries none.
     """
 

@@ -1,4 +1,4 @@
-"""Hop rule: grammar proposes, payload identity verifies (mikit D3/D4, wave 0a).
+"""Hop rule: grammar proposes, payload identity verifies.
 
 Internal substrate for dataflow walks over captured op graphs. A HOP is one
 step upstream across an op that transports a value without changing what it
@@ -13,7 +13,7 @@ never a silent one). The rule has two halves:
   consumers (string facets, plan surfaces) may run on the proposer alone.
 
 Every step carries the op's pass-qualified label and live ``site_key``
-(mikit D4: pass-qualified identity is day-one identity, never a user
+(pass-qualified identity is the identity, never a user
 decision). A shape-changing op never hops silently: it either parses into an
 explicit :class:`IndexMapRecord` or the walk stops at it, named.
 
@@ -56,7 +56,7 @@ _DROPOUT_FUNCS = frozenset({"dropout"})
 
 GrammarName = Literal["value", "branch"]
 
-#: Value-preserving grammar (mikit D3): identity/view kinds, casts, parseable
+#: Value-preserving grammar: identity/view kinds, casts, parseable
 #: index subsets, and dropout ONLY when the recorded args prove it inert
 #: (eval mode or p == 0). Used wherever the walk backs a tensor claim.
 VALUE_GRAMMAR: GrammarName = "value"
@@ -81,7 +81,7 @@ class HopRecord:
 
 @dataclass(frozen=True)
 class IndexMapRecord:
-    """Explicit position mapping across the walk's index hops (mikit F6).
+    """Explicit position mapping across the walk's index hops.
 
     ``derivation`` is ``"identity"`` when no index hop changed any extent
     (every recorded subscript kept every position) and ``"slice"`` when the

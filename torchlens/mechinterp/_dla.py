@@ -1,10 +1,10 @@
-"""Direct logit contributions (mikit D9; TLens ``logit_attrs``).
+"""Direct logit contributions (TLens ``logit_attrs``).
 
 CONVENTION, in one sentence: DLA is a linear decomposition of the ACTUAL
 logits at the actual operating point (frozen norm scale computed from the
 captured norm input), not a set of counterfactuals.
 
-The D9 rules, all load-bearing and all measured:
+The rules, all load-bearing and all measured:
 
 - DIRECTIONS-FIRST: build ``gamma * (W_U[:, answer] - W_U[:, vs])`` before
   any vocabulary-sized tensor can exist; peak memory scales with requested
@@ -133,7 +133,7 @@ def _map_positions(
     ``position_map`` is the recipe's ``logits_position_map`` IndexMapRecord;
     identity maps pass through; a slice-derived map translates residual
     positions to logits rows; a residual position outside the kept set
-    refuses (mikit D9 position honesty).
+    refuses (position honesty).
     """
 
     raw = [positions] if isinstance(positions, int) else list(positions)
@@ -185,7 +185,7 @@ def _map_positions(
 def _position_coordinates(
     anchor: LMHeadAnchor, residual: torch.Tensor, positions: Any
 ) -> tuple[torch.Tensor, tuple[int, ...], tuple[int, ...]]:
-    """Resolve the requested positions against BOTH tensors they index (D9).
+    """Resolve the requested positions against BOTH tensors they index.
 
     Returns the captured logits, the residual-stream rows, and the matching
     logits rows -- translated through the recipe's ``logits_position_map``
@@ -230,7 +230,7 @@ def direct_logit_contributions(
     vs: Any = None,
     positions: Any = -1,
 ) -> ContributionScores:
-    """Attribute the model's own logits to internal writers (mikit D9).
+    """Attribute the model's own logits to internal writers.
 
     Parameters
     ----------
@@ -369,7 +369,7 @@ def direct_logit_contributions(
 
 
 def _require_admissible(components: ComponentStack) -> None:
-    """Refuse diagnostic / CLOSED-UNRESOLVED / target-less stacks (D7)."""
+    """Refuse diagnostic / CLOSED-UNRESOLVED / target-less stacks."""
 
     if components.diagnostic_only or components.grading == "closed_unresolved":
         refuse(
@@ -391,7 +391,7 @@ def _require_admissible(components: ComponentStack) -> None:
 def _token_directions_for(
     w_u: torch.Tensor, answer: Any, vs: Any
 ) -> tuple[tuple[int, ...], tuple[int, ...] | None, torch.Tensor]:
-    """Validate token specs and build the raw directions FIRST (D9).
+    """Validate token specs and build the raw directions FIRST.
 
     No vocabulary-sized intermediate ever exists: the directions matrix is
     ``[d_model, n_requested]``.
@@ -424,7 +424,7 @@ def _constant_row(  # noqa: PLR0913 -- the D9 constant row's evidence set, spell
     """Build the ONE minimal constant row (final-norm beta + unembed bias).
 
     Writer-side biases are already inside the literal captured writers;
-    adding them here is the measured 6.35-logit double count (D9).
+    adding them here is the measured 6.35-logit double count.
     """
 
     constant = torch.zeros(shape, dtype=torch.float32)

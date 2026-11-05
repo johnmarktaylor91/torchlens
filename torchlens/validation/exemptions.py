@@ -104,14 +104,13 @@ SKIP_VALIDATION_ENTIRELY: dict[str, str] = skip_validation_justifications()
 # ---------------------------------------------------------------------------
 # Registry 2: Skip perturbation only (forward replay still runs).
 # Ops whose output values do not depend on any perturbable parent VALUE.
-# Each entry maps func name -> per-entry justification (r3 fix of finding
-# R19-F1: this was the only registry shaped as a bare set; every membership
-# now carries its own proof, matching ``SKIP_VALIDATION_ENTIRELY``). Contract
+# Each entry maps func name -> per-entry justification (every membership
+# carries its own proof, matching ``SKIP_VALIDATION_ENTIRELY``). Contract
 # clause: C2 perturbation sensitivity (``validation/CLAUDE.md`` replay step 5)
 # -- an entry is admissible only when the parent VALUE provably cannot affect
 # the output, proved from the saved call, never assumed from the op's name.
-# Round-31 registry narrowing: ``fill_`` (tensor fill VALUE at arg 1) and
-# ``expand_as`` (arg 0 values flow into the output) moved to
+# ``fill_`` (tensor fill VALUE at arg 1) and ``expand_as`` (arg 0 values flow
+# into the output) are deliberately NOT here: they live in
 # ``STRUCTURAL_ARG_POSITIONS`` so their genuine value edges stay
 # perturbation-tested.
 # ---------------------------------------------------------------------------
@@ -227,8 +226,8 @@ def uninitialized_by_design_applies(op: Any) -> bool:
     OVERLOADED, and only the argless / integer-sizes / ``torch.Size`` forms
     return uninitialized memory. ``new(tensor)`` and ``new(sequence_data)``
     are initialized, value-bearing, deterministic calls -- classifying them
-    uninitialized skipped replay entirely and blessed an actually WRONG
-    replay ``exempted`` without execution (b1-sol R08-1, reproduced). The
+    uninitialized would skip replay entirely and bless an actually WRONG
+    replay ``exempted`` without execution. The
     proof is fail-closed: a call not provably size-only is NOT exempt and
     falls through to real replay, where a wrong value fails loud.
 
@@ -312,7 +311,7 @@ def _uninitialized_value_origin(op: Any, source_trace: Any, depth: int = 0) -> b
         return False
     # Same per-call proof as the replay-skip consumer: a value-bearing
     # new(tensor)/new(data) result is REAL data, never uninitialized
-    # allocation memory (R08-1 sibling site).
+    # allocation memory.
     return uninitialized_by_design_applies(op)
 
 
@@ -897,7 +896,7 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
     ``where(mask, value, input)``. The input parent is irrelevant only when the
     saved mask is true at every output element; a tensor fill-value parent is
     irrelevant only when the saved mask is false at every output element. The
-    mask parent (F2 tightening: no longer a structural-position blanket) is
+    mask parent (not a structural-position blanket) is
     irrelevant only when the saved input already equals the fill value at
     every broadcast position -- then every possible mask yields the same
     output. Any other mask perturbation must run and register sensitivity.
@@ -1019,9 +1018,9 @@ def _perturbed_parents_are_zipped_siblings(layer: Op, layers_to_perturb: list[st
     ``meshgrid``/``broadcast_tensors`` zip N inputs to N outputs: output ``j``
     carries EXACTLY input ``j``'s values, so perturbing input ``k != j`` is
     legitimately insensitive for output ``j``, while perturbing input ``j``
-    must change it. The former whole-op skip (R08-2, b1-sol) exempted BOTH
+    must change it. A whole-op skip would exempt BOTH
     directions, so a dropped or misattributed value edge on these
-    multi-output ops was never perturbation-proved.
+    multi-output ops would never be perturbation-proved.
 
     The projection is fail-closed: a missing ``multi_output_index``, an
     unrecognized arg-position shape, or a perturbed parent not found in the
@@ -1314,7 +1313,7 @@ def _posthoc_discrete_output_decision(
     """
 
     if layer.dtype == torch.bool:
-        # R08: the bool exemption is no longer a blanket pass. For the
+        # The bool exemption is not a blanket pass. For the
         # elementwise-comparison family the threshold-straddle probe settles
         # it with evidence; a probe-proven no-influence edge falls through
         # to the perturbation_insensitive failure (the remaining posthoc
@@ -1330,10 +1329,10 @@ def _posthoc_discrete_output_decision(
                 "transmits value; the original perturbation magnitude did not "
                 "cross the comparison threshold",
             )
-        # R08-2: the straddle covers comparisons only; the rest of the bool
+        # the straddle covers comparisons only; the rest of the bool
         # universe gets the substitution-battery probe so a provably spurious
         # edge on a logical/predicate op falls through to the failure instead
-        # of the old evidence-free blanket pass.
+        # of an evidence-free blanket pass.
         predicate_probe = _bool_predicate_influence_probe(layer, layers_to_perturb)
         if predicate_probe is False:
             return PosthocPerturbDecision(False, "bool_predicate_no_value_influence")
@@ -1404,12 +1403,11 @@ def _perturbed_parents_only_occupy_template_slot(
 
     A structural-template exemption is only sound for the TEMPLATE argument:
     its values never flow into the output, only its shape/dtype/device do.
-    For the ``*_like`` family that is ``args[0]`` / ``input=`` (the F2
-    tightening); for ``to(other)`` it is ``args[1]`` / ``other=`` (the H3
-    tightening -- the perturbed data SOURCE of a cast is a genuine value
-    dependency, and an unchanged output there is a dropped substitution, not
-    structure). Any other parent slot must NOT be excused as structural.
-    Missing position metadata fails closed.
+    For the ``*_like`` family that is ``args[0]`` / ``input=``;
+    for ``to(other)`` it is ``args[1]`` / ``other=`` (the perturbed data
+    SOURCE of a cast is a genuine value dependency, and an unchanged output
+    there is a dropped substitution, not structure). Any other parent slot must NOT be excused as
+    structural. Missing position metadata fails closed.
 
     Parameters
     ----------
@@ -1482,7 +1480,7 @@ def _posthoc_structural_output_decision(
             template_kwarg_names=("other",),
         )
     ):
-        # H3 tightening: only the TEMPLATE tensor (args[1] / other=) is
+        # Tightened: only the TEMPLATE tensor (args[1] / other=) is
         # structural -- solely its dtype/device flow into the output. A
         # perturbed data SOURCE (args[0]) whose replay output stays unchanged
         # is a dropped substitution and must fall through to the failure path.
@@ -1500,7 +1498,7 @@ def _posthoc_structural_output_decision(
         "broadcast_tensors",
         "broadcasttensors",
     ] and _perturbed_parents_are_zipped_siblings(layer, layers_to_perturb):
-        # R08-2 narrowing: only a CROSS-member zipped-sibling perturbation is
+        # Only a CROSS-member zipped-sibling perturbation is
         # structural here. An output's OWN input staying insensitive is a
         # dropped/misattributed value edge and must fall through to the
         # failure path.
@@ -1513,7 +1511,7 @@ def _posthoc_structural_output_decision(
         "rand_like",
         "randn_like",
     ] and _perturbed_parents_only_occupy_template_slot(layer, layers_to_perturb):
-        # F2 tightening: only the TEMPLATE parent (args[0] / input=) is
+        # Only the TEMPLATE parent (args[0] / input=) is
         # structural. A perturbed runtime value parent -- e.g. a ``full_like``
         # fill_value tensor -- whose replay output stays unchanged is a missed
         # or broken dependency and must fall through to the failure path.
@@ -1531,7 +1529,7 @@ def _posthoc_structural_output_decision(
         # output: a template, exactly like args[0] of the *_like family. A
         # probability edge (out-of-place bernoulli slot 0, or bernoulli_'s
         # slot 1 / p=) is NOT exempted here: it is a genuine value dependency
-        # validated by the complement-probability perturbation (deephunt L17).
+        # validated by the complement-probability perturbation.
         # The rest of _RNG_FILL_DESTINATION_OPS follows the same proof: see the
         # table's comment.
         return PosthocPerturbDecision(
@@ -1906,7 +1904,7 @@ def _index_domain_value_irrelevance_decision(
     """Return a proof decision for an index parent that provably cannot matter.
 
     These are the ONLY excuses for an in-domain index rotation leaving the
-    output unchanged (F2 tightening); each is a mathematical irrelevance proof
+    output unchanged; each is a mathematical irrelevance proof
     read from the saved co-arguments, so a genuinely missed/broken index
     dependency (where the co-arguments DO vary) still falls through to
     ``perturbation_insensitive``:
@@ -2014,9 +2012,9 @@ def _index_domain_value_irrelevance_decision(
 # holds for all of them, including in-place ``mul_``/``__imul__`` where the
 # saved receiver snapshot is the pre-call value), so listing a spelling here
 # NEVER weakens the perturbation net: the exemption still requires the
-# NON-perturbed co-operand to be provably all-zero. Omitting a spelling was
-# the round-26 W3-5/F2 false-positive bug (``x + 0.0 * x.sum()`` via
-# ``__rmul__`` and ``view.mul_(0.0)`` wrongly failed ``perturbation_insensitive``
+# NON-perturbed co-operand to be provably all-zero. Omitting a spelling
+# would give a false positive (``x + 0.0 * x.sum()`` via
+# ``__rmul__`` and ``view.mul_(0.0)`` would wrongly fail ``perturbation_insensitive``
 # while the zero-TENSOR twin passed).
 _MULTIPLICATIVE_ANNIHILATOR_FUNC_NAMES = frozenset(
     {

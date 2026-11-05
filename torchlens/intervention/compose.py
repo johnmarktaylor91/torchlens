@@ -1,4 +1,4 @@
-"""``tl.compose``: the explicit value algebra for chained edits (edits memo D20-D22).
+"""``tl.compose``: the explicit value algebra for chained edits.
 
 One composed edit chains VALUES at one site: ``compose(a, b, c)(x) == c(b(a(x)))``
 (left-to-right, matching the hook plan's declared ``composition="left_to_right"``
@@ -7,7 +7,7 @@ constrained semantics that already existed -- and the spec door's
 ``spec_rules_overlap`` refusal points here as the explicit spelling for two
 edits at one site.
 
-The D20 laws implemented:
+The laws implemented:
 
 - FLATTENED at construction: associativity is syntactic AND audit-visible
   (``compose(a, compose(b, c))`` and ``compose(a, b, c)`` are one identity).
@@ -19,13 +19,13 @@ The D20 laws implemented:
   portability is the WEAKEST leaf; a leaf failure aborts the whole fire
   (atomic -- the engine never sees a half-applied chain).
 
-The D21 refusals: mixed forward/backward kinds; ANY unseeded stochastic leaf
+The refusals: mixed forward/backward kinds; ANY unseeded stochastic leaf
 (the honest-draw law admits no unacknowledged RNG into a chain); ANY
 shape-changing leaf in v1 (the conditional next-leaf-declares-contract rule is
 the documented relaxation -- operationally identical today, since no
 Edit declares an input contract).
 
-The D22 three-layer boundary: compose chains VALUES at one site;
+The three-layer boundary: compose chains VALUES at one site;
 selection-batch ``do([(sel, edit), ...])`` carries MANY rules in ONE
 transaction; the immutable ``InterventionSpec`` carries many rules as the
 DURABLE artifact. Cross-site compose is refused by construction (a composed
@@ -48,12 +48,12 @@ from .types import Edit, HelperPortability
 
 __all__ = ["compose"]
 
-#: Portability lattice: the composed spec takes the WEAKEST leaf (D20).
+#: Portability lattice: the composed spec takes the WEAKEST leaf.
 _PORTABILITY_RANK: dict[str, int] = {"builtin": 0, "import_ref": 1, "opaque_audit": 2}
 
 
 def _flatten(edits: tuple[Any, ...]) -> list[Edit]:
-    """Flatten nested compose specs into the ordered leaf list (D20)."""
+    """Flatten nested compose specs into the ordered leaf list."""
 
     leaves: list[Edit] = []
     for edit in edits:
@@ -65,7 +65,7 @@ def _flatten(edits: tuple[Any, ...]) -> list[Edit]:
 
 
 def _validate_leaves(leaves: list[Edit]) -> None:
-    """Apply the D20/D21 construction refusals over the flattened leaves."""
+    """Apply the construction refusals over the flattened leaves."""
 
     if not leaves:
         raise InvalidArgumentError(
@@ -173,7 +173,7 @@ def compose(*edits: Any) -> Edit:
 
             current = out
             for index, leaf_hook in enumerate(leaf_hooks):
-                # Thread the composed-leaf path for the derived-seed law (D6):
+                # Thread the composed-leaf path for the derived-seed law:
                 # two stochastic leaves inside one compose cannot collide.
                 ctx.state["compose_leaf_path"] = (index,)
                 try:
@@ -219,7 +219,7 @@ def compose(*edits: Any) -> Edit:
             "compose_leaves": "|".join(leaf.name for leaf in leaves),
             "compose_leaf_count": len(leaves),
             # Row-coherent leaves keep their mask-equivariance obligation
-            # through the chain (the D23 check reads these facts).
+            # through the chain (the check reads these facts).
             **(
                 {
                     "row_coherent": True,

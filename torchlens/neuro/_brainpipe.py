@@ -1,28 +1,28 @@
-"""Planned whole-model extraction: plan, table, run, npz (F20).
+"""Planned whole-model extraction: plan, table, run, npz.
 
-The brainpipe centerpiece (memo section 3): a two-phase plan-then-run API
+The brainpipe centerpiece: a two-phase plan-then-run API
 whose extraction-PLAN table prints measured bytes, measured peaks, and
 engine-multiplied cost before anything runs. The RUNNER is the shipped
 :func:`torchlens.dataset_extraction.extract_dataset` (batched, atomic
 shards, manifest, resume, model identity); this module adds the PLANNER --
 two real probes, per-site linear byte fits, budget arithmetic that refuses
-with numbers instead of silently shrinking (D-10), and full-signature plan
-keying (D-15) -- plus npz interchange with the Net2Brain file-naming
-contract (D-21).
+with numbers instead of silently shrinking, and full-signature plan
+keying -- plus npz interchange with the Net2Brain file-naming
+contract.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
-Design law highlights honored here:
+Design rules honored here:
 
-* D-8: single-pass-primary. One ``save='all'``-shaped pass with eager
+* Single-pass-primary. One ``save='all'``-shaped pass with eager
   transform-and-release beats chunking for the reduce-at-capture case;
   layer chunking is a later fallback, never a floor remedy.
-* D-10: batch size belongs to the user. The planner REFUSES with
+* Batch size belongs to the user. The planner REFUSES with
   arithmetic; it never silently shrinks a batch or drops a site.
-* D-11: engine is trace-only at launch. ``engine="fastlog"`` refuses typed
+* The engine is trace-only at launch. ``engine="fastlog"`` refuses typed
   until the definitional parity suite exists (an engine swap changes what
   "whole model" MEANS); ``engine="auto"`` is dead.
-* D-13: ``inference_only=True`` is the sweep's default probe/run posture.
-* D-15: two probes (batch b and 2b), per-site linear fit, full
+* ``inference_only=True`` is the sweep's default probe/run posture.
+* Two probes (batch b and 2b), per-site linear fit, full
   input-signature keying; a signature mismatch is a typed refusal with the
   re-plan remedy, never a silent overrun.
 """
@@ -66,7 +66,7 @@ _BYTE_UNITS: dict[str, int] = {
 
 
 def parse_bytes(value: Any) -> int:
-    """Parse a human-unit byte budget (D-26; twin of ``format_bytes``).
+    """Parse a human-unit byte budget (twin of ``format_bytes``).
 
     Parameters
     ----------
@@ -135,7 +135,7 @@ def _format_bytes(num_bytes: int | float | None) -> str:
 
 @dataclass(frozen=True, slots=True)
 class PlanSite:
-    """One requested site's measured plan row (memo section 3.2).
+    """One requested site's measured plan row.
 
     Parameters
     ----------
@@ -154,13 +154,13 @@ class PlanSite:
     batch_invariant:
         Whether the site's bytes did NOT scale with batch (position
         embeddings, mask broadcasts -- over-predicted 8x by naive total
-        scaling, memo D-15).
+        scaling).
     transformed_shape:
         Post-transform shape at the probe batch, when a transform ran.
     transformed_bytes:
         Post-transform bytes at the probe batch, when a transform ran.
     transform_seconds:
-        Measured live transform time at the probe batch (D-15: the probe
+        Measured live transform time at the probe batch (the probe
         executes the transform chain; post-transform bytes and time are
         measured, never derived).
     included:
@@ -211,7 +211,7 @@ class ExtractionPlan:
     """Immutable measured plan for one whole-model extraction sweep.
 
     Produced by :func:`plan_extraction`; consumed by :meth:`run`. The plan
-    is valid ONLY for its input signature (D-15): shapes, dtype, batch
+    is valid ONLY for its input signature: shapes, dtype, batch
     size, transform identity, and model class all key the plan, and
     :meth:`run` refuses a drifted request typed instead of silently
     over-running.
@@ -321,7 +321,7 @@ class ExtractionPlan:
         return pd.DataFrame(self.to_dict()["sites"])
 
     def table(self) -> str:
-        """Render the extraction-PLAN table (memo section 3.2).
+        """Render the extraction-PLAN table.
 
         One row per REQUESTED site -- included, excluded, or refused, never
         silently dropped -- and a footer with the probe's own measured cost,
@@ -392,7 +392,7 @@ class ExtractionPlan:
                     remedy="re-plan with probe inputs matching the run stimuli",
                 )
 
-    def run(  # noqa: PLR0913 -- the single-pass door onto extract_dataset: each kwarg forwards one memo-specified public knob (D-8)
+    def run(  # noqa: PLR0913 -- single-pass door onto extract_dataset
         self,
         stimuli: Any,
         *,
@@ -404,7 +404,7 @@ class ExtractionPlan:
     ) -> Any:
         """Execute the planned sweep through the shipped extraction runner.
 
-        Single-pass-primary (D-8): one batched extraction pass over the
+        Single-pass-primary: one batched extraction pass over the
         included sites with the planned transform; disk mode writes the
         atomic self-describing artifact with resume support.
 
@@ -479,7 +479,7 @@ def _probe_once(
     transform:
         Optional unary transform (or coerced pipeline callable) executed
         LIVE per site so post-transform bytes and time are measured, not
-        derived (D-15).
+        derived.
 
     Returns
     -------
@@ -528,7 +528,7 @@ def _build_plan_sites(
     facts_2: dict[str, dict[str, Any]],
     probe_b: int,
 ) -> list[PlanSite]:
-    """Fit per-site plan rows from the two measured probes (D-15).
+    """Fit per-site plan rows from the two measured probes.
 
     Parameters
     ----------
@@ -598,7 +598,7 @@ def _build_plan_sites(
     return plan_sites
 
 
-def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surface (brainpipe D-10/D-11/D-15): every kwarg is a named plan input
+def plan_extraction(  # noqa: PLR0913 -- public planner surface; every kwarg is a named plan input
     model: nn.Module,
     probe_inputs: torch.Tensor,
     *,
@@ -610,7 +610,7 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
     safety_margin: float = 0.15,
     engine: str = "trace",
 ) -> ExtractionPlan:
-    """Build a measured extraction plan from two real probe captures (D-15).
+    """Build a measured extraction plan from two real probe captures.
 
     Runs the model twice -- at the probe batch size ``b`` and at ``2b`` --
     fits per-site retained bytes linearly in batch size (detecting
@@ -633,7 +633,7 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
     num_stimuli:
         Total stimuli the run will consume.
     batch_size:
-        The run's batch size. Belongs to the user (D-10): the planner
+        The run's batch size. Belongs to the user: the planner
         refuses over-budget plans with arithmetic, never shrinks this.
     output_transform:
         Optional unary transform executed live at the probe.
@@ -642,7 +642,7 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
     safety_margin:
         Fraction of the budget held back (default 0.15).
     engine:
-        ``"trace"`` only at launch (D-11).
+        ``"trace"`` only at launch.
 
     Returns
     -------
@@ -716,7 +716,7 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
     # Peak prediction: linear fit of the probes' RESIDENT peaks vs batch,
     # evaluated at the run batch. Honest basis disclosure: this predicts
     # the measured instrumented route (engine, selection, transform,
-    # signature), never a model-global constant (memo s3.3).
+    # signature), never a model-global constant.
     predicted_peak: int | None = None
     peak_basis = "unmeasured"
     residents: list[tuple[int, int]] = [
@@ -800,7 +800,7 @@ def export_npz(
     compatibility: str | None = None,
     stimulus_ids: list[str] | None = None,
 ) -> list[Path]:
-    """Export extracted features as npz interchange (D-21).
+    """Export extracted features as npz interchange.
 
     Parameters
     ----------
@@ -819,7 +819,7 @@ def export_npz(
         FILE-NAMING CONTRACT: their encoding loader globs and sorts
         LEXICOGRAPHICALLY, so filenames are zero-padded in stimulus order
         and the sidecar records the name-to-stimulus-id map -- get this
-        wrong and rows silently misalign against brain data (memo D-21).
+        wrong and rows silently misalign against brain data.
     stimulus_ids:
         Optional per-stimulus identifiers recorded in the sidecar.
 
@@ -916,7 +916,7 @@ def _write_per_stimulus_npz(
     compatibility: str | None,
     stimulus_ids: list[str] | None,
 ) -> list[Path]:
-    """Write the per-stimulus npz layout with the D-21 naming contract.
+    """Write the per-stimulus npz layout with the naming contract.
 
     Zero-padded filenames sort lexicographically in stimulus order (the
     Net2Brain loader globs + sorts; misalignment against brain data is

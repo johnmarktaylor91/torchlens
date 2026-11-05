@@ -231,7 +231,7 @@ def compare_traces(  # noqa: PLR0913 - the registry-declared request record, key
         "match_basis": match_basis,
         "rtol": rtol,
         "atol": atol,
-        # Non-droppable coverage header (memo 3.7).
+        # Non-droppable coverage header.
         "coverage": {
             "sites_reference": len(ref_index),
             "sites_subject": len(sub_index),

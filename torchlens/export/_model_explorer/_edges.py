@@ -1,4 +1,4 @@
-"""Occurrence-preserving ported edges through an explicit label map (D4).
+"""Occurrence-preserving ported edges through an explicit label map.
 
 The capture relation mixes spellings within one graph: ``parents`` entries
 and ``parent_arg_positions`` refs are bare ``layer_label`` for single-pass
@@ -103,7 +103,7 @@ def incoming_edges(
             skipped += 1
             continue
         # Structural provenance: no recorded slot, so no inputsMetadata row
-        # and no invented targetNodeInputId ordering (memo D4).
+        # and no invented targetNodeInputId ordering.
         edges.append({"sourceNodeId": source_id, "sourceNodeOutputId": "0"})
     return edges, metadata, skipped
 

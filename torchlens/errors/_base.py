@@ -299,7 +299,7 @@ class TorchLensWarning(UserWarning):
         self.fields = dict(payload)
         if message is None and payload:
             message = _message_from_payload(type(self).__name__, self.fields)
-        # Remedy-contract alignment (S-18 warning contract, compo wave 0):
+        # Remedy-contract alignment (warning contract):
         # the SAME chokepoint the error base carries above -- derive the
         # structured ``fields["remedy"]`` from the authored "Remedy: ..."
         # message tail; an explicit ``remedy=`` kwarg always wins.

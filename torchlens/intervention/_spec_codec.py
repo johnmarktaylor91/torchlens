@@ -88,12 +88,12 @@ _SPEC_FILE = "spec.json"
 def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None:
     """Validate the top-level ``spec.json`` structure before deserialization.
 
-    WT1 A-IV item 20 (lane A08): the loader used to index straight into the
+    The loader used to index straight into the
     decoded JSON, so a spec.json missing its ``intervention_spec`` object died
     with a bare ``KeyError`` and junk-typed top-level fields flowed silently
     into spec metadata. Structural violations refuse with the module's
     documented ``ReplayPreconditionError``; deeper per-record staging refusals
-    are the C03 lane's continuing work.
+    are the lane's continuing work.
     """
 
     spec_payload = data.get("intervention_spec")
@@ -206,7 +206,7 @@ def _serialize_fire_record(
         JSON-safe fire-record payload.
     """
 
-    # R10-14: ``dataclasses.asdict`` deep-copies every field value first, so a
+    # ``dataclasses.asdict`` deep-copies every field value first, so a
     # graph-connected helper tensor arg raised torch's deepcopy error at save
     # time for an intermediate about to be overwritten anyway. Build the
     # payload shallowly: the two structured fields are serialized below and
@@ -475,7 +475,7 @@ def _sampling_from_json(value: Any) -> tuple[SamplingRecord, ...]:
 def _edge_address_from_json(value: Any) -> tuple | None:
     """Rebuild a persisted fire-record ``edge_address`` occurrence address.
 
-    WT1 A-IV item 20 (lane A08): the serializer wrote every FireRecord field
+    The serializer wrote every FireRecord field
     -- ``edge_address`` included -- but the deserializer omitted it, so the
     ``(child_func_call_id, arg_kind, arg_path)`` occurrence address was
     SILENTLY DISCARDED on every load. JSON round-trips tuples as lists, so

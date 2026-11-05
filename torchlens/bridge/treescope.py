@@ -1,4 +1,4 @@
-"""The treescope bridge: external registration, probe, sniff, door (B4, F16).
+"""The treescope bridge: external registration, probe, sniff, door (B4).
 
 Makes TorchLens objects render boundedly inside Google DeepMind's treescope
 notebook renderer (treescope memo decision 1). Design rules, each earned by
@@ -12,24 +12,24 @@ a panel measurement:
   version / handlers / tensor capability / suppression state. NEVER
   ``register_as_default()``; NEVER register or replace ``torch.Tensor``
   (treescope owns that slot).
-- **Hybrid activation (memo 3.2)**: thin lazy ``__treescope_repr__``
+- **Hybrid activation**: thin lazy ``__treescope_repr__``
   methods live on ``Trace`` and ``PartialTrace`` ONLY (the two dataclasses
   treescope reflects into megabyte dumps; the method route is the only one
   that fires with zero registration) and delegate to
   :func:`treescope_repr` here; ``Layer``/``Op`` ride the registry. Under
   ``register_as_default()`` at TOP LEVEL the methods are inert because our
-  ``_repr_html_`` wins first (F-B) -- they protect the EXPLICIT and NESTED
+  ``_repr_html_`` wins first -- they protect the EXPLICIT and NESTED
   render paths.
-- **Container rule (memo 3.4, hard)**: a container handler emits scalars,
+- **Container rule (hard)**: a container handler emits scalars,
   strings, and a budgeted foldable index of lookup keys with
   ``shown K of N``; it NEVER passes child TL objects to the subtree
-  renderer -- the recursive version measured WORSE than no bridge (F-D).
-- **Tensor gate (memo 3.5)**: a tensor leaf renders only when saved,
+  renderer -- the recursive version measured WORSE than no bridge.
+- **Tensor gate**: a tensor leaf renders only when saved,
   resident, non-meta; the adapter is probed BEHAVIORALLY at first use
-  (F-A: released 0.1.10 raises on every torch>=2.13 tensor). Healthy: the
+  (released 0.1.10 raises on every torch>=2.13 tensor). Healthy: the
   REAL tensor passes through (bounded by construction, F-F). Broken:
   strict degradation naming the reason and pointing at the native card.
-- **The repaired duplicate-box sniff (memo 3.6)**: treescope appends any
+- **The repaired duplicate-box sniff**: treescope appends any
   object's ``_repr_html_`` in a collapsed "Rich HTML representation" box
   AFTER our handler renders. The cards return a one-line sentinel instead
   of the full card exactly when BOTH (a) a treescope repr-HTML
@@ -73,7 +73,7 @@ __all__ = [
     "unregister",
 ]
 
-#: The three-way bucket ledger (memo 3.3): a CHECKED-IN decision per
+#: The three-way bucket ledger: a CHECKED-IN decision per
 #: exported dataclass type, never a blanket rule. RICH types carry full
 #: cards (methods or registry handlers); ONE_LINE types render as
 #: ``<ClassName: one-line summary>`` (initial assignments are PROVISIONAL
@@ -105,7 +105,7 @@ class _BridgeState:
 
     installed: dict[type, Any] = field(default_factory=dict)
     disabled_depth: int = 0
-    #: One-shot post-success slot for the duplicate-box sniff (memo 3.6).
+    #: One-shot post-success slot for the duplicate-box sniff.
     last_render_id: int | None = None
     probe_cache: tuple[bool, str | None] | None = None
     skipped_types: tuple[str, ...] = ()
@@ -175,7 +175,7 @@ def _import_treescope() -> Any:
 
 
 def probe_tensor_support() -> tuple[bool, str | None]:
-    """Behaviorally probe the treescope torch adapter (memo 3.5 / F-A).
+    """Behaviorally probe the treescope torch adapter.
 
     Released treescope 0.1.10 reads the removed ``Tensor.names`` attribute
     and raises on every torch>=2.13 tensor, so capability is PROBED on a
@@ -267,7 +267,7 @@ def register() -> None:
     planned: list[tuple[type, Any]] = []
     for dotted, bucket in BRIDGE_LEDGER.items():
         if bucket == "rich" and dotted.rsplit(".", 1)[-1] in ("Trace", "PartialTrace"):
-            continue  # method-activated (memo 3.2), never registry rows
+            continue  # method-activated, never registry rows
         target = _resolve_ledger_type(dotted)
         if target is None:
             skipped.append(dotted)
@@ -483,7 +483,7 @@ def _record_summary_lines(record: Any) -> list[str]:
 
 
 def _tensor_leaf(record: Any, path: str | None, subtree_renderer: Any) -> list[Any]:
-    """The tensor gate (memo 3.5): real tensor through, or a named reason."""
+    """The tensor gate: real tensor through, or a named reason."""
 
     from treescope import rendering_parts as rp
 
@@ -539,7 +539,7 @@ def _warn_degraded_once() -> None:
 
 
 def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
-    """Body of the thin ``__treescope_repr__`` methods (memo 3.2).
+    """Body of the thin ``__treescope_repr__`` methods.
 
     Emits identity facts and a budgeted foldable index of lookup keys with
     ``shown K of N`` (container rule 3.4: strings only, never child TL
@@ -603,7 +603,7 @@ def _trace_fact_lines(obj: Any) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# The repaired duplicate-box sniff (memo 3.6)
+# The repaired duplicate-box sniff
 
 #: NARROW frame predicate: only these treescope-private module names count.
 #: Broad "any treescope frame" measured 26 bytes where the user's card
@@ -659,7 +659,7 @@ register_card_suppressor(consume_repr_suppression)
 
 
 # ---------------------------------------------------------------------------
-# The explicit bridge door (memo 3.7)
+# The explicit bridge door
 
 
 def display(obj: Any) -> None:

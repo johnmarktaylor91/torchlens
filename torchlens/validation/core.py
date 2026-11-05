@@ -268,7 +268,7 @@ class ValidationDecisionRecorder:
         ``no_nodes_replay_validated`` guard could be satisfied with ZERO
         interior op replays -- a trace whose every interior op was
         individually exempted but whose outputs matched ground truth
-        reported ``passed`` with an inflated count (b1-fable round-2 F1).
+        reported ``passed`` with an inflated count.
         Only labeled ``phase="replay"`` validations are replayed nodes.
 
         Returns
@@ -484,7 +484,7 @@ DEEP_NUMERIC_REPLAY_STORAGE_ULP_HEADROOM = 4.0
 # tensor of 1e-9s let 99.9% of the tensor be zeroed and pass the base lane).
 # Past the ratio the atol falls back to the median magnitude --
 # fail-toward-strict: the guarded atol is never larger than the unguarded
-# one, so nothing that used to fail can start passing.
+# one, so nothing that fails unguarded can start passing.
 DEEP_NUMERIC_REPLAY_MAX_ATOL_DYNAMIC_RANGE = 1e4
 
 
@@ -716,7 +716,7 @@ def _ground_truth_output_matches_saved(
         # doctrine on fp8_safe_comparison_pair: an own-ULP row would read a
         # genuine one-ULP fp8 corruption as equal). This is the one dtype
         # family measured in the WIDENED dtype's ULPs by design -- strictly
-        # tighter, never looser (b4-opus F13-2a adjudication).
+        # tighter, never looser.
         saved_output, ground_truth_output = fp8_safe_comparison_pair(
             saved_output, ground_truth_output
         )
@@ -769,8 +769,8 @@ def _comparator_self_test() -> None:
         pos_zero = torch.tensor([0.0, 1.0], dtype=fp32)
         # R74r6-F1: bound the EFFECTIVE fp32 band from BOTH sides, not just
         # non-vacuity. The loosest sentinel above is a 1/3 relative gap, so
-        # any rtol below 0.333 used to pass -- a 5,461x-loosened band ran
-        # this self-test green and blessed 30% corruption of every replayed
+        # any rtol below 0.333 would pass -- a 5,461x-loosened band would run
+        # this self-test green and bless 30% corruption of every replayed
         # activation. The pairs below pin the band's order of magnitude: a
         # 16x-the-shipped-512-ULP-fp32-row relative gap (~9.8e-4, formerly
         # the independent decimal literal 1e-3, which could co-drift against
@@ -791,7 +791,7 @@ def _comparator_self_test() -> None:
             and not bool(tensor_nanequal(base, unequal, allow_tolerance=True))
             and bool(tensor_nanequal(nan_pair, nan_pair.clone(), allow_tolerance=True))
             and not bool(tensor_nanequal(nan_pair, nan_vs_number, allow_tolerance=True))
-            # Signed-zero doctrine (sol+fable r4): a -0.0/+0.0 flip is not
+            # Signed-zero doctrine: a -0.0/+0.0 flip is not
             # EXACT (bit-distinct, diverges through 1/x) but sits inside the
             # tolerance band.
             and not bool(tensor_nanequal(neg_zero, pos_zero))
@@ -879,7 +879,7 @@ def _refuse_unreplayable_trace(self: "Trace") -> None:
     # validation refuses typed. Metadata invariants run in full elsewhere.
     refuse_collective_boundary_trace(self, "forward-replay validation")
     _raise_if_portable_bundle_log(self)
-    # Judge self-test (R75-4): tensor_nanequal is the single comparator
+    # Judge self-test: tensor_nanequal is the single comparator
     # behind BOTH the per-op replay verdict here and capture-side
     # alias/mutation bookkeeping, with no oracle above it. A degradation
     # making it vacuously true would blind the whole tripwire while every
@@ -1332,13 +1332,12 @@ def validate_parents_of_saved_layer(
 def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     """Return whether a layer's out was intentionally replaced by a hook.
 
-    Round-26 W3-2 hardening: the per-op ``is_edited`` /
-    ``is_internal_source`` attributes are written by the same capture machinery
-    whose failure this exemption must not mask, so they are no longer trusted
-    alone. The claim must be corroborated by the trace-level replacement-event
-    ledger (populated only at capture sites that directly observed a genuine
-    replacement); a self-claimed replacement op in a PLAIN capture now fails
-    replay instead of being exempted (2026-06-02 lesson).
+    The per-op ``is_edited`` / ``is_internal_source`` attributes are written by
+    the same capture machinery whose failure this exemption must not mask, so
+    they are not trusted alone. The claim must be corroborated by the
+    trace-level replacement-event ledger (populated only at capture sites that
+    directly observed a genuine replacement); a self-claimed replacement op in
+    a PLAIN capture fails replay instead of being exempted.
 
     Parameters
     ----------
@@ -1683,10 +1682,10 @@ def _check_layer_arguments_logged_correctly(
                     if validation_result_for_arg_and_layer.decision != "validated":
                         return validation_result_for_arg_and_layer
 
-        # Round-26 W3-1: inverse orphan-arg check. Everything above starts
+        # Inverse orphan-arg check. Everything above starts
         # from RECORDED parents, so a capture bug that drops a parent edge
         # (removing it from BOTH ``parents`` and ``parent_arg_positions`` --
-        # the r22 argpos bug class) corrupts both sides of the set-equality
+        # the argpos bug class) corrupts both sides of the set-equality
         # check together and leaves the dropped parent's saved arg value
         # sitting UNATTRIBUTED and uninspected. This sweep works from the
         # saved args instead: every unattributed non-trivial tensor arg slot
@@ -1933,9 +1932,8 @@ def _check_arglocs_correct_for_arg(
     # RE-DRAW: both the child's snapshot and the parent's current out are
     # same-shape, same-dtype 0/1 draws of the same storage. Requiring that
     # structure keeps the genuine case exempt while arbitrary corrupted
-    # values fall through to the Case 3 failure (deephunt M1 companion: the
-    # bare func-name key validated ANY value mismatch under a bernoulli_
-    # parent).
+    # values fall through to the Case 3 failure (a bare func-name key
+    # would validate ANY value mismatch under a bernoulli_ parent).
     if (
         not parent_layer_matches_arg
         and parent_layerged_as_arg
@@ -2014,7 +2012,7 @@ def _matches_own_parameter(target_layer: Op, value: torch.Tensor) -> bool:
         if not isinstance(param_value, torch.Tensor):
             continue
         if param_value.device.type == "meta":
-            # Offloaded model (accelerate hooks, lane F37): the live handle is
+            # Offloaded model (accelerate hooks): the live handle is
             # meta between forwards and carries no value evidence, so it can
             # never CONFIRM a match. Fail closed: the slot keeps whatever
             # classification it already has.
@@ -2071,26 +2069,26 @@ def _foreach_sibling_attributes_slot(
 ) -> bool:
     """Return whether a sibling foreach output attributes this exact zipped slot.
 
-    Narrow companion to the zipped foreach parent projection (round-31 M3):
+    Narrow companion to the zipped foreach parent projection:
     for ``torch._foreach_*`` calls, each output's parents are restricted to
     its own zipped list members, so sibling members' operands legitimately
     appear unattributed in every other output's saved args. The exemption
     requires ALL of: a ``_foreach_`` op, a zipped tuple slot key, and a
     sibling output of the SAME call attributing SOME parent at the SAME slot
     -- proof the slot is a sibling-OWNED member slot rather than a dropped
-    edge. r29 F5: the check is SLOT-keyed, not candidate-keyed. The former
-    version required the sibling's attributed label to EQUAL the value-matched
-    candidate, so an honest in-place ``_foreach_*_`` capture false-FAILED
+    edge. The check is SLOT-keyed, not candidate-keyed. Requiring the
+    sibling's attributed label to EQUAL the value-matched candidate would
+    false-FAIL an honest in-place ``_foreach_*_`` capture
     whenever a zipped member's producer had a value-identical twin anywhere in
     the trace (``clone``/``* 1.0``/``detach`` guarantee one): the sweep's
-    matched candidate was the twin ORPHAN, never the sibling's attributed
-    producer, and the exemption declined. Ownership of the slot by a sibling
+    matched candidate would be the twin ORPHAN, never the sibling's attributed
+    producer, and the exemption would decline. Ownership of the slot by a sibling
     is the honest fact; WHICH producer the sweep's value match found is noise.
     A zipped edge dropped from every member still fails -- no sibling
     attributes that slot, so the sweep runs and the drop is caught (pinned by
     ``test_m3_dropped_zipped_edge_still_fails_validation``); a wrong producer
-    AT an attributed slot is the capture witness's per-slot identity job
-    (r29 F3c), not the value sweep's.
+    AT an attributed slot is the capture witness's per-slot identity job,
+    not the value sweep's.
 
     Parameters
     ----------
@@ -2161,7 +2159,7 @@ def _check_unattributed_arg_slots(
         Failed result for a provably-dropped parent edge, otherwise validated.
     """
 
-    # Round-31 FN-1..6: the capture-time IDENTITY witness. Capture records, per
+    # The capture-time IDENTITY witness. Capture records, per
     # arg slot, whether the live tensor had a traced producer that is absent
     # from the recorded parent edges (``dropped_edge_tensor_args``). Unlike the
     # value sweep below, this is blind to the slot's VALUE, so a dropped edge
@@ -2245,25 +2243,25 @@ def _check_unattributed_arg_slots(
                 continue
             if _matches_own_parameter(target_layer, value):
                 continue
-            # ``torch._foreach_*`` outputs are ZIPPED (round-31 M3): member
+            # ``torch._foreach_*`` outputs are ZIPPED: member
             # ``i`` depends only on member ``i`` of each list operand, so a
             # sibling member's operand legitimately sits in this op's saved
             # list args without an edge. Exempt the slot ONLY when a SIBLING
             # output of the SAME call attributes a parent at this exact zipped
-            # slot (slot ownership, r29 F5) -- a genuinely dropped zipped edge
+            # slot (slot ownership) -- a genuinely dropped zipped edge
             # (nobody attributes the slot) still fails.
             if _foreach_sibling_attributes_slot(self, target_layer, arg_type, argloc_key):
                 continue
-            # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
+            # ``t.data = rhs``: the setter is
             # captured as the canonical single-argument ``detach(rhs)`` call,
             # so the pre-rebind receiver never appears as a recorded argument
             # and no receiver-slot exemption is needed -- every recorded slot
             # of a ``data`` op is the fully-swept RHS.
-            # Round-31 H2: a runtime TENSOR at any input slot -- including
+            # A runtime TENSOR at any input slot -- including
             # schema-typed ``int``/``Scalar`` control slots (``roll`` shifts,
             # ``softmax`` dim, factory size dims) -- is a data dependency whose
-            # producer must be attributed, so the former ATen-schema
-            # metadata-slot suppression is gone; capture's runtime coverage
+            # producer must be attributed, so no ATen-schema
+            # metadata-slot suppression applies; capture's runtime coverage
             # guard parents every such slot, and an unattributed match here is
             # a dropped edge regardless of the slot's schema type.
             candidates = _orphan_candidate_index(self).get((tuple(value.shape), value.dtype), [])
@@ -2419,7 +2417,7 @@ def _execute_func_with_restored_state(
     # In-place mutating ops (__setitem__, zero_, __delitem__) return None
     # from PyTorch but the "output" is the mutated first argument. Property
     # setters (``t.real = rhs``: ``layer.func`` is the getset descriptor's
-    # ``__set__``, round-31 M6) have the same shape.
+    # ``__set__``) have the same shape.
     if layer_func.__name__ in ("__setitem__", "zero_", "__delitem__", "__set__"):
         recomputed_output = input_args["args"][0]
 
@@ -2652,7 +2650,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Membership is proved PER CALL: Tensor.new's value-bearing overloads
     # (new(tensor)/new(data)) are deterministic initialized calls and fall
     # through to real replay -- exempting them blessed a wrong replay
-    # without execution (b1-sol R08-1).
+    # without execution.
     if layer.func_name in SKIP_VALIDATION_ENTIRELY:
         if uninitialized_by_design_applies(layer):
             return ValidationCheckResult.exempted(
@@ -2745,10 +2743,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Forward replay failure (non-perturbed): saved activations don't match.
     if not matches_saved and not perturb:
         # Exemption candidate: a parent is an in-place RNG op that may have
-        # mutated its tensor after the child logged it as an arg. The blanket
-        # form exempted ANY mismatch here -- including one caused by a
-        # corrupted recorded func or non-tensor args on the CHILD (deephunt
-        # M1) -- so the exemption now requires a SNAPSHOT PROOF: re-replay the
+        # mutated its tensor after the child logged it as an arg. A blanket
+        # exemption would excuse ANY mismatch here -- including one caused by a
+        # corrupted recorded func or non-tensor args on the CHILD -- so the
+        # exemption requires a SNAPSHOT PROOF: re-replay the
         # op keeping the child's own saved-arg snapshots (the pre-mutation
         # values the child actually consumed) at the bernoulli-parent slots.
         # Only when that reproduces the saved output is the mismatch proven
@@ -2825,10 +2823,10 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         # unchanged under every draw and still falls through to the posthoc
         # excuses and the failure below -- the tripwire's failure condition is
         # untouched, only its evidence collection got more attempts. The unit
-        # steps close the value-discretizing dead zone (round-34 Finding B): a
+        # steps close the value-discretizing dead zone: a
         # near-constant float parent feeding an integer cast needs an excursion
         # that crosses an integer boundary before truncation can transmit it.
-        # The geometric magnitude ladder (round-35 R2) extends that to dead
+        # The geometric magnitude ladder extends that to dead
         # zones WIDER than one unit -- bucketize with wide bins, round with
         # negative decimals, and kin -- so any FINITE discretization step up to
         # the bounded cap is eventually crossed and the real edge registers.
@@ -3378,13 +3376,12 @@ def _floating_step_distinct_from(tensor: torch.Tensor) -> torch.Tensor:
     return torch.where(unchanged, fallback, candidate).to(tensor.dtype)
 
 
-# Geometric perturbation-magnitude ladder for the dead-zone retry (round-35
-# R2, scoped in the R2 refinement). Every value-DISCRETIZING child has a
-# FINITE quantization step -- 1 for integer casts, the bin width for
+# Geometric perturbation-magnitude ladder for the dead-zone retry. Every value-DISCRETIZING
+# child has a FINITE quantization step -- 1 for integer casts, the bin width for
 # ``bucketize``, ``10**-decimals`` for ``round(decimals<0)`` -- so growing
 # the excursion x10 per rung crosses any such dead zone up to the bounded
-# 1e9 cap. The +-1.0 rung is the plain unit step and runs unconditionally
-# (round-34 Finding B); the larger rungs run ONLY for value-discretizing
+# 1e9 cap. The +-1.0 rung is the plain unit step and runs unconditionally;
+# the larger rungs run ONLY for value-discretizing
 # children. The cap keeps the retry loop bounded; per-element steps a dtype
 # cannot represent fall back to the minimal representable step inside
 # ``_directional_step_perturb``.
@@ -3475,7 +3472,7 @@ def _perturbation_retry_strategies(
     -------
     list of str
         Minimal representable steps first (least likely to violate a child op's input
-        domain), the paired up/down unit steps (round-34 Finding B), then the non-uniform
+        domain), the paired up/down unit steps, then the non-uniform
         ``lift_min_entry`` probe (``_shift_probe.py``). Only when the child is a
         value-discretizing op does the ladder continue to geometrically growing magnitudes,
         so any finite TRUNCATION dead zone is eventually crossed while fp-swamped float
@@ -3516,9 +3513,9 @@ def _value_retry_strategies(layer: Op) -> list[str]:
 
     strategies = list(VALUE_STEP_STRATEGIES)
     if getattr(layer, "dtype", None) == torch.bool:
-        # R08: a bool-output child is a THRESHOLD op — small steps routinely
-        # fail to cross it, which the blanket ``discrete_bool_output``
-        # exemption then excused for the entire bool universe. Before any
+        # A bool-output child is a THRESHOLD op — small steps routinely
+        # fail to cross it, which a blanket ``discrete_bool_output``
+        # exemption would excuse for the entire bool universe. Before any
         # exemption is consulted, probe the excursions that flip real bool
         # edges: sign flips (comparisons against symmetric thresholds, eq),
         # zeroing (truthiness for the logical_* family), NaN injection
@@ -3578,7 +3575,7 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
         signed = _directional_step_perturb(tensor.view(_UNSIGNED_AS_SIGNED[tensor.dtype]), strategy)
         return signed.view(tensor.dtype)
     if strategy == "negate_values":
-        # R08 bool-edge probe: crosses any sign-symmetric comparison
+        # Bool-edge probe: crosses any sign-symmetric comparison
         # threshold and flips eq/ne against a nonzero comparand.
         if tensor.dtype == torch.bool:
             return torch.logical_not(tensor)
@@ -3590,14 +3587,14 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
             return _directional_step_perturb(tensor, "step_up")
         return negated
     if strategy == "zero_values":
-        # R08 bool-edge probe: flips truthiness for the logical_* family and
+        # Bool-edge probe: flips truthiness for the logical_* family and
         # any comparison whose threshold separates the values from zero.
         zeroed = torch.zeros_like(tensor)
         if torch.equal(zeroed, tensor):
             return _directional_step_perturb(tensor, "step_up")
         return zeroed
     if strategy == "nan_values":
-        # R08 bool-edge probe: flips isnan/isfinite and every ordered
+        # Bool-edge probe: flips isnan/isfinite and every ordered
         # comparison. Only floating parents can carry NaN.
         if tensor.is_floating_point() or tensor.is_complex():
             return torch.full_like(tensor, float("nan"))

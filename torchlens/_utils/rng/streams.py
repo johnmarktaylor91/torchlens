@@ -179,7 +179,7 @@ def log_current_rng_states(torch_only: bool = False) -> dict[str, Any]:
         capture omits them rather than initializing CUDA (see
         :func:`_snapshot_cuda_rng_states`).
     """
-    # r65 CLUSTER Z: per-op state logging runs INSIDE the capture window; a
+    # Per-op state logging runs INSIDE the capture window; a
     # TorchLens-initiated snapshot is never model host nondeterminism (the
     # ``get_rng_state`` family carries no registry row TODAY -- this bracket keeps the
     # invariant structural rather than dependent on that vocabulary staying read-free).
@@ -208,7 +208,7 @@ def set_rng_from_saved_states(rng_states: dict[str, Any]) -> None:
     """
     if not rng_states:
         return
-    # r65 CLUSTER Z: in-forward intervention replay restores engine state THROUGH the
+    # In-forward intervention replay restores engine state THROUGH the
     # monitored ``set_rng_state`` mutation channels; a TorchLens-owned restore is never
     # model host nondeterminism, so the whole restore brackets under the active
     # monitor's mark suppression (the replayed USER op itself runs outside any bracket

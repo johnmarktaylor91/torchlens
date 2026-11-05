@@ -6,8 +6,8 @@ argument's shape. These helpers locate that index slot, measure its domain, and
 build in-domain perturbations (full rotation, single-entry move) for the replay
 ladder. ``exemptions.py`` consumes the slot and domain facts for its degenerate-
 domain and value-irrelevance decisions; ``core.py`` consumes the perturbations.
-Split from ``validation/exemptions.py`` along this seam (R43 file-size
-ratchet); the logic is unchanged.
+Split from ``validation/exemptions.py`` along this seam to keep file sizes
+bounded; the logic is unchanged.
 """
 
 from typing import Any
@@ -17,13 +17,13 @@ import torch
 from .._data_classes.op import Op
 
 # ---------------------------------------------------------------------------
-# Index-domain perturbation standard (F2 tightening).
+# Index-domain perturbation standard.
 #
 # The ops below consume an integer index/target arg whose VALUES genuinely
 # determine the output, but whose valid domain is bounded by a sibling arg's
-# shape (random draws can go out of bounds and crash the kernel). The legacy
-# treatment blanket-skipped perturbing those args, which could excuse a
-# genuinely-missed dependency. The tightened standard perturbs them IN-DOMAIN:
+# shape (random draws can go out of bounds and crash the kernel). Blanket-skipping
+# perturbation of those args could excuse a genuinely-missed dependency, so
+# the standard perturbs them IN-DOMAIN:
 # every in-range entry is rotated by one position (``(v + 1) % n``, a bijection
 # on ``[0, n)``), out-of-range sentinels (e.g. ``cross_entropy`` ignore_index)
 # are preserved, and only the provably degenerate domain (``n <= 1`` or no

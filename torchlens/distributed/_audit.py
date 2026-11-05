@@ -15,7 +15,7 @@ for every membership appearing in two or more rank cores and audits:
 4. A conflicted membership refuses STRUCTURALLY
    (``group_lifetime_evidence_conflict``): no uid of that membership may join
    and no unmatched uid of it may become a presence gap. Enforcing that is the
-   caller's (the C1 merge engine's) obligation; this module only renders the
+   caller's (the merge engine's) obligation; this module only renders the
    verdicts.
 
 The audit is a pure function of the presented evidence so the merge engine can

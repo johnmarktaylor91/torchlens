@@ -1,7 +1,7 @@
 """Saved intervention-spec compatibility checking (site-key-first).
 
-Split out of ``save.py`` (C03 fix cycle): the compat preview owns the
-site-key-first join (surgery Build 0b) -- the structural key is the join
+Split out of ``save.py`` (to keep that file small): the compat preview owns the
+site-key-first join -- the structural key is the join
 identity, labels stay display-only disclosure. ``save.py`` re-exports the
 public names, so ``torchlens.intervention.save.check_spec_compat`` and
 ``torchlens.intervention.check_spec_compat`` keep resolving.
@@ -26,7 +26,7 @@ __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]
 class TargetManifestDiff:
     """Diff between saved target manifest and a new model log.
 
-    Site-key rows (C03, surgery Build 0b; DOCUMENTED-UNSTABLE) are the join
+    Site-key rows (DOCUMENTED-UNSTABLE) are the join
     identity when both sides carry keys; the label rows stay as display-only
     disclosure (labels renumber under edits, keys do not).
 
@@ -80,7 +80,7 @@ class SpecCompat:
     outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"]
     diff: TargetManifestDiff
     has_identical_target_resolution: bool
-    #: Human-readable site-level diff (C03; empty when no keys on either side).
+    #: Human-readable site-level diff (empty when no keys on either side).
     site_diff: str = ""
 
 
@@ -221,7 +221,7 @@ def _fold_entry(
         res.all_resolved_keys.update(facts.resolved_keys)
     if facts.resolved_labels == facts.saved_labels:
         return
-    # SITE-KEY-FIRST (C03, surgery Build 0b): the structural key is the join
+    # SITE-KEY-FIRST: the structural key is the join
     # identity; a label drift with IDENTICAL key multisets is disclosure,
     # never incompatibility -- one live edit renumbers 31-62 labels on real
     # resnet18 without moving a single site.

@@ -1,23 +1,23 @@
-"""The capture-owned factory-device slot (W1-CTX, weightsfree memo D4).
+"""The capture-owned factory-device slot.
 
 TorchLens owns the meta factory device during an ADMITTED weights-free
 capture; no torch ``DeviceContext`` mode is ever on the stack during the
-captured forward. The ratified L7a 1.4-A scoped ``torch.device("meta")``
-context is REPLACED by this slot (memo sec 11 ratification item): the torch
-mode's catch-all ``__torch_function__`` re-entry respells every dunder op
-(``__add__`` -> ``add``) and was measured as the sole cause of two
-twin-refuting digest asymmetries (defect L3), while its ONE contribution —
+captured forward. A scoped ``torch.device("meta")`` context is
+not used; this slot replaces it: the torch mode's catch-all
+``__torch_function__`` re-entry respells every dunder op (``__add__`` ->
+``add``) and was measured as the sole cause of two twin-refuting
+digest asymmetries, while its ONE contribution —
 factory-op device injection — is already replicated by TorchLens's own
 wrapper (:func:`~torchlens.backends.torch.wrappers._maybe_inject_device_kwarg`).
 
-Production form (memo build item 3): nest-safe (a stack, not a flag),
+Nest-safe (a stack, not a flag),
 owner-thread-scoped (``threading.local`` — worker threads never see the
 slot), restores on ``BaseException`` (context-manager ``finally``), wraps
 ONLY the user forward (armed by the capture scope in
 ``torchlens/_capture/trace.py``, never imports/preparation/postprocessing),
-and is published through ``tl.report.doctor()`` beside the W1 root set.
+and is published through ``tl.report.doctor`` beside the root set.
 
-Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
+Every spelling is DOCUMENTED-UNSTABLE.
 """
 
 from __future__ import annotations

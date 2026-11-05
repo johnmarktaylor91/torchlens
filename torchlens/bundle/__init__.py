@@ -101,12 +101,12 @@ if TYPE_CHECKING:
 class Bundle:
     """Flat container of Traces with relationship-gated operations.
 
-    CROSS-MEMBER PARAMETER READS ARE CLAIM-GATED (A-CKPT; foldB D7): a
+    CROSS-MEMBER PARAMETER READS ARE CLAIM-GATED: a
     parameter value/difference/trajectory read across two or more members
     asserts capture-time parameter values, but parameter members carry live
     model handles (or nothing after deserialization), never capture-time
     bytes. Absent immutable parameter evidence on every member (capture-time
-    snapshots, R8(b), future), such reads refuse BEFORE tensor lookup with
+    snapshots, not yet available), such reads refuse BEFORE tensor lookup with
     the stable code ``checkpoint_series_live_params`` -- keyed on the claim,
     never on Python object identity or the relationship lattice below, which
     never licenses a parameter value claim. A relation row asserting a
@@ -124,7 +124,7 @@ class Bundle:
     baseline:
         Optional baseline member name or ``Trace`` reference.
     member_relations:
-        Optional S6 member-relation rows (``MemberRelationRow`` instances or
+        Optional member-relation rows (``MemberRelationRow`` instances or
         payload mappings; the artifact loader may additionally pass
         ``OpaqueRelationRow`` instances for preserved unknown namespaced
         kinds). Rows are schema-validated and checked against the initial
@@ -137,8 +137,8 @@ class Bundle:
         executed, and re-emitted on save. User construction normally leaves
         this ``None``.
     bundle_id:
-        Load-side carriage for the persisted container identity (F03
-        lineage). ``None`` (the user door) mints a fresh random id; the
+        Load-side carriage for the persisted container identity
+        (lineage). ``None`` (the user door) mints a fresh random id; the
         artifact loader passes the saved id verbatim.
 
     Examples
@@ -178,10 +178,10 @@ class Bundle:
             (), relations or ()
         )
         self._preserved_sections: dict[str, Any] = dict(preserved_sections or {})
-        # F03 lineage (ledger memo 0b): one random container identity, minted
-        # here, restored verbatim by the artifact loader — NEVER a content
-        # hash (the D1a id law). Anchors record how each member entered THIS
-        # container; the operation list is the container-side chronology.
+        # Lineage: one random container identity, minted here, restored
+        # verbatim by the artifact loader -- NEVER a content hash. Anchors
+        # record how each member entered THIS container; the operation list is
+        # the container-side chronology.
         self._bundle_id: str = bundle_id if bundle_id else mint_bundle_id()
         self._forked_from_bundle_id: str | None = None
         self._member_construction: dict[str, dict[str, Any]] = {
@@ -229,7 +229,7 @@ class Bundle:
         return name in self._members
 
     def _outcome_distribution(self) -> dict[str, int]:
-        """Count member capture outcomes by settled status (F10)."""
+        """Count member capture outcomes by settled status."""
 
         return _card.outcome_distribution(self)
 
@@ -261,7 +261,7 @@ class Bundle:
         return _card.bundle_repr(self)
 
     def __str__(self) -> str:
-        """Bounded bundle view: repr line + per-member one-liners (F10)."""
+        """Bounded bundle view: repr line + per-member one-liners."""
 
         return _card.bundle_str(self)
 
@@ -287,13 +287,13 @@ class Bundle:
 
         A Bundle has no settlement of its own -- members remain the
         settlement authority. This property is the declared container
-        DERIVATION (foldB D9): a frozen ``CaptureOutcome`` with
+        DERIVATION: a frozen ``CaptureOutcome`` with
         ``derived=True`` whose status is the most severe member status
         (COMPLETE never blessed above the weakest member; an unsettled
         member folds as UNKNOWN fail-closed) and whose ``settlement_note``
         names the driving member. It is a disclosure reported beside
         results, NEVER a per-member gate: capability gating applies at the
-        member whose facts a read cites (D8).
+        member whose facts a read cites.
 
         Returns
         -------
@@ -426,7 +426,7 @@ class Bundle:
 
     @property
     def id(self) -> str:
-        """This container's persisted random identity (F03 lineage, D1a law).
+        """This container's persisted random identity (lineage).
 
         Minted at construction (never a content hash), restored verbatim on
         load, and re-minted on :meth:`fork` — the forked container anchors
@@ -460,7 +460,7 @@ class Bundle:
         The ledger is append-only and hash-chained (seq + previous-row
         digest, the same spelling as the v9 EVENT audit rows), so fork
         lineage and semantic chronology can never grow as two orderings on
-        one container (foldB F03 brief-delta).
+        one container.
         """
 
         return _operations.record_bundle_operation(
@@ -481,7 +481,7 @@ class Bundle:
 
     @_BundleStructuralProperty
     def relations(self) -> tuple[MemberRelationRow | OpaqueRelationRow, ...]:
-        """Return the immutable S6 member-relation view (R4).
+        """Return the immutable member-relation view (R4).
 
         Returns
         -------
@@ -503,7 +503,7 @@ class Bundle:
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
-    # One explicit edit or identity per member (F03 item 5); broadcast do()
+    # One explicit edit or identity per member; broadcast do
     # is untouched forever.
     vary = _bundle_vary
 
@@ -577,7 +577,7 @@ class Bundle:
         return _bundle_add_alternative(self, second_run, steered=steered, prefix=prefix)
 
     def effects(self, history_id: str | None = None) -> Any:
-        """Serve the stored per-candidate effect table (F03 item 8).
+        """Serve the stored per-candidate effect table.
 
         The table is DATA the engine wrote once (released/refused/failed
         candidates included), persisted in the artifact keyed by operation
@@ -779,7 +779,7 @@ class Bundle:
         ------
         BundleRelationError
             ``bundle_member_has_relations`` when a removed member has
-            relation rows and ``cascade_relations`` is ``False`` (S6 R5).
+            relation rows and ``cascade_relations`` is ``False`` (R5).
         """
 
         return _members.remove_members(self, names, cascade_relations=cascade_relations)
@@ -810,7 +810,7 @@ class Bundle:
         ------
         BundleRelationError
             ``bundle_member_has_relations`` when a removed member has
-            relation rows and ``cascade_relations`` is ``False`` (S6 R5).
+            relation rows and ``cascade_relations`` is ``False`` (R5).
         """
 
         _members.remove_except(self, keep, cascade_relations=cascade_relations)
@@ -858,7 +858,7 @@ class Bundle:
         ------
         BundleRelationError
             ``bundle_member_has_relations`` when a removed member has
-            relation rows and ``cascade_relations`` is ``False`` (S6 R5).
+            relation rows and ``cascade_relations`` is ``False`` (R5).
         """
 
         _members.clear_members(self, cascade_relations=cascade_relations)
@@ -1369,9 +1369,8 @@ class Bundle:
         shared live weak model reference. The persisted ``model_object_id``
         is deliberately never sufficient — object ids do not survive (or
         stay unique across) a save/load boundary, so trusting them
-        manufactured identity-rank upgrades between loaded artifacts (the
-        A-GATE rank-upgrade audit pins this: loaded pairs settle to the
-        graph/weight evidence that actually round-trips).
+        manufactured identity-rank upgrades between loaded artifacts (loaded
+        pairs settle to the graph/weight evidence that actually round-trips).
 
         Returns
         -------

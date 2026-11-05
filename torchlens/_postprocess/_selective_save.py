@@ -290,9 +290,9 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
         if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
     ]
     trace._num_saved_ops = len(saved_ops)
-    # F20 (brainpipe D-17): read the ONE byte model -- physically retained
+    # Read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
-    # explorer P4 memory truth (reduce-only captures count the retained
+    # explorer memory truth (reduce-only captures count the retained
     # TRANSFORMED bytes) is served by this same aggregate.
     from .._save_budget import retained_activation_bytes
 

@@ -1,6 +1,6 @@
 """Closed-vocabulary parsing for torchlens-owned boolean environment knobs.
 
-THE one boolean env parser (round-7 b7 R47): every torchlens-owned on/off
+THE one boolean env parser: every torchlens-owned on/off
 knob must parse against the same closed vocabulary, because the historical
 exact-``"1"`` / raw-truthiness spellings turned a typo into a silently
 different configuration -- ``TORCHLENS_COLLAPSE_STRICT=true`` left a
@@ -98,7 +98,7 @@ class EnvFlagSpec:
     values: tuple[str, ...] = field(default_factory=tuple)
 
 
-#: THE registry of torchlens-owned environment knobs (WT1 A-VI item 34).
+#: THE registry of torchlens-owned environment knobs.
 #: Every ``TORCHLENS_*`` environment read in the package must have a row
 #: here, and every ``kind="bool"`` knob must parse through
 #: :func:`closed_bool_env` (or a reason-ledgered inline closed-vocabulary

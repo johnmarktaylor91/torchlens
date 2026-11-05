@@ -1,4 +1,4 @@
-"""The ``ReadTable`` result carrier (M(reads) item 1, decision D8).
+"""The ``ReadTable`` result carrier.
 
 Immutable, trace-bound Mapping keyed ``(target_id, kind, address)`` with
 honesty as columns: the closed status vocabulary, retention/capture status,
@@ -35,7 +35,7 @@ __all__ = ["ReadRow", "ReadTable", "TableProvenance", "load_read_table"]
 
 READ_TABLE_SCHEMA_VERSION = "read_table_v1"
 
-# Closed row-status vocabulary (D8). A numeric zero is `ok`; autograd None is
+# Closed row-status vocabulary. A numeric zero is `ok`; autograd None is
 # `unreachable`; fabricating zeros for unreachable rows is the defect class
 # this carrier exists to prevent.
 ROW_STATUSES: tuple[str, ...] = (
@@ -74,7 +74,7 @@ class ReadRow:
     alias_group:
         Ordinal of the ``(node, slot)`` alias group this row's site shares a
         gradient with, or ``None`` when unshared. Rows are per requested
-        address; dedup is for the engine (D11).
+        address; dedup is for the engine.
     method:
         Signed method name (``activation_x_grad`` / ``grad`` /
         ``activation``).
@@ -217,7 +217,7 @@ class ReadRow:
 
 @dataclass(frozen=True)
 class TableProvenance:
-    """Table-level provenance and disclosure (D8), never only DataFrame.attrs.
+    """Table-level provenance and disclosure, never only DataFrame.attrs.
 
     Attributes
     ----------
@@ -235,7 +235,7 @@ class TableProvenance:
         Number of addresses in the declared population.
     excluded_counts:
         status/reason -> count for rows EXCLUDED from an implicit population
-        (the D10 ancestor-cone counts land here as
+        (the ancestor-cone counts land here as
         ``not_upstream_of_target``).
     frozen_policy:
         Resolved frozen policy name (``'mlp_out'`` / ``'none'`` /
@@ -244,9 +244,9 @@ class TableProvenance:
         Digest of the resolved frozen site set.
     frozen_requested_count / frozen_resolved_count / frozen_fired_count:
         Freeze coverage disclosure; fired is cone-dependent and asserted
-        ``<=`` resolved, never an exact count (D6).
+        ``<=`` resolved, never an exact count.
     alias_group_count / aliased_site_count:
-        Disclosure of shared-gradient duplication (D11).
+        Disclosure of shared-gradient duplication.
     batching_plan:
         The chosen plan: ``{'batch_size': B, 'reason': ..., 'device': ...}``.
     autograd_calls:
@@ -288,7 +288,7 @@ class TableProvenance:
 
 
 class ReadTable(Mapping):
-    """Immutable trace-bound mapping of read rows (D8).
+    """Immutable trace-bound mapping of read rows.
 
     Keys are ``(target_id, kind, address)``; values are :class:`ReadRow`.
     The table never mutates; every derivation (``target``,
@@ -495,7 +495,7 @@ class ReadTable(Mapping):
     ) -> ReadTable:
         """Fold multi-target rows into one row per address, explicitly.
 
-        No implicit mean/max/sum exists anywhere (D9): the caller supplies
+        No implicit mean/max/sum exists anywhere: the caller supplies
         the reducer. Only site-grain ``ok`` rows fold; a non-ok row at any
         target keeps the address's worst status with its reason.
 
@@ -559,7 +559,7 @@ class ReadTable(Mapping):
         """Explicitly collapse alias groups to one row per ``(node, slot)``.
 
         The default table reports one row per requested address with the
-        duplication disclosed (D11); this is the explicit opt-in collapse.
+        duplication disclosed; this is the explicit opt-in collapse.
         The first member address of each group survives; scores must agree
         exactly within a group (they share one gradient by construction), so
         a conflict is an engine defect and raises.
@@ -617,7 +617,7 @@ class ReadTable(Mapping):
         -----
         Dense tensors live on the carrier; the DataFrame is a projection.
         Provenance is duplicated into ``DataFrame.attrs`` but the carrier
-        copy is authoritative (D8).
+        copy is authoritative.
         """
 
         if values not in ("omit", "object", "explode"):
@@ -658,20 +658,20 @@ class ReadTable(Mapping):
     def save(self, path: str | Path) -> Path:
         """Persist a scalar table as a standalone ``read_table_v1`` JSON file.
 
-        Tensor-bearing (element-grain) tables refuse until sidecars exist
-        (D8). The saved artifact is session-independent: no trace payloads,
-        no runtime handles; a loaded table is ``rescorable=False``.
+                Tensor-bearing (element-grain) tables refuse until sidecars exist
+        . The saved artifact is session-independent: no trace payloads,
+                no runtime handles; a loaded table is ``rescorable=False``.
 
-        Parameters
-        ----------
-        path:
-            Destination file path (created or overwritten).
+                Parameters
+                ----------
+                path:
+                    Destination file path (created or overwritten).
 
-        Raises
-        ------
-        ReadError
-            Code ``read_table_not_portable`` when any row carries a dense
-            value.
+                Raises
+                ------
+                ReadError
+                    Code ``read_table_not_portable`` when any row carries a dense
+                    value.
         """
 
         dense = [row for row in self._rows.values() if row.value is not None]

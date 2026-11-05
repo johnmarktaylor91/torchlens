@@ -201,7 +201,7 @@ class InterventionDecision:
     template_ref: Any | None = None
     keep_grad: bool = False
     isolate: bool = False
-    #: Provenance of the SPEC rule that produced this decision (leverage B7):
+    #: Provenance of the SPEC rule that produced this decision:
     #: the user's WHERE expression must survive into the persisted spec, so
     #: the spec threads it through the decision to the staging site. It is
     #: a provenance rider only — predicate-door persistence still stamps
@@ -243,7 +243,7 @@ class ParentRef:
 class LiteralTensor:
     """Template component that stores a tensor literal for replay.
 
-    ``param_barcode`` (r75 F2) snapshots, AT CLASSIFICATION TIME (mid-capture, model
+    ``param_barcode`` snapshots, AT CLASSIFICATION TIME (mid-capture, model
     provably alive), the per-capture random barcode model prep stamped on an
     ``nn.Parameter`` argument -- the same barcode mirrored onto the cooked ``Param``
     record. The runnable producer's parameter matcher uses it as its gc-immune identity
@@ -252,7 +252,7 @@ class LiteralTensor:
     model (plus one ``gc.collect()`` before the save) left two same-shape+dtype BN params
     unmatchable -- a nondeterministic honest-save over-refusal. ``None`` for non-Parameter
     literals and foreign/unstamped parameters (matching falls through to the other rungs);
-    optional-with-default keeps unpickling of pre-r75 payloads intact (readers use
+    optional-with-default keeps unpickling of older payloads intact (readers use
     ``getattr`` with a ``None`` fallback).
 
     ``_capture_param_fingerprint`` (private) records, for an ``nn.Parameter`` argument,
@@ -584,7 +584,7 @@ class InterventionSpec:
             hook=hook,
             helper=helper,
             handle=handle,
-            # Record the helper's tensors as staged: helpers alias them (F9).
+            # Record the helper's tensors as staged: helpers alias them.
             metadata=stamp_metadata(metadata, hook, helper),
         )
         if prepend:
@@ -773,9 +773,9 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         reconstruct={"_parent_run", "_capture_outcome", "_output_slot"},
     )
     # `_trace_core` (the columnar op row store) is not in MODEL_LOG_FIELD_ORDER (private runtime
-    # storage, FieldPolicy.DROP). The generic field pass reconstructs (drops) it; the M11 COW fork
-    # builder installs the forked core (per-fork store views over the shared sealed base) explicitly
-    # after the field pass.
+    # storage, FieldPolicy.DROP). The generic field pass reconstructs (drops) it; the
+    # copy-on-write fork builder installs the forked core (per-fork store views over the
+    # shared sealed base) explicitly after the field pass.
     table["_trace_core"] = ForkFieldPolicy.FORK_RECONSTRUCT
     return table
 
@@ -815,7 +815,7 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
 MODEL_LOG_FIELD_FORK_POLICY = _build_trace_fork_policy()
 LAYER_PASS_LOG_FIELD_FORK_POLICY = _build_op_log_fork_policy()
 
-# The tlspec v8 coordinated bump retired this module's S3 pre-release
+# The coordinated tlspec v8 schema bump retired this module's pre-release
 # registrations (Edit.selection_recipe, FireRecord.edge_address).
 
 __all__ = [

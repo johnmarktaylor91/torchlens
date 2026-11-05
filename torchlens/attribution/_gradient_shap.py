@@ -1,4 +1,4 @@
-"""GradientShap: expected gradients over a baseline pool (attrib memo D10).
+"""GradientShap: expected gradients over a baseline pool.
 
 The estimator convention is PINNED to captum's ``InputBaselineXGradient``,
 verified against captum source before implementation and held by the

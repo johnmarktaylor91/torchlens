@@ -1,4 +1,4 @@
-"""``bundle.vary(mapping)`` — one explicit edit or identity PER member (F03 item 5).
+"""``bundle.vary(mapping)`` — one explicit edit or identity PER member.
 
 The teachable law: **do = one edit to all members;
 vary = one explicit edit or identity per member; both take the same spec
@@ -16,7 +16,7 @@ Contract:
   duplicate-after-normalization members refuse typed BEFORE any mutation;
   subsets require explicit ``unmentioned="unchanged"``.
 - Donor-plan normalization runs ONCE across the whole mapping before members
-  diverge (the edits panel's D8 contract, honored via
+  diverge (honored via
   :func:`~torchlens.intervention.stochastic.assign_batch_donor_groups` —
   one reused SamplingPlan object keeps one persisted ``donor_group_id``
   across members; separately constructed plans never share).

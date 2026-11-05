@@ -1,9 +1,6 @@
-"""Import-clean representation geometry helpers (real subpackage; C01 item 18).
+"""Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL.
 
-This provisional surface intentionally depends only on NumPy, Torch, and PIL.
-The math kernel lives in ``_geometry`` and the Trace-facing evolution/node
-visuals in ``_trace_views``; this facade re-exports every historical spelling.
-"""
+The math kernel lives in ``_geometry`` and the trace-facing views in ``_trace_views``; this facade re-exports both."""
 
 from __future__ import annotations
 

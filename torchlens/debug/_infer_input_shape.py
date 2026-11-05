@@ -1959,7 +1959,7 @@ def _run_search(
             attempts,
             f"Shape inference was blocked by an unsupported forward error: {delayed_blockers[-1]}",
         )
-    # Evidence-led classification (quickstart memo D10, the CLIP fix):
+    # Evidence-led classification (the CLIP-class fix):
     # see torchlens/debug/_infer_failure_classify.py.
     classified = classify_nongeometric_failure(attempts, _is_skippable_shape_error)
     if classified is not None:

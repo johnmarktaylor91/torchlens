@@ -1,34 +1,6 @@
-"""Trackers: one engine, first-party sinks, measured relays (lane F26).
+"""Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL, memory, framework callbacks) deliver them.
 
-TorchLens never builds dashboards; it computes MORE and BETTER statistics
-than the trackers' built-in watchers and FEEDS their dashboards. One
-collection/reduction engine (the C06 ``torchlens._observability`` substrate)
-produces immutable, tensor-free records; this package owns conversion,
-namespace rendering, buffering, delivery, and sink failures:
-
-- :func:`watch` -- attach-once watching with disclosed cost tiers (P:
-  parameters/gradients/updates, the default, wraps no forward; M:
-  module-hook activations; O: op capture, deferred this window with a typed
-  teaching refusal), a mandatory caller ``global_step``, and the
-  loud-failure taxonomy (nothing becomes an empty panel without a typed
-  explanation).
-- :class:`TensorBoardSink` -- the reference, CI-tested transport (raw
-  histograms with exact counts on explicit edges; relay detection).
-- :class:`WandbSink` -- the thin native serializer that preserves exactly
-  what the wandb TB relay destroys (caller step axis, histogram summaries).
-- :class:`JSONLSink` / :class:`MemorySink` -- dependency-free receivers
-  (future-viewer plumbing / the reference test sink).
-- :func:`build_graph_ir` / :func:`graph_ir_to_tensorboard` -- the executed
-  DAG as a TB graph with evidence-qualified StepStats, truthful fields only.
-- :class:`HFTrainerWatchCallback` / :class:`LightningWatchCallback` --
-  explicit framework wrappers over the same engine.
-
-Access spelling is ``import torchlens.trackers`` for now; root-facade
-routing is an F35 registration fragment. Every spelling here is
-DOCUMENTED-UNSTABLE pending naming-session ratification. The sink protocol
-is documented (``docs/reference/trackers.md``) so third parties write their
-own receivers -- TorchLens owns the engine, they own the sink.
-"""
+The sink protocol is documented in ``docs/reference/trackers.md`` so third parties can write their own receivers."""
 
 from __future__ import annotations
 

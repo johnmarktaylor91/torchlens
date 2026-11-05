@@ -1,4 +1,4 @@
-"""Repgeom node visuals: MDS/RDM/scree node-spec callbacks (C01 item 18).
+"""Repgeom node visuals: MDS/RDM/scree node-spec callbacks.
 
 PIL-only render-time images composed from ``tl.viz.render_*`` primitives,
 returned as NodeSpec callbacks for ``Trace.draw(node_spec_fn=...)``.

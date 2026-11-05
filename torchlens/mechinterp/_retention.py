@@ -1,4 +1,4 @@
-"""Retention plans (mikit D15): printable, priceable, composable save plans.
+"""Retention plans: printable, priceable, composable save plans.
 
 Every kit function REFUSES with the complete missing-site set when payloads
 are absent -- never a partial table, never a silent widening to
@@ -67,7 +67,7 @@ class PlanSite:
 
 @dataclass(frozen=True)
 class SavePlan:
-    """A priced, composable retention plan (mikit D15).
+    """A priced, composable retention plan.
 
     ``predicate`` composes with ordinary ``save=``; ``module_subtrees`` are
     whole-module saves (attention interiors for head analyses). The
@@ -226,7 +226,7 @@ def _input_sites(trace: Any, analysis: str) -> list[PlanSite]:
 
 
 def retention_plan(trace: Any, analyses: Any = ("decomposition", "dla")) -> SavePlan:
-    """Build the retention plan for the named analyses (mikit D15).
+    """Build the retention plan for the named analyses.
 
     Parameters
     ----------

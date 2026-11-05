@@ -1,14 +1,14 @@
-"""Shared handoff machinery for the ``torchlens.neuro`` treaty desk (F22).
+"""Shared handoff machinery for the ``torchlens.neuro`` treaty desk.
 
 One enumeration + shaping + provenance substrate consumed by both public
 verbs (:func:`torchlens.neuro.datasets`, :func:`torchlens.neuro.rdms`) and
 by the legacy ``bridge.rsatoolbox.dataset`` delegation. Site eligibility is
-the CORE stimulus-indexed gate (``torchlens.repgeom._annotation_gate``,
-lane A11) -- the neuro package never re-derives "which sites index
+the CORE stimulus-indexed gate (``torchlens.repgeom._annotation_gate``)
+-- the neuro package never re-derives "which sites index
 stimuli"; it consumes the one evidence order (record kind first, defended
-shape equality second) that stopped the fabricated buffer pseudo-RDMs
-(neuro memo D4/D5). Shaping is the ONE recorded feature-matrix operation
-(:mod:`torchlens.features`, tvscope B7) -- no hand-rolled flatten enters an
+shape equality second) that stopped the fabricated buffer pseudo-RDMs.
+Shaping is the ONE recorded feature-matrix operation
+(:mod:`torchlens.features`) -- no hand-rolled flatten enters an
 rsatoolbox handoff.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -33,7 +33,7 @@ from ._conflicts import (
 )
 
 #: Observation-descriptor key of the ALWAYS-written original-row-index
-#: descriptor (neuro memo D10): rsatoolbox's ``calc_rdm(descriptor=...)``
+#: descriptor: rsatoolbox's ``calc_rdm(descriptor=...)``
 #: returns rows in SORTED descriptor order, so presentation order must ride
 #: a descriptor of our own that is permuted along with the data (measured
 #: recoverable at rsatoolbox 0.1.5 and 0.3.2). rsatoolbox's own ``index``
@@ -41,14 +41,14 @@ from ._conflicts import (
 #: it does not exist.
 PRESENTATION_INDEX_KEY = "tl_presentation_index"
 
-#: Descriptor value recorded when no pooling/readout was applied (memo D3:
-#: the readout is scientific provenance and is ALWAYS recorded; disclosed
+#: Descriptor value recorded when no pooling/readout was applied (the
+#: readout is scientific provenance and is ALWAYS recorded; disclosed
 #: flattening is the honest launch default).
 FLATTEN_POOL = "flatten"
 
 
 class NeuroHandoffError(_ActionableErrorMixin, ConfigurationError, ValueError):
-    """Typed refusal from the neuro handoff surface (memo 4.1/4.2).
+    """Typed refusal from the neuro handoff surface.
 
     Codes: ``neuro_pool_vocabulary_unavailable``,
     ``neuro_obs_descriptor_invalid``, ``neuro_stimulus_ids_mismatch``,
@@ -89,7 +89,7 @@ class NeuroHandoffError(_ActionableErrorMixin, ConfigurationError, ValueError):
 
 @dataclass(frozen=True)
 class SiteOutcome:
-    """One per-site ledger row of a neuro sweep (memo D5/D6).
+    """One per-site ledger row of a neuro sweep.
 
     Attributes
     ----------
@@ -111,7 +111,7 @@ class SiteDatasets(OrderedDict):
     """Insertion-ordered site -> Dataset mapping carrying its sweep ledger.
 
     The per-site report is exposed explicitly from day one on new neuro
-    functions (memo D6): ``.ledger`` is a tuple of :class:`SiteOutcome`
+    functions: ``.ledger`` is a tuple of:class:`SiteOutcome`
     rows covering every considered site (computed AND skipped). The class
     is a plain ``OrderedDict`` subclass measured pickle/copy/deepcopy-safe
     with the attribute intact and ``==``-equal to the plain mapping.
@@ -123,7 +123,7 @@ class SiteDatasets(OrderedDict):
 def check_pool(pool: Any) -> str:
     """Validate the ``pool=`` argument against the launch vocabulary.
 
-    neuro mints no pooling vocabulary of its own (memo D3): readout presets
+    neuro mints no pooling vocabulary of its own: readout presets
     belong to the shared extraction/readout layer, which has not shipped a
     vocabulary yet, so the only accepted value is ``None`` -> disclosed
     flattening. The choice is ALWAYS recorded in descriptors.
@@ -162,7 +162,7 @@ def check_pool(pool: Any) -> str:
 
 
 def widen_for_handoff(matrix: torch.Tensor) -> tuple[torch.Tensor, str | None]:
-    """Apply the handoff dtype rule and report the cast (memo D12).
+    """Apply the handoff dtype rule and report the cast.
 
     Captured dtypes pass through; ``float16``/``bfloat16`` widen to
     ``float32`` (never ``float64`` -- float64 doubles peak handoff memory
@@ -193,7 +193,7 @@ def validate_obs(
     *,
     site: str,
 ) -> dict[str, Any]:
-    """Validate user condition/run/repeat observation descriptors (memo 4.1).
+    """Validate user condition/run/repeat observation descriptors.
 
     A misaligned condition vector is the panel's highest-severity failure
     class: plausible, scientifically wrong, invisible -- so every column is
@@ -268,7 +268,7 @@ def resolve_stimulus_ids(
     *,
     site: str,
 ) -> tuple[list[str], str]:
-    """Resolve row identity per the authority rule (memo 4.1).
+    """Resolve row identity per the authority rule.
 
     Manifest-recorded ids are authoritative on an artifact: an explicitly
     supplied list must MATCH them and acts as validation, never silent
@@ -384,7 +384,7 @@ class SitePayload:
     ----------
     key:
         Canonical, collision-free site key (pass-qualified for multi-pass
-        selections, memo D13).
+        selections).
     requested:
         The lookup the caller typed (equals ``key`` on default sweeps).
     matrix:
@@ -513,11 +513,11 @@ def enumerate_trace_sites(
     *,
     verb: str,
 ) -> tuple[list[SitePayload], list[SiteOutcome]]:
-    """Enumerate eligible trace sites through the CORE gate (memo 4.4).
+    """Enumerate eligible trace sites through the CORE gate.
 
     Default sweeps (``sites=None``) cover every stimulus-indexed saved
     site -- single-pass layers under their layer label and multi-pass
-    layers as pass-qualified canonical keys automatically (memo D13: a
+    layers as pass-qualified canonical keys automatically (a
     CORnet-S user wants ``V1:1..V1:T``, not a refusal) -- skipping
     ineligible sites into the ledger with ONE summarized disclosure.
     Explicit requests refuse actionably: an ineligible site raises the
@@ -580,7 +580,7 @@ def enumerate_trace_sites(
         reason = _site_ineligibility(record, expected_counts)
         if reason is not None:
             _raise_ineligible_site(verb, _safe_label(record) or lookup, reason)
-        # Canonical key rule (memo D13): pass-qualified keys ONLY for
+        # Canonical key rule: pass-qualified keys ONLY for
         # multi-pass layers; single-pass sites use the bare layer label so
         # explicit requests, default sweeps, and the repgeom verbs agree.
         multi_pass = int(getattr(record, "num_passes", 1)) > 1
@@ -603,7 +603,7 @@ def _default_trace_sweep(
 
     Single-pass layers enter under their layer label; multi-pass layers
     emit pass-qualified canonical keys automatically, each pass gated
-    independently (memo D13). Ineligible sites skip into the ledger with
+    independently. Ineligible sites skip into the ledger with
     ONE summarized disclosure.
 
     Parameters
@@ -699,7 +699,7 @@ def enumerate_extraction_sites(
     *,
     verb: str,
 ) -> tuple[list[SitePayload], list[SiteOutcome], Any]:
-    """Enumerate eligible extraction-artifact sites (memo 4.4 file route).
+    """Enumerate eligible extraction-artifact sites (file route).
 
     Evidence order for the file route: the manifest's declared stimulus
     count and axis semantics are FIRST-CLASS evidence (batch axis 0 by the
@@ -795,7 +795,7 @@ def enumerate_extraction_sites(
 def base_descriptors(
     payload: SitePayload, *, source_kind: str, trace: Any | None
 ) -> dict[str, Any]:
-    """Build the shared per-site Dataset/RDM descriptor block (memo 4.1).
+    """Build the shared per-site Dataset/RDM descriptor block.
 
     Parameters
     ----------
@@ -842,7 +842,7 @@ def base_descriptors(
     if trace is not None:
         model_name = trace._source_class_name if is_live_trace(trace) else None
         if model_name:
-            # The reserved multi-model slot (memo section 8): one factual
+            # The reserved multi-model slot: one factual
             # model identity per Dataset today, a stack key tomorrow.
             descriptors["model"] = str(model_name)
         if getattr(trace, "intervention_audit", None):

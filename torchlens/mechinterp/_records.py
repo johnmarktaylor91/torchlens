@@ -1,4 +1,4 @@
-"""Typed result records + the shared labeled-coordinate protocol (mikit item 4).
+"""Typed result records + the shared labeled-coordinate protocol.
 
 Every kit function returns a TYPED record whose rows carry the same small
 coordinate/provenance vocabulary: pass-qualified op labels, live site keys,
@@ -31,7 +31,7 @@ __all__ = [
     "StackGrading",
 ]
 
-#: Stack grading vocabulary (mikit D7). ``open`` never reaches a caller: an
+#: Stack grading vocabulary. ``open`` never reaches a caller: an
 #: OPEN stack refuses at construction, always.
 StackGrading = Literal["complete", "closed_constant", "closed_unresolved"]
 
@@ -57,7 +57,7 @@ class Coordinate:
     ----------
     label:
         Human-facing component label -- a module address in eval mode
-        (``transformer.h.3.attn.c_proj``), never a raw op name (mikit D6).
+        (``transformer.h.3.attn.c_proj``), never a raw op name.
     op_label:
         Pass-qualified captured op label the value rode (``add_10_101:2``).
     site_key:
@@ -123,7 +123,7 @@ class ComponentStack:
 
     - Rows are in EXECUTION order (the order whose accumulation replays the
       forward's own fp32 add sequence -- the bitwise identity's precondition).
-    - ``grading`` is settled at construction (mikit D7): ``complete`` (every
+    - ``grading`` is settled at construction: ``complete`` (every
       row a named writer), ``closed_constant`` (non-writer rows are VERIFIED
       constants), or ``closed_unresolved`` (a diagnostic ``strict=False``
       product, refused by DLA / gallery / launch claims). An OPEN stack never
@@ -164,7 +164,7 @@ class ComponentStack:
         rows:
             Component rows in execution order.
         grading:
-            Settled D7 grading; ``open`` is not constructible.
+            Settled grading; ``open`` is not constructible.
         target_coordinate:
             Coordinate of the tensor the rows sum to.
         target_value:
@@ -353,7 +353,7 @@ def _pandas_frame(rows: list[dict[str, Any]]) -> Any:
 
 
 class ContributionScores:
-    """Per-component direct-logit contribution rows (mikit D9's record).
+    """Per-component direct-logit contribution rows.
 
     Rows carry the shared coordinate protocol; ``values[i]`` is row ``i``'s
     contribution to each requested direction at each selected position

@@ -1,14 +1,14 @@
 """Noise tunnel: run ANY kit method on noised input copies and aggregate.
 
-Attrib memo D4-D6. The tunnel perturbs floating and complex attributed leaves
+The tunnel perturbs floating and complex attributed leaves
 only (integer ids, masks, booleans, and strings pass through unchanged),
 reuses ONE noised object at every repeated tensor reference, takes ABSOLUTE
 noise scales (range-relative noise is a docs recipe, never a hidden
 inference), and aggregates with ``"mean"``, ``"mean_square"``, or population
-``"variance"``. Sampling is serial behind the replaceable runner seam (D5) --
+``"variance"``. Sampling is serial behind the replaceable runner seam --
 there is deliberately NO public sample-batch knob.
 
-Composition rulings (D6): ``noise_tunnel(method=smoothgrad)`` refuses with a
+Composition rulings: ``noise_tunnel(method=smoothgrad)`` refuses with a
 pointer to the direct saliency spelling; ``noise_tunnel(method=gradient_shap)``
 works with independent per-sample RNG substreams and both sample counts
 disclosed; ``noise_tunnel(method=grad_cam)`` disables child rendering and
@@ -68,7 +68,7 @@ def _derived_child_seed(seed: int, sample_index: int) -> int:
 
 
 def _refuse_composition(bound: _BoundMethod) -> None:
-    """Apply the D6 composition refusals for the bound child method.
+    """Apply the composition refusals for the bound child method.
 
     Parameters
     ----------
@@ -105,7 +105,7 @@ def _grad_cam_aggregate_overlay(
     inputs_prepared: Any,
     child_results: list[Attribution],
 ) -> Any:
-    """Render the ONE aggregate overlay for a grad_cam child (D6).
+    """Render the ONE aggregate overlay for a grad_cam child.
 
     Parameters
     ----------
@@ -143,7 +143,7 @@ def _validate_noise_bank_coverage(
     n_samples: int,
     prepared: Any,
 ) -> None:
-    """Validate a stored bank's coverage up front (attrib memo D4).
+    """Validate a stored bank's coverage up front.
 
     A defective bank is TUNNEL configuration, not a child failure, so
     coverage is checked before any sample runs (per-draw geometry re-checks

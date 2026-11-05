@@ -1,4 +1,4 @@
-"""``log_injections`` stages 0-2: anchored injected-op recording (F01/F44).
+"""``log_injections`` stages 0-2: anchored injected-op recording.
 
 The capture option ``CaptureOptions(log_injections=True)`` makes computation
 performed INSIDE an intervention hook first-class: each torch call the hook
@@ -14,9 +14,9 @@ STAGE 0 PREREQUISITES (both anchored-identity layers):
   see these calls (the misfire test measures both halves).
 * Each injected op gets the durable structural key
   ``(host_site_key, spec_rule_id, host_pass, firing_index, nesting_path,
-  local_op_ordinal, output_slot)`` -- VERBATIM the C07 entry-dark
+  local_op_ordinal, output_slot)`` -- VERBATIM the entry-dark
   ``Op.injection_provenance`` slot grammar (tlspec v9), which stage 2
-  (lane F44) persists against with no further schema bump -- plus a
+ persists against with no further schema bump -- plus a
   human-readable label anchored to the host site
   (``relu_5_23/inj_1``; rendering is display sugar for the naming session).
 
@@ -30,9 +30,9 @@ injections during REPLAY stay deferred: no capture session exists during
 replay, so nothing executed inside a replay hook can be recorded without
 standing one up.
 
-STAGE 2 (lane F44, persistence + attestation): analysis-level saves
+STAGE 2 (persistence + attestation): analysis-level saves
 persist the injected family through :mod:`torchlens._io.injection_codec`
-(synthesized op rows writing the C07 ``Op.injection_provenance`` slot;
+(synthesized op rows writing the ``Op.injection_provenance`` slot;
 callable identity through the trusted-callable resolver; fire-time arg
 snapshots for replay). Loads degrade to ``attestation="unattested"`` --
 never refusing on an unresolvable callable, always refusing on forged
@@ -68,10 +68,10 @@ __all__ = [
 
 @dataclass(frozen=True)
 class InjectionProvenance:
-    """The durable structural key of one injected op output (C07 slot grammar).
+    """The durable structural key of one injected op output (slot grammar).
 
     Field-for-field the tlspec v9 entry-dark ``Op.injection_provenance``
-    record (surgery memo 3.5 items 8-9, 12): stage 2 (lane F44) persists
+    record: stage 2 persists
     THIS shape with no further schema bump.
     """
 
@@ -418,11 +418,11 @@ def injection_state(trace: Any) -> dict[str, Any]:
 def arm_injection_logging(trace: Any, *, armed: bool) -> None:
     """Arm (or explicitly disarm) injected-op recording for one capture.
 
-    The capture entry's one-line arming spelling (F01 stages 0-1): the ONE
+    The capture entry's one-line arming spelling: the ONE
     consolidated session-transient state dict (a declared ``FieldPolicy.DROP``
     Trace field) is created here at entry, and ``armed`` mirrors the
-    ``log_injections`` capture knob. Injected records never persist at
-    stage 1 -- the save door refuses typed, naming lane F44.
+    ``log_injections`` capture knob. Injected records persist only at analysis
+    level; the runnable save door refuses typed.
     """
 
     injection_state(trace)["armed"] = armed
@@ -528,8 +528,8 @@ def next_firing_index(trace: Any, spec_rule_id: str) -> int:
 def refuse_injection_logged_runnable_save(trace: Any, save_level: str) -> None:
     """Refuse a RUNNABLE save of a trace carrying logged injected ops (typed).
 
-    Analysis-level persistence is lane F44's shipped codec (the injected
-    family rides the artifact as op rows writing the C07
+    Analysis-level persistence is handled by the injection codec (the injected
+    family rides the artifact as op rows writing the
     ``Op.injection_provenance`` slot). The runnable product is different:
     its sparse core is the model's taken-path DAG, injected computation is
     NOT on that path, and a runnable artifact silently dropping it would

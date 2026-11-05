@@ -1,4 +1,4 @@
-"""Per-query-head attention contributions (mikit D10; TLens
+"""Per-query-head attention contributions (TLens
 ``stack_head_results``).
 
 Rows are ``z_h @ W_O_h`` per QUERY head, read from the validated ``result``
@@ -250,7 +250,7 @@ def attention_head_contributions(
     onto: torch.Tensor | None = None,
     positions: Any = None,
 ) -> ComponentStack:
-    """Per-query-head contribution rows + verified remainders (mikit D10).
+    """Per-query-head contribution rows + verified remainders.
 
     Parameters
     ----------

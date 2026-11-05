@@ -1,12 +1,12 @@
 """The private concrete-input capture primitive (quickstart B5).
 
-Layer 2 of the four-layer split (memo D1): this primitive accepts ONLY a
+Layer 2 of the four-layer split: this primitive accepts ONLY a
 concrete :class:`~torchlens._quickstart._plan.InputPlan` -- it can never
 invoke zero-input resolution, synthesis, or inference, so the
 resolver -> inference -> capture import cycle is impossible by construction.
 The inference search and every quickstart verb capture THROUGH this door.
 
-The pinned execution policy (memo D8, surface-specific): summary and render
+The pinned execution policy (surface-specific): summary and render
 pin eval + no-grad, restore every training flag, host/device RNG, and
 normalization buffers, verify with a state-dict hash, and disclose -- with
 the promise SCOPED to what is actually restored (arbitrary Python side
@@ -83,7 +83,7 @@ def state_dict_hash(model: nn.Module) -> str:
     parameter or persistent-buffer mutation across a pinned capture is
     detectable. This is a VALUE hash -- deliberately not the cheap
     name/shape fingerprint, whose collisions the panel measured across
-    checkpoints (memo D9).
+    checkpoints.
     """
 
     hasher = hashlib.blake2b(digest_size=16)
@@ -149,12 +149,12 @@ def capture_concrete(  # noqa: PLR0913 -- the ONE capture door: a concrete plan 
         The model to capture.
     plan:
         Concrete input plan. When the plan already carries a verified trace
-        (rung-3 in-call reuse, memo D9), that trace is returned directly and
+        (rung-3 in-call reuse), that trace is returned directly and
         NO new forward runs -- the capture counter stays at the inference
         search's own count.
     pinned_eval:
         Pin eval + no-grad, then restore training flags, RNG state, and
-        normalization buffers (the summary/render policy, memo D8).
+        normalization buffers (the summary/render policy).
     metadata_only:
         Capture with ``save=None`` (no activation payloads).
     verify_state:

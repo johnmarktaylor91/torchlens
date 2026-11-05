@@ -49,7 +49,7 @@ _GOVERNED_COMPATIBILITY_REFUSALS = (
 class _RecoveryWarningSink(list):
     """Recovery-warning ledger with a hard cap and an explicit overflow summary.
 
-    A malformed-line flood (a multi-million-line corrupt index) used to append
+    A malformed-line flood (a multi-million-line corrupt index) would append
     one warning per line without bound. The sink keeps the first
     ``_MAX_RECOVERY_WARNINGS`` diagnostics and counts the rest, so the ledger
     stays honest about suppression instead of silently growing or truncating.
@@ -155,10 +155,10 @@ def recover(path: str | Path) -> Recording:
             manifest = Manifest.read(manifest_path)
             _validate_fastlog_layout(bundle_path, manifest)
         except _GOVERNED_COMPATIBILITY_REFUSALS:
-            # Drop-not-resurrect (R10-4, widened by G3/D-ECO-9): a bundle the
+            # Drop-not-resurrect: a bundle the
             # version window or runtime policy REFUSES is refused here too;
             # letting the bare-pass salvage below resurrect it as
-            # recovered=True defeated the governed refusal entirely.
+            # recovered=True would defeat the governed refusal entirely.
             raise
         except ArtifactError:
             pass
@@ -193,17 +193,17 @@ def _load_from_index(
     metadata = _read_metadata(bundle_path / "metadata.json")
     records: list[ActivationRecord] = []
     warnings_out = _RecoveryWarningSink(recovery_warnings)
-    # WT1 A-IV item 21 (lane A08): an aborted bundle's PARTIAL/REASON.txt
-    # debris IS the on-disk failure record. Recovery used to discard it and
-    # rebuild the Recording with ``failed=False`` and no error evidence --
-    # laundering a failed capture into a benign "recovered". Carry it.
+    # An aborted bundle's PARTIAL/REASON.txt debris IS the on-disk failure
+    # record. Carry it into the rebuilt Recording; rebuilding with
+    # ``failed=False`` and no error evidence would launder a failed capture
+    # into a benign "recovered".
     abort_reason = _abort_debris_reason(bundle_path) if recovered else None
     if abort_reason is not None:
         warnings_out.append(f"bundle was aborted mid-write: {abort_reason}")
     lines = _read_index_lines(bundle_path / "fastlog_index.jsonl")
     for line_number, raw_line in enumerate(lines, start=1):
         try:
-            # Bounded: a depth-bomb line used to escape the JSONDecodeError
+            # Bounded: a depth-bomb line would escape the JSONDecodeError
             # handler as a raw RecursionError out of public recover().
             data = loads_bounded(raw_line)
         except json.JSONDecodeError:
@@ -317,7 +317,7 @@ def _read_index_lines(path: Path) -> list[str]:
 
     try:
         with path.open("rb") as handle:
-            # R10-3 fstat-first: refuse on the stat size BEFORE reading so an
+            # fstat first: refuse on the stat size BEFORE reading so an
             # over-ceiling index never materializes a transient ~512 MiB
             # buffer. The post-read length check stays as the truth for a file
             # that grew after the stat.
@@ -327,7 +327,7 @@ def _read_index_lines(path: Path) -> list[str]:
                     f"Fastlog index at {path} exceeds the {_INDEX_MAX_BYTES}-byte ceiling.",
                     code="fastlog_index_too_large",
                 )
-            # Stat-sized bounded read (R33-1): reading CEILING+1 pre-allocated
+            # Stat-sized bounded read: reading CEILING+1 pre-allocated
             # a transient ~512 MiB buffer for every index regardless of its
             # actual size. One sentinel byte over the stat size detects growth
             # between fstat and read; the ceiling refusal above stays the
@@ -431,7 +431,7 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     from .._io.lazy import _file_identity
     from .._utils.hashing import sha256_file
 
-    # R59 TOCTOU (lazy.py discipline): the digest and the mmap-backed load are
+    # TOCTOU guard (as in lazy.py): the digest and the mmap-backed load are
     # two opens of the same path, so bracket the hash with the file identity and
     # re-check before loading -- a rename-replace in the window is refused
     # rather than admitting bytes that were never hashed.
@@ -531,7 +531,7 @@ def _recording_from_records(
     ``abort_reason`` is the PARTIAL/REASON.txt debris text when the bundle was
     aborted mid-write: the rebuilt Recording then carries ``failed=True`` plus
     the string evidence, and its derived outcome is FAILED -- recovery
-    salvages records, never the failure verdict (WT1 A-IV item 21).
+    salvages records, never the failure verdict.
     """
 
     halted = bool(metadata.get("halted", False))

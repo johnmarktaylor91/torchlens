@@ -1,13 +1,13 @@
 """Occlusion attribution: scalar trace occlusion and the direct input map.
 
-Two engines share one window discipline (attrib memo D8): direct eval/no-grad
+Two engines share one window discipline: direct eval/no-grad
 forwards serve the input occlusion MAP (reference-implementation parity;
 ``overlap="average"`` default, ``"sum"`` explicit), while Trace fork/do
 replay serves the scalar selection occlusion below (the activation SWEEP over
 a trace selection is the lane's declared shed row -- its geometry,
 replacement-policy seam, and per-engine pass-budget refusal tier ship here so
 the sweep lands later without churn). Refusals are counted in DETERMINISTIC
-per-engine pass counts, never wall-clock (D9): a time budget would make
+per-engine pass counts, never wall-clock: a time budget would make
 identical inputs refuse on a laptop and run on a workstation. The refusal
 message and fields carry the arithmetic -- computed pass count, measured
 one-pass time, projected total.
@@ -39,7 +39,7 @@ from torchlens.attribution._core import (
 )
 from torchlens.intervention.helpers import mean_ablate, zero_ablate
 
-# Deterministic per-engine pass budgets (attrib memo D9), sized by the
+# Deterministic per-engine pass budgets, sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms
 # replay per window on resnet18).
 _DIRECT_MAX_PASSES = 4096

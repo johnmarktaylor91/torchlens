@@ -98,13 +98,12 @@ def active_intervention_context(
         Control while the context is installed.
     """
 
-    # grind-r5 b7 R55 (sol HIGH, poss. REOPENED b2:C10): restores unwind
-    # through a SPLICEABLE entry list (the rng-monitor _PATCH_STACKS
-    # standard), not blind save/restore. The old unconditional restore
-    # re-published a DEAD context when two overlapping contexts unwound out
-    # of stack order (two-thread probe left thread A's spec/plan live after
-    # BOTH finally blocks ran), poisoning every later operation with a stale
-    # intervention. A non-top exit now splices its link out (the entry above
+    # Restores unwind through a SPLICEABLE entry list (the rng-monitor
+    # _PATCH_STACKS standard), not blind save/restore. An unconditional
+    # restore would re-publish a DEAD context when two overlapping contexts
+    # unwound out of stack order (a two-thread probe left thread A's
+    # spec/plan live after BOTH finally blocks ran), poisoning every later
+    # operation with a stale intervention. A non-top exit now splices its link out (the entry above
     # inherits its predecessor) and only the top exit writes the globals.
     # Cross-thread VISIBILITY of the process-global slot remains bounded by
     # the single-threaded-by-design capture contract (concurrent captures
@@ -200,7 +199,7 @@ def _execute_hook(
         getattr(injection_trace, "_tl_injection_state", None) or {}
     ).get("armed", False)
     if _injection_armed:
-        # F01 log_injections stage 0-1: record the torch calls THIS hook
+        # Injection logging: record the torch calls THIS hook
         # firing executes as anchored injected ops. The recorder installs
         # INSIDE the paused window, so the main capture journal and the
         # live site-key minter never see these calls -- injected ops
@@ -505,10 +504,10 @@ def _apply_live_hooks(
         pre_hook_dtype = str(current_out.dtype)
         version_before = _tensor_version(current_out)
         content_before = _tensor_content_probe(current_out)
-        # F01 log_injections: a pre-lowered plan entry that carries its spec
+        # Injection logging: a pre-lowered plan entry that carries its spec
         # rule id (the tl.module(...) lowering at the capture entry) anchors
         # this firing's injected ops to that PERSISTED id; entries without one
-        # leave the door's own ``current_rule`` untouched (AUD-CODE 2.3b).
+        # leave the door's own ``current_rule`` untouched.
         entry_rule_id = normalized_entry.metadata.get("rule_id")
         stamped_state = (
             _armed_injection_state(_state._active_trace) if isinstance(entry_rule_id, str) else None
@@ -1334,7 +1333,7 @@ def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:
 
 
 class _LiveSiteMinter:
-    """Incremental ``site_key_v1`` minter for the LIVE door (F02 D6 coordinate).
+    """Incremental ``site_key_v1`` minter for the LIVE door.
 
     The replay door reads the postprocess-minted ``Op.site_key``; the live
     door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
@@ -1345,11 +1344,11 @@ class _LiveSiteMinter:
     slot), then report ``seen + 1`` for the firing op without consuming it
     (it is consumed when its own record lands). Both doors therefore derive
     ONE logical firing coordinate, and a stochastic edit draws the same
-    donor at capture time and on replay (fable51 audit AUD-CODE 3.8: the raw
-    ordinal label shifted whenever an unrelated upstream op was added).
+    donor at capture time and on replay (the raw ordinal label would shift
+    whenever an unrelated upstream op was added).
 
     DISCLOSED RESIDUAL: postprocess prunes orphan ops (they consume no
-    ordinals, SF-63); orphan-ness is not knowable live, so a to-be-pruned op
+    ordinals); orphan-ness is not knowable live, so a to-be-pruned op
     that PRECEDES the firing op inside the same cohort shifts the live
     ordinal by one relative to replay. The pass component derives from the
     innermost module call's pass (functional, module-free recurrence is
@@ -1589,7 +1588,7 @@ def _append_active_spec_records(records: list[FireRecord]) -> None:
 
     if not records:
         return
-    # Attested coupling (lane F42): this is the ONE funnel every live
+    # Attested coupling: this is the ONE funnel every live
     # FireRecord passes through, so the armed coupling session of an
     # intervened episode capture attributes fires here -- independent of
     # whether a spec ledger is installed.

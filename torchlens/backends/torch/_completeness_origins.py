@@ -134,20 +134,20 @@ def _escape_storage_ptr(source: torch.Tensor) -> int | None:
 def _param_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
     """Return the state address of the registered PARAMETER whose storage ``source`` aliases.
 
-    DIRECT alias rung only (r18): ``source`` shares a param's storage (``self.w.detach()``,
+    DIRECT alias rung only: ``source`` shares a param's storage (``self.w.detach``,
     ``self.w[0]``, ``self.w.tolist()``, ``self.w.detach().numpy()``) -- its storage pointer
     is in the forward-start param index. Resolves for frozen params too (no autograd needed).
 
-    r37 INV-1: the former DERIVED autograd rung (r19-C -- walk ``grad_fn`` back to
-    ``AccumulateGrad`` leaves and declare purity when every leaf is a registered param) is
-    REMOVED as an attribution mechanism. Measured on torch 2.8 (exp1, hon2_3): a DETACHED
+    A DERIVED autograd rung (walk ``grad_fn`` back to ``AccumulateGrad`` leaves and
+    declare purity when every leaf is a registered param) is NOT used as an attribution
+    mechanism. Measured on torch 2.8: a DETACHED
     or non-differentiable-dtype operand (``x.data``, ``x.detach()``, a bool mask from
     ``x > 0``, a long index, ``where``'s condition) contributes NO autograd slot at all, so
     "every leaf is a param" never proves operand totality -- the walk blessed
-    input-contaminated chains as pure-param (false VERIFIED, hon2_3). Pure param-derived
+    input-contaminated chains as pure-param (false VERIFIED). Pure param-derived
     reads are recovered ONLY through positive dispatch-origin propagation
     (:func:`_resolved_dispatch_origins`); no autograd-graph structural argument may ever
-    serve as an operand-totality proof again (INV-1 banned mechanism).
+    serve as an operand-totality proof (banned mechanism).
     """
 
     param_storage_addresses = getattr(trace, "_param_storage_addresses", None)
@@ -182,13 +182,13 @@ def _operand_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
     witnessable by its own slot digest); registered-state meta/buffer address; the
     dispatch-origin ledger (a previously registered unlabelled alias/product); direct
     registered-param storage identity. Anything unresolved is ``unknown`` -- an
-    explicit taint, never an omission (INV-1).
+    explicit taint, never an omission.
     """
 
     label = get_tensor_label(operand)
     if isinstance(label, str):
         return frozenset({f"{_ORIGIN_LABEL_PREFIX}{label}"})
-    # r81 (r80 F2): a ``state:`` origin requires the SESSION-VALIDATED stamp
+    # a ``state:`` origin requires the SESSION-VALIDATED stamp
     # (current-session object + live storage identity), never the raw static
     # stamp -- a stamped plain-attr buffer whose storage was ``.data``-rebound
     # to input data mid-forward must resolve as ``unknown`` (explicit taint),
@@ -217,11 +217,11 @@ def _operand_leaf_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
     a basis that survives orphan-pruning: registered state addresses and the labels of
     tensors that were never produced by an in-scope dispatch (model inputs and other
     boundary tensors). The producer consumes this basis as the fail-closed FALLBACK
-    witness set for an escape whose direct source label was orphan-pruned (r37
-    mechanism A: "falls back to propagated leaf origins for pruned labels").
+    witness set for an escape whose direct source label was orphan-pruned (it falls
+    back to propagated leaf origins for pruned labels).
     """
 
-    # r81 (r80 F2): the leaf ``state:`` rung requires the SESSION-VALIDATED
+    # the leaf ``state:`` rung requires the SESSION-VALIDATED
     # stamp -- this ledger rung was the actual suppression vehicle for the
     # plain-attr ``.data=`` input-layout launder: the rebound receiver's raw
     # stamp resolved every downstream product to a pure ``state:`` leaf basis,
@@ -234,15 +234,15 @@ def _operand_leaf_origins(trace: Any, operand: torch.Tensor) -> frozenset[str]:
     if registry is not None:
         entry = registry.get(operand)
         if entry is not None:
-            # r29 F1: a ledger entry is identity-keyed, so it survives a
+            # a ledger entry is identity-keyed, so it survives a
             # storage-SWAPPING ``.data=`` rebind of the SAME object and then
             # describes the PRE-rebind value -- the exact staleness that let a
             # rebound receiver's leaf basis resolve pure-``state:`` and launder
-            # an input-layout read (sec1 false VERIFIED). A receiver currently
+            # an input-layout read (a false VERIFIED). A receiver currently
             # labeled by a barrier op resolves ``unknown`` (explicit taint):
             # the taint then propagates through every downstream registration,
             # so products of the rebound tensor fail closed too. Pointer-
-            # preserving rebinds never register a barrier (r85 siblings keep
+            # preserving rebinds never register a barrier (sibling rebinds keep
             # their attribution).
             rebind_barriers = _STORAGE_REBIND_BARRIER_LABELS.get(trace)
             if rebind_barriers:
@@ -274,7 +274,7 @@ def _operator_is_seeded_rng(func: Any) -> bool:
 def _operator_uninit_family_tail(func: Any) -> str | None:
     """Return a dispatcher overload's base op name IF it is in the uninit family.
 
-    r53 hon_2: the shared closed table lives in ``utils/rng.py`` (one predicate,
+    The shared closed table lives in ``utils/rng.py`` (one predicate,
     three layers). At this layer the spelling is the overload-independent aten
     base name (``aten.empty_like`` -> ``empty_like``).
     """
@@ -293,7 +293,7 @@ def _operator_uninit_family_tail(func: Any) -> str | None:
 def _python_tensor_method_uninit_family_tail(
     namespace: str | None, qualname: str | None, args: tuple[Any, ...] = ()
 ) -> str | None:
-    """Return a PYTHON-``torch.Tensor``-method spelling's uninit family tail (r55 hon_1).
+    """Return a PYTHON-``torch.Tensor``-method spelling's uninit family tail.
 
     The dispatch-level origin ledger above keys the family off aten base names,
     which is complete for every spelling that REDISPATCHES an aten family op --
@@ -353,7 +353,7 @@ def _operator_total_writer_destination(
 ) -> Any | None:
     """Return the tensor whose bytes this dispatch TOTALLY overwrites, or ``None``.
 
-    Total writers per the shared r53 hon_2 sanitizer table: the ``out=`` kwarg
+    Total writers per the shared sanitizer table: the ``out=`` kwarg
     destination (torch's ``out=`` convention IS a full overwrite; only an exact
     single-tensor ``out`` sanitizes) and the in-place
     ``copy_``/``zero_``/``fill_``/RNG-fill receivers. Partial or unprovable
@@ -401,7 +401,7 @@ def _register_dispatch_result_origins(
     covered because the receiver IS a result-aliasing operand: re-registering results
     updates its entry with the union (its VALUE now depends on all operands).
 
-    r53 hon_2: an uninitialized-memory family op (``empty`` factories; a GROWING
+    An uninitialized-memory family op (``empty`` factories; a GROWING
     ``resize_``, decided against ``pre_dispatch_receiver_numel`` read at the
     interpose BEFORE the receiver was resized, failing closed to tainted when
     unavailable) additionally taints its results with the distinct ``uninit``
@@ -421,7 +421,7 @@ def _register_dispatch_result_origins(
     # pointers/labels through torch-function-wrapped accessors; unpaused reads
     # would be logged as spurious ops mid-forward (shifting raw counters and
     # staling every label recorded after them) and would trip the escape census.
-    # The r53 hon_2 metadata reads (``numel`` on the result, the ``out=`` kwarg
+    # The metadata reads (``numel`` on the result, the ``out=`` kwarg
     # probe) live INSIDE the same paused scope for exactly that reason.
     with _state.pause_logging(), internal_scalar_read():
         total_write_destination = _operator_total_writer_destination(func, args, kwargs)
@@ -471,7 +471,7 @@ def _register_dispatch_result_origins(
     if registry is None:
         registry = _TensorOriginRegistry()
         _DISPATCH_TENSOR_ORIGINS[trace] = registry
-    # r43 CLASS 2: index every owner-produced activation's storage pointer so the non-owner
+    # Index every owner-produced activation's storage pointer so the non-owner
     # storage-identity catch-all recognizes a ``.data`` / view / detach alias of a captured
     # activation touched off-owner. The true-original accessor is wrapper-free.
     captured_ptrs = _CAPTURED_STORAGE_PTRS.get(trace)

@@ -74,28 +74,23 @@ def _deep_inventory_frame_reachable(
     ``deep_inventory_budget_exhausted`` (INCOMPLETE) -- never a silent partial
     snapshot.
 
-    r38 (round-37 re-attack): the walk now has PARITY with the model-rooted
-    sweep for the stdlib instance holders it used to leaf -- ``weakref.ref``
-    referents (base-C deref), ``threading.local`` per-thread namespaces
-    (``tp_traverse``, ALL threads' dicts), ``functools.partial`` interiors
-    (base member descriptors), and ``deque`` buffers (base ``__iter__``) --
-    each a previously executed frame-rooted false-VERIFIED (V6/V7/V8 +
-    deque). An OPAQUE queue (``SimpleQueue`` / ``mp.Queue``) reachable from a
-    frame and not non-mutatingly provably empty fails CLOSED
-    (``inventory_opaque_container``): an unreadable C-internal holder is a
-    typed INCOMPLETE, never a silent leaf. Dynamic-name namespace subscripts
-    (``globals()["name"]``) are witnessed by resolving the code object's
-    string CONSTANTS as global roots (:meth:`_snapshot_numpy_frame_rngs`).
-    r39 (round-39 re-attack): six more executed C-holder false-VERIFIEDs closed
-    by bounded parity branches -- weakref PROXIES (fail-closed; no inert deref),
-    warm ``functools.lru_cache`` wrappers and ``MappingProxyType`` (both via
-    ``tp_traverse``), owner-thread ``ContextVar`` values (base C ``get``),
-    OBJECT-dtype ndarray elements (base getsets, budget-gated), and class-var
-    resolution through the MRO and a user METACLASS (parity with the model
-    sweep). These are STOPGAPS for found shapes, not closure: a generator
-    reachable ONLY through a C-implemented holder whose accessor path contains
-    no Python frame remains structurally outside this witness's scope on
-    numpy>=2 + CPython<3.12 (contract s11; the sys.monitoring/PEP-669 receiver
+    The walk has PARITY with the model-rooted sweep for the stdlib instance holders --
+    ``weakref.ref`` referents (base-C deref), ``threading.local`` per-thread namespaces
+    (``tp_traverse``, ALL threads' dicts), ``functools.partial`` interiors (base member
+    descriptors), and ``deque`` buffers (base ``__iter__``); leafing any of them would give a
+    frame-rooted false-VERIFIED. An OPAQUE queue (``SimpleQueue`` / ``mp.Queue``) reachable from a
+    frame and not non-mutatingly provably empty fails CLOSED (``inventory_opaque_container``): an
+    unreadable C-internal holder is a typed INCOMPLETE, never a silent leaf. Dynamic-name namespace
+    subscripts (``globals()["name"]``) are witnessed by resolving the code object's string CONSTANTS
+    as global roots (:meth:`_snapshot_numpy_frame_rngs`). Further C-holder shapes are covered by
+    bounded parity branches -- weakref PROXIES (fail-closed; no inert deref), warm
+    ``functools.lru_cache`` wrappers and ``MappingProxyType`` (both via ``tp_traverse``),
+    owner-thread ``ContextVar`` values (base C ``get``), OBJECT-dtype ndarray elements (base
+    getsets, budget-gated), and class-var resolution through the MRO and a user METACLASS (parity
+    with the model sweep). These are STOPGAPS for found shapes, not closure: a generator reachable
+    ONLY through a C-implemented holder whose accessor path contains no Python frame remains
+    structurally outside this witness's scope on
+    numpy>=2 + CPython<3.12 (the sys.monitoring/PEP-669 receiver
     classifier is the py>=3.12 architectural closure, under owner review).
 
     Remaining documented residuals (contract s11): receivers in namespaces no
@@ -139,7 +134,7 @@ def _deep_inventory_frame_reachable(
                 monitor._deep_inventory_exhausted = True
                 monitor._flag_uncertain("deep_inventory_budget_exhausted")
                 return
-            # r39 (executed false-VERIFIED V9a): a weakref PROXY forwards EVERY
+            # A weakref PROXY forwards EVERY
             # read -- including ``isinstance`` (via ``__class__``) and attribute
             # access -- through its referent's own attribute machinery, and NO
             # inert deref exists (see :data:`_WEAKREF_PROXY_TYPES`). Match the
@@ -189,15 +184,15 @@ def _deep_inventory_frame_reachable(
                     set.__iter__(value) if isinstance(value, set) else frozenset.__iter__(value)
                 )
                 continue
-            # r38 parity branches: stdlib INSTANCE holders the MODEL-rooted sweep
-            # already walks but this frame walk leafed -- ``weakref.ref`` referents,
+            # Parity branches: stdlib INSTANCE holders the MODEL-rooted sweep
+            # also walks -- ``weakref.ref`` referents,
             # ``threading.local`` per-thread namespaces, ``functools.partial``
-            # interiors, and ``deque`` buffers. Each was an executed frame-rooted
-            # false-VERIFIED (round 37: V6/V7/V8 + deque); every read below is
+            # interiors, and ``deque`` buffers. Leafing any of them would give a
+            # frame-rooted false-VERIFIED; every read below is
             # base-C (deref / ``tp_traverse`` / member descriptor / base
             # ``__iter__``), so no user code can fire.
             if isinstance(value, _weakref_module.ref):
-                # Mirror of the model sweep's r53 corr_2 branch: ONE base-C deref
+                # Mirror of the model sweep's weakref branch: ONE base-C deref
                 # (immune to a hostile subclass ``__call__`` override); a dead ref
                 # contributes nothing; a deref failure fails CLOSED, never reads
                 # as no-referent. A SUBCLASS also walks its own attribute surface.
@@ -242,10 +237,9 @@ def _deep_inventory_frame_reachable(
                     pending.extend(monitor._custom_holder_children(value))
                     pending.append(value_type)
                 continue
-            # r39 C-holder parity branches (executed false-VERIFIEDs V9b/V9c/V9e/
-            # V9f): a generator reached ONLY through a C-implemented holder with a
-            # C accessor path never enters a Python frame. Every read below is
-            # base-C (``tp_traverse`` / base getset / C ``Context`` lookup).
+            # C-holder parity branches: a generator reached ONLY through a C-implemented holder with
+            # a C accessor path never enters a Python frame. Every read below is base-C
+            # (``tp_traverse`` / base getset / C ``Context`` lookup).
             if _LRU_CACHE_WRAPPER_TYPE is not None and isinstance(value, _LRU_CACHE_WRAPPER_TYPE):
                 # A cache WARMED pre-capture returns its cached generator with no
                 # Python frame; ``tp_traverse`` exposes the cache dict (walked by
@@ -311,12 +305,11 @@ def _deep_inventory_frame_reachable(
                     pending.append(member)
                 continue
             if isinstance(value, type):
-                # r39 (executed false-VERIFIEDs V9c/V9d): ``CLS.gen`` resolves
+                # ``CLS.gen`` resolves
                 # through ``CLS.__mro__`` AND ``type(CLS).__mro__`` entirely in C,
                 # and -- unlike the model sweep -- this walk never expands a shared
                 # module namespace, so a BASE class or user METACLASS is NOT
-                # otherwise reachable (the r38 "reachable through its own defining
-                # namespace" rationale was false for the frame walk). Cascade the
+                # otherwise reachable through a defining namespace. Cascade the
                 # MRO and enqueue the metaclass, matching the model sweep; both
                 # are dedup-bounded, and ``type`` itself plus stdlib/torch/numpy
                 # classes stay trusted leaves on their own visit.
@@ -353,8 +346,8 @@ def _deep_inventory_frame_reachable(
                 pending.append(value_type)
                 continue
             if monitor._exposes_queue_protocol(value):
-                # r38 mirror of the model sweep's r45/r47 queue posture: an
-                # inspectable queue (``queue.Queue`` family) was already walked as
+                # Mirror of the model sweep's queue posture: an
+                # inspectable queue (``queue.Queue`` family) is already walked as
                 # a recursable holder above (its ``.queue`` deque descends via the
                 # deque branch); an OPAQUE queue (``SimpleQueue`` / ``mp.Queue`` --
                 # no readable buffer, ``get`` would drain) that is not

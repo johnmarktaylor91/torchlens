@@ -51,8 +51,7 @@ _LIVE_FIRE_RESULTS_STORAGE_ATTR = "_tl_live_fire_results_by_tensor_id"
 
 # Stable constant-spelled refusal kinds (surfaced on ``fields["kind"]``),
 # enrolled in the lockstep gate's constant-spelled table so a rename or
-# string drift trips governance like any inline ``code=`` literal (r25,
-# b6-fable carried MED: both shipped outside every governance surface).
+# string drift trips governance like any inline ``code=`` literal.
 INTERVENTION_FIRE_RESULTS_UNRECORDABLE = "intervention_fire_results_unrecordable"
 INTERVENTION_FIRE_RESULTS_CLEANUP_FAILED = "intervention_fire_results_cleanup_failed"
 
@@ -666,7 +665,7 @@ def _apply_predicate_intervention(
 
     injection_state = peek_injection_state(trace)
     if injection_state is not None and injection_state.get("armed", False):
-        # F01 injections: anchor this firing's injected ops to the PERSISTED
+        # Injections: anchor this firing's injected ops to the PERSISTED
         # rule id when the intervene= operand is the public immutable spec
         # (consolidated session-transient state, read by _execute_hook's
         # recorder).

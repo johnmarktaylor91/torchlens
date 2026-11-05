@@ -61,7 +61,7 @@ def sweep(
         Whether to ALSO capture one PRISTINE (un-intervened) trace first,
         named ``"baseline"`` and set as the Bundle baseline — without it a
         sweep bundle has no comparison anchor and ``most_changed`` raises
-        ``BaselineUndeterminedError`` (F03 ledger memo item 2). The default
+        ``BaselineUndeterminedError``. The default
         ``False`` keeps the legacy member cardinality and DISCLOSES the
         missing baseline at construction with one coded warning.
     loss:
@@ -113,7 +113,7 @@ def sweep(
             argument="intervene",
         )
 
-    # C03 spec door: the ONE immutable InterventionSpec is accepted unchanged
+    # Spec door: the ONE immutable InterventionSpec is accepted unchanged
     # as sweep values -- one member per spec, each captured with
     # intervene=<that spec>. Site and action already live inside each spec,
     # so site= must be omitted, and mixing spec and plain values is refused
@@ -228,7 +228,7 @@ def _capture_swept_members(
 
     traces = {}
     for member_name, value in zip(member_names, swept_values, strict=True):
-        # C03 (ledger memo item 1): the swept value rides a TYPED builtin
+        # The swept value rides a TYPED builtin
         # helper spec whose args carry the value, never an anonymous closure
         # -- before this, a swept member's only value linkage was its default
         # name (measured amnesia: byte-identical audit rows across members).
@@ -265,7 +265,7 @@ def _sweep_over_specs(
     include_baseline: bool = False,
     **trace_kwargs: Any,
 ) -> tuple[Trace | None, dict[str, Trace], dict[str, Any]]:
-    """Capture one intervened trace per swept InterventionSpec (C03 spec door).
+    """Capture one intervened trace per swept InterventionSpec (spec door).
 
     ``input_kwargs`` rides ``**trace_kwargs`` (it is forwarded verbatim to
     every capture alongside the other trace kwargs). Returns the baseline,

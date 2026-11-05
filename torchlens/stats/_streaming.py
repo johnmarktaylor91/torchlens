@@ -1,4 +1,4 @@
-"""Streaming statistic kernels (stats/ promotion, C01 item 18)."""
+"""Streaming statistic kernels."""
 
 from __future__ import annotations
 
@@ -186,7 +186,7 @@ class Covariance:
         name:
             Optional metric name.
         device:
-            Compute/state device (F20 D-25; default: historical CPU).
+            Compute/state device (default: historical CPU).
         dtype:
             Floating compute dtype (default: historical ``float64``).
         """
@@ -250,7 +250,7 @@ class Covariance:
 
 
 def _resolve_placement(device: Any, dtype: Any) -> tuple[torch.device, torch.dtype]:
-    """Resolve the accumulator compute placement (F20, brainpipe D-25).
+    """Resolve the accumulator compute placement.
 
     The ONE policy seam for accumulator ``device=``/``dtype=`` keywords, so
     later accumulators cannot fork conventions: ``None`` means the historical
@@ -343,7 +343,7 @@ class CrossCovariance:
         name:
             Optional metric name.
         device:
-            Compute/state device (F20 D-25; default: historical CPU).
+            Compute/state device (default: historical CPU).
         dtype:
             Floating compute dtype (default: historical ``float64``).
         """
@@ -566,7 +566,7 @@ class CKA:
         name:
             Optional metric name.
         device:
-            Compute/state device (F20 brainpipe D-25; e.g. ``"cuda"``).
+            Compute/state device (e.g. ``"cuda"``).
             ``None`` keeps the historical CPU placement bit-identical.
         dtype:
             Floating compute dtype (default: historical ``float64``).
@@ -647,7 +647,7 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityS
     b:
         Second tensor-like representation with the same row count.
     device:
-        Compute device (F20 brainpipe D-25; e.g. ``"cuda"`` keeps the Gram
+        Compute device (e.g. ``"cuda"`` keeps the Gram
         work on-device). ``None`` keeps the historical CPU placement.
     dtype:
         Floating compute dtype (default: historical ``float64``).
@@ -739,7 +739,7 @@ class PCA:
         Each component row is flipped so its largest-magnitude entry is
         positive (first occurrence on exact ties, per ``torch.argmax``), so
         two identical fits produce IDENTICAL arrays — an eigensolver's sign
-        choice is otherwise arbitrary (transforms memo P6).
+        choice is otherwise arbitrary.
 
         Returns
         -------
@@ -762,7 +762,7 @@ class PCA:
         return components * flip, values[order]
 
     def compute(self) -> dict[str, Any]:
-        """Return components, variances, and the P6 additive fit facts.
+        """Return components, variances, and the additive fit facts.
 
         Returns
         -------
@@ -770,8 +770,7 @@ class PCA:
             ``components`` (sign-canonicalized) and ``explained_variance``
             as before, plus ``mean`` (the feature mean the fit centered
             on), ``n_samples``, ``n_features``, and ``digest`` (the
-            ``sha256:`` content digest of the fitted arrays — transforms
-            memo P6).
+            ``sha256:`` content digest of the fitted arrays).
         """
 
         from ._fitted import fitted_digest

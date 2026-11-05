@@ -432,10 +432,10 @@ def _output_layer_pairs(
     target_labels = list(getattr(target_log, "output_layers", []) or [])
     candidate_labels = list(getattr(candidate_log, "output_layers", []) or [])
     if target_labels and candidate_labels:
-        # grind-r5 b7 R23 (sol HIGH): a silent shortest-prefix zip reported
-        # only the surviving outputs' deltas, so a member that LOST an output
-        # compared clean. Arity mismatch is a structural divergence and must
-        # refuse, never truncate.
+        # A silent shortest-prefix zip would report only the surviving
+        # outputs' deltas, so a member that LOST an output compared clean.
+        # Arity mismatch is a structural divergence and must refuse, never
+        # truncate.
         if len(target_labels) != len(candidate_labels):
             raise BundleMemberError(
                 f"output comparison refused: the target trace has "

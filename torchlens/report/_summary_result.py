@@ -1,4 +1,4 @@
-"""Rebuilt summary result assembly (F08; summary memo item 12, 3.7/3.8).
+"""Rebuilt summary result assembly.
 
 ``build_rebuilt_summary`` is the ONE report builder both entry points
 share: resolve the view ladder, gather detached facts, render the
@@ -75,7 +75,7 @@ def collect_summary_facts(
     health = health_facts(trace)
     input_shapes, input_dtypes = _tensor_leaf_shapes(trace)
     outcome = getattr(trace, "outcome", None)
-    # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
+    # Pass-level peaks publish ONLY through the observe gate:
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
     peak_facts = pass_peak_facts(trace, "forward")
@@ -381,7 +381,7 @@ def result_to_markdown(report: SummaryReport) -> str:
 
 
 def result_details(report: SummaryReport) -> str:
-    """The relocated capture-facts block (memo 3.6): result-side details."""
+    """The relocated capture-facts block: result-side details."""
 
     capture = report.capture
     payload = getattr(report, "_rebuilt", None)

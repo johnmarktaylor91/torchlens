@@ -37,16 +37,16 @@ __all__ = (
 
 
 def _STORAGE_RAW_POINTER_TARGETS() -> tuple[Any, ...]:
-    """Return storage classes whose ``data_ptr`` accessor leaks the raw pointer (r16-C1).
+    """Return storage classes whose ``data_ptr`` accessor leaks the raw pointer.
 
     ``tensor.untyped_storage()`` yields a ``torch.UntypedStorage`` and ``tensor.storage()`` a
-    ``torch.TypedStorage``; ``data_ptr()`` on either hands out the same raw pointer the r15 Tensor
+    ``torch.TypedStorage``; ``data_ptr()`` on either hands out the same raw pointer the Tensor
     patch fails closed on. Both are Python-visible classes whose ``data_ptr`` method is patchable.
     """
 
     targets: list[Any] = []
     for name in ("UntypedStorage", "TypedStorage"):
-        cls = torch_attr(name)  # r47 secD_1: no lazy ``torch.__getattr__``
+        cls = torch_attr(name)  # no lazy ``torch.__getattr__``
         if cls is not None and hasattr(cls, "data_ptr"):
             targets.append(cls)
     return tuple(targets)
@@ -75,7 +75,7 @@ def _check_writeback_watch(state: _WitnessState) -> None:
     """Detect a host write-back through any watched mutable zero-copy alias at forward end.
 
     The honest rule is keyed on the WHOLE aliased storage's BYTES, never on the version counter
-    (r14-H1) and never on only the view's element extent (r15-H2). A watched source whose whole
+    and never on only the view's element extent. A watched source whose whole
     storage is UNCHANGED since the mutable-alias exposure was only read: it stays VERIFIED (a pure
     read-only ``.numpy().sum()`` / storage-pointer identity check is not over-triggered). A watched
     source whose storage bytes CHANGED anywhere -- INCLUDING outside the view's own window (a
@@ -87,9 +87,9 @@ def _check_writeback_watch(state: _WitnessState) -> None:
       raw byte comparison is AMBIGUOUS -- the diff could be the tracked op OR an additional host
       write layered on top, and cannot prove the ABSENCE of a host write -> conservatively opaque.
 
-    Gating detection on ``version unchanged`` (the pre-r14 behaviour) let a tracked in-place op
+    Gating detection on ``version unchanged`` would let a tracked in-place op
     that bumps the version AFTER the ``.numpy()`` / ``.data`` snapshot skip the byte compare, so a
-    host write-back on the same storage went undetected and the run falsely VERIFIED. Comparing
+    host write-back on the same storage would go undetected and the run falsely VERIFY. Comparing
     bytes alone closes that gate while keeping read-only exposures honestly VERIFIED.
     """
 
@@ -416,9 +416,9 @@ def _build_witness_state(
 def _plane_p_requested() -> bool:
     """Whether the distributed opt-in is armed (plane-P observes this capture).
 
-    Merge-ranks C2: plane-P physical dispatch observation rides the shared
+    Plane-P physical dispatch observation rides the shared
     TorchLens dispatch mode for ARMED captures only, so unarmed dense capture
-    keeps its exact pre-C2 dispatch-mode-free path (zero interference). An
+    keeps its exact dispatch-mode-free path (zero interference). An
     armed process with no initialized process group (armed before creating
     one, or after ``destroy_process_group``) is dormant: no collective can run,
     so the capture takes the same unarmed path.
@@ -532,12 +532,12 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
         # mechanism feeds one uniform source-witness pass. The patch is a pure observer,
         # restored unconditionally, and is skipped entirely for the non-runnable census path.
         if record_escapes:
-            # r35 I2: arm wrapper ownership tokens so raised / host-returning dispatch
+            # Arm wrapper ownership tokens so raised / host-returning dispatch
             # events can be attributed to their exact wrapper owner (the ledger's
             # owner-accounted discharge rule) even with both shadow modes off.
             prior_ledger_armed = _state._runnable_ledger_armed
             _state._runnable_ledger_armed = True
-            # r43: publish the witness state so wrappers.py string-hook interception can
+            # publish the witness state so wrappers.py string-hook interception can
             # classify owner vs non-owner (the ONE place a non-owner thread must not flip
             # the global ``pause_logging`` toggle). Cleared FIRST on exit.
             # The slot is owned by the completeness_witness module (its readers,
@@ -568,10 +568,10 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
 def _collect_authorized_internal_caller_modules() -> None:
     """Register the witness-family and buffer-write modules' own code objects.
 
-    The witness was one module until the r3 split; every ``_completeness_*``
+    The witness was one module until the split; every ``_completeness_*``
     sibling (plus the ``completeness_witness`` module) holds internal callers
     that must stay on the authorized roster, or the detector self-trips on the
-    witness's own no-observe storage reads (the r3 cluster regression).
+    witness's own no-observe storage reads (the cluster regression).
     """
 
     import importlib

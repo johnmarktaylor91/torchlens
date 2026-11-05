@@ -73,9 +73,8 @@ def _resolve_conditional_bool_op(
     Any | None
         The exact evaluating op. The raw label is preferred because it is
         unique per pass: a rolled multi-pass bool layer renames every pass to
-        ONE base label, and an unqualified ``layer_dict_all_keys`` lookup
-        resolves last-writer-wins to an arbitrary pass (round-24 condbranch
-        seal, S3). Falls back to the renamed label for legacy events.
+        ONE base label, and an unqualified ``layer_dict_all_keys`` lookup resolves last-writer-wins
+        to an arbitrary pass. Falls back to the renamed label for legacy events.
     """
 
     if (

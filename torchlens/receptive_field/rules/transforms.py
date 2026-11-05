@@ -40,8 +40,8 @@ def _axis_map_result(
     out_axis_edges:
         Per-surviving-output-axis affine ``(step, start)`` slice maps
         (``parent = step * out + start``). Omitted axes are identity. The
-        historical rank-changing path DISCARDED these computed edges, silently
-        dropping every slice offset under an exact claim (disputed-r2 b6/R20-2).
+        rank-changing path must carry these computed edges: discarding them
+        would silently drop every slice offset under an exact claim.
     selected_parent_indices:
         Normalized integer index per scalar-selected parent axis. A recorded
         index lets the query walk narrow the axis to its exact singleton

@@ -41,7 +41,7 @@ __all__ = ["DiffRow", "DiffReport", "diff"]
 #: Engine-inserted machinery layer types (leverage exclusion rule).
 _MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
 
-#: Closed row-status vocabulary (leverage B15).
+#: Closed row-status vocabulary.
 _ROW_STATUSES = (
     "added",
     "removed",

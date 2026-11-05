@@ -344,7 +344,7 @@ def _projected_backward_records(
 def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -> bool:
     """Return whether trace-level evidence corroborates a replacement stamp.
 
-    Every ``intervention_replacement`` exemption used to trust per-op
+    An ``intervention_replacement`` exemption must not trust per-op
     attributes (``func_name``/``is_edited``/``is_internal_source``)
     that the placeholder synthesizer ITSELF writes, so a placeholder minted or
     forged during PLAIN capture passed validation -- defeating the 2026-06-02
@@ -514,8 +514,8 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # (func_name + is_edited + NOT internal_source), AND require the
     # trace-level replacement-event ledger to corroborate it
     # (``op_has_genuine_replacement_evidence``): the per-op attributes alone are
-    # written by the placeholder synthesizer itself, so trusting them let a
-    # plain-capture placeholder pass (round-26 W3-2). Widening this to a blanket
+    # written by the placeholder synthesizer itself, so trusting them would let a
+    # plain-capture placeholder pass. Widening this to a blanket
     # ``func_name`` check would disarm the plain-capture tripwire (see project
     # CLAUDE.md "Validation Integrity").
     if (
@@ -532,9 +532,9 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # metadata corruption, not an exemption. The one remaining legitimate
     # spelling is the functionless internal source ("none" + the
     # is_internal_source flag + no callable func, exactly the conjunction the
-    # payloads invariant requires). A bare string set here let a traced relu
+    # payloads invariant requires). A bare string set here would let a traced relu
     # with a nulled func_call_id and a rewritten func_name pass the whole
-    # suite (deephunt M2).
+    # suite.
     func_name = str(getattr(layer, "func_name", "")).lower()
     if (
         func_name == "none"

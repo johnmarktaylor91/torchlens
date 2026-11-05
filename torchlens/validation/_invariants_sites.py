@@ -1,4 +1,4 @@
-"""Site-key invariants I-S1 / I-S2 / I-S3' (the L1 grouping-core tripwires).
+"""Site-key invariants I-S1 / I-S2 / I-S3' (the grouping-core tripwires).
 
 APPLICABILITY DOMAIN (declared at the invariant's birth, never a later
 weakening): capture-time traces always carry site keys (step 7 mints them),

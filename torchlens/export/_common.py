@@ -1,4 +1,4 @@
-"""Shared export helpers (subpackage promotion, C01 item 18).
+"""Shared export helpers (subpackage promotion).
 
 Helpers consumed by more than one export-target family live here so the
 per-family modules never import each other or the package facade.

@@ -61,7 +61,7 @@ def _sum_tensors(
 ) -> torch.Tensor:
     """Reduce nested tensor outputs to a scalar loss.
 
-    Depth-bounded and memoized (grind-p3 T11): the walk shares the boundary
+    Depth-bounded and memoized: the walk shares the boundary
     nesting ceiling instead of dying in a raw ``RecursionError``, a cyclic
     container refuses typed (its occurrence-weighted sum would be infinite),
     and a DAG-shaped output that reuses one sub-container under several paths
@@ -136,7 +136,7 @@ def _clone_inputs_with_grad(
 ) -> Any:
     """Clone tensor inputs and enable grads on floating tensors.
 
-    Depth-bounded and memoized (grind-p3 T11), mirroring
+    Depth-bounded and memoized, mirroring
     :func:`torchlens._utils.arg_handling.copy_arg_tree`: an over-deep nest
     refuses typed through the shared input-boundary ceiling instead of a raw
     ``RecursionError``; a mutable container is registered in the memo BEFORE
@@ -464,12 +464,12 @@ def _run_stock_backward(
     stock_module_grads = None
     stock_identity_addresses = None
     stock_reached_keys = None
-    # R75-1 sibling site: the "stock autograd" reference pass must run on
-    # PRISTINE torch. In a wrapped process it used to run through the
+    # The "stock autograd" reference pass must run on
+    # PRISTINE torch. In a wrapped process it would run through the
     # installed pass-through wrapper shells -- the same closures the
     # candidate capture observes through -- so a wrapper-layer numeric
-    # distortion corrupted stock and captured gradients IDENTICALLY and
-    # the comparison passed vacuously. Refuse (fail-closed) if the
+    # distortion would corrupt stock and captured gradients IDENTICALLY and
+    # the comparison would pass vacuously. Refuse (fail-closed) if the
     # wrappers cannot be removed because a capture is active.
     with pristine_torch_oracle(), refusing_carried_graph(model):
         if layer_grad_snapshot is not None:
@@ -714,8 +714,8 @@ def validate_backward_pass(
                 stock_identity_addresses,
                 stock_reached_keys=stock_reached_keys,
                 # None flows through: the comparator derives the tolerance per
-                # gradient dtype (R13: the fp32 constants applied to fp64
-                # masked corruption ~4.5e11 fp64 ULPs above round-off).
+                # gradient dtype (the fp32 constants applied to fp64 would
+                # mask corruption ~4.5e11 fp64 ULPs above round-off).
                 atol=layer_grad_atol,
                 rtol=layer_grad_rtol,
             )
@@ -790,8 +790,7 @@ def validate_backward_pass(
         # (NaN-vs-number still fails elementwise). Tolerances resolve PER
         # GRADIENT DTYPE when not explicitly overridden: the fp32 constants
         # applied to every dtype checked fp64 grads ~4.5e11 of their own ULPs
-        # loose and false-failed fp16 grads (R13; the derivation shipped in
-        # c9734a7e but had zero verdict-site consumers).
+        # loose and false-failed fp16 grads.
         params_passed = True
         for name in expected_param_grads:
             expected_grad = expected_param_grads[name]

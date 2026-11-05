@@ -43,7 +43,7 @@ def _seed_seq_spawn_fragment(bit_generator: Any) -> str:
     verdict-steering hidden state (a fresh oracle-1 run spawns a
     differently-keyed child). Folding the spawn counter plus the seeding
     identity into the digest makes an in-window spawn on a digest-rooted
-    engine witnessable (grind-r5 b8 R57 HIGH). Absent/opaque seed
+    engine witnessable. Absent/opaque seed
     sequences digest to the empty fragment (nothing spawnable to hide).
     """
 
@@ -90,32 +90,30 @@ def _digest_rng_instance(holder: Any) -> str:
         return exact(bit_generator.state) + spawn_fragment(bit_generator)
     if isinstance(holder, np.random.RandomState):
         return exact(holder.get_state())
-    # r41 (review): a BARE model-held BitGenerator (``self.bg = PCG64(...)`` drawn
+    # A BARE model-held BitGenerator (``self.bg = PCG64(...)`` drawn
     # through a wrapping Generator) advances its own ``state``; digest it directly
     # so the registry's BitGenerator claim is digest-true.
     if isinstance(holder, np.random.BitGenerator):
         return exact(holder.state) + spawn_fragment(holder)
-    # grind-r5 b8 R57: a model-held bare ``SeedSequence`` is a spawnable
+    # A model-held bare ``SeedSequence`` is a spawnable
     # entropy root; ``seed_seq.spawn()`` mid-window is the same hidden
     # verdict-steering mutation as ``Generator.spawn()``.
     if isinstance(holder, np.random.SeedSequence):
         return _seed_seq_state_fragment(holder)
     if isinstance(holder, torch.Generator):
-        # r7 b8-sol R57: a model-held ``torch.Generator`` drawn on a
-        # pre-existing (non-hooked) thread advanced state with NO witness
-        # while the numpy analog was digest-caught, so the residual
-        # enumeration's "only an EXTERNALLY-HELD generator" claim was
-        # false. Digest the exact state bytes plus device identity so the
-        # before/after sweeps witness any draw thread-independently. A
-        # state-read failure propagates to the fail-closed inventory
-        # error path, downgrading completeness rather than reading clean.
+        # A model-held ``torch.Generator`` drawn on a pre-existing (non-hooked) thread advances
+        # state, so it needs a witness like the numpy analog (keeping the residual enumeration's
+        # "only an EXTERNALLY-HELD generator" claim true). Digest the exact state bytes plus device
+        # identity so the before/after sweeps witness any draw thread-independently. A state-read
+        # failure propagates to the fail-closed inventory error path, downgrading completeness
+        # rather than reading clean.
         state_bytes = holder.get_state().cpu().numpy().tobytes()
         return exact(("torch.Generator", str(holder.device), state_bytes))
     if isinstance(holder, random.Random):
         try:
             state = holder.getstate()
         except NotImplementedError:
-            # r55 corr_1: ``random.SystemRandom`` (and any stateless ``Random``
+            # ``random.SystemRandom`` (and any stateless ``Random``
             # subclass following its documented protocol) INTENTIONALLY has no
             # digestible state -- ``getstate()`` raises ``NotImplementedError``
             # by design. Possession of an UNDRAWN stateless engine is not

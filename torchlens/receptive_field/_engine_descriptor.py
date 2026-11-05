@@ -117,7 +117,7 @@ def _public_axis(axis_index: int, extent: int, state: _AxisState, op: Op) -> Rec
             # source index entirely, which no exactness flag can repair.
             # Degrade to an honest whole-extent envelope; an extent-1 axis
             # keeps the geometry's own exactness because its whole extent IS
-            # the only representable index (disputed-r3 F1/F2).
+            # the only representable index.
             return ReceptiveFieldAxis(
                 axis_index,
                 None,

@@ -1,6 +1,6 @@
-"""The trace() entry door for the declared/inferred/kwargs-only rungs (F17 B8).
+"""The trace() entry door for the declared/inferred/kwargs-only rungs.
 
-Extracted verbatim from ``torchlens._user_funcs`` (god-file ratchet R43): the
+Extracted verbatim from ``torchlens._user_funcs``: the
 capture-shaping-kwarg default table, its comparator, and the ladder capture
 driver ``trace_via_ladder`` that ``tl.trace`` re-enters through. The gold rung
 never comes through this module -- ``trace()`` handles a real input inline.
@@ -24,7 +24,7 @@ __tl_layer__ = "FACADE"
 #: verified trace unusable as-is (it was captured metadata-complete,
 #: eval-mode, save='all', no interventions); any of these set means the
 #: zero-argument rung RECAPTURES with the inferred concrete input instead of
-#: reusing the verified trace (quickstart memo D8: an incompatible requested
+#: reusing the verified trace (an incompatible requested
 #: capture recaptures with disclosure, never silently serves the eval trace).
 _LADDER_DEFAULTS: dict[str, Any] = {
     "capture": None,
@@ -62,12 +62,12 @@ def _trace_via_ladder(
     input_size: Any,
     trace_kwargs: dict[str, Any],
 ) -> Trace:
-    """Resolve the declared/inferred/kwargs-only rungs and capture (F17 B8).
+    """Resolve the declared/inferred/kwargs-only rungs and capture.
 
     The declared rung synthesizes concrete tensors (disclosed) and re-enters
     ``trace()``. The inferred rung consumes the inference search's exact
-    verified trace when every capture-shaping kwarg is at its default (memo
-    D9 in-call reuse: capture counter stays at 1); otherwise it recaptures
+    verified trace when every capture-shaping kwarg is at its default (in-call
+    reuse: capture counter stays at 1); otherwise it recaptures
     from the inferred concrete input with the requested options, disclosed in
     the provenance record's execution policy.
 
@@ -81,7 +81,7 @@ def _trace_via_ladder(
         The caller's real keyword input, when supplied (kwargs-only calls
         normalize through this door).
     input_size:
-        The declared-shape argument (memo D4 grammar), or ``None``.
+        The declared-shape argument, or ``None``.
     trace_kwargs:
         Every other ``trace()`` keyword, forwarded verbatim on re-entry.
 

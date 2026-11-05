@@ -10,8 +10,7 @@ ImageNet recipe is right opts in by name::
 
 The opt-in stays a TorchLens-authored recipe, never an authority: its record
 keeps ``source="imagenet_default"`` and ``verified=False``, so its derived
-status is ``unverified_fallback`` and it can never anchor a verified audit
-(tvscope memo D9).
+status is ``unverified_fallback`` and it can never anchor a verified audit.
 """
 
 from __future__ import annotations

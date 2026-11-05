@@ -1,16 +1,16 @@
 """Pristine-torch context for wrap-state-independent validation oracles.
 
-R75-1 (b9-fable round-2, probe-proven): once torch is wrapped, EVERY
+Once torch is wrapped, EVERY
 in-process value oracle -- the phase-0 ground-truth forward, the per-op
 replay (which calls the wrapper-closure ``canonical_capture_callable``),
 and backward validation's "stock autograd" forward -- observes through the
 same installed wrapper shells. A TorchLens-induced numeric distortion (a
-planted 0.1% ``tanh`` distortion in the wrapper layer) therefore validated
-CLEAN in a wrapped process and was caught only in a fresh one: the verdict
-on the identical model and bug depended on whether any capture had run
-earlier in the process.
+planted 0.1% ``tanh`` distortion in the wrapper layer) would therefore
+validate CLEAN in a wrapped process and be caught only in a fresh one: the
+verdict on the identical model and bug would depend on whether any capture had
+run earlier in the process.
 
-The fix: the ground-truth oracles run with the wrappers REMOVED
+So the ground-truth oracles run with the wrappers REMOVED
 (``unwrap_torch``) and reinstalled afterwards. ``unwrap_torch`` restores
 each callable from the append-only ``_decorated_to_orig`` ledger, whose
 orig side is recorded by the wrap machinery BEFORE the decorator sees the
@@ -18,12 +18,12 @@ function -- so a corrupted decorator cannot poison the restoration, which
 is exactly what makes this a genuinely independent observation root.
 Re-install is cheap (cached wrapper maps; no re-decoration).
 
-Residual, disclosed (r4 census MED-2 scope correction): the per-op replay
+Residual, disclosed: the per-op replay
 still executes the RECORDED capture callable, so replay alone remains
 wrap-state-correlated. With the phase-0 ground truth pristine, a
 wrapper-layer distortion that REACHES the final output diverges from
 ground truth and fails validation regardless of process wrap state --
-that (and only that) is the class the probe proved closed. A distortion
+that (and only that) is the class this closes. A distortion
 MASKED downstream (a saturating clamp, a sign/argmax head) matches the
 pristine final output AND matches its own corrupt replay, so it still
 validates clean in-process; the cross-process mode-vs-wrapper
@@ -31,7 +31,7 @@ differential harness (``tools/differential_capture.py``) is the
 independent root for that masked-interior class, and
 ``tests/test_validation_pristine_ground_truth.py`` pins the boundary.
 
-Ledger integrity (r4 census MED-1): ``_decorated_to_orig`` is the SINGLE
+Ledger integrity: ``_decorated_to_orig`` is the SINGLE
 shared root behind capture's orig grab, this oracle's restoration, and
 sparse-runnable callable resolution -- a ledger entry whose "orig" is
 itself a TorchLens wrapper (the orphaned prior-generation-snapshot

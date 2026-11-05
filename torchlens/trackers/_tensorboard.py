@@ -1,11 +1,11 @@
-"""TensorBoardSink: the reference, CI-tested transport (memo 3.1, 3.10).
+"""TensorBoardSink: the reference, CI-tested transport.
 
 Writes through torch's own ``SummaryWriter`` (the exact path the relays
 patch). Histograms go through ``add_histogram_raw`` with exact counts on
 explicit edges -- the receiving API that makes an honest low-cost watcher
 possible at all (credits, memo section 12).
 
-Relay law (G6, measured): the C06 signed-log2 grid is NON-uniform, and both
+Relay law (G6, measured): the signed-log2 grid is NON-uniform, and both
 relays reconstruct or resample edges in ways that are exact only for uniform
 bins (wandb) or never (ClearML). So when a relay is DETECTED, histogram
 emission refuses typed -- scalars flow (both relays carry scalars, wandb
@@ -13,7 +13,7 @@ rewrites their step axis and that is disclosed, not repaired). Detection:
 wandb patches ``tensorboard`` visibly (``wandb.patched["tensorboard"]``);
 ClearML rebinds ``FileWriter.add_event`` (module check). The ClearML
 detector evidences CONFIGURATION, not capture -- the delivery vocabulary
-survives the weakest detector (memo 3.10).
+survives the weakest detector.
 """
 
 from __future__ import annotations

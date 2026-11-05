@@ -1,6 +1,6 @@
 """The ONE tool registry: names, schemas, budgets, handlers, transports.
 
-Registry law (agent memo 3.1): this module owns every tool's name,
+Registry law: this module owns every tool's name,
 description, input/output schema, read-only/idempotent annotations, default
 budgets, CLI verb mapping, and handler. Python (:func:`call_tool`), MCP
 (``torchlens.bridge.mcp``), and the CLI (``torchlens.agent.cli``) are thin
@@ -682,7 +682,7 @@ def tool_specs() -> tuple[AgentToolSpec, ...]:
                         "type": "string",
                         "description": "Optional root name for detail mode.",
                     },
-                    # Measured (D4 rule): 151 compact rows serialize to ~9.1k
+                    # Measured: 151 compact rows serialize to ~9.1k
                     # tokens, so the orientation default rises to the smallest
                     # passing round value for THIS tool.
                     "max_tokens": _max_tokens_property(12_000),

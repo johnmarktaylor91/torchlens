@@ -1,4 +1,4 @@
-"""Head-ablation sugar (F03 item 7b): the canonical mechinterp move, guarded.
+"""Head-ablation sugar: the canonical mechinterp move, guarded.
 
 The sugar lowers "ablate head i of block B" onto the WRITE-CAPABLE ``v``
 facet — exact for standard multi-head attention because attn_out is linear

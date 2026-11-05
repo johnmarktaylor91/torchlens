@@ -1,12 +1,11 @@
-"""Per-call op markers: NVTX ranges + FLIP-1 join markers (lane F27).
+"""Per-call op markers: NVTX ranges + join markers.
 
 The two per-call marker sinks the wrapper timing bracket rides, split out
-of the wrappers god-file under its size ratchet: identity-carrying NVTX
-ranges (W0.2, with TorchLens-internal separation via the allowlist-by-
-construction internal-read marker) and the ``record_function`` join markers
-whose names are exact ``func_call_id`` keys (W2.2). Each sink is on only
-when its backend is active; a sink-side failure degrades the range/join,
-never the user op.
+of the wrappers module: identity-carrying NVTX ranges (with TorchLens-internal
+separation via the allowlist-by-construction internal-read marker) and the
+``record_function`` join markers whose names are exact ``func_call_id`` keys.
+Each sink is on only when its backend is active; a sink-side failure degrades
+the range/join, never the user op.
 """
 
 from __future__ import annotations
@@ -103,7 +102,7 @@ def _nvtx_range_pop(enabled: bool) -> None:
 def _op_marker_labels(func_name: str, func_call_id: int) -> tuple[str, str]:
     """Return the (visual, join) marker names for one wrapped call.
 
-    W0.2 (TN-D11/D13/D14): names carry identity -- twenty ``conv2d`` calls
+    Names carry identity -- twenty ``conv2d`` calls
     are twenty distinguishable ranges -- and TorchLens's OWN bookkeeping
     calls (an explicit :func:`internal_scalar_read` marker is live, e.g. a
     scalar-bool value read) are separated under
@@ -196,14 +195,14 @@ monitor_state.register_warmup(_warm_session_reader)
 
 
 def _push_op_markers(trace: Any, func_name: str, func_call_id: int) -> tuple[bool, Any]:
-    """Open the per-call visual/join markers at the op clock's open (W0.3).
+    """Open the per-call visual/join markers at the op clock's open.
 
     Two independent sinks, each on only when its backend is active:
 
     - NVTX (``emit_nvtx=True``): Nsight-visual range with an
       identity-carrying name.
     - ``torch.profiler.record_function`` (an active
-      ``torchlens._observability.session``): the FLIP-1 op-altitude join
+      ``torchlens._observability.session``): the op-altitude join
       marker whose name is the exact ``func_call_id`` key.
 
     Parameters

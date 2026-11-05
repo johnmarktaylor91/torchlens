@@ -538,8 +538,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
 
     if input_identity is not None:
         # The input-transform identity joins the resume signature as a
-        # VALUE-level extension of the existing transform_pipeline field
-        # (tvscope B5): runs without an input path keep the historical value
+        # VALUE-level extension of the existing transform_pipeline field:
+        # runs without an input path keep the historical value
         # shape byte-for-byte, and any input-path difference (including
         # against a pre-block artifact) mismatches through the one door.
         transform_record = {"output": transform_record, "input": input_identity}

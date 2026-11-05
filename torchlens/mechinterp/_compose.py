@@ -27,7 +27,7 @@ def apply_norm_scale(
     norm: str = "final",
     scale: str = "frozen",
 ) -> ComponentStack:
-    """Fold one checked norm linearization into a component stack (D8).
+    """Fold one checked norm linearization into a component stack.
 
     Parameters
     ----------

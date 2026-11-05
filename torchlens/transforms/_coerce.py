@@ -1,11 +1,11 @@
-"""``coerce_transform`` — the ONE door every transform slot goes through (memo B1).
+"""``coerce_transform`` — the ONE door every transform slot goes through.
 
 Accepts ``None`` | raw unary callable | registered name | frozen spec |
 ordered sequence | per-site Mapping, following the ratified predicate-door
 pattern: one door means one audit shape. Bare strings resolve only to
 zero-parameter deterministic presets; strings are never import paths or a
 parameter mini-language. Nested sequences flatten; UNORDERED containers
-refuse (T-C8: composition is ordered and recorded).
+refuse (composition is ordered and recorded).
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -44,7 +44,7 @@ class _DefaultKey:
 #: Mapping key selecting the fallback chain for sites without their own row.
 DEFAULT = _DefaultKey()
 
-#: Containers with no defined iteration order — refused, never guessed (T-C8).
+#: Containers with no defined iteration order — refused, never guessed.
 _UNORDERED_TYPES = (set, frozenset)
 
 
@@ -132,7 +132,7 @@ def _coerce_step(value: Any) -> TransformSpec | OpaqueStep:
 
 
 def _flatten_steps(value: Any, out: list[TransformSpec | OpaqueStep]) -> None:
-    """Flatten nested ordered sequences into ``out`` (T-C8).
+    """Flatten nested ordered sequences into ``out``.
 
     Parameters
     ----------
@@ -261,7 +261,7 @@ def chain(*items: Any) -> TransformPipeline:
     Returns
     -------
     TransformPipeline
-        The ordered chain (memo decision 3: both spellings normalize to the
+        The ordered chain (both spellings normalize to the
         same object).
 
     Examples

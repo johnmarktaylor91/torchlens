@@ -1,4 +1,4 @@
-"""rsatoolbox bridge: the single-Dataset special case (neuro memo D2).
+"""rsatoolbox bridge: the single-Dataset special case.
 
 The full per-site handoff lives at :func:`torchlens.neuro.datasets`; this
 legacy spelling survives as a DELEGATION to the same flattening and

@@ -347,10 +347,10 @@ def _validate_sparse_run_descriptor(
         # v2 requires the EXPLICIT capture-scoped ambient execution context; a
         # legacy v1 descriptor predates it and stays analysis-only at readiness.
         required.add("ambient_context")
-        # r69 A: v2 requires the descriptor-native required-witness presence
+        # v2 requires the descriptor-native required-witness presence
         # ledger (exact family/member coverage validated by the typed parser).
         required.add("required_witness_inventory")
-        # r71 A: the REQUIRED witness-free replay-structure records -- the
+        # The REQUIRED witness-free replay-structure records -- the
         # input-boundary site/arity authority and the explicit typed coverage-gap
         # ledger the completeness floor derives from. Never optional or defaulted.
         required.add("input_boundary")
@@ -467,14 +467,14 @@ def _validate_runnable_payload_entries(manifest: dict[str, Any]) -> None:
         if label in labels:
             raise ValueError(f"Runnable weight payload repeats canonical state name {label!r}.")
         labels.add(label)
-    # r6 M3: the weights branch used to be ONE-DIRECTIONAL -- it rejected blobs without the
-    # flag but ACCEPTED ``weights.present=true`` with a MISSING or WRONG blob set, and never
-    # cross-checked weight LABELS against the descriptor's own declared state names. Deleting
-    # both ``runnable_weight`` entries (plus their body_index rows, blobs and
-    # ``n_auxiliary_blobs``) left ``present=true`` and ``validate_tlspec()`` returned clean,
-    # while ``.run()`` then failed with ``StateBindingError`` -- the gate users are told to run
-    # CERTIFIED an artifact the strict binder cannot bind. Close it with the same bidirectional
-    # cross-check the non-persistent-buffer branch below already performs.
+    # The weights branch must be BIDIRECTIONAL. A one-directional check would reject blobs
+    # without the flag but ACCEPT ``weights.present=true`` with a MISSING or WRONG blob set,
+    # and would never cross-check weight LABELS against the descriptor's own declared state
+    # names. Deleting both ``runnable_weight`` entries (plus their body_index rows, blobs and
+    # ``n_auxiliary_blobs``) would leave ``present=true`` and ``validate_tlspec()`` clean,
+    # while ``.run()`` then fails with ``StateBindingError`` -- the gate users are told to run
+    # would CERTIFY an artifact the strict binder cannot bind. So the weights branch performs
+    # the same bidirectional cross-check the non-persistent-buffer branch below does.
     #
     # The buffer branch's literal shape (``present == bool(names)``) is NOT the right mirror
     # here, and adopting it would over-block honest artifacts. Non-persistent buffers are a
@@ -650,8 +650,8 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
     ------
     torchlens._io.ArtifactTooNewError
         If the declared version is newer than this runtime supports. Typed
-        through the one G3 chokepoint: the bare ``ValueError`` this used to
-        raise was swallowed by the load path's generic exception laundering
+        through the one shared chokepoint: a bare ``ValueError`` here would be
+        swallowed by the load path's generic exception laundering
         and surfaced codeless.
     """
 

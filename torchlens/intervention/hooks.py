@@ -581,7 +581,7 @@ def _validate_live_site_target(site_target: Any, *, allow_replay_only: bool = Fa
     site_target:
         Selector-like target passed to live hook attachment.
     allow_replay_only:
-        Whether replay-capable structural kinds (``site``, the C03
+        Whether replay-capable structural kinds (``site``, the
         structural selector) may pass: the trace-side attach door resolves
         them post hoc on the finished graph, and the RERUN preflight
         (:func:`normalize_hooks_from_spec`) re-validates without this

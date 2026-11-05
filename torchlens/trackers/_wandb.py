@@ -1,4 +1,4 @@
-"""WandbSink: the thin native serializer over the same records (memo 3.1).
+"""WandbSink: the thin native serializer over the same records.
 
 Justified by measurement, not preference: the wandb TB relay rewrites the
 caller's step axis (100/102/104 arrive as 0/1/2), destroys every histogram
@@ -8,7 +8,7 @@ exists to preserve exactly what the relay loses. It is a serializer
 engine; ~100 lines over the shared emission view, as designed.
 
 The 512-bucket cap is wandb's own (documented constructor limit); the
-default C06 grid at bpo=4 over [2^-48, 2^16] renders 513 bins per signed
+default grid at bpo=4 over [2^-48, 2^16] renders 513 bins per signed
 sketch, so the sink REDUCES bins-per-octave pressure honestly: it refuses
 typed rather than letting wandb silently re-bin. When the caller passes
 neither ``descriptor=`` nor ``settings=``, ``watch`` asks the sink
@@ -31,7 +31,7 @@ __tl_layer__ = "L8"
 WANDB_BUCKET_CAP = 512
 
 #: A descriptor whose signed render (2 * bins_per_side + 1 center band) fits
-#: the wandb cap: (16 - (-46)) * 4 = 248 bins/side -> 497 buckets. The C06
+#: the wandb cap: (16 - (-46)) * 4 = 248 bins/side -> 497 buckets. The
 #: DEFAULT grid renders 513 and would refuse, so watch() uses this grid for a
 #: WandbSink when the caller names none; it is also the one-line remedy the
 #: refusal names for an explicit over-cap descriptor.
@@ -71,8 +71,7 @@ class WandbSink:
         """Wrap an existing run object (never calls ``wandb.init`` itself).
 
         Activation is a visible call in user source: constructing the run is
-        the user's act, and this sink never creates one (the enablement law,
-        memo 3.16).
+        the user's act, and this sink never creates one (the enablement law).
         """
 
         if not callable(getattr(to, "log", None)):
@@ -88,7 +87,7 @@ class WandbSink:
         self._closed = False
 
     def capabilities(self) -> frozenset[str]:
-        """Scalars, raw histograms, and text; graphs are demoted (memo s9)."""
+        """Scalars, raw histograms, and text; graphs are demoted."""
 
         return frozenset({"scalar", "raw_histogram", "text_manifest", "run_metadata"})
 
@@ -96,7 +95,7 @@ class WandbSink:
         """The grid ``watch`` uses when the caller chose none (fits the cap).
 
         ``watch`` consults this hook only when both ``descriptor=`` and
-        ``settings=`` are None; any caller grid, the C06 default carried by a
+        ``settings=`` are None; any caller grid, the default carried by a
         bare ``WatchSettings()`` included, is judged by
         :meth:`preflight_histograms` and refuses when over the cap.
         """
@@ -107,10 +106,10 @@ class WandbSink:
         """Refuse an over-cap grid at ATTACH, before any emission.
 
         The engine calls this when histograms are requested. Refusing here
-        (typed, while the user is at the console) replaces the old shape of
-        the same refusal: raised inside ``emit_histogram`` on the first
-        sampled step, where the engine's runtime latch swallowed it and
-        stopped ALL delivery to this sink after step 0 (AUD-CODE 2.14).
+        (typed, while the user is at the console) is preferable to raising the
+        same refusal inside ``emit_histogram`` on the first sampled step,
+        where the engine's runtime latch would swallow it and stop ALL
+        delivery to this sink after step 0.
         """
 
         buckets = 2 * len(descriptor.bucket_edges()) - 1

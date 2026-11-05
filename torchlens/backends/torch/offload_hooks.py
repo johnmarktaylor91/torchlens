@@ -1,4 +1,4 @@
-"""Accelerate offload/dispatch hook shims for eager capture (lane F37, R5).
+"""Accelerate offload/dispatch hook shims for eager capture.
 
 Accelerate's ``AlignDevicesHook`` machinery runs INSIDE the module forwards
 TorchLens logs: ``pre_forward`` moves args to the execution device and

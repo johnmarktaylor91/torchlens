@@ -1,4 +1,4 @@
-"""Narration sinks: stderr, path, stream, or callable (snoop D2 sinks).
+"""Narration sinks: stderr, path, stream, or callable.
 
 Default stderr (stdout stays clean). File sinks flush per line by default:
 that durability is the entire reason live narration exists alongside the

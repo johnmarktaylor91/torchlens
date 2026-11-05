@@ -1,20 +1,20 @@
-"""Deterministic counter-hash machinery for SRP matrix generation (memo B6).
+"""Deterministic counter-hash machinery for SRP matrix generation.
 
 TorchLens owns its SRP construction: a splitmix64-class integer hash computed
 in torch int64 ops with LIMB-DECOMPOSED wrapping arithmetic (no intermediate
 ever exceeds 2^40 before a final well-masked compose), so generation is a
 pure function of ``(effective_seed, column, draw counter)`` — block-independent
 by construction: generating one column block or sixteen chunks yields
-bit-identical matrices (O13), which is what makes the O(chunk)-memory
+bit-identical matrices, which is what makes the O(chunk)-memory
 ``dense_chunked`` multiply path universally available.
 
 Every byte-level operation here (limb scheme, 63-bit modulo reduction, the
 threshold/sign bit split, the rejection tie rule) is part of
 ``ALGORITHM_VERSION``, not implementation folklore: a change to any of them
-is a construction change and bumps the version (T-C13).
+is a construction change and bumps the version.
 
 Cross-device bit-exactness is REASONED, measured on CPU only, and
-gate-verified before any on-device claim ships (memo 16.4; the O3 test stays
+gate-verified before any on-device claim ships (the test stays
 executable precisely because "holds by construction" is the claim that must
 be tested).
 """
@@ -33,7 +33,7 @@ __tl_layer__ = "L4"
 
 __all__ = ["ALGORITHM_VERSION", "MatrixHeader"]
 
-#: Numerics-visible version of the owned construction (T-C13): covers the
+#: Numerics-visible version of the owned construction: covers the
 #: splitmix64 limb scheme, the 63-bit modulo position draw, the
 #: first-occurrence-wins rejection rule, the position-keyed sign bit, and the
 #: canonical serialization below.
@@ -185,7 +185,7 @@ def _hash_position(seed: int, column: torch.Tensor, draw: torch.Tensor) -> torch
     """Position-keyed two-argument counter hash.
 
     A pure function of ``(seed, column, draw)`` with no sequential state, so
-    any column chunking generates bit-identical values (O13).
+    any column chunking generates bit-identical values.
 
     Parameters
     ----------
@@ -368,7 +368,7 @@ def generate_bernoulli_columns(
     position-keyed counter hash fall below ``floor(density * 2^62)``; the
     sign comes from bit 0 of the same word. O(extent * len(columns_block))
     work — the planner discloses this cost so a multi-second generation
-    cannot surprise a harvest (memo section 6).
+    cannot surprise a harvest.
 
     Parameters
     ----------

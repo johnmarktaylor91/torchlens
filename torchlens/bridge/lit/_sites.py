@@ -1,15 +1,15 @@
 """Site pinning, the ``blocks`` preset, and the structural site resolver.
 
 Site identity is the structural ``site_key``, never the layer label and not the
-module address alone (LIT-panel memo D4): padding shifts every block LABEL on
+module address alone: padding shifts every block LABEL on
 every architecture measured (0/6, 0/12 survivors), while ``site_key`` survived
 padding, ragged batches, and eager-vs-sdpa byte-identically. Each exposed site
 pins ``(field_name, module_address, site_key, pass_index)`` at construction;
 per-request traces re-resolve through a per-trace index over concrete ``Op``
 records matching ``(site_key, pass index)`` and refuse on zero or multiple
-matches (memo D5 -- deliberately NOT ``align_to()``, which rejects exactly the
+matches (deliberately NOT ``align_to()``, which rejects exactly the
 padding-drifted traces this bridge must accept). All discovery and reads are
-PER-OP (memo D6): ``Layer`` aggregates raise or silently return empty on
+PER-OP: ``Layer`` aggregates raise or silently return empty on
 multi-pass boundaries.
 """
 
@@ -28,12 +28,12 @@ _TRAILING_INT = re.compile(r"^(?P<stem>.*?)(?P<index>\d+)$")
 
 @dataclass(frozen=True)
 class SiteSpec:
-    """One pinned LIT embedding site (LIT-panel memo D4 pin quad).
+    """One pinned LIT embedding site (a pinned field/address/key/pass quad).
 
     Parameters
     ----------
     field_name:
-        Visible LIT output-spec field name (placeholder spelling, [UI-SPRINT]).
+        Visible LIT output-spec field name (placeholder spelling).
     module_address:
         Module-tree address whose output op this site reads.
     site_key:
@@ -49,7 +49,7 @@ class SiteSpec:
 
 
 def module_output_ops(trace: Any) -> list[Any]:
-    """Return every op that is a module output, per-op (memo D6).
+    """Return every op that is a module output, per-op.
 
     Parameters
     ----------
@@ -107,7 +107,7 @@ def _module_addresses(trace: Any) -> tuple[str, ...]:
 
 
 def discover_block_stack(trace: Any) -> tuple[str, ...]:
-    """Discover the largest homogeneous repeated-module stack (memo D7).
+    """Discover the largest homogeneous repeated-module stack.
 
     The preset is built from module-call metadata, never op-name matching: the
     op-name-substring heuristic it replaces selected interleaved sublayer norms
@@ -201,10 +201,10 @@ def pin_blocks(trace: Any) -> list[SiteSpec]:
     """Pin the ``blocks`` preset sites on the probe trace.
 
     The preset takes the LAST pass of each block's module-output op, as tested
-    preset semantics (memo D8: on GPT-2 the last-pass residual add equals HF
+    preset semantics (on GPT-2 the last-pass residual add equals HF
     ``output_hidden_states`` bit-exactly for blocks 0-10; block 11 is
     pre-``ln_f`` -- documented). Field names are ``tl_block_<i>`` placeholders
-    pending the naming sprint ([UI-SPRINT] item 2).
+    pending naming.
 
     Parameters
     ----------
@@ -235,7 +235,7 @@ def pin_blocks(trace: Any) -> list[SiteSpec]:
 
 
 def pin_explicit(trace: Any, sites: tuple[str, ...]) -> list[SiteSpec]:
-    """Pin explicit user sites on the probe trace (memo D7/D8).
+    """Pin explicit user sites on the probe trace.
 
     Each entry is a module address, optionally pass-qualified as
     ``"address:N"``. An unqualified address whose module fires more than once
@@ -334,8 +334,8 @@ def resolve_pinned(trace: Any, specs: list[SiteSpec]) -> dict[str, Any]:
     """Re-resolve pinned sites on a fresh trace via the structural index.
 
     Builds one index over concrete per-op records keyed by
-    ``(site_key, pass_index)`` and demands exactly one match per pinned site
-    (memo D5). Zero matches refuse as drift, naming both the address and the
+    ``(site_key, pass_index)`` and demands exactly one match per pinned site.
+    Zero matches refuse as drift, naming both the address and the
     key; multiple matches refuse as ambiguity (bare ``site_key`` is unique only
     per call instance -- torchlens invariant I-S2).
 

@@ -1,4 +1,4 @@
-"""Per-neuron MLP contributions (mikit D7 identity gate at neuron grain).
+"""Per-neuron MLP contributions (the identity gate at neuron grain).
 
 The MLP output projection is linear in its hidden activation, so an MLP's
 output decomposes exactly into one row per hidden neuron:
@@ -14,8 +14,8 @@ is labelled the projection bias ONLY when it provably equals that bias
 within the reconstruction tolerance, dropped when it is provably zero, and
 otherwise kept as an ``mlp_remainder`` row that grades the stack
 CLOSED-UNRESOLVED (diagnostic only; DLA refuses it). The rows plus the
-verified constant therefore sum to the captured MLP output under the D7
-gate, the same identity receipt head rows carry.
+verified constant therefore sum to the captured MLP output under the
+identity gate, the same identity receipt head rows carry.
 
 Memory: ``d_mlp`` rows of ``[batch, seq, d_model]`` each (3072 rows per
 gpt2-small layer). ``neurons=`` keeps named neurons and folds the rest into
@@ -324,7 +324,7 @@ def mlp_neuron_contributions(
     onto: torch.Tensor | None = None,
     positions: Any = None,
 ) -> ComponentStack:
-    """Per-neuron MLP contribution rows + verified constants (mikit D7 gate).
+    """Per-neuron MLP contribution rows + verified constants (identity-gated).
 
     Parameters
     ----------

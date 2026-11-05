@@ -59,7 +59,7 @@ def _build_container_spec(
     """Build a replay container spec for a supported output container.
 
     Over-deep and self-referential subtrees degrade to the honest ``opaque``
-    lane (r-b4 R27-4) instead of exhausting the interpreter stack; the cycle
+    lane instead of exhausting the interpreter stack; the cycle
     guard is path-scoped so DAG-shaped outputs keep one spec per occurrence.
 
     Parameters
@@ -134,7 +134,7 @@ def _build_container_spec_unguarded(
         )
     torch_fields = _torch_return_type_fields(value)
     if type(value).__module__ == "torch.return_types" and not torch_fields:
-        # r35 hon1_4: a structseq whose field declaration cannot be PROVEN
+        # A structseq whose field declaration cannot be PROVEN
         # (no valid __match_args__, no identity bijection) is recorded opaque
         # so the runnable producer refuses it typed -- never silently recorded
         # as a plain positional tuple (a lossy type substitution).
@@ -164,7 +164,7 @@ def _build_container_spec_unguarded(
             type_module=module,
             type_qualname=qualname,
             child_specs=tuple(child_specs),
-            # r37 secB_1 capture-side parity with dataclass/hf: the inert
+            # Capture-side parity with dataclass/hf: the inert
             # ``tuple.__new__`` rebuild drops non-field instance state.
             lossy_reconstruction=namedtuple_extra_instance_state(value),
         )
@@ -382,7 +382,7 @@ def _walk_supported_output_container(
 ) -> Iterator[tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]]:
     """Yield tensors from a supported output container.
 
-    Bounded by the same ceiling/cycle policy as the spec builders (r-b4 R27-4):
+    Bounded by the same ceiling/cycle policy as the spec builders:
     an over-deep or self-referential subtree is treated exactly like an
     unrecognized container -- its tensors are yielded at the opaque boundary
     path by the fallback below, matching the ``opaque`` spec node the builder
@@ -461,7 +461,7 @@ def _prove_runnable_output_lossless(
     _depth: int = 0,
     _in_progress: set[int] | None = None,
 ) -> tuple[bool, str]:
-    """Positively prove one MODEL-output subtree is losslessly reconstructable (r35 I1).
+    """Positively prove one MODEL-output subtree is losslessly reconstructable.
 
     A runnable claim requires refuse-unless-proved: the proof establishes an exact
     root kind, recursively supported child kinds, and fully encodable literal
@@ -485,7 +485,7 @@ def _prove_runnable_output_lossless(
         return False, f"unordered_container:{type(value).__qualname__}"
     if _literal_value_supported(value) or isinstance(value, torch.Size):
         return True, ""
-    # r-b4 R27-4: refuse-unless-proved makes the guard trivial -- an over-deep or
+    # refuse-unless-proved makes the guard trivial -- an over-deep or
     # self-referential subtree simply cannot be proved lossless.
     if _in_progress is None:
         _in_progress = set()
@@ -529,10 +529,10 @@ def _prove_runnable_output_lossless_unguarded(
         if type(value).__module__ == "torch.return_types" and not torch_fields:
             return False, "structseq_fields_unprovable"
         if namedtuple_type_can_carry_instance_state(type(value)):
-            # r39 corr1-1: refuse at save any namedtuple TYPE capable of carrying dropped
+            # Refuse at save any namedtuple TYPE capable of carrying dropped
             # instance state (an unslotted subclass), even when THIS instance's ``__dict__``
-            # is currently empty -- load cannot see the original instance and secB_1 forbids
-            # trusting a persisted "no extras" flag, so instance-emptiness is unprovable at
+            # is currently empty -- load cannot see the original instance and must not
+            # trust a persisted "no extras" flag, so instance-emptiness is unprovable at
             # load. This is the SAME structural type-level criterion the load-time gate
             # (``_spec_node_reconstruction_lossy`` -> ``namedtuple_type_can_carry_instance_state``)
             # applies, closing the producer/consumer disagreement that let an unslotted
@@ -560,7 +560,7 @@ def _prove_runnable_output_lossless_unguarded(
         if recon is None:
             return False, f"unreconstructable_mapping:{type(value).__qualname__}"
         if mapping_extra_instance_state(value):
-            # r37 3-ADJ-2: OrderedDict/defaultdict instances can carry attributes
+            # OrderedDict/defaultdict instances can carry attributes
             # the key/value rebuild drops -- refuse at save.
             return False, f"mapping_instance_state:{type(value).__qualname__}"
         for key in value.keys():
@@ -647,7 +647,7 @@ def runnable_output_losslessness(
     out: Any,
     output_entries: Sequence[tuple[torch.Tensor, tuple[OutputPathComponent, ...], Any]],
 ) -> dict[str, Any]:
-    """Build the explicit model-output traversal proof result (r35 I1, decision B).
+    """Build the explicit model-output traversal proof result.
 
     Combines the positive structural losslessness proof with the tensor-leaf /
     typed-path bijection over the walked output entries: duplicate paths, a
@@ -679,7 +679,7 @@ def runnable_output_losslessness(
     lossless = proved and not duplicate_paths and not used_fallback
     if not lossless and not reason:
         reason = "duplicate_output_paths" if duplicate_paths else "fallback_traversal"
-    # r39 corr2_5: an EXPLICIT closed root kind, so the live provider never INFERS a bare
+    # an EXPLICIT closed root kind, so the live provider never INFERS a bare
     # tensor from "one leaf, no spec, no path" -- an opaque set/frozenset/custom container the
     # traversal fell back on produces that SAME signature. ``bare_tensor_root`` is the single
     # positive fact the live bare-tensor fast path is gated on; a non-tensor opaque root is

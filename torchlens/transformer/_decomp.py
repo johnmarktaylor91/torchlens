@@ -1,4 +1,4 @@
-"""Score decomposition: the BertViz neuron-view DATA, term-complete (D19).
+"""Score decomposition: the BertViz neuron-view DATA, term-complete.
 
 For one selected (layer, head, destination, source) pair, the record carries
 the post-transform q/k vectors, their per-dimension products, the scale, and
@@ -61,7 +61,7 @@ def score_decomposition(  # noqa: PLR0913 -- one keyword per addressed coordinat
     batch_index: int = 0,
     tolerance: float = 1e-3,
 ) -> ScoreDecomposition:
-    """Decompose one attention score into its per-dimension terms (D19).
+    """Decompose one attention score into its per-dimension terms.
 
     Reads the ``q``/``k`` facets (position-major ``[batch, pos, head,
     d_head]``) and the ``scores`` facet (head-major ``[batch, head, dst,
@@ -149,7 +149,7 @@ def render_neuron_card(
     *,
     svg_fonttype: str = "path",
 ) -> SavedFigure:
-    """Render the selected-pair neuron card (family-gated static card, D19).
+    """Render the selected-pair neuron card (family-gated static card).
 
     Three aligned bands -- q vector, k vector, and their per-dimension
     products -- plus the printed term accounting ending at the captured
