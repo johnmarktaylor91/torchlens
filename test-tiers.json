@@ -9306,6 +9306,11 @@
         "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_wrapper_teardown_hygiene.py"
       ],
+      "torchlens/backends/torch/_bool_check_records.py": [
+        "tests/test_torch_compat.py",
+        "tests/test_validation_bool_check_records.py",
+        "tests/test_w1f3_observer_failopen.py"
+      ],
       "torchlens/backends/torch/_boundary_types.py": [
         "tests/real_model/test_compat_matrix_rows.py",
         "tests/test_differential_oracle_authority.py",
@@ -9453,7 +9458,8 @@
         "tests/test_conditional_scalar_escape_advisory.py",
         "tests/test_framework_filename_verdict_bound.py",
         "tests/test_lazy_materialize_census.py",
-        "tests/test_structure_only_teaching.py"
+        "tests/test_structure_only_teaching.py",
+        "tests/test_validation_bool_check_records.py"
       ],
       "torchlens/backends/torch/_escape_detection_fields.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -11192,14 +11198,14 @@
         "tests/test_validation_index_domain_in_range.py"
       ],
       "torchlens/debug/_checks/_records.py": [
-        "tests/real_model/test_hon_checks_lr_scheduler.py",
         "tests/test_checks_kit_events.py",
         "tests/test_checks_kit_nonfinite.py",
         "tests/test_checks_kit_param_checks.py",
         "tests/test_checks_kit_provocations.py",
         "tests/test_checks_kit_range_seam.py",
         "tests/test_checks_kit_scan.py",
-        "tests/test_checks_kit_session.py"
+        "tests/test_checks_kit_session.py",
+        "tests/test_validation_bool_check_records.py"
       ],
       "torchlens/debug/_checks/_scan.py": [
         "tests/test_alias_scan_scaling.py",
@@ -11580,8 +11586,8 @@
       "torchlens/errors/_validation.py": [
         "tests/test_backward_p7_validation.py",
         "tests/test_validation.py",
+        "tests/test_validation_bool_check_records.py",
         "tests/test_validation_hardening.py",
-        "tests/test_validation_index_domain_in_range.py",
         "tests/test_validation_key_forgery.py",
         "tests/test_validation_module_call_counts.py",
         "tests/test_valmem_validation_memory.py",
@@ -13570,9 +13576,9 @@
         "tests/test_backward_p7_validation.py",
         "tests/test_rf_ext_validation.py",
         "tests/test_validation.py",
+        "tests/test_validation_bool_check_records.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_index_domain_in_range.py",
-        "tests/test_validation_module_call_counts.py",
         "tests/test_valmem_validation_memory.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],

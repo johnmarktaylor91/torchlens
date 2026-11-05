@@ -3108,6 +3108,7 @@ docs-md	docs/maintainers/where.md	1717
 docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	1726
 docs-md	docs/maintainers/where.md	173
+docs-md	docs/maintainers/where.md	1730
 docs-md	docs/maintainers/where.md	1734
 docs-md	docs/maintainers/where.md	1735
 docs-md	docs/maintainers/where.md	174
@@ -3569,6 +3570,7 @@ docs-md	docs/maintainers/where.md	584
 docs-md	docs/maintainers/where.md	586
 docs-md	docs/maintainers/where.md	587
 docs-md	docs/maintainers/where.md	588
+docs-md	docs/maintainers/where.md	58861
 docs-md	docs/maintainers/where.md	589
 docs-md	docs/maintainers/where.md	59
 docs-md	docs/maintainers/where.md	59010
@@ -3650,6 +3652,7 @@ docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
 docs-md	docs/maintainers/where.md	700
 docs-md	docs/maintainers/where.md	701
+docs-md	docs/maintainers/where.md	701832
 docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	702414
 docs-md	docs/maintainers/where.md	703
@@ -8485,6 +8488,7 @@ test-docstrings	tests/test_completeness_witness.py	64
 test-docstrings	tests/test_completeness_witness.py	65
 test-docstrings	tests/test_completeness_witness.py	70
 test-docstrings	tests/test_completeness_witness.py	77
+test-docstrings	tests/test_condbranch_hardening.py	10
 test-docstrings	tests/test_condbranch_hardening.py	22
 test-docstrings	tests/test_condbranch_hardening.py	24
 test-docstrings	tests/test_condbranch_hardening.py	3.10
