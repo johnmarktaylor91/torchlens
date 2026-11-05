@@ -22,6 +22,20 @@ from ._torch_symbols import torch_dtype_named
 from .tensor_leaves import copy_host_bytes, flat_byte_view
 
 
+def _bridge_works() -> bool:
+    """Return :func:`get_numpy_bridge_support`, probing with capture logging paused.
+
+    The first call runs a real ``torch.from_numpy`` / ``Tensor.numpy`` probe; a
+    conversion inside an active capture (the RNG digest) would otherwise record
+    those probe ops into the user's trace.
+    """
+
+    from .. import _state  # above ``_utils``: never at module top
+
+    with _state.pause_logging():
+        return get_numpy_bridge_support()
+
+
 def tensor_to_numpy(tensor: torch.Tensor, *, force: bool = False) -> Any:
     """Return ``tensor.cpu().numpy()``, also when torch's NumPy bridge is broken.
 
@@ -51,7 +65,7 @@ def tensor_to_numpy(tensor: torch.Tensor, *, force: bool = False) -> Any:
         When NumPy has no matching dtype (bf16, fp8), as ``Tensor.numpy`` does.
     """
 
-    if get_numpy_bridge_support():
+    if _bridge_works():
         return tensor.numpy(force=True) if force else tensor.cpu().numpy()
     dtype_name = str(tensor.dtype).removeprefix("torch.")
     try:
@@ -87,7 +101,7 @@ def tensor_from_numpy(array: Any) -> torch.Tensor:
         When torch has no matching dtype, as ``torch.from_numpy`` does.
     """
 
-    if get_numpy_bridge_support():
+    if _bridge_works():
         return torch.from_numpy(array)
     # ``np.ascontiguousarray`` promotes 0-d input to shape (1,): keep the
     # caller's shape explicitly.
