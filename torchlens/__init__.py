@@ -119,9 +119,7 @@ _LAZY_ATTRS = {
     "validation": ("torchlens.validation", None),
     "types": ("torchlens.types", None),
     "appliances": ("torchlens.appliances", None),
-    # The input and output detector registries: the glossary and guides spell
-    # tl.preprocessing.<name> and tl.postprocessing.<name>, which resolved only
-    # after an explicit submodule import until these rows existed.
+    # The detector registries the glossary spells tl.postprocessing/preprocessing.*.
     "postprocessing": ("torchlens.postprocessing", None),
     "preprocessing": ("torchlens.preprocessing", None),
     "backends": ("torchlens.backends", None),
@@ -136,15 +134,13 @@ _LAZY_ATTRS = {
     "patch_from": ("torchlens.intervention.helpers", "patch_from"),
     "Recipe": ("torchlens.intervention.spec", "Recipe"),
     "positions": ("torchlens.intervention._position_edits", "positions"),
-    # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
-    # ratification; provisional-name protocol).
+    # L6 selection algebra (DOCUMENTED-UNSTABLE; provisional-name protocol).
     "Selector": ("torchlens._selection.selection", "Selector"),
     "Selection": ("torchlens._selection.selection", "Selection"),
     "units": ("torchlens._selection.selection", "units"),
     "param": ("torchlens._selection.selection", "param"),
     "random_like": ("torchlens._selection.selection", "random_like"),
-    # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
-    # naming-session ratification; provisional-name protocol).
+    # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE; provisional-name protocol).
     "top_k": ("torchlens._selection.values", "top_k"),
     "top_fraction": ("torchlens._selection.values", "top_fraction"),
     "threshold": ("torchlens._selection.values", "threshold"),
@@ -152,18 +148,15 @@ _LAZY_ATTRS = {
     "dead": ("torchlens._selection.values", "dead"),
     "saturated": ("torchlens._selection.values", "saturated"),
     "low_variance": ("torchlens._selection.values", "low_variance"),
-    # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
-    # naming-session ratification; provisional-name protocol).
+    # L6 graph-structural producers (DOCUMENTED-UNSTABLE; provisional-name protocol).
     "neighborhood": ("torchlens._selection.graph", "neighborhood"),
     "between": ("torchlens._selection.graph", "between"),
-    # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
-    # pending naming-session ratification; provisional-name protocol).
+    # L6 differential + cross-pass producers (DOCUMENTED-UNSTABLE; provisional-name protocol).
     "changed": ("torchlens._selection.compare", "changed"),
     "top_changed": ("torchlens._selection.compare", "top_changed"),
     "stable_across_passes": ("torchlens._selection.compare", "stable_across_passes"),
     "pass_variance": ("torchlens._selection.compare", "pass_variance"),
-    # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
-    # ratification; provisional-name protocol).
+    # L6 subspace producer (DOCUMENTED-UNSTABLE; provisional-name protocol).
     "subspace": ("torchlens._selection.subspace", "subspace"),
 }
 
