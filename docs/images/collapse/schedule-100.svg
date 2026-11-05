@@ -12,7 +12,7 @@
 <text text-anchor="start" x="8" y="-1328.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ResNet</text>
 <text text-anchor="start" x="8" y="-1314.7" font-family="Helvetica,sans-Serif" font-size="14.00">13 nodes (1011.8 KB)</text>
 <text text-anchor="start" x="8" y="-1300.7" font-family="Helvetica,sans-Serif" font-size="14.00">11,689,512 params (44.6 MB, all trainable)</text>
-<text text-anchor="start" x="8" y="-1286.7" font-family="Helvetica,sans-Serif" font-size="14.00">this model reuses 8 modules across 16 calls; vis_mode=&#39;rolled&#39; shows the loop</text>
+<text text-anchor="start" x="8" y="-1286.7" font-family="Helvetica,sans-Serif" font-size="14.00">8 reused modules (16 calls); rolled=True draws the loop</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>

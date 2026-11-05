@@ -329,9 +329,9 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
 
     The collapse panel ratified "disclose, don't switch" for weight-shared
     models: the default ``vis_mode`` stays, and an overview render (a smart
-    collapse mode) says how many modules ran more than once and that rolled
-    mode draws the loop. Nested modules of a reused module are not counted
-    again.
+    collapse mode) says how many modules ran more than once and that
+    ``rolled=True`` draws the loop, short enough not to clip. Nested modules
+    of a reused module are not counted again.
 
     Returns
     -------
@@ -361,9 +361,7 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     count = len(outermost)
     calls = sum(outermost.values())
     noun = "module" if count == 1 else "modules"
-    return (
-        f"this model reuses {count} {noun} across {calls} calls; vis_mode='rolled' shows the loop"
-    )
+    return f"{count} reused {noun} ({calls} calls); rolled=True draws the loop"
 
 
 def drawn_module_marks(
