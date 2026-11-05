@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1737 modules, 702901 lines, 0 modules without a docstring.
+85 packages, 1738 modules, 702959 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,9 +40,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 73 | 23842 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 74 | 23869 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48860 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48863 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -87,14 +87,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 32 | 14261 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1968 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7708 |
-| `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4047 |
+| `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14490 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
 | `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 18 | 7241 |
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 86 | 33887 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 86 | 33905 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -937,7 +937,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (73 modules, 23842 lines)
+Shared helpers used by two or more TorchLens packages. (74 modules, 23869 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -978,6 +978,7 @@ Shared helpers used by two or more TorchLens packages. (73 modules, 23842 lines)
 | `_quiet_property` | Attribute reads for the tensor search that keep property getters' log records quiet. | 75 |
 | `_raw_pointer_denial` | Structural raw-pointer denial for resolved callables and bundle keywords. | 429 |
 | `_record_group_table` | Concern-group table for the ''Op'' and ''Layer'' record members (pure data). | 676 |
+| `_render_slots` | Context slots a node-spec callback reads while the renderer calls it. | 27 |
 | `_runnable_alias_resolver` | Runnable torch alias resolution: successors for recorded torch callable paths. | 196 |
 | `_runnable_torch_aliases` | Monotonic torch callable moves for sparse runnable reattachment (a data-only leaf). | 215 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
@@ -1042,7 +1043,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (104 modules, 48860 lines)
+Computational graph visualization via Graphviz. (104 modules, 48863 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1093,7 +1094,7 @@ Computational graph visualization via Graphviz. (104 modules, 48860 lines)
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 752 |
 | `_label_geometry` | Plane geometry of a laid-out Graphviz drawing (points, y up), for label placement. | 220 |
 | `_label_width` | Conservative text-width metrics for sizing node labels before Graphviz lays them out. | 114 |
-| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 483 |
+| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 495 |
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 696 |
 | `_node_boxes` | Box layout for nodes that carry a picture or a list of labels. | 109 |
@@ -1111,7 +1112,7 @@ Computational graph visualization via Graphviz. (104 modules, 48860 lines)
 | `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2018 |
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2111 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 269 |
-| `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 64 |
+| `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 55 |
 | `_render_node_parts` | Label parts for Graphviz nodes: integer ranges, buffer addresses, module-box outputs. | 105 |
 | `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2028 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
@@ -2155,7 +2156,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7708 lines
 
 ### `torchlens.repgeom`
 
-Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. (9 modules, 4047 lines)
+Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. (9 modules, 4057 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2163,7 +2164,7 @@ Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need on
 | `_annotation_gate` | Stimulus-indexed annotation gating shared by the *_evolution verbs. | 283 |
 | `_disagreement` | Where representational metrics disagree about which site scores higher. | 374 |
 | `_geometry` | Representation-geometry math kernel (repgeom/ promotion). | 1278 |
-| `_node_keys` | Annotation-key resolution for repgeom node visuals. | 171 |
+| `_node_keys` | Annotation-key resolution for repgeom node visuals. | 181 |
 | `_node_visuals` | Repgeom node visuals: MDS/RDM/scree node-spec callbacks. | 649 |
 | `_similarity_ids` | Similarity-repository identifiers for TorchLens's own geometry measures. | 73 |
 | `_trace_views` | Trace-facing repgeom views: evolution tables + node visuals. | 642 |
@@ -2323,7 +2324,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (86 modules, 33887 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (86 modules, 33905 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2411,7 +2412,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
 | `_structural_slot_checks` | Pre-perturbation checks for argument slots whose value is pinned by structure. | 173 |
 | `_trace_checks` | Trace check functions reached from the records through ''_data_classes._doors.validation''. | 184 |
-| `_unread_value_proofs` | Posthoc value proofs for writes that cannot change the output and unread arguments. | 356 |
+| `_unread_value_proofs` | Posthoc value proofs for writes that cannot change the output and unread arguments. | 374 |
 | `_value_predicates` | Saved-value predicates used by the posthoc value-proof decisions. | 197 |
 
 ### `torchlens.viz`
