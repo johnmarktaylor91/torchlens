@@ -43,7 +43,7 @@ from .._data_substrate import compare_model_identity, compute_model_identity
 from .._runnable.transaction import _require_live_source_model
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensError, TorchLensWarning
-from ..errors.runnable import RunCapabilityUnavailableError
+from ..errors._runnable import RunCapabilityUnavailableError
 from .facets import Facet, MissingFacet
 
 __all__ = [

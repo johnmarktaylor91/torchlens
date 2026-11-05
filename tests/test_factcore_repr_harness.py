@@ -21,8 +21,8 @@ import torchlens as tl
 #: (D31): none may inherit the dataclass auto-repr. F10 extends this sweep
 #: to the whole exported surface with its value-record conversion.
 _NO_AUTO_REPR_CLASSES = (
-    "torchlens.recording.types:Recording",
-    "torchlens.recording.types:ActivationRecord",
+    "torchlens.recording._types:Recording",
+    "torchlens.recording._types:ActivationRecord",
     "torchlens._ir.predicate:RecordContext",
     "torchlens._runnable:RunResult",
     "torchlens._runnable:RunReport",

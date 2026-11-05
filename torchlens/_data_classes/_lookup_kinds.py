@@ -21,6 +21,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from .._errors import AmbiguousOpLookupError
+from .._utils._record_group_table import record_member
 
 
 def owning_trace(records: Iterable[Any]) -> Any:
@@ -318,7 +319,7 @@ def buffer_for_key(trace: Any, key: str) -> Any:
     """The one Buffer a module address reaches, or the Buffer of a buffer-version op, else ``None``."""
 
     ops = _ops_named(trace, key)
-    if len(ops) == 1 and getattr(ops[0], "is_buffer", False):
+    if len(ops) == 1 and record_member(ops[0], "is_buffer", False):
         for buffer in trace.buffers:
             if any(version is ops[0] for version in getattr(buffer, "versions", ())):
                 return buffer
@@ -357,7 +358,7 @@ def module_item(module: Any, key: str) -> Any:
     if key in module.layer_labels or key.rsplit(":", 1)[0] in module.layer_labels:
         return trace[key]
     descendant = _module_at(trace, key)
-    address = getattr(descendant, "address", None)
+    address = record_member(descendant, "address", None)
     if descendant is not None and (
         module.address == "self"
         or address == module.address

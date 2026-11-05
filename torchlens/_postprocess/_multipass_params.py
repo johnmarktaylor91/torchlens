@@ -39,7 +39,7 @@ def union_multipass_params(layer_log: Layer, pass_ops: list[Any]) -> None:
     layer_log.num_params_frozen = sum(
         int(param.num_params) for param in params if not param.is_trainable
     )
-    layer_log.total_param_memory = Bytes(sum(int(param.param_memory) for param in params))
+    layer_log._cost_total_param_memory = Bytes(sum(int(param.param_memory) for param in params))
 
 
 def pass_param_addresses(pass_ops: list[Any]) -> list[list[str]]:

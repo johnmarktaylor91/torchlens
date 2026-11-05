@@ -67,7 +67,7 @@ def resolve_save_subject(trace: Any) -> Any:
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
-    recording_types = sys.modules.get("torchlens.recording.types")
+    recording_types = sys.modules.get("torchlens.recording._types")
     if recording_types is not None and isinstance(trace, recording_types.Recording):
         # A failed recording has no trace to cook; hand it on unchanged so the
         # N1 capture-outcome gate below refuses it under its own settled

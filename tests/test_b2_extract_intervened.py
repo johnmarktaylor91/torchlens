@@ -55,7 +55,7 @@ def _stimuli() -> torch.Tensor:
     return torch.randn(10, 6, generator=generator)
 
 
-def _spec() -> tl.intervention.spec.InterventionSpec:
+def _spec() -> tl.intervention._spec.InterventionSpec:
     """Zero-ablate the fc2 module output."""
 
     return tl.when(tl.module("fc2"), tl.zero_ablate())

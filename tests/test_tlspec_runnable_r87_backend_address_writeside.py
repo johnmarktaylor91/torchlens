@@ -47,6 +47,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -55,7 +56,7 @@ _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cac
 def _buffer_ops(trace: Any) -> list[Any]:
     """Return every materialized buffer op of ``trace``."""
 
-    return [op for op in trace if getattr(op, "is_buffer", False)]
+    return [op for op in trace if record_member(op, "is_buffer", False)]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
@@ -141,7 +142,7 @@ def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
     """
 
     trace = _capture(_InPlaceBuffer(), torch.ones(3))
-    b_ops = [op for op in _buffer_ops(trace) if op.address == "b"]
+    b_ops = [op for op in _buffer_ops(trace) if op.buffer_address == "b"]
 
     assert len(b_ops) == 2, f"expected a read + write node for 'b', got {b_ops}"
     read_nodes = [op for op in b_ops if not op.parents]
@@ -149,7 +150,7 @@ def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
     assert len(read_nodes) == 1 and len(write_nodes) == 1, "need one read and one write node"
 
     for op in b_ops:
-        assert op.address == "b", "display address unchanged on both nodes"
+        assert op.buffer_address == "b", "display address unchanged on both nodes"
         assert op.backend_address == "b", (
             f"{op.layer_label} (parents={op.parents}) reports "
             f"backend_address={op.backend_address!r}, expected 'b'"

@@ -49,7 +49,7 @@ def _check_module_call_boundary_and_tree(
     """
 
     call_label = getattr(module_call, "label", None)
-    address = getattr(module_call, "address", None)
+    address = record_member(module_call, "address", None)
     call_index = getattr(module_call, "call_index", None)
     expected_call_label = f"{address}:{call_index}"
     if call_label != expected_call_label:
@@ -94,7 +94,7 @@ def _is_root_call(module_call: Any, call_label: str) -> bool:
     are dropped from every op's stack at postprocess (``_drop_root_call_frames``).
     """
 
-    return str(getattr(module_call, "address", call_label.rsplit(":", 1)[0])) == "self"
+    return str(record_member(module_call, "address", call_label.rsplit(":", 1)[0])) == "self"
 
 
 def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> None:
@@ -147,10 +147,10 @@ def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> 
                 f"ModuleCall '{call_label}' child {child_label!r} has call_parent="
                 f"{getattr(child_call, 'call_parent', None)!r}",
             )
-        expected_prefix = list(getattr(module_call, "module_call_stack", ()) or ())
+        expected_prefix = list(record_member(module_call, "module_call_stack", ()) or ())
         if not _is_root_call(module_call, call_label):
             expected_prefix.append(call_label)
-        child_stack = list(getattr(child_call, "module_call_stack", ()) or ())
+        child_stack = list(record_member(child_call, "module_call_stack", ()) or ())
         if child_stack[: len(expected_prefix)] != expected_prefix:
             raise MetadataInvariantError(
                 name,
@@ -399,7 +399,7 @@ def _check_param_usage_reciprocal_links(ml: Trace, param: object, name: str) -> 
         If a used operation or layer does not point back to ``param``.
     """
 
-    address = getattr(param, "address", "<unknown>")
+    address = record_member(param, "address", "<unknown>")
     for op_label in getattr(param, "used_by_ops", ()):
         op = ml[op_label]
         if not _param_log_list_contains_param(op._param_logs, param):
@@ -438,7 +438,7 @@ def _check_param_co_parent_links(
         If a co-parent address is unresolved or not reciprocal.
     """
 
-    address = getattr(param, "address", "<unknown>")
+    address = record_member(param, "address", "<unknown>")
     for co_parent_address in getattr(param, "co_parent_params", ()) or ():
         co_parent = param_address_index.get(co_parent_address)
         if co_parent is None:
@@ -587,6 +587,10 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_buffers import (  # noqa: E402
     _param_address_index,
     _param_log_list_contains_param,
@@ -594,7 +598,4 @@ from ._invariants_buffers import (  # noqa: E402
 )
 from ._invariants_conditional_base import (  # noqa: E402
     _strip_pass_suffix,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from .._semantic.facets import FacetView
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

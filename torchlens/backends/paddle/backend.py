@@ -1696,7 +1696,7 @@ class PaddleBackend:
                     position = (key, *path)
                     kwarg_positions[position] = label
                     _add(label, position, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _build_op_capture(
         self,
@@ -2541,7 +2541,7 @@ def _paddle_trace_intermediate_signatures(
         if require_float and not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = PaddleIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(getattr(op.call, "call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())

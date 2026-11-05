@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention.spec import Recipe
+from torchlens.intervention._spec import Recipe
 
 _WIDTH = 4000  # above torch's 1000-element print threshold
 

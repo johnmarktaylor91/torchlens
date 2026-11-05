@@ -34,7 +34,7 @@ from ._capture_door import _capture_without_seed, _unfold_capture_options
 from ._generation_options import GenerationOptions
 from ._generation_stream import TokenSeries, _StepSink, site_selector
 from ._recorder import Recorder
-from .types import ActivationRecord, Recording
+from ._types import ActivationRecord, Recording
 
 #: Generation settings that decide which tokens are produced, recorded with the result.
 TOKEN_CHOICE_SETTINGS: tuple[str, ...] = (

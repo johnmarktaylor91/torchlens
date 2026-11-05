@@ -1,8 +1,8 @@
 """Private internals shared by the builtin intervention helpers.
 
 Nothing here persists: every builtin helper's registry key, qualified name and
-``torchlens.intervention.helpers:<name>`` import reference stays in
-:mod:`torchlens.intervention.helpers`; this module only holds the spec builder,
+``torchlens.intervention._helpers:<name>`` import reference stays in
+:mod:`torchlens.intervention._helpers`; this module only holds the spec builder,
 argument and placeholder checks, RNG and signal-alignment utilities those
 constructors share. Import these through ``helpers`` where a name is already
 re-exported there; new consumers import this module directly.
@@ -20,6 +20,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._utils._display_errors import lookup_message
 from ._facet_writes import _active_facet_fire, _facet_home_label
+from ._types import Edit, HelperPortability, Signal
 from .errors import AmbiguousAxisError, HookValueError, _refuse_non_executable
 from .hooks import HookContext, _resolve_facet_specs
 from .stochastic import (
@@ -28,10 +29,9 @@ from .stochastic import (
     _record_sampling,
     _resolve_over_axes,
 )
-from .types import Edit, HelperPortability, Signal
 
 if TYPE_CHECKING:
-    from .population import Population
+    from ._population import Population
 
 
 def _mean_ablate_axes(dim: Any) -> Literal["all"] | tuple[int, ...] | None:

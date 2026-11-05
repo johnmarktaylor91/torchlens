@@ -33,7 +33,7 @@ def value_text(value: Any, depth: int = 0) -> str:
 def _value_text(value: Any, depth: int) -> str:
     """Format scalars and a bounded prefix of ordinary containers."""
 
-    if type(value).__module__ == "torchlens.intervention.types":
+    if type(value).__module__ == "torchlens.intervention._types":
         kind = type(value).__name__
         if kind in {"LiteralTensor", "LiteralValue"}:
             return value_text(value.value, depth)

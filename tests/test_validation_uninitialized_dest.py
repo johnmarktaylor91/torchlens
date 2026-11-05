@@ -34,14 +34,14 @@ import torch.nn as nn
 
 from torchlens._capture.run_entry import _run_model_and_save_specified_outs
 from torchlens._user_funcs import _validate_forward_pass_torch
+from torchlens.validation._core import validate_saved_outs
 from torchlens.validation._destination_coverage import same_saved_values
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import (
+from torchlens.validation._diagnostics import (
     CHECK_PERTURBATION,
     CHECK_REPLAY,
     get_validation_failure,
 )
-from torchlens.validation.exemptions import (
+from torchlens.validation._exemptions import (
     _uninitialized_value_origin,
 )
 
@@ -295,7 +295,7 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
         for layer in trace._layer_list:
             op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if op.func_name in ("index_copy_", "indexcopy_") and str(
-                op.parent_arg_positions["args"].get(0, "")
+                op.call.parent_arg_positions["args"].get(0, "")
             ).startswith("indexcopy"):
                 second = op
         assert second is not None, "expected a chained index_copy_ op"

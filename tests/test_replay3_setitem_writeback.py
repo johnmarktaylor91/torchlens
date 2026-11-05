@@ -72,7 +72,7 @@ def _setitem_ops(trace: Any) -> list[Any]:
 def test_consumers_after_the_write_back_bind_to_it() -> None:
     trace = tl.trace(_ScaleKeypoints(), [torch.rand(1, 17, 3), torch.tensor(0.5)])
     first, second = _setitem_ops(trace)
-    assert trace[second.parent_arg_positions["args"][0]].label == first.label
+    assert trace[second.call.parent_arg_positions["args"][0]].label == first.label
     (add,) = [op for op in trace._layer_list if op.func_name == "__add__"]
     assert [trace[parent].label for parent in add.parents] == [second.label]
 

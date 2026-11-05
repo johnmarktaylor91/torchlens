@@ -37,7 +37,7 @@ from torchlens._visualization._render_leaf import (
 )
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 _POS = torch.ones(2, 3)
 _NEG = -torch.ones(2, 3)
@@ -271,17 +271,17 @@ def test_early_return_false_input_fires_fallthrough_arm() -> None:
         assert len(neg_ops) == 1
         neg = neg_ops[0]
         assert conditional.fired_arm.execution_ops == [neg.layer_label]
-        assert [kind for _, kind in neg.conditional_branch_stack] == ["fallthrough"]
-        assert neg.conditional_branch_depth == 1
-        body_refs = [ref for ref in neg.in_conditionals if ref.role == "body"]
+        assert [kind for _, kind in neg.control_flow.branch_stack] == ["fallthrough"]
+        assert neg.control_flow.branch_depth == 1
+        body_refs = [ref for ref in neg.control_flow.in_conditionals if ref.role == "body"]
         assert [ref.arm_kind for ref in body_refs] == ["fallthrough"]
         for op in trace._layer_list:
-            assert not op.conditional_then_children
-            assert not op.conditional_else_children
+            assert not op.control_flow.then_children
+            assert not op.control_flow.else_children
         entries = [
             children
             for op in trace._layer_list
-            for children in op.conditional_arm_children.values()
+            for children in op.control_flow.arm_children.values()
             if "fallthrough" in children
         ]
         assert entries, "the fall-through arm's entry edge is recorded"
@@ -296,8 +296,8 @@ def test_plain_if_false_test_is_skipped_with_no_fallthrough_arm() -> None:
             conditional = _only_conditional(trace)
             assert _arm_kinds(conditional) == ["then"]
             for op in _ops_named(trace, "sub"):
-                assert op.conditional_branch_depth == 0
-                assert not op.conditional_branch_stack
+                assert op.control_flow.branch_depth == 0
+                assert not op.control_flow.branch_stack
         finally:
             trace.cleanup()
     trace = tl.trace(PlainIfNoElse(), (_NEG,))
@@ -382,7 +382,7 @@ def test_return_on_one_nested_path_is_not_proven() -> None:
         try:
             assert "fallthrough" not in _all_kinds(trace)
             for op in _ops_named(trace, "neg"):
-                assert not op.conditional_branch_stack
+                assert not op.control_flow.branch_stack
         finally:
             trace.cleanup()
 
@@ -548,7 +548,7 @@ def test_while_test_records_no_conditional() -> None:
     trace = _validated_trace(WhileModel(), _POS)
     try:
         assert len(trace.graph.conditionals) == 0
-        kinds = {op.conditional_context_kind for op in trace._layer_list}
+        kinds = {op.control_flow.context_kind for op in trace._layer_list}
         assert "while" in kinds
     finally:
         trace.cleanup()

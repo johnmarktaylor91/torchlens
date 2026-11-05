@@ -328,7 +328,7 @@ def test_tl_authored_root_without_bound_method_root_refuses(tmp_path) -> None:
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
-    log.ops[0].tl_authored_root = True
+    log.ops[0]._call_tl_authored_root = True
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "marker_bad")
     assert excinfo.value.fields["code"] == "artifact_tl_authored_root_invalid"

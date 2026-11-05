@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from torchlens.intervention import population
-from torchlens.intervention.population import OneDatum, PerRowDatums
+from torchlens.intervention._population import OneDatum, PerRowDatums
 
 
 def test_origin_is_required_and_nonempty() -> None:

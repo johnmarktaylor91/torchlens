@@ -15,8 +15,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.episode import BundleExperimentError
-from torchlens.intervention.audit import event_audit_rows
+from torchlens.errors._episode import BundleExperimentError
+from torchlens.intervention._audit import event_audit_rows
 
 
 class _Tiny(nn.Module):

@@ -148,7 +148,7 @@ def test_get_multipass_attr_propagates_unrelated_value_error():
 
 
 def test_h1_module_key_for_forward_op_no_multipass_leak():
-    from torchlens._visualization._render_leaf import (
+    from torchlens._visualization._forward_op_module import (
         _forward_op_is_module_output,
         _module_key_for_forward_op,
     )

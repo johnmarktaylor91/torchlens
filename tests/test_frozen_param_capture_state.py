@@ -88,7 +88,9 @@ def _ops_reading(trace: tl.Trace, address: str) -> list[Any]:
 def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     """Only an analysis that backpropagates through its own capture flips frozen flags."""
 
-    from torchlens.backends.torch.frozen_parameter_gradients import frozen_parameter_gradients
+    from torchlens.backends.torch.frozen_parameter_gradients import (
+        frozen_parameter_gradients,
+    )
     from torchlens.mechinterp._eap import _capture
 
     model, x = _model_and_input()
@@ -96,7 +98,7 @@ def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     before = _param_state(model)
 
     plain = tl.trace(model, x)
-    assert _ops_reading(plain, "head.weight")[0].grad_fn_class_name is None
+    assert _ops_reading(plain, "head.weight")[0].autograd.grad_fn_class_name is None
 
     def scoped_capture() -> None:
         with frozen_parameter_gradients():
@@ -105,12 +107,12 @@ def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     captured: list[tl.Trace] = []
     assert all(_flags_inside_forward(model, scoped_capture).values())
     scoped = captured[0]
-    assert _ops_reading(scoped, "frozen.weight")[0].grad_fn_class_name is not None
+    assert _ops_reading(scoped, "frozen.weight")[0].autograd.grad_fn_class_name is not None
     assert all(scoped.params[name].is_trainable is False for name in (*FROZEN, *TRAINABLE))
     _assert_same_state(before, _param_state(model))
 
     analysis = _capture(model, x)
-    assert _ops_reading(analysis, "head.weight")[0].grad_fn_class_name is not None
+    assert _ops_reading(analysis, "head.weight")[0].autograd.grad_fn_class_name is not None
     _assert_same_state(before, _param_state(model))
 
     plain_flags = _flags_inside_forward(model, lambda: tl.trace(model, x))

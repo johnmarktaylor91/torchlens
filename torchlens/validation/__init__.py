@@ -23,14 +23,14 @@ from .._user_public_impls import (
 )
 from .._utils.facade import resolve_facade_attr
 from ._descriptor_versions import validate_descriptor_versions, validate_format3
-from .diagnostics import (
+from ._diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,
     last_validation_failure,
     last_validation_peak_memory,
 )
-from .invariants import check_metadata_invariants
-from .status import ValidationReplayState as ValidationReplayState
+from ._invariants import check_metadata_invariants
+from ._status import ValidationReplayState as ValidationReplayState
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 

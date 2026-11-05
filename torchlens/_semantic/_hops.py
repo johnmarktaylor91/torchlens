@@ -30,6 +30,8 @@ from typing import Any, Literal
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 __all__ = [
     "BRANCH_GRAMMAR",
     "VALUE_GRAMMAR",
@@ -155,8 +157,8 @@ def _dropout_is_inert(op: Any) -> bool:
     not propose the hop.
     """
 
-    pos = list(getattr(op, "non_tensor_pos_args", ()) or ())
-    kwargs = dict(getattr(op, "non_tensor_kwargs", {}) or {})
+    pos = list(record_member(op, "non_tensor_pos_args", ()) or ())
+    kwargs = dict(record_member(op, "non_tensor_kwargs", {}) or {})
     p: Any = kwargs.get("p", pos[0] if len(pos) >= 1 else None)
     training: Any = kwargs.get("training", pos[1] if len(pos) >= 2 else None)
     if isinstance(p, (int, float)) and float(p) == 0.0:
@@ -172,7 +174,7 @@ def _parse_index_args(op: Any) -> tuple[Any, ...] | None:
     as a position mapping.
     """
 
-    pos = list(getattr(op, "non_tensor_pos_args", ()) or ())
+    pos = list(record_member(op, "non_tensor_pos_args", ()) or ())
     if len(pos) != 1:
         return None
     index = pos[0]
@@ -202,7 +204,7 @@ def _propose(op: Any, grammar: GrammarName) -> HopRecord | None:
         return None
     kind, detail = classified
     label = str(getattr(op, "label", "<unknown>"))
-    return HopRecord(label, getattr(op, "site_key", None), func_name, kind, detail)
+    return HopRecord(label, record_member(op, "site_key", None), func_name, kind, detail)
 
 
 HopKind = Literal["identity", "cast", "index", "dropout"]
@@ -260,7 +262,7 @@ def _payload(op: Any) -> torch.Tensor | None:
     """Return the op's saved output tensor, or ``None`` when unreadable."""
 
     readable = bool(
-        getattr(op, "has_saved_activation", False) or getattr(op, "out_ref", None) is not None
+        getattr(op, "has_saved_activation", False) or record_member(op, "out_ref", None) is not None
     )
     if not readable:
         return None

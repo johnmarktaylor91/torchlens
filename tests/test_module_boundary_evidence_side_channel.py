@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils._dispatch_modes import TensorSubclassUnsupportedError
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 from torchlens.options import CaptureOptions
 
@@ -109,7 +110,7 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     # Replaced-parent provenance (fc1's real output) survived the rejection.
     assert tuple(boundary.parents)
     # The replacement is never laundered into an untraceable internal source.
-    assert not any(bool(getattr(op, "is_internal_source", False)) for op in log._layer_list)
+    assert not any(bool(record_member(op, "is_internal_source", False)) for op in log._layer_list)
 
 
 @pytest.mark.smoke

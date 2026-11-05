@@ -20,8 +20,10 @@ from .._ir.selector_eval import (
     walk_selector,
 )
 from .._trace_core.label_cells import shared_site_index
+from .._utils._record_group_table import record_member
 from ..intervention.hooks import _resolve_facet_specs
 from ._display import site_table_card, site_table_repr
+from ._resolver_messages import _multi_match_message
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -240,7 +242,7 @@ class _SiteTable:
                 "func_name": getattr(site, "func_name", getattr(site, "name", None)),
                 "module": getattr(site, "module", None),
                 "modules": getattr(site, "modules", ()),
-                "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
+                "output_of_module_calls": record_member(site, "output_of_module_calls", ()),
             }
             for site, signal in zip(
                 map(_site_record, self._sites), self._site_signals(), strict=True
@@ -291,7 +293,7 @@ def _resolve_sites(
     refuse_excess_fanout(selector, matched, max_fanout)
     if len(matched) > 1:
         warnings.warn(
-            _multi_match_message(selector, matched),
+            _multi_match_message(selector, [_site_record(site) for site in matched]),
             MultiMatchWarning,
             stacklevel=2,
         )
@@ -433,46 +435,6 @@ def _indexed_label_match(
         cached = (log, sites, len(sites), index)
         indexes[id(log)] = cached
     return cast("tuple[Site, ...]", cached[3].get(str(selector.selector_value), ()))
-
-
-def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
-    """Return the multi-match warning text for a resolved site set.
-
-    A set holding a synthetic model-output alias (``output_N``) together with
-    the op it aliases does not fan out: a value edit applied at both sites
-    compounds on the one returned value, so the warning says so.
-
-    Parameters
-    ----------
-    query:
-        Selector input as the caller spelled it.
-    matched:
-        Resolved sites, in execution order.
-
-    Returns
-    -------
-    str
-        Warning message.
-    """
-
-    records = [_site_record(site) for site in matched]
-    matched_labels = {getattr(site, "layer_label", None) for site in records}
-    pairs = [
-        (str(getattr(site, "layer_label", None)), str(parent))
-        for site in records
-        if getattr(site, "is_output", False)
-        for parent in (getattr(site, "parents", ()) or ())
-        if parent in matched_labels
-    ]
-    if not pairs:
-        return f"selector {query!r} matched {len(matched)} sites and will fan out."
-    named = ", ".join(f"{alias!r} aliases {producer!r}" for alias, producer in pairs)
-    return (
-        f"selector {query!r} matched {len(matched)} sites, including a model-output alias "
-        f"and the op it aliases ({named}); a value edit applied at both compounds on the "
-        "same returned value instead of reaching independent sites. Narrow the selector to "
-        "the producing op."
-    )
 
 
 def find_sites(

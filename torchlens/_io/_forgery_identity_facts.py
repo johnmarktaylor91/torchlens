@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 #: Stored attribute of each pass's peak-memory reason (the forward reason is a v11 group key;
 #: the backward reason keeps its stored name).
 _PEAK_REASON_ATTR = {
@@ -184,7 +186,7 @@ def _validate_tl_authored_root(trace: Trace) -> None:
 
     marked_labels: list[str] = []
     for op in _ops_of(trace):
-        value = getattr(op, "tl_authored_root", None)
+        value = record_member(op, "tl_authored_root", None)
         if value is None:
             continue
         label = str(getattr(op, "label", "<unknown>"))

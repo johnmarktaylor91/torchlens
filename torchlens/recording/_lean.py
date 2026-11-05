@@ -20,10 +20,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._errors import InvalidArgumentError
-from .exceptions import RecordingConfigError
+from ._exceptions import RecordingConfigError
 
 if TYPE_CHECKING:
-    from .options import _RecordingConfig
+    from ._options import _RecordingConfig
 
 
 def validate_lean_value(value: object) -> None:

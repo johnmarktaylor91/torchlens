@@ -112,11 +112,11 @@ def test_scripted_helper_is_one_boundary_op_and_validates() -> None:
     trace = _trace_with_disclosure(model, x)
 
     (op,) = _boundary_ops(trace)
-    assert op.is_transform is True
-    assert op.transform_kind == SCRIPT_FUNCTION_TRANSFORM_KIND
-    assert op.transform_config["function"] == scripted_gate.qualified_name
-    assert op.transform_config["source"].startswith(__file__)
-    assert op.transform_fn_qualname == "scripted_gate"
+    assert op.call.is_func_transform is True
+    assert op.call.func_transform_kind == SCRIPT_FUNCTION_TRANSFORM_KIND
+    assert op.call.func_transform_config["function"] == scripted_gate.qualified_name
+    assert op.call.func_transform_config["source"].startswith(__file__)
+    assert op.call.func_transform_fn_qualname == "scripted_gate"
     assert is_script_function_recorder(op.func)
     assert [record_type(trace[label]) for label in op.parents] == ["linear"]
     assert [record_type(trace[label]) for label in op.children] == ["relu"]

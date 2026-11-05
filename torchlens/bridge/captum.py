@@ -16,7 +16,8 @@ from .._entry_refusals import refuse_captum_method
 from .._errors import InvalidArgumentError
 from .._selection.selectors import site as site_selector
 from .._user_funcs import trace as _trace
-from ..intervention.spec import when as _when
+from .._utils._record_group_table import record_member
+from ..intervention._spec import when as _when
 
 # ``source_model`` stays importable from this module (audit notebook 16 calls
 # ``bridge.captum.source_model``).
@@ -213,7 +214,7 @@ def _positional_inputs(log: Any) -> tuple[tuple[torch.Tensor, ...], str | None]:
     for layer in log._layer_list:
         if not getattr(layer, "is_input", False):
             continue
-        role = str(getattr(layer, "io_role", "") or "")
+        role = str(record_member(layer, "io_role", "") or "")
         parts = role.split(".")
         out = getattr(layer, "out", None)
         if len(parts) != 2 or parts[0] != "input" or not isinstance(out, torch.Tensor):
@@ -299,7 +300,7 @@ def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
             if exc.fields.get("code") not in _PROBE_FALLBACK_CODES:
                 raise
     resolved = _pick_pass(resolve_one_site(trace, site), site, pass_index)
-    site_key = str(resolved.site_key)
+    site_key = str(record_member(resolved, "site_key"))
     return _SiteProbe(
         source_model(trace),
         site_key,
@@ -383,7 +384,7 @@ def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
             if (
                 isinstance(index, int)
                 and index < target
-                and getattr(op, "site_key", None) == site_key
+                and record_member(op, "site_key", None) == site_key
             ):
                 earlier += 1
     return earlier + 1

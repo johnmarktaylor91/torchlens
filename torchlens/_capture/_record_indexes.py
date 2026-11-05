@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from .._ir.predicate import _distinct_label_index_keys
 
 if TYPE_CHECKING:
-    from ..recording.types import ActivationRecord
+    from ..recording._types import ActivationRecord
 
 __all__ = ("_RecordIndexes",)
 

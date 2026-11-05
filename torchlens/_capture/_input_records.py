@@ -18,7 +18,7 @@ from .._runnable.seam import runnable_trace_state
 from ..backends.registry import (
     get_backend_spec,
 )
-from ..recording.exceptions import PredicateError
+from ..recording._exceptions import PredicateError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

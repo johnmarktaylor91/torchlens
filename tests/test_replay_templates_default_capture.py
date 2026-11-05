@@ -207,12 +207,12 @@ def test_saved_default_trace_persists_no_argument_templates(tmp_path) -> None:
     torch.manual_seed(0)
     model = _Mlp().eval()
     trace = tl.trace(model, torch.randn(2, 6))
-    assert any(op.args_template is not None for op in trace.ops)
+    assert any(op.call.args_template is not None for op in trace.ops)
     bundle = tmp_path / "default.tlspec"
     trace.save(str(bundle))
     loaded = tl.load(str(bundle))
-    assert all(op.args_template is None for op in loaded.ops)
-    assert all(op.kwargs_template is None for op in loaded.ops)
+    assert all(op.call.args_template is None for op in loaded.ops)
+    assert all(op.call.kwargs_template is None for op in loaded.ops)
 
 
 def test_structure_only_capture_records_no_templates_and_refuses_replay() -> None:
@@ -224,7 +224,7 @@ def test_structure_only_capture_records_no_templates_and_refuses_replay() -> Non
     )
     assert trace.is_replayable is False
     assert trace.options.save_arg_templates is False
-    assert all(op.args_template is None for op in trace.ops)
+    assert all(op.call.args_template is None for op in trace.ops)
     # The structure-only capability door refuses first, before the template
     # precondition, and it already names the remedy without the flag.
     with pytest.raises(StructureOnlyCapabilityError) as info:

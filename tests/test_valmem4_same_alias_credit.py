@@ -33,7 +33,7 @@ from torchlens import _user_public_impls, _validation_argument_references as arg
 from torchlens._save_budget import SaveBudget, SaveBudgetExceededError
 from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
-from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
+from torchlens.validation._diagnostics import get_validation_diagnostics, get_validation_failure
 
 _TIGHT = 64  # bytes: below every tensor these unit tests charge
 _BELOW_WEIGHTS = 1 << 16  # 64 KiB: far above every real copy, far below a 256x256 weight
@@ -163,13 +163,13 @@ def test_a_user_trace_still_charges_parameter_copies() -> None:
 
 def _corrupt_relu_input(trace: Any) -> None:
     relu = next(op for op in trace._layer_list if op.func_name == "relu")
-    relu.saved_args[0].add_(1.0)
+    relu.call.saved_args[0].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any) -> None:
     linear = next(op for op in trace._layer_list if op.func_name == "linear")
     with torch.no_grad():
-        linear.saved_args[1].add_(1.0)
+        linear.call.saved_args[1].add_(1.0)
 
 
 def _validate_corrupted(corrupt: Any) -> tuple[bool, list[str]]:

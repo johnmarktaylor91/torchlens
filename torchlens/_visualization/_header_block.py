@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._capture_honesty import honesty_banner_lines
+from .._utils._record_group_table import record_member
 from .._vocab.node_spec import (
     EDITED_HEADER_OMITTED_BANNERS,
     LENS_BANNER_OMIT_KEY,
@@ -149,7 +150,7 @@ def _all_ops(trace: Trace) -> list[Any]:
     Buffer sources are left out: like parameters, they are model state, not ops.
     """
 
-    ops = [op for op in trace.ops.values() if not getattr(op, "is_buffer", False)]
+    ops = [op for op in trace.ops.values() if not record_member(op, "is_buffer", False)]
     seen = {id(op) for op in ops}
     for label in (*trace.input_layers, *trace.output_layers):
         op = trace.ops[label]
@@ -179,7 +180,7 @@ def _memory(ops: Iterable[Any]) -> int:
 
     total = 0
     for op in ops:
-        value = getattr(op, "activation_memory", None)
+        value = record_member(op, "activation_memory", None)
         if isinstance(value, int | float) and not isinstance(value, bool):
             total += int(value)
     return total

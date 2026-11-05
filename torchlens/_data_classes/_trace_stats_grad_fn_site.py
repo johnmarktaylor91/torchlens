@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._quantities import Duration
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -19,7 +20,7 @@ def _grad_fn_site_key(
     if not getattr(grad_fn_record, "has_op", False) or grad_fn_record.op_label is None:
         return None, False
     op = layer_lookup.get(grad_fn_record.op_label)
-    return getattr(op, "site_key", None), True
+    return record_member(op, "site_key", None), True
 
 
 def _accumulate_grad_fn_site_record(

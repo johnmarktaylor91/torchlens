@@ -19,10 +19,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes.trace import Conditional, ConditionalAccessor, ConditionalArm
+from torchlens._data_classes.trace import (
+    Conditional,
+    ConditionalAccessor,
+    ConditionalArm,
+)
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._runnable import PathFaithfulness
-from torchlens.errors.runnable import SparseCorePayloadError
+from torchlens.errors._runnable import SparseCorePayloadError
 from torchlens.options import CaptureOptions
 
 

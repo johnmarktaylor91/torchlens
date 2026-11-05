@@ -24,7 +24,7 @@ from ..backends.registry import (
 )
 from ..backends.torch.structure_only_belt import structure_only_forward_boundary
 from ..recording._halt import StopSignal
-from ..recording.types import CaptureSpec
+from ..recording._types import CaptureSpec
 from ._weightsfree_admission import weightsfree_forward_scope
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
 from .predicates import _is_halt_only_capture, _module_capture_spec

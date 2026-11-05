@@ -36,9 +36,9 @@ from ..._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
+from ...recording._exceptions import PredicateError
 from ...recording._storage_resolver import _resolve_storage
-from ...recording.exceptions import PredicateError
-from ...recording.types import (
+from ...recording._types import (
     CaptureSpec,
     ModuleStackFrame,
     RecordContext,

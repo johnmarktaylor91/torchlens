@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._utils._record_group_table import record_member
 from .source_graph import SourceGraph
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ def _project_endpoint_units(
     endpoint_projection: dict[str, str] = {}
     for node in source_graph.entries_to_plot.values():
         raw_label = _render_node_label(node, request.vis_mode)
-        if getattr(node, "is_buffer", False) and not _is_buffer_visible(node, show_buffers):
+        if record_member(node, "is_buffer", False) and not _is_buffer_visible(node, show_buffers):
             # A buffer hidden by the visibility policy gets NO endpoint
             # projection: projecting it kept its dataflow edges alive while
             # the node itself was never emitted, so the rank path shipped

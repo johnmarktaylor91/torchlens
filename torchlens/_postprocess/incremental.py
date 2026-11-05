@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Literal, cast
 
-from ..recording.exceptions import RecordingConfigError
-from ..recording.types import ActivationRecord, Recording
+from ..recording._exceptions import RecordingConfigError
+from ..recording._types import ActivationRecord, Recording
 
 EnrichmentStep = Literal["module_path_strings"]
 _ALL_FEASIBLE: tuple[EnrichmentStep, ...] = ("module_path_strings",)

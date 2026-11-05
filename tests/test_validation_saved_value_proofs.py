@@ -24,10 +24,10 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation._destination_coverage import _setitem_index_targets_are_unique
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
+from torchlens.validation._destination_coverage import _setitem_index_targets_are_unique
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
@@ -74,7 +74,7 @@ def _parent_from(trace: Any, op: Any, func_name: str) -> str:
 def _arg_parent(op: Any, key: Any) -> str:
     """Return the parent label registered at positional ``key``."""
 
-    return op.parent_arg_positions["args"][key]
+    return op.call.parent_arg_positions["args"][key]
 
 
 def _decision(trace: Any, op: Any, parent: str) -> tuple[str, str]:
@@ -369,7 +369,7 @@ _SDPA = {"scaled_dot_product_attention"}
 def _mask_parent(op: Any) -> str:
     """Return sdpa's attn_mask parent, positional or keyword."""
 
-    kwargs = op.parent_arg_positions.get("kwargs", {}) or {}
+    kwargs = op.call.parent_arg_positions.get("kwargs", {}) or {}
     return kwargs.get("attn_mask") or _arg_parent(op, 3)
 
 

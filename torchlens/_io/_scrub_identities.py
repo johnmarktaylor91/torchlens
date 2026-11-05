@@ -7,6 +7,8 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
+from .._utils._record_group_table import record_member, record_storage_attr
+
 # Canonical remapped param barcode token (``param_000001``), for R21-1's
 # trace-level equivalence-key ordering.
 _EQUIV_PARAM_TOKEN = re.compile(r"param_\d{6}")
@@ -133,26 +135,15 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         remapped_barcodes = [remap_barcode_text(barcode) for barcode in original_barcodes]
         remapped_group = "_".join(sorted(remapped_barcodes))
         record._param_barcodes = remapped_barcodes
-        equivalence_class = getattr(record, "equivalence_class", None)
+        equivalence_class = record_member(record, "equivalence_class", None)
+        attr = record_storage_attr(record, "equivalence_class")
         if isinstance(equivalence_class, str) and original_group:
-            record.equivalence_class = equivalence_class.replace(original_group, remapped_group)
+            setattr(record, attr, equivalence_class.replace(original_group, remapped_group))
         else:
-            record.equivalence_class = remap_barcode_text(equivalence_class)
-        if isinstance(equivalence_class, str) and isinstance(record.equivalence_class, str):
-            equivalence_class_map[equivalence_class] = record.equivalence_class
-        # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
-        # multi-pass accessor raises InvalidArgumentError (a ValueError, which
-        # getattr does not swallow), so probing before the gate broke every
-        # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
-        # `parent_param_ops` row; only Op-side records reach the getattr.
-        record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
-        parent_param_ops = (
-            getattr(record, "parent_param_ops", None) if "parent_param_ops" in record_spec else None
-        )
-        if isinstance(parent_param_ops, dict):
-            record.parent_param_ops = {
-                remap_barcode_text(key): value for key, value in parent_param_ops.items()
-            }
+            setattr(record, attr, remap_barcode_text(equivalence_class))
+        if isinstance(equivalence_class, str) and isinstance(getattr(record, attr), str):
+            equivalence_class_map[equivalence_class] = getattr(record, attr)
+        _remap_parent_param_ops(record, remap_barcode_text)
 
     equivalence_groups = state.get("_graph_op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
@@ -197,7 +188,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         for next_id in getattr(grad_fn, "next_grad_fn_ids", ()) or ():
             register_grad_id(next_id)
     for record in (*ops, *layers):
-        register_grad_id(getattr(record, "grad_fn_object_id", None))
+        register_grad_id(record_member(record, "grad_fn_object_id", None))
     # grind-r5 b3 R21-1: the BACKWARD-PASS rows carry the same autograd
     # identities in ``root_grad_fn_ids``; the a169e886 dense-ordinal fix never
     # reached them, so a raw grad_fn memory address persisted verbatim into
@@ -217,20 +208,15 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         return grad_id_map.get(value, value)
 
     if isinstance(grad_fn_logs, dict):
-        remapped_logs = type(grad_fn_logs)()
-        for grad_id, grad_fn in grad_fn_logs.items():
-            grad_fn.grad_fn_object_id = remap_grad_id(grad_fn.grad_fn_object_id)
-            grad_fn.creator_object_id = remap_grad_id(grad_fn.creator_object_id)
-            grad_fn.next_grad_fn_ids = [
-                remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
-            ]
-            remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["_grad_fn_logs"] = remapped_logs
+        state["_grad_fn_logs"] = _remap_grad_fn_logs(grad_fn_logs, remap_grad_id)
     state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
     roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
     state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
     for record in (*ops, *layers):
-        record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
+        grad_id_attr = record_storage_attr(record, "grad_fn_object_id")
+        setattr(
+            record, grad_id_attr, remap_grad_id(record_member(record, "grad_fn_object_id", None))
+        )
     for pass_record in pass_records:
         root_ids = getattr(pass_record, "root_grad_fn_ids", None)
         if root_ids:
@@ -238,6 +224,37 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
 
     for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
         state[object_id_key] = 1 if state.get(object_id_key) is not None else None
+
+
+def _remap_grad_fn_logs(grad_fn_logs: dict[Any, Any], remap_grad_id: Callable[[Any], Any]) -> Any:
+    """Return ``grad_fn_logs`` re-keyed by trace-local ordinal, each record's ids remapped."""
+
+    remapped_logs = type(grad_fn_logs)()
+    for grad_id, grad_fn in grad_fn_logs.items():
+        grad_fn.grad_fn_object_id = remap_grad_id(grad_fn.grad_fn_object_id)
+        grad_fn.creator_object_id = remap_grad_id(grad_fn.creator_object_id)
+        grad_fn.next_grad_fn_ids = [remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids]
+        remapped_logs[remap_grad_id(grad_id)] = grad_fn
+    return remapped_logs
+
+
+def _remap_parent_param_ops(record: Any, remap_barcode_text: Callable[[Any], Any]) -> None:
+    """Remap the parameter-barcode keys of one record's ``parent_param_ops``."""
+
+    # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
+    # multi-pass accessor raises InvalidArgumentError (a ValueError, which
+    # getattr does not swallow), so probing before the gate broke every
+    # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
+    # `parent_param_ops` row; only Op-side records reach the getattr.
+    record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
+    parent_param_ops = (
+        record_member(record, "parent_param_ops", None)
+        if "parent_param_ops" in record_spec
+        else None
+    )
+    if isinstance(parent_param_ops, dict):
+        remapped = {remap_barcode_text(key): value for key, value in parent_param_ops.items()}
+        setattr(record, record_storage_attr(record, "parent_param_ops"), remapped)
 
 
 def _canonicalize_param_links(

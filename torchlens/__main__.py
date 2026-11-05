@@ -1,4 +1,4 @@
-"""``python -m torchlens``: the tiered read-only CLI (torchlens.agent.cli).
+"""``python -m torchlens``: the tiered read-only CLI (torchlens.agent._cli).
 
 Tier-0 verbs (info/schema/guide/version/ls) stay torch-free: the package
 ``__init__`` defers its torch import, so ``python -m torchlens info run.tlspec``
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 
-from torchlens.agent.cli import main
+from torchlens.agent._cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

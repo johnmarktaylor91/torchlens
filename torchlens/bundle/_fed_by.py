@@ -67,7 +67,7 @@ from .._io.sidecar import (
     read_sidecar,
     register_sidecar_family,
 )
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

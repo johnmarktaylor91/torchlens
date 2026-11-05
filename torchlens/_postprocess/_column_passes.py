@@ -71,6 +71,6 @@ def _find_output_ancestors_facade(trace: Trace, labels: list[str]) -> None:
         node = trace[node_label]
         for child_node_label in node.children:
             child = trace[child_node_label]
-            if child.has_output_descendant:
-                node.has_output_descendant = True
+            if child.graph.has_output_descendant:
+                node._graph_has_output_descendant = True
                 node.output_descendants.update(child.output_descendants)

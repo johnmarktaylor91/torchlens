@@ -118,7 +118,7 @@ def causal_offset_from_weights(op: Op, dim: int) -> int | None:
 def softmax_dim(op: Op) -> int | None:
     """Return a softmax op's recorded dimension, or ``None``."""
 
-    dim = ReceptiveFieldRuleContext(op).arg("dim", op.func_config.get("dim", -1))
+    dim = ReceptiveFieldRuleContext(op).arg("dim", op.call.config.get("dim", -1))
     return dim if isinstance(dim, int) else None
 
 

@@ -28,6 +28,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._helpers import Edit
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
     LazyImportRef,
     _deserialize_value,
@@ -36,8 +38,6 @@ from torchlens.intervention._spec_values import (
     _SerializedState,
 )
 from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
-from torchlens.intervention.helpers import Edit
-from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:

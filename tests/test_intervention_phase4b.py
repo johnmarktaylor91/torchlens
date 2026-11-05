@@ -11,7 +11,7 @@ import torch
 import torchlens as tl
 from torchlens.backends.torch._ops_containers import _walk_output_tensors_with_paths
 from torchlens.backends.torch._ops_interventions import _replace_output_tensors_by_path
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -194,7 +194,7 @@ def test_intervention_ready_records_unique_container_paths_for_multi_output_op()
 
     split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
-    assert len({layer.func_call_id for layer in split_layers}) == 1
+    assert len({layer.call.call_id for layer in split_layers}) == 1
     assert len({layer.container_path for layer in split_layers}) == 2
     assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
     assert all(layer.container_spec is not None for layer in split_layers)
@@ -236,7 +236,9 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
     )
 
     templates = [
-        layer.args_template for layer in log._layer_list if layer.args_template is not None
+        layer.call.args_template
+        for layer in log._layer_list
+        if layer.call.args_template is not None
     ]
     flattened = [component for template in templates for component in template.args]
 
@@ -277,7 +279,7 @@ def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persist
     assert log.is_replayable is False
     compute_layers = [layer for layer in log._layer_list if layer.func is not None]
     assert compute_layers
-    assert all(layer.args_template is not None for layer in compute_layers)
+    assert all(layer.call.args_template is not None for layer in compute_layers)
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:

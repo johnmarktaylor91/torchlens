@@ -490,7 +490,7 @@ def test_output_role_spelling_names_the_projective_target() -> None:
     try:
         source = next(item for item in trace._layer_list if item.is_input)
         output = trace.output_ops[0]
-        role = str(output.io_role or "")
+        role = str(output.graph.io_role or "")
         assert role and role != output.label
         by_op = source.projective_field.at((4, 4), target=output)
         by_role = source.projective_field.at((4, 4), target=role)

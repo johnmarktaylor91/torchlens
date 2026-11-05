@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.errors import BufferThreadGapWarning
 
 
@@ -50,7 +51,7 @@ def _written_buffer_op(trace: tl.Trace):
     return next(
         op
         for op in trace._layer_list
-        if getattr(op, "is_buffer", False) and getattr(op, "parents", ())
+        if record_member(op, "is_buffer", False) and getattr(op, "parents", ())
     )
 
 
@@ -130,7 +131,7 @@ def test_eval_mode_norm_journals_no_buffer_write() -> None:
     model = _EvalNorm().eval()
     trace = tl.trace(model, torch.randn(2, 2, 4, 4))
     assert not [op.label for op in trace._layer_list if getattr(op, "buffer_write_kind", None)]
-    assert all(not op.parents for op in trace._layer_list if getattr(op, "is_buffer", False))
+    assert all(not op.parents for op in trace._layer_list if record_member(op, "is_buffer", False))
 
 
 def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
