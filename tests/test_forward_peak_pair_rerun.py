@@ -93,3 +93,28 @@ def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> 
     assert int(trace._cost_forward_peak_memory) == 200
     assert trace._cost_forward_peak_memory_reason is None
     assert trace._provenance_forward_memory_backend == "cuda"
+
+
+def test_bracket_never_writes_onto_the_forward_exception() -> None:
+    """The bracket's cleanup leaves the user's in-flight exception untouched.
+
+    ``contextlib.contextmanager`` re-assigns ``__traceback__`` on the exception it
+    re-raises (Python 3.11+); an exception whose ``__setattr__`` refuses writes was
+    then replaced by that ``AttributeError``. The bracket still records its fields.
+    """
+
+    class _LockedError(Exception):
+        """An exception that refuses every attribute write."""
+
+        __slots__ = ()
+
+        def __setattr__(self, name: str, value: object) -> None:
+            """Refuse the write."""
+
+            raise AttributeError("locked")
+
+    trace = SimpleNamespace(measure_host_peak_memory=False, measure_python_peak_memory=False)
+    with pytest.raises(_LockedError):
+        with capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cpu")):
+            raise _LockedError("boom")
+    assert trace._provenance_forward_memory_backend == "cpu"
