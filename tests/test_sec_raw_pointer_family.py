@@ -54,7 +54,6 @@ from torchlens._utils._raw_pointer_denial import (
     is_raw_pointer_parameter_name,
     raw_pointer_constructor_family,
 )
-from torchlens._utils._record_group_table import record_storage_attr
 from torchlens._utils._torch_symbols import (
     ALLOWED_EXACT_ROOTS,
     ENUMERATED_TORCH_NAMESPACES,
@@ -419,11 +418,10 @@ def _crafted_new_bundle(tmp_path: Path, kwargs: dict[str, Any]) -> tuple[Path, t
 
     trace, reference = _replay_capture()
     target = next(op for op in trace._layer_list if op.func_name == "relu")
-    target.func_name = "new"
-    func_id = FunctionRegistryKey("torch.Tensor", "new", "method")
-    setattr(target, record_storage_attr(target, "func_id"), func_id)
-    setattr(target, record_storage_attr(target, "saved_kwargs"), dict(kwargs))
-    setattr(target, record_storage_attr(target, "non_tensor_kwargs"), dict(kwargs))
+    target._internal_set("func_name", "new")
+    target._internal_set("func_id", FunctionRegistryKey("torch.Tensor", "new", "method"))
+    target._internal_set("saved_kwargs", dict(kwargs))
+    target._internal_set("non_tensor_kwargs", dict(kwargs))
     path = tmp_path / "crafted.tlz"
     trace.save(path, level="executable_with_callables")
     return path, reference
