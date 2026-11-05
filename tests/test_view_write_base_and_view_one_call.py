@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._tensor_label import get_tensor_label
 from torchlens.backends.torch import _ops_capture_records
 
 
@@ -127,10 +128,41 @@ def test_base_read_after_the_call_still_binds_to_the_mutation() -> None:
     assert producers == {"__add__", "add_"}
 
 
-@pytest.mark.parametrize("case", ["base_first", "view_first", "base_and_two_views"])
-def test_a_wrong_binding_still_fails_validation(case: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Planted bug: no per-argument binding leaves one label on two values; validation fails."""
+def _plant_no_binding(tensors: list[torch.Tensor]) -> dict[int, str]:
+    """Planted bug: nothing moves, so the base and the view share one label."""
 
-    monkeypatch.setattr(_ops_capture_records, "_resolve_call_alias_labels", lambda tensors: {})
+    return {}
+
+
+def _plant_view_also_pre_write(tensors: list[torch.Tensor]) -> dict[int, str]:
+    """Planted bug: the written view also binds to the base's pre-write label."""
+
+    moved = dict(_REAL_RESOLVER[0](tensors))
+    for tensor in tensors:
+        if id(tensor) not in moved:
+            continue
+        for other in tensors:
+            if other is not tensor and get_tensor_label(other) == get_tensor_label(tensor):
+                moved[id(other)] = moved[id(tensor)]
+    return moved
+
+
+_REAL_RESOLVER: list[Any] = []
+
+
+@pytest.mark.parametrize("plant", [_plant_no_binding, _plant_view_also_pre_write])
+@pytest.mark.parametrize("case", ["base_first", "view_first", "base_and_two_views"])
+def test_a_wrong_binding_still_fails_validation(
+    case: str, plant: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A planted wrong binding fails validation.
+
+    A binding that SWAPS base and view is not caught by validation (each slot's
+    actual content reaches replay through its per-child version snapshot); the
+    exact binding is pinned by ``test_each_argument_binds_to_the_value_it_is``.
+    """
+
+    _REAL_RESOLVER[:] = [_ops_capture_records._resolve_call_alias_labels]
+    monkeypatch.setattr(_ops_capture_records, "_resolve_call_alias_labels", plant)
     torch.manual_seed(0)
     assert not _validate(_ONE_CALL_MODELS[case](), torch.randn(3, 8))
