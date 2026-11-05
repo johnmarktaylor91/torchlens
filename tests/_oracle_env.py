@@ -536,12 +536,17 @@ def expect_bundle_minor_version_mismatch() -> Iterator[None]:
     an error by default (deliberate: TorchLens warnings should be assertable),
     so a golden-loading test must narrowly expect/filter THIS exact advisory
     rather than the loader weakening or the global promotion rule loosening.
+    The advisory opens with ``Bundle`` on the 2.x manifest path and with
+    ``Artifact`` on the saved-format-3 path (``check_runtime_identity``'s
+    ``subject``); the filter matches the one advisory under either subject.
 
     On a runtime whose torch minor happens to match the golden's recording
     (e.g. a 2.13 CI row), the warning never fires and this filter is simply
     unused -- safe on every row, not just the mismatched ones. The warning's
     own firing behavior is pinned independently in
-    ``tests/test_tlspec_envelope_ceiling.py::test_manifest_policy_warns_not_raises_on_minor_mismatch``.
+    ``tests/test_tlspec_envelope_ceiling.py::test_manifest_policy_warns_not_raises_on_minor_mismatch``,
+    and this filter's reach under both subjects in
+    ``test_oracle_minor_mismatch_filter_matches_each_loader_and_nothing_else``.
     """
 
     import warnings
@@ -551,7 +556,7 @@ def expect_bundle_minor_version_mismatch() -> Iterator[None]:
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message=r"Bundle torch_version=.* differs from runtime torch_version=.* "
+            message=r"(?:Bundle|Artifact) torch_version=.* differs from runtime torch_version=.* "
             r"\(minor version mismatch\)\.",
             category=TorchLensWarning,
         )
