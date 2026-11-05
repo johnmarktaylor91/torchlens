@@ -73,7 +73,7 @@ torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
 torchlens/_data_classes/_nonfinite.py	885
 torchlens/_data_classes/_op_dedup.py::_dedup_cached_identity_out	66
-torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
+torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	103
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
