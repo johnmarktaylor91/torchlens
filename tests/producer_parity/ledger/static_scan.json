@@ -4457,6 +4457,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_quiet_property.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_utils/_sparse_invariant_guard.py",
   "has_default": true,
@@ -7304,6 +7312,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_session_cleanup.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/_sources_lazy.py",
@@ -7524,7 +7540,7 @@
   "field": "modules",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {

@@ -5791,8 +5791,8 @@
         "tests/test_trace_core_op_store.py"
       ],
       "torchlens/_utils/_display_card.py": [
+        "tests/test_decorated_helper_sources.py",
         "tests/test_display_helpers.py",
-        "tests/test_owned_record_displays.py",
         "tests/test_parameter_inplace_mutation.py",
         "tests/test_r28_capture_attribution.py",
         "tests/test_repr_fix_contracts.py",
@@ -6044,6 +6044,16 @@
         "tests/test_valmem3_saved_arg_offload.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py"
+      ],
+      "torchlens/_utils/_render_slots.py": [
+        "tests/test_interventions_view_changes.py",
+        "tests/test_render_bugs.py",
+        "tests/test_rolled_draw_sibling_counts.py",
+        "tests/test_semantic_io_a3.py",
+        "tests/test_summary_walk_columns.py",
+        "tests/test_surgery_visuals_marks.py",
+        "tests/test_surgery_visuals_realism.py",
+        "tests/test_themes_nonfinite.py"
       ],
       "torchlens/_utils/_runnable_alias_resolver.py": [
         "tests/test_intervention_phase10.py",
@@ -7681,13 +7691,9 @@
       ],
       "torchlens/_visualization/renderer_registry.py": [
         "tests/test_arch_spine_registries.py",
-        "tests/test_draw_headless.py",
         "tests/test_encoding_channels.py",
         "tests/test_encoding_size.py",
-        "tests/test_output_aesthetics.py",
-        "tests/test_themes_stage0.py",
-        "tests/visualization/test_sibling_order_clusters.py",
-        "tests/visualization/test_sibling_ordering.py"
+        "tests/test_themes_stage0.py"
       ],
       "torchlens/_visualization/renderers/__init__.py": [
         "tests/test_bundle_diff_renderer.py",
