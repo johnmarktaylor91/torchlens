@@ -21,6 +21,7 @@ below the depth ceiling.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from collections.abc import Callable
@@ -85,6 +86,18 @@ def _fd_size(handle: IO[Any]) -> int | None:
         return os.fstat(handle.fileno()).st_size
     except (OSError, ValueError, AttributeError):  # non-seekable / pipe / no fileno
         return None
+
+
+def _open_regular(path: Path) -> IO[bytes]:
+    """Open ``path`` for reading only if it is a regular file (never a FIFO or device).
+
+    A FIFO named like a JSON file would block ``open()`` forever and a character device
+    would stream without end; both refuse as ``OSError`` before anything is opened.
+    """
+
+    if path.exists() and not path.is_file():
+        raise OSError(f"{path} is not a regular file")
+    return path.open("rb")
 
 
 def _bounded_read_bytes(handle: IO[bytes], max_bytes: int) -> bytes:
@@ -264,13 +277,26 @@ def loads_bounded(
 
         raise _refuse(f"manifest JSON contains the non-finite constant {name}", text)
 
+    def _finite_float(token: str) -> float:
+        """Parse one JSON number, refusing an overflow to infinity (``1e999``)."""
+
+        value = float(token)
+        return value if math.isfinite(value) else _reject_constant(token)
+
     try:
         return json.loads(
-            text, parse_constant=_reject_constant, object_pairs_hook=object_pairs_hook
+            text,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            object_pairs_hook=object_pairs_hook,
         )
-    except RecursionError as exc:  # pragma: no cover - prescan normally fires first
+    except (RecursionError, ValueError) as exc:
+        if isinstance(exc, json.JSONDecodeError):
+            raise
+        # RecursionError (the prescan normally fires first) or the interpreter's
+        # integer-digit limit on a huge literal: both refuse through the typed channel.
         raise _refuse(
-            "manifest JSON nesting exceeded the interpreter recursion limit", text
+            f"manifest JSON could not be decoded ({type(exc).__name__}: {str(exc)[:80]})", text
         ) from exc
 
 
@@ -351,7 +377,7 @@ def read_bounded(
         handlers at each call site catch it unchanged.
     """
 
-    with path.open("rb") as handle:
+    with _open_regular(path) as handle:
         data = _bounded_read_bytes(handle, max_bytes)
     try:
         text = data.decode(encoding)
@@ -388,5 +414,5 @@ def read_bytes_bounded(path: Path, *, max_bytes: int = _MAX_JSON_BYTES) -> bytes
         When the payload exceeds ``max_bytes``.
     """
 
-    with path.open("rb") as handle:
+    with _open_regular(path) as handle:
         return _bounded_read_bytes(handle, max_bytes)

@@ -143,7 +143,7 @@ import torch
 
 # The structural stdlib/builtin rule lives in its own leaf module; the names stay
 # readable here for ``_safe_unpickle`` and the SSOT drift gate.
-from . import _raw_pointer_denial as _rawptr
+from . import _raw_pointer_denial as _rawptr, _unchecked_kernel_denial as _unchecked
 from ._stdlib_denial import (  # noqa: F401
     _ALLOWED_STDLIB_ROOTS,
     _STDLIB_AND_BUILTIN_TOP_LEVEL,
@@ -1318,14 +1318,16 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     if _is_denied_forward_dunder_name(_terminal_callable_name(real)):
         return False
     # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
-    # ``while_loop`` / ``handle_torch_function`` / ``_check_with`` / ``_disable_dynamo``)
-    # -- the arbitrary-callable-INVOKE class carrying no ``map`` / ``register`` name
-    # marker. Runs BEFORE the module gate so a callable-taking op in the allowlisted
-    # ``torch`` namespace cannot slip. Fails safe: no-signature C ops fall through.
+    # ``while_loop`` / ``handle_torch_function`` / ``_check_with`` / ``_disable_dynamo``),
+    # which carry no ``map`` / ``register`` name marker, BEFORE the module gate so one in
+    # the allowlisted ``torch`` namespace cannot slip; no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50: deny the RAW-POINTER family structurally (``_raw_pointer_denial``) BEFORE the
-    # module gate, whose bare ``torch`` / ``torch._C`` prefixes admit deeper submodules.
+    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally
+    # (``_raw_pointer_denial``, ``_unchecked``) BEFORE the module gate, whose bare
+    # ``torch`` / ``torch._C`` prefixes admit deeper submodules.
+    if _unchecked.is_unchecked_memory_kernel(real):
+        return False
     if _rawptr.is_raw_pointer_risk(real, _ALLOWED_FORWARD_OP_MODULES):
         return False
     module = str(getattr(real, "__module__", "") or "")
