@@ -113,7 +113,7 @@ def test_linecache_cell_records_the_if_and_does_not_warn(cell_names: list[str]) 
     branch_line = _CELL_SOURCE.splitlines().index("        if x.sum() < 0:     # branch") + 1
     assert records[0].source_file == name
     assert records[0].if_stmt_span[0] == branch_line
-    assert tl.validate_forward_pass(model, x) is True
+    assert tl.validation.validate_forward_pass(model, x) is True
 
 
 def test_exec_without_linecache_entry_still_warns(cell_names: list[str]) -> None:
