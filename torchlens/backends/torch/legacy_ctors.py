@@ -14,7 +14,8 @@ its identity, ``isinstance`` and ``x.type(torch.FloatTensor)`` are unchanged,
 and any alias bound before the first capture reaches the same patched class.
 The new ``__new__`` routes the call through ``torch_func_decorator``, so a
 constructor call during a capture is one logged op (func name = class name,
-``cuda_`` prefixed for ``torch.cuda`` classes) that owns its dispatches, and
+prefixed ``cuda_``, ``sparse_`` or ``cuda_sparse_`` for the ``torch.cuda``,
+``torch.sparse`` and ``torch.cuda.sparse`` classes) that owns its dispatches, and
 outside a capture the decorator's fast path runs the original C constructor.
 Installed with the other wrappers by ``wrap_torch``; ``unwrap_torch`` restores
 the original ``tp_new`` slot and class ``__dict__`` exactly.
@@ -74,11 +75,19 @@ _WARNED_FOREIGN_NEW: set[str] = set()
 
 
 def _legacy_func_name(namespace_name: str, class_name: str) -> str:
-    """Return the recorded op name for one roster row."""
+    """Return the recorded op name for one roster row.
 
-    if namespace_name == "torch.cuda":
-        return f"cuda_{class_name}"
-    return class_name
+    ``torch`` and ``torch.autograd`` rows record the bare class name. The
+    prefixed names keep a sparse constructor, whose indices and values are
+    tensor parents, apart from the dense one in name-keyed argument tables.
+    """
+
+    prefixes = {
+        "torch.cuda": "cuda_",
+        "torch.sparse": "sparse_",
+        "torch.cuda.sparse": "cuda_sparse_",
+    }
+    return prefixes.get(namespace_name, "") + class_name
 
 
 def _resolve_class(namespace_name: str, class_name: str) -> type | None:
