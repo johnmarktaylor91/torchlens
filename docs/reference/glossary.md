@@ -5035,7 +5035,7 @@ alphabetical order.
 | `Trace.__enter__` | Context-manager entry; returns the Trace itself so `with trace:` binds the same object |
 | `Trace.__exit__` | Context-manager exit; detaches the sticky hooks the last `do()` inside the scope staged |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
-| `Trace.append` | `trace.append(inputs, *, model=None)`: run the model on one more compatible batch and add its rows to this Trace in place, with the same checks as a rerun; returns `None`. `model` omitted reuses the live model this Trace holds weakly. A batch that changes shapes beyond the batch axis, an edit not marked `is_compatible_with_append`, or a streamed capture refuses typed (`AppendMismatchError`, `AppendStreamingUnsupportedError`) |
+| `Trace.append` | `trace.append(inputs, *, model=None)`: run the model on one more compatible batch and add its rows to this Trace in place, with the same checks as a rerun; returns `None`. `model` omitted reuses the live model this Trace holds weakly. A batch that changes shapes beyond the batch axis or an edit not marked `is_compatible_with_append` raises `AppendMismatchError`; a batch that would rewrite streamed activation blobs raises `AppendStreamingUnsupportedError` |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
 | `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |

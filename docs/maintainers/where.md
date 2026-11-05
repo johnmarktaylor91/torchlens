@@ -367,13 +367,13 @@ Core data structures for representing a logged forward pass. (105 modules, 40126
 | `_trace_intervention_records` | Intervention spec state and history records of a ''Trace'' (L1). | 275 |
 | `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 246 |
 | `_trace_missing_attrs` | The canonical refusal for an attribute a ''Trace'' does not have. | 155 |
-| `_trace_output` | The model-return doors of a Trace (''output'', ''transformed_output'') and ''append''. | 144 |
+| `_trace_output` | The model-return doors of a Trace (''trace.output'', ''trace.transformed_output''). | 89 |
 | `_trace_pickle_state` | Private initialization and verification-state blocks for Trace persistence. | 60 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 171 |
 | `_trace_profile` | Trace model-profile helpers. | 190 |
 | `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
 | `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
-| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 650 |
+| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays, and ''append''. | 705 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |

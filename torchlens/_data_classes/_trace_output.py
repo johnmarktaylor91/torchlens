@@ -1,13 +1,10 @@
-"""The model-return doors of a Trace (``output``, ``transformed_output``) and ``append``."""
+"""The model-return doors of a Trace (``trace.output``, ``trace.transformed_output``)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from torch import nn
-
 from .._output_slot import fork_output_refusal, read_output, read_transformed_output
-from . import _doors
 from ._moe_views import _TraceRouting
 
 
@@ -90,56 +87,3 @@ class TraceOutputMixin(_TraceRouting):
             del self.__dict__["transformed_output"]
         except KeyError:
             raise AttributeError("transformed_output") from None
-
-
-class TraceAppendMixin:
-    """Add a compatible batch to a live Trace in place (``trace.append``)."""
-
-    def append(self: Any, inputs: Any, *, model: nn.Module | None = None) -> None:
-        """Run ``inputs`` through the captured model and stack the batch onto this Trace.
-
-        The one in-place mutator of the run family. The new batch is captured
-        with this Trace's staged intervention spec, checked against the
-        captured graph, and stacked onto every saved tensor along batch
-        dimension 0. Op counts, pass indexes and labels are unchanged (the
-        graph must be identical); ``provenance.is_appended`` becomes ``True``,
-        ``last_run`` describes the append (``engine="append"``) and
-        ``state_history`` gains an ``"append"`` record. The stored input
-        transform applies as it does for ``run``.
-
-        Parameters
-        ----------
-        inputs:
-            Forward input tree for the new batch, in every form ``run`` takes.
-        model:
-            The captured model. When omitted, the live model this Trace holds
-            (weakly, as for ``run``) is reused.
-
-        Raises
-        ------
-        AppendMismatchError
-            When the new batch's graph, site labels or saved shapes do not
-            match this Trace.
-        AppendStreamingUnsupportedError
-            When this Trace is still streaming activations to disk.
-        RunCapabilityUnavailableError
-            For a loaded Trace when ``model`` is omitted (pass the model).
-        RecordBindingError
-            ``run_source_model_collected`` when ``model`` is omitted and the
-            captured model was garbage-collected.
-        KeywordConflictError
-            ``run_legacy_arguments_conflict`` when ``model`` is not an ``nn.Module``.
-
-        Examples
-        --------
-        >>> import torch
-        >>> import torchlens as tl
-        >>> model = torch.nn.Linear(3, 2)
-        >>> opts = tl.options.CaptureOptions(replayable=True)
-        >>> trace = tl.trace(model, torch.randn(2, 3), capture=opts)
-        >>> trace.append(torch.randn(1, 3), model=model)
-        >>> trace.provenance.is_appended
-        True
-        """
-
-        _doors.intervention()._trace_run.append(self, inputs, model=model)
