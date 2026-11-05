@@ -40,7 +40,11 @@ from ._trace_collapse import (
     collapse_plan as _collapse_plan,
     collapse_schedule as _collapse_schedule,
 )
-from ._trace_draw_arguments import _backward_render_arguments, _forward_render_arguments
+from ._trace_draw_arguments import (
+    _backward_render_arguments,
+    _combined_render_arguments,
+    _forward_render_arguments,
+)
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
 
@@ -239,24 +243,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         rendered: Any = _render_backward(trace, **_backward_render_arguments(locals()))
     elif graph == "combined":
         outpath = "combined_modelgraph" if path is None else path
-        rendered = render_combined_graph(
-            trace,
-            vis_outpath=outpath,
-            vis_graph_overrides=graph_overrides,
-            node_spec_fn=node_spec_fn,
-            backward_node_spec_fn=backward_node_spec_fn,
-            vis_edge_overrides=edge_overrides,
-            vis_save_only=not open_viewer,
-            vis_fileformat=file_format,
-            direction="leftright" if direction is None else direction,
-            vis_mode="rolled" if rolled else "unrolled",
-            intervening_cluster=intervening_cluster,
-            show_buffer_layers=show_buffers,
-            show_edge_shapes=show_edge_shapes,
-            show_arg_labels=show_arg_labels,
-            bwd=bwd,
-            show_legend=show_legend,
-        )
+        rendered = render_combined_graph(trace, **_combined_render_arguments(locals()))
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
         request_sink: dict[str, Any] = {}

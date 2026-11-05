@@ -49,9 +49,12 @@ class VisualizationOverrides:
         edge: Overrides for data-flow edges.
         grad_edge: Overrides for grad-flow edges.
         module: Overrides for module subgraph clusters (e.g. label style).
+        arg_labels: Whether edges into a multi-input op carry their argument-position
+            labels (``show_arg_labels``).
     """
 
     graph: dict[str, Any] | None = None
     edge: dict[str, Any] | None = None
     grad_edge: dict[str, Any] | None = None
     module: dict[str, Any] | None = None
+    arg_labels: bool = True

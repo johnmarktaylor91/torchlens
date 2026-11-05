@@ -8,6 +8,8 @@ ceiling raise); behavior unchanged.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .._errors import InvalidArgumentError
 from .._literals import (
     CollapseLiteral,
@@ -16,6 +18,7 @@ from .._literals import (
     VisNodeModeLiteral,
 )
 from .modes import MODE_REGISTRY
+from .renderer_registry import renderer_info, renderer_names
 from .request import ShowContainersLiteral
 
 
@@ -156,3 +159,28 @@ def _show_containers_refusal(show_containers: object) -> tuple[str, str]:
         f"show_containers must be False or one of {modes}; received {show_containers!r}",
         f"pass show_containers=False or one of {modes}",
     )
+
+
+def _validate_draw_renderer(vis_renderer: str, encoding: Any) -> None:
+    """Refuse an unregistered renderer, or encoding channels it cannot draw.
+
+    Raises
+    ------
+    InvalidArgumentError
+        If ``vis_renderer`` is not a registered renderer name.
+    """
+
+    if vis_renderer not in renderer_names():
+        raise InvalidArgumentError(
+            f"vis_renderer must be one of {sorted(renderer_names())}; received "
+            f"{vis_renderer!r}. Out-of-tree renderers register through "
+            "torchlens._visualization.renderer_registry.register_renderer.",
+            code="visualization_renderer_invalid",
+            remedy="pass a registered renderer name",
+            argument="vis_renderer",
+        )
+    renderer_capability_rows = renderer_info(vis_renderer).capabilities
+    if encoding is not None and not bool(renderer_capability_rows.get("encoding_channels", False)):
+        from ._encoding import raise_encoding_renderer_refusal
+
+        raise_encoding_renderer_refusal(vis_renderer, encoding.active_channels())

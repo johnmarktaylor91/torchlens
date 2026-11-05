@@ -891,7 +891,6 @@ def _add_edges_for_node(
     rolled_maps: "_RolledEdgeMaps | None" = None,
     deduped_edge_registry: dict[tuple[Any, ...], dict[str, Any]] | None = None,
     label_color: str | None = None,
-    show_arg_labels: bool = True,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -1240,12 +1239,11 @@ def _add_edges_for_node(
         # to a HIDDEN member the ellipsis merely summarizes, and the distinct
         # labels would defeat the visual dedupe (39 parallel ellipsis->cat
         # edges instead of one summary edge with an xN disclosure).
-        edge_touches_ellipsis = tail_name.endswith("___runfoldellipsis") or head_name.endswith(
-            "___runfoldellipsis"
-        )
+        suffix = "___runfoldellipsis"
+        edge_touches_ellipsis = tail_name.endswith(suffix) or head_name.endswith(suffix)
         arg_label_channel: str | None = None
         if (
-            show_arg_labels
+            (overrides is None or overrides.arg_labels)
             and not edge_is_self_loop
             and not child_is_collapsed_module
             and metadata_child is not None
