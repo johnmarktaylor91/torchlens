@@ -405,3 +405,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 967139bab3acb82896ae951e5dd851ba2495c713 (dirty)
 recorded: 2026-11-05T12:35:45.329835+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: backward drawing fixes (wip/draw-backward-fixes-1105): backward key cells fitted with margin, no grad N/A rows; backward and combined DOT change
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c881c7334e50e04e590f4c5a5d7fcad8e013eb74 (dirty)
+recorded: 2026-11-05T19:26:25.408350+00:00

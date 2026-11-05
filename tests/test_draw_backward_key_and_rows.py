@@ -104,7 +104,7 @@ def test_module_focus_refuses_on_gradient_graphs(tmp_path: Path, graph: str) -> 
     try:
         with pytest.raises(InvalidArgumentError) as excinfo:
             trace.draw(path=str(tmp_path / "g"), graph=graph, module="fc1")
-        assert excinfo.value.code == "visualization_mode_invalid"
+        assert excinfo.value.fields["code"] == "visualization_mode_invalid"
         assert "module=" in str(excinfo.value)
         with pytest.raises(InvalidArgumentError):
             trace.modules["fc1"].draw(path=str(tmp_path / "m"), graph=graph)
