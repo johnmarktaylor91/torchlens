@@ -36,7 +36,7 @@ from torchlens._capture.outcome import (
     require_capture_capability,
 )
 from torchlens._runnable import PathFaithfulness, StateSource
-from torchlens.errors import RunCapabilityUnavailableError, TorchLensWarning
+from torchlens.errors import ReattachError, RunCapabilityUnavailableError, TorchLensWarning
 from torchlens.options import CaptureOptions
 
 pytest.importorskip("transformers")
@@ -46,7 +46,10 @@ from tests.real_model.r0.families import (  # noqa: E402
     build_gpt2,
     build_gpt2_default_cache,
 )
-from tests.support.hf_capabilities import gpt2_attention_keeps_causal_mask_buffer  # noqa: E402
+from tests.support.hf_capabilities import (  # noqa: E402
+    attention_masks_avoid_vmap,
+    gpt2_attention_keeps_causal_mask_buffer,
+)
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
 
@@ -83,6 +86,19 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
     else:
         runnable_trace.save(path, level="runnable")
     loaded = tl.load(path)
+    if not attention_masks_avoid_vmap():
+        # 4.x builds GPT-2's attention mask through ``torch.vmap``: the recorded
+        # callable is a vmapped closure with no import path, so once the random
+        # state binds the run refuses typed, naming that callable.
+        with pytest.raises(ReattachError) as excinfo:
+            loaded.run_transaction(inputs=input_ids, seed=0)
+        assert excinfo.value.fields["code"] == "private_api_unavailable"
+        recorded = [
+            dict(diagnostic.details).get("recorded_key", "")
+            for diagnostic in excinfo.value.fields["diagnostics"]
+        ]
+        assert any("vmap" in key for key in recorded)
+        return
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
         result = loaded.run_transaction(inputs=input_ids, seed=0)
     assert result.report.state_source is StateSource.RANDOM_INITIALIZATION

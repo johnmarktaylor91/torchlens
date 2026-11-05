@@ -163,3 +163,23 @@ def gpt2_attention_keeps_causal_mask_buffer() -> bool:
         config = GPT2Config(n_layer=1, n_head=1, n_embd=4, vocab_size=8, n_positions=4)
         attention = GPT2Attention(config)
     return "bias" in attention._non_persistent_buffers_set
+
+
+@functools.cache
+def attention_masks_avoid_vmap() -> bool:
+    """Return whether transformers builds sdpa/eager attention masks without ``torch.vmap``.
+
+    The 5.x ``sdpa_mask`` takes ``use_vmap`` and builds masks from index
+    tensors by default. The 4.x builders always expand the mask function
+    through ``torch.vmap``, so a traced causal LM records an op whose callable
+    is a vmapped closure with no import path. Without ``masking_utils`` there
+    is no vmap construction at all.
+    """
+
+    import inspect
+
+    try:
+        from transformers.masking_utils import sdpa_mask
+    except ImportError:
+        return True
+    return "use_vmap" in inspect.signature(sdpa_mask).parameters
