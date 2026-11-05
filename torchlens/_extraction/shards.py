@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+from .._utils._weights_only_policy import weights_only_load_is_safe
 from .ragged import RaggedBatch
 
 __tl_layer__ = "L5"
@@ -72,7 +72,7 @@ def validate_shard_format(shard_format: Any) -> str:
             remedy="pass 'safetensors' (default) or 'pt'",
             value=repr(shard_format),
         )
-    if shard_format == "pt" and not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+    if shard_format == "pt" and not weights_only_load_is_safe():
         raise InvalidArgumentError(
             "shard_format='pt' needs torch 2.6 or newer: this torch's weights_only loader is "
             "not safe against crafted files (CVE-2025-32434), so .pt shards are never read.",
@@ -231,7 +231,7 @@ def _read_pt_shard(path: Path, keys: list[str] | None) -> dict[str, torch.Tensor
     # torch<2.3's mmap path requires a literal str filename (``ValueError: f
     # must be a string filename``); a plain str is accepted on every
     # supported torch version, so this is not a version branch.
-    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+    if not weights_only_load_is_safe():
         # CVE-2025-32434: ``weights_only=True`` is bypassable on torch <= 2.5.1, and a shard
         # is artifact bytes, so on such a torch a ``.pt`` shard is never unpickled.
         raise InvalidArgumentError(

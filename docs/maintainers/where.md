@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1719 modules, 697719 lines, 0 modules without a docstring.
+85 packages, 1720 modules, 697742 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2142 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 69 | 23168 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 70 | 23191 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6475 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 103 | 48598 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
@@ -935,7 +935,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (69 modules, 23168 lines)
+Shared helpers used by two or more TorchLens packages. (70 modules, 23191 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -994,6 +994,7 @@ Shared helpers used by two or more TorchLens packages. (69 modules, 23168 lines)
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_unchecked_kernel_denial` | Structural denial of torch kernels that skip their own memory bounds checks. | 120 |
 | `_uninit_alloc` | Uninitialized-memory value-source family ( hon_2): ONE closed table. | 226 |
+| `_weights_only_policy` | Whether this torch's weights-only ''torch.load'' is safe on untrusted bytes. | 23 |
 | `alias_footprint` | THE one absolute-byte three-valued alias/overlap engine. | 293 |
 | `arg_handling` | Argument copying, normalization, and input validation for model forward calls. | 1009 |
 | `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 160 |
