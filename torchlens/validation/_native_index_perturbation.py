@@ -40,6 +40,9 @@ _CHECKED_NAMESPACES = frozenset({"aten", "prims"})
 
 _DEFAULT_STRATEGY = "default"
 _FIRST_RETRY_STRATEGY = "step_up"
+#: Replay strategies that take a proven-safe value, mapped to the builder's
+#: ``alternate`` flag (the first retry rung takes the alternate move).
+_ALTERNATE_BY_STRATEGY = {_DEFAULT_STRATEGY: False, _FIRST_RETRY_STRATEGY: True}
 """The first retry rung (``_shift_probe.VALUE_STEP_STRATEGIES[0]``): it gets the alternate
 in-domain value; every later rung gets none, which ends the retry ladder."""
 
@@ -240,13 +243,10 @@ def native_index_perturbation(
     builder = _NATIVE_INDEX_SLOTS.get(name, {}).get(key) if arg_type == "args" else None
     if builder == _VALUE:
         return None
-    if builder is None or isinstance(builder, str) or parent_values.is_sparse:
+    alternate = _ALTERNATE_BY_STRATEGY.get(perturb_strategy)
+    if builder is None or isinstance(builder, str) or parent_values.is_sparse or alternate is None:
         return NativeIndexPerturbation(None)
-    if perturb_strategy == _DEFAULT_STRATEGY:
-        return NativeIndexPerturbation(builder(parent_values, False))
-    if perturb_strategy == _FIRST_RETRY_STRATEGY:
-        return NativeIndexPerturbation(builder(parent_values, True))
-    return NativeIndexPerturbation(None)
+    return NativeIndexPerturbation(builder(parent_values, alternate))
 
 
 def _is_integer_tensor(values: torch.Tensor) -> bool:

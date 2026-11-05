@@ -234,6 +234,19 @@ def _straddle_substitutes(parent: Any, other: Any) -> tuple[Any, ...]:
     return (base, base - one, base + one)
 
 
+def _fold_in_keys(value: Any, array: Any) -> Any:
+    """Return ``value``'s typed PRNG key(s) with ``1`` folded into each key."""
+
+    import jax
+    import jax.numpy as jnp
+
+    if not array.shape:
+        return jax.random.fold_in(value, 1)
+    flat = jnp.reshape(array, (-1,))
+    folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
+    return jnp.reshape(folded, array.shape)
+
+
 def _perturb_candidates(value: Any) -> tuple[Any, ...]:
     """Return deterministic perturbation candidates for a JAX value.
 
@@ -248,16 +261,11 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         Perturbed values with the same shape and dtype family.
     """
 
-    import jax
     import jax.numpy as jnp
 
     array = jnp.asarray(value)
     if str(array.dtype).startswith("key<"):
-        if not array.shape:
-            return (jax.random.fold_in(value, 1),)
-        flat = jnp.reshape(array, (-1,))
-        folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
-        return (jnp.reshape(folded, array.shape),)
+        return (_fold_in_keys(value, array),)
     if array.dtype == jnp.bool_:
         return (jnp.logical_not(array),)
     if jnp.issubdtype(array.dtype, jnp.integer):

@@ -171,7 +171,9 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # confetti-splitting defect. Union measured at merge atop F06's 199.
     # 2026-08-29 F10 T71d re-reconcile: the union is F16's 200 (its stated
     # site) with F10's paydown holding; measured at the merged tree.
-    "PLR0911": 200,
+    # 200->199 (2026-11-05 B21F): the corpus-w2 perturbation helpers fold their
+    # guard arms into early-classify helpers and a strategy table; measured 199.
+    "PLR0911": 199,
     "PLR0912": 267,
     # 422->423 (same L8 settle): _build_funcol_payload carries the C0 payload
     # argument surface (mirrors the ledgered _build_payload in collectives).

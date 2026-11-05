@@ -211,6 +211,15 @@ def lift_min_entry_values(
         return _swap_integer_extremes(tensor, fallback)
     if not tensor.is_floating_point():
         return fallback(tensor, "step_up")
+    return _lift_float_min_entry(tensor, fallback)
+
+
+def _lift_float_min_entry(
+    tensor: torch.Tensor,
+    fallback: Callable[[torch.Tensor, str], torch.Tensor],
+) -> torch.Tensor:
+    """Lift a float tensor's smallest finite entry above its largest (see ``lift_min_entry_values``)."""
+
     finite = torch.isfinite(tensor)
     if not bool(finite.any()):
         return fallback(tensor, "step_up")

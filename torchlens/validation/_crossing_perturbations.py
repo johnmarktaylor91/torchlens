@@ -423,12 +423,8 @@ def sdpa_mask_crossing_values(
         row is not well defined, there is one key, or the moved mask is not finite.
     """
 
-    if getattr(layer, "func_name", None) != _SDPA_FUNC or not parent_values.is_floating_point():
-        return None
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    if parent_values.ndim == 0 or len(args) < 3 or not _sdpa_mask_only_slot(layer, parent_label):
-        return None
-    if not sdpa_softmax_rows_well_defined(layer, args):
+    args = _sdpa_mask_replay_args(layer, parent_label, parent_values)
+    if args is None:
         return None
     try:
         scores = _sdpa_scores(layer, args, parent_values.detach())
@@ -447,6 +443,24 @@ def sdpa_mask_crossing_values(
 
 
 _SDPA_FUNC = "scaled_dot_product_attention"
+
+
+def _sdpa_mask_replay_args(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> tuple[Any, ...] | None:
+    """Return the saved sdpa args when the mask-crossing move applies, else ``None``.
+
+    It applies when ``layer`` is ``scaled_dot_product_attention``, the parent is a
+    non-scalar float tensor feeding only the ``attn_mask`` slot, there are at least
+    three saved args, and every softmax row is well defined.
+    """
+
+    if getattr(layer, "func_name", None) != _SDPA_FUNC or not parent_values.is_floating_point():
+        return None
+    args = tuple(getattr(layer, "saved_args", None) or ())
+    if parent_values.ndim == 0 or len(args) < 3 or not _sdpa_mask_only_slot(layer, parent_label):
+        return None
+    return args if sdpa_softmax_rows_well_defined(layer, args) else None
 
 
 def _sdpa_mask_only_slot(layer: Op, parent_label: str) -> bool:
