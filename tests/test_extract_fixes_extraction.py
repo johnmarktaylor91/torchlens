@@ -29,7 +29,7 @@ from torch import nn
 
 from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens._utils._torch_compat import TorchCapabilityWarning
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD, TorchCapabilityWarning
 from torchlens.dataset_extraction import load_extraction
 from torchlens.errors._base import TorchLensWarning
 
@@ -88,6 +88,9 @@ def _tuple_stimuli(ids: torch.Tensor, mask: torch.Tensor) -> list[tuple[torch.Te
     return [(ids[i], mask[i]) for i in range(ids.shape[0])]
 
 
+@pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD, reason=".pt shards need torch 2.6+ (CVE-2025-32434)"
+)
 def test_load_extraction_passes_mmap_and_weights_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -131,6 +134,9 @@ def test_load_extraction_passes_mmap_and_weights_only(
         assert torch.equal(loaded.activations[key], torch.cat(tensors, dim=0))
 
 
+@pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD, reason=".pt shards need torch 2.6+ (CVE-2025-32434)"
+)
 def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
     """The lazy ``.pt`` shard reader also mmaps from a ``Path``, not just a ``str``.
 

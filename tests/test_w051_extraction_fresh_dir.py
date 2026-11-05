@@ -19,6 +19,7 @@ import torchlens as tl
 from torchlens import extract_dataset
 from torchlens._data_substrate import read_trusted_rows
 from torchlens._extraction.reader import open_extraction
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from torchlens.dataset_extraction import load_extraction
 
 
@@ -60,6 +61,9 @@ def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
     assert reader.verify_all()["crc_checked"] == 2
 
 
+@pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD, reason=".pt shards need torch 2.6+ (CVE-2025-32434)"
+)
 def test_fresh_run_sweeps_the_other_native_format_too(tmp_path: Path) -> None:
     model = _model()
     extract_dataset(

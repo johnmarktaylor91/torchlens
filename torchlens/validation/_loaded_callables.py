@@ -8,7 +8,10 @@ boundary, so it resolves those keys there through the same purity-gated
 resolver intervention replay uses: only pure torch, ``torch.Tensor``,
 ``torch.nn.functional`` and ``operator`` callables resolve. A ``custom`` key
 (foreign code) is never imported here, so its op stays unresolved and the
-entry check refuses the bundle by name exactly as before.
+entry check refuses the bundle by name exactly as before. An op whose saved
+keyword names a raw pointer (``Tensor.new(cdata=...)``) is never resolved, and
+``_raw_pointer_denial.refuse_pointer_keywords`` refuses the same call again at
+every replay re-execution.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 from .._utils._callable_safety import _unwrap_capture_wrapper
+from .._utils._raw_pointer_denial import raw_pointer_keyword_name
 from .._utils._record_group_table import record_member
 
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
@@ -53,7 +57,10 @@ def _resolution_candidate(layer: Any) -> Any:
 
     from ..intervention._types import FunctionRegistryKey
 
-    if _is_resolution_exempt(layer):
+    # A bundle-supplied pointer keyword leaves the op unresolved, so the entry
+    # check refuses the bundle by name: the call is never armed.
+    pointer = raw_pointer_keyword_name(record_member(layer, "saved_kwargs", None) or ())
+    if _is_resolution_exempt(layer) or pointer is not None:
         return None
     func_name = str(getattr(layer, "func_name", "none"))
     key = record_member(layer, "func_id", None)
