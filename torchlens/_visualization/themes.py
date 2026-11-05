@@ -4,19 +4,20 @@ A skin styles the ink -- palette, ramps, typography -- and composes freely
 with the semantic lens axis (``theme_registry``). Each skin carries a LIVE
 semantic palette (N4: the rendered node-role colors resolve through the
 active skin at :func:`apply_theme_to_spec`, replacing the dead
-``legend_items`` data deleted in the same change), a 3-anchor sequential
-ramp (low/mid/high, so a diverging map is later a mapping change, not a
-schema change), and the declared NEUTRAL "aggregate, not encoded" fill
-(N17) for collapsed boxes under an active channel.
+``legend_items`` data deleted in the same change), a sequential ramp stop
+list (low value first, blended in OKLab; ``_ramps``), and the declared
+NEUTRAL "aggregate, not encoded" fill (N17) for collapsed boxes under an
+active channel.
 
 The default ``torchlens`` skin and the ``colorblind`` skin render the
 Okabe-Ito role colours (input green, output vermillion, plain operations the
 page colour) with grey weights (light grey when trainable, dark grey when
-frozen), the set that passes every colour-vision gate. No skin draws blue:
-weights are grey in every skin and the sequential ramps are warm. The ``paper``
-and ``high_contrast`` skins keep the legacy TorchLens role colours (input light
-green, output light red, weights light grey when trainable and dark grey when
-frozen) and ``dark`` its dark remap.
+frozen), the set that passes every colour-vision gate. No skin draws blue in
+its palette or inks: weights are grey in every skin. A data-encoded ramp may
+use blue (the selectable viridis family); the shipped default is the warm
+YlOrBr family. The ``paper`` and ``high_contrast`` skins keep the legacy
+TorchLens role colours (input light green, output light red, weights light
+grey when trainable and dark grey when frozen) and ``dark`` its dark remap.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 from .._utils.facade import refuse_removed_member
 from .._vocab.node_spec import NodeSpec
+from ._ramps import DARK_SEQUENTIAL_RAMP, LIGHT_SEQUENTIAL_RAMP
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 from .render_execution import is_raster_format
 
@@ -115,12 +117,6 @@ _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 
-#: Warm sequential ramps (low, mid, high; ColorBrewer YlOrBr anchors): no blue
-#: and no purple in any skin. Luminance falls monotonically on the light page
-#: (243, 170, 77) and rises on the dark one (48, 121, 220), and each passes the
-#: colour-vision gate.
-LIGHT_WARM_RAMP: tuple[str, str, str] = ("#FFF7BC", "#FE9929", "#993404")
-DARK_WARM_RAMP: tuple[str, str, str] = ("#3A2E22", "#C0661E", "#FED98E")
 #: The dark skin's neutral near-black page (no blue tint).
 DARK_PAGE = "#141414"
 #: The declared "aggregate, not encoded" fills (N17): a pale warm stone on the
@@ -162,8 +158,8 @@ class VisualizationTheme:
         the role vocabulary is the key set of
         :data:`LEGACY_SEMANTIC_PALETTE`.
     ramp:
-        Sequential 3-anchor ramp (low, mid, high). The low anchor may never
-        equal ``default_fill`` (the measured white-on-white absence defect:
+        Sequential ramp stops, low value first (two or more). The low stop
+        may never equal ``default_fill`` (the measured white-on-white absence defect:
         an encoded-lowest node indistinguishable from an unencoded one).
     neutral_aggregate_fill:
         The declared "aggregate, not encoded" fill for collapsed boxes and
@@ -187,7 +183,7 @@ class VisualizationTheme:
     # mappingproxy as a field default. The factory returns the one shared
     # read-only proxy, so the default stays identical and immutable.
     semantic_palette: Mapping[str, str] = field(default_factory=lambda: LEGACY_SEMANTIC_PALETTE)
-    ramp: tuple[str, str, str] = LIGHT_WARM_RAMP
+    ramp: tuple[str, ...] = LIGHT_SEQUENTIAL_RAMP
     neutral_aggregate_fill: str = LIGHT_AGGREGATE_FILL
     typography: TypographyRecord = field(default=DEFAULT_TYPOGRAPHY)
 
@@ -217,7 +213,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="black",
         default_font="black",
         semantic_palette=RELEASED_SEMANTIC_PALETTE,
-        ramp=LIGHT_WARM_RAMP,
+        ramp=LIGHT_SEQUENTIAL_RAMP,
         neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
     "paper": VisualizationTheme(
@@ -245,7 +241,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="#E5E5E5",
         default_font="#FAFAFA",
         semantic_palette=_DARK_SEMANTIC_PALETTE,
-        ramp=DARK_WARM_RAMP,
+        ramp=DARK_SEQUENTIAL_RAMP,
         neutral_aggregate_fill=DARK_AGGREGATE_FILL,
     ),
     "colorblind": VisualizationTheme(
@@ -259,7 +255,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="#111111",
         default_font="#111111",
         semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
-        ramp=LIGHT_WARM_RAMP,
+        ramp=LIGHT_SEQUENTIAL_RAMP,
         neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
     "high_contrast": VisualizationTheme(

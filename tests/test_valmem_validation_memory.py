@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import gc
+import io
 import warnings
 from collections.abc import Iterator
 from typing import Any
@@ -258,7 +259,7 @@ def test_validated_capture_restores_every_restorable_kind(
 
 
 class _Config:
-    """Stand-in for a Hugging Face ``config`` object (an unsupported plain attribute)."""
+    """Stand-in for a Hugging Face ``config`` object (a plain object the fallback snapshots)."""
 
     hidden_size = 6
 
@@ -267,6 +268,7 @@ class _ConfiguredModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.config = _Config()
+        self.handle = io.BytesIO(b"opaque")  # copyable, but C-level state no snapshot sees
         self.lin = nn.Linear(6, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

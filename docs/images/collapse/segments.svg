@@ -10,15 +10,15 @@
 <title>ResNet</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-1513.9 399,-1513.9 399,4 -4,4"/>
 <text text-anchor="start" x="8" y="-1495.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ResNet</text>
-<text text-anchor="start" x="8" y="-1481.7" font-family="Helvetica,sans-Serif" font-size="14.00">13 nodes (1.4 MB)</text>
-<text text-anchor="start" x="8" y="-1467.7" font-family="Helvetica,sans-Serif" font-size="14.00">25,557,032 params (97.5 MB, all trainable)</text>
+<text text-anchor="start" x="8" y="-1481.7" font-family="Helvetica,sans-Serif" font-size="14.00">177 ops (11.8 MB)</text>
+<text text-anchor="start" x="8" y="-1467.7" font-family="Helvetica,sans-Serif" font-size="14.00">25.6M params (97.5 MB, all trainable)</text>
 <text text-anchor="start" x="8" y="-1453.7" font-family="Helvetica,sans-Serif" font-size="14.00">16 reused modules (48 calls); rolled=True draws the loop</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#98fb98" stroke="black" cx="197.5" cy="-45.96" rx="108.38" ry="45.92"/>
+<ellipse fill="#98fb98" stroke="black" cx="197.5" cy="-45.96" rx="99.9" ry="45.92"/>
 <text text-anchor="start" x="173.5" y="-61.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
-<text text-anchor="start" x="131.5" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 64, 64), 48.0 KB</text>
+<text text-anchor="start" x="137.5" y="-41.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 64, 64), 48 KB</text>
 <text text-anchor="start" x="170.5" y="-22.76" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
 </g>
 <!-- conv2d_1_1pass1 -->
@@ -26,7 +26,7 @@
 <title>conv2d_1_1pass1</title>
 <polygon fill="#d9d9d9" stroke="black" points="349.5,-231.92 45.5,-231.92 45.5,-128.92 349.5,-128.92 349.5,-231.92"/>
 <text text-anchor="start" x="158.5" y="-215.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
-<text text-anchor="start" x="123.5" y="-195.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="129.5" y="-195.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256 KB</text>
 <text text-anchor="start" x="55.5" y="-176.22" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(7, 7), stride=(2, 2), padding=(3, 3)</text>
 <text text-anchor="start" x="114.5" y="-157.22" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (64, 3, 7, 7)</text>
 <text text-anchor="start" x="172" y="-138.22" font-family="Helvetica,sans-Serif" font-size="14.00">@conv1</text>
@@ -44,7 +44,7 @@
 <polygon fill="#d9d9d9" stroke="black" points="304,-375.92 91,-375.92 91,-272.92 304,-272.92 304,-375.92"/>
 <polygon fill="none" stroke="black" points="308,-379.92 87,-379.92 87,-268.92 308,-268.92 308,-379.92"/>
 <text text-anchor="start" x="147.5" y="-359.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_1_2</text>
-<text text-anchor="start" x="124" y="-339.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="130" y="-339.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256 KB</text>
 <text text-anchor="start" x="113.5" y="-320.22" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text text-anchor="start" x="101.5" y="-301.22" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (64,) · bias (64,)</text>
 <text text-anchor="start" x="179.5" y="-282.22" font-family="Helvetica,sans-Serif" font-size="14.00">@bn1</text>
@@ -60,9 +60,9 @@
 <!-- relu_1_3pass1 -->
 <g id="node4" class="node">
 <title>relu_1_3pass1</title>
-<polygon fill="white" stroke="black" points="281.5,-481.92 113.5,-481.92 113.5,-416.92 281.5,-416.92 281.5,-481.92"/>
+<polygon fill="white" stroke="black" points="275.5,-481.92 119.5,-481.92 119.5,-416.92 275.5,-416.92 275.5,-481.92"/>
 <text text-anchor="start" x="170" y="-465.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_1_3</text>
-<text text-anchor="start" x="123.5" y="-445.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KB</text>
+<text text-anchor="start" x="129.5" y="-445.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256 KB</text>
 <text text-anchor="start" x="179" y="-426.22" font-family="Helvetica,sans-Serif" font-size="14.00">@relu</text>
 </g>
 <!-- batchnorm_1_2pass1&#45;&gt;relu_1_3pass1 -->
@@ -76,7 +76,7 @@
 <title>maxpool2d_1_4pass1</title>
 <polygon fill="white" stroke="black" points="313.5,-602.92 81.5,-602.92 81.5,-518.92 313.5,-518.92 313.5,-602.92"/>
 <text text-anchor="start" x="146" y="-586.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">maxpool2d_1_4</text>
-<text text-anchor="start" x="127.5" y="-566.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 16, 16), 64.0 KB</text>
+<text text-anchor="start" x="133" y="-566.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 16, 16), 64 KB</text>
 <text text-anchor="start" x="91.5" y="-547.72" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=3, stride=2, padding=1</text>
 <text text-anchor="start" x="164" y="-528.72" font-family="Helvetica,sans-Serif" font-size="14.00">@maxpool</text>
 </g>
@@ -101,15 +101,18 @@
 <!-- layer3pass1 -->
 <g id="node7" class="node">
 <title>layer3pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="299.5,-815.92 99.5,-815.92 95.5,-811.92 95.5,-712.92 295.5,-712.92 299.5,-716.92 299.5,-815.92"/>
-<polyline fill="none" stroke="black" points="295.5,-811.92 95.5,-811.92 "/>
-<polyline fill="none" stroke="black" points="295.5,-811.92 295.5,-712.92 "/>
-<polyline fill="none" stroke="black" points="295.5,-811.92 299.5,-815.92 "/>
-<text text-anchor="start" x="171" y="-799.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer3</text>
-<text text-anchor="start" x="165.5" y="-779.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
-<text text-anchor="start" x="127.5" y="-760.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1024, 4, 4), 64.0 KB</text>
-<text text-anchor="start" x="139" y="-741.22" font-family="Helvetica,sans-Serif" font-size="14.00">50 ops + 38 buffers</text>
-<text text-anchor="start" x="105.5" y="-722.22" font-family="Helvetica,sans-Serif" font-size="14.00">7098368 params (all trainable)</text>
+<g id="a_node7"><a xlink:title="7,098,368 params (0 frozen)">
+<polygon fill="#d9d9d9" stroke="black" points="289,-815.92 110,-815.92 106,-811.92 106,-712.92 285,-712.92 289,-716.92 289,-815.92"/>
+<polyline fill="none" stroke="black" points="285,-811.92 106,-811.92 "/>
+<polyline fill="none" stroke="black" points="285,-811.92 285,-712.92 "/>
+<polyline fill="none" stroke="black" points="285,-811.92 289,-815.92 "/>
+<text text-anchor="start" x="171.5" y="-799.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer3</text>
+<text text-anchor="start" x="166" y="-779.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
+<text text-anchor="start" x="133.5" y="-760.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1024, 4, 4), 64 KB</text>
+<text text-anchor="start" x="139.5" y="-741.22" font-family="Helvetica,sans-Serif" font-size="14.00">50 ops + 38 buffers</text>
+<text text-anchor="start" x="116.5" y="-722.22" font-family="Helvetica,sans-Serif" font-size="14.00">7.1M params (all trainable)</text>
+</a>
+</g>
 </g>
 <!-- layer1__segment__layer2pass1&#45;&gt;layer3pass1 -->
 <g id="edge6" class="edge">
@@ -120,15 +123,18 @@
 <!-- layer4pass1 -->
 <g id="node8" class="node">
 <title>layer4pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="303.5,-972.92 95.5,-972.92 91.5,-968.92 91.5,-869.92 299.5,-869.92 303.5,-873.92 303.5,-972.92"/>
-<polyline fill="none" stroke="black" points="299.5,-968.92 91.5,-968.92 "/>
-<polyline fill="none" stroke="black" points="299.5,-968.92 299.5,-869.92 "/>
-<polyline fill="none" stroke="black" points="299.5,-968.92 303.5,-972.92 "/>
-<text text-anchor="start" x="171" y="-956.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
-<text text-anchor="start" x="165.5" y="-936.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
-<text text-anchor="start" x="127.5" y="-917.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 2, 2), 32.0 KB</text>
-<text text-anchor="start" x="139" y="-898.22" font-family="Helvetica,sans-Serif" font-size="14.00">26 ops + 20 buffers</text>
-<text text-anchor="start" x="101.5" y="-879.22" font-family="Helvetica,sans-Serif" font-size="14.00">14964736 params (all trainable)</text>
+<g id="a_node8"><a xlink:title="14,964,736 params (0 frozen)">
+<polygon fill="#d9d9d9" stroke="black" points="287,-972.92 112,-972.92 108,-968.92 108,-869.92 283,-869.92 287,-873.92 287,-972.92"/>
+<polyline fill="none" stroke="black" points="283,-968.92 108,-968.92 "/>
+<polyline fill="none" stroke="black" points="283,-968.92 283,-869.92 "/>
+<polyline fill="none" stroke="black" points="283,-968.92 287,-972.92 "/>
+<text text-anchor="start" x="171.5" y="-956.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
+<text text-anchor="start" x="166" y="-936.22" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
+<text text-anchor="start" x="133.5" y="-917.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 2, 2), 32 KB</text>
+<text text-anchor="start" x="139.5" y="-898.22" font-family="Helvetica,sans-Serif" font-size="14.00">26 ops + 20 buffers</text>
+<text text-anchor="start" x="118.5" y="-879.22" font-family="Helvetica,sans-Serif" font-size="14.00">15M params (all trainable)</text>
+</a>
+</g>
 </g>
 <!-- layer3pass1&#45;&gt;layer4pass1 -->
 <g id="edge7" class="edge">
@@ -142,7 +148,7 @@
 <title>adaptiveavgpool2d_1_141pass1</title>
 <polygon fill="white" stroke="black" points="291.5,-1093.92 103.5,-1093.92 103.5,-1009.92 291.5,-1009.92 291.5,-1093.92"/>
 <text text-anchor="start" x="113.5" y="-1077.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_141</text>
-<text text-anchor="start" x="131" y="-1057.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 1, 1), 8.0 KB</text>
+<text text-anchor="start" x="137" y="-1057.72" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048, 1, 1), 8 KB</text>
 <text text-anchor="start" x="143" y="-1038.72" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=(1, 1)</text>
 <text text-anchor="start" x="166.5" y="-1019.72" font-family="Helvetica,sans-Serif" font-size="14.00">@avgpool</text>
 </g>
@@ -155,9 +161,9 @@
 <!-- flatten_1_142pass1 -->
 <g id="node10" class="node">
 <title>flatten_1_142pass1</title>
-<ellipse fill="white" stroke="black" cx="197.5" cy="-1163.45" rx="86.95" ry="32.55"/>
+<ellipse fill="white" stroke="black" cx="197.5" cy="-1163.45" rx="78.48" ry="32.55"/>
 <text text-anchor="start" x="155" y="-1170.25" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_142</text>
-<text text-anchor="start" x="146.5" y="-1150.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048), 8.0 KB</text>
+<text text-anchor="start" x="152.5" y="-1150.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 2048), 8 KB</text>
 </g>
 <!-- adaptiveavgpool2d_1_141pass1&#45;&gt;flatten_1_142pass1 -->
 <g id="edge9" class="edge">
