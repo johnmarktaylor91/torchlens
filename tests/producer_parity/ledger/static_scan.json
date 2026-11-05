@@ -1772,7 +1772,7 @@
   "field": "kind",
   "file": "torchlens/_io/format3/payloads.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
