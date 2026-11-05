@@ -10,6 +10,9 @@ parameters). These tests pin the fixes and their narrowness.
 
 from __future__ import annotations
 
+import copy
+import io
+import threading
 from typing import Any
 
 import numpy as np
@@ -21,7 +24,10 @@ import torchlens._user_public_impls as user_public_impls
 from torchlens._capture_state_helpers import (
     _ModuleTreePlainAttrSnapshot,
 )
-from torchlens._plain_attr_fidelity import assert_copy_kept_instance_attrs
+from torchlens._plain_attr_fidelity import (
+    assert_copy_kept_instance_attrs,
+    deepcopy_for_validation,
+)
 from torchlens.validation import validate_forward_pass
 
 
@@ -85,16 +91,6 @@ class UncopyableSeanetLikeModel(nn.Module):
         return (recurrent.permute(1, 2, 0) + y) * float(self.hop_length)
 
 
-def _module_with_large_non_alias_tensor_state() -> tuple[nn.Module, set[str]]:
-    """Large tensors that are not registered aliases, alone, mixed and copied."""
-
-    module = nn.Linear(128, 128)
-    module.cache = [torch.zeros(5000)]
-    module.mixed = [module.weight, torch.zeros(5000)]
-    module.copied_weight = module.weight.detach().clone()
-    return module, {"Linear[0].cache", "Linear[0].copied_weight", "Linear[0].mixed"}
-
-
 def _module_with_structured_numpy_void() -> tuple[nn.Module, set[str]]:
     """A structured ``np.void`` is a writable view into its array, not an immutable scalar.
 
@@ -112,19 +108,52 @@ def _module_with_structured_numpy_void() -> tuple[nn.Module, set[str]]:
     return module, {"Module[0].record"}
 
 
+class SlotsState:
+    """Buffer-like state object whose values live in ``__slots__``."""
+
+    __slots__ = ("size", "items", "lock", "spare")
+
+    def __init__(self) -> None:
+        """Fill every slot but ``spare``."""
+
+        self.size = 0
+        self.items: list[torch.Tensor] = []
+        self.lock = threading.RLock()
+
+
+class Node:
+    """Object that points back at itself through its instance dict."""
+
+    def __init__(self) -> None:
+        """Make the cycle."""
+
+        self.me = self
+
+
+def _module_with_opaque_state() -> tuple[nn.Module, set[str]]:
+    """C-level, object-array and self-referencing values stay unsupported."""
+
+    module = nn.Module()
+    module.stream = io.BytesIO(b"state")
+    module.table = np.array([object()], dtype=object)
+    module.node = Node()
+    module.ok_slots = SlotsState()
+    return module, {"Module[0].node", "Module[0].stream", "Module[0].table"}
+
+
 @pytest.mark.parametrize(
     "build",
-    [_module_with_large_non_alias_tensor_state, _module_with_structured_numpy_void],
-    ids=["large-non-alias-tensors", "structured-numpy-void"],
+    [_module_with_structured_numpy_void, _module_with_opaque_state],
+    ids=["structured-numpy-void", "opaque-state"],
 )
 def test_unsupported_plain_attribute_state_is_still_refused(
     build: Any,
 ) -> None:
     """The deepcopy-fallback snapshot names what it cannot restore instead of copying it.
 
-    Large non-alias tensor state and a structured ``np.void`` are reported as
-    unsupported paths; a silent by-reference copy would hide in-place writes
-    the forward makes to them.
+    A structured ``np.void``, slot-backed and C-level objects, object arrays and
+    self-referencing objects are reported as unsupported paths; a silent
+    by-reference copy would hide in-place writes the forward makes to them.
     """
 
     module, expected = build()
@@ -236,3 +265,153 @@ def test_registered_tensor_alias_attribute_is_identity_tracked() -> None:
     snapshot.restore_changed_attrs()
     assert linear.__dict__["weight_alias"] is linear.weight
     assert set(linear._parameters) == {"weight", "bias"}  # restore registered nothing new
+
+
+class PlainConfig:
+    """Config object kept as a plain attribute (an ``hp`` / ``cfg`` idiom)."""
+
+    def __init__(self) -> None:
+        """Set a scale and a call counter."""
+
+        self.scale = 0.5
+        self.calls = 0
+
+
+class RichPlainStateModel(nn.Module):
+    """Model whose plain attributes used to refuse the deepcopy fallback.
+
+    It keeps a Python module, a large positional table, dtype and device
+    descriptors, a config object and a NumPy generator as plain attributes, and
+    its forward mutates the table and the config in place.
+    """
+
+    def __init__(self, uncopyable: bool) -> None:
+        """Build the layer and the plain state."""
+
+        super().__init__()
+        self.uncopyable = uncopyable
+        self.F = torch.nn.functional
+        self.lin = nn.Linear(8, 8)
+        self.pe = torch.randn(1024, 8)
+        self._dtype = torch.float32
+        self._device = torch.device("cpu")
+        self.cfg = PlainConfig()
+        self.rng = np.random.RandomState(0)
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> RichPlainStateModel:
+        """Refuse deepcopy when asked to, as a model with an opaque handle does."""
+
+        if self.uncopyable:
+            raise RuntimeError("this model cannot be deep-copied")
+        copied = RichPlainStateModel.__new__(RichPlainStateModel)
+        memo[id(self)] = copied
+        for name, value in self.__dict__.items():
+            copied.__dict__[name] = copy.deepcopy(value, memo)
+        return copied
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the table rows, then bump the table and the config in place."""
+
+        out = self.F.relu(self.lin(x.to(self._dtype)) + self.pe[: x.shape[0]] * self.cfg.scale)
+        self.pe.mul_(1.0 + 1e-3)
+        self.cfg.calls += 1
+        self.cfg.scale = self.cfg.scale + 0.25
+        return out
+
+
+def test_module_object_attribute_no_longer_breaks_the_validation_deepcopy() -> None:
+    """A Python module held as an attribute is shared, so the deepcopy succeeds."""
+
+    model = RichPlainStateModel(uncopyable=False)
+    copied = deepcopy_for_validation(model)
+    assert copied.F is torch.nn.functional
+    assert copied.pe is not model.pe and copied.cfg is not model.cfg
+    with pytest.raises(TypeError, match="module"):
+        copy.deepcopy(model)
+
+
+def test_rich_plain_state_validates_through_live_model_fallback() -> None:
+    """Large tensors, descriptors, modules, configs and generators are restored and proven."""
+
+    torch.manual_seed(0)
+    model = RichPlainStateModel(uncopyable=True)
+    snapshot = _ModuleTreePlainAttrSnapshot(model)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    pe, cfg = model.pe, model.cfg
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                model, [torch.randn(4, 8)], {}, validate_metadata=True
+            )
+            is True
+        )
+    assert model.pe is pe and model.cfg is cfg
+
+
+def test_in_place_writes_to_rich_plain_state_are_restored_in_place() -> None:
+    """Restores write back into the original objects, so aliases see the old values."""
+
+    model = RichPlainStateModel(uncopyable=True)
+    pe, cfg, rng = model.pe, model.cfg, model.rng
+    pe_before = pe.clone()
+    expected_draw = np.random.RandomState(0).rand()
+    snapshot = _ModuleTreePlainAttrSnapshot(model)
+    pe.add_(1.0)
+    cfg.calls = 7
+    cfg.extra = "added"
+    rng.rand()
+    model._dtype = torch.float64
+    snapshot.restore_changed_attrs()
+    assert model.pe is pe and torch.equal(pe, pe_before)
+    assert model.cfg is cfg and vars(cfg) == {"scale": 0.5, "calls": 0}
+    assert model.rng is rng and rng.rand() == expected_draw
+    assert model._dtype is torch.float32
+    model.cfg = PlainConfig()  # a reassignment is a change even with equal values
+    snapshot.restore_changed_attrs()
+    assert model.cfg is cfg
+
+
+def test_nan_tensor_attribute_compares_unchanged_by_bytes() -> None:
+    """A NaN-holding plain tensor is unchanged when its bytes are, not flagged forever."""
+
+    module = nn.Module()
+    module.table = torch.full((5000,), float("nan"))
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete
+    snapshot.restore_changed_attrs()
+    module.table[0] = 1.0
+    snapshot.restore_changed_attrs()
+    assert torch.isnan(module.table).all()
+
+
+def test_large_non_alias_tensor_state_is_captured_whole() -> None:
+    """Large plain tensors, alone, mixed with a registered alias and copied, are cloned whole."""
+
+    module = nn.Linear(128, 128)
+    module.cache = [torch.zeros(5000)]
+    module.mixed = [module.weight, torch.zeros(5000)]
+    module.copied_weight = module.weight.detach().clone()
+    copied_before = module.copied_weight.clone()
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    module.cache[0].add_(1.0)
+    module.copied_weight.mul_(2.0)
+    snapshot.restore_changed_attrs()
+    assert torch.equal(module.cache[0], torch.zeros(5000))
+    assert torch.equal(module.copied_weight, copied_before)
+
+
+def test_slots_state_is_restored_through_its_slots() -> None:
+    """Slot values are compared and restored in place; an unset slot is cleared again."""
+
+    module = nn.Module()
+    state = module.state = SlotsState()
+    lock = state.lock
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    state.size = 3
+    state.items.append(torch.ones(2))
+    state.spare = "filled"
+    snapshot.restore_changed_attrs()
+    assert module.state is state and state.size == 0 and state.items == []
+    assert state.lock is lock and not hasattr(state, "spare")
