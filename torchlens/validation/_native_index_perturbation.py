@@ -121,10 +121,12 @@ _VALUE = "value"
 reads the slot (torch_sparse saves those for backward), so no draw can address memory and
 the generic perturbation runs unchanged."""
 
-_SCATTER_CSR = {0: _VALUE, 1: _CSR, 2: _VALUE}
-_SCATTER_COO = {0: _VALUE, 1: _INDEX, 2: _VALUE}
+_Slots = dict[int, _Builder | str]
 
-_NATIVE_INDEX_SLOTS: dict[str, dict[int, _Builder | str]] = {
+_SCATTER_CSR: _Slots = {0: _VALUE, 1: _CSR, 2: _VALUE}
+_SCATTER_COO: _Slots = {0: _VALUE, 1: _INDEX, 2: _VALUE}
+
+_NATIVE_INDEX_SLOTS: dict[str, _Slots] = {
     # torch_scatter CSR family (src, indptr, out): indptr is a CSR pointer over src.
     **dict.fromkeys(
         ("gather_csr", "segment_sum_csr", "segment_mean_csr", "segment_min_csr"),
