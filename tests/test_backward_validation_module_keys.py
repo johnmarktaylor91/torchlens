@@ -5,7 +5,8 @@ shares one ``nn.Tanh`` between two ``nn.Sequential``s, and the capture addressed
 the LAST registration path while stock-torch hooks (``named_modules()``) use the first; `IQL`'s
 policy returns a ``torch.distributions`` object whose tensor leaves the stock side did not
 enumerate, and four of them receive no gradient on either side. These tests pin the shared
-fixes: first registration path is canonical, stock enumerates plain-object leaves with the
+fixes: first registration path is canonical (the path ``named_modules()`` reaches first, also when
+a shallower alias such as ``self.B = self.A[0]`` is registered later, as in MemN2N), stock enumerates plain-object leaves with the
 capture's walk, and "no gradient in stock or capture" is agreement, never evidence (Lead
 ruling, 2026-10-31): the asymmetric cases still fail and a run that compares nothing still
 returns False.
@@ -63,6 +64,35 @@ def test_shared_module_canonical_address_is_its_first_registration() -> None:
 
 def test_shared_module_validates_backward() -> None:
     assert _validate_backward(_SharedActivation(), torch.randn(2, 3)) is True
+    assert last_validation_failure() is None
+
+
+class _LaterShallowAlias(nn.Module):
+    """``A.0`` registered first, then the shallower alias ``B`` (MemN2N's ``self.B = self.A[0]``)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.A = nn.ModuleList([nn.Linear(3, 3)])
+        self.C = nn.Linear(3, 3)
+        self.B = self.A[0]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (torch.tanh(self.B(x)) * self.C(self.A[0](x))).sum(dim=-1)
+
+
+def test_later_shallow_alias_keeps_the_first_registration_address() -> None:
+    torch.manual_seed(0)
+    model = _LaterShallowAlias()
+    trace = tl.trace(model, torch.randn(2, 3))
+    calls = {call.label for call in trace.module_calls}
+    assert {"A.0:1", "A.0:2"} <= calls
+    assert not {call for call in calls if call.startswith("B:")}
+    assert trace.modules["B"] is trace.modules["A.0"]
+    assert dict(model.named_modules())["A.0"] is model.B
+
+
+def test_later_shallow_alias_validates_backward() -> None:
+    assert _validate_backward(_LaterShallowAlias(), torch.randn(2, 3)) is True
     assert last_validation_failure() is None
 
 
