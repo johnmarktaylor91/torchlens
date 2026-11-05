@@ -1960,7 +1960,6 @@ docs-md	docs/guides/treescope_cards.md	82.9
 docs-md	docs/guides/visualization.md	0.25
 docs-md	docs/guides/visualization.md	0.492
 docs-md	docs/guides/visualization.md	1,2,3
-docs-md	docs/guides/visualization.md	1,610
 docs-md	docs/guides/visualization.md	1.0
 docs-md	docs/guides/visualization.md	1.0.
 docs-md	docs/guides/visualization.md	10
@@ -7082,15 +7081,12 @@ package-docstrings	torchlens/_visualization/_geometry_audit.py	21
 package-docstrings	torchlens/_visualization/_geometry_audit.py	356
 package-docstrings	torchlens/_visualization/_geometry_audit.py	39
 package-docstrings	torchlens/_visualization/_geometry_audit.py	877
-package-docstrings	torchlens/_visualization/_header_block.py	1,024
 package-docstrings	torchlens/_visualization/_header_block.py	1024
 package-docstrings	torchlens/_visualization/_header_block.py	11
-package-docstrings	torchlens/_visualization/_header_block.py	124,439,808
 package-docstrings	torchlens/_visualization/_header_block.py	149
 package-docstrings	torchlens/_visualization/_header_block.py	1_1
 package-docstrings	torchlens/_visualization/_header_block.py	2026
 package-docstrings	torchlens/_visualization/_header_block.py	29
-package-docstrings	torchlens/_visualization/_header_block.py	4.0
 package-docstrings	torchlens/_visualization/_header_block.py	48
 package-docstrings	torchlens/_visualization/_label_format.py	0.87,
 package-docstrings	torchlens/_visualization/_label_format.py	0.95
