@@ -1368,13 +1368,6 @@ torchlens/transforms/_srp.py::_srp_normalize	75
 torchlens/transforms/_srp.py::srp	68
 torchlens/transforms/_srp.py::srp_verify_matrix	76
 torchlens/transforms/_srp_hash.py::generate_fixed_columns	85
-torchlens/validation/__init__.py	1277
-torchlens/validation/__init__.py::_validate_body_index	70
-torchlens/validation/__init__.py::_validate_manifest_against_schema	95
-torchlens/validation/__init__.py::_validate_runnable_payload_entries	170
-torchlens/validation/__init__.py::_validate_schema_properties	92
-torchlens/validation/__init__.py::_validate_sparse_run_descriptor	127
-torchlens/validation/__init__.py::_validate_v2_backend_fields	68
 torchlens/validation/_backward.py	820
 torchlens/validation/_backward.py::_clone_inputs_with_grad	64
 torchlens/validation/_backward.py::_sum_tensors	73
