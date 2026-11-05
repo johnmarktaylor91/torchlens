@@ -22,6 +22,8 @@ from ._crossing_perturbations import (
     integer_extrema_crossing_values,
     isclose_tolerance_crossing_values,
 )
+from ._ctc_lengths_perturbation import CTC_LOSS_FUNCS, ctc_length_rotation_values
+from ._masked_scatter_perturbation import MASKED_SCATTER_FUNCS, masked_scatter_mask_values
 from ._membership_perturbation import isin_membership_toggle_values
 
 if TYPE_CHECKING:
@@ -93,8 +95,12 @@ def _perturb_domain_sensitive_parent_values(
 _SET_TEST_CROSSING_VALUES = {
     "isin": isin_membership_toggle_values,
     "isclose": isclose_tolerance_crossing_values,
+    **dict.fromkeys(MASKED_SCATTER_FUNCS, masked_scatter_mask_values),
+    **dict.fromkeys(CTC_LOSS_FUNCS, ctc_length_rotation_values),
 }
-"""Set and tolerance tests whose operands get values that flip each element's result."""
+"""Ops whose operands get purpose-built values: set and tolerance tests get values that
+flip each element's result; ``masked_scatter`` gets a mask with the same true count and
+``ctc_loss`` length vectors rotated across the batch (same sum, same values)."""
 
 
 def _integer_saturation_crossing_values(
