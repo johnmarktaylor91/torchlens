@@ -110,7 +110,7 @@ def _site_keys_for_table(log: Any, table: _SiteTable) -> list[str | None]:
     ``_SiteTable.labels()``: those are layer labels, which a multi-pass layer
     repeats once per pass and which name no single op.
     """
-    from .._selection.resolver import _site_record
+    from .._selection._resolver_records import _site_record
 
     keys: list[str | None] = []
     for site in table:

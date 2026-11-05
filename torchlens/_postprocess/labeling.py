@@ -30,6 +30,7 @@ from .._quantities import Bytes
 from .._record_type import record_type
 from .._utils._record_group_table import op_attr, record_member
 from ..intervention._types import ParentRef
+from ._conditional_child_rename import _rename_children_by_cond, _rename_conditional_child_views
 from ._label_rename import _rename_label_dataclass, _rename_replay_fields
 from ._module_containment import _log_module_hierarchy_info_for_layer
 
@@ -161,14 +162,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
     for _t, layer_entry in enumerate(self):
         _normalize_io_role_flags(layer_entry)
-        if record_type(layer_entry) in ["input", "buffer"]:
-            layer_entry.step_index = 0
-        elif record_type(layer_entry) == "output":
-            layer_entry.step_index = None  # fix later
-        else:
-            layer_entry.step_index = step_index
-            self._num_ops += 1
-            step_index += 1
+        step_index = _assign_step_index(self, layer_entry, step_index)
 
         # Replace any layer names with their final names:
         _replace_layer_names_for_layer_entry(
@@ -203,6 +197,38 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     _compute_fx_qualpaths(self)
     _finalize_output_compute_indexs(self)
     _build_module_hierarchy_dicts(self)
+
+
+def _assign_step_index(self: "Trace", layer_entry: Op, step_index: int) -> int:
+    """Set one layer's ``step_index`` and return the next free step index.
+
+    Inputs and buffers get 0 and outputs ``None`` (fixed later); every other
+    op takes ``step_index`` and is counted in ``self._num_ops``.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed.
+    layer_entry:
+        Op to number.
+    step_index:
+        Next free step index.
+
+    Returns
+    -------
+    int
+        The next free step index after this op.
+    """
+
+    if record_type(layer_entry) in ["input", "buffer"]:
+        layer_entry.step_index = 0
+    elif record_type(layer_entry) == "output":
+        layer_entry.step_index = None  # fix later
+    else:
+        layer_entry.step_index = step_index
+        self._num_ops += 1
+        step_index += 1
+    return step_index
 
 
 def _effective_param_geometry(pl: Any) -> tuple[int, Any]:
@@ -393,47 +419,6 @@ _SCALAR_LABEL_FIELDS_TO_RENAME = [
 ]
 
 
-def _rename_elif_children(
-    conditional_elif_children: dict[int, list[str]],
-    mapping: dict[str, str],
-) -> dict[int, list[str]]:
-    """Rename labels inside ``conditional_elif_children``.
-
-    Args:
-        conditional_elif_children: Mapping from elif index to child labels.
-        mapping: Raw-to-final layer-label mapping.
-
-    Returns:
-        A new dict with all child labels rewritten.
-    """
-    return {
-        elif_ix: [mapping[layer_label] for layer_label in child_labels]
-        for elif_ix, child_labels in conditional_elif_children.items()
-    }
-
-
-def _rename_children_by_cond(
-    conditional_arm_children: dict[int, dict[str, list[str]]],
-    mapping: dict[str, str],
-) -> dict[int, dict[str, list[str]]]:
-    """Rename labels inside ``conditional_arm_children``.
-
-    Args:
-        conditional_arm_children: ``cond_id -> branch_kind -> child labels``.
-        mapping: Raw-to-final layer-label mapping.
-
-    Returns:
-        A new dict with every nested child label rewritten.
-    """
-    return {
-        cond_id: {
-            branch_kind: [mapping[layer_label] for layer_label in child_labels]
-            for branch_kind, child_labels in branch_children.items()
-        }
-        for cond_id, branch_children in conditional_arm_children.items()
-    }
-
-
 def _replace_layer_names_for_layer_entry(
     self: "Trace",
     layer_entry: Op,
@@ -589,28 +574,7 @@ def _replace_layer_names_for_layer_entry(
         set_entry_field("conditional_elif_children", conditional_elif_children)
         set_entry_field("conditional_else_children", conditional_else_children)
     else:
-        elif_children = record_member(layer_entry, "conditional_elif_children", None)
-        if elif_children:
-            set_entry_field(
-                "conditional_elif_children",
-                _rename_elif_children(elif_children, layer_mapping),
-            )
-        conditional_then_children_value = record_member(
-            layer_entry, "conditional_then_children", None
-        )
-        if conditional_then_children_value:
-            set_entry_field(
-                "conditional_then_children",
-                [layer_mapping[layer_label] for layer_label in conditional_then_children_value],
-            )
-        conditional_else_children_value = record_member(
-            layer_entry, "conditional_else_children", None
-        )
-        if conditional_else_children_value:
-            set_entry_field(
-                "conditional_else_children",
-                [layer_mapping[layer_label] for layer_label in conditional_else_children_value],
-            )
+        _rename_conditional_child_views(layer_entry, layer_mapping, set_entry_field)
     _rename_replay_fields(layer_entry, mapping, set_entry_field, field_cache, ParentRef)
 
 
@@ -719,26 +683,7 @@ def _add_lookup_keys_for_layer_entry(
 
     # Relabel the module ops if this pass built module metadata:
     if self._options_mode in {"exhaustive", "predicate"}:
-        context = layer_entry.module_context
-        layer_entry._module_context_output_of_module_calls = [
-            _module_call_label(module_call) for module_call in context.output_of_module_calls
-        ]
-        layer_entry._module_context_input_to_module_calls = [
-            _module_call_label(module_call) for module_call in context.input_to_module_calls
-        ]
-        if layer_entry.module is not None:
-            layer_entry.module = _module_call_label(layer_entry.module)
-        layer_entry.modules = [
-            _module_call_label(module_call) for module_call in layer_entry.modules
-        ]
-        # B3R7-R05-1: ``module_call_stack`` carries the same containment fact
-        # as ``modules`` (seeded from the modules facet at ingest), so it is
-        # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
-        layer_entry._module_context_call_stack = [
-            _module_call_label(module_call) for module_call in layer_entry.module_context.call_stack
-        ]
-        if (layer_entry.module is None) and len(layer_entry.modules) > 0:
-            layer_entry.module = layer_entry.modules[-1]
+        _relabel_module_calls(layer_entry)
 
     # Allow indexing by modules exited as well. A model-output alias node
     # inherits the module calls of the op it aliases (graph_traversal copies
@@ -793,6 +738,36 @@ def _add_lookup_keys_for_layer_entry(
                 self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
                 self._layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
+
+
+def _relabel_module_calls(layer_entry: Op) -> None:
+    """Rewrite one Op's module-call fields from ``(name, pass)`` to ``"name:pass"`` labels.
+
+    Parameters
+    ----------
+    layer_entry:
+        Op whose ``module``, ``modules`` and module-context call lists are
+        relabeled in place.
+    """
+
+    context = layer_entry.module_context
+    layer_entry._module_context_output_of_module_calls = [
+        _module_call_label(module_call) for module_call in context.output_of_module_calls
+    ]
+    layer_entry._module_context_input_to_module_calls = [
+        _module_call_label(module_call) for module_call in context.input_to_module_calls
+    ]
+    if layer_entry.module is not None:
+        layer_entry.module = _module_call_label(layer_entry.module)
+    layer_entry.modules = [_module_call_label(module_call) for module_call in layer_entry.modules]
+    # B3R7-R05-1: ``module_call_stack`` carries the same containment fact
+    # as ``modules`` (seeded from the modules facet at ingest), so it is
+    # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
+    layer_entry._module_context_call_stack = [
+        _module_call_label(module_call) for module_call in layer_entry.module_context.call_stack
+    ]
+    if (layer_entry.module is None) and len(layer_entry.modules) > 0:
+        layer_entry.module = layer_entry.modules[-1]
 
 
 def _module_call_label(module_call: Any) -> str:

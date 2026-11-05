@@ -38,7 +38,6 @@ from .._io import (
 from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
-from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._lookup_kinds import converted, param_for_key
 from ._runtime_handles import source_model_from_trace
@@ -760,7 +759,7 @@ class Param:
 
         return fail_open(
             lambda: param_repr_line(self),
-            lambda _error: f"<Param {record_member(self, 'address', '<unbound>')}: repr degraded>",
+            lambda _error: f"<Param {getattr(self, 'address', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:

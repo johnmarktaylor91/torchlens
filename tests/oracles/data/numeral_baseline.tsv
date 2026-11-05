@@ -5815,6 +5815,7 @@ package-docstrings	torchlens/_io/_load_validators.py	10
 package-docstrings	torchlens/_io/_load_validators.py	102
 package-docstrings	torchlens/_io/_load_validators.py	3.0
 package-docstrings	torchlens/_io/_load_validators.py	43
+package-docstrings	torchlens/_io/_provenance_git.py	21
 package-docstrings	torchlens/_io/_root_manifest.py	2.16
 package-docstrings	torchlens/_io/_runtime_identity.py	3.0
 package-docstrings	torchlens/_io/_runtime_identity.py	440
@@ -5844,7 +5845,6 @@ package-docstrings	torchlens/_io/bundle.py	1_1
 package-docstrings	torchlens/_io/bundle.py	2.16
 package-docstrings	torchlens/_io/bundle.py	2.31.0
 package-docstrings	torchlens/_io/bundle.py	2.38
-package-docstrings	torchlens/_io/bundle.py	21
 package-docstrings	torchlens/_io/bundle.py	2_3
 package-docstrings	torchlens/_io/bundle.py	3.0
 package-docstrings	torchlens/_io/bundle.py	3.3

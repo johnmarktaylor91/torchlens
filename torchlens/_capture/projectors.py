@@ -16,10 +16,11 @@ from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
-from .._utils._record_group_table import op_attr, record_member
+from .._utils._record_group_table import op_attr
 from ._cook_facts import _cook_facts, _replay_capture_events
 from ._cooked_inventory import install_cooked_inventory, install_run_facts
 from ._multipass_cook import fold_pass_cores
+from ._parent_arg_signature import _format_parent_arg_positions, _normalized_parent_arg_positions
 from ._record_indexes import _RecordIndexes
 from .session import CapturedRunCore
 
@@ -54,76 +55,6 @@ _GRAPH_CHANGE_MESSAGE = (
     "otherwise the refresh failed. Please "
     "re-run trace with the desired inputs."
 )
-
-
-def _signature_sort_key(value: Any) -> tuple[str, str]:
-    """Return a stable comparable token for graph-signature sort keys.
-
-    Parameters
-    ----------
-    value
-        Parent-position key to normalize for signature comparison.
-
-    Returns
-    -------
-    tuple[str, str]
-        Type-qualified token that keeps incomparable key types sortable.
-    """
-
-    return (f"{type(value).__module__}.{type(value).__qualname__}", repr(value))
-
-
-def _normalized_parent_arg_positions(
-    parent_arg_positions: dict[str, dict[Any, str]] | None,
-) -> tuple[tuple[str, tuple[tuple[Any, str], ...]], ...]:
-    """Return a deterministic signature view of parent argument positions.
-
-    Parameters
-    ----------
-    parent_arg_positions
-        Layer parent routing metadata keyed by argument domain.
-
-    Returns
-    -------
-    tuple[tuple[str, tuple[tuple[Any, str], ...]], ...]
-        Stable, comparable representation of argument and keyword parent routing.
-    """
-
-    positions = parent_arg_positions or {}
-    return tuple(
-        (
-            arg_domain,
-            tuple(
-                sorted(
-                    (positions.get(arg_domain, {}) or {}).items(),
-                    key=lambda item: _signature_sort_key(item[0]),
-                )
-            ),
-        )
-        for arg_domain in ("args", "kwargs")
-    )
-
-
-def _format_parent_arg_positions(
-    parent_arg_positions: tuple[tuple[str, tuple[tuple[Any, str], ...]], ...],
-) -> str:
-    """Format normalized parent routing for graph-drift error details.
-
-    Parameters
-    ----------
-    parent_arg_positions
-        Normalized parent routing metadata from ``_normalized_parent_arg_positions``.
-
-    Returns
-    -------
-    str
-        Compact human-readable routing summary.
-    """
-
-    rendered_parts: list[str] = []
-    for arg_domain, entries in parent_arg_positions:
-        rendered_parts.append(f"{arg_domain}={list(entries)!r}")
-    return ", ".join(rendered_parts)
 
 
 def _cloned_core_events(core: CapturedRunCore) -> tuple[OpEvent, ...]:
@@ -516,16 +447,16 @@ class RefreshProjector:
         from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
-        qualname = record_member(sink_layer, "buffer_source_func_name", None)
+        qualname = getattr(sink_layer.graph, "buffer_source_func_name", None)
         if not is_mode_sensitive_qualname(qualname):
             return claims
-        source_label = record_member(sink_layer, "buffer_source", None)
+        source_label = getattr(sink_layer.graph, "buffer_source", None)
         if not source_label or source_label not in trace._layer_dict_all_keys:
             return claims
         source = trace._layer_dict_all_keys[source_label]
         tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
         mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
-        kwargs = record_member(source, "non_tensor_kwargs", None) or {}
+        kwargs = getattr(source.call, "non_tensor_kwargs", None) or {}
         literal = kwargs.get(mode_argument)
         if not isinstance(literal, bool):
             # The mode flag is the first boolean among the positional non-tensor
@@ -534,7 +465,7 @@ class RefreshProjector:
             literal = next(
                 (
                     value
-                    for value in record_member(source, "non_tensor_pos_args", None) or ()
+                    for value in getattr(source.call, "non_tensor_pos_args", None) or ()
                     if isinstance(value, bool)
                 ),
                 None,
@@ -570,7 +501,7 @@ class RefreshProjector:
             for layer in target_sinks
             if layer.buffer_value_changed is True
             and layer.buffer_write_kind == "inplace"
-            and (record_member(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
+            and (getattr(layer.graph, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
             == "add_"
             and self._sink_module_call(layer) in norm_calls
         }
@@ -578,7 +509,7 @@ class RefreshProjector:
     def _sink_module_call(self, sink_layer: Any) -> str | None:
         """Return the innermost module call of a buffer sink's producing op."""
 
-        source_label = record_member(sink_layer, "buffer_source", None)
+        source_label = getattr(sink_layer.graph, "buffer_source", None)
         layers = self.target._layer_dict_all_keys
         if not source_label or source_label not in layers:
             return None

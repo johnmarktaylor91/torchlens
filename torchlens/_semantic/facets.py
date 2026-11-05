@@ -20,19 +20,17 @@ from typing import Any, Literal, TypeAlias, overload
 
 import torch
 
-from .._ir.container import (
-    DataclassField,
-    DictKey,
-    HFKey,
-    NamedField,
-    OutputPathComponent,
-    TupleIndex,
-)
+from .._ir.container import OutputPathComponent
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from .._utils._record_group_table import record_member
 from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
+from ._structural_names import (
+    _canonical_multi_output_name,
+    _path_to_dotted_name,
+    _primary_structural_names,
+)
 from .coverage import facet_coverage as coverage
 
 RecordScope = Literal["op", "module", "any"]
@@ -1992,66 +1990,6 @@ def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
         if dotted is not None:
             facets[dotted] = spec
     return facets
-
-
-def _primary_structural_names(records: Sequence[Any]) -> builtins.list[str | None]:
-    """Return collision-safe primary string names for output records."""
-
-    candidates: builtins.list[str] = []
-    for index, record in enumerate(records):
-        name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
-        if name is not None:
-            candidates.append(name)
-            continue
-        path_key = tuple(getattr(record, "container_path", ()) or ())
-        dotted = _path_to_dotted_name(path_key)
-        candidates.append(dotted or f"out{index}")
-    duplicates = {name for name in candidates if candidates.count(name) > 1}
-    return [None if name in duplicates else name for name in candidates]
-
-
-def _path_to_dotted_name(path: tuple[OutputPathComponent, ...]) -> str | None:
-    """Return a dotted structural name for ordinary positional paths."""
-
-    if not path:
-        return None
-    parts: builtins.list[str] = []
-    for index, component in enumerate(path):
-        part = _path_component_to_name(component)
-        if part is None:
-            return None
-        if index == 0 and isinstance(component, TupleIndex):
-            parts.append(f"out{part}")
-        else:
-            parts.append(part)
-    return ".".join(parts)
-
-
-def _canonical_multi_output_name(name: Any) -> str | None:
-    """Return the public structural facet name for a captured output name."""
-
-    if not isinstance(name, str) or not name:
-        return None
-    first, separator, rest = name.partition(".")
-    if first.isdecimal():
-        return f"out{first}{separator}{rest}" if separator else f"out{first}"
-    return name
-
-
-def _path_component_to_name(component: OutputPathComponent) -> str | None:
-    """Return a string component name when it has unambiguous item syntax."""
-
-    if isinstance(component, TupleIndex):
-        return str(component.index)
-    if isinstance(component, NamedField | DataclassField):
-        return component._name
-    if isinstance(component, DictKey | HFKey):
-        return str(component._key)
-    if isinstance(component, int):
-        return str(component)
-    if isinstance(component, str):
-        return component
-    return None
 
 
 def _record_scope_matches(scope: RecordScope, record: Any) -> bool:

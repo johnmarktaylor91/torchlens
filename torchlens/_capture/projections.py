@@ -44,6 +44,12 @@ from ..recording._types import (
     StorageIntent,
 )
 from ._forward_helpers import _normalize_module_stack
+from ._live_event_fields import (
+    _grad_fn_handle_from_index,
+    _live_grad_fn_object_id,
+    _live_internal_source_parents,
+    _live_interventions,
+)
 from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
 from ._sparse_refs import (
     _module_frames_from_record_context,
@@ -898,50 +904,6 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
 )
 
 
-def _grad_fn_handle_from_index(trace: Trace, event: OpEvent) -> Any:
-    """Read the live autograd handle from its single owner, the journal index.
-
-    grad_fn single ownership (producer unification P2): the journal's
-    ``grad_fn_handles_by_label_raw`` side index is the one handle authority.
-    The event-field fallback keeps byte-identity for detached streams until
-    the compat ``OpEvent`` field dies with the legacy producer.
-    """
-
-    events = getattr(trace, "capture_events", None)
-    if events is not None:
-        handle = events.grad_fn_handles_by_label_raw.get(event.label_raw)
-        if handle is not None:
-            return handle
-    # Compat OpEvents still carry the handle field; decomposed OpRecords never
-    # do (single ownership) and read as None here by strict-protocol default.
-    return record_member(event, "grad_fn_handle", None)
-
-
-def _live_grad_fn_object_id(trace: Trace, event: OpEvent) -> Any:
-    """Return the id of the live autograd handle, if one is indexed."""
-
-    handle = _grad_fn_handle_from_index(trace, event)
-    return None if handle is None else id(handle)
-
-
-def _live_internal_source_parents(trace: Trace, event: OpEvent) -> list[str]:
-    """Return parent labels whose events carry an internal-source ancestor."""
-
-    return [
-        edge.parent_label_raw
-        for edge in event.parents
-        if trace.capture_events.live_index.require_event(
-            edge.parent_label_raw
-        ).has_internal_source_ancestor
-    ]
-
-
-def _live_interventions(trace: Trace, event: OpEvent) -> list[Any]:
-    """Return fire records minted for this event's interventions."""
-
-    return [result.fire_record for result in event.fire_results if result.fire_record is not None]
-
-
 # This is the capture-time equivalent of an Op property lookup.  Constructing
 # the complete Op-shaped dictionary made every single attribute read walk every
 # parameter, edge, child, and module field and allocate all mutable projections.
@@ -1473,7 +1435,7 @@ def _grad_record_context_from_op_grad_event(
     op = trace._layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
-        grad_fn_class_name=record_member(op, "grad_fn_class_name", None) or "",
+        grad_fn_class_name=getattr(op.autograd, "grad_fn_class_name", None) or "",
         kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
