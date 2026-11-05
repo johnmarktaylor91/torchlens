@@ -227,16 +227,20 @@ def _int_entries(value: Any, default: int) -> list[int] | None:
             return None
         return [int(entry) for entry in value.reshape(-1).tolist()]
     if isinstance(value, (list, tuple)):
-        entries: list[int] = []
-        for entry in value:
-            read = _int_entries(entry, default)
-            if read is None or len(read) != 1:
-                return None
-            entries.extend(read)
-        return entries
-    if type(value) is int:
-        return [value]
-    return None
+        return _int_entries_of_sequence(value, default)
+    return [value] if type(value) is int else None
+
+
+def _int_entries_of_sequence(value: list[Any] | tuple[Any, ...], default: int) -> list[int] | None:
+    """Return a list or tuple size argument as ints, or None when any entry is unreadable."""
+
+    entries: list[int] = []
+    for entry in value:
+        read = _int_entries(entry, default)
+        if read is None or len(read) != 1:
+            return None
+        entries.extend(read)
+    return entries
 
 
 def check_conv_transpose_unit_output_padding_exempt(
