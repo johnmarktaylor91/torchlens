@@ -8,9 +8,9 @@ argument raises. A small family deliberately does NOT, because it exists for cal
 range. Handed attacker-chosen arguments, each one reads or writes outside its tensor's
 storage:
 
-1. ``_unsafe_*`` kernels (``_unsafe_index``, ``_unsafe_index_put``,
-   ``_unsafe_masked_index``, ``_unsafe_masked_index_put_accumulate``, ``_unsafe_view``):
-   the aten naming convention for "no bounds check".
+1. ``_unsafe_*`` and ``*_unsafe`` kernels (``_unsafe_index``, ``_unsafe_index_put``,
+   ``_unsafe_masked_index``, ``_unsafe_view``, ``_sparse_coo_tensor_unsafe``,
+   ``_sparse_csr_tensor_unsafe``): the aten naming convention for "no bounds check".
 2. Kernels whose schema takes an ``unsafe`` argument that turns validation off
    (``segment_reduce(..., unsafe=True)`` skips the lengths check,
    ``_index_put_impl_(..., unsafe=True)`` skips the index bounds check).
@@ -27,6 +27,10 @@ family. The rule is structural: the name prefixes in :data:`UNCHECKED_NAME_PREFI
 plus every aten schema that declares an ``unsafe`` argument, read from the live
 dispatcher, so a kernel torch adds later is denied the moment it ships.
 
+Not covered: the PUBLIC sparse constructors (``torch.sparse_coo_tensor`` and siblings)
+also skip index validation while torch's sparse invariant checks are off (the default),
+but they are legitimate forward ops and cannot be refused by name.
+
 This module imports torch and the standard library only, plus the torch compat
 schema accessor.
 """
@@ -41,6 +45,7 @@ from ._torch_compat import get_jit_all_schemas
 
 __all__ = [
     "UNCHECKED_NAME_PREFIXES",
+    "UNCHECKED_NAME_SUFFIXES",
     "is_unchecked_memory_kernel",
     "unchecked_switch_kernel_names",
 ]
@@ -51,6 +56,11 @@ UNCHECKED_NAME_PREFIXES: tuple[str, ...] = (
     "_nested_view_from_",
     "_reshape_alias",
 )
+
+#: Callable-name suffixes of the same family: the private sparse constructors that skip
+#: index validation (``_sparse_coo_tensor_unsafe``, ``_sparse_csr_tensor_unsafe``,
+#: ``_sparse_compressed_tensor_unsafe``, ...) and ``_view_func_unsafe``.
+UNCHECKED_NAME_SUFFIXES: tuple[str, ...] = ("_unsafe",)
 
 #: Kernels known to take an ``unsafe`` validation switch, used only when the live
 #: dispatcher schema table is unavailable (the rule then still refuses these).
@@ -95,13 +105,16 @@ def is_unchecked_memory_kernel(func: Callable[..., Any] | Any) -> bool:
     Returns
     -------
     bool
-        ``True`` for an ``_unsafe*`` / ``_nested_view_from_*`` / ``_reshape_alias*``
-        kernel or any aten op whose schema takes an ``unsafe`` switch.
+        ``True`` for an ``_unsafe*`` / ``*_unsafe`` / ``_nested_view_from_*`` /
+        ``_reshape_alias*`` kernel (matched on the op packet, so ``torch.ops.aten``
+        overloads are covered) or any aten op whose schema takes an ``unsafe`` switch.
     """
 
-    name = getattr(func, "__name__", None)
-    if not isinstance(name, str) or not name:
+    raw = getattr(func, "__name__", None)
+    if not isinstance(raw, str) or not raw:
         return False
-    if name.startswith(UNCHECKED_NAME_PREFIXES):
+    # ``torch.ops.aten.<op>.<overload>`` reports ``"<op>.<overload>"``: match the op packet.
+    name = raw.split(".", 1)[0]
+    if name.startswith(UNCHECKED_NAME_PREFIXES) or name.endswith(UNCHECKED_NAME_SUFFIXES):
         return True
     return name in unchecked_switch_kernel_names()

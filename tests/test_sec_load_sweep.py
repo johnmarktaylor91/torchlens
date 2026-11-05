@@ -84,16 +84,20 @@ def test_symlinked_shard_and_symlinked_ledger_refuse(tmp_path: Path) -> None:
     container = tmp_path / "art"
     _ledger(container, [{"index": 0, "file": "batch_00000.pt", "row_start": 0, "n_rows": 1}])
     (container / "batch_00000.pt").symlink_to(outside)
-    with pytest.raises(ExtractionArtifactError):
+    with pytest.raises(ExtractionArtifactError) as info:
         read_trusted_rows(container)
+    assert info.value.fields["code"] == "extraction_ledger_invalid"
 
     other = tmp_path / "art2"
     other.mkdir()
+    (other / "batch_00000.pt").write_bytes(b"x")  # a well-formed row, so only the link refuses
     target = tmp_path / "rows.jsonl"
-    target.write_text("{}\n", encoding="utf-8")
+    row = {"index": 0, "file": "batch_00000.pt", "row_start": 0, "n_rows": 1}
+    target.write_text(json.dumps(row) + "\n", encoding="utf-8")
     (other / "ledger.jsonl").symlink_to(target)
-    with pytest.raises(ExtractionArtifactError):
+    with pytest.raises(ExtractionArtifactError) as info:
         read_trusted_rows(other)
+    assert info.value.fields["code"] == "extraction_ledger_invalid"
 
 
 def test_writer_shaped_ledger_rows_still_verify(tmp_path: Path) -> None:
@@ -132,7 +136,13 @@ def test_pt_shard_refuses_on_a_bypassable_weights_only_torch(
     shard.write_bytes(b"crafted")
     with pytest.raises(InvalidArgumentError) as info:
         shards.read_shard(shard, "pt")
-    assert info.value.fields["code"] == "extraction_pt_shard_unsafe_torch"
+    assert info.value.fields["code"] == "extraction_shard_format_invalid"
+    assert "CVE-2025-32434" in str(info.value)
+    # the write refuses too: such a torch could never read its own .pt shards back
+    with pytest.raises(InvalidArgumentError) as info:
+        shards.validate_shard_format("pt")
+    assert "CVE-2025-32434" in str(info.value)
+    assert shards.validate_shard_format("safetensors") == "safetensors"
 
 
 def test_pyreft_weights_refuse_on_unsafe_torch_and_symlinked_weight(
@@ -143,9 +153,20 @@ def test_pyreft_weights_refuse_on_unsafe_torch_and_symlinked_weight(
     from torchlens._errors import InvalidArgumentError
     from torchlens.bridge import pyreft
 
+    class _Reached(BaseException):
+        """Raised if the weight bytes reach torch.load (escapes ``except Exception``)."""
+
+    def _never(*_args: Any, **_kwargs: Any) -> Any:
+        """Fail the test if the weight bytes ever reach torch.load."""
+
+        raise _Reached("torch.load reached on an unsafe torch")
+
     monkeypatch.setattr(pyreft, "HAS_SAFE_WEIGHTS_ONLY_LOAD", False)
-    with pytest.raises(InvalidArgumentError):
+    monkeypatch.setattr(pyreft.torch, "load", _never)
+    with pytest.raises(InvalidArgumentError) as info:
         pyreft._tensors(tmp_path / "intkey_k.bin", b"crafted", 1, 2)
+    assert "CVE-2025-32434" in str(info.value)
+    monkeypatch.undo()
 
     outside = tmp_path / "victim.bin"
     outside.write_bytes(b"not yours")
@@ -359,19 +380,46 @@ def test_crafted_bundle_naming_an_unchecked_kernel_never_runs(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize("trust", [False, True])
-@pytest.mark.parametrize("import_path", ["torch:_unsafe_index", "torch:segment_reduce"])
-def test_registry_resolver_refuses_unchecked_kernels(import_path: str, trust: bool) -> None:
-    """The resolver behind validation replay of a loaded bundle refuses them, even trusted."""
+@pytest.mark.parametrize("qualname", ["_unsafe_index", "segment_reduce"])
+def test_registry_resolver_refuses_unchecked_kernels(qualname: str, trust: bool) -> None:
+    """The resolver behind validation replay refuses them at the purity gate, even trusted.
+
+    The key is the ``torch``-namespace shape a loaded trace's ``func_id`` carries, so both
+    trust settings reach ``is_pure_forward_callable`` (a ``custom`` key would be refused
+    earlier, untrusted, for a different reason).
+    """
 
     from torchlens.errors import UntrustedCallableError
     from torchlens.intervention._resolver_registry import resolve_function_registry_key
     from torchlens.intervention.types import FunctionRegistryKey
 
-    key = FunctionRegistryKey(
-        "custom", import_path.split(":")[1], "function", import_path=import_path
-    )
-    with pytest.raises(UntrustedCallableError):
+    key = FunctionRegistryKey("torch", qualname, "function")
+    with pytest.raises(UntrustedCallableError) as info:
         resolve_function_registry_key(key, trust_custom_callables=trust)
+    assert info.value.fields["code"] == "custom_callable_not_pure"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "torch.ops.aten.segment_reduce.default",
+        "torch.ops.aten._index_put_impl_.default",
+        "torch.ops.aten._unsafe_index.Tensor",
+        "torch._sparse_coo_tensor_unsafe",
+        "torch._sparse_csr_tensor_unsafe",
+        "torch._sparse_compressed_tensor_unsafe",
+    ],
+)
+def test_overloads_and_unsafe_suffix_kernels_are_denied(path: str) -> None:
+    """Op overloads match on their op packet, and the ``*_unsafe`` sparse constructors deny."""
+
+    value: Any = torch
+    for part in path.split(".")[1:]:
+        value = getattr(value, part, None)
+        if value is None:
+            pytest.skip(f"{path} is absent on this torch")
+    assert is_unchecked_memory_kernel(value), path
+    assert not is_pure_forward_callable(value), f"{path} admitted"
 
 
 # --------------------------------------------------------------------------- #

@@ -59,17 +59,28 @@ def validate_shard_format(shard_format: Any) -> str:
     Raises
     ------
     torchlens.errors.InvalidArgumentError
-        ``extraction_shard_format_invalid`` outside the vocabulary.
+        ``extraction_shard_format_invalid`` outside the vocabulary, or ``"pt"`` on a torch
+        whose ``weights_only`` loader is bypassable (CVE-2025-32434): such a torch could
+        never read the shards back, so the write refuses too.
     """
 
-    if shard_format in SHARD_FORMATS:
-        return str(shard_format)
-    raise InvalidArgumentError(
-        f"shard_format= value {shard_format!r} is not in the closed vocabulary {SHARD_FORMATS}.",
-        code="extraction_shard_format_invalid",
-        remedy="pass 'safetensors' (default) or 'pt'",
-        value=repr(shard_format),
-    )
+    if shard_format not in SHARD_FORMATS:
+        raise InvalidArgumentError(
+            f"shard_format= value {shard_format!r} is not in the closed vocabulary "
+            f"{SHARD_FORMATS}.",
+            code="extraction_shard_format_invalid",
+            remedy="pass 'safetensors' (default) or 'pt'",
+            value=repr(shard_format),
+        )
+    if shard_format == "pt" and not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+        raise InvalidArgumentError(
+            "shard_format='pt' needs torch 2.6 or newer: this torch's weights_only loader is "
+            "not safe against crafted files (CVE-2025-32434), so .pt shards are never read.",
+            code="extraction_shard_format_invalid",
+            remedy="pass shard_format='safetensors' (default), or upgrade torch to 2.6+",
+            value=repr(shard_format),
+        )
+    return str(shard_format)
 
 
 def shard_extension(shard_format: str) -> str:
@@ -226,7 +237,7 @@ def _read_pt_shard(path: Path, keys: list[str] | None) -> dict[str, torch.Tensor
         raise InvalidArgumentError(
             f"Refusing to read .pt shard {path.name!r}: this torch's weights_only loader is "
             "not safe against crafted files (CVE-2025-32434).",
-            code="extraction_pt_shard_unsafe_torch",
+            code="extraction_shard_format_invalid",
             remedy="upgrade torch to 2.6 or newer, or re-extract with shard_format='safetensors'",
         )
     raw = torch.load(str(path), weights_only=True, mmap=True)
