@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.validation.core as validation_core
+import torchlens.validation._core as validation_core
 from torchlens.backends.torch._autograd_grad_marker import is_autograd_grad_recorder
 from torchlens.validation._autograd_grad_replay import _recorded_order, _select_output
 

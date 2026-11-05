@@ -5651,3 +5651,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 32e854d321b5815b418873b7d0d9a13888d99c24 (clean)
 recorded: 2026-11-05T11:47:02.903316+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: autograd.grad replay reads op order and parents in the validation subgraph replay
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8374d352d0d9cfd6cbb6ff5c8447861d5c39d54d (dirty)
+recorded: 2026-11-05T12:29:09.257886+00:00

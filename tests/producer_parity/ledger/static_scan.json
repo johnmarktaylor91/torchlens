@@ -10172,7 +10172,7 @@
   "field": "parents",
   "file": "torchlens/validation/_autograd_grad_replay.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 3,
   "via_getattr": false
  },
  {
