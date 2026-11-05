@@ -430,6 +430,34 @@ def owed_names(rows: list[dict[str, Any]]) -> dict[str, str]:
     return owed
 
 
+def _group_member_names() -> set[str]:
+    """Return ``Op.group.member`` and ``Layer.group.member`` for every concern group.
+
+    The lockstep inventory walks reached classes only, so a computed member that
+    lives on a group class (``Op.graph.co_parents``) has no row; the group class
+    lists its public members the way its ``__dir__`` does (imports torchlens).
+    """
+
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens._utils._record_group_table import ACTIVE_GROUPS
+
+    names: set[str] = set()
+    for owner in (Op, Layer):
+        for group in sorted(ACTIVE_GROUPS):
+            prop = getattr(owner, group, None)
+            if not isinstance(prop, property) or prop.fget is None:
+                continue
+            group_cls = prop.fget.__annotations__.get("return")
+            if isinstance(group_cls, str):  # a postponed annotation names the class
+                group_cls = vars(sys.modules[owner.__module__]).get(group_cls)
+            if not isinstance(group_cls, type):
+                continue
+            prefix = f"{owner.__name__}.{group}."
+            names |= {prefix + n for n in dir(group_cls) if not n.startswith("_")}
+    return names
+
+
 def known_names(rows: list[dict[str, Any]]) -> set[str]:
     """Return every name a ``covers`` field may spell (root, export, Class.member)."""
 
@@ -437,7 +465,7 @@ def known_names(rows: list[dict[str, Any]]) -> set[str]:
     names = {row["path"] for row in rows if row["kind"] in {"root", "export"}}
     members = (_member_name(row, spellings) for row in rows if row["kind"] == "member")
     names |= {name for name in members if name is not None}
-    return names
+    return names | _group_member_names()
 
 
 def _module_covered(name: str, covered: dict[str, list[str]]) -> list[str]:
