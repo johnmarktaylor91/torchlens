@@ -8080,6 +8080,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/debug/_common.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/debug/_common.py",
@@ -8190,14 +8198,6 @@
   "has_default": false,
   "sites": 8,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/debug/_nan.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
