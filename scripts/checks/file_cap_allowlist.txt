@@ -877,7 +877,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	62
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	73
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	136
-torchlens/backends/torch/_tl.py	1749
+torchlens/backends/torch/_tl.py	1748
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
@@ -958,7 +958,7 @@ torchlens/backends/torch/wrappers.py	2843
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
-torchlens/backends/torch/wrappers.py::decorate_all_once	68
+torchlens/backends/torch/wrappers.py::decorate_all_once	67
 torchlens/backends/torch/wrappers.py::torch_func_decorator	796
 torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	642
 torchlens/bridge/_sae_export.py::write_delphi	92
