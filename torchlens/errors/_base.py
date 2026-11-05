@@ -432,22 +432,8 @@ class _TransparentGeneratorContext(Generic[_Yield]):
             raise RuntimeError("generator didn't stop")
         if value is None:
             value = typ()
-        return self._throw(value)
-
-    def _throw(self, value: BaseException) -> bool:
-        """Throw ``value`` into the generator; report whether it was suppressed.
-
-        Parameters
-        ----------
-        value:
-            The in-flight exception.
-
-        Returns
-        -------
-        bool
-            ``True`` when the generator swallowed ``value``.
-        """
-
+        # Inline, not a helper: one frame like contextlib, so a fixed ``stacklevel``
+        # in a guard's teardown lands on the same frame under either manager.
         try:
             self._generator.throw(value)
         except StopIteration as exc:

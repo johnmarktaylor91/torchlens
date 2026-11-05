@@ -24,6 +24,7 @@ from ... import _state
 from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils.display import user_stacklevel
 from ...errors._base import transparent_contextmanager
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
@@ -908,7 +909,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                     "(reason: escape_detector_teardown_failed); a leaked hook may still "
                     "be active in this process.",
                     CaptureGapWarning,
-                    stacklevel=2,
+                    stacklevel=user_stacklevel(),
                 )
         thread_count_end = threading.active_count()
         trace._provenance_thread_count_end = thread_count_end
@@ -931,7 +932,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 "domain is the capture-owner thread; move model tensor work into that thread "
                 "or treat this Trace as unverified.",
                 CaptureGapWarning,
-                stacklevel=2,
+                stacklevel=user_stacklevel(),
             )
         if getattr(trace, "_raw_dynamo_region_detected", False):
             # A bypassed torch.compile region is the ROOT cause of the incompleteness and
