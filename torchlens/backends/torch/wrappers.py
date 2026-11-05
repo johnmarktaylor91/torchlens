@@ -49,6 +49,7 @@ from ..._utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.display import identity
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import get_vars_of_type_from_obj
@@ -572,9 +573,9 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
                 with _state.pause_logging(), internal_scalar_read():
                     collected: set[int] = set()
                     for p in model.parameters():
-                        collected.add(p.untyped_storage().data_ptr())
+                        collected.add(tensor_read(p, "untyped_storage")(p).data_ptr())
                     for b in model.buffers():
-                        collected.add(b.untyped_storage().data_ptr())
+                        collected.add(tensor_read(b, "untyped_storage")(b).data_ptr())
                 ptrs = frozenset(collected)
             except Exception:
                 ptrs = None
@@ -795,11 +796,7 @@ def _propagate_mutation_label_to_storage_aliases(
 # corrupted interpreter state when exercised across several capture paths in
 # one process (segfault on torch 2.1.2) -- see
 # ``TensorSubclassUnsupportedError``.
-_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
-    "__new__": 0,
-    "_make_subclass": 0,
-    "as_subclass": 1,
-}
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {"__new__": 0, "_make_subclass": 0, "as_subclass": 1}
 
 
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})

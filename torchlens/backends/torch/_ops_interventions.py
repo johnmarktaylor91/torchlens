@@ -39,9 +39,7 @@ from ...intervention.types import (
 from ...recording.types import (
     RecordContext,
 )
-from ._tl import (
-    get_label_list,
-)
+from ._tl import get_label_list
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
