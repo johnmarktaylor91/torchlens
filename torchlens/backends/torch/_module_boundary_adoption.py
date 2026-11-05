@@ -48,8 +48,8 @@ def collect_pre_forward_tensor_ids(
     """
 
     from .model_prep import (
-        _clear_callable_session_tensor_metadata,
         _clear_module_attribute_tensor_metadata,
+        _clear_module_callables_tensor_metadata,
     )
 
     owned: dict[int, torch.Tensor] = {}
@@ -72,9 +72,7 @@ def collect_pre_forward_tensor_ids(
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen, visit=_note)
     for submodule in submodules:
-        _clear_callable_session_tensor_metadata(
-            getattr(submodule, "forward", None), seen, visit=_note_callable
-        )
+        _clear_module_callables_tensor_metadata(submodule, seen, visit=_note_callable)
     return owned, frozenset(callable_only)
 
 

@@ -27,8 +27,7 @@ from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     _PLAIN_ATTR_IGNORED_NAMES,
     _module_plain_attr_names,
-    align_validation_copy,
-    deepcopy_for_validation,
+    copy_model_for_validation,
     is_registered_tensor_alias,
     restore_simple_plain_attrs_on_copy,
 )
@@ -1288,8 +1287,7 @@ def _model_for_ground_truth_validation(
     """
 
     try:
-        copied_model = deepcopy_for_validation(model)
-        align_validation_copy(model, copied_model)
+        copied_model = copy_model_for_validation(model)
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
     except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
@@ -1355,8 +1353,7 @@ def _model_for_validation_replay(
     """
 
     try:
-        copied_model = deepcopy_for_validation(model)
-        align_validation_copy(model, copied_model)
+        copied_model = copy_model_for_validation(model)
         _strip_copied_forward_decorations(copied_model)
         restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True

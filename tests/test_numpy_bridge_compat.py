@@ -14,6 +14,10 @@ raise exactly what torch raises on the broken pair. On a real broken pair
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+import textwrap
 import warnings
 from pathlib import Path
 
@@ -108,10 +112,10 @@ def test_digests_survive_a_broken_bridge_byte_identically(broken_bridge: None) -
         assert transport.digest_byte_view(tensor).tobytes() == want
 
 
-def test_probe_flags_a_broken_bridge_in_the_snapshot(
+def test_probe_flags_a_broken_bridge_and_warns_once(
     broken_bridge: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The probe flips HAS_NUMPY_BRIDGE, warns once, and the snapshot reports it."""
+    """The probe flips HAS_NUMPY_BRIDGE and warns once."""
 
     monkeypatch.delenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS")
     with warnings.catch_warnings(record=True) as caught:
@@ -124,7 +128,41 @@ def test_probe_flags_a_broken_bridge_in_the_snapshot(
     assert "numpy<2" in messages[0]
     assert tc.HAS_NUMPY_BRIDGE is False
     assert "HAS_NUMPY_BRIDGE" not in tc.OPTIONAL_CAPABILITY_FLAGS
-    assert tc.get_torch_capability_snapshot()["HAS_NUMPY_BRIDGE"] is False
+
+
+def test_capability_snapshot_reports_a_broken_bridge() -> None:
+    """The capability snapshot (``tl.report.doctor()``'s source) reports a broken bridge.
+
+    Runs in a fresh interpreter: the snapshot forces every lazy capability probe,
+    which imports ``torch.distributed`` namespaces for the rest of the process, and
+    a capture in a process holding them runs the sharded-tensor scan that an
+    ordinary process skips, so a later capture-cost pin in the same worker would
+    measure that scan too.
+    """
+
+    code = textwrap.dedent(
+        """
+        import torch
+        from torchlens._utils import _torch_compat as tc
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError("Numpy is not available")
+
+        torch.Tensor.numpy = _raise
+        torch.from_numpy = _raise
+        print("SNAPSHOT", tc.get_torch_capability_snapshot()["HAS_NUMPY_BRIDGE"])
+        """
+    )
+    env = {"TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS": "1"}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env={**os.environ, **env},
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "SNAPSHOT False" in proc.stdout.splitlines()
 
 
 def test_bridge_probe_latches_after_one_call(monkeypatch: pytest.MonkeyPatch) -> None:

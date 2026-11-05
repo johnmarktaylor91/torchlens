@@ -13,17 +13,21 @@ caller's model state is untouched. Three facts decide whether that is sound:
   (:func:`is_registered_tensor_alias`), as ``nn.RNNBase._flat_weights`` does; such
   values are restored by the state_dict restore, so only their identity is plain state.
 
-:func:`deepcopy_for_validation` makes the copy itself. It shares imported Python
+:func:`deepcopy_for_validation` makes the deepcopy. It shares imported Python
 module objects with the source instead of trying to pickle them: ``copy`` already
 treats functions and classes as atomic, and a module reached through an attribute
 (``self.F = torch.nn.functional``) is the same process-wide object the forward would
 reach through a global name, so sharing it is what an uncopied model does too.
+:func:`copy_model_for_validation` takes the validation copy: that deepcopy,
+fidelity-checked, with each closure a module keeps as an attribute rebound to the
+copy's own objects.
 """
 
 from __future__ import annotations
 
 import copy
 import sys
+import types
 from typing import Any
 
 import torch
@@ -64,15 +68,99 @@ def deepcopy_for_validation(model: nn.Module) -> nn.Module:
         An independent deep copy; only entries of ``sys.modules`` are shared.
     """
 
+    return _deepcopy_with_memo(model)[0]
+
+
+def _deepcopy_with_memo(model: nn.Module) -> tuple[nn.Module, dict[int, Any]]:
+    """Deep-copy ``model`` sharing ``sys.modules`` entries; return the copy and its memo."""
+
     memo: dict[int, Any] = {
         id(module): module for module in list(sys.modules.values()) if module is not None
     }
-    return copy.deepcopy(model, memo)
+    return copy.deepcopy(model, memo), memo
 
 
 _FIDELITY_MAX_DEPTH = 4
 _FIDELITY_MAX_CONTAINER_ITEMS = 128
 _OBJECT_GETSTATE = getattr(object, "__getstate__", None)
+
+
+def copy_model_for_validation(model: nn.Module) -> nn.Module:
+    """Deep-copy ``model`` for a validation run: fidelity-checked, closures rebound.
+
+    Parameters
+    ----------
+    model:
+        Original module tree.
+
+    Returns
+    -------
+    nn.Module
+        The copy, after :func:`align_validation_copy` (fidelity check, modes) and
+        :func:`_rebind_copied_module_closures`.
+
+    Raises
+    ------
+    Exception
+        Whatever ``copy.deepcopy`` or the fidelity check raises; callers take the
+        disclosed live-model fallback.
+    """
+
+    copied, memo = _deepcopy_with_memo(model)
+    align_validation_copy(model, copied)
+    _rebind_copied_module_closures(copied, memo)
+    return copied
+
+
+def _rebind_copied_module_closures(copied: nn.Module, memo: dict[int, Any]) -> None:
+    """Point the closures a copied module keeps as attributes at the copy's objects.
+
+    ``copy.deepcopy`` returns a function as itself, so a closure a module builds in
+    ``__init__`` and stores on itself (Uni-Core's ``LayerNorm.func`` closes over
+    ``self`` and reads ``self.weight``) still reads the SOURCE module when the copy
+    runs: the copy's forward consumes the source's parameters, tensors from outside
+    the copied model. Each such function is rebuilt with every cell whose contents
+    the deepcopy copied holding that copy; any other cell keeps its object. TorchLens's
+    own forward wrappers are left to ``_strip_copied_forward_decorations``.
+
+    Parameters
+    ----------
+    copied:
+        The deep copy.
+    memo:
+        The ``copy.deepcopy`` memo (``id(original) -> copy``; it keeps every
+        memoized original alive, so its ids cannot be recycled).
+    """
+
+    for module in copied.modules():
+        for name, value in list(module.__dict__.items()):
+            if type(value) is not types.FunctionType or not value.__closure__:
+                continue
+            if str(getattr(value, "__module__", "")).startswith("torchlens."):
+                continue
+            cells = tuple(_copied_cell(cell, memo) for cell in value.__closure__)
+            if all(new is old for new, old in zip(cells, value.__closure__, strict=True)):
+                continue
+            rebound = types.FunctionType(
+                value.__code__, value.__globals__, value.__name__, value.__defaults__, cells
+            )
+            rebound.__kwdefaults__ = value.__kwdefaults__
+            rebound.__qualname__ = value.__qualname__
+            rebound.__dict__.update(value.__dict__)
+            module.__dict__[name] = rebound
+
+
+def _copied_cell(cell: Any, memo: dict[int, Any]) -> Any:
+    """Return a cell holding the deepcopy of ``cell``'s contents, or ``cell`` itself."""
+
+    try:
+        contents = cell.cell_contents
+    except ValueError:  # an empty cell (a free variable not yet assigned)
+        return cell
+    copied = memo.get(id(contents))
+    if copied is None or copied is contents:
+        return cell
+    return types.CellType(copied)
 
 
 def assert_copy_kept_instance_attrs(source: nn.Module, copied: nn.Module) -> None:
