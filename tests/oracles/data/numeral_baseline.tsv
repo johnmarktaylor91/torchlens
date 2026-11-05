@@ -3158,10 +3158,10 @@ docs-md	docs/maintainers/where.md	432
 docs-md	docs/maintainers/where.md	434
 docs-md	docs/maintainers/where.md	435
 docs-md	docs/maintainers/where.md	436
+docs-md	docs/maintainers/where.md	4364
 docs-md	docs/maintainers/where.md	437
 docs-md	docs/maintainers/where.md	438
 docs-md	docs/maintainers/where.md	439
-docs-md	docs/maintainers/where.md	4398
 docs-md	docs/maintainers/where.md	44
 docs-md	docs/maintainers/where.md	440
 docs-md	docs/maintainers/where.md	441
@@ -6669,6 +6669,10 @@ package-docstrings	torchlens/_utils/_exception_notes.py	3.10
 package-docstrings	torchlens/_utils/_exception_notes.py	3.11.
 package-docstrings	torchlens/_utils/_exception_notes.py	678
 package-docstrings	torchlens/_utils/_kernel_probes.py	2.1
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.2
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.3
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.4
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.4,
 package-docstrings	torchlens/_utils/_kernel_probes.py	86
 package-docstrings	torchlens/_utils/_mps_memory.py	2.5
 package-docstrings	torchlens/_utils/_multipass_access.py	12
@@ -7433,6 +7437,8 @@ package-docstrings	torchlens/backends/torch/_completeness_escape_state.py	43
 package-docstrings	torchlens/backends/torch/_completeness_finalize.py	14
 package-docstrings	torchlens/backends/torch/_completeness_finalize.py	15
 package-docstrings	torchlens/backends/torch/_completeness_finalize.py	16
+package-docstrings	torchlens/backends/torch/_completeness_hop.py	2.1
+package-docstrings	torchlens/backends/torch/_completeness_hop.py	2.1,
 package-docstrings	torchlens/backends/torch/_completeness_metadata.py	1.0
 package-docstrings	torchlens/backends/torch/_completeness_metadata.py	1_3_
 package-docstrings	torchlens/backends/torch/_completeness_metadata.py	29
@@ -9525,9 +9531,12 @@ test-docstrings	tests/test_collapse_power_perf.py	24,165
 test-docstrings	tests/test_column_passes_finalize.py	15.5
 test-docstrings	tests/test_compat_report.py	13
 test-docstrings	tests/test_compile_set_stance.py	2.6
+test-docstrings	tests/test_completeness_hop_rules.py	2.1
+test-docstrings	tests/test_completeness_hop_rules.py	2.1,
 test-docstrings	tests/test_completeness_witness.py	10
 test-docstrings	tests/test_completeness_witness.py	11.4
 test-docstrings	tests/test_completeness_witness.py	124
+test-docstrings	tests/test_completeness_witness.py	2.1
 test-docstrings	tests/test_completeness_witness.py	200
 test-docstrings	tests/test_completeness_witness.py	2026
 test-docstrings	tests/test_completeness_witness.py	240
@@ -10827,6 +10836,7 @@ test-docstrings	tests/test_to_pandas_field_coverage.py	3.1
 test-docstrings	tests/test_to_pandas_field_coverage.py	3.4
 test-docstrings	tests/test_torch_compat.py	10
 test-docstrings	tests/test_torch_compat.py	2.1
+test-docstrings	tests/test_torch_compat.py	2.1,
 test-docstrings	tests/test_torch_compat.py	2.1.
 test-docstrings	tests/test_torch_compat.py	2.2
 test-docstrings	tests/test_torch_compat.py	2.3
@@ -10834,6 +10844,8 @@ test-docstrings	tests/test_torch_compat.py	2.4
 test-docstrings	tests/test_torch_compat.py	26
 test-docstrings	tests/test_torch_compat.py	35
 test-docstrings	tests/test_torch_compat.py	42
+test-docstrings	tests/test_torch_func_transforms.py	2.1,
+test-docstrings	tests/test_torch_func_transforms.py	2.2
 test-docstrings	tests/test_torch_func_transforms.py	29
 test-docstrings	tests/test_torch_func_transforms.py	31
 test-docstrings	tests/test_torch_ops_call_recording.py	1.0

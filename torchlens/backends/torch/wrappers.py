@@ -42,7 +42,7 @@ from ..._utils._torch_compat import (
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
-    get_functorch_maybe_current_level,
+    get_functorch_transform_probe,
     get_jit_boolean_dispatch_table,
     get_jit_builtin_table,
     get_optional_torch_namespace,
@@ -183,10 +183,10 @@ def _fix_tensor_sequence_slot() -> None:
 
 def _is_inside_functorch_transform() -> bool:
     """Return True if inside a vmap/grad/etc. functorch transform."""
-    maybe_current_level = get_functorch_maybe_current_level()
-    if maybe_current_level is None:
+    transform_probe = get_functorch_transform_probe()
+    if transform_probe is None:
         return False
-    return maybe_current_level() is not None
+    return transform_probe() is not None
 
 
 def _is_inside_dynamo_compilation() -> bool:

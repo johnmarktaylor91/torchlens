@@ -159,6 +159,57 @@ def probe_sparse_spsolve_cuda() -> bool:
     return _solves_identity_system(spsolve, "cuda")
 
 
+def probe_reduce_tuple_dim() -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
+        of axes directly (added torch 2.2; torch 2.1 only accepts a single
+        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
+        falls back to sequential single-axis reduction.
+    """
+
+    probe = torch.zeros((2, 2), dtype=torch.bool)
+    try:
+        probe.any(dim=(0, 1))
+    except TypeError:
+        return False
+    return True
+
+
+def probe_meta_item_guard() -> bool:
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+
+    Returns
+    -------
+    bool
+        ``True`` when calling ``.item()`` (or any other scalar extraction,
+        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
+        carrying torch's own "Tensor.item() cannot be called on meta
+        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
+        falls all the way through to the aten dispatcher's generic
+        ``NotImplementedError`` ("... not implemented for this backend").
+        TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught
+        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
+        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
+        raising-frame PROVENANCE, never message text -- correctly, since
+        the two exception FAMILIES genuinely differ here. Absence is a
+        healthy old install surfacing the honest alternate typed refusal,
+        not a TorchLens degradation.
+    """
+
+    try:
+        torch.ones((), device="meta").item()
+    except NotImplementedError:
+        return False
+    except RuntimeError:
+        return True
+    return False
+
+
 def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -> bool:
     """Solve a tiny CSR identity system; ``False`` only on torch's no-cuDSS refusal.
 
@@ -184,4 +235,47 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
         if _NO_CUDSS_MARKER in str(error):
             return False
         raise
+    return True
+
+
+def probe_gradient_edge() -> bool:
+    """Return whether torch's GradientEdge surface actually WORKS end to end.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
+        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
+        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
+        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
+        an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
+        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
+        every output -- including a bare ``GradientEdge``, which has no such
+        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
+        matching this read's long-documented "2.4+" remedy text). Absent on
+        older torch or broken on this intermediate band is a healthy old
+        install either way, not a TorchLens degradation: the read refuses
+        typed.
+    """
+
+    from torch.autograd import graph
+
+    gradient_edge = getattr(graph, "GradientEdge", None)
+    if gradient_edge is None or getattr(graph, "get_gradient_edge", None) is None:
+        return False
+
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        if h.grad_fn is None:
+            # Never happens for a requires_grad leaf's product, but the
+            # static annotation is ``Node | None``; treat an impossible-in-
+            # practice None the same as any other probe failure below.
+            return False
+        torch.autograd.grad(
+            [gradient_edge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
+        )
+    except Exception:
+        return False
     return True
