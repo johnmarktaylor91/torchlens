@@ -18,8 +18,12 @@ and the ordinary forward ops keep resolving.
 
 from __future__ import annotations
 
+import importlib
 import inspect
+import sys
+import warnings
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -28,6 +32,8 @@ import torch.nn as nn
 from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
+from torchlens._constants import ORIG_TORCH_FUNCS
+from torchlens._io import ArtifactError
 from torchlens._io.runnable_load import DescriptorStructuralBoundError, _validate_call_arity
 from torchlens._runnable import (
     LiteralArgumentRef,
@@ -36,7 +42,12 @@ from torchlens._runnable import (
     ReadinessStatus,
     RunnableErrorCode,
 )
-from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens._utils._callable_safety import (
+    _ALLOWED_FORWARD_OP_MODULES,
+    _OPERATOR_MODULES,
+    _unwrap_capture_wrapper,
+    is_pure_forward_callable,
+)
 from torchlens._utils._raw_pointer_denial import (
     RAW_POINTER_PARAMETER_NAMES,
     is_raw_pointer_constructor_type,
@@ -52,6 +63,9 @@ from torchlens._utils._torch_symbols import (
 from torchlens.errors import RunCapabilityUnavailableError, UntrustedCallableError
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.validation._autograd_grad_replay import execute_replay_func
+from torchlens.validation._influence_probes import _ProbeCall, _substitutes_move_output
+from torchlens.validation._loaded_callables import resolve_loaded_callables
 
 
 class _Tiny(nn.Module):
@@ -140,24 +154,46 @@ def _reachable_callables() -> list[tuple[str, Any]]:
     return found
 
 
+def _pointer_verdicts(found: list[tuple[str, Any]]) -> tuple[list[str], list[str], int]:
+    """Classify enumerated callables, failing CLOSED on the signature-less ones.
+
+    Returns admitted pointer-takers, admitted signature-less callables whose real
+    module is not EXACTLY listed (a C builtin the signature rule cannot read), and
+    the count of pointer-takers the gate refused (proof the guard is not vacuous).
+    """
+
+    listed = _ALLOWED_FORWARD_OP_MODULES | _OPERATOR_MODULES
+    offenders: list[str] = []
+    unlisted: list[str] = []
+    refused = 0
+    for path, value in found:
+        admitted = is_pure_forward_callable(value)
+        real = _unwrap_capture_wrapper(value)
+        try:
+            parameters: Any = inspect.signature(real).parameters
+        except (TypeError, ValueError):
+            module = str(getattr(real, "__module__", "") or "")
+            if admitted and module and module not in listed:
+                unlisted.append(f"{path} ({module})")
+            continue
+        pointer_params = [name for name in parameters if is_raw_pointer_parameter_name(name)]
+        if pointer_params and admitted:
+            offenders.append(f"{path}{pointer_params}")
+        refused += bool(pointer_params and not admitted)
+    return offenders, unlisted, refused
+
+
 @pytest.mark.smoke
 def test_no_admitted_callable_accepts_a_raw_pointer_parameter() -> None:
-    """RUNTIME enumeration of the loader's reachable roots: no pointer sink is admitted."""
+    """RUNTIME enumeration of the loader's reachable roots: no pointer sink is admitted.
 
-    offenders: list[str] = []
-    for path, value in _reachable_callables():
-        if not is_pure_forward_callable(value):
-            continue
-        try:
-            signature = inspect.signature(value)
-        except (TypeError, ValueError):
-            continue
-        pointer_params = [
-            name for name in signature.parameters if is_raw_pointer_parameter_name(name)
-        ]
-        if pointer_params:
-            offenders.append(f"{path}{pointer_params}")
+    Fails CLOSED: an admitted callable with no inspectable signature must live in an
+    EXACTLY listed module, so a new pointer-taking C builtin cannot pass unseen.
+    """
+
+    offenders, unlisted, _refused = _pointer_verdicts(_reachable_callables())
     assert not offenders, f"admitted callables taking a raw pointer: {offenders}"
+    assert not unlisted, f"admitted signature-less callables in unlisted modules: {unlisted}"
 
 
 def test_pointer_name_rule_covers_the_suffix_shapes() -> None:
@@ -336,3 +372,201 @@ def test_untampered_bundle_still_runs(tmp_path: Path) -> None:
     loaded = tl.load(str(_bundle(tmp_path, "clean.tlspec")))
     assert loaded._runnable.readiness.status is not ReadinessStatus.UNAVAILABLE
     loaded.run_transaction(inputs=torch.randn(2, 4))
+
+
+# --------------------------------------------------------------------------- #
+# (6) replay validation of a loaded bundle (the second execution boundary)    #
+# --------------------------------------------------------------------------- #
+
+
+class _Relu(nn.Module):
+    """A linear and a relu: the relu op is rewritten into ``Tensor.new``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return relu of the linear output plus a residual."""
+
+        return torch.relu(self.fc(x)) + x * 2.0
+
+
+def _replay_capture() -> tuple[Any, torch.Tensor]:
+    """Capture with re-execution payloads; return the trace and the reference output."""
+
+    torch.manual_seed(0)
+    model = _Relu().eval()
+    x = torch.randn(3, 4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True))
+    return trace, model(x)
+
+
+def _crafted_new_bundle(tmp_path: Path, kwargs: dict[str, Any]) -> tuple[Path, torch.Tensor]:
+    """Save a replay-level bundle whose relu op claims to be ``Tensor.new(**kwargs)``.
+
+    Both keyword records are rewritten, as a crafted file can: ``saved_kwargs`` (the
+    replay call) and ``non_tensor_kwargs`` (which keeps the op out of the
+    uninitialized-allocation exemption, so replay would really execute it).
+    """
+
+    trace, reference = _replay_capture()
+    target = next(op for op in trace._layer_list if op.func_name == "relu")
+    target.func_name = "new"
+    target.func_id = FunctionRegistryKey("torch.Tensor", "new", "method")
+    target.saved_kwargs = dict(kwargs)
+    target.non_tensor_kwargs = dict(kwargs)
+    path = tmp_path / "crafted.tlz"
+    trace.save(path, level="executable_with_callables")
+    return path, reference
+
+
+def test_loaded_validation_refuses_a_pointer_keyword_before_resolution(tmp_path: Path) -> None:
+    """``validate_forward_pass`` on a crafted bundle refuses by name; nothing is called.
+
+    Never dereferences: the op stays unresolved, so the entry check raises before replay.
+    """
+
+    path, reference = _crafted_new_bundle(tmp_path, {"cdata": 0})
+    loaded = tl.load(path)
+    crafted = next(op for op in loaded._layer_list if op.func_name == "new")
+    resolved = resolve_loaded_callables(loaded)
+    try:
+        assert all(op is not crafted for op in resolved)
+        assert crafted.func is None
+    finally:
+        for op in resolved:
+            op.func = None
+    with pytest.raises(ArtifactError, match="requires resolved func callables"):
+        loaded.validate_forward_pass(reference)
+
+
+def test_loaded_tensor_new_without_a_pointer_keyword_still_resolves(tmp_path: Path) -> None:
+    """The refusal keys on the pointer keyword, never on ``Tensor.new`` itself."""
+
+    path, _reference = _crafted_new_bundle(tmp_path, {})
+    loaded = tl.load(path)
+    crafted = next(op for op in loaded._layer_list if op.func_name == "new")
+    resolved = resolve_loaded_callables(loaded)
+    assert any(op is crafted for op in resolved)
+    for op in resolved:
+        op.func = None
+
+
+def test_replay_execution_refuses_a_pointer_keyword() -> None:
+    """The replay belt refuses before the op's function is called (in-memory traces too)."""
+
+    trace, _reference = _replay_capture()
+    op = next(op for op in trace._layer_list if op.func_name == "relu")
+    calls: list[Any] = []
+    op.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
+    with pytest.raises(UntrustedCallableError) as excinfo:
+        execute_replay_func(op, {"args": list(op.saved_args), "kwargs": {"cdata": 0}}, [])
+    assert excinfo.value.fields["code"] == "custom_callable_not_pure"
+    assert calls == []
+
+
+def test_influence_probe_refuses_a_pointer_keyword() -> None:
+    """A probe refusal must RAISE: a probe that cannot run would keep an exemption."""
+
+    calls: list[Any] = []
+    layer = SimpleNamespace(
+        func=lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(2),
+        out=torch.zeros(2),
+        layer_label="crafted",
+        func_name="new",
+    )
+    call = _ProbeCall((torch.zeros(2),), {"cdata": 0}, 0)
+    with pytest.raises(UntrustedCallableError):
+        _substitutes_move_output(layer, call, lambda: (torch.ones(2),))  # type: ignore[arg-type]
+    assert calls == []
+
+
+# --------------------------------------------------------------------------- #
+# (7) signature-less private-C builtins fail closed unless exactly listed     #
+# --------------------------------------------------------------------------- #
+
+_PRIVATE_C_POINTER_ADOPTERS = (
+    ("torch._C._aoti", "alloc_tensor_by_stealing_from_void_ptr"),
+    ("torch._C._aoti", "AOTIModelContainerRunnerCpu"),
+    ("torch._C._cudart", "cudaHostRegister"),
+    ("torch._C._cudart", "cudaHostUnregister"),
+)
+
+
+def test_private_c_pointer_adopters_are_refused_even_under_trust() -> None:
+    """pybind builtins with no signature (AOTI, cudart) never resolve, trusted or not."""
+
+    checked = 0
+    for module_name, name in _PRIVATE_C_POINTER_ADOPTERS:
+        try:
+            candidate = getattr(importlib.import_module(module_name), name, None)
+        except ImportError:
+            candidate = None
+        if candidate is None:
+            continue
+        checked += 1
+        assert not is_pure_forward_callable(candidate), f"{module_name}.{name} admitted"
+        key = FunctionRegistryKey("custom", name, "function", import_path=f"{module_name}:{name}")
+        with pytest.raises(UntrustedCallableError):
+            resolve_function_registry_key(key, trust_custom_callables=True)
+    assert checked, "no private-C pointer adopter was available to check"
+
+
+def _torch_module_callables() -> list[tuple[str, Any]]:
+    """Every callable defined in a loaded ``torch.*`` module or ``torch._C`` submodule."""
+
+    modules: dict[str, ModuleType] = {
+        name: module
+        for name, module in list(sys.modules.items())
+        if isinstance(module, ModuleType) and (name == "torch" or name.startswith("torch."))
+    }
+    stack = [torch._C]
+    while stack:
+        current = stack.pop()
+        for value in list(vars(current).values()):
+            if isinstance(value, ModuleType) and value.__name__.startswith("torch._C."):
+                if value.__name__ not in modules:
+                    modules[value.__name__] = value
+                    stack.append(value)
+    found: list[tuple[str, Any]] = []
+    for module_name, module in sorted(modules.items()):
+        for name, value in list(vars(module).items()):
+            real_module = str(getattr(value, "__module__", "") or "")
+            if callable(value) and real_module.startswith("torch"):
+                found.append((f"{module_name}.{name}", value))
+    return found
+
+
+def test_trusted_resolution_fails_closed_for_unlisted_signature_less_callables() -> None:
+    """Whole-torch census: what a trusted key can name is listed, refused or inspectable.
+
+    A pointer-taking callable with a signature is refused by the signature rule (and
+    the census must SEE at least one, or the check is vacuous); one without a
+    signature must live in an EXACTLY listed module.
+    """
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        offenders, unlisted, refused = _pointer_verdicts(_torch_module_callables())
+    assert not offenders, f"admitted callables taking a raw pointer: {offenders}"
+    assert not unlisted, f"admitted signature-less callables in unlisted modules: {unlisted}"
+    assert refused, "the census saw no pointer-taking callable: the guard would be vacuous"
+
+
+def test_capture_roster_needs_no_unlisted_private_c_module() -> None:
+    """Every decorated torch function still clears the private-C rule (no capture lost)."""
+
+    listed = _ALLOWED_FORWARD_OP_MODULES
+    lost: list[str] = []
+    for namespace, name in ORIG_TORCH_FUNCS:
+        owner: Any = torch
+        for part in namespace.split(".")[1:]:
+            owner = getattr(owner, part, None)
+        value = getattr(owner, name, None) if owner is not None else None
+        module = str(getattr(_unwrap_capture_wrapper(value), "__module__", "") or "")
+        if module.startswith("torch._C.") and module not in listed:
+            lost.append(f"{namespace}.{name} ({module})")
+    assert not lost, f"decorated functions in unlisted private-C modules: {lost}"
