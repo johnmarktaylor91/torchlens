@@ -62,6 +62,8 @@ PAGES: dict[str, str] = {
     "docs/neuroai/task_rnn_circuits.md": "torchlens",
     "docs/neuroai/protein_language_model.md": "esm",
     "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/causal_trace_recipe.ipynb": "matplotlib",
+    "examples/methods/contrastive_direction_recipe.ipynb": "torchlens",
     "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
     "examples/methods/function_vectors_recipe.ipynb": "transformers",
     "examples/methods/clip_head_attention_recipe.ipynb": "clip",
