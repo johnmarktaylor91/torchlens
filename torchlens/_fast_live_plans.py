@@ -48,8 +48,7 @@ from ._runnable import RunnableErrorCode, RunProvider
 from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.introspection import get_vars_of_type_from_obj
-from .backends.torch import _session_forwards, _tl as _tl_meta
-from .backends.torch._logged_arguments import logged_receiver_output
+from .backends.torch import _logged_arguments, _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -525,7 +524,7 @@ def collected_function_output(
     receiver as the output (``logged_receiver_output``); the collector sees the same.
     """
 
-    return logged_receiver_output(
+    return _logged_arguments.logged_receiver_output(
         output,
         args,
         func_name,
