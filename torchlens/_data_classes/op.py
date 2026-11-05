@@ -59,15 +59,8 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
-from .._ir._op_row_seed import (
-    NAME_KEYS,
-    REF_DEFAULT_FIELDS,
-    device_ref_from_metadata as _device_ref_from_metadata,
-    dtype_ref_or_none as _dtype_ref_or_none,
-    seed_op_values,
-)
 from .._ir.refs import DeviceRef, DtypeRef
-from .._quantities import Bytes, Duration, Flops, Macs, as_duration
+from .._quantities import Bytes, Duration, Flops, Macs, as_bytes, as_duration, as_flops
 from .._selection.selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
@@ -336,8 +329,17 @@ _OP_SLOT_NAMES = tuple(
 # ``state_restore``) already speaks the descriptor protocol, so behavior is
 # unchanged while the physical cells live in per-trace columns.
 _OP_STORE_LAYOUT = OpStoreLayout(_OP_SLOT_NAMES)
-# Bulk-ingress seed constants: the layout ids of the cells `__init__` overrides
-# after the one-pass dict seed (the converted fields live in `_ir._op_row_seed`).
+# Bulk-ingress seed constants: the converted-at-construction fields and the
+# layout ids of the cells `__init__` overrides after the one-pass dict seed.
+_INIT_BYTES_FIELDS = (
+    "activation_memory",
+    "transformed_activation_memory",
+    "autograd_memory",
+    "bytes_delta_at_call",
+    "bytes_peak_at_call",
+    "gradient_memory",
+    "transformed_gradient_memory",
+)
 _FID_SOURCE_TRACE_REF = _OP_STORE_LAYOUT.fid_by_name["_source_trace_ref"]
 _FID_IS_IN_CONDITIONAL_BODY = _OP_STORE_LAYOUT.fid_by_name["_is_in_conditional_body"]
 _FID_GRAD_RECORDS = _OP_STORE_LAYOUT.fid_by_name["_grad_records"]
@@ -825,6 +827,22 @@ def _recursive_safe_copy(val: Any) -> Any:
     """Compatibility alias for recursive input-argument copying."""
 
     return copy_arg_tree(val)
+
+
+def _dtype_ref_or_none(value: Any) -> DtypeRef | None:
+    """Return a neutral dtype reference for a dtype-like value."""
+
+    return DtypeRef.from_value(value)
+
+
+def _device_ref_from_metadata(out: Any, output_device: Any) -> DeviceRef | None:
+    """Return a neutral device reference from payload or output-device metadata."""
+
+    if isinstance(out, torch.Tensor):
+        return DeviceRef.from_value(out.device)
+    if output_device in (None, "same"):
+        return None
+    return DeviceRef.from_value(output_device)
 
 
 def _summarize_value(value: Any) -> str:
@@ -1785,8 +1803,16 @@ class Op(OpAtenMixin, _SelectionOperand):
             fields_dict["ordinal_index"] = -1
         if "grad_fn" not in fields_dict:
             fields_dict["grad_fn"] = None
-        for ref_field in REF_DEFAULT_FIELDS:
-            fields_dict.setdefault(ref_field, None)
+        if fields_dict.get("dtype_ref") is None:
+            fields_dict["dtype_ref"] = _dtype_ref_or_none(fields_dict.get("dtype"))
+        if fields_dict.get("device_ref") is None:
+            fields_dict["device_ref"] = _device_ref_from_metadata(
+                fields_dict.get("out"), fields_dict.get("output_device")
+            )
+        if fields_dict.get("backend_address") is None:
+            fields_dict["backend_address"] = fields_dict.get("address")
+        if fields_dict.get("resolver_status") is None:
+            fields_dict["resolver_status"] = "resolved"
         for derived_field in (
             "input_ops",
             "input_activations",
@@ -1820,7 +1846,12 @@ class Op(OpAtenMixin, _SelectionOperand):
         # class; runtime attribute surface comes from the generated field
         # descriptors.
         fd = fields_dict
-        seed_op_values(fd, NAME_KEYS)
+        for field_name in _INIT_BYTES_FIELDS:
+            fd[field_name] = as_bytes(fd[field_name])
+        fd["param_memory"] = Bytes(fd["param_memory"] or 0)
+        fd["func_duration"] = as_duration(fd["func_duration"])
+        fd["flops_forward"] = as_flops(fd["flops_forward"])
+        fd["flops_backward"] = as_flops(fd["flops_backward"])
         get = fd.get
         cells = [get(field_name, _MISSING) for field_name in _OP_STORE_LAYOUT.names]
         # Store as weakref to break the circular reference

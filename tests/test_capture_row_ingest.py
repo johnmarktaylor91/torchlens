@@ -287,3 +287,19 @@ def test_no_unbuilt_handle_reads_an_adopted_row(monkeypatch: pytest.MonkeyPatch,
     assert sources and handles
     reading = [handle for handle in handles if id(handle._row) in adopted_ids]
     assert reading == []
+
+
+def test_row_seed_matches_op_construction() -> None:
+    """The row seed converts the fields ``Op.__init__`` converts and derives the same refs."""
+
+    from torchlens._data_classes import op as op_module
+    from torchlens._ir import _op_row_seed
+
+    assert _op_row_seed.INIT_BYTES_FIELDS == op_module._INIT_BYTES_FIELDS
+    for dtype in (torch.float32, torch.int64, None):
+        assert _op_row_seed.dtype_ref_or_none(dtype) == op_module._dtype_ref_or_none(dtype)
+    tensor = torch.zeros(2)
+    for out, output_device in ((tensor, None), (None, "same"), (None, None), (None, "cpu")):
+        assert _op_row_seed.device_ref_from_metadata(
+            out, output_device
+        ) == op_module._device_ref_from_metadata(out, output_device)

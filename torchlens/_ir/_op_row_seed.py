@@ -1,13 +1,15 @@
-"""The values ``Op`` construction derives and converts, for a fields dict or a row.
+"""The values ``Op`` construction derives and converts, applied to a capture row.
 
-``Op.__init__`` fills four reference defaults (``dtype_ref``, ``device_ref``,
-``backend_address``, ``resolver_status``) and converts the byte, duration and
-FLOP fields to their quantity types. Row ingest (``_postprocess/_row_ingest.py``)
-adopts a capture row without a fields dict and must apply the same derivations
-exactly once. Both call :func:`seed_op_values`: ``Op.__init__`` with
-:data:`NAME_KEYS` over its fields dict, ingest with :func:`layout_keys` over the
-row list, so the two paths share one implementation. This module imports no
-module of the package's largest import cycle.
+``Op.__init__`` (``_data_classes/op.py``) fills four reference defaults
+(``dtype_ref``, ``device_ref``, ``backend_address``, ``resolver_status``) and
+converts the byte, duration and FLOP fields to their quantity types. Row
+ingest (``_postprocess/_row_ingest.py``) adopts a capture row without a fields
+dict or ``Op.__init__`` and applies the same derivations exactly once, with
+:func:`seed_op_values` over the row list (:func:`layout_keys`). ``Op.__init__``
+keeps its own copy: ``_data_classes`` sits a layer below ``_ir`` and may not
+import more from it. ``tests/test_capture_row_ingest.py`` pins the two to the
+same fields and the same cells. This module imports no module of the
+package's largest import cycle.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from .refs import DeviceRef, DtypeRef
 
 __all__: tuple[str, ...] = ()
 
-#: The byte-count fields converted with ``as_bytes`` at construction.
+#: The byte-count fields ``Op.__init__`` converts with ``as_bytes`` (its ``_INIT_BYTES_FIELDS``).
 INIT_BYTES_FIELDS: tuple[str, ...] = (
     "activation_memory",
     "transformed_activation_memory",
@@ -31,14 +33,6 @@ INIT_BYTES_FIELDS: tuple[str, ...] = (
     "bytes_peak_at_call",
     "gradient_memory",
     "transformed_gradient_memory",
-)
-
-#: The reference fields ``Op.__init__`` defaults when they are ``None``.
-REF_DEFAULT_FIELDS: tuple[str, ...] = (
-    "dtype_ref",
-    "device_ref",
-    "backend_address",
-    "resolver_status",
 )
 
 
@@ -111,8 +105,8 @@ def seed_op_values(values: Any, keys: OpSeedKeys) -> None:
     Parameters
     ----------
     values
-        A complete fields dict (with :data:`NAME_KEYS`) or a layout-ordered
-        row list (with :func:`layout_keys`); every key must be present.
+        A layout-ordered row list (with :func:`layout_keys`) or a complete
+        fields dict (with :data:`NAME_KEYS`); every key must be present.
     keys
         Where each value lives in ``values``.
     """

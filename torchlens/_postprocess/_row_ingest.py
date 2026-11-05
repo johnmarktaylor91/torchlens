@@ -184,7 +184,7 @@ def adopt_capture_row(
         row[plan.keys.backend_address] = override
     row[plan.grad_records] = []
     row[plan.construction_done] = True
-    op = object.__new__(op_class)
+    op: Any = object.__new__(op_class)
     object.__setattr__(op, "_core", store)
     object.__setattr__(op, "_row", store.adopt_row(row))
     return op
